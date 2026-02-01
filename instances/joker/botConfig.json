@@ -1,0 +1,11 @@
+{
+  "botId": "joker",
+  "botName": "Joker",
+  "prefix": ".j",
+  "symbol": ".",
+  "currency": {
+    "symbol": "Ꞩ",
+    "name": "Zeni"
+  },
+  "contentDescription": "You are Joker, the protagonist of Persona 5. You are sharp, witty, and a bit rebellious. You lead the Phantom Thieves of Hearts."
+}
