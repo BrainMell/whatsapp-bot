@@ -99,17 +99,33 @@ process.on('unhandledRejection', (reason, promise) => {
 // --- BROWSER PATH HELPER ---
 function getChromePath() {
     if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+    
+    let paths = [];
     if (process.platform === 'win32') {
-        const paths = [
+        paths = [
             'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
             'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
             'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
         ];
-        for (const p of paths) {
-            if (fs.existsSync(p)) return p;
-        }
+    } else {
+        paths = [
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/app/.apt/usr/bin/google-chrome-stable',
+            '/app/.apt/usr/bin/google-chrome',
+            '/usr/local/bin/google-chrome',
+            '/usr/bin/chromium-browser'
+        ];
     }
-    return '/usr/bin/google-chrome-stable';
+
+    for (const p of paths) {
+        if (fs.existsSync(p)) return p;
+    }
+    
+    // Fallback if none found - though puppeteer-core will likely fail
+    return process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '/usr/bin/google-chrome-stable';
 }
 
 // --- DYNAMIC TITLE LOGIC ---
@@ -610,7 +626,7 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
         browser = await puppeteer.launch({ 
             headless: "new", 
             executablePath: getChromePath(),
-            args: ['--no-sandbox','--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] 
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--no-first-run', '--disable-software-rasterizer'] 
         });
         const page = await browser.newPage();
 
@@ -957,16 +973,16 @@ const RESET_INTERVAL = 4 * 60 * 60 * 1000; // 4 Hours in milliseconds
 
 // Periodic wipe: All group message logs cleared from MongoDB
 setInterval(() => {
-    system.set('group_message_info', {});
+    system.set(BOT_ID + '_group_message_info', {});
     if (typeof groupMessageHistory !== 'undefined') {
         groupMessageHistory.clear(); 
     }
-    console.log("🧹 Periodic wipe: All group message logs cleared from MongoDB.");
+    console.log(`🧹 [${BOT_ID}] Periodic wipe: All group message logs cleared from MongoDB.`);
 }, RESET_INTERVAL);
 
 // Load data from MongoDB
 function loadGroupInfo() {
-    return system.get('group_message_info', {});
+    return system.get(BOT_ID + '_group_message_info', {});
 }
 
 // Save specific group data without affecting others
@@ -979,14 +995,14 @@ function saveGroupMessage(chatId, messageObj) {
     // Keep only last 100 messages per group to save space
     if (allData[chatId].length > 100) allData[chatId].shift();
     
-    system.set('group_message_info', allData);
+    system.set(BOT_ID + '_group_message_info', allData);
 }
 
 // Reset logic: Wipes the MongoDB logs every 4 hours
 setInterval(() => {
-    system.set('group_message_info', {});
+    system.set(BOT_ID + '_group_message_info', {});
     groupMessageHistory.clear(); 
-    console.log("🧹 Global reset: Group Info wiped from MongoDB.");
+    console.log(`🧹 [${BOT_ID}] Global reset: Group Info wiped from MongoDB.`);
 }, RESET_INTERVAL);
 
 // Scrapes pintrest for image results based on a query, had no idea how to do this btw, gemini and reddit helped
@@ -994,12 +1010,11 @@ async function searchPinterest(query, count = 10) {
     let browser;
     try {
         // Launch stealth browser
-        browser = await puppeteer.launch({ 
-            headless: "new", 
+        browser = await puppeteer.launch({
+            headless: "new",
             executablePath: getChromePath(),
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] 
-        });
-        const page = await browser.newPage();
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--no-first-run', '--disable-software-rasterizer', '--single-process']
+        });        const page = await browser.newPage();
         
         // Block unnecessary files to speed up search and avoid timeouts
         await page.setRequestInterception(true);
@@ -1065,16 +1080,16 @@ const overrideUsers = new Set();
 // Load blocked users from DB
 async function loadBlockedUsers() {
   try {
-    const data = system.get("blocked_users", []);
+    const data = system.get(BOT_ID + "_blocked_users", []);
     data.forEach(userId => blockedUsers.add(userId));
-    console.log(`📛 Loaded ${blockedUsers.size} blocked users from MongoDB`);
+    console.log(`📛 [${BOT_ID}] Loaded ${blockedUsers.size} blocked users from MongoDB`);
   } catch (err) {
     console.error("Error loading blocked users:", err.message);
   }
 }
 
 function saveBlockedUsers() {
-  system.set("blocked_users", Array.from(blockedUsers));
+  system.set(BOT_ID + "_blocked_users", Array.from(blockedUsers));
 }
 
 function blockUser(userId) {
@@ -1125,18 +1140,18 @@ const groupSettings = new Map();
 
 function loadGroupSettings() {
   try {
-    const data = system.get("group_settings", {});
+    const data = system.get(BOT_ID + "_group_settings", {});
     Object.entries(data).forEach(([key, value]) => {
       groupSettings.set(key, value);
     });
-    console.log("✅ Loaded group settings from MongoDB");
+    console.log(`✅ [${BOT_ID}] Loaded group settings from MongoDB`);
   } catch (err) {
     console.error("Error loading group settings:", err.message);
   }
 }
 
 function saveGroupSettings() {
-  system.set("group_settings", Object.fromEntries(groupSettings));
+  system.set(BOT_ID + "_group_settings", Object.fromEntries(groupSettings));
 }
 
 function getGroupSettings(chatId) {
@@ -1159,18 +1174,18 @@ const supportUsage = new Map();
 
 function loadSupportUsage() {
   try {
-    const data = system.get("support_usage", {});
+    const data = system.get(BOT_ID + "_support_usage", {});
     for (const [userId, count] of Object.entries(data)) {
       supportUsage.set(userId, count);
     }
-    console.log("✅ Loaded support usage from MongoDB");
+    console.log(`✅ [${BOT_ID}] Loaded support usage from MongoDB`);
   } catch (err) {
     console.error("Error loading support usage:", err.message);
   }
 }
 
 function saveSupportUsage() {
-  system.set("support_usage", Object.fromEntries(supportUsage));
+  system.set(BOT_ID + "_support_usage", Object.fromEntries(supportUsage));
 }
 
 function checkSupportUsage(userId) {
@@ -1195,18 +1210,18 @@ const userWarnings = new Map();
 
 function loadUserWarnings() {
   try {
-    const data = system.get("user_warnings", {});
+    const data = system.get(BOT_ID + "_user_warnings", {});
     Object.entries(data).forEach(([key, value]) => {
       userWarnings.set(key, value);
     });
-    console.log("✅ Loaded warnings from MongoDB");
+    console.log(`✅ [${BOT_ID}] Loaded warnings from MongoDB`);
   } catch (err) {
     console.error("Error loading warnings:", err.message);
   }
 }
 
 function saveUserWarnings() {
-  system.set("user_warnings", Object.fromEntries(userWarnings));
+  system.set(BOT_ID + "_user_warnings", Object.fromEntries(userWarnings));
 }
 
 // Muted users - MongoDB
@@ -1214,18 +1229,18 @@ const mutedUsers = new Map();
 
 function loadMutedUsers() {
   try {
-    const data = system.get("muted_users", {});
+    const data = system.get(BOT_ID + "_muted_users", {});
     Object.entries(data).forEach(([userId, muteData]) => {
       mutedUsers.set(userId, muteData);
     });
-    console.log(`🔇 Loaded ${mutedUsers.size} muted users from MongoDB`);
+    console.log(`🔇 [${BOT_ID}] Loaded ${mutedUsers.size} muted users from MongoDB`);
   } catch (err) {
     console.error("Error loading muted users:", err.message);
   }
 }
 
 function saveMutedUsers() {
-  system.set("muted_users", Object.fromEntries(mutedUsers));
+  system.set(BOT_ID + "_muted_users", Object.fromEntries(mutedUsers));
 }
 
 function addWarning(userId, groupId, reason) {
@@ -2391,6 +2406,7 @@ async function initSocket() {
     loadUserWarnings();
     loadBlockedUsers();
     loadMutedUsers();
+    loadEnabledChats();
     
     const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
     const { version } = await fetchLatestBaileysVersion();
@@ -2590,6 +2606,20 @@ We are happy to have you here.
 
     // Track enabled chats
     const enabledChats = new Set();
+    
+    function loadEnabledChats() {
+      try {
+        const data = system.get(BOT_ID + "_enabled_chats", []);
+        data.forEach(chatId => enabledChats.add(chatId));
+        console.log(`✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`);
+      } catch (err) {
+        console.error("Error loading enabled chats:", err.message);
+      }
+    }
+
+    function saveEnabledChats() {
+      system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
+    }
 
     // ============================================
     // MESSAGE HANDLER - processes every incoming message
@@ -2656,6 +2686,67 @@ We are happy to have you here.
   // 🧠 BRAIN: Context-Aware Extraction System
   // This processes every message through the analytical layers (Buffer -> Trigger -> Batch -> AI)
   contextEngine.onMessage(m, txt);
+
+  // 1. Get Group Metadata & Admin Status EARLY
+  let groupMetadata = null;
+  let botIsAdmin = false;
+  let senderIsAdmin = false;
+  
+  if (isGroupChat) {
+    try {
+      // Use cache helper
+      groupMetadata = await getGroupMetadata(chatId);
+      if (groupMetadata) {
+        // Get bot's ID in both formats
+        const myNumber = sock.user.id.split(':')[0].split('@')[0];
+        const myLid = sock.authState.creds?.me?.lid;
+        const myLidNumber = myLid ? myLid.split(':')[0] : null;
+        
+        // Get sender number
+        const senderNumber = senderJid.split(':')[0].split('@')[0];
+
+        botIsAdmin = groupMetadata.participants.some(p => {
+          const pNumber = p.id.split(':')[0].split('@')[0];
+          const isMe = pNumber === myNumber || (myLidNumber && pNumber === myLidNumber);
+          return isMe && (p.admin === 'admin' || p.admin === 'superadmin');
+        });
+
+        senderIsAdmin = groupMetadata.participants.some(p => {
+          const pNumber = p.id.split(':')[0].split('@')[0];
+          return pNumber === senderNumber && (p.admin === 'admin' || p.admin === 'superadmin');
+        });
+      }
+    } catch (e) {
+      // console.log(`[Metadata] Failed for ${chatId}`);
+    }
+  }
+
+  const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
+
+  // ============================================
+  // SECURITY & SPAM DETECTION
+  // ============================================
+  if (!m.key.fromMe) {
+    // 1. Antilink Security (Skip for admins)
+    if (isGroupChat && !senderIsAdmin) {
+      await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount);
+    }
+
+    // 2. Antispam Detection
+    const settings = getGroupSettings(chatId);
+    if (settings.antispam && !isOwner && !senderIsAdmin) {
+      const isSpamming = checkSpam(senderJid);
+      if (isSpamming) {
+        console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
+        await sock.sendMessage(chatId, { 
+          text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
+        });
+        // Auto-mute for 1 minute
+        muteUser(senderJid, 60000);
+        return;
+      }
+    }
+  }
 
   // 📢 DEBUG: Get Newsletter JID (Forward a message from your channel to the bot)
   const newsletterJid = m.message?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid;
@@ -2837,57 +2928,8 @@ if (m.pushName && !isSelf) {
           return;
         }
 
-        // get group metadata if in a group
-        let groupMetadata = null;
-        let botIsAdmin = false;
-        let senderIsAdmin = false;
-        let currentParticipants = [];
+        let currentParticipants = groupMetadata ? groupMetadata.participants.map(p => p.id) : [];
         
-
-if (isGroupChat && isBotCommand) {
-  try {
-    groupMetadata = await getGroupMetadata(chatId);
-    
-    if (groupMetadata) {
-      currentParticipants = groupMetadata.participants.map(p => p.id);
-      
-      // Get bot's ID in both formats
-      const myNumber = sock.user.id.split(':')[0].split('@')[0];
-      const myLid = sock.authState.creds?.me?.lid || `106631840940269:5@lid`;
-      const myLidNumber = myLid.split(':')[0];
-      
-      // Get sender number
-      const senderNumber = senderJid.split(':')[0].split('@')[0];
-
-      // Check if bot is admin - match by LID number!
-      botIsAdmin = groupMetadata.participants.some(p => {
-        const participantNumber = p.id.split(':')[0].split('@')[0];
-        const isMe = participantNumber === myLidNumber || participantNumber === myNumber;
-        const isAdmin = p.admin === 'admin' || p.admin === 'superadmin';
-        return isMe && isAdmin;
-      });
-
-      // Check if sender is admin
-      senderIsAdmin = groupMetadata.participants.some(p => {
-        const participantNumber = p.id.split(':')[0].split('@')[0];
-        const isSender = participantNumber === senderNumber;
-        const isAdmin = p.admin === 'admin' || p.admin === 'superadmin';
-        return isSender && isAdmin;
-      });
-
-      console.log(`🔑 Bot admin: ${botIsAdmin}, Sender admin: ${senderIsAdmin} | Members: ${groupMetadata.participants.length}`);
-    } else {
-      console.log(`⚠️ Metadata unavailable for ${chatId}`);
-    }
-
-  } catch (err) {
-    console.log(`❌ Error processing metadata for ${chatId}:`, err.message);
-  }
-}
-
-
-
-
 
         // Override command - allows user to bypass admin checks
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mellowisking`) {
@@ -2904,10 +2946,6 @@ if (isGroupChat && isBotCommand) {
           }
           return;
         }
-
-        // Check if user has override enabled (bypasses admin checks)
-        const hasOverride = overrideUsers.has(senderJid);
-        const canUseAdminCommands = senderIsAdmin || hasOverride || isOwner;
 
         // ============================================
         // SUPPORT COMMAND
@@ -6865,7 +6903,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
         const browser = await puppeteer.launch({
             headless: "new",
             executablePath: getChromePath(),
-            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--no-first-run", "--disable-software-rasterizer", "--single-process"]
         });
 
         const page = await browser.newPage();
@@ -9511,26 +9549,25 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} summary`) || low
         // BOT CONTROL COMMANDS
         // ============================================
 
-        // enable bot in chat
-        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} on`)) {
+        // .on - enable bot in group
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} on` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} on `)) {
+          if (!canUseAdminCommands) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+          }
           enabledChats.add(chatId);
-           await sock.sendMessage(chatId, { react: { text: `⏳`, key: m.key } });
-
-          const videoPath = botConfig.getAssetPath('intro.mp4'); 
-          const replyText = BOT_MARKER + `🤖 ${botConfig.getBotName()}  AI is now *enabled* in this chat!`;
-          // Send video response with the AI reply as the caption
-          await sock.sendMessage(chatId, {
-              video: fs.readFileSync(videoPath),
-              caption: replyText,
-              contextInfo: { mentionedJid: [senderJid] }
-          });
-           await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+          saveEnabledChats();
+          const replyText = BOT_MARKER + `🤖 ${botConfig.getBotName()} AI is now *enabled* in this chat!`;
+          await sock.sendMessage(chatId, { text: replyText });
           return;
         }
-        
-        // disable bot in chat
-        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} off`)) {
+
+        // .off - disable bot in group
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} off` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} off `)) {
+          if (!canUseAdminCommands) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+          }
           enabledChats.delete(chatId);
+          saveEnabledChats();
           await sock.sendMessage(chatId, { text: BOT_MARKER + `🤖 ${botConfig.getBotName()} AI is now *disabled* in this chat!` });
           return;
         }
