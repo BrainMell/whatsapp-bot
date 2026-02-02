@@ -1,81 +1,65 @@
-// cleanup-sessions.js
-// Run this to clean up old WhatsApp sessions and speed up boot time
-
 const fs = require('fs');
 const path = require('path');
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
-// Set this to true ONLY when you want to run the cleanup
-const ENABLE_CLEANUP = true; 
-const AUTH_DIR = './auth';
+// Adjust path depending on where this script is run from.
+// Assuming this is in 'core/', we step back one level to find 'instances/'
+const instancesDir = path.join(__dirname, '../instances');
 
-// ==========================================
-// EXECUTION LOGIC
-// ==========================================
+async function cleanupSessions() {
+    console.log("🧹 Starting Multi-Instance Session Cleanup...");
 
-if (!ENABLE_CLEANUP) {
-    console.log('⚠️  Cleanup is currently DISABLED.');
-    console.log('💡 To run the cleanup, edit this file and set ENABLE_CLEANUP = true;');
-    process.exit(0);
-}
-
-console.log('🧹 Starting session cleanup...');
-
-try {
-    // Check if directory exists
-    if (!fs.existsSync(AUTH_DIR)) {
-        console.error(`❌ Error: Directory "${AUTH_DIR}" not found.`);
-        process.exit(1);
+    if (!fs.existsSync(instancesDir)) {
+        console.error(`❌ Instances directory not found at: ${instancesDir}`);
+        return;
     }
 
-    // Get all files in auth directory
-    const files = fs.readdirSync(AUTH_DIR);
-    
-    let deletedCount = 0;
-    let keptFiles = [];
-    
-    files.forEach(file => {
-        const filePath = path.join(AUTH_DIR, file);
-        
-        // KEEP creds.json - this is your login!
-        if (file === 'creds.json') {
-            keptFiles.push(file);
-            console.log(`✅ Keeping: ${file}`);
-            return;
-        }
-        
-        // DELETE session files, pre-keys, etc.
-        // These are often the cause of "MessageCounterError"
-        const shouldDelete = file.startsWith('session-') || 
-                           file.startsWith('pre-key-') || 
-                           file.startsWith('sender-key-') || 
-                           file.startsWith('app-state-') ||
-                           file.startsWith('lid-mapping-') ||
-                           file.startsWith('device-list-');
+    // Get all instance folders (joker, subaru, etc.)
+    const instances = fs.readdirSync(instancesDir).filter(f => 
+        fs.statSync(path.join(instancesDir, f)).isDirectory()
+    );
 
-        if (shouldDelete) {
-            try {
-                if (fs.lstatSync(filePath).isFile()) {
-                    fs.unlinkSync(filePath);
-                    deletedCount++;
-                    console.log(`🗑️  Deleted: ${file}`);
+    if (instances.length === 0) {
+        console.log("⚠️ No instances found.");
+        return;
+    }
+
+    console.log(`found ${instances.length} instances.`);
+
+    for (const instance of instances) {
+        const authPath = path.join(instancesDir, instance, 'auth');
+
+        if (fs.existsSync(authPath)) {
+            console.log(`
+🔍 Processing: [${instance}]`);
+            const files = fs.readdirSync(authPath);
+            let deletedCount = 0;
+
+            for (const file of files) {
+                // THE GOLDEN RULE: Skip creds.json
+                if (file !== 'creds.json') {
+                    const fullPath = path.join(authPath, file);
+                    try {
+                        // Recursive true allows deleting directories if Baileys creates subfolders
+                        fs.rmSync(fullPath, { recursive: true, force: true });
+                        deletedCount++;
+                    } catch (e) {
+                        console.error(`   ❌ Failed to delete ${file}: ${e.message}`);
+                    }
                 }
-            } catch (err) {
-                console.log(`❌ Failed to delete ${file}:`, err.message);
+            }
+
+            if (deletedCount > 0) {
+                console.log(`   ✅ Cleaned ${deletedCount} session files.`);
+            } else {
+                console.log(`   ✨ Already clean.`);
             }
         } else {
-            keptFiles.push(file);
+            console.log(`   ⚠️ No auth folder found for [${instance}]`);
         }
-    });
-    
-    console.log('\n✅ Cleanup complete!');
-    console.log(`📊 Kept ${keptFiles.length} file(s): ${keptFiles.join(', ')}`);
-    console.log(`🗑️  Deleted ${deletedCount} session file(s)`);
-    console.log('\n🚀 Restart the bot - it should boot MUCH faster!');
-    
-} catch (err) {
-    console.error('❌ Error during cleanup:', err.message);
-    process.exit(1);
+    }
+
+    console.log("\n✅ Session cleanup complete. All 'creds.json' files preserved.");
 }
+
+// Execute
+cleanupSessions();
