@@ -1,12 +1,5 @@
 node_modules
-auth
-database
 .env
-Ldatabase
-stickers
 temp
 tools
-assets
 package-lock.json
-rpgasset
-models
