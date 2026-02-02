@@ -1,5 +1,5 @@
-# Use Node 18 with full system libraries
-FROM node:18-bullseye
+# Use Node 20 (LTS) with full system libraries
+FROM node:20-bullseye
 
 # Install the missing Linux libraries that sharp and pureimage need
 RUN apt-get update && apt-get install -y \
