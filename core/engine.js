@@ -289,7 +289,7 @@ setInterval(async () => {
   try {
     const results = loans.checkDueLoans();
     if (results.length > 0) {
-      console.log(`💸 Processed ${results.length} loan transactions/defaults.`);
+      console.log(`💸 [${BOT_ID}] Processed ${results.length} loan transactions/defaults.`);
       
       if (sock) {
         for (const res of results) {
@@ -346,21 +346,16 @@ process.stderr.write = (chunk, encoding, callback) => {
   return originalStderrWrite(chunk, encoding, callback);
 };
 
-// STYLISH UPTIME COUNTER - shows bot is alive during session management
-let uptimeSeconds = 0;
+// STYLISH RAM MONITOR - shows bot is alive and tracking resources
 const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 let spinnerIndex = 0;
 
 // Update every 30 seconds
 setInterval(() => {
-  const hours = Math.floor(uptimeSeconds / 3600);
-  const mins = Math.floor((uptimeSeconds % 3600) / 60);
-  const secs = uptimeSeconds % 60;
-  const timeStr = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  const ramUsage = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
   const spinner = spinnerFrames[spinnerIndex % spinnerFrames.length];
-  console.log(`${spinner} [${BOT_ID}] Uptime: ${timeStr} | Status: 🟢 Active`);
+  console.log(`${spinner} [${BOT_ID}] RAM: ${ramUsage} MB | Status: 🟢 Active`);
   spinnerIndex++;
-  uptimeSeconds += 30;
 }, 30000); // Every 30 seconds
 
 // --- Marker for tracking bot's own messages (invisible to users) ---
@@ -600,42 +595,57 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
         
         const response = await got.get(searchUrl, {
             headers: {
-                'Referer': 'https://www.pornpics.com/'
-            }
+                'Referer': 'https://www.pornpics.com/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: { request: 15000 }
         });
         
         const { document } = parseHTML(response.body);
-        
-        // Find all thumbnail links
-        const galleryItems = document.querySelectorAll('li.thumb');
+        const imgs = document.querySelectorAll('img');
+        console.log(`🔍 [${BOT_ID}] PornPics found ${imgs.length} image tags`);
         const candidates = [];
 
-        for (const item of galleryItems) {
-            const img = item.querySelector('img');
-            if (!img) continue;
+        for (const img of imgs) {
+            // Extract image URL from common lazy-load attributes or src
+            let url = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('src');
+            if (!url) continue;
 
-            // Extract image URL from data-src or src
-            let url = img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('data-original');
-            if (!url || !url.startsWith('http')) {
-                if (url && url.startsWith('//')) url = 'https:' + url;
+            if (!url.startsWith('http')) {
+                if (url.startsWith('//')) url = 'https:' + url;
+                else if (url.startsWith('/')) url = 'https://www.pornpics.com' + url;
                 else continue;
             }
 
-            // Estimate score based on thumbnail size if available
-            const w = parseInt(img.getAttribute('width')) || 300;
-            const h = parseInt(img.getAttribute('height')) || 300;
-            candidates.push({ url, score: w * h });
+            // Skip common UI icons and small images
+            if (url.includes('logo') || url.includes('icon') || url.includes('avatar')) continue;
+
+            const w = parseInt(img.getAttribute('width')) || 0;
+            const h = parseInt(img.getAttribute('height')) || 0;
+            const score = w * h;
+
+            // Original logic used 40000 score threshold
+            if (score > 20000 || (!w && !h)) {
+                candidates.push({ url, score });
+            }
         }
 
-        if (candidates.length === 0) return [];
+        if (candidates.length === 0) {
+            console.log('⚠️ No images found using standard tags, trying broad search...');
+            // Fallback: try to find anything that looks like a thumb URL in the HTML
+            const regex = /https?:\/\/[^\"\'\s]+\.(jpg|jpeg|png|webp)/gi;
+            const matches = response.body.match(regex) || [];
+            matches.forEach(url => {
+                if (url.includes('thumb')) candidates.push({ url, score: 30000 });
+            });
+        }
 
-        // filter out tiny placeholders and sort
-        const finalList = candidates
-            .filter(c => c.score > 40000)
-            .sort((a,b) => b.score - a.score)
-            .map(c => c.url);
+        // filter and sort
+        const finalList = [...new Set(candidates.map(c => c.url))]
+            .filter(url => !url.includes('google') && !url.includes('click'))
+            .slice(0, count + 1);
 
-        // skip first weird file if necessary
+        // skip first if necessary
         const result = finalList.length > 1 ? finalList.slice(1) : finalList;
 
         console.log(`✅ Found ${result.length} usable images`);
@@ -967,23 +977,38 @@ async function searchPinterest(query, count = 10) {
         });
 
         const html = response.body;
+        console.log(`🔍 [${BOT_ID}] Pinterest HTML length: ${html.length}`);
         
-        // Find the script tag containing the app state
+        // Find the script tag containing the app state (multiple potential matches)
         const stateMatch = html.match(/<script[^>]*id="__PINTEREST_APP_STATE__"[^>]*>(.*?)<\/script>/s) || 
-                          html.match(/window\.__PINTEREST_APP_STATE__\s*=\s*({.*?});/s);
+                          html.match(/window\.__PINTEREST_APP_STATE__\s*=\s*({.*?});/s) ||
+                          html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
 
         let pins = [];
 
         if (stateMatch) {
-            const state = JSON.parse(stateMatch[1]);
-            
-            // Extract pins from various potential locations in the state object
-            if (state.resourceDataCache) {
-                for (const entry of state.resourceDataCache) {
-                    if (entry.data?.results) {
-                        pins.push(...entry.data.results);
+            try {
+                const state = JSON.parse(stateMatch[1]);
+                
+                // Deep extraction for Pinterest`s ever-changing JSON
+                const findPins = (obj) => {
+                    if (!obj || typeof obj !== 'object') return;
+                    if (Array.isArray(obj)) {
+                        obj.forEach(item => {
+                            if (item && item.images) pins.push(item);
+                            else findPins(item);
+                        });
+                    } else {
+                        if (obj.images && (obj.id || obj.pin_id)) {
+                            pins.push(obj);
+                        }
+                        Object.values(obj).forEach(val => findPins(val));
                     }
-                }
+                };
+                
+                findPins(state);
+            } catch (e) {
+                console.log("⚠️ Pinterest JSON parse failed, falling back to DOM");
             }
         }
 
@@ -994,7 +1019,6 @@ async function searchPinterest(query, count = 10) {
             imgs.forEach(img => {
                 const src = img.getAttribute('src');
                 if (src) {
-                    // Force HD quality
                     pins.push({ imageUrl: src.replace(/236x|474x/g, '736x') });
                 }
             });
@@ -2346,6 +2370,23 @@ async function initSocket() {
   botStarting = true;
   console.log(`🚀 Starting ${BOT_ID} (${botConfig.getBotName()})...`);
   
+  // Track enabled chats (moved up for initialization safety)
+  const enabledChats = new Set();
+  
+  function loadEnabledChats() {
+    try {
+      const data = system.get(BOT_ID + "_enabled_chats", []);
+      data.forEach(chatId => enabledChats.add(chatId));
+      console.log(`✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`);
+    } catch (err) {
+      console.error("Error loading enabled chats:", err.message);
+    }
+  }
+
+  function saveEnabledChats() {
+    system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
+  }
+
   try {
     // 1. Load Everything from Database FIRST
     await system.loadSystemData();
@@ -2559,23 +2600,6 @@ We are happy to have you here.
         console.log('Error in group-participants.update:', err);
     }
 });
-
-    // Track enabled chats
-    const enabledChats = new Set();
-    
-    function loadEnabledChats() {
-      try {
-        const data = system.get(BOT_ID + "_enabled_chats", []);
-        data.forEach(chatId => enabledChats.add(chatId));
-        console.log(`✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`);
-      } catch (err) {
-        console.error("Error loading enabled chats:", err.message);
-      }
-    }
-
-    function saveEnabledChats() {
-      system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
-    }
 
     // ============================================
     // MESSAGE HANDLER - processes every incoming message
@@ -6872,17 +6896,18 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
 
         for (const res of searchResults) {
             try {
-                console.log(`🔍 Fetching API data for: ${res.name}`);
+                console.log(`🔍 [${BOT_ID}] Fetching API data for: ${res.name}`);
                 const pageData = await scrapeVSBPage(res.url);
                 const stats = await extractStatsWithGroq(pageData.htmlContent);
                 
-                if (stats.tier !== "Unknown" || pageData.summary.length > 0) {
+                // If we have a summary, it's a valid character page even if stats are Unknown
+                if (pageData.summary.length > 50 || stats.tier !== "Unknown") {
                     foundData = { ...pageData, stats };
                     finalUrl = res.url;
                     break;
                 }
             } catch (e) {
-                console.log(`⚠️ Skipping ${res.name}: ${e.message}`);
+                console.log(`⚠️ [${BOT_ID}] Skipping ${res.name}: ${e.message}`);
             }
         }
 

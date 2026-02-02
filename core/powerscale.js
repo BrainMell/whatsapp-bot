@@ -9,13 +9,19 @@ async function getGot() {
 
 const PeakLogic = {
     clean: (text) => {
-        if (!text) return "N/A";
+        if (!text || text === "N/A") return "N/A";
+        // Remove wikitext brackets, bolding, and parenthetical info
         let peak = text.split('|').pop().trim();
-        return peak.replace(/\([^)]+\)/g, "").replace(/[[^\]]+]/g, "").trim();
+        peak = peak.replace(/'''|\*\*|\[\[|\||\]\]/g, "");
+        peak = peak.replace(/\([^)]+\)/g, "").replace(/[[^\]]+]/g, "").trim();
+        return peak || "N/A";
     },
     tier: (text) => {
-        const tiers = [...text.matchAll(/\b([0-9]+)-([A-Z])\b/gi)].map(m => m[0]);
-        return tiers.length ? tiers[tiers.length - 1] : "Unknown";
+        if (!text || text === "N/A") return "Unknown";
+        // Look for common tier formats like 2-C, Low 2-C, 1-A, etc.
+        const tierRegex = /\b([0-9]+-[A-Z]|Low\s+[0-9]+-[A-Z]|High\s+[0-9]+-[A-Z]|At\s+least\s+[0-9]+-[A-Z])\b/gi;
+        const matches = [...text.matchAll(tierRegex)].map(m => m[0]);
+        return matches.length ? matches[matches.length - 1] : "Unknown";
     },
     bio: (text) => {
         if (!text) return "";
@@ -89,24 +95,25 @@ async function scrapeVSBPage(pageUrl) {
 
         if (!page || page.missing) throw new Error("Page not found");
 
-        const htmlContent = page.revisions?.[0]?.['*'] || ''; // Wikitext actually, but extractStats expects this
-        
-        // Extract basic stats from intro text if available
+        const htmlContent = page.revisions?.[0]?.['*'] || ''; // Wikitext
         const summary = page.extract || "";
+        
         const stats = {};
         const statFields = ["Striking Strength", "Durability", "Stamina", "Range", "Speed", "Attack Potency"];
         
         statFields.forEach(field => {
-            const regex = new RegExp(field + "\\s*:\s*(.+)", "i");
+            // Flexible regex for wikitext and plain text
+            const regex = new RegExp(`(?:'''|\*\*|\b)${field}(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)`, "i");
             const match = summary.match(regex) || htmlContent.match(regex);
-            stats[field] = match ? match[1].split('\n')[0].trim() : "N/A";
+            stats[field] = match ? match[1].trim() : "N/A";
         });
 
-        const tierMatch = summary.match(/Tier\s*:\s*(.+)/i) || htmlContent.match(/Tier\s*:\s*(.+)/i);
-        const tierRaw = tierMatch ? tierMatch[1].split('\n')[0].trim() : "N/A";
+        const tierRegex = /(?:'''|\*\*|\b)Tier(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)/i;
+        const tierMatch = summary.match(tierRegex) || htmlContent.match(tierRegex);
+        const tierRaw = tierMatch ? tierMatch[1].trim() : "N/A";
 
         return {
-            htmlContent: htmlContent, // Passing wikitext as fallback
+            htmlContent: htmlContent, 
             imageUrl: page.thumbnail?.source || "",
             summary: summary,
             tierRaw: tierRaw,
@@ -121,19 +128,17 @@ async function scrapeVSBPage(pageUrl) {
 }
 
 async function extractStatsWithGroq(htmlContent) {
-    // This function originally parsed HTML but we now have wikitext/summary
-    // I'll keep the logic but clean up common tags
     const stats = {};
     const statFields = ["Attack Potency", "Speed", "Durability", "Stamina", "Range"];
 
     statFields.forEach(field => {
-        const regex = new RegExp(`${field}\s*?:\s*(.*?)(?:\n|$)`, "i");
+        const regex = new RegExp(`(?:'''|\*\*|\b)${field}(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)`, "i");
         const match = htmlContent.match(regex);
-        stats[field] = match ? match[1].replace(/<[^>]+>/g, '').trim() : "N/A";
+        stats[field] = match ? match[1].replace(/<[^>]+>/g, '').replace(/\||\[\[|\]\]/g, '').trim() : "N/A";
     });
 
-    const tierMatch = htmlContent.match(/Tier\s*:\s*(.*?)(?:\n|$)/i);
-    stats.Tier = tierMatch ? tierMatch[1].replace(/<[^>]+>/g, '').trim() : "N/A";
+    const tierMatch = htmlContent.match(/(?:'''|\*\*|\b)Tier(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)/i);
+    stats.Tier = tierMatch ? tierMatch[1].replace(/<[^>]+>/g, '').replace(/\||\[\[|\]\]/g, '').trim() : "N/A";
 
     const cleanedStats = {
         ap: PeakLogic.clean(stats["Attack Potency"]),
@@ -141,7 +146,7 @@ async function extractStatsWithGroq(htmlContent) {
         durability: PeakLogic.clean(stats["Durability"]),
         stamina: PeakLogic.clean(stats["Stamina"]),
         range: PeakLogic.clean(stats["Range"]),
-        tier: PeakLogic.tier(stats["Tier"] || stats["Attack Potency"])
+        tier: PeakLogic.tier(stats.Tier !== "N/A" ? stats.Tier : stats["Attack Potency"])
     };
 
     return cleanedStats;
