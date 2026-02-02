@@ -2090,7 +2090,7 @@ ${commandCategory}`;
 
 
 
-    let mainMsg = GET_BANNER(`✨ *${botName.toUpperCase()}*`) + `\n *Version 3.1* \n *By mellow* \n\n`;
+    let mainMsg = GET_BANNER(`✨ *${botName.toUpperCase()}*`) + `\n *Version ${botConfig.getVersion()}* \n *By mellow* \n\n`;
 
 
 
@@ -2919,7 +2919,7 @@ if (isGroupChat && isBotCommand) {
         // ============================================
         
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} about`) {
-          const aboutText = GET_BANNER(`🃏 ${botConfig.getBotName().toUpperCase()} v3.0`) + `
+          const aboutText = GET_BANNER(`🃏 ${botConfig.getBotName().toUpperCase()} v${botConfig.getVersion()}`) + `
 
 *Created by:* Mellow
 

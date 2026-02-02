@@ -11,6 +11,7 @@ class BotConfig {
       botId: "bot1",
       botName: "Joker",
       prefix: ".j",
+      version: "4.0",
       symbol: ".",
       currency: {
         symbol: "Ꞩ",
@@ -34,6 +35,7 @@ class BotConfig {
   getBotId() { return this.config.botId; }
   getBotName() { return this.config.botName; }
   getPrefix() { return this.config.prefix; }
+  getVersion() { return this.config.version; }
   getCurrency() { return this.config.currency; }
   getSymbol() { return this.config.symbol; }
   getContentDescription() { return this.config.contentDescription; }
@@ -66,6 +68,7 @@ module.exports = {
   getBotId: () => (storage.getStore()?.getBotId() || "global"),
   getBotName: () => (storage.getStore()?.getBotName() || "Bot"),
   getPrefix: () => (storage.getStore()?.getPrefix() || ".j"),
+  getVersion: () => (storage.getStore()?.getVersion() || "4.0"),
   getCurrency: () => (storage.getStore()?.getCurrency() || { symbol: "Ꞩ", name: "Zeni" }),
   getSymbol: () => (storage.getStore()?.getSymbol() || "."),
   getContentDescription: () => (storage.getStore()?.getContentDescription() || ""),

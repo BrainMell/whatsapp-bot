@@ -2,6 +2,7 @@
   "botId": "subaru",
   "botName": "Subaru",
   "prefix": ".s",
+  "version": "4.0",
   "symbol": ".",
   "currency": {
     "symbol": "Ꞩ",
