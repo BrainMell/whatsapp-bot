@@ -29,10 +29,15 @@ const cheerio = require("cheerio");
 const play = require('play-dl');
 const yts = require('yt-search');
 const ytdl = require("@distube/ytdl-core");
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
-puppeteer.use(StealthPlugin());
+const { parseHTML } = require('linkedom');
+
+// Helper for dynamic ESM import of got-scraping
+async function getGot() {
+    const { gotScraping } = await import('got-scraping');
+    return gotScraping;
+}
+
 const ffmpeg = require('fluent-ffmpeg');
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
 const { getAnikaiBestMatch } = require('./anikaiResolver');
@@ -95,38 +100,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
-
-// --- BROWSER PATH HELPER ---
-function getChromePath() {
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
-    
-    let paths = [];
-    if (process.platform === 'win32') {
-        paths = [
-            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-        ];
-    } else {
-        paths = [
-            '/usr/bin/google-chrome-stable',
-            '/usr/bin/google-chrome',
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-            '/app/.apt/usr/bin/google-chrome-stable',
-            '/app/.apt/usr/bin/google-chrome',
-            '/usr/local/bin/google-chrome',
-            '/usr/bin/chromium-browser'
-        ];
-    }
-
-    for (const p of paths) {
-        if (fs.existsSync(p)) return p;
-    }
-    
-    // Fallback if none found - though puppeteer-core will likely fail
-    return process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '/usr/bin/google-chrome-stable';
-}
 
 // --- DYNAMIC TITLE LOGIC ---
 function getDynamicTitle(userId) {
@@ -617,85 +590,58 @@ function normalizeJid(jid) {
   return jid.split('@')[0].split(':')[0];
 }
 
-// ---------- scraper ----------
+// ---------- scraper (Refactored to No-Browser) ----------
 async function scrapePornPics(searchTerm, count = 10, options = {}) {
-    const { debug = false } = options;
-    let browser;
     try {
+        const got = await getGot();
         const searchUrl = `https://www.pornpics.com/?q=${encodeURIComponent(searchTerm)}`;
-        browser = await puppeteer.launch({ 
-            headless: "new", 
-            executablePath: getChromePath(),
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--no-first-run', '--disable-software-rasterizer'] 
+        
+        console.log('🔍 Scraping (No-Browser):', searchUrl);
+        
+        const response = await got.get(searchUrl, {
+            headers: {
+                'Referer': 'https://www.pornpics.com/'
+            }
         });
-        const page = await browser.newPage();
+        
+        const { document } = parseHTML(response.body);
+        
+        // Find all thumbnail links
+        const galleryItems = document.querySelectorAll('li.thumb');
+        const candidates = [];
 
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        await page.setViewport({ width: 1366, height: 900 });
+        for (const item of galleryItems) {
+            const img = item.querySelector('img');
+            if (!img) continue;
 
-        await page.setRequestInterception(true);
-        page.on('request', req => {
-            if (['stylesheet','font'].includes(req.resourceType())) req.abort();
-            else req.continue();
-        });
-
-        console.log('🔍 Scraping:', searchUrl);
-        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-
-        // scroll to lazy-load images
-        const maxScrolls = Math.ceil(count / 5);
-        for (let i = 0; i < maxScrolls; i++) {
-            await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 1.2)));
-            await new Promise(res => setTimeout(res, 900));
-        }
-
-        const candidates = await page.evaluate(() => {
-            const selectors = ['img.ll-loaded','img[data-src]','img[data-original]','img[srcset]','article img','figure img','div.thumb img','img'];
-            const seen = new Set();
-            const out = [];
-
-            for (const sel of selectors) {
-                const nodes = Array.from(document.querySelectorAll(sel));
-                for (const img of nodes) {
-                    let url = img.src || img.getAttribute('data-src') || img.getAttribute('data-original') || null;
-                    if (!url && img.hasAttribute('srcset')) {
-                        const srcset = img.getAttribute('srcset').split(',').map(s => s.trim()).filter(Boolean);
-                        if (srcset.length) url = srcset[srcset.length - 1].split(' ')[0];
-                    }
-                    if (!url || !url.startsWith('http') || seen.has(url)) continue;
-                    seen.add(url);
-
-                    const natW = img.naturalWidth || 0;
-                    const natH = img.naturalHeight || 0;
-                    const attrW = parseInt(img.getAttribute('width') || img.width || 0) || 0;
-                    const attrH = parseInt(img.getAttribute('height') || img.height || 0) || 0;
-                    const score = (natW || attrW) * (natH || attrH);
-                    out.push({ url, score });
-                }
+            // Extract image URL from data-src or src
+            let url = img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('data-original');
+            if (!url || !url.startsWith('http')) {
+                if (url && url.startsWith('//')) url = 'https:' + url;
+                else continue;
             }
 
-            out.sort((a,b) => b.score - a.score);
-            return out;
-        });
-
-        if (!candidates || candidates.length === 0) {
-            await browser.close();
-            return [];
+            // Estimate score based on thumbnail size if available
+            const w = parseInt(img.getAttribute('width')) || 300;
+            const h = parseInt(img.getAttribute('height')) || 300;
+            candidates.push({ url, score: w * h });
         }
 
-        // filter out videos/tiny placeholders
-        const videoExtRE = /\.(mp4|webm|ogg)(\?.*)?$/i;
-        const filtered = candidates.filter(c => !videoExtRE.test(c.url) && c.score > 40000).map(c => c.url);
+        if (candidates.length === 0) return [];
 
-        // skip first weird file automatically
-        const finalList = filtered.length > 1 ? filtered.slice(1) : filtered;
+        // filter out tiny placeholders and sort
+        const finalList = candidates
+            .filter(c => c.score > 40000)
+            .sort((a,b) => b.score - a.score)
+            .map(c => c.url);
 
-        await browser.close();
-        console.log(`✅ Found ${finalList.length} usable images`);
-        return finalList.slice(0, count);
+        // skip first weird file if necessary
+        const result = finalList.length > 1 ? finalList.slice(1) : finalList;
+
+        console.log(`✅ Found ${result.length} usable images`);
+        return result.slice(0, count);
 
     } catch (err) {
-        if (browser) await browser.close();
         console.error('❌ PornPics Scrape Error:', err.message || String(err));
         return [];
     }
@@ -1005,55 +951,65 @@ setInterval(() => {
     console.log(`🧹 [${BOT_ID}] Global reset: Group Info wiped from MongoDB.`);
 }, RESET_INTERVAL);
 
-// Scrapes pintrest for image results based on a query, had no idea how to do this btw, gemini and reddit helped
+// Scrapes pinterest for image results based on a query (Refactored to No-Browser)
 async function searchPinterest(query, count = 10) {
-    let browser;
     try {
-        // Launch stealth browser
-        browser = await puppeteer.launch({
-            headless: "new",
-            executablePath: getChromePath(),
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--no-first-run', '--disable-software-rasterizer', '--single-process']
-        });        const page = await browser.newPage();
+        const got = await getGot();
+        const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`;
         
-        // Block unnecessary files to speed up search and avoid timeouts
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            if (['stylesheet', 'font', 'media'].includes(req.resourceType())) {
-                req.abort();
-            } else {
-                req.continue();
+        console.log('🔍 Pinterest Search (No-Browser):', url);
+        
+        const response = await got.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
             }
         });
-        
-        const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`;
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); 
 
-        // Scroll to trigger lazy loading (more scrolls for more images)
-        const scrolls = Math.ceil(count / 10); // More scrolls for more images
-        for (let i = 0; i < scrolls; i++) {
-            await page.evaluate(() => window.scrollBy(0, 1000));
-            await new Promise(res => setTimeout(res, 2000)); 
+        const html = response.body;
+        
+        // Find the script tag containing the app state
+        const stateMatch = html.match(/<script[^>]*id="__PINTEREST_APP_STATE__"[^>]*>(.*?)<\/script>/s) || 
+                          html.match(/window\.__PINTEREST_APP_STATE__\s*=\s*({.*?});/s);
+
+        let pins = [];
+
+        if (stateMatch) {
+            const state = JSON.parse(stateMatch[1]);
+            
+            // Extract pins from various potential locations in the state object
+            if (state.resourceDataCache) {
+                for (const entry of state.resourceDataCache) {
+                    if (entry.data?.results) {
+                        pins.push(...entry.data.results);
+                    }
+                }
+            }
         }
 
-        const images = await page.evaluate(() => {
-            const pinWrappers = document.querySelectorAll('div[data-test-id="pinWrapper"]');
-            const links = [];
-            pinWrappers.forEach(wrapper => {
-                const img = wrapper.querySelector('img');
-                if (img && img.src && img.src.includes('pinimg.com')) {
-                    // Force HD quality by replacing thumbnail resolution with 736x
-                    links.push(img.src.replace(/236x|474x/g, '736x'));
+        // Fallback: If JSON extraction failed, try lightweight DOM parsing for images
+        if (pins.length === 0) {
+            const { document } = parseHTML(html);
+            const imgs = document.querySelectorAll('img[src*="pinimg.com"]');
+            imgs.forEach(img => {
+                const src = img.getAttribute('src');
+                if (src) {
+                    // Force HD quality
+                    pins.push({ imageUrl: src.replace(/236x|474x/g, '736x') });
                 }
             });
-            return links;
-        });
+        } else {
+            // Map the extracted pin data
+            pins = pins.map(pin => ({
+                imageUrl: pin.images?.orig?.url || pin.images?.['736x']?.url || pin.images?.['474x']?.url
+            })).filter(p => p.imageUrl);
+        }
 
-        await browser.close();
-        // Return requested number of unique HD images
-        return [...new Set(images)].slice(0, count);
+        const uniqueImages = [...new Set(pins.map(p => p.imageUrl))];
+        console.log(`✅ Found ${uniqueImages.length} Pinterest images`);
+        return uniqueImages.slice(0, count);
+
     } catch (err) {
-        if (browser) await browser.close();
         console.error("❌ Pinterest Error:", err.message);
         return [];
     }
@@ -6900,177 +6856,35 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
     });
 
     try {
-        const browser = await puppeteer.launch({
-            headless: "new",
-            executablePath: getChromePath(),
-            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--no-first-run", "--disable-software-rasterizer", "--single-process"]
-        });
+        // Step 1: Search for character links
+        const searchResults = await searchVSB(character);
 
-        const page = await browser.newPage();
-        page.setDefaultNavigationTimeout(60000);
-        await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-
-        // Search VS Battles Wiki
-        const searchUrl = `https://vsbattles.fandom.com/wiki/Special:Search?query=${encodeURIComponent(character)}`;
-        await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
-
-        const searchResults = await page.$$eval(
-            ".unified-search__result a",
-            links => links
-                .map(a => a.href)
-                .filter(h => h.includes("/wiki/") && !h.includes("Special:") && !h.includes("Category:"))
-        );
-
-        if (searchResults.length === 0) {
-            await browser.close();
+        if (!searchResults || searchResults.length === 0) {
             await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-            await sock.sendMessage(chatId, {
+            return await sock.sendMessage(chatId, {
                 text: BOT_MARKER + `❌ No results found for "${character}" on VS Battles Wiki.`
             });
-            await awardProgression(senderJid, chatId);
-            return;
         }
 
+        // Step 2: Try results until one provides valid stats
         let foundData = null;
+        let finalUrl = "";
 
-        // Try each search result
-        for (const url of searchResults) {
-            console.log(`🔍 Checking URL: ${url}`);
-            
-            // Wait for network to be idle (images loaded)
+        for (const res of searchResults) {
             try {
-                await page.goto(url, { 
-                    waitUntil: "networkidle2",  // Wait for network to be mostly idle
-                    timeout: 30000 
-                });
-            } catch (navErr) {
-                console.log("⚠️ Network timeout, trying with domcontentloaded...");
-                await page.goto(url, { waitUntil: "domcontentloaded" });
-            }
-
-            // Scroll page to trigger lazy-loaded images
-            await page.evaluate(() => {
-                window.scrollTo(0, document.body.scrollHeight / 2);
-            });
-            
-            // Wait a bit for images to load after scroll
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Try to wait for image to appear (with timeout)
-            try {
-                await page.waitForSelector('img[src*="static.wikia.nocookie.net"]', { 
-                    timeout: 5000 
-                });
-                console.log("✅ Image element found on page");
-            } catch (imgWaitErr) {
-                console.log("⚠️ Image selector timeout, continuing anyway...");
-            }
-
-            const data = await page.evaluate(() => {
-                const out = { image: "", summary: "", stats: {} };
-                const content = document.querySelector("#mw-content-text");
-                if (!content) return out;
-
-                // ========= IMAGE SCRAPING - Try multiple strategies =========
-                let foundImage = null;
+                console.log(`🔍 Fetching API data for: ${res.name}`);
+                const pageData = await scrapeVSBPage(res.url);
+                const stats = await extractStatsWithGroq(pageData.htmlContent);
                 
-                // Strategy 1: Direct VS Battles Wiki image URL
-                foundImage = content.querySelector('img[src*="https://static.wikia.nocookie.net/vsbattles/images/"]');
-                
-                // Strategy 2: Any wikia image
-                if (!foundImage) {
-                    foundImage = content.querySelector('img[src*="static.wikia.nocookie.net"]');
+                if (stats.tier !== "Unknown" || pageData.summary.length > 0) {
+                    foundData = { ...pageData, stats };
+                    finalUrl = res.url;
+                    break;
                 }
-                
-                // Strategy 3: Infobox image
-                if (!foundImage) {
-                    foundImage = content.querySelector('.pi-image-thumbnail');
-                }
-                
-                // Strategy 4: Any image in the article
-                if (!foundImage) {
-                    const allImages = content.querySelectorAll('img');
-                    for (const img of allImages) {
-                        if (img.src && img.src.includes('static.wikia.nocookie.net') && !img.src.includes('Wikia-Visualization')) {
-                            foundImage = img;
-                            break;
-                        }
-                    }
-                }
-                
-                if (foundImage && foundImage.src) {
-                    out.image = foundImage.src.split('/revision')[0];
-                    console.log("✅ Found wiki image:", out.image);
-                } else {
-                    console.log("❌ No wiki image found on page");
-                }
-
-                const removeBrackets = (t) => t ? t.replace(/\[[^\]]+\]/g, "").trim() : "";
-
-                // ========= SUMMARY =========
-                const summaryH2 = [...content.querySelectorAll("h2")].find(h => /summary/i.test(h.innerText));
-                if (summaryH2) {
-                    let node = summaryH2.nextSibling;
-                    let arr = [];
-                    while (node && (node.nodeType !== 1 || node.tagName !== "H2")) {
-                        const t = node.nodeType === 3 ? node.textContent : node.innerText || "";
-                        if (t.trim()) arr.push(t.trim());
-                        node = node.nextSibling;
-                    }
-                    out.summary = removeBrackets(arr.join("\n\n"));
-                }
-
-                // ========= STATS =========
-                const statFields = ["Tier", "Durability", "Lifting Strength", "Speed", "Attack Potency", "Standard Equipment"];
-                statFields.forEach(field => {
-                    const regex = new RegExp(field + "\\s*:\\s*(.+)", "i");
-                    const match = content.innerText.match(regex);
-                    const fieldKey = field.replace(/\s+/g, "_");
-
-                    if (match) {
-                        let value = removeBrackets(match[1].trim());
-                        if (fieldKey !== "Standard_Equipment" && value.includes("|")) {
-                            const parts = value.split("|");
-                            value = parts[parts.length - 1].trim();
-                        }
-                        out.stats[fieldKey] = value;
-                    } else {
-                        out.stats[fieldKey] = "";
-                    }
-                });
-
-                return out;
-            });
-
-            // Check if we found valid data
-            const hasStats = Object.values(data.stats).some(val => val && val.length > 0);
-
-            if (hasStats || data.summary.length > 0) {
-                // If wiki didn't provide image, use SuperHero API
-                if (!data.image || data.image === "") {
-                    console.log("❌ No wiki image, fetching from SuperHero API...");
-                    try {
-                        const apiResponse = await axios.get(
-                            `https://superheroapi.com/api/6e934a5989d474065c897c8fcc68df21/search/${encodeURIComponent(character)}`
-                        );
-                        if (apiResponse.data && apiResponse.data.results && apiResponse.data.results.length > 0) {
-                            data.image = apiResponse.data.results[0].image.url;
-                            console.log("✅ Got image from SuperHero API!");
-                        }
-                    } catch (apiErr) {
-                        console.log("❌ SuperHero API failed:", apiErr.message);
-                    }
-                }
-
-                foundData = data;
-                console.log("✅ Valid data found!");
-                break;
-            } else {
-                console.log("❌ Page invalid, moving to next result...");
+            } catch (e) {
+                console.log(`⚠️ Skipping ${res.name}: ${e.message}`);
             }
         }
-
-        await browser.close();
 
         if (!foundData) {
             await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
@@ -7089,90 +6903,34 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
 
         message += `⚡ *POWER STATS:*\n`;
         message += `━━━━━━━━━━━━━━━━━━\n`;
-
-        // TIER - Most important stat, show first!
-        if (foundData.stats.Tier) {
-            message += `🏆 *TIER:* ${foundData.stats.Tier}\n`;
-            message += `━━━━━━━━━━━━━━━━━━\n`;
-        }
-
-        if (foundData.stats.Attack_Potency) {
-            message += `💥 *Attack Potency:*\n${foundData.stats.Attack_Potency.substring(0, 200)}${foundData.stats.Attack_Potency.length > 200 ? '...' : ''}\n\n`;
-        }
-
-        if (foundData.stats.Durability) {
-            message += `🛡️ *Durability:*\n${foundData.stats.Durability.substring(0, 200)}${foundData.stats.Durability.length > 200 ? '...' : ''}\n\n`;
-        }
-
-        if (foundData.stats.Speed) {
-            message += `⚡ *Speed:*\n${foundData.stats.Speed.substring(0, 200)}${foundData.stats.Speed.length > 200 ? '...' : ''}\n\n`;
-        }
-
-        if (foundData.stats.Lifting_Strength) {
-            message += `💪 *Lifting Strength:*\n${foundData.stats.Lifting_Strength.substring(0, 200)}${foundData.stats.Lifting_Strength.length > 200 ? '...' : ''}\n\n`;
-        }
-
-        if (foundData.stats.Standard_Equipment) {
-            message += `🔧 *Equipment:*\n${foundData.stats.Standard_Equipment.substring(0, 200)}${foundData.stats.Standard_Equipment.length > 200 ? '...' : ''}\n\n`;
-        }
-
+        message += `🏆 *TIER:* ${foundData.stats.tier}\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        message += `💥 *Attack Potency:* ${foundData.stats.ap}\n`;
+        message += `🛡️ *Durability:* ${foundData.stats.durability}\n`;
+        message += `⚡ *Speed:* ${foundData.stats.speed}\n`;
+        message += `💪 *Stamina:* ${foundData.stats.stamina}\n`;
+        message += `📏 *Range:* ${foundData.stats.range}\n`;
         message += `━━━━━━━━━━━━━━━━━━\n`;
         message += `📚 Source: VS Battles Wiki`;
 
-        // Send with image if available (with retry logic)
-        if (foundData.image && foundData.image.length > 0) {
-            console.log("📸 Attempting to send with image:", foundData.image);
-            
-            let imageSent = false;
-            const maxRetries = 3;
-            
-            for (let attempt = 1; attempt <= maxRetries && !imageSent; attempt++) {
-                try {
-                    console.log(`🔄 Image download attempt ${attempt}/${maxRetries}...`);
-                    
-                    const imageResponse = await axios.get(foundData.image, { 
-                        responseType: 'arraybuffer',
-                        timeout: 20000,  // 20 second timeout
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                        }
-                    });
-                    
-                    // Validate image data
-                    if (!imageResponse.data || imageResponse.data.length === 0) {
-                        throw new Error("Empty image data received");
-                    }
-                    
-                    await sock.sendMessage(chatId, {
-                        image: Buffer.from(imageResponse.data),
-                        caption: BOT_MARKER + message
-                    });
-                    
-                    console.log("✅ Sent with image successfully!");
-                    imageSent = true;
-                    
-                } catch (imgErr) {
-                    console.log(`❌ Attempt ${attempt} failed:`, imgErr.message);
-                    
-                    if (attempt < maxRetries) {
-                        // Wait before retry (exponential backoff)
-                        const waitTime = attempt * 1000; // 1s, 2s, 3s
-                        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-                        await new Promise(resolve => setTimeout(resolve, waitTime));
-                    } else {
-                        console.log("❌ All retry attempts failed, sending text only...");
-                    }
-                }
-            }
-            
-            // If image failed after all retries, send text only
-            if (!imageSent) {
-                console.log("📝 Falling back to text-only message");
+        // Send with image if available
+        if (foundData.imageUrl) {
+            try {
+                const imageResponse = await axios.get(foundData.imageUrl, { 
+                    responseType: 'arraybuffer',
+                    timeout: 10000,
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                
+                await sock.sendMessage(chatId, {
+                    image: Buffer.from(imageResponse.data),
+                    caption: BOT_MARKER + message
+                });
+            } catch (imgErr) {
+                console.log("📸 Image load failed, sending text only");
                 await sock.sendMessage(chatId, { text: BOT_MARKER + message });
             }
-            
         } else {
-            console.log("📝 No image available, sending text only");
             await sock.sendMessage(chatId, { text: BOT_MARKER + message });
         }
 
@@ -7181,17 +6939,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
 
     } catch (err) {
         console.error("❌ Powerscale Error:", err);
-      
-        if (err.message.includes('scrollHeight')) {
-            await sock.sendMessage(chatId, { react: { text: "🫗", key: m.key } });
-            await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `Couldnt Find Character , Search Again With More \`Specific Name\``});
-        }else {
-            await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-            await sock.sendMessage(chatId, {
-            text: BOT_MARKER + ` Failed to fetch power scaling data.\nError: ${err.message}, try again, It \`Should Work.\``
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(chatId, {
+            text: BOT_MARKER + ` Failed to fetch power scaling data.\nError: ${err.message}`
         });
-        }
         await awardProgression(senderJid, chatId);
     }
     return;
