@@ -75,53 +75,94 @@ class ContextEngine {
         for (const userData of data.users) {
             const jid = userData.userId;
             
-            // Get user from economy cache/DB
-            const user = economy.getUser(jid);
+            // 1. Resolve JID (if AI returned a name instead of JID, which it shouldn`t but safety first)
+            let finalJid = jid;
+            if (!jid.includes('@')) {
+                // Fuzzy match name to JID from our economy cache
+                const users = economy.economyData || new Map();
+                for (const [uJid, uData] of users.entries()) {
+                    if (uData.nickname?.toLowerCase() === jid.toLowerCase()) {
+                        finalJid = uJid;
+                        break;
+                    }
+                }
+            }
+
+            // 2. Ensure user exists
+            if (!economy.isRegistered(finalJid)) {
+                // economy.initializeClass(finalJid); // Only init if we actually have something to save
+            }
+            
+            const user = economy.getUser(finalJid);
             if (!user) continue;
 
             if (!user.profile) {
-                user.profile = { memories: { likes: [], dislikes: [], hobbies: [], personal: [] } };
+                user.profile = { 
+                    memories: { likes: [], dislikes: [], hobbies: [], personal: [], other: [] },
+                    stats: { messageCount: 0, firstSeen: new Date(), lastSeen: new Date() },
+                    notes: []
+                };
+            }
+            
+            if (!user.profile.memories) {
+                user.profile.memories = { likes: [], dislikes: [], hobbies: [], personal: [], other: [] };
             }
 
-            // Map AI keys to User Model keys
-            const map = {
-                'preferences': 'likes',
-                'experiences': 'personal',
-                'interests': 'hobbies',
-                'identity': 'personal'
-            };
+            let changes = 0;
 
             // Process Preferences
             if (userData.preferences) {
                 userData.preferences.forEach(p => {
                     const category = p.category === 'dislike' ? 'dislikes' : 'likes';
+                    if (!user.profile.memories[category]) user.profile.memories[category] = [];
                     if (!user.profile.memories[category].includes(p.subject)) {
                         user.profile.memories[category].push(p.subject);
+                        changes++;
                     }
                 });
             }
 
-            // Process Experiences/Interests
+            // Process Experiences
             if (userData.experiences) {
+                if (!user.profile.memories.personal) user.profile.memories.personal = [];
                 userData.experiences.forEach(e => {
                     const str = `${e.activity_type} ${e.subject}`;
                     if (!user.profile.memories.personal.includes(str)) {
                         user.profile.memories.personal.push(str);
+                        changes++;
                     }
                 });
             }
 
+            // Process Interests
             if (userData.interests) {
+                if (!user.profile.memories.hobbies) user.profile.memories.hobbies = [];
                 userData.interests.forEach(i => {
                     if (!user.profile.memories.hobbies.includes(i.specific_interest)) {
                         user.profile.memories.hobbies.push(i.specific_interest);
+                        changes++;
+                    }
+                });
+            }
+
+            // Process Other Facts (Identity etc)
+            if (userData.identity || userData.other) {
+                const others = [...(userData.identity || []), ...(userData.other || [])];
+                if (!user.profile.memories.other) user.profile.memories.other = [];
+                others.forEach(o => {
+                    const str = typeof o === 'string' ? o : (o.fact || o.trait || JSON.stringify(o));
+                    if (!user.profile.memories.other.includes(str)) {
+                        user.profile.memories.other.push(str);
+                        changes++;
                     }
                 });
             }
 
             // Save back to DB
-            economy.saveUser(jid);
-            console.log(`🧠 Brain: Updated memory profile for ${user.nickname} (${jid})`);
+            if (changes > 0) {
+                economy.saveUser(finalJid);
+                console.log(`🧠 Brain: Learned ${changes} new things about ${user.nickname || finalJid.split('@')[0]}`);
+            }
         }
     }
 }

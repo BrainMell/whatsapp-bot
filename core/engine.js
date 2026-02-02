@@ -96,6 +96,22 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
+// --- BROWSER PATH HELPER ---
+function getChromePath() {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (process.platform === 'win32') {
+        const paths = [
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+        ];
+        for (const p of paths) {
+            if (fs.existsSync(p)) return p;
+        }
+    }
+    return '/usr/bin/google-chrome-stable';
+}
+
 // --- DYNAMIC TITLE LOGIC ---
 function getDynamicTitle(userId) {
   const user = economy.getUser(userId);
@@ -591,7 +607,11 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
     let browser;
     try {
         const searchUrl = `https://www.pornpics.com/?q=${encodeURIComponent(searchTerm)}`;
-        browser = await puppeteer.launch({ headless: "new", args: ['--no-sandbox','--disable-setuid-sandbox'] });
+        browser = await puppeteer.launch({ 
+            headless: "new", 
+            executablePath: getChromePath(),
+            args: ['--no-sandbox','--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] 
+        });
         const page = await browser.newPage();
 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
@@ -976,7 +996,8 @@ async function searchPinterest(query, count = 10) {
         // Launch stealth browser
         browser = await puppeteer.launch({ 
             headless: "new", 
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+            executablePath: getChromePath(),
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] 
         });
         const page = await browser.newPage();
         
@@ -6843,7 +6864,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
     try {
         const browser = await puppeteer.launch({
             headless: "new",
-            args: ["--no-sandbox", "--disable-setuid-sandbox"]
+            executablePath: getChromePath(),
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
         });
 
         const page = await browser.newPage();

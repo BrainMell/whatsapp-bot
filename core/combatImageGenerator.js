@@ -199,7 +199,7 @@ async function drawSpriteBar(canvas, x, y, current, max, type = 'hp', w = 121, h
         
         if (smooth) {
             // Smooth scaling using the 'full' sprite (hp5 or mana5)
-            const spritePath = path.join(UI_PATH, `${getPrefix()}5.png`);
+            const spritePath = path.join(UI_PATH, `${prefix}5.png`);
             if (fs.existsSync(spritePath)) {
                 const bar = await Jimp.read(spritePath);
                 const barW = Math.max(1, Math.round(w * percent));
@@ -209,7 +209,7 @@ async function drawSpriteBar(canvas, x, y, current, max, type = 'hp', w = 121, h
         } else {
             // Segmented sprite choice
             const spriteNum = Math.min(5, Math.max(1, Math.round(percent * 4) + 1));
-            const spritePath = path.join(UI_PATH, `${getPrefix()}${spriteNum}.png`);
+            const spritePath = path.join(UI_PATH, `${prefix}${spriteNum}.png`);
             if (fs.existsSync(spritePath)) {
                 const bar = await Jimp.read(spritePath);
                 bar.resize({ w, h });
