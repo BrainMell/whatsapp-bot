@@ -19,6 +19,12 @@ const { BotConfig } = require('./botConfig');
 const connectDB = require('./db');
 
 async function boot() {
+    // Kill Switch Check
+    if (process.env.BOT_ACTIVE === 'false') {
+        console.log("🛑 Kill Switch Triggered (BOT_ACTIVE=false). Manager shutting down...");
+        process.exit(0);
+    }
+
     console.log(" Multi-Tenant Manager Booting...");
     
     // 1. Connect to Shared Database once
