@@ -2,6 +2,7 @@
 module.exports = {
     handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount) {
         try {
+            if (!msg || !msg.message) return;
             const chatId = msg.key.remoteJid;
             const sender = msg.key.participant || msg.key.remoteJid;
 

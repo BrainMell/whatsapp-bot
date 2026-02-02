@@ -3,34 +3,32 @@ const puppeteer = require('puppeteer-extra');
 const Groq = require("groq-sdk"); 
 
 const getChromeExecutablePath = () => {
-    if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
-        console.log(`Using Chrome executable from CHROME_PATH environment variable: ${process.env.CHROME_PATH}`);
-        return process.env.CHROME_PATH;
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
+
+    let paths = [];
+    if (process.platform === 'win32') {
+        paths = [
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+        ];
+    } else {
+        paths = [
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/app/.apt/usr/bin/google-chrome-stable',
+            '/usr/local/bin/google-chrome'
+        ];
     }
 
-    try {
-        const defaultPath = puppeteer.executablePath();
-        if (defaultPath && fs.existsSync(defaultPath)) {
-            console.log(`Using Chrome executable from Puppeteer's default: ${defaultPath}`);
-            return defaultPath;
-        }
-    } catch (e) {
-        console.warn(`Puppeteer's default executable not found or failed to retrieve: ${e.message}`);
+    for (const p of paths) {
+        if (fs.existsSync(p)) return p;
     }
 
-    const commonPaths = [
-        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    ];
-
-    for (const path of commonPaths) {
-        if (fs.existsSync(path)) {
-            console.log(`Using common Windows Chrome path: ${path}`);
-            return path;
-        }
-    }
-
-    throw new Error("Chrome/Chromium executable not found. Please ensure Chrome/Chromium is installed or set the CHROME_PATH environment variable.");
+    return process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '/usr/bin/google-chrome-stable';
 };
 
 const PeakLogic = {
@@ -61,7 +59,7 @@ async function searchVSB(characterName) {
             "--disable-accelerated-2d-canvas",
             "--no-first-run",
             "--no-zygote",
-            // "--single-process" // Removed this line
+            "--single-process"
         ]
     });
 
@@ -111,7 +109,7 @@ async function scrapeVSBPage(pageUrl) {
             "--disable-accelerated-2d-canvas",
             "--no-first-run",
             "--no-zygote",
-            // "--single-process" // Removed this line
+            "--single-process"
         ]
     });
 
