@@ -12,8 +12,7 @@ Extract the following for each relevant user:
 1. **Preferences**: Things they explicitly like/love or dislike/hate
 2. **Experiences**: Activities they've done, places visited, content consumed
 3. **Interests**: Topics, hobbies, or domains they're passionate about
-4. **Identity Markers**: How they describe themselves (e.g. "I am a dev", "As a mother...")
-5. **Recommendations**: What they suggest to others
+4. **Other Facts**: Identity markers (how they describe themselves), recommendations they give, or specific facts.
 
 For each extraction:
 - Include exact message timestamp and username
@@ -40,7 +39,8 @@ For each extraction:
         }
       ],
       "experiences": [],
-      "interests": []
+      "interests": [],
+      "other": []
     }
   ],
   "metadata": {
@@ -53,15 +53,13 @@ For each extraction:
      * Build the batch extraction prompt
      */
     buildPrompt(conversationStr, tasks) {
-        const usersOfInterest = [...new Set(tasks.map(t => t.message.username))];
-        
         // Detailed trigger list for the AI to focus on
         const targetSummary = tasks.map(t => {
             const types = t.triggerTypes.map(tr => `${tr.type} (${tr.confidence.toFixed(2)})`).join(', ');
-            return `- ${t.message.username} at ${t.message.timestamp.toLocaleTimeString()}: ${types}\n  "${t.message.content}"`;
+            return `- ${t.message.username} (${t.message.userId}) at ${t.message.timestamp.toLocaleTimeString()}: ${types}\n  "${t.message.content}"`;
         }).join('\n');
 
-        return `${this.systemInstructions}\n\nCONVERSATION:\n${conversationStr}\n\nEXTRACTION TARGETS (Focus on these):\n${targetSummary}\n\nFOCUS ON USERS: ${usersOfInterest.join(', ')}\n\nCRITICAL RULES:\n1. Only extract EXPLICIT information.\n2. Return ONLY valid JSON.\n3. Mark sarcasm/hypotheticals clearly.\n\nReturn format:\n${this.responseFormat}`;
+        return `${this.systemInstructions}\n\nCONVERSATION:\n${conversationStr}\n\nEXTRACTION TARGETS (Focus on these, but look for info on ANY participant):\n${targetSummary}\n\nCRITICAL RULES:\n1. Only extract EXPLICIT information.\n2. Return ONLY valid JSON.\n3. Use REAL JIDs (e.g. 1234@s.whatsapp.net) for 'userId' if available in the conversation context.\n4. Mark sarcasm/hypotheticals clearly.\n\nReturn format:\n${this.responseFormat}`;
     }
 }
 

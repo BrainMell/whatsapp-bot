@@ -22,15 +22,19 @@ class BufferManager {
     addMessage(msg) {
         if (!msg.chatId) return;
 
-        if (!this.windows.has(msg.chatId)) {
-            this.windows.set(msg.chatId, {
+        // Use Bot ID + Chat ID to isolate contexts in multi-tenant mode
+        const contextKey = `${botConfig.getBotId()}_${msg.chatId}`;
+
+        if (!this.windows.has(contextKey)) {
+            this.windows.set(contextKey, {
                 chatId: msg.chatId,
+                botId: botConfig.getBotId(),
                 messages: [],
                 lastUpdate: new Date()
             });
         }
 
-        const window = this.windows.get(msg.chatId);
+        const window = this.windows.get(contextKey);
         window.messages.push(msg);
         window.lastUpdate = new Date();
 
@@ -44,7 +48,8 @@ class BufferManager {
      * Get context around a specific message
      */
     getContext(chatId, aroundMsgId, before = 15, after = 5) {
-        const window = this.windows.get(chatId);
+        const contextKey = `${botConfig.getBotId()}_${chatId}`;
+        const window = this.windows.get(contextKey);
         if (!window) return [];
 
         const messages = window.messages;

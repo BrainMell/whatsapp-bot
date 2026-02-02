@@ -1,4 +1,17 @@
 require("dotenv").config();
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Keep-alive endpoint for Render/UptimeRobot
+app.get('/', (req, res) => {
+  res.send('Multi-Tenant Bot Manager is Running!');
+});
+
+app.listen(port, () => {
+  console.log(`📡 Keep-alive server listening on port ${port}`);
+});
+
 const fs = require('fs');
 const path = require('path');
 const { startBot } = require('./core/engine');
