@@ -1,4 +1,29 @@
 require("dotenv").config();
+
+/**
+ * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
+ * Intercepts hardcoded library logs that serialize large Buffer objects.
+ */
+const maskLogs = (originalFn) => {
+    return function(...args) {
+        const str = args[0];
+        if (typeof str === 'string' && (
+            str.includes('Removing old closed session') || 
+            str.includes('SessionEntry') || 
+            str.includes('Closing open session') ||
+            str.includes('Ratchet')
+        )) {
+            return;
+        }
+        originalFn.apply(console, args);
+    };
+};
+
+console.log = maskLogs(console.log);
+console.info = maskLogs(console.info);
+console.warn = maskLogs(console.warn);
+console.debug = maskLogs(console.debug);
+
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;

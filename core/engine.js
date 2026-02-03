@@ -83,11 +83,11 @@ async function startBot(configInstance) {
     setInterval(async () => {
       try {
         const usage = process.memoryUsage().rss / 1024 / 1024;
-        await Metric.create({
+        Metric.create({
           botId: BOT_ID,
           ramUsage: usage,
           timestamp: new Date()
-        });
+        }).catch(() => {});
       } catch (err) {}
     }, 300000);
 
@@ -109,25 +109,25 @@ process.env.NODE_ENV = 'production';
 process.on('uncaughtException', async (err) => {
   console.error('❌ Uncaught Exception:', err.message);
   try {
-    await ErrorLog.create({
+    ErrorLog.create({
       errorType: 'uncaught_exception',
       message: err.message,
       stack: err.stack,
       timestamp: new Date()
-    });
+    }).catch(() => {});
   } catch (e) {}
 });
 
 process.on('unhandledRejection', async (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
   try {
-    await ErrorLog.create({
+    ErrorLog.create({
       errorType: 'unhandled_rejection',
       message: reason?.message || String(reason),
       stack: reason?.stack || null,
       metadata: { promise: String(promise) },
       timestamp: new Date()
-    });
+    }).catch(() => {});
   } catch (e) {}
 });
 
@@ -2242,31 +2242,31 @@ ${commandCategory}`;
 
 
   // ============================================
-function cleanupOldSessions() {
+async function cleanupOldSessions() {
   try {
     const authDir = './auth';
     if (!fs.existsSync(authDir)) return;
     
-    const files = fs.readdirSync(authDir);
+    const files = await fs.promises.readdir(authDir);
     let deletedCount = 0;
     
-    files.forEach(file => {
+    await Promise.all(files.map(async (file) => {
       // KEEP creds.json - everything else can go
       if (file === 'creds.json') return;
       
       try {
-        fs.unlinkSync(path.join(authDir, file));
+        await fs.promises.unlink(path.join(authDir, file));
         deletedCount++;
       } catch (err) {
         // Ignore errors
       }
-    });
+    }));
     
     if (deletedCount > 0) {
-      console.log(`🧹 Cleaned up ${deletedCount} old session files`);
+      // No log - silent optimization
     }
   } catch (err) {
-    console.log('⚠️ Session cleanup failed:', err.message);
+    // console.log('⚠️ Session cleanup failed:', err.message);
   }
 }
 
@@ -2459,26 +2459,16 @@ async function initSocket() {
     system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
   }
 
-  try {
-    // 1. Load Everything from Database FIRST
-    await system.loadSystemData();
-    await economy.loadEconomy();
-    await guilds.loadGuilds();
-    await loans.loadLoans();
-
-    if (!hasAuth(configInstance.getAuthPath())) {
-      console.log('⚠️ No auth folder found. Waiting for QR scan...');
-      isNewLogin = true;
-    }
-
-    loadGroupSettings();
-    loadUserWarnings();
-    loadBlockedUsers();
-    loadMutedUsers();
-    loadEnabledChats();
-    
-    const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
-    // Fetch latest version to avoid 405 (Method Not Allowed) errors
+    try {
+      // 1. Load Everything from Database FIRST in Parallel
+      await Promise.all([
+        system.loadSystemData(),
+        economy.loadEconomy(),
+        guilds.loadGuilds(),
+        loans.loadLoans()
+      ]);
+      
+      const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());    // Fetch latest version to avoid 405 (Method Not Allowed) errors
     const { version } = await fetchLatestBaileysVersion();
     
     // Flag to ignore broadcasts (status updates) only during initial boot/reconnect
@@ -2699,6 +2689,13 @@ We are happy to have you here.
 
   const chatId = m.key.remoteJid;
   const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
+  
+  // LIGHTWEIGHT DEBUG LOG
+  const debugText = m.message.conversation || m.message.extendedTextMessage?.text || "Media/Other";
+  if (type === 'notify') {
+    // console.log(`📩 [${BOT_ID}] ${senderJid}: ${debugText.substring(0, 30)} (Rekeying: ${isRekeying})`);
+  }
+
   const isGroupChat = chatId.endsWith('@g.us');
   const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
 
@@ -2753,6 +2750,11 @@ We are happy to have you here.
     m.message.videoMessage?.caption;
 
   const txt = text ? text.trim() : '';
+
+  // 🚨 HARD-PING TEST (Bypasses everything)
+  if (txt.toLowerCase() === 'ping' || txt.toLowerCase() === '.j ping') {
+    return await sock.sendMessage(chatId, { text: 'pong! 🏓 (Engine is alive)' });
+  }
   
   // 🧠 BRAIN: Context-Aware Extraction System
   // This processes every message through the analytical layers (Buffer -> Trigger -> Batch -> AI)
@@ -10067,12 +10069,3 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
 }
 
 module.exports = { startBot };
-
-
-
-
-
-
-
-
-
