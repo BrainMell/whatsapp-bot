@@ -72,7 +72,7 @@ async function startBot(configInstance) {
     let isNewLogin = false;
     let isRekeying = false;
     let botStartTime;
-    const msgRetryCounterCache = new NodeCache();
+    const msgRetryCounterCache = new NodeCache({ stdTTL: 3600 }); // 1 hour TTL
     const groupMetadataCache = new NodeCache({ stdTTL: 300 });
     const commandCooldowns = new Map();
 
@@ -2406,7 +2406,11 @@ async function initSocket() {
     loadEnabledChats();
     
     const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
+    // Fetch latest version to avoid 405 (Method Not Allowed) errors
     const { version } = await fetchLatestBaileysVersion();
+    
+    // Flag to ignore broadcasts (status updates) only during initial boot/reconnect
+    let ignoreBroadcasts = true;
 
     sock = makeWASocket({
       version,
@@ -2423,7 +2427,10 @@ async function initSocket() {
       },
       printQRInTerminal: false,
       browser: [`${botConfig.getBotName()} Bot`, 'Chrome', '1.0.0'],
-      shouldIgnoreJid: () => false,
+      // Filter broadcasts only while booting/reconnecting
+      shouldIgnoreJid: (jid) => ignoreBroadcasts && jid.includes('@broadcast'),
+      // Optimization: lower resource usage and faster startup
+      experimentalStore: true,
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -2450,6 +2457,7 @@ async function initSocket() {
       if (connection === 'open') {
         console.log('✅ WhatsApp connected (open).');
         isRekeying = false; // BOT IS STABLE
+        ignoreBroadcasts = false; // Allow broadcasts after successful connection
         
         // --- SYNC BOT IDENTITY TO WHATSAPP (Only on fresh login) ---
         if (isNewLogin) {
