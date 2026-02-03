@@ -9,8 +9,20 @@ const pureimage = require('pureimage');
 const { PassThrough } = require('stream');
 const path = require('path');
 const fs = require('fs');
+const { LRUCache } = require('lru-cache');
 
 const botConfig = require('../botConfig');
+
+const spriteCache = new LRUCache({ max: 60, ttl: 1000 * 60 * 30 }); // 60 sprites, 30min TTL
+
+async function cachedJimpRead(filePath) {
+    if (typeof filePath !== 'string') return await Jimp.read(filePath);
+    const cached = spriteCache.get(filePath);
+    if (cached) return cached.clone(); // always clone — Jimp mutates in place
+    const img = await Jimp.read(filePath);
+    spriteCache.set(filePath, img);
+    return img.clone();
+}
 
 const getPrefix = () => botConfig.getPrefix();
 
@@ -201,7 +213,7 @@ async function drawSpriteBar(canvas, x, y, current, max, type = 'hp', w = 121, h
             // Smooth scaling using the 'full' sprite (hp5 or mana5)
             const spritePath = path.join(UI_PATH, `${prefix}5.png`);
             if (fs.existsSync(spritePath)) {
-                const bar = await Jimp.read(spritePath);
+                const bar = await cachedJimpRead(spritePath);
                 const barW = Math.max(1, Math.round(w * percent));
                 bar.resize({ w: barW, h });
                 canvas.composite(bar, x, y);
@@ -211,7 +223,7 @@ async function drawSpriteBar(canvas, x, y, current, max, type = 'hp', w = 121, h
             const spriteNum = Math.min(5, Math.max(1, Math.round(percent * 4) + 1));
             const spritePath = path.join(UI_PATH, `${prefix}${spriteNum}.png`);
             if (fs.existsSync(spritePath)) {
-                const bar = await Jimp.read(spritePath);
+                const bar = await cachedJimpRead(spritePath);
                 bar.resize({ w, h });
                 canvas.composite(bar, x, y);
             }
@@ -269,7 +281,7 @@ async function generateCombatImage(players, enemies, options = {}) {
         // 1. Background
         const bgPath = backgroundPath || getRandomEnvironment();
         if (bgPath && fs.existsSync(bgPath)) {
-            const bg = await Jimp.read(bgPath);
+            const bg = await cachedJimpRead(bgPath);
             bg.resize({ w: CANVAS_W, h: CANVAS_H });
             canvas.composite(bg, 0, 0);
         }
@@ -285,7 +297,7 @@ async function generateCombatImage(players, enemies, options = {}) {
             const defender = players[1];
             const defSpritePath = getCharacterSprite(defender.class?.id || 'FIGHTER', defender.spriteIndex || 0);
             if (fs.existsSync(defSpritePath)) {
-                const defSprite = await Jimp.read(defSpritePath);
+                const defSprite = await cachedJimpRead(defSpritePath);
                 const dW = enemySpriteSize * 1.5; // Make them look big
                 defSprite.resize({ w: dW, h: Jimp.AUTO });
                 defSprite.flip({ horizontal: true, vertical: false }); // Mirror them!
@@ -324,7 +336,7 @@ async function generateCombatImage(players, enemies, options = {}) {
             for (const item of mobRenderQueue) {
                 try {
                     const { enemy, path: ePath, x, y, isBoss } = item;
-                    const eSprite = await Jimp.read(ePath);
+                    const eSprite = await cachedJimpRead(ePath);
                     const eW = isBoss ? enemySpriteSize * 1.5 : enemySpriteSize;
                     eSprite.resize({ w: eW, h: Jimp.AUTO });
                     if (enemy.currentHP <= 0) eSprite.color([{ apply: 'red', params: [100] }]);
@@ -352,7 +364,7 @@ async function generateCombatImage(players, enemies, options = {}) {
             const UI_PATH = getPaths().ui;
             const fullPath = path.join(UI_PATH, ui.path);
             if (fs.existsSync(fullPath)) {
-                const img = await Jimp.read(fullPath);
+                const img = await cachedJimpRead(fullPath);
                 img.resize({ w: ui.w, h: ui.h });
                 canvas.composite(img, normX(ui.x), normY(ui.y));
             }
@@ -382,7 +394,7 @@ async function generateCombatImage(players, enemies, options = {}) {
             const player = players[0];
             const spritePath = getCharacterSprite(player.class?.id || 'FIGHTER', player.spriteIndex || 0);
             if (fs.existsSync(spritePath)) {
-                const sprite = await Jimp.read(spritePath);
+                const sprite = await cachedJimpRead(spritePath);
                 if (player.currentHP <= 0 || (player.hp <= 0)) sprite.color([{ apply: 'red', params: [100] }]);
 
                 const s1W = 314;

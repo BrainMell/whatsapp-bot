@@ -72,7 +72,7 @@ async function startBot(configInstance) {
     let isNewLogin = false;
     let isRekeying = false;
     let botStartTime;
-    const msgRetryCounterCache = new NodeCache({ stdTTL: 3600 }); // 1 hour TTL
+    const msgRetryCounterCache = new NodeCache({ stdTTL: 300 }); // 5 min TTL
     const groupMetadataCache = new NodeCache({ stdTTL: 300 });
     const commandCooldowns = new Map();
 
@@ -555,13 +555,13 @@ function extractViewOnce(msg) {
 // streams the media content and converts to buffer
 async function downloadMedia(message, type) {
   const stream = await downloadContentFromMessage(message, type);
-  let buffer = Buffer.from([]);
+  const chunks = [];
 
   for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
+    chunks.push(chunk);
   }
 
-  return buffer;
+  return Buffer.concat(chunks);
 }
 
 // NEW: Write EXIF metadata to WebP stickers
@@ -954,13 +954,6 @@ function saveGroupMessage(chatId, messageObj) {
     system.set(BOT_ID + '_group_message_info', allData);
 }
 
-// Reset logic: Wipes the MongoDB logs every 4 hours
-setInterval(() => {
-    system.set(BOT_ID + '_group_message_info', {});
-    groupMessageHistory.clear(); 
-    console.log(`🧹 [${BOT_ID}] Global reset: Group Info wiped from MongoDB.`);
-}, RESET_INTERVAL);
-
 // Scrapes pinterest for image results based on a query (Refactored to No-Browser)
 async function searchPinterest(query, count = 10) {
     try {
@@ -1111,6 +1104,18 @@ function getMentionOrReply(m) {
 
 // Conversation memory per USER (not per chat)
 const conversationMemory = new Map();
+
+// Evict stale conversation histories (idle > 2 hours)
+setInterval(() => {
+  const cutoff = Date.now() - 7200000; // 2 hours
+  for (const [jid, history] of conversationMemory.entries()) {
+    const lastMsg = history[history.length - 1];
+    if (!lastMsg || (lastMsg._ts && lastMsg._ts < cutoff)) {
+      conversationMemory.delete(jid);
+    }
+  }
+}, 300000); // run every 5 min
+
 const temporaryContext = new Map();
 const pendingTagRequests = new Map();
 
@@ -1258,6 +1263,36 @@ const blacklistedUsers = new Set();
 
 // ✅ Spam prevention
 const spamTracker = new Map();
+
+setInterval(() => {
+  const now = Date.now();
+
+  // spamTracker: remove users with no recent messages
+  for (const [userId, data] of spamTracker.entries()) {
+    if (data.messages.length === 0 && now - (data.lastWarning || 0) > 600000) {
+      spamTracker.delete(userId);
+    }
+  }
+
+  // temporaryContext: clear empty entries
+  for (const [jid, items] of temporaryContext.entries()) {
+    if (!items || !items.length) temporaryContext.delete(jid);
+  }
+
+  // pendingTagRequests: drop anything older than 2 min
+  for (const [jid, req] of pendingTagRequests.entries()) {
+    if (now - req.timestamp > 120000) pendingTagRequests.delete(jid);
+  }
+
+  // activityTracker: cap nested maps at 200 most recent users per chat
+  for (const [chatId, users] of activityTracker.entries()) {
+    if (users.size > 200) {
+      const sorted = [...users.entries()].sort((a, b) => b[1].lastMessage - a[1].lastMessage);
+      users.clear();
+      sorted.slice(0, 200).forEach(([k, v]) => users.set(k, v));
+    }
+  }
+}, 120000); // every 2 min
 
 // Activity tracking - who sent how many messages
 function trackActivity(chatId, userId) {
@@ -1707,7 +1742,7 @@ async function askAI(senderJid, newMessage, mentionedJids = [], chatId = null) {
   
   // Only store in memory if it contains important info or history is short (and not a command)
   if (shouldStore || (!isCommand && history.length < 5)) {
-    history.push({ role: `user`, content: newMessage });
+    history.push({ role: `user`, content: newMessage, _ts: Date.now() });
   }
   
   const recentHistory = history.slice(-10);
@@ -1760,7 +1795,7 @@ async function askAI(senderJid, newMessage, mentionedJids = [], chatId = null) {
   });
 
   const aiReply = completion.choices[0].message.content;
-  history.push({ role: "assistant", content: aiReply });
+  history.push({ role: "assistant", content: aiReply, _ts: Date.now() });
   conversationMemory.set(senderJid, history);
   
   // Update user stats (only if we have the profile and save function)
@@ -2205,7 +2240,11 @@ function cleanupOldSessions() {
 // Clean up sessions every 24 hours to prevent accumulation
 // ✅ FIX: Disabled auto-cleanup - it was causing slow startups!
 // To clean sessions manually, use: node cleanup-sessions.js
-// DISABLED: setInterval(cleanupOldSessions, 24 * 60 * 60 * 1000);
+// Starts the interval 3 minutes after boot, so it never hits during startup
+setTimeout(() => {
+    cleanupOldSessions(); // Run once after 3 mins
+    setInterval(cleanupOldSessions, 24 * 60 * 60 * 1000); // Daily after that
+}, 180000);
 
 // ============================================
 // 📰 AUTOMATED NEWS LOOP
@@ -3235,7 +3274,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s`) {
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    let buffer = Buffer.from([]);
+    const chunks = [];
     const mediaMsg = isReply ? quotedMsg : m.message;
     const type = mediaMsg.imageMessage ? 'image' : 'video';
     const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage;
@@ -3243,8 +3282,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s`) {
     // Download using downloadContentFromMessage
     const stream = await downloadContentFromMessage(messageData, type);
     for await (const chunk of stream) { 
-      buffer = Buffer.concat([buffer, chunk]); 
+      chunks.push(chunk); 
     }
+    const buffer = Buffer.concat(chunks);
 
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
@@ -3371,8 +3411,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} toimg`) {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
 
     const stream = await downloadContentFromMessage(quotedMsg.stickerMessage, 'sticker');
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+    const chunks = [];
+    for await (const chunk of stream) { chunks.push(chunk); }
+    const buffer = Buffer.concat(chunks);
 
     const timestamp = Date.now();
     const tempSticker = `./temp/temp_${timestamp}.webp`;
@@ -3418,8 +3459,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
 
     const stream = await downloadContentFromMessage(quotedMsg.stickerMessage, 'sticker');
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+    const chunks = [];
+    for await (const chunk of stream) { chunks.push(chunk); }
+    const buffer = Buffer.concat(chunks);
 
     const timestamp = Date.now();
     const tempSticker = `./temp/temp_${timestamp}.webp`;
