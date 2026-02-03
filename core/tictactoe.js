@@ -7,9 +7,19 @@ const { Jimp, loadFont } = require('jimp');
 const { SANS_64_BLACK, SANS_32_BLACK, SANS_16_BLACK } = require('jimp/fonts');
 const fs = require('fs');
 const path = require('path');
+const { LRUCache } = require('lru-cache');
 const botConfig = require('../botConfig');
 const economy = require('./economy');
 const system = require('./system'); // NEW: Database System Module
+
+const tttCache = new LRUCache({ max: 10, ttl: 1000 * 60 * 60 }); // Cache for 1 hour
+
+async function cachedJimpRead(filePath) {
+    if (tttCache.has(filePath)) return tttCache.get(filePath).clone();
+    const img = await Jimp.read(filePath);
+    tttCache.set(filePath, img);
+    return img.clone();
+}
 
 // ============================================
 // SCOREBOARD MANAGEMENT (UPGRADED)
@@ -64,7 +74,7 @@ async function renderLeaderboard() {
         let image;
         
         if (fs.existsSync(backgroundPath)) {
-            image = await Jimp.read(backgroundPath);
+            image = await cachedJimpRead(backgroundPath);
         } else {
             image = new Jimp({ width: 800, height: 1000, color: 0x1a1a2eff });
         }
