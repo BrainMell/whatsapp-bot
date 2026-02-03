@@ -48,6 +48,9 @@ const ludo = require('./ludo');
 const wordle = require('./wordle');
 const economy = require('./economy');
 const system = require('./system'); // NEW: MongoDB System Module
+const ChatMessage = require('./models/ChatMessage');
+const ErrorLog = require('./models/ErrorLog');
+const Metric = require('./models/Metric');
 const news = require('./news'); // ✅ Added news module
 const loans = require('./loans'); // ✅ Added loans module
 const P = require('pino');
@@ -76,6 +79,18 @@ async function startBot(configInstance) {
     const groupMetadataCache = new NodeCache({ stdTTL: 300 });
     const commandCooldowns = new Map();
 
+    // RAM Metric Collection (Every 5 mins)
+    setInterval(async () => {
+      try {
+        const usage = process.memoryUsage().rss / 1024 / 1024;
+        await Metric.create({
+          botId: BOT_ID,
+          ramUsage: usage,
+          timestamp: new Date()
+        });
+      } catch (err) {}
+    }, 300000);
+
   // Wrap everything in AsyncLocalStorage to provide context to core files
   await storage.run(configInstance, async () => {
     // Get dynamic values
@@ -91,14 +106,29 @@ async function startBot(configInstance) {
 process.env.NODE_ENV = 'production';
 
 // Global error handlers to prevent process crash
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', async (err) => {
   console.error('❌ Uncaught Exception:', err.message);
-  console.error(err.stack);
-  // We don't exit here to keep the bot alive, but be careful with state corruption
+  try {
+    await ErrorLog.create({
+      errorType: 'uncaught_exception',
+      message: err.message,
+      stack: err.stack,
+      timestamp: new Date()
+    });
+  } catch (e) {}
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', async (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  try {
+    await ErrorLog.create({
+      errorType: 'unhandled_rejection',
+      message: reason?.message || String(reason),
+      stack: reason?.stack || null,
+      metadata: { promise: String(promise) },
+      timestamp: new Date()
+    });
+  } catch (e) {}
 });
 
 // --- DYNAMIC TITLE LOGIC ---
@@ -354,8 +384,7 @@ let spinnerIndex = 0;
 setInterval(() => {
   const ramUsage = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
   const spinner = spinnerFrames[spinnerIndex % spinnerFrames.length];
-  console.log(`${spinner} [${BOT_ID}] RAM: ${ramUsage} MB | Status: 🟢 Active`);
-  spinnerIndex++;
+      // console.log(`${spinner} [${BOT_ID}] RAM: ${ramUsage} MB | Status: 🟢 Active`);  spinnerIndex++;
 }, 30000); // Every 30 seconds
 
 // --- Marker for tracking bot's own messages (invisible to users) ---
@@ -975,24 +1004,26 @@ async function searchPinterest(query, count = 10) {
         // Find the script tag containing the app state (multiple potential matches)
         const stateMatch = html.match(/<script[^>]*id="__PINTEREST_APP_STATE__"[^>]*>(.*?)<\/script>/s) || 
                           html.match(/window\.__PINTEREST_APP_STATE__\s*=\s*({.*?});/s) ||
-                          html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+                          html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s) ||
+                          html.match(/<script[^>]*type="application\/json"[^>]*data-brio-id="[^"]*"[^>]*>(.*?)<\/script>/s);
 
         let pins = [];
 
         if (stateMatch) {
             try {
-                const state = JSON.parse(stateMatch[1]);
+                const jsonStr = stateMatch[1] || stateMatch[0].replace(/<script.*?>|<\/script>/g, '').trim();
+                const state = JSON.parse(jsonStr);
                 
                 // Deep extraction for Pinterest`s ever-changing JSON
                 const findPins = (obj) => {
                     if (!obj || typeof obj !== 'object') return;
                     if (Array.isArray(obj)) {
                         obj.forEach(item => {
-                            if (item && item.images) pins.push(item);
+                            if (item && (item.images || item.image_large_url)) pins.push(item);
                             else findPins(item);
                         });
                     } else {
-                        if (obj.images && (obj.id || obj.pin_id)) {
+                        if ((obj.images || obj.image_large_url) && (obj.id || obj.pin_id || obj.node_id)) {
                             pins.push(obj);
                         }
                         Object.values(obj).forEach(val => findPins(val));
@@ -1008,17 +1039,19 @@ async function searchPinterest(query, count = 10) {
         // Fallback: If JSON extraction failed, try lightweight DOM parsing for images
         if (pins.length === 0) {
             const { document } = parseHTML(html);
-            const imgs = document.querySelectorAll('img[src*="pinimg.com"]');
+            // Look for both pin images and lazy-loaded images
+            const imgs = document.querySelectorAll('img[src*="pinimg.com"], img[data-src*="pinimg.com"]');
             imgs.forEach(img => {
-                const src = img.getAttribute('src');
+                const src = img.getAttribute('src') || img.getAttribute('data-src');
                 if (src) {
-                    pins.push({ imageUrl: src.replace(/236x|474x/g, '736x') });
+                    // Try to get the highest resolution version available
+                    pins.push({ imageUrl: src.replace(/\/(236x|474x|originals)\//g, '/736x/') });
                 }
             });
         } else {
             // Map the extracted pin data
             pins = pins.map(pin => ({
-                imageUrl: pin.images?.orig?.url || pin.images?.['736x']?.url || pin.images?.['474x']?.url
+                imageUrl: pin.images?.orig?.url || pin.images?.['736x']?.url || pin.images?.['474x']?.url || pin.image_large_url || pin.image_url
             })).filter(p => p.imageUrl);
         }
 
@@ -2677,6 +2710,17 @@ We are happy to have you here.
   // Skip if no readable content
   const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
   if (!hasContent) return;
+
+  // Persist message to MongoDB (1-hour TTL)
+  const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;
+  ChatMessage.create({
+    sender: senderJid,
+    body: messageBody,
+    type: m.message.imageMessage ? 'image' : (m.message.videoMessage ? 'video' : (m.message.audioMessage ? 'audio' : 'text')),
+    timestamp: new Date(),
+    chatId: chatId,
+    botId: BOT_ID
+  }).catch(err => {});
 
   // ============================================
   // SECURITY & SPAM DETECTION
@@ -5903,10 +5947,21 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
       '-o', fileName
     ]);
 
+    // Hard-kill timer: 60 seconds
+    const killTimer = setTimeout(() => {
+      dl.kill('SIGKILL');
+      if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
+      console.log(`[YouTube] Killed hung process for: ${video.title}`);
+    }, 60000);
+
     // Auto-delete on spawn error
-    dl.on('error', () => { if (fs.existsSync(fileName)) fs.unlinkSync(fileName); });
+    dl.on('error', () => { 
+      clearTimeout(killTimer);
+      if (fs.existsSync(fileName)) fs.unlinkSync(fileName); 
+    });
 
     dl.on('close', async (code) => {
+      clearTimeout(killTimer);
       if (code === 0 && fs.existsSync(fileName)) {
         try {
           await sock.sendMessage(chatId, { 
@@ -6646,7 +6701,14 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime search`)) 
     global[`__${BOT_ID}_anime_search_cache_by_chat`].set(chatId, cacheData);
 
     const sentMenu = await sock.sendMessage(chatId, { text: BOT_MARKER + menu }, { quoted: m });
-    if (sentMenu?.key?.id) global[`__${BOT_ID}_anime_search_cache_by_msgid`].set(sentMenu.key.id, cacheData);
+    const msgId = sentMenu?.key?.id;
+    if (msgId) global[`__${BOT_ID}_anime_search_cache_by_msgid`].set(msgId, cacheData);
+
+    // Auto-clear cache after 5 minutes to save RAM
+    setTimeout(() => {
+      global[`__${BOT_ID}_anime_search_cache_by_chat`].delete(chatId);
+      if (msgId) global[`__${BOT_ID}_anime_search_cache_by_msgid`].delete(msgId);
+    }, 300000);
 
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
   } catch (err) {
