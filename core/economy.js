@@ -18,6 +18,24 @@ const DAILY_REWARD = 500;
 // CACHE: Stores all active user data in memory for instant access
 const economyData = new Map();
 
+// Debounced saving to prevent MongoDB flooding
+const pendingSaves = new Set();
+let saveTimer = null;
+
+function scheduleSave(userId) {
+  pendingSaves.add(userId);
+  if (!saveTimer) {
+    saveTimer = setTimeout(async () => {
+      const toSave = [...pendingSaves];
+      pendingSaves.clear();
+      saveTimer = null;
+      for (const id of toSave) {
+        await saveUser(id);
+      }
+    }, 500); // flush every 500ms
+  }
+}
+
 //==================this part handles all the data loading and saving==================
 async function loadEconomy() {
   try {
@@ -149,7 +167,7 @@ function registerUser(userId, nickname) {
   // log the bonus
   logTransaction(userId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
   
-  saveUser(userId);
+  scheduleSave(userId);
   
   return {
     success: true,
@@ -241,7 +259,7 @@ function addMoney(userId, amount, description = "Money Added") {
   
   logTransaction(userId, description, amount, user.wallet);
   
-  saveUser(userId);
+  scheduleSave(userId);
   return user.wallet;
 }
 
@@ -255,7 +273,7 @@ function removeMoney(userId, amount, description = "Money Removed") {
   
   logTransaction(userId, description, -amount, user.wallet);
   
-  saveUser(userId);
+  scheduleSave(userId);
   return true;
 }
 
@@ -268,7 +286,7 @@ function addGold(userId, amount) {
   const user = getUser(userId);
   if (!user) return false;
   user.questGold = (user.questGold || 0) + amount;
-  saveUser(userId);
+  scheduleSave(userId);
   return true;
 }
 
@@ -276,7 +294,7 @@ function removeGold(userId, amount) {
   const user = getUser(userId);
   if (!user || (user.questGold || 0) < amount) return false;
   user.questGold -= amount;
-  saveUser(userId);
+  scheduleSave(userId);
   return true;
 }
 //========================================
@@ -331,7 +349,7 @@ function addItem(userId, itemId, quantity = 1) {
         };
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     return true;
 }
 
@@ -357,7 +375,7 @@ function removeItem(userId, itemId, quantity = 1) {
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     return true;
 }
 
@@ -385,7 +403,7 @@ function sellItem(userId, itemId, quantity = 1) {
         }
         user.wallet += total;
         user.stats.totalEarned += total;
-        saveUser(userId);
+        scheduleSave(userId);
         return { success: true, msg: `💰 Sold ${count} items for ${getZENI()}${total.toLocaleString()}` };
     }
 
@@ -416,7 +434,7 @@ function sellItem(userId, itemId, quantity = 1) {
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     return { success: true, msg: `💰 Sold ${quantity}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}` };
 }
 
@@ -454,8 +472,8 @@ function transferMoney(fromUserId, toUserId, amount) {
   logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -amount, sender.wallet);
   logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, amount, receiver.wallet);
 
-  saveUser(fromUserId);
-  saveUser(toUserId);
+  scheduleSave(fromUserId);
+  scheduleSave(toUserId);
   
   return {
     success: true,
@@ -488,7 +506,7 @@ function deposit(userId, amount) {
   
   logTransaction(userId, "Bank Deposit", -amount, user.wallet);
 
-  saveUser(userId);
+  scheduleSave(userId);
   
   return { 
     success: true, 
@@ -521,7 +539,7 @@ function withdraw(userId, amount) {
   
   logTransaction(userId, "Bank Withdrawal", amount, user.wallet);
 
-  saveUser(userId);
+  scheduleSave(userId);
   
   return { 
     success: true, 
@@ -579,7 +597,7 @@ function claimDaily(userId) {
   
   logTransaction(userId, "Daily Reward", DAILY_REWARD, user.wallet);
 
-  saveUser(userId);
+  scheduleSave(userId);
   
   return {
     success: true,
@@ -613,7 +631,7 @@ function initializeClass(userId) {
     user.statBonuses = user.statBonuses || {
       hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0
     };
-    saveUser(userId);
+    scheduleSave(userId);
     return true;
   }
   return false;
@@ -646,7 +664,7 @@ function addProfessionXP(userId, profession, amount) {
         leveledUp = true;
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     return { leveledUp, newLevel: prof.level };
 }
 
@@ -682,7 +700,7 @@ function buyMembership(userId, tierId) {
         user.membership.expires = now + durationMs;
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     return { success: true, message: `💎 **UPGRADED!**\n\nYou are now a **${tier.name}**!\nExpires: ${new Date(user.membership.expires).toLocaleDateString()}` };
 }
 
@@ -720,7 +738,7 @@ function changeClass(userId) {
   user.class = newClass.id;
   user.spriteIndex = Math.floor(Math.random() * 100);
   user.lastClassChange = Date.now();
-  saveUser(userId);
+  scheduleSave(userId);
   
   return {
     success: true,
@@ -760,7 +778,7 @@ function evolveClass(userId, evolutionId) {
         user.skillPoints = (user.skillPoints || 0) + pointsToRefund;
     }
     
-    saveUser(userId);
+    scheduleSave(userId);
     
     return { 
         success: true, 
@@ -793,7 +811,7 @@ function resetClass(userId) {
   user.wallet += refund;
   user.class = starterClass.id;
   user.spriteIndex = Math.floor(Math.random() * 100);
-  saveUser(userId);
+  scheduleSave(userId);
   
   return {
     success: true,
@@ -818,7 +836,7 @@ function updateAdventurerRank(userId) {
   
   if (newRank !== oldRank) {
     user.adventurerRank = newRank;
-    saveUser(userId);
+    scheduleSave(userId);
     
     const rankData = classSystem.ADVENTURER_RANKS[newRank];
     return {
@@ -841,7 +859,7 @@ function addStatBonus(userId, stat, value) {
   }
   
   user.statBonuses[stat] = (user.statBonuses[stat] || 0) + value;
-  saveUser(userId);
+  scheduleSave(userId);
   return true;
 }
 
@@ -860,7 +878,7 @@ function addQuestProgress(userId, amount, won = true) {
     user.questsFailed = (user.questsFailed || 0) + 1;
   }
   
-  saveUser(userId);
+  scheduleSave(userId);
   
   return updateAdventurerRank(userId);
 }
@@ -871,26 +889,6 @@ function hasItem(userId, itemId) {
   return (user.inventory[itemId] || 0) > 0;
 }
 
-function getGold(userId) {
-  const user = getUser(userId);
-  return user ? (user.questGold || 0) : 0;
-}
-
-function addGold(userId, amount) {
-  const user = getUser(userId);
-  if (!user) return false;
-  user.questGold = (user.questGold || 0) + amount;
-  saveUser(userId);
-  return true;
-}
-
-function removeGold(userId, amount) {
-  const user = getUser(userId);
-  if (!user || (user.questGold || 0) < amount) return false;
-  user.questGold -= amount;
-  saveUser(userId);
-  return true;
-}
 //==================this part handles leaderboards and user profiles==================
 function getMoneyLeaderboard(limit = 10) {
   return Array.from(economyData.entries())
@@ -1012,8 +1010,8 @@ function robUser(thiefId, victimId) {
     logTransaction(thiefId, `Robbed @${victimId.split('@')[0]}`, amount, thief.wallet);
     logTransaction(victimId, `Robbed by @${thiefId.split('@')[0]}`, -amount, victim.wallet);
 
-    saveUser(thiefId);
-    saveUser(victimId);
+    scheduleSave(thiefId);
+    scheduleSave(victimId);
     return { 
       success: true, 
       message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${victimId.split('@')[0]}!` 
@@ -1024,7 +1022,7 @@ function robUser(thiefId, victimId) {
     
     logTransaction(thiefId, "Robbery Fine (Police)", -fine, thief.wallet);
 
-    saveUser(thiefId);
+    scheduleSave(thiefId);
     return { 
       success: false, 
       message: `🚓 *BUSTED*\n\nThe police caught you! You paid a fine of ${getZENI()}${fine.toLocaleString()}.` 

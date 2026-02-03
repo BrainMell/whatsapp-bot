@@ -931,3 +931,17 @@ module.exports = {
   globalGuildData,
   activeChallenges
 };
+
+// Periodic sweeper for memory optimization
+setInterval(() => {
+    const now = Date.now();
+    const invites = globalGuildData.guildInvites || {};
+    let changed = false;
+    for (const [jid, invite] of Object.entries(invites)) {
+      if (now - invite.timestamp > 120000) {
+        delete invites[jid];
+        changed = true;
+      }
+    }
+    if (changed) syncGuildSystem(); 
+  }, 60000); // check every minute

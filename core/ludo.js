@@ -16,6 +16,28 @@ const economy = require('./economy');
 
 const getPfpDir = () => botConfig.getDataPath('pfp');
 
+async function cleanPfpCache() {
+  const dir = getPfpDir();
+  if (!fs.existsSync(dir)) return;
+  try {
+    const files = fs.readdirSync(dir)
+      .map(f => {
+        const filePath = path.join(dir, f);
+        return { name: f, path: filePath, mtime: fs.statSync(filePath).mtime };
+      })
+      .filter(f => f.name.endsWith('.jpg'))
+      .sort((a, b) => a.mtime - b.mtime); // oldest first
+      
+    if (files.length > 100) {
+      const toDelete = files.slice(0, files.length - 100);
+      toDelete.forEach(f => {
+        try { fs.unlinkSync(f.path); } catch(e) {}
+      });
+      console.log(`🧹 [Ludo] Cleaned ${toDelete.length} old PFPs from cache.`);
+    }
+  } catch (err) {}
+}
+
 async function fetchProfilePicture(sock, jid) {
   try {
     const normalizedJid = jid.split('@')[0].split(':')[0];
@@ -25,6 +47,9 @@ async function fetchProfilePicture(sock, jid) {
       console.log(`✅ Using cached PFP for ${normalizedJid}`);
       return pfpPath;
     }
+    
+    // Clean cache before adding new ones
+    await cleanPfpCache();
     
     console.log(`📸 Fetching PFP for ${normalizedJid}...`);
     

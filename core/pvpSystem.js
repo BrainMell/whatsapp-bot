@@ -275,6 +275,25 @@ ${rewardMsg}
     return msg;
 }
 
+// Periodic sweeper for memory optimization
+setInterval(() => {
+    const now = Date.now();
+  
+    // Expire unclaimed invites older than 2 min
+    for (const [chatId, invite] of duelInvites.entries()) {
+      if (now - invite.timestamp > 120000) {
+        duelInvites.delete(chatId);
+      }
+    }
+  
+    // Expire abandoned duels with no action in 5 min
+    for (const [chatId, duel] of activeDuels.entries()) {
+      if (now - duel.lastAction > 300000) {
+        activeDuels.delete(chatId);
+      }
+    }
+  }, 60000); // check every minute
+
 module.exports = {
     getDuel,
     challengePlayer,
