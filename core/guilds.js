@@ -87,7 +87,7 @@ async function loadGuilds() {
         };
     }
     
-    console.log(`✅ Loaded ${guilds.length} guilds from MongoDB`);
+    // console.log(`✅ Loaded ${guilds.length} guilds from MongoDB`);
   } catch (err) {
     console.error("Error loading guilds from DB:", err.message);
   }
