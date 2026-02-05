@@ -750,6 +750,7 @@ function checkChatLimits(chatId, isSolo) {
 const INITIAL_STATE_TEMPLATE = {
     active: false,
     isProcessing: false,
+    combatProcessing: false,
     chatId: null,
     mode: 'NORMAL', 
     difficulty: 1.0,
@@ -1267,100 +1268,110 @@ async function startCombat(sock, groq, encounter, chatId) {
     
     // Wait 2 minutes before starting first turn
     state.timers.combatStart = setTimeout(async () => {
-        if (!state.inCombat) return; // Safety check
-        
-        let turnMsg = `🔔 *BATTLE START!*\n\n🎲 *Turn Order:*\n`;
-        state.turnOrder.forEach((c, i) => {
-            const icon = c.isEnemy ? c.icon : (c.class?.icon || '👤');
-            turnMsg += `  ${i + 1}. ${icon} ${c.name}\n`;
-        });
-        
         try {
-            sock.sendMessage(state.chatId, { text: turnMsg });
+            if (!state.inCombat) return; // Safety check
+            
+            let turnMsg = `🔔 *BATTLE START!*\n\n🎲 *Turn Order:*\n`;
+            state.turnOrder.forEach((c, i) => {
+                const icon = c.isEnemy ? c.icon : (c.class?.icon || '👤');
+                turnMsg += `  ${i + 1}. ${icon} ${c.name}\n`;
+            });
+            
+            await sock.sendMessage(state.chatId, { text: turnMsg });
+            await processCombatTurn(sock, chatId);
         } catch (err) {
-            console.error("Failed to send initial turn order:", err.message);
+            console.error("[Quest] combatStart timer error:", err?.message || err);
         }
-        await processCombatTurn(sock, chatId);
     }, 120000); // 2 minutes
 }
 
 async function processCombatTurn(sock, chatId) {
     const state = getGameState(chatId);
     if (!state || !state.inCombat) return;
-    
-    // Reset justDied flags for all combatants at the start of a new turn process
-    state.players.forEach(p => p.justDied = false);
-    state.enemies.forEach(e => e.justDied = false);
-    
-    // 💡 TICK SYSTEM: Find next combatant to reach 100 AP
-    let activeActor = null;
-    let ticks = 0;
-    const maxTicks = 1000; 
 
-    // Prevent infinite loop if everyone is dead or insanely slow
-    while (!activeActor && ticks < maxTicks) {
-        ticks++;
-        for (const c of state.turnOrder) {
-            // Skip dead
-            if (c.stats.hp <= 0) continue;
-            
-            c.actionGauge = (c.actionGauge || 0) + Math.max(1, (c.stats.spd || 10));
-            
-            if (c.actionGauge >= 100) {
-                activeActor = c;
-                break; // Found someone!
+    // Prevent overlapping turn processing (timers + user actions can collide).
+    if (state.combatProcessing) return;
+    state.combatProcessing = true;
+    
+    try {
+        while (state.inCombat) {
+            // Reset justDied flags for all combatants at the start of a new turn process
+            state.players.forEach(p => p.justDied = false);
+            state.enemies.forEach(e => e.justDied = false);
+
+            // 💡 TICK SYSTEM: Find next combatant to reach 100 AP
+            let activeActor = null;
+            let ticks = 0;
+            const maxTicks = 1000;
+
+            // Prevent infinite loop if everyone is dead or insanely slow
+            while (!activeActor && ticks < maxTicks) {
+                ticks++;
+                for (const c of state.turnOrder) {
+                    // Skip dead
+                    if (c.stats.hp <= 0) continue;
+
+                    c.actionGauge = (c.actionGauge || 0) + Math.max(1, (c.stats.spd || 10));
+
+                    if (c.actionGauge >= 100) {
+                        activeActor = c;
+                        break; // Found someone!
+                    }
+                }
             }
-        }
-        
-        // If we looped through everyone and found someone, break the while loop
-        if (activeActor) break;
-    }
 
-    if (!activeActor) return;
+            if (!activeActor) return;
 
-    // Reset actor gauge
-    activeActor.actionGauge -= 100;
-    state.activeCombatant = activeActor; 
+            // Reset actor gauge
+            activeActor.actionGauge -= 100;
+            state.activeCombatant = activeActor;
 
-    // Process status effects at start of turn
-    const statusMessages = processStatusEffects(activeActor);
-    if (statusMessages.length > 0) {
-        try {
-            await sock.sendMessage(state.chatId, { text: statusMessages.join('\n') });
-        } catch (err) {
-            console.error("Failed to send status messages in processCombatTurn:", err.message);
+            // Process status effects at start of turn
+            const statusMessages = processStatusEffects(activeActor);
+            if (statusMessages.length > 0) {
+                try {
+                    await sock.sendMessage(state.chatId, { text: statusMessages.join('\n') });
+                } catch (err) {
+                    console.error("Failed to send status messages in processCombatTurn:", err.message);
+                }
+            }
+
+            // Check if dead from status effects
+            if (activeActor.stats.hp <= 0) {
+                await handleDeath(sock, activeActor, chatId);
+                continue;
+            }
+
+            // Check for skip turn effects
+            const skipEffects = ['freeze', 'stun', 'sleep'];
+            const effects = activeActor.statusEffects || [];
+            const hasSkipEffect = effects.some(e => skipEffects.includes(e.type));
+
+            if (hasSkipEffect) {
+                try {
+                    await sock.sendMessage(state.chatId, {
+                        text: `${activeActor.icon} ${activeActor.name} is unable to act!`
+                    });
+                } catch (err) {
+                    console.error("Failed to send skip effect message in processCombatTurn:", err.message);
+                }
+                continue;
+            }
+
+            if (activeActor.isEnemy) {
+                // AI Turn
+                await performEnemyAction(sock, activeActor, chatId);
+                return;
+            }
+
+            // Player Turn
+            await promptPlayerAction(sock, activeActor, chatId);
+            return;
         }
-    }
-    
-    // Check if dead from status effects
-    if (activeActor.stats.hp <= 0) {
-        await handleDeath(sock, activeActor, chatId);
-        await processCombatTurn(sock, chatId);
-        return;
-    }
-    
-    // Check for skip turn effects
-    const skipEffects = ['freeze', 'stun', 'sleep'];
-    const hasSkipEffect = activeActor.statusEffects.some(e => skipEffects.includes(e.type));
-    
-    if (hasSkipEffect) {
-        try {
-            await sock.sendMessage(state.chatId, {
-                text: `${activeActor.icon} ${activeActor.name} is unable to act!`
-            });
-        } catch (err) {
-            console.error("Failed to send skip effect message in processCombatTurn:", err.message);
-        }
-        await processCombatTurn(sock, chatId);
-        return;
-    }
-    
-    if (activeActor.isEnemy) {
-        // AI Turn
-        await performEnemyAction(sock, activeActor, chatId);
-    } else {
-        // Player Turn
-        await promptPlayerAction(sock, activeActor, chatId);
+    } catch (err) {
+        console.error("[Quest] processCombatTurn error:", err?.message || err);
+    } finally {
+        state.combatProcessing = false;
     }
 }
 
@@ -1723,7 +1734,9 @@ async function performEnemyAction(sock, enemy, chatId) {
         } catch (err) {
             console.error("Failed to send boss telegraph result:", err.message);
         }
-        setTimeout(async () => await nextTurn(sock, turnInfo, chatId), GAME_CONFIG.ENEMY_TURN_TIME);
+        setTimeout(() => {
+            nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+        }, GAME_CONFIG.ENEMY_TURN_TIME);
         return;
     }
 
@@ -1742,7 +1755,9 @@ async function performEnemyAction(sock, enemy, chatId) {
                 } catch (err) {
                     console.error("Failed to send boss mechanic telegraph:", err.message);
                 }
-                setTimeout(async () => await nextTurn(sock, null, chatId), GAME_CONFIG.ENEMY_TURN_TIME);
+                setTimeout(() => {
+                    nextTurn(sock, null, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+                }, GAME_CONFIG.ENEMY_TURN_TIME);
                 return;
             }
 
@@ -1786,7 +1801,9 @@ async function performEnemyAction(sock, enemy, chatId) {
             } catch (err) {
                 console.error("Failed to send enemy ability result:", err.message);
             }
-            setTimeout(async () => await nextTurn(sock, turnInfo, chatId), GAME_CONFIG.ENEMY_TURN_TIME);
+            setTimeout(() => {
+                nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+            }, GAME_CONFIG.ENEMY_TURN_TIME);
             return;
         }
     }
@@ -1821,7 +1838,9 @@ async function performEnemyAction(sock, enemy, chatId) {
         } catch (err) {
             console.error("Failed to send enemy action result:", err.message);
         }
-        setTimeout(async () => await nextTurn(sock, turnInfo, chatId), GAME_CONFIG.ENEMY_TURN_TIME);
+        setTimeout(() => {
+            nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+        }, GAME_CONFIG.ENEMY_TURN_TIME);
     }
 
 async function handleDeath(sock, entity, chatId, lastKiller = "The Infection") {
@@ -1997,7 +2016,7 @@ async function endCombat(sock, victory, chatId) {
         });
         
         setTimeout(() => {
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e));
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, GAME_CONFIG.BREAK_TIME);
     } else {
         if (state.mode === 'PERMADEATH') {
@@ -2132,7 +2151,9 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
     if (!state.active) state = state;
 
     const regTime = solo ? 30000 : GAME_CONFIG.REGISTRATION_TIME;
-    state.timers.reg = setTimeout(() => startJourney(sock, chatId), regTime);
+    state.timers.reg = setTimeout(() => {
+        startJourney(sock, chatId).catch(e => console.error("[Quest] startJourney timer error:", e?.message || e));
+    }, regTime);
 
     const modeEmoji = mode === 'PERMADEATH' ? '💀' : '🗺️';
     let msg = `
@@ -2283,7 +2304,9 @@ async function startJourney(sock, chatId) {
     });
     
     // Shopping phase
-    setTimeout(() => openShop(sock, chatId), 1000);
+    setTimeout(() => {
+        openShop(sock, chatId).catch(e => console.error("[Quest] openShop timer error:", e?.message || e));
+    }, 1000);
 
     // 💡 HIVE MIND WHISPERS (5% chance)
     if (Math.random() < 0.05) {
@@ -2295,8 +2318,9 @@ async function startJourney(sock, chatId) {
             "...the hive only wants to protect you..."
         ];
         const whisper = whispers[Math.floor(Math.random() * whispers.length)];
-        setTimeout(async () => {
-            await sock.sendMessage(chatId, { text: `_「 ${whisper} 」_` });
+        setTimeout(() => {
+            sock.sendMessage(chatId, { text: `_「 ${whisper} 」_` })
+                .catch(e => console.error("[Quest] whisper send error:", e?.message || e));
         }, 5000);
     }
 }
@@ -2349,7 +2373,7 @@ async function openShop(sock, chatId) {
     
     state.timers.shop = setTimeout(() => {
         state.phase = 'PLAYING';
-        nextStage(sock, state.groq, chatId);
+        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, GAME_CONFIG.SHOP_TIME);
 }
 
@@ -2389,14 +2413,14 @@ async function nextStage(sock, groq, chatId) {
                 console.error("Failed to send split path message in nextStage:", err.message);
             }
 
-            state.timers.vote = setTimeout(async () => {
+            state.timers.vote = setTimeout(() => {
                 const v1 = Object.values(state.votes).filter(v => v === '1').length;
                 const v2 = Object.values(state.votes).filter(v => v === '2').length;
                 
                 const winner = v2 > v1 ? 'REST' : 'ELITE_COMBAT';
                 state.isProcessing = false;
                 state.isBranching = false; // Clear flag
-                await processBranchChoice(sock, winner, chatId);
+                processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
             }, 30000);
             return;
         }
@@ -2504,7 +2528,9 @@ async function handleRestEncounter(sock, encounter, chatId) {
         console.error("Failed to send rest encounter message:", err.message);
     }
     
-    setTimeout(() => nextStage(sock, state.groq, chatId), GAME_CONFIG.BREAK_TIME);
+    setTimeout(() => {
+        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+    }, GAME_CONFIG.BREAK_TIME);
 }
 
 async function generateBossEncounter(sock, groq, chatId) {
@@ -2570,7 +2596,7 @@ async function handleMerchantEncounter(sock, encounter, chatId) {
     state.timers.merchant = setTimeout(() => {
         if (state.active) {
             state.isMerchantActive = false;
-            nextStage(sock, state.groq, chatId);
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }
     }, GAME_CONFIG.VOTE_TIME || 30000);
 }
@@ -2617,7 +2643,7 @@ async function handleNonCombatEncounter(sock, encounter, chatId) {
     
     state.timers.vote = setTimeout(() => {
         if (state.active && !state.voteProcessing) {
-            processVotes(sock, encounter, chatId);
+            processVotes(sock, encounter, chatId).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
         }
     }, timer);
 }
@@ -2644,7 +2670,9 @@ async function processVotes(sock, encounter, chatId) {
     
     if (!encounter || !encounter.choices) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
-        setTimeout(() => nextStage(sock, state.groq, chatId), GAME_CONFIG.BREAK_TIME);
+        setTimeout(() => {
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        }, GAME_CONFIG.BREAK_TIME);
         return;
     }
 
@@ -2655,7 +2683,9 @@ async function processVotes(sock, encounter, chatId) {
         } catch (err) {
             console.error("Failed to send invalid choice message in processVotes:", err.message);
         }
-        setTimeout(() => nextStage(sock, state.groq, chatId), GAME_CONFIG.BREAK_TIME);
+        setTimeout(() => {
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        }, GAME_CONFIG.BREAK_TIME);
         return;
     }
     
@@ -2721,7 +2751,9 @@ async function processVotes(sock, encounter, chatId) {
     
     state.votes = {};
     state.voteProcessing = false;
-    setTimeout(() => nextStage(sock, state.groq, chatId), GAME_CONFIG.BREAK_TIME);
+    setTimeout(() => {
+        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+    }, GAME_CONFIG.BREAK_TIME);
 }
 
 async function endAdventure(sock, chatId, victory = true) {
@@ -3478,14 +3510,14 @@ module.exports = {
         
         if (allVoted && state.isBranching) {
             clearTimeout(state.timers.vote);
-            const sock = require('./index').getSock?.() || state.sock;
-            setTimeout(async () => {
+            const sock = state.sock;
+            setTimeout(() => {
                 const v1 = Object.values(state.votes).filter(v => v === '1').length;
                 const v2 = Object.values(state.votes).filter(v => v === '2').length;
                 const winner = v2 > v1 ? 'REST' : 'ELITE_COMBAT';
                 state.isProcessing = false;
                 state.isBranching = false;
-                await processBranchChoice(sock, winner, chatId);
+                processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
             }, 1000);
             return `🗳️ All votes in! Branching to *${Object.values(state.votes).filter(v => v === '2').length > Object.values(state.votes).filter(v => v === '1').length ? 'Safe Path' : 'Danger Path'}*...`;
         }
@@ -3497,9 +3529,9 @@ module.exports = {
             clearTimeout(state.timers.vote);
             
             // Use setTimeout to avoid blocking
-            const sock = require('./index').getSock?.() || state.sock;
+            const sock = state.sock;
             setTimeout(() => {
-                processVotes(sock, currentEnc, chatId);
+                processVotes(sock, currentEnc, chatId).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
             }, state.solo ? 1000 : 2000); // 1s for solo, 2s for group
             
             return `🗳️ Vote cast! ${state.solo ? 'Processing...' : 'All votes in! Processing...'}`;
