@@ -35,7 +35,7 @@ async function generateCombatImage(players, enemies, options = {}) {
             })),
             combatType: options.combatType || 'PVE',
             rank: options.rank || 'F',
-            background: options.backgroundPath ? options.backgroundPath.split(/[/\]/).pop() : 'forest1.png'
+            background: options.backgroundPath ? options.backgroundPath.split(/[\/\\]/).pop() : 'forest1.png'
         };
 
         const imageBuffer = await goService.generateCombatImage(payload);
