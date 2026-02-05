@@ -101,6 +101,137 @@ async function startBot(configInstance) {
     const ZENI = CURRENCY.symbol;
     let BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;   // BOT MArker for messages
 
+    // ============================================
+    // 📨 SAFE SEND QUEUE
+    // - Serializes all outgoing messages
+    // - Avoids "Connection Closed" cascades during reconnects
+    // - Adds a small gap between sends to reduce WS churn/rate limits
+    // ============================================
+    const WS_OPEN = 1;
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const isConnError = (err) => {
+      const msg = err?.message ? String(err.message) : '';
+      const statusCode = err?.output?.statusCode || err?.statusCode;
+      return (
+        msg.includes('Connection Closed') ||
+        msg.includes('Socket') ||
+        msg.includes('WebSocket') ||
+        statusCode === 408 ||
+        statusCode === 428
+      );
+    };
+
+    const sendQueue = (() => {
+      const queue = [];
+      let processing = false;
+
+      // Updated on every (re)connect
+      let boundSock = null;
+      let rawSend = null;
+
+      const MAX_QUEUE = 150;
+      const MSG_TTL_MS = 5 * 60 * 1000; // 5 minutes
+      const MAX_RETRIES = 3;
+      const SEND_GAP_MS = 350;
+
+      const canSendNow = () => {
+        return !!(
+          boundSock &&
+          rawSend &&
+          boundSock.ws &&
+          boundSock.ws.readyState === WS_OPEN &&
+          boundSock.user
+        );
+      };
+
+      const bind = (newSock) => {
+        boundSock = newSock;
+        // Capture the raw Baileys sender BEFORE we override sock.sendMessage.
+        rawSend = newSock.sendMessage.bind(newSock);
+      };
+
+      const kick = () => {
+        if (processing) return;
+        processing = true;
+        processQueue().finally(() => {
+          processing = false;
+        });
+      };
+
+      const enqueue = (jid, content, options = {}) => {
+        return new Promise((resolve, reject) => {
+          if (queue.length >= MAX_QUEUE) {
+            const dropped = queue.shift();
+            dropped?.reject?.(new Error('Send queue overflow (dropped oldest message)'));
+          }
+
+          queue.push({
+            jid,
+            content,
+            options,
+            ts: Date.now(),
+            retries: 0,
+            resolve,
+            reject,
+          });
+
+          kick();
+        });
+      };
+
+      const processQueue = async () => {
+        while (queue.length > 0) {
+          // Don't spin when disconnected
+          if (!canSendNow()) return;
+
+          const item = queue[0];
+
+          // Drop expired messages
+          if (Date.now() - item.ts > MSG_TTL_MS) {
+            queue.shift();
+            item.reject(new Error('Send queue TTL expired'));
+            continue;
+          }
+
+          try {
+            const res = await rawSend(item.jid, item.content, item.options);
+            queue.shift();
+            item.resolve(res);
+            await sleep(SEND_GAP_MS);
+          } catch (err) {
+            item.retries += 1;
+
+            // Connection issues: pause and wait for reconnect; keep message at front
+            if (isConnError(err)) {
+              await sleep(Math.min(1000 * Math.pow(2, item.retries - 1), 5000));
+              return;
+            }
+
+            // Non-connection error: retry a little then drop
+            if (item.retries < MAX_RETRIES) {
+              await sleep(Math.min(500 * item.retries, 1500));
+              continue;
+            }
+
+            queue.shift();
+            item.reject(err);
+          }
+        }
+      };
+
+      const size = () => queue.length;
+
+      const clear = (reason = 'Send queue cleared') => {
+        while (queue.length) {
+          const item = queue.shift();
+          item.reject(new Error(reason));
+        }
+      };
+
+      return { bind, send: enqueue, kick, size, clear };
+    })();
+
     // 1. Kick off the connection
     initSocket().catch(e => console.error(`[${configInstance.getBotId()}] Initial boot failed:`, e.message));
 process.env.NODE_ENV = 'production';
@@ -2495,6 +2626,11 @@ async function initSocket() {
       experimentalStore: true,
     });
 
+    // Route ALL outgoing messages through the queue so callers don't spam WS while reconnecting.
+    // This also makes stale sock references far less harmful across reconnects.
+    sendQueue.bind(sock);
+    sock.sendMessage = (jid, content, options = {}) => sendQueue.send(jid, content, options);
+
     sock.ev.on("creds.update", saveCreds);
 
     // Start automated news loop
@@ -2520,6 +2656,9 @@ async function initSocket() {
         console.log('✅ WhatsApp connected (open).');
         isRekeying = false; // BOT IS STABLE
         ignoreBroadcasts = false; // Allow broadcasts after successful connection
+
+        // Give the WS a moment to settle, then flush any queued outbound messages.
+        setTimeout(() => sendQueue.kick(), 1500);
         
         // --- SYNC BOT IDENTITY TO WHATSAPP (Only on fresh login) ---
         if (isNewLogin) {
@@ -2552,11 +2691,13 @@ async function initSocket() {
 
         if (!hasAuth(configInstance.getAuthPath())) {
           console.log('🛑 No auth folder. NOT reconnecting.');
+          sendQueue.clear('No auth folder - cannot reconnect');
           return;
         }
 
         if (statusCode === DisconnectReason.loggedOut) {
           console.log('🔒 Session logged out. Delete ./auth and re-scan.');
+          sendQueue.clear('Logged out');
           return;
         }
 
@@ -2582,18 +2723,25 @@ async function initSocket() {
 async function getGroupMetadata(id, forceRefresh = false) {
   if (!id.endsWith('@g.us')) return null;
   
-  if (!forceRefresh) {
-    const cached = groupMetadataCache.get(id);
-    if (cached) return cached;
+  const cached = groupMetadataCache.get(id);
+  if (!forceRefresh && cached) return cached;
+
+  // If the socket isn't ready, don't block message handling on metadata fetch.
+  if (!sock?.ws || sock.ws.readyState !== WS_OPEN) {
+    return cached || null;
   }
   
   try {
-    const metadata = await sock.groupMetadata(id);
+    // Timeout so unstable connections don't stall the whole handler.
+    const metadata = await Promise.race([
+      sock.groupMetadata(id),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Metadata timeout')), 5000))
+    ]);
     groupMetadataCache.set(id, metadata);
     return metadata;
   } catch (e) {
     console.error(`❌ Failed to fetch metadata for ${id}:`, e.message);
-    return null;
+    return cached || null;
   }
 }
 
