@@ -1,14 +1,15 @@
 // ============================================
-// AFRICAN LUDO - FIXED WITH WORKING LOGIC
-// Based on proven HTML version coordinates
+// AFRICAN LUDO - GO SERVICE INTEGRATION
 // ============================================
 
-const { Jimp } = require('jimp');
 const fs = require('fs');
 const path = require('path');
 const botConfig = require('../botConfig');
 const axios = require('axios');
 const economy = require('./economy');
+const GoImageService = require('./goImageService');
+
+const goService = new GoImageService();
 
 // ============================================
 // PROFILE PICTURE MANAGEMENT
@@ -44,42 +45,29 @@ async function fetchProfilePicture(sock, jid) {
     const pfpPath = path.join(getPfpDir(), `${normalizedJid}.jpg`);
     
     if (fs.existsSync(pfpPath)) {
-      console.log(`✅ Using cached PFP for ${normalizedJid}`);
-      return pfpPath;
+      return pfpPath; // Use cached if available (legacy logic)
     }
     
     // Clean cache before adding new ones
     await cleanPfpCache();
     
-    console.log(`📸 Fetching PFP for ${normalizedJid}...`);
-    
     try {
       const pfpUrl = await sock.profilePictureUrl(jid, 'image');
-      
       if (pfpUrl) {
-        const response = await axios.get(pfpUrl, { 
-          responseType: 'arraybuffer',
-          timeout: 10000 
-        });
-        
-        fs.writeFileSync(pfpPath, Buffer.from(response.data));
-        console.log(`✅ Cached PFP for ${normalizedJid}`);
-        return pfpPath;
+        return pfpUrl; // Return URL for Go service (or download if needed for legacy)
       }
     } catch (pfpErr) {
       console.log(`⚠️ PFP not available for ${normalizedJid}: ${pfpErr.message}`);
     }
     
     return null;
-    
   } catch (err) {
-    console.error(`❌ Error fetching PFP: ${err.message}`);
     return null;
   }
 }
 
 // ============================================
-// BOARD CONFIGURATION - USING PROVEN COORDS
+// BOARD CONFIGURATION
 // ============================================
 
 const COLORS = {
@@ -89,23 +77,7 @@ const COLORS = {
   GREEN: 'green'
 };
 
-const COLOR_HEX = {
-  red: (0xFF4D4DFF >>> 0),
-  blue: (0x3498DBFF >>> 0),
-  yellow: (0xF1C40FFF >>> 0),
-  green: (0x2ECC71FF >>> 0),
-  white: (0xFFFFFFFF >>> 0),
-  black: (0x000000FF >>> 0),
-  gray: (0xCCCCCCFF >>> 0),
-  lightgray: (0xF0F2F5FF >>> 0),
-  darkgray: (0x333333FF >>> 0),
-  border: (0x333333FF >>> 0)
-};
-
-const BOARD_SIZE = 900;
-const CELL_SIZE = 60;
-const GRID_SIZE = 15;
-
+// ... (Track/Path constants logic remains the same for game engine) ...
 // ✅ PROVEN WORKING TRACK - From HTML version (converted to 0-indexed)
 // Grid is 15x15, coordinates are [row, col] starting from 0
 const MAIN_TRACK = [
@@ -157,18 +129,8 @@ const HOME_ENTRANCE = {
   blue: 37     // (39 + 50) % 52 = 37
 };
 
-const CENTER_FINISH = [7, 7];
-
 // Safe squares (star positions)
 const SAFE_SQUARES = [0, 13, 26, 39]; // Starting positions are safe
-
-// Base positions (where pieces start before entering)
-const BASES = {
-  red: [[2, 2], [2, 4], [4, 2], [4, 4]],
-  green: [[2, 10], [2, 12], [4, 10], [4, 12]],
-  yellow: [[10, 10], [10, 12], [12, 10], [12, 12]],
-  blue: [[10, 2], [10, 4], [12, 2], [12, 4]]
-};
 
 // ============================================
 // GAME STATE MANAGEMENT
@@ -470,512 +432,33 @@ class LudoGame {
 }
 
 // ============================================
-// RENDERING WITH IMPROVED DESIGN
+// RENDERING WITH GO SERVICE
 // ============================================
 
 async function renderBoard(game, sock = null) {
   try {
-    const image = new Jimp({ 
-      width: BOARD_SIZE, 
-      height: BOARD_SIZE, 
-      color: COLOR_HEX.lightgray 
-    });
+    const payload = {
+      players: game.players.map(p => ({
+        jid: p.fullJid,
+        color: p.color,
+        pieces: p.pieces.map(piece => ({
+          id: piece.id,
+          position: piece.position,
+          inBase: piece.inBase,
+          inHome: piece.inHome,
+          onHomePath: piece.onHomePath,
+          homePathIndex: piece.homePathIndex
+        }))
+      })),
+      lastRoll: game.lastRoll || 0
+    };
 
-    drawBackgroundAreas(image);
-    drawGrid(image);
-    drawHomePaths(image);
-    drawSafeSquares(image);
-    drawCenterFinish(image);
-    drawPlayerBases(image);
-    await drawPieces(image, game);
-    drawWalls(image, game);
-    await drawDice(image, game);
-    
-    if (sock) {
-      await drawProfilePictures(image, game, sock);
-    }
-
-    const buffer = await image.getBuffer('image/png');
+    const buffer = await goService.renderLudoBoard(payload);
     return buffer;
   } catch (err) {
-    console.error('❌ Board rendering failed:', err);
+    console.error('❌ Board rendering failed via Go Service:', err.message);
     return null;
   }
-}
-
-function drawBackgroundAreas(image) {
-  const cornerSize = 6 * CELL_SIZE;
-  
-  // Base corners with slight transparency
-  fillRect(image, 0, 0, cornerSize, cornerSize, COLOR_HEX.red, 0.35);
-  fillRect(image, BOARD_SIZE - cornerSize, 0, cornerSize, cornerSize, COLOR_HEX.green, 0.15);
-  fillRect(image, BOARD_SIZE - cornerSize, BOARD_SIZE - cornerSize, cornerSize, cornerSize, COLOR_HEX.yellow, 0.15);
-  fillRect(image, 0, BOARD_SIZE - cornerSize, cornerSize, cornerSize, COLOR_HEX.blue, 0.15);
-  
-  // Draw white inner areas for bases
-  const innerSize = cornerSize * 0.7;
-  const innerOffset = (cornerSize - innerSize) / 2;
-  
-  fillRect(image, innerOffset, innerOffset, innerSize, innerSize, COLOR_HEX.white, 1);
-  fillRect(image, BOARD_SIZE - cornerSize + innerOffset, innerOffset, innerSize, innerSize, COLOR_HEX.white, 1);
-  fillRect(image, BOARD_SIZE - cornerSize + innerOffset, BOARD_SIZE - cornerSize + innerOffset, innerSize, innerSize, COLOR_HEX.white, 1);
-  fillRect(image, innerOffset, BOARD_SIZE - cornerSize + innerOffset, innerSize, innerSize, COLOR_HEX.white, 1);
-}
-
-function drawGrid(image) {
-  const gridColor = COLOR_HEX.darkgray;
-  const thickness = 5; // Increased thickness (1px + 4px)
-  
-  // Vertical lines
-  for (let i = 0; i <= GRID_SIZE; i++) {
-    const x = i * CELL_SIZE;
-    fillRect(image, x - Math.floor(thickness/2), 0, thickness, BOARD_SIZE, gridColor);
-  }
-  
-  // Horizontal lines
-  for (let i = 0; i <= GRID_SIZE; i++) {
-    const y = i * CELL_SIZE;
-    fillRect(image, 0, y - Math.floor(thickness/2), BOARD_SIZE, thickness, gridColor);
-  }
-}
-
-function drawHomePaths(image) {
-  for (const [color, path] of Object.entries(HOME_PATHS)) {
-    const colorHex = COLOR_HEX[color];
-    
-    path.forEach(([row, col]) => {
-      const x = col * CELL_SIZE;
-      const y = row * CELL_SIZE;
-      fillRect(image, x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4, colorHex, 0.4);
-    });
-  }
-}
-
-function drawSafeSquares(image) {
-  SAFE_SQUARES.forEach(index => {
-    const [row, col] = MAIN_TRACK[index];
-    const x = col * CELL_SIZE + CELL_SIZE / 2;
-    const y = row * CELL_SIZE + CELL_SIZE / 2;
-    
-    // Draw star
-    drawStar(image, x, y, 15, COLOR_HEX.yellow);
-  });
-}
-
-function drawCenterFinish(image) {
-  const center = 7.5 * CELL_SIZE;
-  const triangleSize = CELL_SIZE * 1.5;
-  
-  const triangles = [
-    { color: COLOR_HEX.red, points: [[center, center], [center - triangleSize, center], [center, center - triangleSize]] },
-    { color: COLOR_HEX.green, points: [[center, center], [center, center - triangleSize], [center + triangleSize, center]] },
-    { color: COLOR_HEX.yellow, points: [[center, center], [center + triangleSize, center], [center, center + triangleSize]] },
-    { color: COLOR_HEX.blue, points: [[center, center], [center, center + triangleSize], [center - triangleSize, center]] }
-  ];
-  
-  triangles.forEach(({ color, points }) => {
-    fillTriangle(image, points, color);
-  });
-}
-
-function drawPlayerBases(image) {
-  for (const [color, positions] of Object.entries(BASES)) {
-    const colorHex = COLOR_HEX[color];
-    
-    positions.forEach(([row, col]) => {
-      const x = col * CELL_SIZE + CELL_SIZE / 2;
-      const y = row * CELL_SIZE + CELL_SIZE / 2;
-      
-      // ✅ FIX: Only draw outline, no filled circle (prevents ghost pieces)
-      drawCircleOutline(image, x, y, 22, colorHex, 3);
-    });
-  }
-}
-
-async function drawPieces(image, game) {
-  for (const player of game.players) {
-    const colorHex = COLOR_HEX[player.color];
-    
-    for (const piece of player.pieces) {
-      if (piece.inHome) continue;
-
-      let gridPos;
-      
-      if (piece.inBase) {
-        const basePositions = BASES[player.color];
-        gridPos = basePositions[piece.id - 1];
-      } else if (piece.onHomePath) {
-        const homePath = HOME_PATHS[player.color];
-        gridPos = homePath[piece.homePathIndex];
-      } else {
-        gridPos = MAIN_TRACK[piece.position];
-      }
-
-      const [row, col] = gridPos;
-      const x = col * CELL_SIZE + CELL_SIZE / 2;
-      const y = row * CELL_SIZE + CELL_SIZE / 2;
-
-      // Draw piece
-      drawFilledCircle(image, x, y, 18, colorHex);
-      drawCircleOutline(image, x, y, 18, COLOR_HEX.white, 2);
-      
-      // Draw piece number
-      drawPieceNumber(image, x, y, piece.id);
-    }
-  }
-}
-
-function drawWalls(image, game) {
-  for (const wall of game.walls) {
-    const gridPos = MAIN_TRACK[wall.position];
-    const [row, col] = gridPos;
-    const x = col * CELL_SIZE + CELL_SIZE / 2;
-    const y = row * CELL_SIZE + CELL_SIZE / 2;
-    
-    drawShield(image, x, y, 25, COLOR_HEX.blue);
-  }
-}
-
-async function drawDice(image, game) {
-  if (game.lastRoll > 0) {
-    const centerX = 7.5 * CELL_SIZE;
-    const centerY = 7.5 * CELL_SIZE;
-    
-    // Draw dice
-    fillRect(image, centerX - 30, centerY - 30, 60, 60, COLOR_HEX.white, 1);
-    drawRect(image, centerX - 30, centerY - 30, 60, 60, COLOR_HEX.black, 2);
-    
-    drawDiceDots(image, centerX, centerY, game.lastRoll);
-  }
-}
-
-async function drawProfilePictures(image, game, sock) {
-  const cornerPositions = {
-    red: { x: 90, y: 90 },
-    green: { x: 810, y: 90 },
-    yellow: { x: 810, y: 810 },
-    blue: { x: 90, y: 810 }
-  };
-  
-  const pfpSize = 120;
-  const placeholderPath = botConfig.getAssetPath('placeholder.png');
-  
-  for (const player of game.players) {
-    const position = cornerPositions[player.color];
-    if (!position) continue;
-    
-    try {
-      const pfpPath = await fetchProfilePicture(sock, player.fullJid);
-      
-      let pfpToUse = null;
-      
-      // Try to load player's actual PFP
-      if (pfpPath && fs.existsSync(pfpPath)) {
-        pfpToUse = await Jimp.read(pfpPath);
-      } 
-      // Fall back to placeholder if no PFP or doesn't exist
-      else if (fs.existsSync(placeholderPath)) {
-        pfpToUse = await Jimp.read(placeholderPath);
-        console.log(`⚠️ Using placeholder for ${player.color} player`);
-      }
-      
-      // If we have an image (either real or placeholder)
-      if (pfpToUse) {
-        pfpToUse.resize({ w: pfpSize, h: pfpSize });
-        pfpToUse.circle();
-        
-        // Draw colored border
-        const borderColor = COLOR_HEX[player.color];
-        const borderThickness = 6;
-        const radius = pfpSize / 2;
-        
-        for (let angle = 0; angle < 360; angle += 1) {
-          const rad = (angle * Math.PI) / 180;
-          for (let t = 0; t < borderThickness; t++) {
-            const r = radius + t;
-            const bx = Math.round(position.x + r * Math.cos(rad));
-            const by = Math.round(position.y + r * Math.sin(rad));
-            if (bx >= 0 && bx < image.bitmap.width && by >= 0 && by < image.bitmap.height) {
-              image.setPixelColor(borderColor, bx, by);
-            }
-          }
-        }
-        
-        image.composite(pfpToUse, position.x - pfpSize / 2, position.y - pfpSize / 2);
-        console.log(`✅ Placed PFP for ${player.color} player`);
-      } else {
-        // Last resort: draw basic placeholder if image file is missing
-        drawProfilePlaceholder(image, position.x, position.y, pfpSize / 2, COLOR_HEX[player.color]);
-        console.log(`⚠️ Using drawn placeholder for ${player.color} player`);
-      }
-    } catch (err) {
-      console.error(`❌ Error drawing PFP for ${player.color}:`, err.message);
-      // Try to use placeholder.png on error
-      try {
-        if (fs.existsSync(placeholderPath)) {
-          const placeholder = await Jimp.read(placeholderPath);
-          placeholder.resize({ w: pfpSize, h: pfpSize });
-          placeholder.circle();
-          
-          const borderColor = COLOR_HEX[player.color];
-          const borderThickness = 6;
-          const radius = pfpSize / 2;
-          
-          for (let angle = 0; angle < 360; angle += 1) {
-            const rad = (angle * Math.PI) / 180;
-            for (let t = 0; t < borderThickness; t++) {
-              const r = radius + t;
-              const bx = Math.round(position.x + r * Math.cos(rad));
-              const by = Math.round(position.y + r * Math.sin(rad));
-              if (bx >= 0 && bx < image.bitmap.width && by >= 0 && by < image.bitmap.height) {
-                image.setPixelColor(borderColor, bx, by);
-              }
-            }
-          }
-          
-          image.composite(placeholder, position.x - pfpSize / 2, position.y - pfpSize / 2);
-        } else {
-          // Final fallback: draw basic placeholder
-          drawProfilePlaceholder(image, position.x, position.y, pfpSize / 2, COLOR_HEX[player.color]);
-        }
-      } catch (placeholderErr) {
-        // If even placeholder fails, draw basic placeholder
-        drawProfilePlaceholder(image, position.x, position.y, pfpSize / 2, COLOR_HEX[player.color]);
-      }
-    }
-  }
-}
-
-// ============================================
-// DRAWING UTILITIES
-// ============================================
-
-function drawFilledCircle(image, centerX, centerY, radius, color) {
-  for (let angle = 0; angle < 360; angle += 1) {
-    const rad = (angle * Math.PI) / 180;
-    for (let r = 0; r <= radius; r++) {
-      const x = Math.round(centerX + r * Math.cos(rad));
-      const y = Math.round(centerY + r * Math.sin(rad));
-      if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-        image.setPixelColor(color, x, y);
-      }
-    }
-  }
-}
-
-function drawCircleOutline(image, centerX, centerY, radius, color, thickness = 2) {
-  for (let angle = 0; angle < 360; angle += 0.5) {
-    const rad = (angle * Math.PI) / 180;
-    for (let t = 0; t < thickness; t++) {
-      const r = radius - t;
-      const x = Math.round(centerX + r * Math.cos(rad));
-      const y = Math.round(centerY + r * Math.sin(rad));
-      if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-        image.setPixelColor(color, x, y);
-      }
-    }
-  }
-}
-
-function fillRect(image, x, y, width, height, color, alpha = 1) {
-  for (let i = x; i < x + width; i++) {
-    for (let j = y; j < y + height; j++) {
-      if (i >= 0 && i < image.bitmap.width && j >= 0 && j < image.bitmap.height) {
-        if (alpha < 1) {
-          const existing = image.getPixelColor(i, j);
-          const blended = blendColors(existing, color, alpha);
-          image.setPixelColor(blended, i, j);
-        } else {
-          image.setPixelColor(color, i, j);
-        }
-      }
-    }
-  }
-}
-
-function drawRect(image, x, y, width, height, color, thickness = 1) {
-  for (let t = 0; t < thickness; t++) {
-    for (let i = x; i < x + width; i++) {
-      if (i >= 0 && i < image.bitmap.width) {
-        if (y + t >= 0 && y + t < image.bitmap.height) image.setPixelColor(color, i, y + t);
-        if (y + height - t >= 0 && y + height - t < image.bitmap.height) image.setPixelColor(color, i, y + height - t);
-      }
-    }
-    for (let j = y; j < y + height; j++) {
-      if (j >= 0 && j < image.bitmap.height) {
-        if (x + t >= 0 && x + t < image.bitmap.width) image.setPixelColor(color, x + t, j);
-        if (x + width - t >= 0 && x + width - t < image.bitmap.width) image.setPixelColor(color, x + width - t, j);
-      }
-    }
-  }
-}
-
-function drawLine(image, x1, y1, x2, y2, color) {
-  const dx = Math.abs(x2 - x1);
-  const dy = Math.abs(y2 - y1);
-  const sx = x1 < x2 ? 1 : -1;
-  const sy = y1 < y2 ? 1 : -1;
-  let err = dx - dy;
-
-  while (true) {
-    if (x1 >= 0 && x1 < image.bitmap.width && y1 >= 0 && y1 < image.bitmap.height) {
-      image.setPixelColor(color, x1, y1);
-    }
-
-    if (x1 === x2 && y1 === y2) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x1 += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y1 += sy;
-    }
-  }
-}
-
-function drawStar(image, centerX, centerY, size, color) {
-  const outerRadius = size;
-  const innerRadius = size / 2;
-  const points = 5;
-  
-  for (let i = 0; i < points * 2; i++) {
-    const angle = (i * Math.PI) / points - Math.PI / 2;
-    const radius = i % 2 === 0 ? outerRadius : innerRadius;
-    const x = centerX + Math.cos(angle) * radius;
-    const y = centerY + Math.sin(angle) * radius;
-    
-    if (i === 0) continue;
-    
-    const prevAngle = ((i - 1) * Math.PI) / points - Math.PI / 2;
-    const prevRadius = (i - 1) % 2 === 0 ? outerRadius : innerRadius;
-    const prevX = centerX + Math.cos(prevAngle) * prevRadius;
-    const prevY = centerY + Math.sin(prevAngle) * prevRadius;
-    
-    drawLine(image, Math.round(prevX), Math.round(prevY), Math.round(x), Math.round(y), color);
-  }
-}
-
-function drawShield(image, centerX, centerY, size, color) {
-  drawCircleOutline(image, centerX, centerY, size, color, 3);
-  drawLine(image, centerX - size/2, centerY - size/2, centerX + size/2, centerY + size/2, color);
-  drawLine(image, centerX - size/2, centerY + size/2, centerX + size/2, centerY - size/2, color);
-}
-
-function fillTriangle(image, points, color) {
-  const [[x1, y1], [x2, y2], [x3, y3]] = points;
-  
-  let minX = Math.min(x1, x2, x3);
-  let maxX = Math.max(x1, x2, x3);
-  let minY = Math.min(y1, y2, y3);
-  let maxY = Math.max(y1, y2, y3);
-  
-  for (let x = minX; x <= maxX; x++) {
-    for (let y = minY; y <= maxY; y++) {
-      if (isPointInTriangle(x, y, x1, y1, x2, y2, x3, y3)) {
-        if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-          image.setPixelColor(color, Math.round(x), Math.round(y));
-        }
-      }
-    }
-  }
-}
-
-function isPointInTriangle(px, py, x1, y1, x2, y2, x3, y3) {
-  const area = Math.abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1));
-  const area1 = Math.abs((x1 - px) * (y2 - py) - (x2 - px) * (y1 - py));
-  const area2 = Math.abs((x2 - px) * (y3 - py) - (x3 - px) * (y2 - py));
-  const area3 = Math.abs((x3 - px) * (y1 - py) - (x1 - px) * (y3 - py));
-  return Math.abs(area - (area1 + area2 + area3)) < 1;
-}
-
-function drawPieceNumber(image, centerX, centerY, number) {
-  const numberStr = number.toString();
-  
-  const patterns = {
-    '1': [[1,0],[1,1],[1,2],[1,3]],
-    '2': [[0,0],[1,0],[2,0],[2,1],[0,2],[1,2],[2,2],[0,3],[1,3],[2,3]],
-    '3': [[0,0],[1,0],[2,0],[2,1],[0,2],[1,2],[2,2],[2,3],[0,3],[1,3],[2,3]],
-    '4': [[0,0],[0,1],[0,2],[1,2],[2,2],[2,0],[2,1],[2,3]]
-  };
-  
-  const pattern = patterns[numberStr] || patterns['1'];
-  pattern.forEach(([dx, dy]) => {
-    const x = Math.round(centerX - 4 + dx * 3);
-    const y = Math.round(centerY - 6 + dy * 3);
-    if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-      image.setPixelColor(COLOR_HEX.black, x, y);
-    }
-  });
-}
-
-function drawDiceDots(image, centerX, centerY, value) {
-  const dotSize = 5;
-  const spacing = 14;
-  
-  const dotPatterns = {
-    1: [[0, 0]],
-    2: [[-spacing, -spacing], [spacing, spacing]],
-    3: [[-spacing, -spacing], [0, 0], [spacing, spacing]],
-    4: [[-spacing, -spacing], [-spacing, spacing], [spacing, -spacing], [spacing, spacing]],
-    5: [[-spacing, -spacing], [-spacing, spacing], [0, 0], [spacing, -spacing], [spacing, spacing]],
-    6: [[-spacing, -spacing], [-spacing, 0], [-spacing, spacing], [spacing, -spacing], [spacing, 0], [spacing, spacing]]
-  };
-  
-  const pattern = dotPatterns[value] || dotPatterns[1];
-  pattern.forEach(([dx, dy]) => {
-    drawFilledCircle(image, centerX + dx, centerY + dy, dotSize, COLOR_HEX.black);
-  });
-}
-
-function drawProfilePlaceholder(image, centerX, centerY, radius, color) {
-  drawFilledCircle(image, centerX, centerY, radius, color);
-  
-  const borderThickness = 6;
-  for (let angle = 0; angle < 360; angle += 1) {
-    const rad = (angle * Math.PI) / 180;
-    for (let t = 0; t < borderThickness; t++) {
-      const r = radius + t;
-      const x = Math.round(centerX + r * Math.cos(rad));
-      const y = Math.round(centerY + r * Math.sin(rad));
-      if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-        image.setPixelColor(COLOR_HEX.white, x, y);
-      }
-    }
-  }
-  
-  const headRadius = radius * 0.3;
-  const shoulderRadius = radius * 0.5;
-  
-  drawFilledCircle(image, centerX, centerY - radius * 0.15, headRadius, COLOR_HEX.white);
-  
-  for (let angle = 0; angle < 180; angle += 2) {
-    const rad = (angle * Math.PI) / 180;
-    for (let r = shoulderRadius - 10; r <= shoulderRadius; r++) {
-      const x = Math.round(centerX + r * Math.cos(rad));
-      const y = Math.round(centerY + radius * 0.3 + r * Math.sin(rad));
-      if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-        image.setPixelColor(COLOR_HEX.white, x, y);
-      }
-    }
-  }
-}
-
-function blendColors(color1, color2, alpha) {
-  const r1 = (color1 >> 24) & 0xFF;
-  const g1 = (color1 >> 16) & 0xFF;
-  const b1 = (color1 >> 8) & 0xFF;
-  
-  const r2 = (color2 >> 24) & 0xFF;
-  const g2 = (color2 >> 16) & 0xFF;
-  const b2 = (color2 >> 8) & 0xFF;
-  
-  const r = Math.round(r1 * (1 - alpha) + r2 * alpha);
-  const g = Math.round(g1 * (1 - alpha) + g2 * alpha);
-  const b = Math.round(b1 * (1 - alpha) + b2 * alpha);
-  
-  return ((r << 24) | (g << 16) | (b << 8) | 0xFF) >>> 0;
 }
 
 // ============================================

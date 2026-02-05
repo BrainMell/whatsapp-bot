@@ -1226,12 +1226,25 @@ async function startCombat(sock, groq, encounter, chatId) {
         state.backgroundPath = scene.backgroundPath;
     }
     
-    if (scene.success && fs.existsSync(scene.imagePath)) {
+    if (scene.success) {
         try {
-            await sock.sendMessage(state.chatId, {
-                image: fs.readFileSync(scene.imagePath),
-                caption: scene.caption
-            });
+            if (scene.buffer) {
+                await sock.sendMessage(state.chatId, {
+                    image: scene.buffer,
+                    caption: scene.caption
+                });
+            } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+                await sock.sendMessage(state.chatId, {
+                    image: fs.readFileSync(scene.imagePath),
+                    caption: scene.caption
+                });
+                // Clean up temp file
+                setTimeout(() => {
+                    if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
+                }, 10000);
+            } else {
+                await sock.sendMessage(state.chatId, { text: scene.caption || "⚔️ Combat Started!" });
+            }
         } catch (mediaError) {
             console.error("Media upload failed in startCombat:", mediaError.message);
             try {
@@ -1240,11 +1253,6 @@ async function startCombat(sock, groq, encounter, chatId) {
                 console.error("Fallback text failed in startCombat:", err.message);
             }
         }
-        
-        // Clean up temp file
-        setTimeout(() => {
-            if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
-        }, 10000);
     } else {
         // Fallback to text if image fails
         try {
@@ -1876,16 +1884,24 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
             'TURN',
             {
                 turnInfo: lastTurnInfo,
-                backgroundPath: state.backgroundPath
+                backgroundPath: state.backgroundPath,
+                rank: state.dungeonRank
             }
         );
-        if (scene.success && fs.existsSync(scene.imagePath)) {
+        if (scene.success) {
             try {
-                await sock.sendMessage(state.chatId, { image: fs.readFileSync(scene.imagePath), caption: scene.caption });
+                if (scene.buffer) {
+                    await sock.sendMessage(state.chatId, { image: scene.buffer, caption: scene.caption });
+                } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+                    await sock.sendMessage(state.chatId, { image: fs.readFileSync(scene.imagePath), caption: scene.caption });
+                    setTimeout(() => { if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath); }, 5000);
+                } else {
+                    await sock.sendMessage(state.chatId, { text: scene.caption });
+                }
             } catch (err) {
                 console.error("Failed to send turn image in nextTurn:", err.message);
+                await sock.sendMessage(state.chatId, { text: scene.caption });
             }
-            setTimeout(() => { if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath); }, 5000);
         }
     }
 
@@ -1963,12 +1979,25 @@ async function endCombat(sock, victory, chatId) {
         }
     );
 
-    if (scene.success && fs.existsSync(scene.imagePath)) {
+    if (scene.success) {
         try {
-            await sock.sendMessage(state.chatId, {
-                image: fs.readFileSync(scene.imagePath),
-                caption: scene.caption
-            });
+            if (scene.buffer) {
+                await sock.sendMessage(state.chatId, {
+                    image: scene.buffer,
+                    caption: scene.caption
+                });
+            } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+                await sock.sendMessage(state.chatId, {
+                    image: fs.readFileSync(scene.imagePath),
+                    caption: scene.caption
+                });
+                // Clean up
+                setTimeout(() => {
+                    if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
+                }, 10000);
+            } else {
+                await sock.sendMessage(state.chatId, { text: scene.caption || (victory ? "✅ Victory!" : "💀 Defeat...") });
+            }
         } catch (mediaError) {
             console.error("Media upload failed in endCombat:", mediaError.message);
             try {
@@ -1977,11 +2006,6 @@ async function endCombat(sock, victory, chatId) {
                 console.error("Failed to send fallback text in endCombat:", textError.message);
             }
         }
-        
-        // Clean up
-        setTimeout(() => {
-            if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
-        }, 10000);
     } else {
         try {
             await sock.sendMessage(state.chatId, { text: scene.caption || (victory ? "✅ Victory!" : "💀 Defeat...") });

@@ -1,165 +1,83 @@
-const fs = require('fs');
-const Groq = require("groq-sdk"); 
+// ============================================
+// POWERSCALE COMMAND - GO SERVICE MIGRATION
+// ============================================
 
-// Helper for dynamic ESM import
-async function getGot() {
-    const { gotScraping } = await import('got-scraping');
-    return gotScraping;
-}
-
-const PeakLogic = {
-    clean: (text) => {
-        if (!text || text === "N/A") return "N/A";
-        // Remove wikitext brackets, bolding, and parenthetical info
-        let peak = text.split('|').pop().trim();
-        peak = peak.replace(/'''|\*\*|\[\[|\||\]\]/g, "");
-        peak = peak.replace(/\([^)]+\)/g, "").replace(/[[^\]]+]/g, "").trim();
-        return peak || "N/A";
-    },
-    tier: (text) => {
-        if (!text || text === "N/A") return "Unknown";
-        // Look for common tier formats like 2-C, Low 2-C, 1-A, etc.
-        const tierRegex = /\b([0-9]+-[A-Z]|Low\s+[0-9]+-[A-Z]|High\s+[0-9]+-[A-Z]|At\s+least\s+[0-9]+-[A-Z])\b/gi;
-        const matches = [...text.matchAll(tierRegex)].map(m => m[0]);
-        return matches.length ? matches[matches.length - 1] : "Unknown";
-    },
-    bio: (text) => {
-        if (!text) return "";
-        return text.split(/[.!?](?:\s|$)/g)[0].trim() + ".";
-    }
-};
+const GoImageService = require('./goImageService');
+const goService = new GoImageService();
 
 /**
- * Search for characters using MediaWiki's opensearch API
+ * Search for characters using VS Battles Wiki via Go Service
  */
 async function searchVSB(characterName) {
-    const got = await getGot();
-    const baseURL = 'https://vsbattles.fandom.com/api.php';
-    
-    const params = {
-        action: 'opensearch',
-        search: characterName,
-        limit: 10,
-        namespace: 0,
-        format: 'json',
-    };
-
     try {
-        const response = await got.get(baseURL, {
-            searchParams: params,
-        }).json();
-
-        const [query, titles, descriptions, urls] = response;
-        
-        if (!titles || titles.length === 0) throw new Error("Character not found");
-
-        return titles.map((title, idx) => ({
-            url: urls[idx],
-            name: title
+        const result = await goService.searchVSBattles(characterName);
+        return result.characters.map(char => ({
+            url: char.url,
+            name: char.name
         }));
     } catch (error) {
-        console.error('VS Battles search failed:', error.message);
+        console.error('❌ VS Battles search failed:', error.message);
         throw error;
     }
 }
 
 /**
- * Scrape VSB page data using MediaWiki API
+ * Scrape VSB page details via Go Service
  */
 async function scrapeVSBPage(pageUrl) {
-    const got = await getGot();
-    const baseURL = 'https://vsbattles.fandom.com/api.php';
-    
-    // Extract title from URL
-    const titleMatch = pageUrl.match(/\/wiki\/(.+)/);
-    const title = titleMatch ? decodeURIComponent(titleMatch[1]) : '';
-
-    const params = {
-        action: 'query',
-        titles: title,
-        prop: 'pageimages|extracts|revisions',
-        pithumbsize: 1000,
-        exintro: true,
-        explaintext: true,
-        rvprop: 'content',
-        format: 'json',
-    };
-
     try {
-        const response = await got.get(baseURL, {
-            searchParams: params,
-        }).json();
-
-        const pages = response.query.pages;
-        const page = Object.values(pages)[0];
-
-        if (!page || page.missing) throw new Error("Page not found");
-
-        const htmlContent = page.revisions?.[0]?.['*'] || ''; // Wikitext
-        const summary = page.extract || "";
+        const detail = await goService.getVSBattlesDetail(pageUrl);
         
-        const stats = {};
-        const statFields = ["Striking Strength", "Durability", "Stamina", "Range", "Speed", "Attack Potency"];
-        
-        statFields.forEach(field => {
-            // Flexible regex for wikitext and plain text
-            const regex = new RegExp(`(?:'''|\*\*|\b)${field}(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)`, "i");
-            const match = summary.match(regex) || htmlContent.match(regex);
-            stats[field] = match ? match[1].trim() : "N/A";
-        });
-
-        const tierRegex = /(?:'''|\*\*|\b)Tier(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)/i;
-        const tierMatch = summary.match(tierRegex) || htmlContent.match(tierRegex);
-        const tierRaw = tierMatch ? tierMatch[1].trim() : "N/A";
-
+        // Return structure matching what engine.js and legacy code expects
         return {
-            htmlContent: htmlContent, 
-            imageUrl: page.thumbnail?.source || "",
-            summary: summary,
-            tierRaw: tierRaw,
-            stats: stats,
-            imageWidth: page.thumbnail?.width || 0,
-            imageHeight: page.thumbnail?.height || 0
+            htmlContent: 'EXTRACTED_BY_GO', // Placeholder
+            imageUrl: detail.imageURL,
+            summary: detail.summary,
+            tier: detail.tier || 'Unknown',
+            ap: detail.attackPotency || 'N/A',
+            speed: detail.speed || 'N/A',
+            durability: detail.durability || 'N/A',
+            stamina: detail.stamina || 'N/A',
+            range: detail.range || 'N/A',
+            // Also keep original keys for extra safety
+            stats: {
+                tier: detail.tier || 'Unknown',
+                ap: detail.attackPotency || 'N/A',
+                speed: detail.speed || 'N/A',
+                durability: detail.durability || 'N/A',
+                stamina: detail.stamina || 'N/A',
+                range: detail.range || 'N/A'
+            }
         };
     } catch (error) {
-        console.error('VS Battles detail fetch failed:', error.message);
+        console.error('❌ VS Battles detail fetch failed:', error.message);
         throw error;
     }
 }
 
+// Legacy function - kept for compatibility. 
+// Now it just passes through the stats if they were already extracted by Go.
 async function extractStatsWithGroq(htmlContent) {
-    const stats = {};
-    const statFields = ["Attack Potency", "Speed", "Durability", "Stamina", "Range"];
-
-    statFields.forEach(field => {
-        const regex = new RegExp(`(?:'''|\*\*|\b)${field}(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)`, "i");
-        const match = htmlContent.match(regex);
-        stats[field] = match ? match[1].replace(/<[^>]+>/g, '').replace(/\||\[\[|\]\]/g, '').trim() : "N/A";
-    });
-
-    const tierMatch = htmlContent.match(/(?:'''|\*\*|\b)Tier(?:'''|\*\*|\b)?\s*?:\s*(.*?)(?:\n|\||$)/i);
-    stats.Tier = tierMatch ? tierMatch[1].replace(/<[^>]+>/g, '').replace(/\||\[\[|\]\]/g, '').trim() : "N/A";
-
-    const cleanedStats = {
-        ap: PeakLogic.clean(stats["Attack Potency"]),
-        speed: PeakLogic.clean(stats["Speed"]),
-        durability: PeakLogic.clean(stats["Durability"]),
-        stamina: PeakLogic.clean(stats["Stamina"]),
-        range: PeakLogic.clean(stats["Range"]),
-        tier: PeakLogic.tier(stats.Tier !== "N/A" ? stats.Tier : stats["Attack Potency"])
-    };
-
-    return cleanedStats;
+    // If we get our placeholder, we know Go already did the work.
+    // engine.js calls this with pageData.htmlContent.
+    return {}; // Return empty object, engine.js should rely on scrapeVSBPage data
 }
 
 function formatPowerScale(characterName, stats, pageUrl) {
+    const tier = stats.tier || stats.Tier || 'Unknown';
+    const ap = stats.ap || stats['Attack Potency'] || 'N/A';
+    const speed = stats.speed || stats['Speed'] || 'N/A';
+    const durability = stats.durability || stats['Durability'] || 'N/A';
+    const stamina = stats.stamina || stats['Stamina'] || 'N/A';
+    const range = stats.range || stats['Range'] || 'N/A';
+
     let message = `*${characterName} Powerscaling Analysis*\n\n`;
-    message += `*Attack Potency:* ${stats.ap}\n`;
-    message += `*Speed:* ${stats.speed}\n`;
-    message += `*Durability:* ${stats.durability}\n`;
-    message += `*Stamina:* ${stats.stamina}\n`;
-    message += `*Range:* ${stats.range}\n`;
-    message += `*Tier:* ${stats.tier}\n\n`;
+    message += `*Tier:* ${tier}\n`;
+    message += `*Attack Potency:* ${ap}\n`;
+    message += `*Speed:* ${speed}\n`;
+    message += `*Durability:* ${durability}\n`;
+    message += `*Stamina:* ${stamina}\n`;
+    message += `*Range:* ${range}\n\n`;
     message += `Full details: ${pageUrl}`;
     return message;
 }
