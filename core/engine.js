@@ -107,6 +107,8 @@ async function startBot(configInstance) {
     // - Avoids "Connection Closed" cascades during reconnects
     // - Adds a small gap between sends to reduce WS churn/rate limits
     // ============================================
+    // Baileys exposes `sock.ws` as a WebSocketClient (with `.isOpen`), not the raw `ws` instance.
+    // Keep WS_OPEN for fallback checks in case the internal shape changes.
     const WS_OPEN = 1;
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -135,14 +137,17 @@ async function startBot(configInstance) {
       const MAX_RETRIES = 3;
       const SEND_GAP_MS = 350;
 
+      const isWsOpen = () => {
+        const ws = boundSock?.ws;
+        if (!ws) return false;
+        if (typeof ws.isOpen === 'boolean') return ws.isOpen;
+        // Fallbacks: support older/alternate shapes.
+        const rs = ws.readyState ?? ws.socket?.readyState;
+        return rs === WS_OPEN;
+      };
+
       const canSendNow = () => {
-        return !!(
-          boundSock &&
-          rawSend &&
-          boundSock.ws &&
-          boundSock.ws.readyState === WS_OPEN &&
-          boundSock.user
-        );
+        return Boolean(boundSock && rawSend && isWsOpen());
       };
 
       const bind = (newSock) => {
@@ -2727,7 +2732,8 @@ async function getGroupMetadata(id, forceRefresh = false) {
   if (!forceRefresh && cached) return cached;
 
   // If the socket isn't ready, don't block message handling on metadata fetch.
-  if (!sock?.ws || sock.ws.readyState !== WS_OPEN) {
+  const wsOpen = sock?.ws ? (typeof sock.ws.isOpen === 'boolean' ? sock.ws.isOpen : ((sock.ws.readyState ?? sock.ws.socket?.readyState) === WS_OPEN)) : false;
+  if (!wsOpen) {
     return cached || null;
   }
   
@@ -2900,7 +2906,7 @@ We are happy to have you here.
   const txt = text ? text.trim() : '';
 
   // 🚨 HARD-PING TEST (Bypasses everything)
-  if (txt.toLowerCase() === 'ping' || txt.toLowerCase() === '.j ping') {
+  if (txt.toLowerCase() === 'ping' || txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`) {
     return await sock.sendMessage(chatId, { text: 'pong! 🏓 (Engine is alive)' });
   }
   
