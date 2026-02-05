@@ -1,896 +1,1060 @@
-# Baileys Stateless Processing - Master Guide
-## Zero Session Retention, Zero Old Messages, MongoDB-Only Data
-
-> **Goal:** Stop decrypting old messages, stop maintaining session state, only keep application data in MongoDB, minimize RAM to bare minimum.
+# WhatsApp Bot Bug Analysis Report
+## Critical Bugs Causing Connection Errors
 
 ---
 
-## 🎯 The Core Problem You're Trying to Solve
+## 🔴 **CRITICAL BUG #1: Race Conditions in Combat System**
 
-You don't want a traditional WhatsApp client that remembers everything. You want a **message relay** that:
-
-1. ❌ **Does NOT** sync message history
-2. ❌ **Does NOT** decrypt old messages
-3. ❌ **Does NOT** maintain encryption session state beyond what's needed for the current message
-4. ✅ **DOES** process new messages in real-time
-5. ✅ **DOES** extract relevant data (commands, user stats, etc.)
-6. ✅ **DOES** store only application data in MongoDB
-7. ✅ **DOES** immediately clear temporary encryption state
-
-**The issue:** Baileys is designed as a full WhatsApp client. The Signal Protocol requires maintaining session state. We need to work around this.
-
----
-
-## 🚫 What You're Fighting Against
-
-### The Signal Protocol's Session Ratchet
-
-Every time you message someone, the Signal Protocol:
-1. Creates a new encryption key pair
-2. Stores the old key pair (in case of message retries)
-3. Cleans up old key pairs after they're "stale"
-
-This is what causes "Removing old closed session" spam and RAM buildup. You can't fully eliminate it while using Baileys, but you can **minimize it dramatically**.
-
----
-
-## ✅ The Solution: Stateless Processing Architecture
-
+### Error Pattern:
 ```
-┌─────────────────────────────────────────────────────────┐
-│  WhatsApp Message Arrives                               │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│  1. DECRYPT (Baileys handles this - unavoidable)        │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│  2. EXTRACT DATA                                         │
-│     - Sender ID                                          │
-│     - Message text/command                               │
-│     - Timestamp                                          │
-│     - Media info (if any)                                │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│  3. PROCESS & SAVE TO MONGODB                            │
-│     - Update user stats                                  │
-│     - Store message (1hr TTL)                            │
-│     - Execute command                                    │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│  4. IMMEDIATELY WIPE MESSAGE OBJECT                      │
-│     msg.message = null;                                  │
-│     msg = null;                                          │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│  5. FORCE GC EVERY N MESSAGES (optional)                 │
-│     if (global.gc && messageCount % 100 === 0) {         │
-│       global.gc();                                       │
-│     }                                                    │
-└─────────────────────────────────────────────────────────┘
+Failed to send turn image in nextTurn: Connection Closed
+Failed to send status messages in processCombatTurn: Connection Closed
+Failed to send player prompt in promptPlayerAction: Connection Closed
 ```
 
----
+### Root Cause:
+The combat system attempts to send multiple messages sequentially **without waiting for connection state validation**. When the connection drops (Status 408/428), the combat system continues trying to send messages, causing cascading failures.
 
-## 🔧 Implementation: The Minimal Baileys Config
+### Location:
+Lines referencing: `nextTurn`, `processCombatTurn`, `promptPlayerAction`, `startCombat`
 
-This is the **absolute minimum** config to prevent history sync and minimize session overhead:
-
-```js
-const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-
-// 1. SILENT LOGGER (you already have this)
-const logger = pino({ level: 'silent' });
-
-async function startBot(configInstance) {
-  // 2. AUTH STATE (minimal file storage or MongoDB)
-  const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
-  
-  // 3. THE CRITICAL CONFIG
-  const sock = makeWASocket({
-    auth: state,
-    logger: logger, // Silent - no spam
-    
-    // 🛑 STOP HISTORY SYNC
-    syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false,
-    
-    // 🛑 MINIMAL MESSAGE STORAGE
-    getMessage: async (key) => {
-      // Return undefined = don't try to fetch from local storage
-      // This forces Baileys to only process NEW incoming messages
-      return undefined;
-    },
-    
-    // 🛑 IGNORE BROADCASTS
-    shouldIgnoreJid: (jid) => jid.includes('@broadcast'),
-    
-    // 🛑 DON'T PROCESS RECEIPTS/REACTIONS UNLESS NEEDED
-    markOnlineOnConnect: false,
-    
-    // Save credentials when they update
-    msgRetryCounterCache: new NodeCache({ stdTTL: 300 }),
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  
-  return sock;
-}
-```
-
----
-
-## 🧹 The Stateless Message Handler
-
-This is the **core pattern** for processing messages without retaining state:
-
-```js
-let messageCount = 0;
-
-sock.ev.on('messages.upsert', async ({ messages, type }) => {
-  // Only process 'notify' messages (new incoming messages)
-  // Ignore 'append' (old messages from sync)
-  if (type !== 'notify') return;
-  
-  for (let msg of messages) {
-    try {
-      // ============================================
-      // STEP 1: IGNORE OLD MESSAGES (CRITICAL!)
-      // ============================================
-      const msgTimestamp = msg.messageTimestamp;
-      const now = Math.floor(Date.now() / 1000);
-      
-      // If message is older than 2 minutes, SKIP IT
-      if (now - msgTimestamp > 120) {
-        console.log('⏩ Skipping old message');
-        msg = null; // Immediate cleanup
-        continue;
-      }
-      
-      // ============================================
-      // STEP 2: EXTRACT ONLY WHAT YOU NEED
-      // ============================================
-      const chatId = msg.key.remoteJid;
-      const sender = msg.key.participant || msg.key.remoteJid;
-      const fromMe = msg.key.fromMe;
-      const messageType = Object.keys(msg.message || {})[0];
-      const messageText = msg.message?.conversation || 
-                         msg.message?.extendedTextMessage?.text || 
-                         null;
-      
-      // ============================================
-      // STEP 3: SAVE TO MONGODB (FIRE-AND-FORGET)
-      // ============================================
-      // Don't await unless you need to - let it run in background
-      ChatMessage.create({
-        chatId: chatId,
-        sender: sender,
-        body: messageText,
-        type: messageType,
-        timestamp: new Date(msgTimestamp * 1000)
-      }).catch(() => {}); // Swallow errors
-      
-      // Update user stats (also fire-and-forget)
-      if (!fromMe) {
-        User.findOneAndUpdate(
-          { userId: sender },
-          { 
-            $inc: { 'stats.messageCount': 1 },
-            $set: { lastActive: new Date() }
-          },
-          { upsert: true }
-        ).catch(() => {});
-      }
-      
-      // ============================================
-      // STEP 4: PROCESS COMMAND/LOGIC
-      // ============================================
-      if (messageText && messageText.startsWith('.')) {
-        const command = messageText.slice(1).split(' ')[0].toLowerCase();
-        
-        // Handle your commands here
-        // ...
-      }
-      
-    } catch (err) {
-      // Log error to MongoDB, not console
-      ErrorLog.create({
-        errorType: 'message_processing_error',
-        message: err.message,
-        stack: err.stack,
-        timestamp: new Date()
-      }).catch(() => {});
-      
-    } finally {
-      // ============================================
-      // STEP 5: IMMEDIATE CLEANUP (CRITICAL!)
-      // ============================================
-      // Null out the message object so GC can collect it
-      if (msg) {
-        msg.message = null;
-        msg = null;
-      }
-    }
-  }
-  
-  // ============================================
-  // STEP 6: CLEAR THE MESSAGES ARRAY
-  // ============================================
-  messages.length = 0;
-  
-  // ============================================
-  // STEP 7: PERIODIC GARBAGE COLLECTION
-  // ============================================
-  messageCount++;
-  if (global.gc && messageCount % 100 === 0) {
-    global.gc();
-    console.log(`🧹 Forced GC after ${messageCount} messages`);
-  }
-});
-```
-
----
-
-## 🗑️ Aggressive Session State Cleanup
-
-Since Baileys maintains session state for the Signal Protocol, you can't eliminate it entirely, but you can **minimize retention**:
-
-### Option A: Periodic Session File Cleanup (Safe)
-
-Only delete truly old session files that aren't needed:
-
-```js
-const fs = require('fs').promises;
-const path = require('path');
-
-async function cleanOldSessionFiles(authPath) {
-  try {
-    const files = await fs.readdir(authPath);
-    const now = Date.now();
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-    
-    for (const file of files) {
-      // NEVER delete creds.json or app-state-sync files
-      if (file === 'creds.json' || file.startsWith('app-state-sync')) {
-        continue;
-      }
-      
-      const filePath = path.join(authPath, file);
-      const stats = await fs.stat(filePath);
-      
-      // Only delete files older than 7 days
-      if (now - stats.mtimeMs > maxAge) {
-        await fs.unlink(filePath);
-        console.log(`🗑️ Deleted old session file: ${file}`);
-      }
-    }
-  } catch (err) {
-    console.error('Session cleanup error:', err.message);
-  }
+### Fix Required:
+```javascript
+// BEFORE (Buggy):
+async function nextTurn() {
+  await sock.sendMessage(...); // No connection check
+  await sock.sendMessage(...); // Fails if first one disconnected
 }
 
-// Run cleanup once per day
-setInterval(() => {
-  cleanOldSessionFiles(configInstance.getAuthPath());
-}, 24 * 60 * 60 * 1000);
-```
-
-### Option B: Restart Bot Daily (Nuclear Option)
-
-Since you're keeping auth in files/MongoDB, restarting the bot clears RAM completely:
-
-```js
-// Using PM2:
-// ecosystem.config.js
-module.exports = {
-  apps: [{
-    name: 'whatsapp-bot',
-    script: './index.js',
-    cron_restart: '0 4 * * *', // Restart at 4 AM daily
-    max_memory_restart: '500M' // Auto-restart if RAM hits 500MB
-  }]
-};
-```
-
----
-
-## 📊 MongoDB Schema: Only Store Application Data
-
-### 1. Messages Collection (1 Hour TTL)
-
-```js
-const ChatMessageSchema = new mongoose.Schema({
-  chatId: { type: String, required: true, index: true },
-  sender: { type: String, required: true, index: true },
-  body: String,
-  type: String, // conversation, imageMessage, etc.
-  timestamp: { type: Date, required: true, index: true },
-  processed: { type: Boolean, default: false }
-});
-
-// Auto-delete after 1 hour
-ChatMessageSchema.index({ timestamp: 1 }, { expireAfterSeconds: 3600 });
-
-// Compound index for group activity queries
-ChatMessageSchema.index({ chatId: 1, timestamp: -1 });
-```
-
-### 2. User Stats Collection (Permanent)
-
-```js
-const UserSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  stats: {
-    messageCount: { type: Number, default: 0 },
-    commandsUsed: { type: Number, default: 0 },
-    lastCommand: String,
-    lastActive: Date
-  },
-  economy: {
-    wallet: { type: Number, default: 0 },
-    bank: { type: Number, default: 0 }
-  },
-  profile: {
-    nickname: String,
-    registeredAt: { type: Date, default: Date.now }
-  }
-});
-
-UserSchema.index({ userId: 1 });
-UserSchema.index({ 'stats.lastActive': -1 });
-```
-
-### 3. Group Activity Collection (Permanent)
-
-```js
-const GroupActivitySchema = new mongoose.Schema({
-  chatId: { type: String, required: true, index: true },
-  date: { type: Date, required: true }, // Truncated to day
-  userActivity: [{
-    userId: String,
-    messageCount: Number,
-    lastActive: Date
-  }]
-});
-
-// Compound index for daily activity queries
-GroupActivitySchema.index({ chatId: 1, date: -1 });
-```
-
-**Update pattern (aggregated, not per-message):**
-
-```js
-// Run this every 5 minutes or on-demand
-async function aggregateGroupActivity(chatId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const messages = await ChatMessage.aggregate([
-    {
-      $match: {
-        chatId: chatId,
-        timestamp: { $gte: today }
-      }
-    },
-    {
-      $group: {
-        _id: '$sender',
-        messageCount: { $sum: 1 },
-        lastActive: { $max: '$timestamp' }
-      }
-    }
-  ]);
-  
-  await GroupActivity.findOneAndUpdate(
-    { chatId, date: today },
-    {
-      $set: {
-        userActivity: messages.map(m => ({
-          userId: m._id,
-          messageCount: m.messageCount,
-          lastActive: m.lastActive
-        }))
-      }
-    },
-    { upsert: true }
-  );
-}
-```
-
----
-
-## 🛑 Stop the "Removing old closed session" Spam
-
-Add this at the top of `engine.js` after your imports (line 68):
-
-```js
-// ===== SUPPRESS SIGNAL PROTOCOL SESSION LOGS =====
-const originalLog = console.log;
-console.log = function(...args) {
-  const msg = String(args[0] || '');
-  
-  // Block session cleanup spam
-  if (msg.includes('Removing old closed session') || 
-      msg.includes('Closing open session')) {
+// AFTER (Fixed):
+async function nextTurn() {
+  if (!sock || sock.ws.readyState !== WebSocket.OPEN) {
+    console.log("⚠️ Connection not ready, aborting combat action");
     return;
   }
   
-  // Allow everything else
-  originalLog.apply(console, args);
-};
-// =================================================
-```
-
----
-
-## 🚀 Performance Optimizations
-
-### 1. Batch MongoDB Writes
-
-Instead of writing every message individually:
-
-```js
-const messageBatch = [];
-const BATCH_SIZE = 20;
-const BATCH_TIMEOUT = 3000; // 3 seconds
-
-function queueMessage(data) {
-  messageBatch.push(data);
-  
-  if (messageBatch.length >= BATCH_SIZE) {
-    flushBatch();
-  }
-}
-
-async function flushBatch() {
-  if (messageBatch.length === 0) return;
-  
-  const batch = messageBatch.splice(0, messageBatch.length);
-  
   try {
-    await ChatMessage.insertMany(batch, { ordered: false });
+    await sock.sendMessage(...);
+    // Add small delay between messages
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await sock.sendMessage(...);
   } catch (err) {
-    // Ignore duplicate key errors
+    if (err.message.includes('Connection Closed')) {
+      console.log("Connection lost during combat, will retry on reconnect");
+      // Store combat state for recovery
+    }
+  }
+}
+```
+
+---
+
+## 🔴 **CRITICAL BUG #2: Missing Connection State Validation**
+
+### Error Pattern:
+```
+🔻 Connection closed. Status code: 408
+🔻 Connection closed. Status code: 428
+```
+
+### Root Cause:
+The bot does not validate the WebSocket connection state **before attempting to send messages**. Status codes:
+- **408**: Request Timeout (WhatsApp server didn't respond in time)
+- **428**: Precondition Required (Authentication or session issue)
+
+### Location:
+Throughout the message sending logic (lines 9994-10035, combat system calls)
+
+### Fix Required:
+```javascript
+// Add global message wrapper
+async function safeSendMessage(jid, content, options = {}) {
+  const maxRetries = 3;
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    try {
+      // Check connection state
+      if (!sock || !sock.ws || sock.ws.readyState !== 1) { // 1 = OPEN
+        throw new Error('Socket not ready');
+      }
+      
+      // Check if we're authenticated
+      if (!sock.user) {
+        throw new Error('Not authenticated');
+      }
+      
+      return await sock.sendMessage(jid, content, options);
+      
+    } catch (err) {
+      attempt++;
+      
+      if (attempt >= maxRetries) {
+        console.error(`Failed to send message after ${maxRetries} attempts:`, err.message);
+        return null;
+      }
+      
+      // Wait before retry with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+    }
   }
 }
 
-// Auto-flush every 3 seconds
-setInterval(flushBatch, BATCH_TIMEOUT);
-
-// In your message handler:
-queueMessage({
-  chatId: chatId,
-  sender: sender,
-  body: messageText,
-  type: messageType,
-  timestamp: new Date(msgTimestamp * 1000)
-});
-```
-
-### 2. Fire-and-Forget Non-Critical Operations
-
-```js
-// DON'T await these - let them run in background
-ChatMessage.create(data).catch(() => {});
-User.findOneAndUpdate(query, update).catch(() => {});
-ErrorLog.create(errorData).catch(() => {});
-```
-
-### 3. Use Indexes on Every Query Field
-
-```js
-// Add indexes for ALL fields you query on
-ChatMessageSchema.index({ chatId: 1, timestamp: -1 });
-UserSchema.index({ userId: 1 });
-UserSchema.index({ 'stats.lastActive': -1 });
-GroupActivitySchema.index({ chatId: 1, date: -1 });
+// Replace all sock.sendMessage() calls with safeSendMessage()
 ```
 
 ---
 
-## 📋 Complete Implementation Checklist
+## 🔴 **CRITICAL BUG #3: Reconnection Logic Not Clearing State**
 
-### Phase 1: Minimal Config
-- [ ] Verify `logger: pino({ level: 'silent' })`
-- [ ] Add `syncFullHistory: false`
-- [ ] Add `shouldSyncHistoryMessage: () => false`
-- [ ] Add `getMessage: async () => undefined`
-- [ ] Add console.log filter to suppress session spam
-
-### Phase 2: Stateless Message Handler
-- [ ] Add timestamp check (skip messages older than 2 minutes)
-- [ ] Extract only needed data (don't keep full message object)
-- [ ] Use fire-and-forget for MongoDB writes
-- [ ] Null out message objects in `finally` block
-- [ ] Clear messages array after processing
-- [ ] Add periodic GC trigger (every 100 messages)
-
-### Phase 3: MongoDB Optimization
-- [ ] Add TTL index on messages (1 hour)
-- [ ] Create compound indexes for queries
-- [ ] Implement batch writes for messages
-- [ ] Aggregate group activity periodically (not per-message)
-- [ ] Store only application data, not raw messages
-
-### Phase 4: Session Management
-- [ ] Keep auth state minimal (files or MongoDB)
-- [ ] Add safe session file cleanup (weekly, not daily)
-- [ ] Configure PM2 auto-restart (daily or on memory limit)
-- [ ] Never delete `creds.json` or `app-state-sync-*` files
-
-### Phase 5: Memory Monitoring
-- [ ] Start bot with `--expose-gc` flag
-- [ ] Monitor RAM usage in task manager
-- [ ] Set PM2 `max_memory_restart: 500M`
-- [ ] Log memory metrics to MongoDB every 5 minutes
-
----
-
-## 🎯 Expected Results
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Boot RAM | 400-800MB | 150-250MB |
-| Idle RAM | 600-800MB | 200-300MB |
-| RAM per 1000 msgs | +100-200MB | +10-20MB |
-| Old message processing | Yes (waste) | No (skipped) |
-| Session cleanup spam | Constant | Suppressed |
-| Boot time | 2-5 minutes | 5-15 seconds |
-
-
----
-
-## 💡 Bottom Line
-
-You can't fully eliminate the Signal Protocol's session management (it's how WhatsApp encryption works), but you can:
-
-1. ✅ **Prevent old message processing** → `type !== 'notify'` + timestamp check
-2. ✅ **Minimize session retention** → Safe weekly cleanup or daily restarts
-3. ✅ **Eliminate encryption overhead** → Immediate message object cleanup
-4. ✅ **Store only app data** → MongoDB for stats, not raw messages
-5. ✅ **Suppress session spam** → console.log filter
-
-**Your RAM will stay at 200-350MB** with this setup, and you'll never process old messages again.
-
-
-# Baileys v7.0.0-rc.9 Memory Management — Fact-Checked Guide
-
-> **Based on:** Official Baileys documentation, verified GitHub issues #2090 and #2104, and real community solutions from late 2025/early 2026.
-
----
-
-## 🔍 What Gemini Got Right
-
-### ✅ Confirmed Issues (GitHub Verified)
-
-1. **Issue #2090** (Nov 20, 2025): "Node.js memory usage increases by around 0.1 MB for every message received, and this value never goes down, as if the garbage collector is not cleaning anything." This is a real, documented bug in v7.0.0-rc.8 and rc.9.
-
-2. **Issue #2104** (Nov 23, 2025): "Memory leak when sending large media files (videos/documents) via direct URLs or Streams in the latest release candidates (7.0.0-rc.8 and 7.0.0-rc.9)."
-
-3. **makeInMemoryStore is the culprit**: "I highly recommend building your own data store, as storing someone's entire chat history in memory is a terrible waste of RAM." This is stated explicitly in the official documentation.
-
-4. **syncFullHistory setting exists**: "syncFullHistory: boolean - Should Baileys ask the phone for full history, will be received async" (from official TypeScript types).
-
-5. **shouldSyncHistoryMessage works**: "You can choose to disable or receive no history sync messages by setting the shouldSyncHistoryMessage option to () => false."
-
----
-
-## ⚠️ What Gemini Got PARTIALLY Wrong
-
-### 🟡 Misleading or Unproven Claims
-
-1. **"makeCacheableSignalKeyStore is the leak"** — UNPROVEN. In Issue #2090, the bug reporter's example code has `makeCacheableSignalKeyStore` COMMENTED OUT, yet still experiences the leak. This suggests it's NOT the primary cause, though it may contribute. No definitive evidence either way.
-
-2. **"fireInitQueries: false"** — ACTUALLY EXISTS. This config option DOES appear in the official TypeScript types (SocketConfig). Gemini was correct about this.
-
-3. **"Timestamp Guard prevents offline messages"** — WORKAROUND, not a fix. While filtering by timestamp works, this isn't an official Baileys solution. It's a user-level workaround.
-
-4. **"Session cleanup triggers re-sync"** — OVERSIMPLIFIED. The real behavior is more nuanced than "delete files = massive re-sync."
-
----
-
-## 🎯 The Real Problem (Based on Your Codebase)
-
-Looking at your `engine.js`, your logger is already set to `silent` (line 309-311), so **the "Removing old closed session" logs are NOT from Baileys' pino logger**. They're hardcoded console.log statements in the underlying Signal Protocol library that Baileys uses for encryption.
-
-**Critical discovery:** Your config at line 2493 shows `logger: logger`, which means you ARE using the silent logger correctly.
-
-**The ACTUAL memory leak source** (from Issue #2090):
-
-Looking at the bug report's test code, they explicitly commented out `makeCacheableSignalKeyStore`:
-```js
-// auth: {
-//     creds: state.creds,
-//     /** caching makes the store faster to send/recv messages */
-//     keys: makeCacheableSignalKeyStore(state.keys, undefined),
-// },
+### Error Pattern:
+```
+🔁 Reconnecting in 5s...
+🚀 Starting Goten (Goten)...
+Failed to send turn image in nextTurn: Connection Closed
 ```
 
-They used just `auth: state` and STILL got the 0.1MB-per-message leak. This means **the leak is deeper in Baileys' core message processing**, not in the cacheable wrapper.
+### Root Cause:
+When the bot reconnects, it **immediately tries to resume combat** from the previous session without:
+1. Checking if the connection is fully established
+2. Clearing old combat states
+3. Validating that the group/user is still accessible
 
-The memory spike you're seeing comes from two sources:
+### Location:
+`initSocket()` function (around line 9000+), reconnection logic
 
-1. **The v7.0.0-rc.9 bug** (Issue #2090) - a fundamental leak in message processing
-2. **If you're using makeInMemoryStore anywhere** (check your entire codebase)
-
----
-
-## 🛠 The Actual Fix (No BS, Just Facts)
-
-### 1. Check If You're Using makeInMemoryStore
-
-Search your entire project for `makeInMemoryStore`:
-
-```bash
-grep -r "makeInMemoryStore" .
-```
-
-If you find it anywhere, **remove it completely**. "I highly recommend building your own data store, as storing someone's entire chat history in memory is a terrible waste of RAM."
-
-### 2. Your Socket Config (What Actually Works)
-
-Based on verified documentation and TypeScript types:
-
-```js
-const sock = makeWASocket({
-  version,
-  auth: {
-    creds: state.creds,
-    keys: state.keys, // Simple approach - no wrapper
-    // OR if you want caching (unproven if this causes leaks):
-    // keys: makeCacheableSignalKeyStore(state.keys, logger),
-  },
-  logger: logger, // Already set to silent - this is correct
+### Fix Required:
+```javascript
+async function initSocket() {
+  // ... existing code ...
   
-  // VERIFIED CONFIGS FROM DOCS & TYPES:
-  syncFullHistory: false,  // Stops the massive history dump
-  shouldSyncHistoryMessage: () => false,  // Extra layer of protection
-  fireInitQueries: false,  // ✅ VERIFIED - exists in TypeScript types
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect } = update;
+    
+    if (connection === 'open') {
+      console.log("✅ WhatsApp connected (open).");
+      
+      // ⚠️ IMPORTANT: Clear all pending operations
+      await clearPendingOperations();
+      
+      // Wait for connection to stabilize
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      retryCount = 0;
+      // ... rest of the code
+    }
+  });
+}
+
+async function clearPendingOperations() {
+  // Clear combat states
+  const activeCombats = progression.getActiveCombats?.() || [];
+  for (const combat of activeCombats) {
+    console.log(`⚠️ Clearing stale combat session for user ${combat.userId}`);
+    // Don't try to send messages, just clean up the state
+    progression.clearCombat?.(combat.userId, combat.chatId);
+  }
   
-  getMessage: async (key) => {
-    // Return message from your MongoDB if you need retry logic
-    // Otherwise return undefined to prevent in-memory caching
-    return undefined;
-  },
-  
-  // Keep your existing optimizations:
-  msgRetryCounterCache,
-  printQRInTerminal: false,
-  browser: [`${botConfig.getBotName()} Bot`, 'Chrome', '1.0.0'],
-  shouldIgnoreJid: (jid) => ignoreBroadcasts && jid.includes('@broadcast'),
-});
+  // Clear other pending operations
+  commandCooldowns.clear();
+}
 ```
 
-### 3. MongoDB-First Architecture (The Official Recommendation)
+---
 
-Your bot needs to transition from RAM-based storage to MongoDB-first. Here's what needs to change:
+## 🟡 **MEDIUM BUG #4: No Graceful Degradation for Media**
 
-#### A. Message Storage (Already Partly Implemented)
+### Error Pattern:
+```
+Media upload failed in startCombat: Connection Closed
+Fallback text failed in startCombat: Connection Closed
+```
 
-You have ChatMessage model - good. Now ensure EVERY incoming message goes to MongoDB immediately:
+### Root Cause:
+When media upload fails, the fallback text also fails because **the connection is still closed**. No proper error handling cascade.
 
-```js
-sock.ev.on('messages.upsert', async ({ messages }) => {
-  for (const msg of messages) {
-    if (!msg.message) continue;
+### Fix Required:
+```javascript
+async function startCombat(userId, chatId) {
+  try {
+    // Try to send with media
+    const imageBuffer = await generateCombatImage();
+    await safeSendMessage(chatId, {
+      image: imageBuffer,
+      caption: combatText
+    });
+  } catch (err) {
+    console.log("Media upload failed, trying text-only...");
+    
+    // Wait a bit and check connection
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     try {
-      // Fire-and-forget write to MongoDB
-      ChatMessage.create({
-        messageId: msg.key.id,
-        chatId: msg.key.remoteJid,
-        sender: msg.key.participant || msg.key.remoteJid,
-        body: msg.message.conversation || 
-              msg.message.extendedTextMessage?.text || 
-              null,
-        type: Object.keys(msg.message)[0],
-        timestamp: new Date(msg.messageTimestamp * 1000),
-        metadata: {
-          fromMe: msg.key.fromMe,
-          isGroup: msg.key.remoteJid.endsWith('@g.us')
+      // Try text-only
+      await safeSendMessage(chatId, { text: combatText });
+    } catch (err2) {
+      // Store the combat state for later delivery
+      console.log("Both media and text failed, storing for later...");
+      storePendingCombat(userId, chatId, combatText, imageBuffer);
+      return;
+    }
+  }
+}
+```
+
+---
+
+## 🟡 **MEDIUM BUG #5: Unhandled Promise Rejections in Combat**
+
+### Error Pattern:
+```
+❌ Unhandled Rejection at: Promise {
+  <rejected> Error: Connection Closed
+      at sendRawMessage
+```
+
+### Root Cause:
+Combat functions don't properly catch and handle promise rejections, causing them to bubble up to the global handler.
+
+### Location:
+Line 121-132 (global handler), combat system
+
+### Fix Required:
+```javascript
+// Wrap all async combat operations
+sock.ev.on('messages.upsert', async ({ messages }) => {
+  for (const m of messages) {
+    try {
+      // ... message processing ...
+      
+      // When calling combat functions:
+      await handleCombatCommand(args, chatId, senderJid)
+        .catch(err => {
+          console.error("Combat command error:", err.message);
+          // Don't let it crash the bot
+          return sock.sendMessage(chatId, {
+            text: "⚠️ Combat system temporarily unavailable. Try again in a moment."
+          }).catch(() => {});
+        });
+        
+    } catch (err) {
+      // Handle at message level
+      console.error("Message processing error:", err.message);
+    }
+  }
+});
+```
+
+---
+
+## 🟡 **MEDIUM BUG #6: Group Metadata Cache Issues**
+
+### Error Pattern:
+```
+at groupMetadata (file:///app/node_modules/@whiskeysockets/baileys/lib/Socket/groups.js:19:30)
+```
+
+### Root Cause:
+The bot tries to fetch group metadata during a connection issue, but there's no timeout or fallback.
+
+### Location:
+Line 79: `const groupMetadataCache = new NodeCache({ stdTTL: 300 });`
+
+### Fix Required:
+```javascript
+async function getGroupMetadataWithFallback(chatId) {
+  // Check cache first
+  const cached = groupMetadataCache.get(chatId);
+  if (cached) return cached;
+  
+  try {
+    // Set timeout for metadata fetch
+    const metadata = await Promise.race([
+      sock.groupMetadata(chatId),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Metadata timeout')), 5000)
+      )
+    ]);
+    
+    groupMetadataCache.set(chatId, metadata);
+    return metadata;
+    
+  } catch (err) {
+    console.log(`⚠️ Failed to get metadata for ${chatId}, using fallback`);
+    
+    // Return minimal fallback
+    return {
+      id: chatId,
+      subject: 'Unknown Group',
+      participants: []
+    };
+  }
+}
+```
+
+---
+
+## 🟢 **LOW BUG #7: Memory Leaks from Uncleaned Event Listeners**
+
+### Issue:
+Every reconnection creates new event listeners without cleaning old ones.
+
+### Fix Required:
+```javascript
+// Track listeners
+let messageListener = null;
+
+async function initSocket() {
+  // ... existing code ...
+  
+  // Remove old listener before adding new one
+  if (messageListener) {
+    sock.ev.off('messages.upsert', messageListener);
+  }
+  
+  messageListener = async ({ messages }) => {
+    // ... message handling ...
+  };
+  
+  sock.ev.on('messages.upsert', messageListener);
+}
+```
+
+---
+
+## 🟢 **LOW BUG #8: No Circuit Breaker for Rapid Reconnections**
+
+### Error Pattern:
+```
+🔁 Reconnecting in 5s...
+🔁 Reconnecting in 10s...
+(Multiple rapid reconnections)
+```
+
+### Issue:
+The backoff is too simple and doesn't prevent rapid reconnection loops.
+
+### Fix Required:
+```javascript
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 10;
+
+function getBackoff() {
+  consecutiveFailures++;
+  
+  if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+    console.error('🛑 Too many consecutive failures, stopping reconnection.');
+    process.exit(1); // Let the process manager (PM2/systemd) restart
+  }
+  
+  // Exponential backoff with max of 5 minutes
+  const delay = Math.min(5000 * Math.pow(1.5, consecutiveFailures), 300000);
+  return delay;
+}
+
+// Reset on successful connection
+sock.ev.on('connection.update', ({ connection }) => {
+  if (connection === 'open') {
+    consecutiveFailures = 0; // Reset counter
+  }
+});
+```
+
+---
+
+## 📊 **Priority Summary**
+
+### Fix Immediately (Critical):
+1. ✅ Add connection state validation before all message sends
+2. ✅ Implement proper error handling in combat system
+3. ✅ Clear pending operations on reconnection
+
+### Fix Soon (Medium):
+4. ✅ Add graceful degradation for media uploads
+5. ✅ Wrap all async operations with proper error handlers
+6. ✅ Add timeout for group metadata fetches
+
+### Fix When Possible (Low):
+7. ✅ Clean up event listeners on reconnection
+8. ✅ Implement circuit breaker for reconnection loops
+
+---
+
+## 🔧 **Recommended Architectural Changes**
+
+### 1. Message Queue System
+Instead of sending messages directly, queue them:
+```javascript
+const messageQueue = [];
+
+async function queueMessage(jid, content, options) {
+  messageQueue.push({ jid, content, options, timestamp: Date.now() });
+}
+
+async function processQueue() {
+  if (!sock || sock.ws.readyState !== 1) return;
+  
+  while (messageQueue.length > 0) {
+    const msg = messageQueue.shift();
+    
+    // Skip old messages (older than 5 minutes)
+    if (Date.now() - msg.timestamp > 300000) {
+      console.log("Skipping old queued message");
+      continue;
+    }
+    
+    try {
+      await sock.sendMessage(msg.jid, msg.content, msg.options);
+      await new Promise(resolve => setTimeout(resolve, 500)); // Rate limit
+    } catch (err) {
+      // If it fails, put it back
+      messageQueue.unshift(msg);
+      break;
+    }
+  }
+}
+
+// Process queue every second
+setInterval(processQueue, 1000);
+```
+
+### 2. Health Check System
+```javascript
+let lastHealthCheck = Date.now();
+
+setInterval(() => {
+  if (!sock || sock.ws.readyState !== 1) {
+    console.log("⚠️ Health check failed - connection is down");
+    return;
+  }
+  
+  // Ping to keep connection alive
+  sock.sendPresenceUpdate('available').catch(() => {});
+  lastHealthCheck = Date.now();
+}, 30000); // Every 30 seconds
+
+// Monitor health
+setInterval(() => {
+  if (Date.now() - lastHealthCheck > 60000) {
+    console.error("🛑 No successful health check in 60s, forcing reconnect");
+    sock.ws.close();
+  }
+}, 10000);
+```
+
+---
+
+## 🎯 **Implementation Priority**
+
+### Phase 1 (Immediate - Day 1):
+- Implement `safeSendMessage()` wrapper
+- Add connection validation checks
+- Fix combat system to check connection state
+
+### Phase 2 (Within 3 days):
+- Implement message queue
+- Add health check system
+- Clear pending operations on reconnection
+
+### Phase 3 (Within 1 week):
+- Add circuit breaker
+- Implement proper event listener cleanup
+- Add comprehensive logging
+
+---
+
+## 🧪 **Testing Checklist**
+
+- [ ] Test reconnection after manual disconnect
+- [ ] Test combat system during poor network conditions
+- [ ] Test message queue under load
+- [ ] Monitor memory usage over 24 hours
+- [ ] Test graceful shutdown and restart
+- [ ] Verify no orphaned combat sessions after crash
+- [ ] Test with multiple simultaneous combat sessions
+- [ ] Verify proper cleanup of event listeners
+
+---
+
+## 📝 **Additional Notes**
+
+The logs show the bot is **running on Render** (cloud hosting), which can have:
+- Network instability
+- Container restarts
+- Memory limits
+
+Consider:
+1. Adding persistent combat state storage (Redis/MongoDB)
+2. Implementing proper graceful shutdown handling
+3. Adding deployment health checks
+4. Using a process manager with auto-restart limits
+
+---
+
+**Generated:** February 5, 2026  
+**Bot:** Goten WhatsApp Bot  
+**Version:** Production
+
+
+// ============================================
+// CRITICAL BUG FIXES FOR WHATSAPP BOT
+// ============================================
+
+// FIX #1: Safe Message Sending Wrapper
+// Replace all sock.sendMessage() calls with this
+
+async function safeSendMessage(sock, jid, content, options = {}) {
+  const maxRetries = 3;
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    try {
+      // Validate socket exists
+      if (!sock) {
+        throw new Error('Socket is null or undefined');
+      }
+      
+      // Check WebSocket connection state
+      if (!sock.ws || sock.ws.readyState !== 1) { // 1 = WebSocket.OPEN
+        throw new Error('WebSocket not in OPEN state');
+      }
+      
+      // Check authentication
+      if (!sock.user) {
+        throw new Error('Socket not authenticated');
+      }
+      
+      // Attempt to send
+      const result = await sock.sendMessage(jid, content, options);
+      return result;
+      
+    } catch (err) {
+      attempt++;
+      
+      // Log the error
+      console.log(`⚠️ Send attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      
+      // If we've exhausted retries, give up
+      if (attempt >= maxRetries) {
+        console.error(`❌ Failed to send message after ${maxRetries} attempts`);
+        throw err; // Re-throw for upstream handling
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = 1000 * Math.pow(2, attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// ============================================
+// FIX #2: Connection State Manager
+// ============================================
+
+class ConnectionManager {
+  constructor() {
+    this.isConnected = false;
+    this.isAuthenticated = false;
+    this.lastSuccessfulMessage = Date.now();
+    this.consecutiveFailures = 0;
+  }
+  
+  updateState(sock) {
+    if (!sock || !sock.ws) {
+      this.isConnected = false;
+      this.isAuthenticated = false;
+      return;
+    }
+    
+    this.isConnected = sock.ws.readyState === 1;
+    this.isAuthenticated = !!sock.user;
+  }
+  
+  canSendMessage() {
+    return this.isConnected && this.isAuthenticated;
+  }
+  
+  recordSuccess() {
+    this.lastSuccessfulMessage = Date.now();
+    this.consecutiveFailures = 0;
+  }
+  
+  recordFailure() {
+    this.consecutiveFailures++;
+  }
+  
+  getHealthStatus() {
+    const timeSinceLastSuccess = Date.now() - this.lastSuccessfulMessage;
+    
+    return {
+      isHealthy: this.canSendMessage() && timeSinceLastSuccess < 60000,
+      consecutiveFailures: this.consecutiveFailures,
+      timeSinceLastSuccess
+    };
+  }
+}
+
+// Initialize the manager
+const connectionManager = new ConnectionManager();
+
+// Update state on connection events
+sock.ev.on('connection.update', (update) => {
+  connectionManager.updateState(sock);
+  
+  if (update.connection === 'open') {
+    console.log("✅ Connection established");
+    connectionManager.recordSuccess();
+  }
+});
+
+// ============================================
+// FIX #3: Message Queue System
+// ============================================
+
+class MessageQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+    this.maxQueueSize = 100;
+    this.messageTimeout = 300000; // 5 minutes
+  }
+  
+  enqueue(jid, content, options = {}) {
+    // Don't queue if queue is too large
+    if (this.queue.length >= this.maxQueueSize) {
+      console.warn('⚠️ Message queue full, dropping oldest message');
+      this.queue.shift();
+    }
+    
+    this.queue.push({
+      jid,
+      content,
+      options,
+      timestamp: Date.now(),
+      retries: 0
+    });
+    
+    console.log(`📬 Message queued. Queue size: ${this.queue.length}`);
+  }
+  
+  async processQueue(sock, connectionManager) {
+    if (this.processing) return;
+    if (this.queue.length === 0) return;
+    if (!connectionManager.canSendMessage()) {
+      console.log('⏸️ Queue paused - connection not ready');
+      return;
+    }
+    
+    this.processing = true;
+    
+    try {
+      while (this.queue.length > 0 && connectionManager.canSendMessage()) {
+        const message = this.queue[0];
+        
+        // Skip old messages
+        if (Date.now() - message.timestamp > this.messageTimeout) {
+          console.log('⏭️ Skipping expired message');
+          this.queue.shift();
+          continue;
         }
-      }).catch(err => {
-        // Log to ErrorLog instead of console
-        ErrorLog.create({
-          errorType: 'message_storage_failed',
-          message: err.message,
-          metadata: { messageId: msg.key.id }
-        }).catch(() => {});
-      });
-      
-      // Process your bot logic here
-      // ...
-      
+        
+        try {
+          await safeSendMessage(sock, message.jid, message.content, message.options);
+          this.queue.shift(); // Remove successful message
+          connectionManager.recordSuccess();
+          
+          // Rate limit: 500ms between messages
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+        } catch (err) {
+          message.retries++;
+          
+          if (message.retries >= 3) {
+            console.error(`❌ Message failed after 3 retries, dropping`);
+            this.queue.shift();
+          } else {
+            console.log(`⏳ Message retry ${message.retries}/3`);
+            // Move to back of queue for retry
+            this.queue.push(this.queue.shift());
+          }
+          
+          connectionManager.recordFailure();
+          break; // Stop processing on error
+        }
+      }
     } finally {
-      // Immediately clear the message object from memory
-      msg.message = null;
+      this.processing = false;
     }
   }
   
-  // Clear the entire messages array
-  messages.length = 0;
-});
-```
-
-#### B. Group Activity Summary (Needs Rework)
-
-Your group activity command currently relies on in-memory data. Change it to query MongoDB:
-
-```js
-// BEFORE (RAM-dependent - won't work)
-const messages = store.messages[groupId]; // ❌ No store!
-
-// AFTER (MongoDB-first)
-const messages = await ChatMessage.find({
-  chatId: groupId,
-  timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24h
-}).sort({ timestamp: -1 });
-
-// Aggregate activity
-const activity = messages.reduce((acc, msg) => {
-  const sender = msg.sender;
-  acc[sender] = (acc[sender] || 0) + 1;
-  return acc;
-}, {});
-```
-
-#### C. Features That Need MongoDB Migration
-
-Search your code for these patterns and replace with MongoDB queries:
-
-| Old Pattern (RAM) | New Pattern (MongoDB) |
-|-------------------|----------------------|
-| `store.messages[chatId]` | `await ChatMessage.find({ chatId })` |
-| `store.chats.get(chatId)` | `await GroupMetadata.findOne({ chatId })` |
-| `store.contacts.get(userId)` | `await User.findOne({ userId })` |
-| In-memory user tracking | `await User.findOneAndUpdate(...)` |
-
-### 4. Suppress the Session Cleanup Logs (Optional)
-
-Add this at the very top of `engine.js` after line 67:
-
-```js
-// Suppress libsignal session cleanup spam
-const originalLog = console.log;
-console.log = function(...args) {
-  const msg = String(args[0]);
-  if (msg.includes('Removing old closed session') || 
-      msg.includes('Closing open session')) {
-    return; // Silently drop these logs
+  clear() {
+    const count = this.queue.length;
+    this.queue = [];
+    console.log(`🧹 Cleared ${count} messages from queue`);
   }
-  originalLog.apply(console, args);
+}
+
+// Initialize queue
+const messageQueue = new MessageQueue();
+
+// Process queue every 1 second
+setInterval(() => {
+  messageQueue.processQueue(sock, connectionManager);
+}, 1000);
+
+// ============================================
+// FIX #4: Combat System Fixes
+// ============================================
+
+// Wrap all combat message sending
+async function sendCombatMessage(sock, chatId, content, options = {}) {
+  try {
+    // Check connection first
+    if (!connectionManager.canSendMessage()) {
+      console.log('⚠️ Connection not ready, queueing combat message');
+      messageQueue.enqueue(chatId, content, options);
+      return false;
+    }
+    
+    await safeSendMessage(sock, chatId, content, options);
+    return true;
+    
+  } catch (err) {
+    console.error('❌ Combat message failed:', err.message);
+    
+    // If it's a connection error, queue it
+    if (err.message.includes('Connection') || err.message.includes('Socket')) {
+      messageQueue.enqueue(chatId, content, options);
+    }
+    
+    return false;
+  }
+}
+
+// Fixed combat functions
+async function startCombat(sock, userId, chatId, enemyData) {
+  try {
+    const combatText = generateCombatText(enemyData);
+    
+    // Try to send with image
+    try {
+      const imageBuffer = await generateCombatImage(enemyData);
+      
+      const success = await sendCombatMessage(sock, chatId, {
+        image: imageBuffer,
+        caption: combatText
+      });
+      
+      if (success) return;
+      
+    } catch (imgErr) {
+      console.log('⚠️ Combat image generation failed, using text only');
+    }
+    
+    // Fallback to text only
+    await sendCombatMessage(sock, chatId, { text: combatText });
+    
+  } catch (err) {
+    console.error('❌ startCombat error:', err.message);
+    // Store combat state for recovery
+    storePendingCombat(userId, chatId, enemyData);
+  }
+}
+
+async function nextTurn(sock, userId, chatId, combatState) {
+  // ALWAYS check connection before proceeding
+  if (!connectionManager.canSendMessage()) {
+    console.log('⚠️ Connection not ready, combat paused');
+    return;
+  }
+  
+  try {
+    // Send turn image
+    const turnImage = await generateTurnImage(combatState);
+    await sendCombatMessage(sock, chatId, {
+      image: turnImage,
+      caption: combatState.turnText
+    });
+    
+    // Small delay between messages
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Send status messages
+    await sendCombatMessage(sock, chatId, {
+      text: formatCombatStatus(combatState)
+    });
+    
+    // Delay before prompt
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Prompt player action
+    await sendCombatMessage(sock, chatId, {
+      text: generateActionPrompt(combatState)
+    });
+    
+  } catch (err) {
+    console.error('❌ nextTurn error:', err.message);
+    // Don't crash, just log and continue
+  }
+}
+
+// ============================================
+// FIX #5: Reconnection Handler
+// ============================================
+
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+
+async function handleReconnection(sock, reason) {
+  reconnectAttempts++;
+  
+  if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+    console.error('🛑 Too many reconnection attempts, stopping');
+    process.exit(1); // Let PM2/systemd restart the process
+  }
+  
+  // Clear all pending operations
+  await clearPendingOperations();
+  
+  // Calculate backoff
+  const backoffMs = Math.min(5000 * Math.pow(1.5, reconnectAttempts), 300000);
+  console.log(`🔁 Reconnecting in ${Math.round(backoffMs/1000)}s... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+  
+  await new Promise(resolve => setTimeout(resolve, backoffMs));
+  
+  // Attempt reconnection
+  return initSocket();
+}
+
+async function clearPendingOperations() {
+  console.log('🧹 Clearing pending operations...');
+  
+  // Clear message queue of old messages
+  messageQueue.clear();
+  
+  // Clear active combat sessions (don't try to send messages)
+  try {
+    const activeCombats = progression.getActiveCombats?.() || [];
+    for (const combat of activeCombats) {
+      console.log(`⚠️ Cleaning stale combat for user ${combat.userId}`);
+      // Just clear the state, don't send messages
+      progression.clearCombatState?.(combat.userId, combat.chatId);
+    }
+  } catch (err) {
+    console.log('⚠️ Error clearing combats:', err.message);
+  }
+  
+  // Clear cooldowns
+  if (typeof commandCooldowns !== 'undefined') {
+    commandCooldowns.clear();
+  }
+  
+  // Update connection manager
+  connectionManager.updateState(sock);
+}
+
+// ============================================
+// FIX #6: Health Check System
+// ============================================
+
+class HealthChecker {
+  constructor() {
+    this.lastPing = Date.now();
+    this.lastPong = Date.now();
+    this.failedPings = 0;
+  }
+  
+  async performHealthCheck(sock) {
+    try {
+      if (!sock || !sock.ws || sock.ws.readyState !== 1) {
+        this.failedPings++;
+        return false;
+      }
+      
+      // Send presence as a ping
+      this.lastPing = Date.now();
+      await sock.sendPresenceUpdate('available');
+      this.lastPong = Date.now();
+      this.failedPings = 0;
+      
+      return true;
+      
+    } catch (err) {
+      this.failedPings++;
+      console.log(`⚠️ Health check failed: ${err.message}`);
+      return false;
+    }
+  }
+  
+  isHealthy() {
+    const timeSinceLastPong = Date.now() - this.lastPong;
+    return this.failedPings < 3 && timeSinceLastPong < 60000;
+  }
+}
+
+const healthChecker = new HealthChecker();
+
+// Run health check every 30 seconds
+setInterval(async () => {
+  const healthy = await healthChecker.performHealthCheck(sock);
+  
+  if (!healthy && healthChecker.failedPings >= 3) {
+    console.error('🛑 Health check critical failure, forcing reconnect');
+    if (sock && sock.ws) {
+      sock.ws.close();
+    }
+  }
+}, 30000);
+
+// ============================================
+// FIX #7: Event Listener Cleanup
+// ============================================
+
+class EventListenerManager {
+  constructor() {
+    this.listeners = new Map();
+  }
+  
+  register(emitter, event, handler, name) {
+    // Remove old listener if exists
+    if (this.listeners.has(name)) {
+      const old = this.listeners.get(name);
+      old.emitter.off(old.event, old.handler);
+    }
+    
+    // Add new listener
+    emitter.on(event, handler);
+    this.listeners.set(name, { emitter, event, handler });
+  }
+  
+  cleanup() {
+    for (const [name, listener] of this.listeners) {
+      try {
+        listener.emitter.off(listener.event, listener.handler);
+      } catch (err) {
+        console.log(`⚠️ Error removing listener ${name}:`, err.message);
+      }
+    }
+    this.listeners.clear();
+  }
+}
+
+const listenerManager = new EventListenerManager();
+
+// Usage in initSocket:
+async function initSocket() {
+  // ... existing code ...
+  
+  // Register listeners through manager
+  const messageHandler = async ({ messages }) => {
+    // ... your message handling code ...
+  };
+  
+  listenerManager.register(sock.ev, 'messages.upsert', messageHandler, 'messages');
+  
+  // On disconnect, cleanup
+  sock.ev.on('connection.update', (update) => {
+    if (update.connection === 'close') {
+      listenerManager.cleanup();
+    }
+  });
+}
+
+// ============================================
+// FIX #8: Group Metadata with Timeout
+// ============================================
+
+async function getGroupMetadataSafe(sock, chatId, cache) {
+  // Check cache first
+  const cached = cache?.get(chatId);
+  if (cached) return cached;
+  
+  try {
+    // Fetch with timeout
+    const metadata = await Promise.race([
+      sock.groupMetadata(chatId),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Metadata fetch timeout')), 5000)
+      )
+    ]);
+    
+    // Cache the result
+    if (cache) {
+      cache.set(chatId, metadata);
+    }
+    
+    return metadata;
+    
+  } catch (err) {
+    console.log(`⚠️ Failed to get metadata for ${chatId}: ${err.message}`);
+    
+    // Return minimal fallback
+    return {
+      id: chatId,
+      subject: 'Unknown Group',
+      participants: [],
+      desc: '',
+      creation: Date.now()
+    };
+  }
+}
+
+// ============================================
+// HOW TO IMPLEMENT THESE FIXES
+// ============================================
+
+/*
+1. Add these functions to your engine.js file (before startBot function)
+
+2. Replace all instances of:
+   sock.sendMessage(chatId, content, options)
+   
+   With:
+   await safeSendMessage(sock, chatId, content, options)
+
+3. In combat-related files, replace message sends with:
+   await sendCombatMessage(sock, chatId, content, options)
+
+4. In initSocket(), add:
+   - ConnectionManager initialization
+   - MessageQueue initialization
+   - HealthChecker initialization
+   - EventListenerManager for cleanup
+
+5. Update the connection.update handler:
+   sock.ev.on('connection.update', async (update) => {
+     const { connection, lastDisconnect } = update;
+     
+     connectionManager.updateState(sock);
+     
+     if (connection === 'open') {
+       console.log("✅ WhatsApp connected");
+       reconnectAttempts = 0; // Reset counter
+       await clearPendingOperations();
+       
+       // Wait for connection to stabilize
+       await new Promise(resolve => setTimeout(resolve, 2000));
+     }
+     
+     if (connection === 'close') {
+       const statusCode = lastDisconnect?.error?.output?.statusCode;
+       console.log(`🔻 Connection closed. Status code: ${statusCode}`);
+       
+       listenerManager.cleanup();
+       await handleReconnection(sock, lastDisconnect?.error);
+     }
+   });
+
+6. Test thoroughly before deploying to production!
+*/
+
+module.exports = {
+  safeSendMessage,
+  ConnectionManager,
+  MessageQueue,
+  sendCombatMessage,
+  clearPendingOperations,
+  HealthChecker,
+  EventListenerManager,
+  getGroupMetadataSafe
 };
-```
-
----
-
-## 📊 Expected Results
-
-| Metric | Before | After | Source |
-|--------|--------|-------|--------|
-| Boot RAM | 400-600MB | 150-250MB | Based on removing makeInMemoryStore |
-| Idle RAM | 600-800MB | 200-300MB | You already reported 250-300MB |
-| RAM per 1000 msgs | +100MB | +10-20MB | Removing in-memory message storage |
-| Boot time | 2-5 minutes | 5-15 seconds | No history sync |
-
----
-
-## ⚠️ Critical: The v7.0.0-rc.9 Bug Won't Be Fully Fixed
-
-Even with all these optimizations, the 0.1MB-per-message leak in rc.9 is a library bug that won't go away until it's patched.
-
-**Your options:**
-
-1. **Stay on rc.9 + Monitor + Auto-restart**: Use PM2 with `max_memory_restart: 500M` to automatically restart when RAM hits 500MB. Since you're keeping session files, restart is instant.
-
-2. **Downgrade to v6.7.20**: The stable v6 branch doesn't have this specific leak, but you lose v7 features (LID support, better multi-device).
-
-3. **Wait for rc.10+**: Monitor the GitHub issues and update when a fix is released.
-
----
-
-## 🎯 Migration Checklist
-
-### Phase 1: Immediate (Stops the Bleeding)
-- [ ] Search for and remove `makeInMemoryStore` completely
-- [ ] Verify `syncFullHistory: false` and `shouldSyncHistoryMessage: () => false`
-- [ ] Add the console.log filter to suppress session cleanup spam
-- [ ] Set up PM2 with `max_memory_restart: 500M`
-
-### Phase 2: MongoDB Migration (Fixes Long-Term)
-- [ ] Create MongoDB models for: Messages, GroupMetadata, UserActivity
-- [ ] Add TTL index on Messages collection (1 hour expiry)
-- [ ] Refactor group activity command to query MongoDB
-- [ ] Refactor any "summary" or "recap" commands to use MongoDB aggregations
-- [ ] Refactor user stats/tracking to use MongoDB instead of RAM
-
-### Phase 3: Optimization (Speed Boost)
-- [ ] Add indexes: `chatId`, `timestamp`, `sender`
-- [ ] Batch writes: Queue messages and write in batches of 10-20
-- [ ] Fire-and-forget: Don't await non-critical writes (metrics, logs)
-
----
-
-## 📝 Example: Refactoring Group Activity
-
-**Before (RAM-dependent, won't work without makeInMemoryStore):**
-```js
-// ❌ This relies on in-memory store
-const activity = store.messages[groupId].map(m => m.sender);
-```
-
-**After (MongoDB-first, actually works):**
-```js
-// ✅ Query MongoDB for last 24 hours
-const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-const activity = await ChatMessage.aggregate([
-  { $match: { 
-      chatId: groupId, 
-      timestamp: { $gte: last24h } 
-  }},
-  { $group: { 
-      _id: '$sender', 
-      messageCount: { $sum: 1 } 
-  }},
-  { $sort: { messageCount: -1 }},
-  { $limit: 10 }
-]);
-
-const report = activity.map(user => 
-  `${user._id.split('@')[0]}: ${user.messageCount} messages`
-).join('\n');
-```
-
----
-
-## 📋 Verification Summary
-
-| Claim | Status | Source |
-|-------|--------|--------|
-| Issue #2090 exists (0.1MB leak) | ✅ VERIFIED | [GitHub Issue #2090](https://github.com/WhiskeySockets/Baileys/issues/2090) |
-| Issue #2104 exists (media leak) | ✅ VERIFIED | [GitHub Issue #2104](https://github.com/WhiskeySockets/Baileys/issues/2104) |
-| makeInMemoryStore wastes RAM | ✅ VERIFIED | [Official README](https://github.com/WhiskeySockets/Baileys/blob/master/README.md) |
-| syncFullHistory config exists | ✅ VERIFIED | [Official Docs](https://baileys.wiki/docs/socket/configuration/) |
-| shouldSyncHistoryMessage works | ✅ VERIFIED | [History Sync Docs](https://baileys.wiki/docs/socket/history-sync/) |
-| fireInitQueries config exists | ✅ VERIFIED | [TypeScript Types](https://baileys.wiki/docs/api/type-aliases/SocketConfig/) |
-| makeCacheableSignalKeyStore is the leak | ❌ UNPROVEN | Issue #2090 shows leak WITHOUT it |
-| Timestamp guard is "official" | ❌ FALSE | User workaround, not Baileys feature |
-
----
-
-## 🔗 Sources
-
-- **GitHub Issue #2090**: Node.js memory usage increases by around 0.1 MB for every message received, and this value never goes down, as if the garbage collector is not cleaning anything.
-- **GitHub Issue #2104**: Memory leak when sending large media files (videos/documents) via direct URLs or Streams in the latest release candidates (7.0.0-rc.8 and 7.0.0-rc.9).
-- **makeInMemoryStore warning**: I highly recommend building your own data store, as storing someone's entire chat history in memory is a terrible waste of RAM.
-- **syncFullHistory docs**: If you want to emulate a desktop to get full chat history events, use the syncFullHistory option.
-- **shouldSyncHistoryMessage docs**: You can choose to disable or receive no history sync messages by setting the shouldSyncHistoryMessage option to () => false.
-- **fireInitQueries type**: fireInitQueries appears in the official SocketConfig type definition
-
----
-
-## 💡 Bottom Line
-
-Your RAM is already better (250-300MB vs 800MB) because you silenced the logger. The "Removing old closed session" logs are just cosmetic noise now.
-
-**The real fixes are:**
-1. **Remove makeInMemoryStore** (if present) - search your code for it
-2. **Migrate RAM-dependent features to MongoDB** (group activity, summaries, etc.)
-3. **Accept that rc.9 has a core leak** and use PM2 auto-restart as a safety net
-4. **Add `fireInitQueries: false`** to your socket config to prevent metadata spikes
-
-**What Gemini got wrong:** The "session cleanup" issue isn't your problem. Your problem is the documented v7.0.0-rc.9 core message processing leak and any in-memory storage you might still be using.
-
-**What actually helps:** MongoDB-first architecture + PM2 auto-restart at 500MB as a band-aid for the library bug.
