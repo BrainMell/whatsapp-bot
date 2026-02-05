@@ -84,7 +84,7 @@ async function startBot(configInstance) {
       try {
         const usage = process.memoryUsage().rss / 1024 / 1024;
         Metric.create({
-          botId: BOT_ID,
+          botId: botConfig.getBotId(),
           ramUsage: usage,
           timestamp: new Date()
         }).catch(() => {});
@@ -771,7 +771,7 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
         
         const { document } = parseHTML(response.body);
         const imgs = document.querySelectorAll('img');
-        console.log(`🔍 [${BOT_ID}] PornPics found ${imgs.length} image tags`);
+        console.log(`🔍 [${botConfig.getBotId()}] PornPics found ${imgs.length} image tags`);
         const candidates = [];
 
         for (const img of imgs) {
@@ -815,8 +815,6 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
         return [];
     }
 }
-
-module.exports = { scrapePornPics };
 
 
 // Scrapes Rule34.xxx (Refactored to Go Service)
@@ -2282,9 +2280,6 @@ async function initSocket() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    // Start automated news loop
-    startNewsLoop(sock);
-
     // Set bot start time
     botStartTime = Date.now();
     console.log("🕐 Bot start time:", new Date(botStartTime).toISOString());
@@ -2473,6 +2468,7 @@ We are happy to have you here.
     // MESSAGE HANDLER - processes every incoming message
     // ============================================
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
       // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
       if (isRekeying) return;
 
@@ -2482,167 +2478,123 @@ We are happy to have you here.
       }
 
       try {
-  const m = messages[0];
-  if (!m || !m.message) return;
+        const m = messages[0];
+        if (!m || !m.message) return;
 
-  const chatId = m.key.remoteJid;
-  const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
-  
-  // LIGHTWEIGHT DEBUG LOG
-  const debugText = m.message.conversation || m.message.extendedTextMessage?.text || "Media/Other";
-  if (type === 'notify') {
-    // console.log(`📩 [${BOT_ID}] ${senderJid}: ${debugText.substring(0, 30)} (Rekeying: ${isRekeying})`);
-  }
-
-  const isGroupChat = chatId.endsWith('@g.us');
-  const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
-
-  // Skip protocol messages
-  if (m.messageStubType || m.message.protocolMessage || m.message.senderKeyDistributionMessage || m.message.reactionMessage) {
-    return;
-  }
-  
-  // Skip if no readable content
-  const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
-  if (!hasContent) return;
-
-  // Persist message to MongoDB (1-hour TTL)
-  const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;
-  ChatMessage.create({
-    sender: senderJid,
-    body: messageBody,
-    type: m.message.imageMessage ? 'image' : (m.message.videoMessage ? 'video' : (m.message.audioMessage ? 'audio' : 'text')),
-    timestamp: new Date(),
-    chatId: chatId,
-    botId: BOT_ID
-  }).catch(err => {});
-
-  // ============================================
-  // SECURITY & SPAM DETECTION
-  // ============================================
-  if (!m.key.fromMe) {
-    // 1. Antilink Security
-    await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount);
-
-    // 2. Antispam Detection
-    const settings = getGroupSettings(chatId);
-    if (settings.antispam && !isOwner) {
-      const isSpamming = checkSpam(senderJid);
-      if (isSpamming) {
-        console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
-        await sock.sendMessage(chatId, { 
-          text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
-        });
-        // Auto-mute for 1 minute
-        muteUser(senderJid, 60000);
-        return;
-      }
-    }
-  }
-
-  const text =
-    m.message.conversation ||
-    m.message.extendedTextMessage?.text ||
-    m.message.replyMessage?.text ||
-    m.message.imageMessage?.caption ||
-    m.message.videoMessage?.caption;
-
-  const txt = text ? text.trim() : '';
-
-  // 🚨 HARD-PING TEST (Bypasses everything)
-  if (txt.toLowerCase() === 'ping' || txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`) {
-    return await sock.sendMessage(chatId, { text: 'pong! 🏓 (Engine is alive)' });
-  }
-  
-  // 🧠 BRAIN: Context-Aware Extraction System
-  // This processes every message through the analytical layers (Buffer -> Trigger -> Batch -> AI)
-  contextEngine.onMessage(m, txt);
-
-  // 1. Get Group Metadata & Admin Status EARLY
-  let groupMetadata = null;
-  let botIsAdmin = false;
-  let senderIsAdmin = false;
-  
-  if (isGroupChat) {
-    try {
-      // Use cache helper
-      groupMetadata = await getGroupMetadata(chatId);
-      if (groupMetadata) {
-        // Get bot's ID in both formats
-        const myNumber = sock.user.id.split(':')[0].split('@')[0];
-        const myLid = sock.authState.creds?.me?.lid;
-        const myLidNumber = myLid ? myLid.split(':')[0] : null;
+        const chatId = m.key.remoteJid;
+        const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
         
-        // Get sender number
-        const senderNumber = senderJid.split(':')[0].split('@')[0];
+        const isGroupChat = chatId.endsWith('@g.us');
+        const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
 
-        botIsAdmin = groupMetadata.participants.some(p => {
-          const pNumber = p.id.split(':')[0].split('@')[0];
-          const isMe = pNumber === myNumber || (myLidNumber && pNumber === myLidNumber);
-          return isMe && (p.admin === 'admin' || p.admin === 'superadmin');
-        });
+        // Skip protocol messages
+        if (m.messageStubType || m.message.protocolMessage || m.message.senderKeyDistributionMessage || m.message.reactionMessage) {
+          return;
+        }
+        
+        // Skip if no readable content
+        const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
+        if (!hasContent) return;
 
-        senderIsAdmin = groupMetadata.participants.some(p => {
-          const pNumber = p.id.split(':')[0].split('@')[0];
-          return pNumber === senderNumber && (p.admin === 'admin' || p.admin === 'superadmin');
-        });
-      }
-    } catch (e) {
-      // console.log(`[Metadata] Failed for ${chatId}`);
-    }
-  }
+        // Persist message to MongoDB (1-hour TTL)
+        const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;
+        ChatMessage.create({
+          sender: senderJid,
+          body: messageBody,
+          type: m.message.imageMessage ? 'image' : (m.message.videoMessage ? 'video' : (m.message.audioMessage ? 'audio' : 'text')),
+          timestamp: new Date(),
+          chatId: chatId,
+          botId: BOT_ID
+        }).catch(err => {});
 
-  const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
+        // ============================================
+        // SECURITY & SPAM DETECTION
+        // ============================================
+        if (!m.key.fromMe) {
+          // 1. Antilink Security (Skip for admins)
+          // We'll check admin status later if needed, but for now use the helper
+          await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount);
 
-  // ============================================
-  // SECURITY & SPAM DETECTION
-  // ============================================
-  if (!m.key.fromMe) {
-    // 1. Antilink Security (Skip for admins)
-    if (isGroupChat && !senderIsAdmin) {
-      await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount);
-    }
+          // 2. Antispam Detection
+          const settings = getGroupSettings(chatId);
+          if (settings.antispam && !isOwner) {
+            const isSpamming = checkSpam(senderJid);
+            if (isSpamming) {
+              console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
+              await sock.sendMessage(chatId, { 
+                text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
+              });
+              // Auto-mute for 1 minute
+              muteUser(senderJid, 60000);
+              return;
+            }
+          }
+        }
 
-    // 2. Antispam Detection
-    const settings = getGroupSettings(chatId);
-    if (settings.antispam && !isOwner && !senderIsAdmin) {
-      const isSpamming = checkSpam(senderJid);
-      if (isSpamming) {
-        console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
-        await sock.sendMessage(chatId, { 
-          text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
-        });
-        // Auto-mute for 1 minute
-        muteUser(senderJid, 60000);
-        return;
-      }
-    }
-  }
+        const text =
+          m.message.conversation ||
+          m.message.extendedTextMessage?.text ||
+          m.message.replyMessage?.text ||
+          m.message.imageMessage?.caption ||
+          m.message.videoMessage?.caption;
 
-  // 📢 DEBUG: Get Newsletter JID (Forward a message from your channel to the bot)
-  const newsletterJid = m.message?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid;
-  if (newsletterJid) {
-    console.log(`\n📢 NEWSLETTER JID DETECTED: ${newsletterJid}\n`);
-  }
-        // Normalize whitespace: replace multiple spaces with single space
+        const txt = text ? text.trim() : '';
+
+        // 🚨 HARD-PING TEST (Bypasses everything)
+        if (txt.toLowerCase() === 'ping' || txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`) {
+          return await sock.sendMessage(chatId, { text: 'pong! 🏓 (Engine is alive)' });
+        }
+        
+        // 🧠 BRAIN: Context-Aware Extraction System
+        contextEngine.onMessage(m, txt);
+
+        // 1. Get Group Metadata & Admin Status EARLY
+        let groupMetadata = null;
+        let botIsAdmin = false;
+        let senderIsAdmin = false;
+        
+        if (isGroupChat) {
+          try {
+            groupMetadata = await getGroupMetadata(chatId);
+            if (groupMetadata) {
+              const myNumber = sock.user.id.split(':')[0].split('@')[0];
+              const myLid = sock.authState.creds?.me?.lid;
+              const myLidNumber = myLid ? myLid.split(':')[0] : null;
+              const senderNumber = senderJid.split(':')[0].split('@')[0];
+
+              botIsAdmin = groupMetadata.participants.some(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                const isMe = pNumber === myNumber || (myLidNumber && pNumber === myLidNumber);
+                return isMe && (p.admin === 'admin' || p.admin === 'superadmin');
+              });
+
+              senderIsAdmin = groupMetadata.participants.some(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                return pNumber === senderNumber && (p.admin === 'admin' || p.admin === 'superadmin');
+              });
+            }
+          } catch (e) {}
+        }
+
+        const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
+
+        // 📢 DEBUG: Get Newsletter JID
+        const newsletterJid = m.message?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid;
+        if (newsletterJid) {
+          console.log(`\n📢 NEWSLETTER JID DETECTED: ${newsletterJid}\n`);
+        }
+
         let lowerTxt = txt.toLowerCase().replace(/\s+/g, ' ');
-
-        // Define bot identity early
-        const botJid = jidNormalizedUser(sock.user.id);
-        const botLid = sock.authState.creds?.me?.lid || null;
-        
         const isSelf = !!m.key.fromMe;
-
-        // ignore our own messages
         if (isSelf) return;
 
-        // Record debate arguments (automatic) - Move this EARLY but after isSelf
+        // Record debate arguments
         if (chatId.endsWith('@g.us') && debate.isDebateActive(chatId)) {
           debate.recordArgument(chatId, senderJid, txt);
         }
 
-
         const isBotCommand = lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`);
+
 
         // ============================================
         // 🌍 GLOBAL WEATHER SYSTEM
@@ -9846,6 +9798,9 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
   return;
 }
     }); // END messages.upsert
+
+    // Start background tasks AFTER handler is registered
+    startNewsLoop(sock);
 
   } catch (err) {
     console.error('❌ initSocket failed:', err.message);
