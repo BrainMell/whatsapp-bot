@@ -2472,8 +2472,8 @@ We are happy to have you here.
       // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
       if (isRekeying) return;
 
-      // only process new messages (type 'notify'), ignore old synced messages
-      if (type !== 'notify') {
+      // allow 'notify' (standard) and 'append' (sometimes used for new messages)
+      if (type !== 'notify' && type !== 'append') {
         return;
       }
 
@@ -2484,6 +2484,10 @@ We are happy to have you here.
         const chatId = m.key.remoteJid;
         const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
         
+        // --- DIAGNOSTIC LOG ---
+        const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media";
+        console.log(`📩 Processing msg from ${senderJid} in ${chatId}: "${msgText.substring(0, 20)}..."`);
+
         const isGroupChat = chatId.endsWith('@g.us');
         const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
 
@@ -2594,6 +2598,7 @@ We are happy to have you here.
         }
 
         const isBotCommand = lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`);
+        if (isBotCommand) console.log(`🤖 Command detected: ${lowerTxt.split(' ')[0]}`);
 
 
         // ============================================
