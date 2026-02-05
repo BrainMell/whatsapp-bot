@@ -102,6 +102,129 @@ async function startBot(configInstance) {
     let BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;   // BOT MArker for messages
 
     // ============================================
+    // GROUP CHAT SUMMARY SYSTEM
+    // ============================================
+
+    // Store group messages in memory (per group)
+    const groupMessageHistory = new Map();
+    const MAX_HISTORY_PER_GROUP = 200;
+
+    // Track messages for summarization
+    function trackGroupMessage(chatId, sender, senderName, text, timestamp) {
+        const settings = getGroupSettings(chatId);
+        
+        // ✅ ONLY record if the toggle is ON for this specific group
+        if (!settings.recording) return;
+
+        // 1. IGNORE BOT COMMANDS (so it doesn't summarize itself)
+        if (text.toLowerCase().startsWith(`${PREFIX.toLowerCase()}`)) return;
+
+        const messageObj = { sender, senderName, text, timestamp };
+
+        // 2. Track in RAM
+        if (!groupMessageHistory.has(chatId)) groupMessageHistory.set(chatId, []);
+        const history = groupMessageHistory.get(chatId);
+        history.push(messageObj);
+        if (history.length > MAX_HISTORY_PER_GROUP) history.shift();
+
+        // 3. Track in JSON (Isolated by chatId)
+        saveGroupMessage(chatId, messageObj);
+    }
+
+    // Get message history for summary
+    function getGroupMessageHistory(chatId, limit = 50) {
+        const history = groupMessageHistory.get(chatId) || [];
+        return history.slice(-limit); // Get last N messages
+    }
+
+    // Create AI-powered summary with user mentions
+    async function createGroupSummary(messages) {
+        try {
+            let chatContext = "";
+            const nameToJid = new Map();
+
+            // Build context using only actual names from THIS chat
+            messages.forEach((msg) => {
+                // Clean the name so the AI doesn’t get confused
+                const cleanName = msg.senderName.replace(/[^a-zA-Z0-9]/g, '');
+                nameToJid.set(cleanName, msg.sender);
+                chatContext += `${cleanName}: ${msg.text}\n`;
+            });
+
+            const participants = Array.from(nameToJid.keys()).join(", ");
+
+            const res = await groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content:
+                            "You summarize chats. Stick to facts, keep it short, and use @Name when mentioning people. No roleplay, no extra fluff."
+                    },
+                    {
+                        role: "user",
+                        content: 
+    `Participants: ${participants}
+
+Chat:
+${chatContext}
+
+What to do:
+1. Summarize the main points.
+2. Call out key people using @Name.
+3. Keep it direct.`
+                    }
+                ],
+                model: "llama-3.1-8b-instant",
+            });
+
+            let summaryText = res.choices[0].message.content;
+            const mentionedJids = [];
+
+            // Swap @Name with real WhatsApp-style @numbers
+            for (const [name, jid] of nameToJid.entries()) {
+                const tag = `@${name}`;
+                if (summaryText.includes(tag)) {
+                    const phone = jid.split('@')[0];
+                    summaryText = summaryText.split(tag).join(`@${phone}`);
+                    mentionedJids.push(jid);
+                }
+            }
+
+            return { text: summaryText, mentions: mentionedJids };
+        } catch (err) {
+            return { text: "Summary failed.", mentions: [] };
+        }
+    }
+
+    // --- Global Constants for Recording ---
+    const RESET_INTERVAL = 4 * 60 * 60 * 1000; // 4 Hours in milliseconds
+
+    // Periodic wipe: All group message logs cleared from MongoDB
+    setInterval(() => {
+        system.set(BOT_ID + '_group_message_info', {});
+        groupMessageHistory.clear(); 
+        console.log(`🧹 [${BOT_ID}] Periodic wipe: All group message logs cleared from MongoDB.`);
+    }, RESET_INTERVAL);
+
+    // Load data from MongoDB
+    function loadGroupInfo() {
+        return system.get(BOT_ID + '_group_message_info', {});
+    }
+
+    // Save specific group data without affecting others
+    function saveGroupMessage(chatId, messageObj) {
+        const allData = loadGroupInfo();
+        if (!allData[chatId]) allData[chatId] = [];
+        
+        allData[chatId].push(messageObj);
+        
+        // Keep only last 100 messages per group to save space
+        if (allData[chatId].length > 100) allData[chatId].shift();
+        
+        system.set(BOT_ID + '_group_message_info', allData);
+    }
+
+    // ============================================
     // 📨 SAFE SEND QUEUE
     // - Serializes all outgoing messages
     // - Avoids "Connection Closed" cascades during reconnects
@@ -2245,6 +2368,10 @@ async function initSocket() {
         guilds.loadGuilds(),
         loans.loadLoans()
       ]);
+      
+      // Initialize enabled chats list
+      loadEnabledChats();
+      console.log(`📡 Bot Prefix is set to: "${botConfig.getPrefix()}"`);
       
       const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());    // Fetch latest version to avoid 405 (Method Not Allowed) errors
     const { version } = await fetchLatestBaileysVersion();
