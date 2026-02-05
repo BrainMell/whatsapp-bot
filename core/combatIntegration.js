@@ -17,12 +17,8 @@ const path = require('path');
 async function renderCombatStart(players, enemies, encounterInfo) {
     try {
         const result = await combatImageGen.generateCombatImage(players, enemies, {
-            width: 1200,
-            height: 800,
-            spriteSize: 140,
-            showHealthBars: true,
-            outputPath: './temp/combat_start.png',
-            rank: encounterInfo.rank // Pass rank explicitly
+            rank: encounterInfo.rank,
+            backgroundPath: encounterInfo.backgroundPath // Pass if available
         });
         
         return result;
@@ -39,22 +35,15 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
         // Filter out dead units
         let playersToShow = players.filter(p => p.currentHP > 0 || p.justDied);
-        // 🟢 Show enemies if alive OR if they just died this turn
         const enemiesToShow = enemies.filter(e => e.currentHP > 0 || e.justDied);
         
-        // Use updated unit lists
         const result = await combatImageGen.updateCombatImage(
             playersToShow, 
             enemiesToShow, 
             turnInfo,
             {
-                width: 1200,
-                height: 800,
-                spriteSize: 140,
-                showHealthBars: true,
-                outputPath: './temp/combat_turn.png',
-                backgroundPath: options.backgroundPath,
-                rank: options.rank // Pass rank explicitly
+                rank: options.rank,
+                backgroundPath: options.backgroundPath
             }
         );
         
@@ -70,24 +59,9 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  */
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        if (victory) {
-            // New white screen victory image
-            return await combatImageGen.generateEndScreenImage("ENCOUNTER COMPLETE", {
-                outputPath: './temp/combat_end.png'
-            });
-        } else {
-            // New white screen defeat image
-            return await combatImageGen.generateEndScreenImage("DEFEATED", {
-                outputPath: './temp/combat_end.png'
-            });
-        }
-        
-        // Optionally add victory/defeat overlay
-        // This could be enhanced with text rendering
-        
-        return result;
+        // Fallback to text for end screen for now
+        return { success: false, error: "End screen not implemented" };
     } catch (error) {
-        console.error('Combat end render error:', error);
         return { success: false, error: error.message };
     }
 }
@@ -354,11 +328,12 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
     
     return {
         success: true,
-        imagePath: imageResult.path,
+        buffer: imageResult.buffer, // Pass buffer
+        imagePath: imageResult.path, // Pass path if available (legacy)
         caption: caption,
         width: imageResult.width,
         height: imageResult.height,
-        backgroundPath: imageResult.backgroundPath
+        backgroundPath: options.backgroundPath // Pass through for state consistency
     };
 }
 

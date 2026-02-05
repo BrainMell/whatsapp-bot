@@ -3,23 +3,14 @@
 // Features: 3x3, 4x4, 5x5 grids, proper scoring, better leaderboard
 // ============================================
 
-const { Jimp, loadFont } = require('jimp');
-const { SANS_64_BLACK, SANS_32_BLACK, SANS_16_BLACK } = require('jimp/fonts');
 const fs = require('fs');
 const path = require('path');
-const { LRUCache } = require('lru-cache');
 const botConfig = require('../botConfig');
 const economy = require('./economy');
 const system = require('./system'); // NEW: Database System Module
+const GoImageService = require('./goImageService');
 
-const tttCache = new LRUCache({ max: 10, ttl: 1000 * 60 * 60 }); // Cache for 1 hour
-
-async function cachedJimpRead(filePath) {
-    if (tttCache.has(filePath)) return tttCache.get(filePath).clone();
-    const img = await Jimp.read(filePath);
-    tttCache.set(filePath, img);
-    return img.clone();
-}
+const goService = new GoImageService();
 
 // ============================================
 // SCOREBOARD MANAGEMENT (UPGRADED)
@@ -69,22 +60,9 @@ function getLeaderboardText() {
 }
 
 async function renderLeaderboard() {
-    try {
-        const backgroundPath = botConfig.getAssetPath('scores.png');
-        let image;
-        
-        if (fs.existsSync(backgroundPath)) {
-            image = await cachedJimpRead(backgroundPath);
-        } else {
-            image = new Jimp({ width: 800, height: 1000, color: 0x1a1a2eff });
-        }
-        
-        const buffer = await image.getBuffer('image/png');
-        return buffer;
-    } catch (err) {
-        console.error('❌ Leaderboard rendering failed:', err);
-        return null;
-    }
+    // Return null to fallback to text leaderboard for now
+    // Go service leaderboard rendering is a TODO item in renderer.go
+    return null; 
 }
 
 function getAllScores() {
@@ -281,190 +259,24 @@ function makeMove(chatId, playerJid, cellIndex) {
 }
 
 // ============================================
-// IMAGE RENDERING (JIMP v1.x) - MULTI-GRID
+// IMAGE RENDERING WITH GO SERVICE
 // ============================================
-
-const COLORS = {
-  background: 0xECF0F1FF, 
-  grid: 0x34495EFF,
-  x: 0xE74C3CFF,
-  o: 0x3498DBFF,
-  highlight: 0xF39C12FF
-};
 
 async function renderBoard(board, gridSize = 3, lastMoveIndex = null, winPattern = null) {
   try {
-    const size = 600;
-    const cellSize = size / gridSize;
-    
-    const image = new Jimp({ width: size, height: size, color: COLORS.background });
-    
-    // ✅ FIXED: Load the correct font size based on grid BEFORE the loop!
-    let font = null;
-    let xOffset, yOffset;
-    
-    try {
-        if (gridSize === 3) {
-            font = await loadFont(SANS_64_BLACK);  // 64px font for 3x3
-            xOffset = 85;
-            yOffset = 70;
-        } else if (gridSize === 8) {
-            font = await loadFont(SANS_16_BLACK);  // 16px font for 8x8
-            xOffset = 18;
-            yOffset = 22;
-        } else if (gridSize === 16) {
-            font = await loadFont(SANS_16_BLACK);  // 16px font for 16x16 (smallest we have)
-            xOffset = 8;
-            yOffset = 10;
-        } else {
-            // Fallback: use 32px for medium grids
-            font = await loadFont(SANS_32_BLACK);
-            xOffset = Math.floor(cellSize / 5);
-            yOffset = Math.floor(cellSize / 4);
-        }
-        console.log(`✅ Loaded font for ${gridSize}x${gridSize} grid`);
-    } catch (e) {
-        console.warn('⚠️ Font Load Error:', e.message);
-    }
+    const payload = {
+      board: board.map(cell => cell || ""), // Convert nulls to empty strings for Go
+      gridSize: gridSize,
+      lastMoveIndex: lastMoveIndex !== null ? lastMoveIndex : -1,
+      winPattern: winPattern || []
+    };
 
-    const totalCells = gridSize * gridSize;
-    for (let i = 0; i < totalCells; i++) {
-      const row = Math.floor(i / gridSize);
-      const col = i % gridSize;
-      const x = col * cellSize;
-      const y = row * cellSize;
-      const centerX = x + cellSize / 2;
-      const centerY = y + cellSize / 2;
-
-      // Draw cell numbers for empty cells
-      if (board[i] === null && font) {
-          try {
-              // Just print with the pre-loaded font and offsets
-              image.print({
-                  font: font,
-                  x: Math.floor(x + xOffset),
-                  y: Math.floor(y + yOffset),
-                  text: i.toString()
-              });
-          } catch (printErr) {
-              console.error('⚠️ Print Error:', printErr);
-          }
-      }
-
-      // Highlight winning cells
-      if (winPattern && winPattern.includes(i)) {
-        drawRect(image, x + 2, y + 2, cellSize - 4, cellSize - 4, COLORS.highlight, true, 0.2);
-      }
-      // Highlight last move
-      if (i === lastMoveIndex && !winPattern) {
-        drawRect(image, x + 10, y + 10, cellSize - 20, cellSize - 20, COLORS.highlight, false, 1, 3);
-      }
-
-      // Draw X or O
-      let symbolSize, circleRadius;
-      if (gridSize === 3) {
-        symbolSize = 70;
-        circleRadius = 65;
-      } else if (gridSize === 8) {
-        symbolSize = 32;  // Fits well in 75px cells
-        circleRadius = 28;
-      } else if (gridSize === 16) {
-        symbolSize = 16;  // Fits in 37.5px cells
-        circleRadius = 14;
-      } else {
-        // Fallback for any size
-        symbolSize = Math.floor(cellSize * 0.4);
-        circleRadius = Math.floor(cellSize * 0.35);
-      }
-      
-      if (board[i] === 'X') drawX(image, centerX, centerY, symbolSize, COLORS.x);
-      else if (board[i] === 'O') drawCircle(image, centerX, centerY, circleRadius, COLORS.o);
-    }
-
-    // Draw grid lines
-    for (let i = 1; i < gridSize; i++) {
-      const pos = Math.floor(i * cellSize);
-      drawThickLine(image, pos, 0, pos, size, COLORS.grid, 4);
-      drawThickLine(image, 0, pos, size, pos, COLORS.grid, 4);
-    }
-
-    const buffer = await image.getBuffer('image/png');
-    console.log('✅ Board rendered successfully');
+    const buffer = await goService.renderTicTacToeBoard(payload);
     return buffer;
   } catch (err) {
-    console.error('❌ Rendering failed:', err);
+    console.error('❌ Rendering failed via Go Service:', err.message);
     return null;
   }
-}
-
-function drawX(image, centerX, centerY, size, color) {
-  const offset = size / 2;
-  drawThickLine(image, centerX - offset, centerY - offset, centerX + offset, centerY + offset, color, 10);
-  drawThickLine(image, centerX + offset, centerY - offset, centerX - offset, centerY + offset, color, 10);
-}
-
-function drawCircle(image, centerX, centerY, radius, color) {
-  const thickness = 8;
-  for (let angle = 0; angle < 360; angle += 0.5) {
-    const rad = (angle * Math.PI) / 180;
-    for (let r = radius - thickness; r <= radius; r++) {
-      const x = Math.round(centerX + r * Math.cos(rad));
-      const y = Math.round(centerY + r * Math.sin(rad));
-      if (x >= 0 && x < image.bitmap.width && y >= 0 && y < image.bitmap.height) {
-        image.setPixelColor(color, x, y);
-      }
-    }
-  }
-}
-
-function drawThickLine(image, x1, y1, x2, y2, color, thickness = 1) {
-  const dx = Math.abs(x2 - x1);
-  const dy = Math.abs(y2 - y1);
-  const sx = x1 < x2 ? 1 : -1;
-  const sy = y1 < y2 ? 1 : -1;
-  let err = dx - dy;
-  const half = Math.floor(thickness / 2);
-
-  while (true) {
-    for (let ty = -half; ty <= half; ty++) {
-      for (let tx = -half; tx <= half; tx++) {
-        const px = x1 + tx;
-        const py = y1 + ty;
-        if (px >= 0 && px < image.bitmap.width && py >= 0 && py < image.bitmap.height) {
-          image.setPixelColor(color, px, py);
-        }
-      }
-    }
-    if (x1 === x2 && y1 === y2) break;
-    const e2 = err * 2;
-    if (e2 > -dy) { err -= dy; x1 += sx; }
-    if (e2 < dx) { err += dx; y1 += sy; }
-  }
-}
-
-function drawRect(image, x, y, width, height, color, filled = true, alpha = 1, borderWidth = 1) {
-  if (filled) {
-    for (let py = y; py < y + height; py++) {
-      for (let px = x; px < x + width; px++) {
-        if (px >= 0 && px < image.bitmap.width && py >= 0 && py < image.bitmap.height) {
-            const current = image.getPixelColor(px, py);
-            image.setPixelColor(blendColors(current, color, alpha), px, py);
-        }
-      }
-    }
-  } else {
-    drawThickLine(image, x, y, x + width, y, color, borderWidth);
-    drawThickLine(image, x, y + height, x + width, y + height, color, borderWidth);
-    drawThickLine(image, x, y, x, y + height, color, borderWidth);
-    drawThickLine(image, x + width, y, x + width, y + height, color, borderWidth);
-  }
-}
-
-function blendColors(c1, c2, alpha) {
-  const r = Math.round(((c1 >> 24) & 0xFF) * (1 - alpha) + ((c2 >> 24) & 0xFF) * alpha);
-  const g = Math.round(((c1 >> 16) & 0xFF) * (1 - alpha) + ((c2 >> 16) & 0xFF) * alpha);
-  const b = Math.round(((c1 >> 8) & 0xFF) * (1 - alpha) + ((c2 >> 8) & 0xFF) * alpha);
-  return (r << 24) | (g << 16) | (b << 8) | (c1 & 0xFF);
 }
 
 function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) {
