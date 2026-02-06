@@ -28,7 +28,7 @@ async function cleanPfpCache() {
       })
       .filter(f => f.name.endsWith('.jpg'))
       .sort((a, b) => a.mtime - b.mtime); // oldest first
-      
+
     if (files.length > 100) {
       const toDelete = files.slice(0, files.length - 100);
       toDelete.forEach(f => {
@@ -43,18 +43,18 @@ async function fetchProfilePicture(sock, jid) {
   try {
     const normalizedJid = jid.split('@')[0].split(':')[0];
     const pfpPath = path.join(getPfpDir(), `${normalizedJid}.jpg`);
-    
+
     if (fs.existsSync(pfpPath)) {
-      return pfpPath; // Use cached if available (legacy logic)
+      return pfpPath; // Use cached if available
     }
-    
+
     // Clean cache before adding new ones
     await cleanPfpCache();
-    
+
     try {
       const pfpUrl = await sock.profilePictureUrl(jid, 'image');
       if (pfpUrl) {
-        return pfpUrl; // Return URL for Go service (or download if needed for legacy)
+        return pfpUrl; // Return URL for Go service
       }
     } catch (pfpErr) {
       console.log(`⚠️ PFP not available for ${normalizedJid}: ${pfpErr.message}`);
@@ -77,60 +77,38 @@ const COLORS = {
   GREEN: 'green'
 };
 
-// ... (Track/Path constants logic remains the same for game engine) ...
-// ✅ PROVEN WORKING TRACK - From HTML version (converted to 0-indexed)
-// Grid is 15x15, coordinates are [row, col] starting from 0
+// Tracks and paths logic
 const MAIN_TRACK = [
-  // Red straight (moving right)
   [6,1], [6,2], [6,3], [6,4], [6,5],
-  // Up towards Green
   [5,6], [4,6], [3,6], [2,6], [1,6], [0,6],
-  [0,7], [0,8], // Green top turn
-  // Green straight (moving down)
+  [0,7], [0,8],
   [1,8], [2,8], [3,8], [4,8], [5,8],
-  // Right towards Yellow
   [6,9], [6,10], [6,11], [6,12], [6,13], [6,14],
-  [7,14], [8,14], // Yellow right turn
-  // Yellow straight (moving left)
+  [7,14], [8,14],
   [8,13], [8,12], [8,11], [8,10], [8,9],
-  // Down towards Blue
   [9,8], [10,8], [11,8], [12,8], [13,8], [14,8],
-  [14,7], [14,6], // Blue bottom turn
-  // Blue straight (moving up)
+  [14,7], [14,6],
   [13,6], [12,6], [11,6], [10,6], [9,6],
-  // Left towards Red
   [8,5], [8,4], [8,3], [8,2], [8,1], [8,0],
-  [7,0], // Red left turn
-  [6,0]  // 51st position (index 51) - connects back to start
+  [7,0], [6,0]
 ];
 
-// ✅ HOME PATHS - 6 squares each, last square is the winning position
 const HOME_PATHS = {
-  red: [[7,1], [7,2], [7,3], [7,4], [7,5], [7,6]],      // Moving right to center
-  green: [[1,7], [2,7], [3,7], [4,7], [5,7], [6,7]],    // Moving down to center
-  yellow: [[7,13], [7,12], [7,11], [7,10], [7,9], [7,8]], // Moving left to center
-  blue: [[13,7], [12,7], [11,7], [10,7], [9,7], [8,7]]  // Moving up to center
+  red: [[7,1], [7,2], [7,3], [7,4], [7,5], [7,6]],
+  green: [[1,7], [2,7], [3,7], [4,7], [5,7], [6,7]],
+  yellow: [[7,13], [7,12], [7,11], [7,10], [7,9], [7,8]],
+  blue: [[13,7], [12,7], [11,7], [10,7], [9,7], [8,7]]
 };
 
-// ✅ START POSITIONS - Where pieces enter the main track
 const START_POSITIONS = {
-  red: 0,      // Enters at [6,1]
-  green: 13,   // Enters at [1,8]
-  yellow: 26,  // Enters at [8,13]
-  blue: 39     // Enters at [13,6]
+  red: 0, green: 13, yellow: 26, blue: 39
 };
 
-// ✅ HOME ENTRANCE - Turn-off points to enter colored home path
-// Formula: (StartIndex + 50) % 52
 const HOME_ENTRANCE = {
-  red: 50,     // (0 + 50) % 52 = 50
-  green: 11,   // (13 + 50) % 52 = 11
-  yellow: 24,  // (26 + 50) % 52 = 24
-  blue: 37     // (39 + 50) % 52 = 37
+  red: 50, green: 11, yellow: 24, blue: 37
 };
 
-// Safe squares (star positions)
-const SAFE_SQUARES = [0, 13, 26, 39]; // Starting positions are safe
+const SAFE_SQUARES = [0, 13, 26, 39];
 
 // ============================================
 // GAME STATE MANAGEMENT
@@ -142,7 +120,7 @@ class LudoGame {
   constructor(chatId, playerJids) {
     this.chatId = chatId;
     this.players = [];
-    
+
     const availableColors = [COLORS.RED, COLORS.GREEN, COLORS.YELLOW, COLORS.BLUE];
     playerJids.forEach((jid, i) => {
       this.players.push({
@@ -181,14 +159,12 @@ class LudoGame {
     const roll = Math.floor(Math.random() * 6) + 1;
     this.lastRoll = roll;
     this.diceHistory.push({ player: this.getCurrentPlayer().fullJid, roll, time: Date.now() });
-    
+
     if (roll === 6) {
       this.consecutiveSixes++;
-      
       if (this.consecutiveSixes >= 3) {
         return { roll, burned: true, extraTurn: false };
       }
-      
       return { roll, burned: false, extraTurn: true };
     } else {
       this.consecutiveSixes = 0;
@@ -199,44 +175,35 @@ class LudoGame {
   canMovePiece(player, pieceId) {
     const piece = player.pieces.find(p => p.id === pieceId);
     if (!piece) return false;
-
     if (piece.inHome) return false;
     if (piece.inBase && this.lastRoll !== 6) return false;
-
-    // Check if move would overshoot home
     if (piece.onHomePath) {
       const newIndex = piece.homePathIndex + this.lastRoll;
-      return newIndex <= 5; // Home path is 0-5 (6 squares)
+      return newIndex <= 5;
     }
-
     return true;
   }
 
   checkWall(position, excludePlayer = null) {
     const piecesAtPosition = [];
-    
     this.players.forEach(player => {
       if (excludePlayer && player.jid === excludePlayer.jid) return;
-      
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
           piecesAtPosition.push({ player, piece });
         }
       });
     });
-
     const colorGroups = {};
     piecesAtPosition.forEach(({ player, piece }) => {
       if (!colorGroups[player.color]) colorGroups[player.color] = [];
       colorGroups[player.color].push({ player, piece });
     });
-
     for (const color in colorGroups) {
       if (colorGroups[color].length >= 2) {
         return { isWall: true, color, pieces: colorGroups[color] };
       }
     }
-
     return { isWall: false };
   }
 
@@ -250,145 +217,85 @@ class LudoGame {
     let captured = false;
     let reachedHome = false;
 
-    // ✅ Entering from base with a 6
     if (piece.inBase && roll === 6) {
       const startPos = START_POSITIONS[player.color];
       piece.position = startPos;
       piece.inBase = false;
-      
       const captureResult = this.checkCapture(player, startPos);
-      if (captureResult.captured) {
-        captured = true;
-      }
-      
-      return { 
-        success: true, 
-        fromBase: true, 
-        captured, 
-        extraTurn: true
-      };
+      if (captureResult.captured) captured = true;
+      return { success: true, fromBase: true, captured, extraTurn: true };
     }
 
-    // ✅ Moving on home path
     if (piece.onHomePath) {
       const newIndex = piece.homePathIndex + roll;
-      
-      if (newIndex > 5) {
-        return { success: false, error: 'Cannot move - would overshoot home!' };
-      }
-      
+      if (newIndex > 5) return { success: false, error: 'Cannot move - would overshoot home!' };
       piece.homePathIndex = newIndex;
-      
-      // Check if reached winning position (index 5 = last square)
       if (newIndex === 5) {
         piece.inHome = true;
         piece.onHomePath = false;
         reachedHome = true;
-        
         const allHome = player.pieces.every(p => p.inHome);
         if (allHome) {
           this.gameOver = true;
           this.winner = player.fullJid;
         }
-        
-        return { 
-          success: true, 
-          reachedHome: true, 
-          won: allHome,
-          extraTurn: true
-        };
+        return { success: true, reachedHome: true, won: allHome, extraTurn: true };
       }
-      
       return { success: true };
     }
 
-    // ✅ Moving on main track
     const currentPos = piece.position;
     const turnOffIndex = HOME_ENTRANCE[player.color];
-    
     let stepsRemaining = roll;
     let newPos = currentPos;
     
-    // Simulate movement step by step
     while (stepsRemaining > 0) {
-      // Check if we're at the turn-off point
       if (newPos === turnOffIndex) {
-        // Enter home path!
         piece.onHomePath = true;
         piece.position = -1;
         piece.homePathIndex = 0;
         stepsRemaining--;
-        
-        // Continue moving on home path with remaining steps
         while (stepsRemaining > 0) {
           piece.homePathIndex++;
-          
-          if (piece.homePathIndex > 5) {
-            return { success: false, error: 'Cannot move - would overshoot home!' };
-          }
-          
+          if (piece.homePathIndex > 5) return { success: false, error: 'Cannot move - would overshoot home!' };
           if (piece.homePathIndex === 5) {
             piece.inHome = true;
             piece.onHomePath = false;
             reachedHome = true;
-            
             const allHome = player.pieces.every(p => p.inHome);
             if (allHome) {
               this.gameOver = true;
               this.winner = player.fullJid;
             }
-            
-            return { 
-              success: true, 
-              reachedHome: true, 
-              enteredHomePath: true,
-              won: allHome,
-              extraTurn: true
-            };
+            return { success: true, reachedHome: true, enteredHomePath: true, won: allHome, extraTurn: true };
           }
-          
           stepsRemaining--;
         }
-        
         return { success: true, enteredHomePath: true };
       } else {
-        // Normal movement on track
         newPos = (newPos + 1) % 52;
         stepsRemaining--;
       }
     }
 
-    // Check for walls
     const wall = this.checkWall(newPos, player);
     if (wall.isWall && wall.color !== player.color) {
       return { success: false, error: `🛡️ WALL BLOCKED! ${wall.color.toUpperCase()} wall!` };
     }
 
     piece.position = newPos;
-
-    // Check for captures (not on safe squares)
     if (!SAFE_SQUARES.includes(newPos)) {
       const captureResult = this.checkCapture(player, newPos);
-      if (captureResult.captured) {
-        captured = true;
-      }
+      if (captureResult.captured) captured = true;
     }
-
     this.updateWalls();
-
-    return { 
-      success: true, 
-      captured, 
-      extraTurn: captured
-    };
+    return { success: true, captured, extraTurn: captured };
   }
 
   checkCapture(currentPlayer, position) {
     let captured = false;
-    
     this.players.forEach(player => {
       if (player.jid === currentPlayer.jid) return;
-      
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
           piece.position = -1;
@@ -399,13 +306,11 @@ class LudoGame {
         }
       });
     });
-
     return { captured };
   }
 
   updateWalls() {
     this.walls = [];
-    
     for (let pos = 0; pos < 52; pos++) {
       const wall = this.checkWall(pos);
       if (wall.isWall) {
@@ -425,7 +330,6 @@ class LudoGame {
       this.hasExtraTurn = false;
       return;
     }
-
     this.currentTurnIndex = (this.currentTurnIndex + 1) % this.players.length;
     this.consecutiveSixes = 0;
   }
@@ -437,10 +341,19 @@ class LudoGame {
 
 async function renderBoard(game, sock = null) {
   try {
+    const pfpUrls = {};
+    if (sock) {
+      for (const player of game.players) {
+        const pfp = await fetchProfilePicture(sock, player.fullJid);
+        if (pfp) pfpUrls[player.fullJid] = pfp;
+      }
+    }
+
     const payload = {
       players: game.players.map(p => ({
         jid: p.fullJid,
         color: p.color,
+        pfpUrl: pfpUrls[p.fullJid] || '',
         pieces: p.pieces.map(piece => ({
           id: piece.id,
           position: piece.position,
@@ -466,20 +379,16 @@ async function renderBoard(game, sock = null) {
 // ============================================
 
 module.exports = {
-      startGame: async (sock, chatId, starterJid, mentionedJids, BOT_MARKER, m) => {
-          if (activeGames.has(chatId)) {
-              return {
-                  success: false,
-                  message: BOT_MARKER + `❌ A Ludo game is already in progress!\nUse \`${botConfig.getPrefix()} ludo end\` to stop it.`
-              };
-          }
-    const allPlayers = [starterJid, ...mentionedJids];
-    
-    if (allPlayers.length < 2 || allPlayers.length > 4) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ Ludo needs 2-4 players!" 
+  startGame: async (sock, chatId, starterJid, mentionedJids, BOT_MARKER, m) => {
+    if (activeGames.has(chatId)) {
+      return {
+        success: false,
+        message: BOT_MARKER + `❌ A Ludo game is already in progress!\nUse \`${botConfig.getPrefix()} ludo end\` to stop it.`
       };
+    }
+    const allPlayers = [starterJid, ...mentionedJids];
+    if (allPlayers.length < 2 || allPlayers.length > 4) {
+      return { success: false, message: BOT_MARKER + "❌ Ludo needs 2-4 players!" };
     }
 
     const game = new LudoGame(chatId, allPlayers);
@@ -492,7 +401,6 @@ module.exports = {
     }).join('\n');
 
     const imageBuffer = await renderBoard(game, sock);
-
     const message = BOT_MARKER + `┌───────────────┐
 🎲 *LUDO STARTED!* 🎲
 └───────────────┘
@@ -521,39 +429,18 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
 └───────────────┘`;
 
     const mentions = game.players.map(p => p.fullJid);
-
     if (imageBuffer) {
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: message, mentions: mentions }, { quoted: m });
     } else {
-      await sock.sendMessage(chatId, {
-        text: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { text: message, mentions: mentions }, { quoted: m });
     }
-
     return { success: true };
   },
 
   rollDice: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     const game = activeGames.get(chatId);
-    
-    if (!game) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ No active Ludo game!" 
-      };
-    }
-
-    if (game.getCurrentPlayer().fullJid !== senderJid) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ Not your turn!" 
-      };
-    }
+    if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
+    if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const rollResult = game.rollDice();
     const player = game.getCurrentPlayer();
@@ -578,41 +465,26 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     } else if (movablePieces.length === 1) {
       const pieceToMove = movablePieces[0];
       message += `✅ Only piece ${pieceToMove} can move - Auto-moving!\n\n`;
-      
       const moveResult = game.movePiece(player, pieceToMove);
-      
-      if (moveResult.captured) {
-        message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
-      }
-      
-      if (moveResult.reachedHome) {
-        message += `🏠 *PIECE HOME!* 🏠\n\n`;
-      }
-      
+      if (moveResult.captured) message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
+      if (moveResult.reachedHome) message += `🏠 *PIECE HOME!* 🏠\n\n`;
       if (moveResult.won) {
-        // Award Money
         const reward = 500;
         economy.addMoney(player.fullJid, reward);
-
-        message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n`;
-        message += `💰 *Reward:* +${reward} Zeni\n\n`;
-        message += `🎉 All pieces home! 🎉`;
+        message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
         activeGames.delete(chatId);
       } else {
         if (moveResult.extraTurn || game.hasExtraTurn) {
-          message += `🔥 Extra turn! Roll again!\n`;
-          message += `Use: \`${botConfig.getPrefix()} ludo roll\``;
+          message += `🔥 Extra turn! Roll again!\nUse: \`${botConfig.getPrefix()} ludo roll\``;
           game.hasExtraTurn = false;
         } else {
           game.nextTurn();
-          message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\n`;
-          message += `Use: \`${botConfig.getPrefix()} ludo roll\``;
+          message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
         }
       }
     } else {
       message += `✅ Movable pieces: ${movablePieces.join(', ')}\n\n`;
       message += `Use: \`${botConfig.getPrefix()} ludo move <piece>\``;
-      
       if (rollResult.extraTurn) {
         message += `\n\n🔥 Rolled a 6! Extra turn after move!`;
         game.hasExtraTurn = true;
@@ -621,156 +493,75 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
 
     const imageBuffer = await renderBoard(game, sock);
     const mentions = [player.fullJid, game.getCurrentPlayer().fullJid].filter((v, i, a) => a.indexOf(v) === i);
-
     if (imageBuffer) {
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: message, mentions: mentions }, { quoted: m });
     } else {
-      await sock.sendMessage(chatId, {
-        text: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { text: message, mentions: mentions }, { quoted: m });
     }
-
     return { success: true };
   },
 
   movePiece: async (sock, chatId, senderJid, pieceNum, BOT_MARKER, m) => {
     const game = activeGames.get(chatId);
-    
-    if (!game) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ No active Ludo game!" 
-      };
-    }
-
+    if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     const player = game.getPlayerByJid(senderJid);
-    if (!player) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ You're not in this game!" 
-      };
-    }
-
-    if (game.getCurrentPlayer().fullJid !== senderJid) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ Not your turn!" 
-      };
-    }
+    if (!player) return { success: false, message: BOT_MARKER + "❌ You're not in this game!" };
+    if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const moveResult = game.movePiece(player, pieceNum);
-
     if (!moveResult.success) {
-      await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `❌ ${moveResult.error}`
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${moveResult.error}` }, { quoted: m });
       return { success: false };
     }
 
     let message = BOT_MARKER + `🎮 *MOVE COMPLETE*\n\n`;
     message += `@${player.fullJid.split('@')[0]} moved piece ${pieceNum}\n\n`;
-
-    if (moveResult.captured) {
-      message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
-    }
-
-    if (moveResult.reachedHome) {
-      message += `🏠 *PIECE HOME!* 🏠\n\n`;
-    }
-
+    if (moveResult.captured) message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
+    if (moveResult.reachedHome) message += `🏠 *PIECE HOME!* 🏠\n\n`;
     if (moveResult.won) {
-      // Award Money
       const reward = 500;
       economy.addMoney(player.fullJid, reward);
-
-      message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n`;
-      message += `💰 *Reward:* +${reward} Zeni\n\n`;
-      message += `🎉 All pieces home! 🎉`;
-      
+      message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
       activeGames.delete(chatId);
     } else {
       if (moveResult.extraTurn || game.hasExtraTurn) {
-        message += `🔥 Extra turn! Roll again!\n`;
-        message += `Use: \`${botConfig.getPrefix()} ludo roll\``;
+        message += `🔥 Extra turn! Roll again!\nUse: \`${botConfig.getPrefix()} ludo roll\``;
         game.hasExtraTurn = false;
       } else {
         game.nextTurn();
-        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\n`;
-        message += `Use: \`${botConfig.getPrefix()} ludo roll\``;
+        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
       }
     }
 
     const imageBuffer = await renderBoard(game, sock);
     const mentions = [player.fullJid, game.getCurrentPlayer()?.fullJid].filter(Boolean);
-
     if (imageBuffer) {
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: message, mentions: mentions }, { quoted: m });
     } else {
-      await sock.sendMessage(chatId, {
-        text: message,
-        mentions: mentions
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { text: message, mentions: mentions }, { quoted: m });
     }
-
     return { success: true };
   },
 
   showBoard: async (sock, chatId, BOT_MARKER, m) => {
     const game = activeGames.get(chatId);
-    
-    if (!game) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ No active Ludo game!" 
-      };
-    }
-
+    if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     const imageBuffer = await renderBoard(game, sock);
     const currentPlayer = game.getCurrentPlayer();
-
     const message = BOT_MARKER + `🎲 *LUDO BOARD*\n\nCurrent turn: @${currentPlayer.fullJid.split('@')[0]}\nLast roll: ${game.lastRoll || 'None'}\n\nUse: \`${botConfig.getPrefix()} ludo roll\``;
-
     if (imageBuffer) {
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: message,
-        mentions: [currentPlayer.fullJid]
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: message, mentions: [currentPlayer.fullJid] }, { quoted: m });
     } else {
-      await sock.sendMessage(chatId, {
-        text: message,
-        mentions: [currentPlayer.fullJid]
-      }, { quoted: m });
+      await sock.sendMessage(chatId, { text: message, mentions: [currentPlayer.fullJid] }, { quoted: m });
     }
-
     return { success: true };
   },
 
   endGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     const game = activeGames.get(chatId);
-    
-    if (!game) {
-      return { 
-        success: false, 
-        message: BOT_MARKER + "❌ No active Ludo game!" 
-      };
-    }
-
+    if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     activeGames.delete(chatId);
-
-    await sock.sendMessage(chatId, {
-      text: BOT_MARKER + "✅ Ludo game ended!"
-    }, { quoted: m });
-
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Ludo game ended!" }, { quoted: m });
     return { success: true };
   }
 };

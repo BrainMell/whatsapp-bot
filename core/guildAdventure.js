@@ -45,6 +45,7 @@ const GAME_CONFIG = {
     VOTE_TIME: 30000, // Reduced from 45s
     COMBAT_TURN_TIME: 600000, 
     BREAK_TIME: 10000, // Reduced from 60s for better flow
+    ENEMY_TURN_TIME: 5000, 
     PERMADEATH_MULTIPLIER: 2.5,
 };
 
@@ -1274,7 +1275,8 @@ async function startCombat(sock, groq, encounter, chatId) {
 
     state.turnOrder = allCombatants;
     
-    // Wait 2 minutes before starting first turn
+    // Wait before starting first turn - Instant for solo
+    const startDelay = state.solo ? 0 : 120000;
     state.timers.combatStart = setTimeout(async () => {
         try {
             if (!state.inCombat) return; // Safety check
@@ -1290,7 +1292,7 @@ async function startCombat(sock, groq, encounter, chatId) {
         } catch (err) {
             console.error("[Quest] combatStart timer error:", err?.message || err);
         }
-    }, 120000); // 2 minutes
+    }, startDelay);
 }
 
 async function processCombatTurn(sock, chatId) {
@@ -1690,6 +1692,8 @@ async function performEnemyAction(sock, enemy, chatId) {
 
     resultMsg += `${enemy.icon} *${enemy.name}* is attacking!\n`;
     
+    const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
+    
     let turnInfo = {
         actor: enemy,
         action: { name: 'Action' },
@@ -1744,7 +1748,7 @@ async function performEnemyAction(sock, enemy, chatId) {
         }
         setTimeout(() => {
             nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-        }, GAME_CONFIG.ENEMY_TURN_TIME);
+        }, turnDelay);
         return;
     }
 
@@ -1765,7 +1769,7 @@ async function performEnemyAction(sock, enemy, chatId) {
                 }
                 setTimeout(() => {
                     nextTurn(sock, null, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-                }, GAME_CONFIG.ENEMY_TURN_TIME);
+                }, turnDelay);
                 return;
             }
 
@@ -1811,7 +1815,7 @@ async function performEnemyAction(sock, enemy, chatId) {
             }
             setTimeout(() => {
                 nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-            }, GAME_CONFIG.ENEMY_TURN_TIME);
+            }, turnDelay);
             return;
         }
     }
@@ -1848,7 +1852,7 @@ async function performEnemyAction(sock, enemy, chatId) {
         }
         setTimeout(() => {
             nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-        }, GAME_CONFIG.ENEMY_TURN_TIME);
+        }, turnDelay);
     }
 
 async function handleDeath(sock, entity, chatId, lastKiller = "The Infection") {
@@ -2041,7 +2045,7 @@ async function endCombat(sock, victory, chatId) {
         
         setTimeout(() => {
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-        }, GAME_CONFIG.BREAK_TIME);
+        }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
     } else {
         if (state.mode === 'PERMADEATH') {
             state.active = false;
@@ -2171,10 +2175,23 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
     
     gameStates.set(chatId, state);
     
-    // For compatibility during transition
-    if (!state.active) state = state;
+    // Auto-join for solo
+    if (solo && senderJid) {
+        const user = economy.getUser(senderJid);
+        const name = user?.profile?.nickname || senderJid.split('@')[0];
+        state.players.push({
+            jid: senderJid,
+            name: name,
+            class: null,
+            level: progression.getLevel(senderJid) || 1,
+            stats: { hp: 100, maxHp: 100, energy: 100, maxEnergy: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 },
+            equipment: { weapon: null, armor: null, ring: null, amulet: null, boots: null, cloak: null },
+            inventory: [], statusEffects: [], buffs: [], isDead: false, xpEarned: 0, goldEarned: 0,
+            combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 }
+        });
+    }
 
-    const regTime = solo ? 30000 : GAME_CONFIG.REGISTRATION_TIME;
+    const regTime = solo ? 0 : GAME_CONFIG.REGISTRATION_TIME;
     state.timers.reg = setTimeout(() => {
         startJourney(sock, chatId).catch(e => console.error("[Quest] startJourney timer error:", e?.message || e));
     }, regTime);
@@ -2188,9 +2205,9 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
 📜 *Mode:* ${mode === 'PERMADEATH' ? 'PERMADEATH' : 'NORMAL'}
 🏰 *Rank:* ${rankData.name}
 ⚔️ *Length:* ${rankData.encounters} Encounters
-⏱️ *Starts in:* ${solo ? '30s' : '2m'}
+⏱️ *Starts in:* ${solo ? '0s' : '2m'}
 
-👉 Type \`${botConfig.getPrefix()} join\` to enter!
+${solo ? `👤 *Solo Quest:* Starting now...` : `👉 Type \`${botConfig.getPrefix()} join\` to enter!`}
 `;
     return { success: true, msg };
 };
@@ -2327,10 +2344,11 @@ async function startJourney(sock, chatId) {
         p.level = progression.getLevel(p.jid);
     });
     
-    // Shopping phase
+    // Shopping phase - Instant for solo
+    const shopDelay = state.solo ? 0 : 1000;
     setTimeout(() => {
         openShop(sock, chatId).catch(e => console.error("[Quest] openShop timer error:", e?.message || e));
-    }, 1000);
+    }, shopDelay);
 
     // 💡 HIVE MIND WHISPERS (5% chance)
     if (Math.random() < 0.05) {
@@ -2437,6 +2455,7 @@ async function nextStage(sock, groq, chatId) {
                 console.error("Failed to send split path message in nextStage:", err.message);
             }
 
+            const voteTime = state.solo ? 10000 : 30000;
             state.timers.vote = setTimeout(() => {
                 const v1 = Object.values(state.votes).filter(v => v === '1').length;
                 const v2 = Object.values(state.votes).filter(v => v === '2').length;
@@ -2445,7 +2464,7 @@ async function nextStage(sock, groq, chatId) {
                 state.isProcessing = false;
                 state.isBranching = false; // Clear flag
                 processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
-            }, 30000);
+            }, voteTime);
             return;
         }
         
@@ -2554,7 +2573,7 @@ async function handleRestEncounter(sock, encounter, chatId) {
     
     setTimeout(() => {
         nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-    }, GAME_CONFIG.BREAK_TIME);
+    }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
 async function generateBossEncounter(sock, groq, chatId) {
@@ -2617,12 +2636,13 @@ async function handleMerchantEncounter(sock, encounter, chatId) {
     state.phase = 'PLAYING'; // Ensure they can buy
     state.isMerchantActive = true; 
     
+    const merchantTime = state.solo ? 30000 : (GAME_CONFIG.VOTE_TIME || 30000);
     state.timers.merchant = setTimeout(() => {
         if (state.active) {
             state.isMerchantActive = false;
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }
-    }, GAME_CONFIG.VOTE_TIME || 30000);
+    }, merchantTime);
 }
 
 async function handleNonCombatEncounter(sock, encounter, chatId) {
@@ -2657,7 +2677,7 @@ async function handleNonCombatEncounter(sock, encounter, chatId) {
     // Auto-timeout if no one votes
     let timer;
     if (state.solo) {
-        timer = 60000; // 1 min for solo
+        timer = 15000; // Reduced to 15s for solo
     } else if (state.actionJustTaken) {
         timer = 120000; 
         state.actionJustTaken = false; 
@@ -2696,7 +2716,7 @@ async function processVotes(sock, encounter, chatId) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
         setTimeout(() => {
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-        }, GAME_CONFIG.BREAK_TIME);
+        }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
 
@@ -2709,7 +2729,7 @@ async function processVotes(sock, encounter, chatId) {
         }
         setTimeout(() => {
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-        }, GAME_CONFIG.BREAK_TIME);
+        }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
     
@@ -2777,7 +2797,7 @@ async function processVotes(sock, encounter, chatId) {
     state.voteProcessing = false;
     setTimeout(() => {
         nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-    }, GAME_CONFIG.BREAK_TIME);
+    }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
 async function endAdventure(sock, chatId, victory = true) {
@@ -3542,7 +3562,7 @@ module.exports = {
                 state.isProcessing = false;
                 state.isBranching = false;
                 processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
-            }, 1000);
+            }, state.solo ? 0 : 1000);
             return `🗳️ All votes in! Branching to *${Object.values(state.votes).filter(v => v === '2').length > Object.values(state.votes).filter(v => v === '1').length ? 'Safe Path' : 'Danger Path'}*...`;
         }
 
@@ -3556,7 +3576,7 @@ module.exports = {
             const sock = state.sock;
             setTimeout(() => {
                 processVotes(sock, currentEnc, chatId).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
-            }, state.solo ? 1000 : 2000); // 1s for solo, 2s for group
+            }, state.solo ? 0 : 2000); // 0s for solo, 2s for group
             
             return `🗳️ Vote cast! ${state.solo ? 'Processing...' : 'All votes in! Processing...'}`;
         }

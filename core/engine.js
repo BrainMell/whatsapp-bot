@@ -2709,6 +2709,10 @@ We are happy to have you here.
 
         const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
 
+        // Define bot identity early
+        const botJid = jidNormalizedUser(sock.user.id);
+        const botLid = sock.authState.creds?.me?.lid || null;
+
         // 📢 DEBUG: Get Newsletter JID
         const newsletterJid = m.message?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid;
         if (newsletterJid) {

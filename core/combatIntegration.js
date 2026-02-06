@@ -59,9 +59,12 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  */
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        // Fallback to text for end screen for now
-        return { success: false, error: "End screen not implemented" };
+        const text = victory ? "ENCOUNTER COMPLETE" : "DEFEATED";
+        const imageBuffer = await goService.generateCombatEndScreen(text);
+        
+        return { success: true, buffer: imageBuffer };
     } catch (error) {
+        console.error('Combat end render error:', error);
         return { success: false, error: error.message };
     }
 }
