@@ -36,10 +36,33 @@ class GoImageService {
     }
 
     /**
+     * Generate Combat End Screen
+     */
+    async generateCombatEndScreen(text) {
+        try {
+            const response = await this.client.post('/api/combat/endscreen', { text }, {
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService Combat EndScreen Error:', error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Render Ludo Board
      */
-    async renderLudoBoard(data) {
+    async renderLudoBoard(data, pfpUrls = {}) {
         try {
+            // Merge pfpUrls into players if provided
+            if (data.players && pfpUrls) {
+                data.players = data.players.map(p => ({
+                    ...p,
+                    pfpUrl: p.pfpUrl || pfpUrls[p.jid] || ''
+                }));
+            }
+
             const response = await this.client.post('/api/ludo', data, {
                 responseType: 'arraybuffer'
             });
@@ -66,6 +89,21 @@ class GoImageService {
     }
 
     /**
+     * Render Tic-Tac-Toe Leaderboard
+     */
+    async renderTicTacToeLeaderboard(scores) {
+        try {
+            const response = await this.client.post('/api/ttt/leaderboard', { scores }, {
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService TTT Leaderboard Error:', error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Search Pinterest
      */
     async searchPinterest(query, maxResults = 10) {
@@ -82,8 +120,8 @@ class GoImageService {
 
     /**
      * Search Rule34 (NSFW)
-     * @param {string} query 
-     * @param {number} maxResults 
+     * @param {string} query
+     * @param {number} maxResults
      */
     async searchRule34(query, maxResults = 10) {
         try {

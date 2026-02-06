@@ -60,9 +60,23 @@ function getLeaderboardText() {
 }
 
 async function renderLeaderboard() {
-    // Return null to fallback to text leaderboard for now
-    // Go service leaderboard rendering is a TODO item in renderer.go
-    return null; 
+    try {
+        const scores = system.get('ttt_scores', {});
+        const sorted = Object.entries(scores)
+            .sort(([, a], [, b]) => b.score - a.score)
+            .slice(0, 10)
+            .map(([jid, data]) => ({
+                name: data.name,
+                score: data.score,
+                jid: jid
+            }));
+        
+        const imageBuffer = await goService.renderTicTacToeLeaderboard(sorted);
+        return imageBuffer;
+    } catch (error) {
+        console.error('❌ Leaderboard rendering failed:', error.message);
+        return null;
+    }
 }
 
 function getAllScores() {
