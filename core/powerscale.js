@@ -5,7 +5,7 @@
 
 const GoImageService = require('./goImageService');
 
-const goService = new GoImageService(process.env.GO_IMAGE_SERVICE_URL);
+const goService = new GoImageService();
 
 // Peak Logic (same as before)
 const PeakLogic = {
@@ -49,18 +49,19 @@ async function scrapeVSBPage(pageUrl) {
         const data = await goService.getVSBattlesDetail(pageUrl);
 
         return {
-            htmlContent: "EXTRACTED_BY_GO", // Keep for compatibility
+            htmlContent: "EXTRACTED_BY_GO", 
             imageUrl: data.imageURL || "",
             summary: data.summary || "",
             tierRaw: data.tier || "",
             stats: {
-                "Attack Potency": data.attackPotency || "",
-                "Speed": data.speed || "",
-                "Durability": data.durability || "",
-                "Stamina": data.stamina || "",
-                "Range": data.range || "",
-                "Tier": data.tier || "Unknown"
+                tier: data.tier || "Unknown",
+                ap: data.attackPotency || "N/A",
+                speed: data.speed || "N/A",
+                durability: data.durability || "N/A",
+                stamina: data.stamina || "N/A",
+                range: data.range || "N/A"
             },
+            // Redundant top-level for safety
             tier: data.tier || "Unknown",
             ap: data.attackPotency || "N/A",
             speed: data.speed || "N/A",
@@ -82,8 +83,6 @@ async function scrapeVSBPage(pageUrl) {
  * @returns {Promise<Object>} Cleaned stats
  */
 async function extractStatsWithGroq(htmlContent) {
-    // This function is now obsolete since Go service does the extraction
-    // But we keep it for backward compatibility
     return {};
 }
 
@@ -96,12 +95,12 @@ async function extractStatsWithGroq(htmlContent) {
  */
 function formatPowerScale(characterName, stats, pageUrl) {
     let message = `*${characterName} Powerscaling Analysis*\n\n`;
-    message += `*Attack Potency:* ${stats.ap || stats["Attack Potency"] || "N/A"}\n`;
-    message += `*Speed:* ${stats.speed || stats["Speed"] || "N/A"}\n`;
-    message += `*Durability:* ${stats.durability || stats["Durability"] || "N/A"}\n`;
-    message += `*Stamina:* ${stats.stamina || stats["Stamina"] || "N/A"}\n`;
-    message += `*Range:* ${stats.range || stats["Range"] || "N/A"}\n`;
-    message += `*Tier:* ${stats.tier || stats.tierRaw || "Unknown"}\n\n`;
+    message += `*Attack Potency:* ${stats.ap || "N/A"}\n`;
+    message += `*Speed:* ${stats.speed || "N/A"}\n`;
+    message += `*Durability:* ${stats.durability || "N/A"}\n`;
+    message += `*Stamina:* ${stats.stamina || "N/A"}\n`;
+    message += `*Range:* ${stats.range || "N/A"}\n`;
+    message += `*Tier:* ${stats.tier || "Unknown"}\n\n`;
     message += `Full details: ${pageUrl}`;
     return message;
 }
@@ -113,18 +112,12 @@ function formatPowerScale(characterName, stats, pageUrl) {
  */
 async function getPowerScale(characterName) {
     try {
-        // 1. Search for character
         const searchResults = await searchVSB(characterName);
-
         if (!searchResults || searchResults.length === 0) {
             throw new Error("Character not found");
         }
-
-        // 2. Get first result's details
         const pageUrl = searchResults[0].url;
         const details = await scrapeVSBPage(pageUrl);
-
-        // 3. Format message
         const message = formatPowerScale(characterName, details.stats, pageUrl);
 
         return {
@@ -135,13 +128,9 @@ async function getPowerScale(characterName) {
             imageHeight: details.imageHeight,
             characterName: searchResults[0].name
         };
-
     } catch (error) {
         console.error('Powerscale workflow failed:', error.message);
-        return {
-            success: false,
-            error: error.message
-        };
+        return { success: false, error: error.message };
     }
 }
 
