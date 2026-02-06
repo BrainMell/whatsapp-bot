@@ -25,6 +25,7 @@ console.log = maskLogs(console.log);
 console.info = maskLogs(console.info);
 console.warn = maskLogs(console.warn);
 console.debug = maskLogs(console.debug);
+console.error = maskLogs(console.error);
 
 const express = require('express');
 const app = express();
