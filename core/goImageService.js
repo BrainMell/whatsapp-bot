@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 class GoImageService {
-    constructor() {
-        this.baseUrl = process.env.GO_IMAGE_SERVICE_URL || 'http://localhost:8080';
+    constructor(overrideUrl = null) {
+        this.baseUrl = overrideUrl || process.env.GO_IMAGE_SERVICE_URL || 'http://localhost:8080';
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 60000, // 60s timeout for heavy ops

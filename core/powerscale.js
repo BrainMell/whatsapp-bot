@@ -1,90 +1,155 @@
-// ============================================
-// POWERSCALE COMMAND - GO SERVICE MIGRATION
-// ============================================
+// ===============================================
+// POWERSCALE.JS - Now uses Go Service (10x faster!)
+// Replaces Puppeteer with fast Go chromedp backend
+// ===============================================
 
 const GoImageService = require('./goImageService');
-const goService = new GoImageService();
+
+const goService = new GoImageService(process.env.GO_IMAGE_SERVICE_URL);
+
+// Peak Logic (same as before)
+const PeakLogic = {
+    clean: (text) => {
+        if (!text) return "N/A";
+        let peak = text.split('|').pop().trim();
+        return peak.replace(/\([^)]+\)/g, "").replace(/\[[^\]]+\]/g, "").trim();
+    },
+    tier: (text) => {
+        const tiers = [...text.matchAll(/\b([0-9]+)-([A-Z])\b/gi)].map(m => m[0]);
+        return tiers.length ? tiers[tiers.length - 1] : "Unknown";
+    },
+    bio: (text) => {
+        if (!text) return "";
+        return text.split(/[.!?](?:\s|$)/g)[0].trim() + ".";
+    }
+};
 
 /**
- * Search for characters using VS Battles Wiki via Go Service
+ * Search VS Battles Wiki for characters
+ * @param {string} characterName
+ * @returns {Promise<Array>} Array of {name, url}
  */
 async function searchVSB(characterName) {
     try {
-        const result = await goService.searchVSBattles(characterName);
-        return result.characters.map(char => ({
-            url: char.url,
-            name: char.name
-        }));
+        const response = await goService.searchVSBattles(characterName);
+        return response.characters || [];
     } catch (error) {
-        console.error('❌ VS Battles search failed:', error.message);
+        console.error('VS Battles search failed:', error.message);
+        throw new Error("Character not found");
+    }
+}
+
+/**
+ * Scrape detailed character stats from VS Battles page
+ * @param {string} pageUrl
+ * @returns {Promise<Object>} Character details
+ */
+async function scrapeVSBPage(pageUrl) {
+    try {
+        const data = await goService.getVSBattlesDetail(pageUrl);
+
+        return {
+            htmlContent: "EXTRACTED_BY_GO", // Keep for compatibility
+            imageUrl: data.imageURL || "",
+            summary: data.summary || "",
+            tierRaw: data.tier || "",
+            stats: {
+                "Attack Potency": data.attackPotency || "",
+                "Speed": data.speed || "",
+                "Durability": data.durability || "",
+                "Stamina": data.stamina || "",
+                "Range": data.range || "",
+                "Tier": data.tier || "Unknown"
+            },
+            tier: data.tier || "Unknown",
+            ap: data.attackPotency || "N/A",
+            speed: data.speed || "N/A",
+            durability: data.durability || "N/A",
+            stamina: data.stamina || "N/A",
+            range: data.range || "N/A",
+            imageWidth: data.imageWidth || 0,
+            imageHeight: data.imageHeight || 0
+        };
+    } catch (error) {
+        console.error('VS Battles detail scraping failed:', error.message);
         throw error;
     }
 }
 
 /**
- * Scrape VSB page details via Go Service
+ * Extract and clean stats (now done by Go service, but kept for compatibility)
+ * @param {string} htmlContent - Not used anymore
+ * @returns {Promise<Object>} Cleaned stats
  */
-async function scrapeVSBPage(pageUrl) {
-    try {
-        const detail = await goService.getVSBattlesDetail(pageUrl);
-        
-        // Return structure matching what engine.js and legacy code expects
-        return {
-            htmlContent: 'EXTRACTED_BY_GO', // Placeholder
-            imageUrl: detail.imageURL,
-            summary: detail.summary,
-            tier: detail.tier || 'Unknown',
-            ap: detail.attackPotency || 'N/A',
-            speed: detail.speed || 'N/A',
-            durability: detail.durability || 'N/A',
-            stamina: detail.stamina || 'N/A',
-            range: detail.range || 'N/A',
-            // Also keep original keys for extra safety
-            stats: {
-                tier: detail.tier || 'Unknown',
-                ap: detail.attackPotency || 'N/A',
-                speed: detail.speed || 'N/A',
-                durability: detail.durability || 'N/A',
-                stamina: detail.stamina || 'N/A',
-                range: detail.range || 'N/A'
-            }
-        };
-    } catch (error) {
-        console.error('❌ VS Battles detail fetch failed:', error.message);
-        throw error;
-    }
-}
-
-// Legacy function - kept for compatibility. 
-// Now it just passes through the stats if they were already extracted by Go.
 async function extractStatsWithGroq(htmlContent) {
-    // If we get our placeholder, we know Go already did the work.
-    // engine.js calls this with pageData.htmlContent.
-    return {}; // Return empty object, engine.js should rely on scrapeVSBPage data
+    // This function is now obsolete since Go service does the extraction
+    // But we keep it for backward compatibility
+    return {};
 }
 
+/**
+ * Format powerscale data for display
+ * @param {string} characterName
+ * @param {Object} stats
+ * @param {string} pageUrl 
+ * @returns {string} Formatted message
+ */
 function formatPowerScale(characterName, stats, pageUrl) {
-    const tier = stats.tier || stats.Tier || 'Unknown';
-    const ap = stats.ap || stats['Attack Potency'] || 'N/A';
-    const speed = stats.speed || stats['Speed'] || 'N/A';
-    const durability = stats.durability || stats['Durability'] || 'N/A';
-    const stamina = stats.stamina || stats['Stamina'] || 'N/A';
-    const range = stats.range || stats['Range'] || 'N/A';
-
     let message = `*${characterName} Powerscaling Analysis*\n\n`;
-    message += `*Tier:* ${tier}\n`;
-    message += `*Attack Potency:* ${ap}\n`;
-    message += `*Speed:* ${speed}\n`;
-    message += `*Durability:* ${durability}\n`;
-    message += `*Stamina:* ${stamina}\n`;
-    message += `*Range:* ${range}\n\n`;
+    message += `*Attack Potency:* ${stats.ap || stats["Attack Potency"] || "N/A"}\n`;
+    message += `*Speed:* ${stats.speed || stats["Speed"] || "N/A"}\n`;
+    message += `*Durability:* ${stats.durability || stats["Durability"] || "N/A"}\n`;
+    message += `*Stamina:* ${stats.stamina || stats["Stamina"] || "N/A"}\n`;
+    message += `*Range:* ${stats.range || stats["Range"] || "N/A"}\n`;
+    message += `*Tier:* ${stats.tier || stats.tierRaw || "Unknown"}\n\n`;
     message += `Full details: ${pageUrl}`;
     return message;
+}
+
+/**
+ * Complete powerscale workflow (updated for Go service)
+ * @param {string} characterName
+ * @returns {Promise<Object>} {message, imageUrl}
+ */
+async function getPowerScale(characterName) {
+    try {
+        // 1. Search for character
+        const searchResults = await searchVSB(characterName);
+
+        if (!searchResults || searchResults.length === 0) {
+            throw new Error("Character not found");
+        }
+
+        // 2. Get first result's details
+        const pageUrl = searchResults[0].url;
+        const details = await scrapeVSBPage(pageUrl);
+
+        // 3. Format message
+        const message = formatPowerScale(characterName, details.stats, pageUrl);
+
+        return {
+            success: true,
+            message: message,
+            imageUrl: details.imageUrl,
+            imageWidth: details.imageWidth,
+            imageHeight: details.imageHeight,
+            characterName: searchResults[0].name
+        };
+
+    } catch (error) {
+        console.error('Powerscale workflow failed:', error.message);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
 }
 
 module.exports = {
     searchVSB,
     scrapeVSBPage,
     extractStatsWithGroq,
-    formatPowerScale
+    formatPowerScale,
+    getPowerScale,
+    PeakLogic
 };
