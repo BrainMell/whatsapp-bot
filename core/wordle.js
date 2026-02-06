@@ -567,7 +567,7 @@ module.exports = {
     return { success: true };
   },
 
-  endGame: async (sock, chatId, senderJid, botMarker, m) => {
+  endGame: async (sock, chatId, senderJid, botMarker, m, isAdmin = false) => {
     const game = getGame(senderJid);
 
     if (!game) {
@@ -578,10 +578,21 @@ module.exports = {
     }
 
     const word = game.targetWord;
+    
+    // If not admin, count as a loss for quitting
+    if (!isAdmin) {
+      updateScoreboard(game.fullJid, game.playerName, false, game.guesses.length, game.difficulty);
+    }
+    
     deleteGame(senderJid);
 
+    let message = botMarker + `🛑 Game ended! The word was *${word}*`;
+    if (!isAdmin) {
+      message += `\n💀 Counted as a **LOSS** for quitting.`;
+    }
+
     await sock.sendMessage(chatId, {
-      text: botMarker + `🛑 Game ended! The word was *${word}*`,
+      text: message,
       contextInfo: { mentionedJid: [senderJid] }
     });
 

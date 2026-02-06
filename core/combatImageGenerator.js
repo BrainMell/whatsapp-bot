@@ -52,13 +52,14 @@ async function updateCombatImage(players, enemies, turnInfo, options = {}) {
 }
 
 async function generateEndScreenImage(text, options = {}) {
-    // For now, just return success false so it falls back to text, 
-    // or implement a simple text endpoint in Go later if needed.
-    // The previous implementation used pureimage for text.
-    // We can fallback to text message in the bot logic if this fails.
-    return { success: false, error: "Not implemented in Go service yet" };
+    try {
+        const imageBuffer = await goService.generateCombatEndScreen(text);
+        return { success: true, buffer: imageBuffer };
+    } catch (error) {
+        console.error('âŒ End screen generation failed:', error.message);
+        return { success: false, error: error.message };
+    }
 }
-
 module.exports = {
     generateCombatImage,
     updateCombatImage,

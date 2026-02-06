@@ -7553,13 +7553,19 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
     if (result.success && !result.isMenu) {
         const state = guildAdventure.getGameState(chatId);
         if (state) state.onHardcoreDeath = addToGraveyard;
+        
+        // initAdventure already auto-joins for solo, so we don't call joinAdventure again
         const senderName = m.pushName || senderJid.split('@')[0];
-        const joinRes = guildAdventure.joinAdventure(chatId, senderJid, senderName);
-        if (joinRes.startsWith('✅')) {
-            await sock.sendMessage(chatId, { text: result.msg + `\n✅ *${senderName}* auto-joined!\n⏱️ Solo quest starts in 30 seconds...` });
-        } else {
-            await sock.sendMessage(chatId, { text: joinRes });
-        }
+        
+        let startMsg = `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n`;
+        startMsg += `   ðŸ—¡ï¸  *QUEST STARTING* \n`;
+        startMsg += `â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n`;
+        startMsg += `ðŸ‘¤ Hero: *${senderName}*\n`;
+        startMsg += `ðŸ° Rank: *${rank || 'F'}*\n`;
+        startMsg += `ðŸ’€ Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n`;
+        startMsg += `âš”ï¸ Preparing the battlefield...`;
+
+        await sock.sendMessage(chatId, { text: BOT_MARKER + startMsg });
     } else {
         await sock.sendMessage(chatId, { text: result.msg });
     }
@@ -9665,7 +9671,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle show board` || l
 
 // `${botConfig.getPrefix().toLowerCase()}` wordle end - End current game
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle end` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle stop`) {
-  const result = await wordle.endGame(sock, chatId, senderJid, BOT_MARKER, m);
+  const result = await wordle.endGame(sock, chatId, senderJid, BOT_MARKER, m, canUseAdminCommands);
   if (!result.success) {
     await sock.sendMessage(chatId, { text: result.message });
   }

@@ -4,8 +4,11 @@
 // Integrates image generation with combat system
 
 const combatImageGen = require('./combatImageGenerator');
+const GoImageService = require('./goImageService');
 const fs = require('fs');
 const path = require('path');
+
+const goService = new GoImageService();
 
 // ==========================================
 // 🎨 COMBAT SCENE RENDERING
@@ -60,15 +63,12 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
         const text = victory ? "ENCOUNTER COMPLETE" : "DEFEATED";
-        const imageBuffer = await goService.generateCombatEndScreen(text);
-        
-        return { success: true, buffer: imageBuffer };
+        return await combatImageGen.generateEndScreenImage(text);
     } catch (error) {
         console.error('Combat end render error:', error);
         return { success: false, error: error.message };
     }
 }
-
 // ==========================================
 // 📝 CAPTION GENERATION
 // ==========================================
