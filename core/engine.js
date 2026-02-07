@@ -53,6 +53,7 @@ const ErrorLog = require('./models/ErrorLog');
 const Metric = require('./models/Metric');
 const news = require('./news'); // ✅ Added news module
 const loans = require('./loans'); // ✅ Added loans module
+const stockMarket = require('./stockMarket'); // ✅ Added stock market module
 const P = require('pino');
 const gambling = require('./gambling');
 const progression = require('./progression');
@@ -7972,6 +7973,55 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} invest `)) {
     return;
 }
 
+// STOCK MARKET COMMANDS
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} stocks` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} market`) {
+    let msg = `📈 **GLOBAL STOCK MARKET** 📈\n\n`;
+    for (const [symbol, stock] of Object.entries(stockMarket.STOCKS)) {
+        msg += `• *${stock.name}* (\`${symbol}\`)\n  Price: ${economy.getZENI()}${stock.price.toLocaleString()}\n\n`;
+    }
+    msg += `💡 Use: \`${botConfig.getPrefix()} stocks buy <symbol> <amount>\` or \`${botConfig.getPrefix()} stocks sell <symbol> <amount>\`\n`;
+    msg += `📊 To view your shares: \`${botConfig.getPrefix()} stocks portfolio\``;
+    await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+    return;
+}
+
+if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} stocks `)) {
+    const parts = lowerTxt.split(' ');
+    const action = parts[2]?.toLowerCase();
+    
+    if (action === 'portfolio' || action === 'me') {
+        const portfolio = stockMarket.getPortfolio(senderJid);
+        if (portfolio.length === 0) {
+            return sock.sendMessage(chatId, { text: BOT_MARKER + "📊 You don't own any stocks yet!" });
+        }
+        
+        let msg = `📊 **YOUR PORTFOLIO** 📊\n\n`;
+        let totalValue = 0;
+        portfolio.forEach(s => {
+            msg += `• *${s.name}* (${s.symbol})\n  Shares: ${s.amount} | Value: ${economy.getZENI()}${s.totalValue.toLocaleString()}\n\n`;
+            totalValue += s.totalValue;
+        });
+        msg += `━━━━━━━━━━━━━━━\n💰 **Total Portfolio Value:** ${economy.getZENI()}${totalValue.toLocaleString()}`;
+        return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+    }
+    
+    const symbol = parts[3]?.toUpperCase();
+    const amount = parseInt(parts[4]);
+    
+    if (!symbol || isNaN(amount) || amount <= 0) {
+        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} stocks <buy/sell> <symbol> <amount>\`` });
+    }
+    
+    if (action === 'buy') {
+        const result = stockMarket.buyStock(senderJid, symbol, amount);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+    } else if (action === 'sell') {
+        const result = stockMarket.sellStock(senderJid, symbol, amount);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+    }
+    return;
+}
+
 // MEMBERSHIP COMMANDS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} membership` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} premium`) {
     let msg = `💎 **ADVENTURER MEMBERSHIPS** 💎\n\n`;
@@ -9822,7 +9872,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
       'mute', 'unmute', 'tagall', 'hidetag',
       'guild create', 'guild delete', 'guild join', 'guild leave', 'guild invite', 'guild accept', 'guild decline', 'guild list', 'guild members', 'guild tag', 'guild motto', 'guild promote', 'guild demote', 'guild kick', 'guild title', 'guild titles', 'guild ranks', 'guild leaderboard', 'guild points', 'guild pointsboard', 'guild upgrade', 'guild challenge', 'guild challenges',
       'news', 'anime news',
-      'register', 'balance', 'bal', 'bh', 'history', 'daily', 'deposit', 'withdraw', 'transfer', 'send', 'rob', 'rich', 'money', 'economy',
+      'register', 'balance', 'bal', 'bh', 'history', 'daily', 'deposit', 'withdraw', 'transfer', 'send', 'rob', 'rich', 'money', 'economy', 'invest', 'claim', 'stocks', 'market',
       'cf', 'flip', 'dice', 'roll', 'slots', 'hl', 'bj', 'roulette', 'crash', 'mines', 'plinko', 'scratch', 'cups', 'wheel',
       'horse', 'lotto', 'rps', 'penalty', 'guess',
       'summary', 'recap', 'activity', 'active', 'inactive',
@@ -9972,6 +10022,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
 
     // Start background tasks AFTER handler is registered
     startNewsLoop(sock);
+    
+    // Stock Market Update Loop (Every 30 mins)
+    setInterval(() => {
+        stockMarket.updatePrices();
+        console.log("📈 Stock prices updated.");
+    }, 1800000);
 
   } catch (err) {
     console.error('❌ initSocket failed:', err.message);

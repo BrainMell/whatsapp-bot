@@ -161,7 +161,10 @@ const COMMAND_REGISTRY = {
     { cmd: 'richest', desc: 'Alias for rich.', usage: 'richest' },
     { cmd: 'gamblers', desc: 'Gamble Leaderboard - See the top winners.', usage: 'gamblers' },
     { cmd: 'lb gamble', desc: 'Alias for gamblers leaderboard.', usage: 'lb gamble' },
-    { cmd: 'economy', desc: 'View global economy statistics and insights.', usage: 'economy' }
+    { cmd: 'economy', desc: 'View global economy statistics and insights.', usage: 'economy' },
+    { cmd: 'invest', desc: 'View investment plans or start an investment.', usage: 'invest [plan] [amt]' },
+    { cmd: 'claim', desc: 'Claim your matured investments.', usage: 'claim' },
+    { cmd: 'stocks', desc: 'View the stock market or your portfolio.', usage: 'stocks [buy/sell] [symbol] [amt]' }
   ],
   GAMBLING: [
     { cmd: 'cf', desc: 'Flip a coin and bet on Heads or Tails.', usage: 'cf <amt> <h/t>' },
