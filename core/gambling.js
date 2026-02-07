@@ -7,6 +7,9 @@ const botConfig = require('../botConfig');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 
+const GLOBAL_MAX_BET = 100000; // 100k max bet to protect economy
+const GLOBAL_MIN_BET = 100;   // 100 min bet
+
 // Active game states
 const activeBlackjackGames = new Map();
 const activeCrashGames = new Map();
@@ -53,8 +56,11 @@ function coinflip(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -123,8 +129,11 @@ function diceRoll(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -214,8 +223,11 @@ function slots(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -223,8 +235,8 @@ function slots(userId, amount, economyModule) {
   }
   
   const symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
-  // Increased weights for rarer symbols to boost win rates
-  const weights = [20, 20, 20, 20, 15, 5];
+  // Adjusted weights to make winning harder
+  const weights = [25, 25, 20, 15, 10, 5];
   
   function getSymbol() {
     const total = weights.reduce((a, b) => a + b, 0);
@@ -256,7 +268,7 @@ function slots(userId, amount, economyModule) {
     multiplier = symbolMultipliers[reel1] || 5;
     result = 'JACKPOT';
   } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
-    multiplier = 2.5;
+    multiplier = 1.2; // Reduced from 2.5x to 1.2x
     result = 'SMALL WIN';
   } else {
     multiplier = 0;
@@ -375,8 +387,11 @@ function startBlackjack(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -664,8 +679,11 @@ function roulette(userId, amount, bet, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -784,8 +802,11 @@ function startCrash(userId, amount, economyModule, sock, chatId) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
   
   if (user.wallet < amount) {
@@ -801,22 +822,22 @@ function startCrash(userId, amount, economyModule, sock, chatId) {
   economyModule.logTransaction(userId, "Crash Bet", -amount, user.wallet);
   economyModule.saveUser(userId);
   
-  // Generate crash point with EASIER ODDS!
-  // 35% crash before 2x (not 70%!)
-  // 35% crash between 2x-5x  
-  // 30% go above 5x (up to 100x!)
+  // Generate crash point with realistic house odds
+  // 3% chance: Instant crash at 1.00x
+  // 47% chance: 1.01x - 1.5x
+  // 30% chance: 1.5x - 3.0x
+  // 20% chance: 3.0x - 50.0x
   let crashPoint;
   const rand = Math.random();
   
-  if (rand < 0.35) {
-    // 35% chance: 1.01x - 2.0x
-    crashPoint = 1.01 + Math.random() * 0.99;
-  } else if (rand < 0.70) {
-    // 35% chance: 2.0x - 5.0x
-    crashPoint = 2.0 + Math.random() * 3.0;
+  if (rand < 0.03) {
+    crashPoint = 1.00;
+  } else if (rand < 0.50) {
+    crashPoint = 1.01 + Math.random() * 0.49;
+  } else if (rand < 0.80) {
+    crashPoint = 1.5 + Math.random() * 1.5;
   } else {
-    // 30% chance: 5.0x - 100.0x (BIG WINS!)
-    crashPoint = 5.0 + Math.pow(Math.random(), 1.5) * 95.0;
+    crashPoint = 3.0 + Math.pow(Math.random(), 2) * 47.0;
   }
   
   crashPoint = Math.round(crashPoint * 100) / 100;
@@ -1019,7 +1040,13 @@ Perfect timing! 🔥`
 function startMines(userId, amount, mineCount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid bet!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
   
   const mines = parseInt(mineCount);
@@ -1170,7 +1197,13 @@ function minesCashOut(userId, economyModule) {
 function horseRace(userId, amount, horseNum, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid amount!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const horse = parseInt(horseNum);
@@ -1214,7 +1247,13 @@ function horseRace(userId, amount, horseNum, economyModule) {
 function lottery(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid amount!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const ticket = Math.floor(Math.random() * 100) + 1;
@@ -1252,7 +1291,13 @@ function lottery(userId, amount, economyModule) {
 function rps(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid amount!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const valid = ['rock', 'paper', 'scissors', 'r', 'p', 's'];
@@ -1301,7 +1346,13 @@ function rps(userId, amount, choice, economyModule) {
 function penalty(userId, amount, direction, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid amount!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const valid = ['left', 'center', 'right', 'l', 'c', 'r'];
@@ -1343,7 +1394,13 @@ function penalty(userId, amount, direction, economyModule) {
 function guessNumber(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid amount!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const num = parseInt(guess);
@@ -1384,13 +1441,13 @@ function higherLower(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
-  if (amount <= 0) {
-    return { success: false, message: "❌ Bet amount must be positive!" };
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
   }
-  
-  if (user.wallet < amount) {
-    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
   }
+  if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
   
   const normalizedGuess = guess.toLowerCase();
   if (!['higher', 'lower', 'h', 'l'].includes(normalizedGuess)) {
@@ -1484,181 +1541,6 @@ Bet returned!
 // 13. MINES - 5x5 Grid with hidden mines
 // ============================================
 
-function startMines(userId, amount, mineCount, economyModule) {
-  const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid bet!" };
-  if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
-  
-  const mines = parseInt(mineCount);
-  if (isNaN(mines) || mines < 1 || mines > 20) {
-    return { success: false, message: "❌ Choose between 1-20 mines!" };
-  }
-
-  if (activeMinesGames.has(userId)) {
-    return { success: false, message: "❌ Finish your current Mines game first!" };
-  }
-
-  user.wallet -= amount;
-  economyModule.logTransaction(userId, "Mines Bet", -amount, user.wallet);
-  economyModule.saveUser(userId);
-
-  // Create grid
-  const grid = new Array(25).fill(false); // false = safe
-  let placed = 0;
-  while (placed < mines) {
-    const idx = Math.floor(Math.random() * 25);
-    if (!grid[idx]) {
-      grid[idx] = true;
-      placed++;
-    }
-  }
-
-  activeMinesGames.set(userId, {
-    bet: amount,
-    mineCount: mines,
-    grid: grid,
-    revealed: [],
-    multiplier: 1.0
-  });
-
-  return {
-    success: true,
-    message: `💣 *MINES GAME STARTED* 💣
-
-💰 *Bet:* ${getZENI()}${amount.toLocaleString()}
-💣 *Mines:* ${mines}
-📈 *Current Multiplier:* 1.00x
-
-╔════════════╗
-║ ⬜ ⬜ ⬜ ⬜ ⬜ ║
-║ ⬜ ⬜ ⬜ ⬜ ⬜ ║
-║ ⬜ ⬜ ⬜ ⬜ ⬜ ║
-║ ⬜ ⬜ ⬜ ⬜ ⬜ ║
-║ ⬜ ⬜ ⬜ ⬜ ⬜ ║
-╚════════════╝
-
-Type: \`${botConfig.getPrefix()} mines pick <1-25>\` to reveal a cell!
-Type: \`${botConfig.getPrefix()} mines out\` to cash out!`
-  };
-}
-
-function minesPick(userId, cellIndex, economyModule) {
-  if (!activeMinesGames.has(userId)) {
-    return { success: false, message: "❌ No active Mines game!" };
-  }
-
-  const game = activeMinesGames.get(userId);
-  const idx = parseInt(cellIndex) - 1;
-
-  if (isNaN(idx) || idx < 0 || idx > 24) {
-    return { success: false, message: "❌ Choose a cell between 1-25!" };
-  }
-
-  if (game.revealed.includes(idx)) {
-    return { success: false, message: "❌ Cell already revealed!" };
-  }
-
-  const user = economyModule.getUser(userId);
-
-  // HIT A MINE!
-  if (game.grid[idx]) {
-    activeMinesGames.delete(userId);
-    user.stats.totalSpent += game.bet;
-    updateGamblingStats(userId, game.bet, false, economyModule);
-    economyModule.logTransaction(userId, "Mines Lost (Hit Mine)", 0, user.wallet);
-    economyModule.saveUser(userId);
-
-    return {
-      success: true,
-      won: false,
-      message: `💥 *BOOM!* 💥
-
-You hit a mine at cell ${cellIndex}!
-You lost your bet of ${getZENI()}${game.bet.toLocaleString()}.
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
-    };
-  }
-
-  // SAFE!
-  game.revealed.push(idx);
-  
-  // Calculate new multiplier
-  const n = 25;
-  const m = game.mineCount;
-  const r = game.revealed.length;
-  
-  function combination(n, k) { 
-    if (k < 0 || k > n) return 0;
-    if (k === 0 || k === n) return 1;
-    if (k > n / 2) k = n - k;
-    let res = 1;
-    for (let i = 1; i <= k; i++) res = res * (n - i + 1) / i;
-    return res;
-  }
-
-  const prob = combination(n - m, r) / combination(n, r);
-  game.multiplier = Math.round((0.97 / prob) * 100) / 100; // 3% house edge
-
-  let gridDisplay = "╔════════════╗\n";
-  for (let i = 0; i < 25; i++) {
-    if (i > 0 && i % 5 === 0) gridDisplay += " ║\n║ ";
-    else if (i === 0) gridDisplay += "║ ";
-    
-    if (game.revealed.includes(i)) gridDisplay += "💎 ";
-    else gridDisplay += "⬜ ";
-  }
-  gridDisplay += " ║\n╚════════════╝";
-
-  return {
-    success: true,
-    message: `💎 *SAFE!* 💎
-
-📈 *Multiplier:* ${game.multiplier}x
-💵 *Current Value:* ${getZENI()}${Math.floor(game.bet * game.multiplier).toLocaleString()}
-
-${gridDisplay}
-
-Type: \`${botConfig.getPrefix()} mines pick <1-25>\` or \`${botConfig.getPrefix()} mines out\``
-  };
-}
-
-function minesCashOut(userId, economyModule) {
-  if (!activeMinesGames.has(userId)) {
-    return { success: false, message: "❌ No active Mines game!" };
-  }
-
-  const game = activeMinesGames.get(userId);
-  if (game.revealed.length === 0) {
-    return { success: false, message: "❌ Pick at least one cell before cashing out!" };
-  }
-
-  const user = economyModule.getUser(userId);
-  const winnings = Math.floor(game.bet * game.multiplier);
-  const profit = winnings - game.bet;
-
-  user.wallet += winnings;
-  user.stats.totalEarned += profit;
-  updateGamblingStats(userId, game.bet, true, economyModule);
-  economyModule.logTransaction(userId, `Mines Won (${game.multiplier}x)`, winnings, user.wallet);
-  
-  activeMinesGames.delete(userId);
-  economyModule.saveUser(userId);
-
-  return {
-    success: true,
-    message: `💰 *CASHED OUT!* 💰
-
-🎉 *YOU WON!*
-📈 Multiplier: ${game.multiplier}x
-💵 Won: ${getZENI()}${winnings.toLocaleString()}
-🏆 Profit: +${getZENI()}${profit.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
-  };
-}
-
 // ============================================
 // 14. PLINKO - Drop the ball!
 // ============================================
@@ -1666,7 +1548,13 @@ function minesCashOut(userId, economyModule) {
 function plinko(userId, amount, risk, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid bet!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const riskLevel = risk.toLowerCase();
@@ -1682,9 +1570,9 @@ function plinko(userId, amount, risk, economyModule) {
   };
 
   const weights = {
-    low: [20, 30, 20, 15, 10, 4, 1],
-    mid: [25, 25, 20, 15, 10, 4, 1],
-    high: [40, 25, 15, 10, 6, 3, 1]
+    low: [40, 30, 15, 10, 3, 1.5, 0.5],
+    mid: [50, 25, 10, 8, 5, 1.5, 0.5],
+    high: [70, 15, 8, 4, 2, 0.8, 0.2]
   };
 
   function getResult(table, weight) {
@@ -1740,13 +1628,23 @@ ${path}
 function scratchCard(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount < 100) return { success: false, message: "❌ Min scratch card price is Ꞩ100!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum scratch card price is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum scratch card price is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   user.wallet -= amount;
   economyModule.saveUser(userId);
 
-  const symbols = ['💎', '🍒', '🔔', '🍋', '7️⃣', '🍀'];
+  // Balanced symbol pool: 6 winners, 14 fillers = 20 total symbols
+  const winningSymbols = ['💎', '7️⃣', '🍀', '🔔', '🍒', '🍋'];
+  const fillerSymbols = ['🍎', '🍊', '🍇', '🍉', '🍓', '🥑', '🍌', '🍍', '🥥', '🥭', '🥝', '🌽', '🥕', '🍆'];
+  const symbols = [...winningSymbols, ...fillerSymbols];
+  
   const card = [];
   for (let i = 0; i < 9; i++) {
     card.push(symbols[Math.floor(Math.random() * symbols.length)]);
@@ -1756,7 +1654,8 @@ function scratchCard(userId, amount, economyModule) {
   card.forEach(s => counts[s] = (counts[s] || 0) + 1);
 
   let winner = null;
-  for (const s in counts) {
+  // Only check if a WINNING symbol has 3 or more matches
+  for (const s of winningSymbols) {
     if (counts[s] >= 3) {
       winner = s;
       break;
@@ -1765,7 +1664,7 @@ function scratchCard(userId, amount, economyModule) {
 
   let multiplier = 0;
   if (winner) {
-    const symbolMultipliers = { '💎': 10, '7️⃣': 5, '🍀': 3, '🔔': 2, '🍒': 1.5, '🍋': 1.2 };
+    const symbolMultipliers = { '💎': 50, '7️⃣': 15, '🍀': 8, '🔔': 4, '🍒': 2.5, '🍋': 1.5 };
     multiplier = symbolMultipliers[winner] || 1.1;
   }
 
@@ -1814,7 +1713,13 @@ ${winnings > 0 ? `🎉 *MATCHED 3x ${winner}!*` : '😢 *NO MATCH!*'}
 function cupGame(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid bet!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const cup = parseInt(choice);
@@ -1863,7 +1768,13 @@ ${cups}
 function wheelOfFortune(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
-  if (amount <= 0) return { success: false, message: "❌ Invalid bet!" };
+  
+  if (amount < GLOBAL_MIN_BET) {
+    return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
+  }
+  if (amount > GLOBAL_MAX_BET) {
+    return { success: false, message: `❌ Maximum bet is ${getZENI()}${GLOBAL_MAX_BET.toLocaleString()}!` };
+  }
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   const segments = [0, 0.2, 0.5, 1.2, 1.5, 2, 5, 10];
