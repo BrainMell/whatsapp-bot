@@ -62,6 +62,7 @@ const lootSystem = require('./lootSystem');
 const progressionCommands = require('./progressionCommands');
 const shopCommands = require('./shopCommands');
 const skillCommands = require('./skillCommands');
+const classCommands = require('./classCommands');
 const pvpSystem = require('./pvpSystem');
 const contextEngine = require('./src/context_engine/Engine'); // NEW: Brain system
 const NodeCache = require("node-cache");
@@ -7564,13 +7565,13 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
         // initAdventure already auto-joins for solo, so we don't call joinAdventure again
         const senderName = m.pushName || senderJid.split('@')[0];
         
-        let startMsg = `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n`;
-        startMsg += `   ðŸ—¡ï¸  *QUEST STARTING* \n`;
-        startMsg += `â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n`;
-        startMsg += `ðŸ‘¤ Hero: *${senderName}*\n`;
-        startMsg += `ðŸ° Rank: *${rank || 'F'}*\n`;
-        startMsg += `ðŸ’€ Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n`;
-        startMsg += `âš”ï¸ Preparing the battlefield...`;
+        let startMsg = `╔════════════════════╗\n`;
+        startMsg += `   🗡️  *QUEST STARTING* \n`;
+        startMsg += `╚════════════════════╝\n\n`;
+        startMsg += `👤 Hero: *${senderName}*\n`;
+        startMsg += `⭐ Rank: *${rank || 'F'}*\n`;
+        startMsg += `🔥 Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n`;
+        startMsg += `⚔️ Preparing the battlefield...`;
 
         await sock.sendMessage(chatId, { text: BOT_MARKER + startMsg });
     } else {
@@ -7629,6 +7630,11 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve`)) {
     const args = parts.slice(1);
     const senderName = m.pushName || senderJid.split('@')[0];
     await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, args);
+    return;
+}
+
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} classes`) {
+    await classCommands.displayClasses(sock, chatId);
     return;
 }
 

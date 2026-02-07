@@ -39,7 +39,7 @@ async function displayShop(sock, chatId, category = 'all') {
     
     msg += `📂 *Categories:* \n`;
     Object.entries(categoryInfo).forEach(([key, info]) => {
-        msg += `${info.icon} lexiblePrefix} shop ${key}flexiblePrefix}\n`;
+        msg += `${info.icon} \`${getPrefix()} shop ${key}\`\n`;
     });
     
     msg += `\n━━━━━━━━━━━━━━━\n\n`;
@@ -59,14 +59,14 @@ async function displayShop(sock, chatId, category = 'all') {
             msg += `   💰 Price: ${getZENI()}${item.cost.toLocaleString()}\n`;
             msg += `   📝 ${item.desc}\n`;
             if (item.requirement) msg += `   ⚠️ ${item.requirement}\n`;
-            msg += `   🆔 ID: lexiblePrefix}${item.id}flexiblePrefix}\n\n`;
+            msg += `   🆔 ID: \`${item.id}\`\n\n`;
         });
     }
     
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 *How to buy:* \n`;
-    msg += `Type: lexiblePrefix} buy <id>flexiblePrefix} or lexiblePrefix} buy <#>flexiblePrefix}\n`;
-    msg += `📌 Example: lexiblePrefix} buy health_potion_shopflexiblePrefix}`;
+    msg += `Type: \`${getPrefix()} buy <id>\` or \`${getPrefix()} buy <#>\`\n`;
+    msg += `📌 Example: \`${getPrefix()} buy health_potion_shop\``;
     
     await sock.sendMessage(chatId, { text: msg });
 }
@@ -92,7 +92,7 @@ async function buyItem(sock, chatId, senderJid, input) {
     
     if (!item) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Item not found!\n\nType lexiblePrefix} shopflexiblePrefix} to see available items.\n💡 You can use the item name or its number.`
+            text: `❌ Item not found!\n\nType \`${getPrefix()} shop\` to see available items.\n💡 You can use the item name or its number.`
         });
         return;
     }
