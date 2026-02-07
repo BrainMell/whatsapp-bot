@@ -17,7 +17,6 @@ const progression = require('./progression');
 const skillTree = require('./skillTree');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
-const guilds = require('./guilds');
 const bossMechanics = require('./bossMechanics');
 const classEncounters = require('./classEncounters');
 const combatIntegration = require('./combatIntegration');
@@ -2083,10 +2082,11 @@ async function endCombat(sock, victory, chatId) {
         });
 
         // 💡 GUILD BOARD TRACKING
-        const firstPlayerGuild = guilds.getUserGuild(alivePlayers[0]?.jid);
+        const guilds_mod = require('./guilds');
+        const firstPlayerGuild = guilds_mod.getUserGuild(alivePlayers[0]?.jid);
         if (firstPlayerGuild) {
             state.enemies.forEach(enemy => {
-                guilds.updateBoardProgress(firstPlayerGuild, enemy.type || enemy.id, 1);
+                guilds_mod.updateBoardProgress(firstPlayerGuild, enemy.type || enemy.id, 1);
             });
         }
         
@@ -2462,7 +2462,7 @@ async function openShop(sock, chatId) {
         console.error("Failed to send shop menu in openShop:", err.message);
     }
     
-    const shopTime = state.solo ? 15000 : GAME_CONFIG.SHOP_TIME;
+    const shopTime = GAME_CONFIG.SHOP_TIME;
     state.timers.shop = setTimeout(() => {
         state.phase = 'PLAYING';
         nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));

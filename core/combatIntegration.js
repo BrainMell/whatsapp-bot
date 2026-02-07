@@ -5,6 +5,7 @@
 
 const combatImageGen = require('./combatImageGenerator');
 const GoImageService = require('./goImageService');
+const botConfig = require('../botConfig');
 const fs = require('fs');
 const path = require('path');
 
