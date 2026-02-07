@@ -2898,6 +2898,11 @@ const SKILL_TREES = {
         icon: '🧘',
         skillPointsPerLevel: 3,
         trees: {
+    ZENMASTER: {
+        name: 'Zenmaster',
+        icon: '🧘',
+        skillPointsPerLevel: 3,
+        trees: {
             ZEN: {
                 name: 'Supreme Zen',
                 icon: '🧘',
@@ -2933,6 +2938,208 @@ const SKILL_TREES = {
                         isUltimate: true,
                         isAscended: true,
                         skillPointCost: [8, 12, 15]
+                    }
+                }
+            }
+        }
+    },
+
+    DRAGON_GOD: {
+        name: 'Dragon God',
+        icon: '🐲👑',
+        skillPointsPerLevel: 3,
+        trees: {
+            DRACO: {
+                name: 'Dragon Power',
+                icon: '🐲',
+                skills: {
+                    dragon_breath: {
+                        id: 'dragon_breath',
+                        name: 'Dragon Breath',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 2,
+                        damageMultiplier: [4.5, 5.0, 5.5, 6.0, 6.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_SMALL',
+                        description: 'Incinerate foes with dragon fire',
+                        animation: '🐲🔥💨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    }
+                }
+            }
+        }
+    },
+
+    SHOGUN: {
+        name: 'Shogun',
+        icon: '🏯⚔️',
+        skillPointsPerLevel: 3,
+        trees: {
+            WAR: {
+                name: 'War Path',
+                icon: '⚔️',
+                skills: {
+                    shoguns_order: {
+                        id: 'shoguns_order',
+                        name: 'Shoguns Order',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [25, 24, 23, 22, 20],
+                        cooldown: 3,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        description: 'A strike that commands respect',
+                        animation: '⚔️🎖️💥',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    }
+                }
+            }
+        }
+    },
+
+    KAGE: {
+        name: 'Kage',
+        icon: '🌑🥷',
+        skillPointsPerLevel: 3,
+        trees: {
+            SHADOW: {
+                name: 'Shadow Realm',
+                icon: '🌑',
+                skills: {
+                    shadow_assassination: {
+                        id: 'shadow_assassination',
+                        name: 'Shadow Assassination',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 2,
+                        damageMultiplier: [5.0, 5.5, 6.0, 6.5, 7.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        description: 'Strike from the absolute darkness',
+                        animation: '🌑🥷🗡️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    }
+                }
+            }
+        }
+    },
+
+    VIRTUOSO: {
+        name: 'Virtuoso',
+        icon: '🎻✨',
+        skillPointsPerLevel: 3,
+        trees: {
+            MUSIC: {
+                name: 'Grand Music',
+                icon: '🎻',
+                skills: {
+                    heavenly_melody: {
+                        id: 'heavenly_melody',
+                        name: 'Heavenly Melody',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 3,
+                        type: 'heal_team',
+                        value: [150, 180, 210, 240, 270],
+                        description: 'Heal the entire party with music',
+                        animation: '🎻✨💖',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    }
+                }
+            }
+        }
+    },
+
+    GRAND_INVENTOR: {
+        name: 'Grand Inventor',
+        icon: '🦾⚙️',
+        skillPointsPerLevel: 3,
+        trees: {
+            TECH: {
+                name: 'Hyper Tech',
+                icon: '🦾',
+                skills: {
+                    plasma_cannon: {
+                        id: 'plasma_cannon',
+                        name: 'Plasma Cannon',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [35, 33, 31, 29, 27],
+                        cooldown: 2,
+                        damageMultiplier: [5.5, 6.0, 6.5, 7.0, 7.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'Fire a beam of pure energy',
+                        animation: '🦾⚡🔥',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    }
+                }
+            }
+        }
+    },
+
+    DIVINE_FIST: {
+        name: 'Divine Fist',
+        icon: '🌌👊',
+        skillPointsPerLevel: 3,
+        trees: {
+            DIVINE: {
+                name: 'Divine Might',
+                icon: '🌌',
+                skills: {
+                    star_shatterer: {
+                        id: 'star_shatterer',
+                        name: 'Star Shatterer',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 2,
+                        damageMultiplier: [6.0, 6.5, 7.0, 7.5, 8.0],
+                        damageType: 'TRUE',
+                        targeting: 'SINGLE',
+                        description: 'A punch that can break the stars',
+                        animation: '👊🌌💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    }
+                }
+            }
+        }
+    },
+
+    DEATH_LORD: {
+        name: 'Death Lord',
+        icon: '🌌💀👑',
+        skillPointsPerLevel: 3,
+        trees: {
+            DEATH: {
+                name: 'Sovereign Path',
+                icon: '🌌',
+                skills: {
+                    soul_reaping: {
+                        id: 'soul_reaping',
+                        name: 'Soul Reaping',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 1,
+                        damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'Reap the souls of the living',
+                        animation: '💀⌛🌑',
+                        skillPointCost: [3, 4, 5, 6, 7]
                     }
                 }
             }

@@ -8,6 +8,8 @@ const GuildModel = require('./models/Guild');
 const System = require('./models/System');
 const connectDB = require('../db');
 
+const BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;
+
 // memory caches for fast access
 let globalGuildData = {
   guilds: {},
@@ -253,6 +255,7 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
   info.memberGuilds[creatorJid] = guildName;
   info.guildOwners[creatorJid] = guildName;
 
+  generateDailyBoard(guildName);
   saveGuilds();
   syncGuild(guildName);
   syncGuildSystem();
@@ -266,10 +269,11 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
 }
 
 function getAvailableTargets(level) {
-  // Logic to return monster IDs based on level
-  // Using some from classEncounters or hardcoded ones for now
-  if (level < 10) return ['FLAME', 'DROWNED_ONE', 'STALKER'];
-  return ['ELDER_FLAME', 'LEVIATHAN_SPAWN', 'RAZOR_CLAW'];
+  if (level < 15) return ['FLAME', 'DROWNED_ONE', 'TIDE_LURKER', 'MIST_WALKER'];
+  if (level < 30) return ['STONE_HULK', 'CRYSTAL_CORRUPTED', 'EARTH_WARDEN'];
+  if (level < 45) return ['FROST_GHOUL', 'GLACIAL_BEAST', 'BLIZZARD_WRAITH'];
+  if (level < 60) return ['MAGMA_BRUTE', 'HELLFIRE_DEMON', 'ABYSSAL_HORROR', 'TSUNAMI_WALKER'];
+  return ['OBSIDIAN_JUGGERNAUT', 'DIAMOND_SENTINEL', 'FLESH_ABOMINATION', 'CHIMERA_BEAST'];
 }
 
 function generateDailyBoard(guildName) {
@@ -1103,6 +1107,9 @@ module.exports = {
   tagGuildMembers,
 
   addGuildPoints,
+  addGuildBalance,
+  updateBoardProgress,
+  displayGuildBoard,
   getGuildPoints,
   getGuildPointsLeaderboard,
   awardPointsForActivity,
