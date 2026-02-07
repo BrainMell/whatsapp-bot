@@ -33,7 +33,7 @@ const STARTER_CLASSES = {
         id: 'APPRENTICE',
         name: 'Apprentice',
         icon: '🔮',
-        desc: 'Magic beginner with potential',
+        desc: 'A dedicated student of the arcane arts. While their initial spells are weak, their potential for growth into powerful mages or warlocks is unmatched.',
         tier: 'STARTER',
         stats: { hp: 80, atk: 5, def: 4, mag: 18, spd: 9, luck: 8, crit: 10 },
         evolves_into: ['MAGE', 'WARLOCK', 'ELEMENTALIST', 'NECROMANCER', 'CHRONOMANCER']
@@ -310,7 +310,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 130, atk: 17, def: 9, mag: 4, spd: 16, luck: 11, crit: 20 },
         requirement: { level: 10, questsCompleted: 3, gold: 5000 },
         evolutionCost: 5000,
-        passive: { name: 'Bushido', desc: 'Gain +20% ATK and DEF when honorable.' }
+        passive: { name: 'Bushido', desc: 'Gain +20% ATK and DEF when honorable.' },
+        evolves_into: ['SHOGUN']
+    },
+    SHOGUN: {
+        id: 'SHOGUN',
+        name: 'Shogun',
+        icon: '🏯⚔️',
+        desc: 'Supreme military commander, master of the battlefield.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'SAMURAI',
+        role: 'DPS',
+        stats: { hp: 280, atk: 45, def: 25, mag: 10, spd: 22, luck: 15, crit: 30 },
+        requirement: { level: 30, questsCompleted: 15, victories: 200, gold: 50000 },
+        evolutionCost: 50000,
+        passive: { name: 'Commanders Will', desc: 'Party deals 20% more physical damage.' }
     },
 
     NINJA: {
@@ -324,7 +338,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 95, atk: 16, def: 4, mag: 5, spd: 22, luck: 16, crit: 28 },
         requirement: { level: 10, questsCompleted: 3, gold: 5000 },
         evolutionCost: 5000,
-        passive: { name: 'Shadow Arts', desc: 'First strike always guaranteed crit.' }
+        passive: { name: 'Shadow Arts', desc: 'First strike always guaranteed crit.' },
+        evolves_into: ['KAGE']
+    },
+    KAGE: {
+        id: 'KAGE',
+        name: 'Kage',
+        icon: '🌑🥷',
+        desc: 'The shadow that rules from the darkness.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'NINJA',
+        role: 'DPS',
+        stats: { hp: 200, atk: 48, def: 12, mag: 15, spd: 50, luck: 25, crit: 45 },
+        requirement: { level: 30, questsCompleted: 15, shadowKills: 100, gold: 50000 },
+        evolutionCost: 50000,
+        passive: { name: 'Absolute Stealth', desc: '50% base Evasion. Never missed by attacks.' }
     },
 
     DRAGONSLAYER: {
@@ -338,7 +366,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 190, atk: 14, def: 13, mag: 3, spd: 7, luck: 8, crit: 10 },
         requirement: { level: 10, questsCompleted: 3, gold: 5000 },
         evolutionCost: 5000,
-        passive: { name: 'Dragon Bane', desc: 'Deal 3x damage to dragons.' }
+        passive: { name: 'Dragon Bane', desc: 'Deal 3x damage to dragons.' },
+        evolves_into: ['DRAGON_GOD']
+    },
+    DRAGON_GOD: {
+        id: 'DRAGON_GOD',
+        name: 'Dragon God',
+        icon: '🐲👑',
+        desc: 'Ascended being with the power of the ancient dragons.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'DRAGONSLAYER',
+        role: 'TANK',
+        stats: { hp: 420, atk: 35, def: 35, mag: 20, spd: 12, luck: 15, crit: 15 },
+        requirement: { level: 30, questsCompleted: 15, dragonsKilled: 50, gold: 50000 },
+        evolutionCost: 50000,
+        passive: { name: 'Dragon Heart', desc: 'Immune to all status effects. 50% damage reduction.' }
     },
 
     CLERIC: {
@@ -397,7 +439,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
         requirement: { level: 10, questsCompleted: 3, gold: 5000 },
         evolutionCost: 5000,
-        passive: { name: 'Inspiring Song', desc: 'Party members gain +10% all stats.' }
+        passive: { name: 'Inspiring Song', desc: 'Party members gain +10% all stats.' },
+        evolves_into: ['VIRTUOSO']
+    },
+    VIRTUOSO: {
+        id: 'VIRTUOSO',
+        name: 'Virtuoso',
+        icon: '🎻✨',
+        desc: 'A master of melody whose music can heal souls or break minds.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'BARD',
+        role: 'SUPPORT',
+        stats: { hp: 220, atk: 15, def: 15, mag: 40, spd: 25, luck: 30, crit: 20 },
+        requirement: { level: 30, questsCompleted: 15, songsPlayed: 500, gold: 50000 },
+        evolutionCost: 50000,
+        passive: { name: 'Grand Finale', desc: 'When a player dies, 25% chance to revive them instantly with full HP.' }
     },
 
     ARTIFICER: {
@@ -411,7 +467,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 108, atk: 9, def: 9, mag: 15, spd: 11, luck: 11, crit: 11 },
         requirement: { level: 10, questsCompleted: 3, gold: 5000 },
         evolutionCost: 5000,
-        passive: { name: 'Tech Mastery', desc: 'Summons deal 40% more damage.' }
+        passive: { name: 'Tech Mastery', desc: 'Summons deal 40% more damage.' },
+        evolves_into: ['GRAND_INVENTOR']
+    },
+    GRAND_INVENTOR: {
+        id: 'GRAND_INVENTOR',
+        name: 'Grand Inventor',
+        icon: '🦾⚙️',
+        desc: 'Pioneer of the arcane-tech revolution.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'ARTIFICER',
+        role: 'SUPPORT',
+        stats: { hp: 250, atk: 20, def: 25, mag: 30, spd: 18, luck: 20, crit: 15 },
+        requirement: { level: 30, questsCompleted: 15, itemsCrafted: 100, gold: 50000 },
+        evolutionCost: 50000,
+        passive: { name: 'Hyper-Efficiency', desc: 'Crafting always yields double results. All summons have +50% HP.' }
     },
 
     GOD_HAND: {
@@ -425,7 +495,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 200, atk: 40, def: 20, mag: 20, spd: 30, luck: 15, crit: 15 },
         requirement: { level: 25, questsCompleted: 10, gold: 15000 },
         evolutionCost: 15000,
-        passive: { name: 'Divine Fist', desc: 'Basic attacks have a 10% chance to stun for 2 turns.' }
+        passive: { name: 'Divine Fist', desc: 'Basic attacks have a 10% chance to stun for 2 turns.' },
+        evolves_into: ['DIVINE_FIST']
+    },
+    DIVINE_FIST: {
+        id: 'DIVINE_FIST',
+        name: 'Divine Fist',
+        icon: '🌌👊',
+        desc: 'A martial legend who can shatter stars with a punch.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'GOD_HAND',
+        role: 'DPS',
+        stats: { hp: 400, atk: 70, def: 30, mag: 25, spd: 45, luck: 20, crit: 25 },
+        requirement: { level: 40, questsCompleted: 25, bossKills: 10, gold: 100000 },
+        evolutionCost: 100000,
+        passive: { name: 'One-Inch Punch', desc: 'Ignores 100% of enemy defense.' }
     },
 
     REAPER: {
@@ -439,7 +523,21 @@ const EVOLVED_CLASSES = {
         stats: { hp: 160, atk: 35, def: 10, mag: 30, spd: 15, luck: 10, crit: 25 },
         requirement: { level: 25, questsCompleted: 10, gold: 12000 },
         evolutionCost: 12000,
-        passive: { name: 'Soul Harvest', desc: 'Gain 10% HP and 10% Energy back whenever an enemy dies.' }
+        passive: { name: 'Soul Harvest', desc: 'Gain 10% HP and 10% Energy back whenever an enemy dies.' },
+        evolves_into: ['DEATH_LORD']
+    },
+    DEATH_LORD: {
+        id: 'DEATH_LORD',
+        name: 'Death Lord',
+        icon: '🌌💀👑',
+        desc: 'The sovereign of the underworld.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'REAPER',
+        role: 'DPS',
+        stats: { hp: 350, atk: 65, def: 20, mag: 50, spd: 30, luck: 15, crit: 35 },
+        requirement: { level: 40, questsCompleted: 25, soulCount: 1000, gold: 100000 },
+        evolutionCost: 100000,
+        passive: { name: 'Soul Sovereignty', desc: 'Every kill grants a permanent +1 ATK (Max +500).' }
     },
 
     AVATAR: {

@@ -113,6 +113,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'lb', desc: 'Alias for leaderboard.', usage: 'lb' },
     { cmd: 'upgrade inv', desc: 'Expand your inventory slot capacity.', usage: 'upgrade inv' },
     { cmd: 'classes', desc: 'View the class tree and evolution paths.', usage: 'classes' },
+    { cmd: 'guild board', desc: 'View your guild\'s daily monster hunting board.', usage: 'guild board' },
     { cmd: 'quest', desc: 'Start a group quest adventure.', usage: 'quest [Rank]' },
     { cmd: 'solo', desc: 'Start a solo quest adventure.', usage: 'solo [Rank]' },
     { cmd: 'join', desc: 'Join an active group quest.', usage: 'join' },

@@ -16,6 +16,30 @@ let globalGuildData = {
   guildInvites: {}
 };
 
+const GUILD_ARCHETYPES = {
+  ADVENTURER: {
+    name: 'Adventurers Guild',
+    icon: '⚔️',
+    description: 'Focuses on monster hunting and combat.',
+    perks: 'Increases XP from monsters by 15%.',
+    questType: 'KILL'
+  },
+  MERCHANT: {
+    name: 'Merchants Guild',
+    icon: '💰',
+    description: 'Focuses on commerce and wealth.',
+    perks: 'Increases item sell value by 10%.',
+    questType: 'EARN'
+  },
+  RESEARCH: {
+    name: 'Research Institute',
+    icon: '🧪',
+    description: 'Focuses on study and craft.',
+    perks: 'Reduces crafting material costs by 10%.',
+    questType: 'CRAFT'
+  }
+};
+
 const activeChallenges = new Map();
 
 // types of challenges guilds can throw at each other
@@ -81,6 +105,10 @@ async function loadGuilds() {
             titles,
             createdAt: g.createdAt,
             points: g.xp || 0,
+            level: g.level || 1,
+            balance: g.balance || 0,
+            type: g.type || 'ADVENTURER',
+            dailyBoard: g.dailyBoard || { targets: [] },
             pointsHistory: g.logs || [],
             motto: g.motto || "Adapt or be Infected.",
             buildings: g.upgrades ? (g.upgrades instanceof Map ? Object.fromEntries(g.upgrades) : g.upgrades) : {}
@@ -130,6 +158,10 @@ async function syncGuild(guildName) {
                     title: g.titles[jid] || 'Member'
                 })),
                 xp: g.points || 0,
+                level: g.level || 1,
+                balance: g.balance || 0,
+                type: g.type || 'ADVENTURER',
+                dailyBoard: g.dailyBoard || { targets: [] },
                 motto: g.motto || "Adapt or be Infected.",
                 upgrades: g.buildings || {},
                 logs: g.pointsHistory || []
@@ -179,7 +211,7 @@ function getGuildInfo() {
 }
 
 // make a new guild
-function createGuild(guildName, creatorJid) {
+function createGuild(guildName, creatorJid, archetype = 'ADVENTURER') {
   const info = globalGuildData;
 
   if (info.guildOwners[creatorJid]) {
@@ -196,6 +228,8 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     return { success: false, message: "❌ Guild name already taken!" };
   }
 
+  const type = GUILD_ARCHETYPES[archetype.toUpperCase()] ? archetype.toUpperCase() : 'ADVENTURER';
+
   info.guilds[guildName] = {
     members: [creatorJid],
     owner: creatorJid,
@@ -203,6 +237,9 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     titles: {},
     createdAt: Date.now(),
     points: 0,
+    level: 1,
+    type: type,
+    dailyBoard: { lastUpdate: Date.now(), targets: [] },
     pointsHistory: [],
     motto: "Adapt or be Infected.",
     // 💡 GUILD BUILDINGS
@@ -226,6 +263,48 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
 
 🏰 You are the Guild Master!`
   };
+}
+
+function getAvailableTargets(level) {
+  // Logic to return monster IDs based on level
+  // Using some from classEncounters or hardcoded ones for now
+  if (level < 10) return ['FLAME', 'DROWNED_ONE', 'STALKER'];
+  return ['ELDER_FLAME', 'LEVIATHAN_SPAWN', 'RAZOR_CLAW'];
+}
+
+function generateDailyBoard(guildName) {
+  const guild = globalGuildData.guilds[guildName];
+  if (!guild) return;
+
+  const avgLevel = (guild.level || 1) * 5; 
+  const targets = [];
+  
+  if (guild.type === 'MERCHANT') {
+    const targetZeni = Math.floor((guild.level * 5000) + (guild.members.length * 2000));
+    targets.push({ type: 'EARN_ZENI', count: targetZeni, current: 0, label: 'Earn Zeni' });
+  } else if (guild.type === 'RESEARCH') {
+    const targetItems = Math.floor((guild.level * 2) + guild.members.length);
+    targets.push({ type: 'CRAFT_ITEMS', count: targetItems, current: 0, label: 'Craft Items' });
+  } else {
+    const targetPool = getAvailableTargets(avgLevel);
+    for (let i = 0; i < 3; i++) {
+      const type = targetPool[Math.floor(Math.random() * targetPool.length)];
+      const count = Math.floor(Math.random() * 5 * guild.members.length) + 5;
+      targets.push({ type, count, current: 0, label: `Kill ${type}` });
+    }
+  }
+
+  guild.dailyBoard = {
+    lastUpdate: Date.now(),
+    targets: targets,
+    completed: false,
+    rewards: {
+      xp: 500 * (guild.level || 1),
+      gold: 1000 * (guild.level || 1)
+    }
+  };
+
+  syncGuild(guildName);
 }
 
 // update guild motto
@@ -727,6 +806,103 @@ ${message || 'Guild members, gather!'}
 //========================================
 
 //==================this part handles guild points and activity rewards==================
+function getUserGuild(userJid) {
+  return globalGuildData.memberGuilds[userJid];
+}
+
+function addGuildBalance(guildName, amount) {
+  const guild = globalGuildData.guilds[guildName];
+  if (!guild) return;
+  guild.balance = (guild.balance || 0) + amount;
+  syncGuild(guildName);
+}
+
+function updateBoardProgress(guildName, targetType, amount) {
+  const guild = globalGuildData.guilds[guildName];
+  if (!guild || !guild.dailyBoard || !guild.dailyBoard.targets) return;
+
+  // Check if reset needed
+  if (Date.now() - guild.dailyBoard.lastUpdate > 86400000) {
+    generateDailyBoard(guildName);
+    return;
+  }
+
+  let boardUpdated = false;
+  guild.dailyBoard.targets.forEach(t => {
+    // Match EARN_ZENI for Merchant, CRAFT_ITEMS for Research, or specific monster IDs for Adventurer
+    const isMatch = (t.type === targetType) || (t.type === 'CRAFT_ITEMS' && targetType === 'CRAFT');
+    
+    if (isMatch && t.current < t.count) {
+      t.current = Math.min(t.count, t.current + amount);
+      boardUpdated = true;
+    }
+  });
+
+  if (boardUpdated) {
+    const allDone = guild.dailyBoard.targets.every(t => t.current >= t.count);
+    if (allDone && !guild.dailyBoard.completed) {
+        guild.dailyBoard.completed = true;
+        addGuildPoints(guildName, guild.dailyBoard.rewards.xp, "Board Completed");
+        addGuildBalance(guildName, guild.dailyBoard.rewards.gold);
+    }
+    syncGuild(guildName);
+  }
+}
+
+async function displayGuildBoard(sock, chatId, userJid) {
+  const info = globalGuildData;
+  const guildName = info.memberGuilds[userJid];
+  
+  if (!guildName) {
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You are not in a guild!" });
+    return;
+  }
+
+  const guild = info.guilds[guildName];
+  if (!guild.dailyBoard) guild.dailyBoard = { lastUpdate: 0, targets: [] };
+  
+  const lastUpdate = guild.dailyBoard.lastUpdate || 0;
+  if (Date.now() - lastUpdate > 86400000 || !guild.dailyBoard.targets || guild.dailyBoard.targets.length === 0) {
+    generateDailyBoard(guildName);
+  }
+
+  const archetype = GUILD_ARCHETYPES[guild.type] || GUILD_ARCHETYPES.ADVENTURER;
+  const currencySymbol = botConfig.getCurrency().symbol;
+  
+  let msg = `📜 *${guildName.toUpperCase()} BOARD* 📜\n`;
+  msg += `🏛️ Rank: ${guild.level} | Type: ${archetype.name}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  
+  msg += `📍 *DAILY TARGETS:*\n`;
+  
+  guild.dailyBoard.targets.forEach((t, i) => {
+    const progress = Math.min(100, Math.floor((t.current / t.count) * 100));
+    const bar = "█".repeat(Math.floor(progress / 10)) + "░".repeat(10 - Math.floor(progress / 10));
+    
+    let targetDesc = t.label || t.type;
+    let progressDesc = `${t.current}/${t.count}`;
+    
+    if (t.type === 'EARN_ZENI') {
+        progressDesc = `${currencySymbol}${t.current.toLocaleString()} / ${currencySymbol}${t.count.toLocaleString()}`;
+    }
+
+    msg += `${i + 1}. ${targetDesc}\n`;
+    msg += `   [${bar}] ${progress}% (${progressDesc})\n\n`;
+  });
+  
+  if (guild.dailyBoard.completed) {
+      msg += `✅ *STATUS:* COMPLETED!\n\n`;
+  } else {
+      msg += `🎁 *REWARDS (Shared):*\n`;
+      msg += `💰 ${guild.dailyBoard.rewards.gold} Zeni\n`;
+      msg += `⭐ ${guild.dailyBoard.rewards.xp} Guild XP\n\n`;
+  }
+  
+  msg += `⏰ _Board refreshes daily._`;
+
+  await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+}
+
 function addGuildPoints(guildName, points, reason) {
   const info = globalGuildData;
 
@@ -737,9 +913,18 @@ function addGuildPoints(guildName, points, reason) {
   const guild = info.guilds[guildName];
 
   if (!guild.points) guild.points = 0;
+  if (!guild.level) guild.level = 1;
   if (!guild.pointsHistory) guild.pointsHistory = [];
 
   guild.points += points;
+  
+  // 💡 LEVEL UP LOGIC
+  const xpNeeded = guild.level * 1000;
+  if (guild.points >= xpNeeded) {
+    guild.points -= xpNeeded;
+    guild.level++;
+  }
+
   guild.pointsHistory.push({
     points,
     reason,
@@ -752,7 +937,7 @@ function addGuildPoints(guildName, points, reason) {
 
   syncGuild(guildName);
 
-  return { success: true, newTotal: guild.points };
+  return { success: true, newTotal: guild.points, level: guild.level };
 }
 
 function getGuildPoints(guildName) {

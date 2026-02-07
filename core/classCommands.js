@@ -21,7 +21,11 @@ async function displayClasses(sock, chatId) {
     };
     
     Object.values(classes).forEach(c => {
-        const roleKey = c.tier === 'STARTER' ? 'STARTER' : (c.role || 'DPS');
+        let roleKey = c.tier === 'STARTER' ? 'STARTER' : (c.role || 'DPS');
+        // Map sub-roles to main roles
+        if (roleKey === 'MAGIC_DPS') roleKey = 'MAGE';
+        if (roleKey === 'BRUTE') roleKey = 'TANK';
+        
         if (roles[roleKey]) {
             roles[roleKey].push(c);
         } else {

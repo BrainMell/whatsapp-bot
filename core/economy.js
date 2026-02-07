@@ -426,6 +426,18 @@ function sellItem(userId, itemId, quantity = 1) {
     user.wallet += value;
     user.stats.totalEarned += value;
     
+    // 💡 GUILD CONTRIBUTION
+    const guilds = require('./guilds');
+    const userGuild = guilds.getUserGuild(userId);
+    let guildMsg = "";
+    if (userGuild) {
+        const contribution = Math.floor(value * 0.05); // 5% goes to guild
+        guilds.addGuildPoints(userGuild, contribution, `item sold: ${itemId}`);
+        guilds.addGuildBalance(userGuild, Math.floor(contribution / 2));
+        guilds.updateBoardProgress(userGuild, 'EARN_ZENI', value); // Track earning progress
+        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house! (+${contribution} XP)`;
+    }
+
     if (typeof user.inventory[itemId] === 'number') {
         user.inventory[itemId] -= quantity;
         if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
@@ -435,7 +447,7 @@ function sellItem(userId, itemId, quantity = 1) {
     }
     
     scheduleSave(userId);
-    return { success: true, msg: `💰 Sold ${quantity}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}` };
+    return { success: true, msg: `💰 Sold ${quantity}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
 }
 
 // get user's bag
