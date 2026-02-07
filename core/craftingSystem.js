@@ -399,7 +399,39 @@ function canCraft(userId, recipeId) {
 }
 
 function performCraft(userId, recipeId) {
-    // ... existing performCraft code ...
+    const check = canCraft(userId, recipeId);
+    if (!check.canCraft) return { success: false, message: check.reason };
+
+    const recipe = check.recipe;
+    const user = economy.getUser(userId);
+
+    // 1. Remove ingredients
+    for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
+        inventorySystem.removeItem(userId, ingId, qty);
+    }
+
+    // 2. Add result
+    const resultItem = recipe.result;
+    inventorySystem.addItem(userId, resultItem.id, 1, {
+        name: recipe.name,
+        stats: resultItem.stats || {},
+        slot: resultItem.slot,
+        type: resultItem.stats ? 'EQUIPMENT' : (resultItem.usable ? 'CONSUMABLE' : 'ITEM')
+    });
+
+    // 💡 GUILD BOARD TRACKING
+    const guilds = require('./guilds');
+    const userGuild = guilds.getUserGuild(userId);
+    let guildMsg = "";
+    if (userGuild) {
+        guilds.updateBoardProgress(userGuild, 'CRAFT', 1);
+        guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
+    }
+
+    return { 
+        success: true, 
+        message: `⚒️ **CRAFT SUCCESSFUL: ${recipe.name}**\n\nYou created 1x ${recipe.name}!${guildMsg}` 
+    };
 }
 
 function dismantleItem(userId, itemId) {

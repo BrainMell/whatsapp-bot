@@ -4704,8 +4704,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild create `))
   }
   
   try {
-    const result = guilds.createGuild(guildName, senderJid);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+    const parts = guildName.split('|');
+    const name = parts[0].trim();
+    const archetype = parts[1] ? parts[1].trim() : 'ADVENTURER';
+
+    const result = guilds.createGuild(name, senderJid, archetype);
+    await sock.sendMessage(chatId, { text: BOT_MARKER + result.message + `\n\n💡 Use \`${botConfig.getPrefix()} guild create <name> | <type>\` to choose a path: ADVENTURER, MERCHANT, or RESEARCH.` });
   } catch (err) {
     console.error("Guild create error:", err);
     await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to create guild!" });
@@ -4768,6 +4772,18 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild leave`) {
   } catch (err) {
     console.error("Guild leave error:", err);
     await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to leave guild!" });
+  }
+  await awardProgression(senderJid, chatId);
+  return;
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` guild board
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild board` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} board`) {
+  try {
+    await guilds.displayGuildBoard(sock, chatId, senderJid);
+  } catch (err) {
+    console.error("Guild board error:", err);
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch guild board!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -9818,7 +9834,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
       'profile', 'me', 'whois', 'nickname', 'note', 'likes', 'dislikes', 'hobby', 'personal', 'forget me',
       'level', 'xptop', 'gptop', 'achievements', 'rank', 'adventurer', 'graveyard',
       'wordle', 'wordle start', 'wordle board', 'wordle end', 'wordle stats', 'wordle top',
-      'shop', 'buy', 'evolve', 'character', 'char', 'stats', 'abilities', 'skills', 'skill tree', 'skill up', 'skill reset',
+      'shop', 'buy', 'evolve', 'classes', 'character', 'char', 'stats', 'abilities', 'skills', 'skill tree', 'skill up', 'skill reset',
       'quest', 'solo', 'join', 'stop', 'vote', 'mine', 'recipes', 'craft', 'brew', 'dismantle', 'lore', 'monster guide', 'handbook', 'source',
       'equip', 'unequip', 'inventory', 'bag', 'upgrade inv',
       'duel', 'challenge', 'pvp',

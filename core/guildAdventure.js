@@ -2078,6 +2078,15 @@ async function endCombat(sock, victory, chatId) {
         state.enemies.forEach(e => {
             e.justDied = false;
         });
+
+        // 💡 GUILD BOARD TRACKING
+        const guilds = require('./guilds');
+        const firstPlayerGuild = guilds.getUserGuild(alivePlayers[0]?.jid);
+        if (firstPlayerGuild) {
+            state.enemies.forEach(enemy => {
+                guilds.updateBoardProgress(firstPlayerGuild, enemy.type || enemy.id, 1);
+            });
+        }
         
         setTimeout(() => {
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
