@@ -70,7 +70,7 @@ async function displayClasses(sock, chatId) {
 `;
     }
     
-    msg += `💡 Use `${getPrefix()} evolve` to check your evolution options!`;
+    msg += `💡 Use \`${getPrefix()} evolve\` to check your evolution options!`;
     
     await sock.sendMessage(chatId, { text: msg });
 }
