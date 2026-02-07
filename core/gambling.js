@@ -787,16 +787,8 @@ ${multiplier}x payout!
 
 // ============================================
 // 6. CRASH - Multiplier game
-// ============================================
 
 
-// ============================================
-// 6. CRASH - Aviator-style multiplier game
-// ============================================
-
-// ============================================
-// 6. CRASH - AVIATOR STYLE WITH LIVE SPAM UPDATES
-// ============================================
 
 function startCrash(userId, amount, economyModule, sock, chatId) {
   const user = economyModule.getUser(userId);
