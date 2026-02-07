@@ -1379,16 +1379,12 @@ function loadUserProfile(jid) {
 }
 
 function initializeUserProfile(jid) {
-  // Ensure user document exists first
-  if (!economy.isRegistered(jid)) {
-      // Lazy init for non-registered users in DB
-      // economy.initializeClass(jid); // This creates the user doc
-  }
+  const user = economy.getUser(jid);
   
   return {
     jid: jid,
     whatsappName: null,
-    nickname: null,
+    nickname: user?.nickname || null,
     profilePicture: null,
     notes: [],
     memories: {
@@ -1416,7 +1412,12 @@ function updateUserProfile(jid, updates = {}) {
   
   const profile = user.profile;
   
-  if (updates.nickname !== undefined) profile.nickname = updates.nickname;
+  if (updates.nickname !== undefined) {
+    profile.nickname = updates.nickname;
+    // 💡 RPG SYNC: Also update the main economy nickname so it shows in quests/RPG commands
+    user.nickname = updates.nickname;
+    economy.saveUser(jid);
+  }
   if (updates.whatsappName !== undefined) profile.whatsappName = updates.whatsappName;
   if (updates.profilePicture !== undefined) profile.profilePicture = updates.profilePicture;
   
@@ -2613,6 +2614,11 @@ We are happy to have you here.
         const chatId = m.key.remoteJid;
         const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
         
+        // 💡 GLOBAL CONTEXT HELPERS
+        const user = economy.getUser(senderJid);
+        const userProfile = getUserProfile(senderJid) || initializeUserProfile(senderJid);
+        const senderName = user?.nickname || userProfile?.nickname || m.pushName || senderJid.split('@')[0];
+
         // --- DIAGNOSTIC LOG ---
         const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media";
         console.log(`📩 Processing msg from ${senderJid} in ${chatId}: "${msgText.substring(0, 20)}..."`);
@@ -2847,11 +2853,6 @@ We are happy to have you here.
 
         // Track message for group summaries (after isGroupChat is defined)
         if (isGroupChat && txt && txt.trim() && !isSelf) {
-          let userProfile = getUserProfile(senderJid);
-          if (!userProfile) {
-            userProfile = initializeUserProfile(senderJid);
-          }
-          const senderName = userProfile?.nickname || m.pushName || senderJid.split('@')[0];
           trackGroupMessage(chatId, senderJid, senderName, txt, Date.now());
         }
 
@@ -3452,7 +3453,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             lowerTxt === `${botConfig.getPrefix().toLowerCase()} char` ||
             lowerTxt === `${botConfig.getPrefix().toLowerCase()} stats` ||
             lowerTxt === `${botConfig.getPrefix().toLowerCase()} class`) {
-            const senderName = m.pushName || senderJid.split('@')[0];
             await rpgCommands.displayCharacterSheet(sock, chatId, senderJid, senderName);
             return;
         }
@@ -7457,9 +7457,6 @@ if (isGroupChat && !senderIsAdmin) {
           const pending = pendingTagRequests.get(senderJid);
           
           if (lowerTxt === 'yes' || lowerTxt === 'y' || lowerTxt === 'yeah' || lowerTxt === 'yep') {
-            const senderProfile = getUserProfile(senderJid);
-            const senderName = senderProfile?.nickname || senderJid.split('@')[0];
-            
             const groupMetadata = await sock.groupMetadata(pending.chatId);
             const participants = groupMetadata.participants.map(p => p.id);
             
@@ -7540,7 +7537,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} join`) {
         await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\`` });
         return;
     }
-    const senderName = m.pushName || senderJid.split('@')[0];
     const result = guildAdventure.joinAdventure(chatId, senderJid, senderName);
     await sock.sendMessage(chatId, { text: result });
     return;
@@ -7580,7 +7576,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
         if (state) state.onHardcoreDeath = addToGraveyard;
         
         // initAdventure already auto-joins for solo, so we don't call joinAdventure again
-        const senderName = m.pushName || senderJid.split('@')[0];
         
         let startMsg = `╔════════════════════╗\n`;
         startMsg += `   🗡️  *QUEST STARTING* \n`;
@@ -7637,7 +7632,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve `)) {
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill tree` || 
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} st` ||
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} skilltree`) {
-    const senderName = m.pushName || senderJid.split('@')[0];
     await skillCommands.displaySkillTree(sock, chatId, senderJid, senderName);
     return;
 }
@@ -7645,7 +7639,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill tree` ||
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve`)) {
     const parts = txt.split(' ');
     const args = parts.slice(1);
-    const senderName = m.pushName || senderJid.split('@')[0];
     await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, args);
     return;
 }
@@ -7691,7 +7684,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill learn`) ||
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} abilities` || 
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} skills` || 
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} combat abilities`) {
-    const senderName = m.pushName || senderJid.split('@')[0];
     await skillCommands.viewAbilities(sock, chatId, senderJid, senderName);
     return;
 }
@@ -7848,13 +7840,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} vote` || lowerTxt.start
     }
     const result = guildAdventure.handleVote(chatId, senderJid, choice);
     await sock.sendMessage(chatId, { text: result });
-    return;
-}
-
-// VIEW ABILITIES
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skills`) {
-    const senderName = m.pushName || senderJid.split('@')[0];
-    await skillCommands.viewAbilities(sock, chatId, senderJid, senderName);
     return;
 }
 
@@ -9659,7 +9644,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttttt`)) {
     }
 
     const mentionedJids = target ? [target] : [];
-    const senderName = m.pushName || 'Player';
     await tictactoe.handleStartGame(sock, chatId, senderJid, mentionedJids, BOT_MARKER, m, 16);
     return;
 }
@@ -9681,7 +9665,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tttt`)) {
     }
 
     const mentionedJids = target ? [target] : [];
-    const senderName = m.pushName || 'Player';
     await tictactoe.handleStartGame(sock, chatId, senderJid, mentionedJids, BOT_MARKER, m, 8);
     return;
 }
@@ -9715,14 +9698,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
 
     const mentionedJids = target ? [target] : [];
     
-    const senderName = m.pushName || 'Player';
     await tictactoe.handleStartGame(sock, chatId, senderJid, mentionedJids, BOT_MARKER, m, 3);
     return;
 }
 
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} move `)) {
     const move = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} move `, '').trim();
-    const senderName = m.pushName || 'Player';
     return await tictactoe.handleMove(sock, chatId, senderJid, move, BOT_MARKER, m, senderName);
 }
 // ============================================
@@ -9762,8 +9743,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle start` || lowerT
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle easy` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle e` ||
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle medium` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle m` ||
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle hard` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle h`) {
-  
-  const senderName = m.pushName || 'Player';
   
   // Determine difficulty from command
   let difficulty = 'medium'; // default
