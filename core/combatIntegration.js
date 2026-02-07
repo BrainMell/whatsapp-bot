@@ -326,7 +326,11 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
     }
     
     if (!imageResult.success) {
-        return imageResult;
+        return {
+            success: false,
+            error: imageResult.error,
+            caption: caption // Include caption even on failure
+        };
     }
     
     return {

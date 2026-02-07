@@ -17,6 +17,7 @@ const progression = require('./progression');
 const skillTree = require('./skillTree');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
+const guilds = require('./guilds');
 const bossMechanics = require('./bossMechanics');
 const classEncounters = require('./classEncounters');
 const combatIntegration = require('./combatIntegration');
@@ -1950,7 +1951,9 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
 
 async function endCombat(sock, victory, chatId) {
     const state = getGameState(chatId);
-    if (!state) return;
+    if (!state || state.isEndingCombat) return;
+    state.isEndingCombat = true; // Guard to prevent double processing
+
     console.log(`[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`);
     state.inCombat = false;
     
@@ -2080,7 +2083,6 @@ async function endCombat(sock, victory, chatId) {
         });
 
         // 💡 GUILD BOARD TRACKING
-        const guilds = require('./guilds');
         const firstPlayerGuild = guilds.getUserGuild(alivePlayers[0]?.jid);
         if (firstPlayerGuild) {
             state.enemies.forEach(enemy => {
@@ -2089,9 +2091,11 @@ async function endCombat(sock, victory, chatId) {
         }
         
         setTimeout(() => {
+            state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
             nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-        }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
+        }, state.solo ? 1000 : GAME_CONFIG.BREAK_TIME); // Added 1s delay for solo
     } else {
+        state.isEndingCombat = false;
         if (state.mode === 'PERMADEATH') {
             state.active = false;
         }
@@ -2223,7 +2227,7 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
     // Auto-join for solo
     if (solo && senderJid) {
         const user = economy.getUser(senderJid);
-        const name = user?.profile?.nickname || senderJid.split('@')[0];
+        const name = user?.nickname || user?.profile?.nickname || senderJid.split('@')[0];
         state.players.push({
             jid: senderJid,
             name: name,
@@ -2458,18 +2462,32 @@ async function openShop(sock, chatId) {
         console.error("Failed to send shop menu in openShop:", err.message);
     }
     
+    const shopTime = state.solo ? 15000 : GAME_CONFIG.SHOP_TIME;
     state.timers.shop = setTimeout(() => {
         state.phase = 'PLAYING';
         nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
-    }, GAME_CONFIG.SHOP_TIME);
+    }, shopTime);
 }
 
 async function nextStage(sock, groq, chatId) {
     const state = getGameState(chatId);
-    if (!state || state.isProcessing) return;
+    if (!state) return;
+    
+    console.log(`[Quest] nextStage triggered for ${chatId}. isProcessing: ${state.isProcessing}, Encounter: ${state.encounter}/${state.maxEncounters}`);
+    
+    if (state.isProcessing) {
+        console.warn(`[Quest] nextStage blocked: already processing for ${chatId}`);
+        // Safety: if stuck for more than 30s, force clear
+        if (state.lastProcessTime && Date.now() - state.lastProcessTime > 30000) {
+            console.error(`[Quest] EMERGENCY: Clearing stuck isProcessing for ${chatId}`);
+            state.isProcessing = false;
+        } else {
+            return;
+        }
+    }
+    
     state.isProcessing = true;
-
-    console.log(`[Quest] Advancing to encounter ${state.encounter + 1}/${state.maxEncounters}`);
+    state.lastProcessTime = Date.now();
 
     try {
         if (!groq) groq = state.groq;
