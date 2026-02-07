@@ -19,8 +19,16 @@ function getMarketCap() {
 function updatePrices() {
     for (const symbol in STOCKS) {
         const s = STOCKS[symbol];
-        const change = (Math.random() * 2 - 1) * s.volatility + s.trend;
-        s.price = Math.max(1, Math.floor(s.price * (1 + change)));
+        // Dynamic trend shift (occasionally change direction)
+        if (Math.random() < 0.1) s.trend *= -1;
+        
+        const variance = (Math.random() * 2 - 1) * s.volatility;
+        const change = variance + s.trend;
+        
+        s.price = Math.max(10, Math.floor(s.price * (1 + change)));
+        
+        // Cap price at 1M
+        if (s.price > 1000000) s.price = 1000000;
     }
 }
 
