@@ -2898,11 +2898,6 @@ const SKILL_TREES = {
         icon: '🧘',
         skillPointsPerLevel: 3,
         trees: {
-    ZENMASTER: {
-        name: 'Zenmaster',
-        icon: '🧘',
-        skillPointsPerLevel: 3,
-        trees: {
             ZEN: {
                 name: 'Supreme Zen',
                 icon: '🧘',
