@@ -196,8 +196,8 @@ async function handleEvolution(sock, chatId, senderJid) {
     });
     
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `💬 Choose: lexiblePrefix} evolve <#>flexiblePrefix}\n`;
-    msg += `📌 Example: lexiblePrefix} evolve 1flexiblePrefix}`;
+    msg += `💬 Choose: \`${getPrefix()} evolve <#>\`\n`;
+    msg += `📌 Example: \`${getPrefix()} evolve 1\``;
     
     await sock.sendMessage(chatId, { text: msg });
     
@@ -252,7 +252,7 @@ async function handleEquipment(senderJid, item) {
     
     return {
         success: true,
-        message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use lexiblePrefix} equip ${item.id} ${item.slot}flexiblePrefix} to wear it.`
+        message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use \`${getPrefix()} equip ${item.id} ${item.slot}\` to wear it.`
     };
 }
 
@@ -271,7 +271,7 @@ async function handleConsumable(senderJid, item) {
     
     return {
         success: true,
-        message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with lexiblePrefix} combat item <number>flexiblePrefix}`
+        message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with \`${getPrefix()} combat item <number>\``
     };
 }
 
