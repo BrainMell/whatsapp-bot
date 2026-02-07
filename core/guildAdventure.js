@@ -1349,6 +1349,16 @@ async function processCombatTurn(sock, chatId) {
             // Check if dead from status effects
             if (activeActor.stats.hp <= 0) {
                 await handleDeath(sock, activeActor, chatId);
+                
+                // 💡 CRITICAL FIX: Check if combat should end immediately
+                const playersDead = state.players.every(p => p.isDead);
+                const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
+                
+                if (playersDead || enemiesDead) {
+                    await endCombat(sock, enemiesDead, chatId);
+                    return;
+                }
+                
                 continue;
             }
 
@@ -1656,7 +1666,7 @@ async function performAction(sock, player, action, chatId) {
     }
     
     // Process the turn image update in nextTurn/processCombatTurn
-    nextTurn(sock, turnInfo, chatId);
+    await nextTurn(sock, turnInfo, chatId);
 }
 
 async function performEnemyAction(sock, enemy, chatId) {
@@ -1679,7 +1689,10 @@ async function performEnemyAction(sock, enemy, chatId) {
     if (isSmallMob && state.enemies.filter(e => e.stats.hp > 0).length === 1 && Math.random() < 0.2) {
         resultMsg += `${enemy.icon} *${enemy.name}* is terrified and Cowers! (DEF increased)`;
         applyStatusEffect(enemy, 'shield', 1, 50);
-        return await sock.sendMessage(state.chatId, { text: resultMsg });
+        await sock.sendMessage(state.chatId, { text: resultMsg });
+        return setTimeout(() => {
+            nextTurn(sock, null, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+        }, turnDelay);
     }
 
     // 🧠 AI PERSONALITY: AGGRESSIVE (Heavy mobs / Bosses)
@@ -1882,30 +1895,35 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
     
     // 💡 Generate incremental combat image if action just happened
     if (lastTurnInfo) {
-        const scene = await combatIntegration.generateCombatScene(
-            state.players,
-            state.enemies,
-            'TURN',
-            {
-                turnInfo: lastTurnInfo,
-                backgroundPath: state.backgroundPath,
-                rank: state.dungeonRank
-            }
-        );
-        if (scene.success) {
-            try {
-                if (scene.buffer) {
-                    await sock.sendMessage(state.chatId, { image: scene.buffer, caption: scene.caption });
-                } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
-                    await sock.sendMessage(state.chatId, { image: fs.readFileSync(scene.imagePath), caption: scene.caption });
-                    setTimeout(() => { if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath); }, 5000);
-                } else {
-                    await sock.sendMessage(state.chatId, { text: scene.caption });
+        try {
+            const scene = await combatIntegration.generateCombatScene(
+                state.players,
+                state.enemies,
+                'TURN',
+                {
+                    turnInfo: lastTurnInfo,
+                    backgroundPath: state.backgroundPath,
+                    rank: state.dungeonRank
                 }
-            } catch (err) {
-                console.error("Failed to send turn image in nextTurn:", err.message);
-                await sock.sendMessage(state.chatId, { text: scene.caption });
+            );
+            if (scene.success) {
+                try {
+                    if (scene.buffer) {
+                        await sock.sendMessage(state.chatId, { image: scene.buffer, caption: scene.caption });
+                    } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+                        await sock.sendMessage(state.chatId, { image: fs.readFileSync(scene.imagePath), caption: scene.caption });
+                        setTimeout(() => { if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath); }, 5000);
+                    } else {
+                        await sock.sendMessage(state.chatId, { text: scene.caption });
+                    }
+                } catch (msgErr) {
+                    console.error("Failed to send turn image message in nextTurn:", msgErr.message);
+                    // Try text fallback once, if it fails, we still continue to check for combat end
+                    try { await sock.sendMessage(state.chatId, { text: scene.caption }); } catch {}
+                }
             }
+        } catch (err) {
+            console.error("Critical error in nextTurn image generation:", err.message);
         }
     }
 
@@ -1914,7 +1932,14 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
     const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
     
     if (playersDead || enemiesDead) {
-        await endCombat(sock, enemiesDead, chatId);
+        try {
+            await endCombat(sock, enemiesDead, chatId);
+        } catch (endErr) {
+            console.error("Critical error in endCombat:", endErr.message);
+            // Emergency cleanup if endCombat crashed
+            state.inCombat = false;
+            state.isProcessing = false;
+        }
         return;
     }
     
@@ -1926,7 +1951,7 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
 async function endCombat(sock, victory, chatId) {
     const state = getGameState(chatId);
     if (!state) return;
-    console.log(`[Quest] Combat ended. Victory: ${victory}`);
+    console.log(`[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`);
     state.inCombat = false;
     
     // Calculate rewards
@@ -1956,32 +1981,43 @@ async function endCombat(sock, victory, chatId) {
     const goldPerPlayer = Math.floor(totalGold / playerCount);
     
     const encounterType = state.currentEncounterType || 'COMBAT';
-    const bossName = state.enemies[0]?.id || null; 
-    const lootResults = lootSystem.distributeLoot(
-        alivePlayers,
-        encounterType,
-        bossName,
-        state.difficulty
-    );
+    const bossName = state.enemies[0]?.type || state.enemies[0]?.id || null; 
+    
+    let lootResults = { items: [], gold: totalGold, announcements: [] };
+    try {
+        lootResults = lootSystem.distributeLoot(
+            alivePlayers,
+            encounterType,
+            bossName,
+            state.difficulty
+        );
+    } catch (lootErr) {
+        console.error("Loot distribution failed:", lootErr.message);
+    }
     
     const rewards = {
         gold: totalGold,
         xp: totalXP,
-        items: lootResults.items.map(item => ({ name: item.name || item.id })) // Use name if available
+        items: (lootResults.items || []).map(item => ({ name: item.name || item.id })) 
     };
 
     // Generate final combat image
-    const scene = await combatIntegration.generateCombatScene(
-        state.players,
-        state.enemies,
-        'END',
-        {
-            victory: victory,
-            rewards: rewards,
-            rank: state.dungeonRank,
-            backgroundPath: state.backgroundPath
-        }
-    );
+    let scene = { success: false, caption: victory ? "✅ Victory!" : "💀 Defeat..." };
+    try {
+        scene = await combatIntegration.generateCombatScene(
+            state.players,
+            state.enemies,
+            'END',
+            {
+                victory: victory,
+                rewards: rewards,
+                rank: state.dungeonRank,
+                backgroundPath: state.backgroundPath
+            }
+        );
+    } catch (sceneErr) {
+        console.error("End combat scene generation failed:", sceneErr.message);
+    }
 
     if (scene.success) {
         try {
@@ -2526,6 +2562,15 @@ async function executeEncounter(sock, groq, encounterType, chatId) {
         );
     }
     
+    if (!encounter) {
+        console.error(`❌ Failed to generate encounter of type: ${encounterType}`);
+        // Try to recover by skipping or ending
+        setTimeout(() => {
+            nextStage(sock, groq, chatId).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
+        }, 1000);
+        return;
+    }
+
     state.currentEncounter = encounter;
     state.currentEncounterType = encounter.type;
 

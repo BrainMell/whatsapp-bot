@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const connectDB = require('../db');
 const User = require('./models/User');
+const Guild = require('./models/Guild');
+const Loan = require('./models/Loan');
 const readline = require('readline');
 
 const rl = readline.createInterface({
@@ -14,21 +16,33 @@ async function wipeUsers() {
         await connectDB();
         console.log("✅ Connected.");
 
-        const count = await User.countDocuments();
-        console.log(`\n⚠️  WARNING: You are about to DELETE ALL ${count} USERS from the database.`);
-        console.log("⚠️  This action is IRREVERSIBLE.");
-        console.log("⚠️  This will reset economy, levels, and profiles for everyone.");
+        console.log("\n🛑 CRITICAL: The bot server MUST be turned OFF before running this script.");
+        console.log("If the bot is ON, it will overwrite the database with its memory cache.");
 
-        rl.question('\n🔴 Are you sure you want to proceed? Type "DELETE" to confirm: ', async (answer) => {
-            if (answer === 'DELETE') {
-                console.log("\n🗑️  Wiping User collection...");
+        const userCount = await User.countDocuments();
+        const guildCount = await Guild.countDocuments();
+        const loanCount = await Loan.countDocuments();
+
+        console.log(`\n⚠️  WARNING: You are about to DELETE EVERYTHING:`);
+        console.log(`- ${userCount} Users`);
+        console.log(`- ${guildCount} Guilds`);
+        console.log(`- ${loanCount} Active Loans`);
+        console.log("\n⚠️  This action is IRREVERSIBLE.");
+
+        rl.question('\n🔴 Are you sure you want to proceed? Type "WIPE EVERYTHING" to confirm: ', async (answer) => {
+            if (answer === 'WIPE EVERYTHING') {
+                console.log("\n🗑️  Wiping database collections...");
+                
                 await User.deleteMany({});
-                console.log("✅ All user data has been cleared.");
+                console.log("✅ User data cleared.");
                 
-                // Optional: Check if you want to clear other related collections
-                // await Profile.deleteMany({}); 
+                await Guild.deleteMany({});
+                console.log("✅ Guild data cleared.");
+
+                await Loan.deleteMany({});
+                console.log("✅ Loan data cleared.");
                 
-                console.log("✨ Ready for new information extraction system.");
+                console.log("\n✨ Database is now fresh. You can now restart the bot.");
             } else {
                 console.log("\n❌ Operation cancelled. No data was deleted.");
             }

@@ -6225,6 +6225,7 @@ ${(pick.synopsis || '').slice(0, 280)}...
     await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch trending anime.' }, { quoted: m });
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
+  return;
 }
 
 
@@ -6320,6 +6321,7 @@ _Legacy Score factors in community size, hardcore fans, and historical market da
     console.error(err);
     await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Ranking Engine Error." });
   }
+  return;
 }
 
 // `${botConfig.getPrefix().toLowerCase()}` anime airing  (improved: short list + pick highlight)
@@ -6369,6 +6371,7 @@ ${(highlight.synopsis || '').slice(0, 260)}...
     await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch airing anime.' }, { quoted: m });
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
+  return;
 }
 
 
@@ -6406,6 +6409,7 @@ ${(pick.synopsis || 'Plot details coming soon.').slice(0, 300)}...
     await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ API is busy. Please try again in a few seconds." });
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
+  return;
 }
 
 
@@ -6442,6 +6446,7 @@ ${(pick.synopsis || 'No synopsis.').slice(0, 350)}...
       await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ All anime services are currently busy. Try again shortly.' });
     }
   }
+  return;
 }
 
 
@@ -6498,6 +6503,7 @@ ${(a.synopsis || '').slice(0, 300)}...
     await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch a random anime.' }, { quoted: m });
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
+  return;
 }
 
 
@@ -6543,6 +6549,7 @@ ${(pick.synopsis || 'No description.').slice(0, 300)}...
   } catch (err) {
     await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ API is overloaded. Please wait 5 seconds." });
   }
+  return;
 }
 // `${botConfig.getPrefix().toLowerCase()}` search <query> - Alias for anime search
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search `)) {
