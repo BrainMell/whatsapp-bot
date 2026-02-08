@@ -720,7 +720,7 @@ async function smartGroqCall(options, retries = 2) {
 console.log(`✅ Groq API initialized with ${GROQ_API_KEYS.length} key(s)`);
 // --- FFMPEG Path ---
 const FFMPEG_PATH = process.env.FFMPEG_PATH || `ffmpeg`;
-const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
+const YTDLP_PATH = process.env.YTDLP_PATH || `C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe` || `yt-dlp`;
 
 // can't use any bot commands
 const blockedUsers = new Set();
@@ -964,6 +964,20 @@ async function searchPinterest(query, count = 10) {
         return result.images || [];
     } catch (err) {
         console.error("❌ Pinterest Error:", err.message);
+        return [];
+    }
+}
+
+/**
+ * Search Klipy Stickers (Go Service)
+ */
+async function searchStickers(query, count = 10) {
+    try {
+        console.log(`🔍 Sticker Search (Go Service): ${query}`);
+        const result = await goService.searchStickers(query, count);
+        return result.stickers || [];
+    } catch (err) {
+        console.error("❌ Sticker Error:", err.message);
         return [];
     }
 }
@@ -1331,18 +1345,26 @@ function formatDuration(ms) {
   return `${seconds} second${seconds > 1 ? 's' : ''}`;
 }
 
+// Helper to get chat-specific mute key
+function getMuteKey(userId, chatId) {
+  // If it's a private chat (DM), just use userId. Otherwise, use composite key.
+  if (!chatId || !chatId.endsWith('@g.us')) return userId;
+  return `${userId}_${chatId}`;
+}
+
 // ✅ FIXED: Check if user is muted and auto-cleanup expired mutes
-function isMuted(userId) {
-  if (!mutedUsers.has(userId)) return false;
+function isMuted(userId, chatId) {
+  const key = getMuteKey(userId, chatId);
+  if (!mutedUsers.has(key)) return false;
   
-  const muteData = mutedUsers.get(userId);
+  const muteData = mutedUsers.get(key);
   
   // check if mute has expired
   if (Date.now() > muteData.until) {
     // mute expired, remove it automatically
-    mutedUsers.delete(userId);
+    mutedUsers.delete(key);
     saveMutedUsers();
-    console.log(`🔊 Auto-unmuted ${userId} (time expired)`);
+    console.log(`🔊 Auto-unmuted ${userId} in ${chatId} (time expired)`);
     return false;
   }
   
@@ -1350,27 +1372,32 @@ function isMuted(userId) {
 }
 
 // ✅ FIXED: Mute user with proper persistence
-function muteUser(userId, duration) {
-  mutedUsers.set(userId, {
+function muteUser(userId, chatId, duration) {
+  const key = getMuteKey(userId, chatId);
+  mutedUsers.set(key, {
     until: Date.now() + duration,
     mutedAt: Date.now(),
-    duration: duration
+    duration: duration,
+    userId: userId,
+    chatId: chatId
   });
   saveMutedUsers();
-  console.log(`🔇 Muted ${userId} for ${formatDuration(duration)}`);
+  console.log(`🔇 Muted ${userId} in ${chatId} for ${formatDuration(duration)}`);
 }
 
 // ✅ FIXED: Unmute user with proper cleanup
-function unmuteUser(userId) {
-  mutedUsers.delete(userId);
+function unmuteUser(userId, chatId) {
+  const key = getMuteKey(userId, chatId);
+  mutedUsers.delete(key);
   saveMutedUsers();
-  console.log(`🔊 Unmuted ${userId}`);
+  console.log(`🔊 Unmuted ${userId} in ${chatId}`);
 }
 
 // Get remaining mute time
-function getMuteInfo(userId) {
-  if (!mutedUsers.has(userId)) return null;
-  const data = mutedUsers.get(userId);
+function getMuteInfo(userId, chatId) {
+  const key = getMuteKey(userId, chatId);
+  if (!mutedUsers.has(key)) return null;
+  const data = mutedUsers.get(key);
   const remaining = data.until - Date.now();
   return remaining > 0 ? remaining : null;
 }
@@ -2669,13 +2696,12 @@ We are happy to have you here.
             if (isSpamming) {
               console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
               await sock.sendMessage(chatId, { 
-                text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
-              });
-              // Auto-mute for 1 minute
-              muteUser(senderJid, 60000);
-              return;
-            }
-          }
+                      text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
+                    });
+                    // Auto-mute for 1 minute
+                    muteUser(senderJid, chatId, 60000);
+                    return;
+                  }          }
         }
 
         const text =
@@ -2882,11 +2908,10 @@ if (m.pushName && !isSelf) {
   }
 }
 
-        // FIXED: Auto-delete muted user messages FIRST before anything else
-        if (isMuted(senderJid)) {
-          try {
-            await sock.sendMessage(chatId, { delete: m.key });
-            console.log(`🔇 Deleted message from muted user: ${senderJid}`);
+          // FIXED: Auto-delete muted user messages FIRST before anything else
+          if (isMuted(senderJid, chatId)) {
+            try {
+              await sock.sendMessage(chatId, { delete: m.key });            console.log(`🔇 Deleted message from muted user: ${senderJid}`);
             return; // stop processing this message
           } catch (err) {
             console.log("❌ Failed to delete muted user message:", err.message);
@@ -3278,12 +3303,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
   }
 
   try {
-    // Search Pinterest
+    // Search Stickers
     await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
     
-    const images = await searchPinterest(searchTerm, count);
+    const stickers = await searchStickers(searchTerm, count);
 
-    if (images.length === 0) {
+    if (stickers.length === 0) {
       await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
     }
@@ -3295,10 +3320,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
 
     let successCount = 0;
     
-    for (let i = 0; i < images.length; i++) {
+    for (let i = 0; i < stickers.length; i++) {
       try {
-        // Download image
-        const response = await axios.get(images[i], { responseType: 'arraybuffer' });
+        // Download sticker
+        const response = await axios.get(stickers[i], { responseType: 'arraybuffer' });
         const buffer = Buffer.from(response.data);
 
         // Convert to sticker with CROPPED type
@@ -4257,19 +4282,31 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
 
 
 
-                  const duration = parseDuration(durationStr);
-
-                  muteUser(targetUser, duration);
+                                    const duration = parseDuration(durationStr);
 
 
 
-                  await sock.sendMessage(chatId, { 
+                                    muteUser(targetUser, chatId, duration);
 
-                    text: BOT_MARKER + `@${targetUser.split('@')[0]} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
 
-                    mentions: [targetUser]
 
-                  });
+                  
+
+
+
+                                    await sock.sendMessage(chatId, { 
+
+
+
+                                      text: BOT_MARKER + `@${targetUser.split('@')[0]} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
+
+
+
+                                      mentions: [targetUser]
+
+
+
+                                    });
 
                   return;
 
@@ -4293,14 +4330,14 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
             return;
           }
 
-          if (!isMuted(targetUser)) {
+          if (!isMuted(targetUser, chatId)) {
             await sock.sendMessage(chatId, { 
               text: BOT_MARKER + "that user isn't muted." 
             });
             return;
           }
 
-          unmuteUser(targetUser);
+          unmuteUser(targetUser, chatId);
           await sock.sendMessage(chatId, { 
             text: BOT_MARKER + `@${targetUser.split('@')[0]} has been unmuted.`,
             mentions: [targetUser]
@@ -5687,8 +5724,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild challenge 
           const targetName = targetUser.split('@')[0];
           
           const profile = getUserProfile(targetUser);
-          const warnings = getWarningCount(targetUser);
-          const muteInfo = getMuteInfo(targetUser);
+          const warnings = getWarningCount(targetUser, chatId);
+          const muteInfo = getMuteInfo(targetUser, chatId);
           const activity = getActivity(chatId, targetUser);
           const isAdmin = groupMetadata?.participants.some(p => p.id === targetUser && (p.admin === `admin` || p.admin === 'superadmin'));
           const blocked = isBlocked(targetUser);

@@ -119,6 +119,21 @@ class GoImageService {
     }
 
     /**
+     * Search Stickers (Klipy GIF API)
+     */
+    async searchStickers(query, maxResults = 10) {
+        try {
+            const response = await this.client.get('/api/scrape/stickers', {
+                params: { query, maxResults }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('GoService Sticker Error:', error.message);
+            return { stickers: [], count: 0 };
+        }
+    }
+
+    /**
      * Search Rule34 (NSFW)
      * @param {string} query
      * @param {number} maxResults

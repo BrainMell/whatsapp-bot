@@ -587,7 +587,7 @@ const ITEM_DATABASE = {
     'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves', reqLevel: 5 },
 
     // --- CRAFTED CONSUMABLES ---
-    'mega_potion': { name: 'Mega Health Potion', description: 'Restores 250 HP.', rarity: 'RARE', value: 2000, usable: true, effect: 'heal', effectValue: 250 },
+    'mega_potion': { name: 'Mega Health Potion', description: 'Restores 80% HP.', rarity: 'RARE', value: 2800, usable: true, effect: 'heal', effectValue: 0.8 },
     'elixir_of_power': { name: 'Elixir of Power', description: 'Boosts ATK and MAG by 50% for 5 turns.', rarity: 'EPIC', value: 5000, usable: true, effect: 'buff_all', effectValue: 50, duration: 5 },
     'liquid_courage': { name: 'Liquid Courage', description: 'Grants a massive temporary shield.', rarity: 'RARE', value: 3500, usable: true, effect: 'shield_max', effectValue: 100 },
     'fire_bomb': { name: 'Fire Bomb', description: 'Deals 150 fire damage to all enemies.', rarity: 'UNCOMMON', value: 1500, usable: true, effect: 'aoe_damage', effectValue: 150 },
@@ -596,21 +596,21 @@ const ITEM_DATABASE = {
     // --- POTIONS & STANDARD ITEMS ---
     'minor_potion': {
         name: 'Minor Health Potion',
-        description: 'Restores 30 HP',
+        description: 'Restores 15% Max HP',
         rarity: 'COMMON',
-        value: 50,
+        value: 70,
         usable: true,
         effect: 'heal',
-        effectValue: 30
+        effectValue: 0.15
     },
     'health_potion': {
         name: 'Health Potion',
-        description: 'Restores 60 HP',
+        description: 'Restores 35% Max HP',
         rarity: 'COMMON',
-        value: 100,
+        value: 140,
         usable: true,
         effect: 'heal',
-        effectValue: 60
+        effectValue: 0.35
     },
 
     // --- WILDERNESS: FISH ---
@@ -627,58 +627,58 @@ const ITEM_DATABASE = {
     'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated essence of the Hive.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'mana_potion': {
         name: 'Mana Potion',
-        description: 'Restores 30 Energy',
+        description: 'Restores 40% Energy',
         rarity: 'COMMON',
         value: 400,
         usable: true,
         effect: 'restore_energy',
-        effectValue: 30
+        effectValue: 0.4
     },
     'greater_potion': {
         name: 'Greater Health Potion',
-        description: 'Restores 120 HP',
+        description: 'Restores 45% Max HP',
         rarity: 'UNCOMMON',
-        value: 250,
+        value: 350,
         usable: true,
         effect: 'heal',
-        effectValue: 120
+        effectValue: 0.45
     },
     'major_potion': {
         name: 'Major Health Potion',
-        description: 'Restores 120 HP',
+        description: 'Restores 60% Max HP',
         rarity: 'RARE',
-        value: 1200,
+        value: 1680,
         usable: true,
         effect: 'heal',
-        effectValue: 120
+        effectValue: 0.6
     },
     'elixir': {
         name: 'Full Restore Elixir',
-        description: 'Fully restores HP',
+        description: 'Fully restores HP (100%)',
         rarity: 'EPIC',
-        value: 3000,
+        value: 4200,
         usable: true,
         effect: 'heal',
-        effectValue: 999
+        effectValue: 1.0
     },
     'regen_salve': {
         name: 'Regeneration Salve',
-        description: 'Heals 15 HP per turn for 3 turns',
+        description: 'Heals 10% Max HP per turn for 3 turns',
         rarity: 'COMMON',
-        value: 800,
+        value: 1120,
         usable: true,
         effect: 'regen',
-        effectValue: 15,
+        effectValue: 0.1,
         duration: 3
     },
     'ether': {
         name: 'Ether',
-        description: 'Fully restores Energy',
+        description: 'Fully restores Energy (100%)',
         rarity: 'RARE',
         value: 1000,
         usable: true,
         effect: 'restore_energy',
-        effectValue: 100
+        effectValue: 1.0
     },
     'defense_tonic': {
         name: 'Defense Tonic',
@@ -709,7 +709,7 @@ const ITEM_DATABASE = {
     },
     'berserker_pill': {
         name: 'Berserker Pill',
-        description: 'Massive damage boost, but lowers defense',
+        description: 'Increases all damage by 50% but reduces defense.',
         rarity: 'EPIC',
         value: 1500,
         usable: true,
@@ -723,16 +723,7 @@ const ITEM_DATABASE = {
         value: 2500,
         usable: true,
         effect: 'revive',
-        effectValue: 50
-    },
-    'berserker_pill': {
-        name: 'Berserker Pill',
-        description: 'Massive damage boost, but lowers defense',
-        rarity: 'EPIC',
-        value: 1500,
-        usable: true,
-        effect: 'buff_all_damage',
-        effectValue: 50
+        effectValue: 0.5
     },
     'bomb': {
         name: 'Bomb',

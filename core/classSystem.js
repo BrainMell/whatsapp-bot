@@ -736,8 +736,8 @@ const CLASS_SHOP_ITEMS = {
         id: 'health_potion_shop',
         name: 'Health Potion',
         icon: '🧪',
-        desc: 'Heal 60 HP (usable in quests)',
-        cost: 500,
+        desc: 'Heal 35% of Max HP (usable in quests)',
+        cost: 700,
         type: 'CONSUMABLE',
         category: 'QUEST'
     },
@@ -747,7 +747,7 @@ const CLASS_SHOP_ITEMS = {
         name: 'Phoenix Down',
         icon: '🪶',
         desc: 'Auto-revive at 50% HP (quest only)',
-        cost: 2500,
+        cost: 3500,
         type: 'CONSUMABLE',
         category: 'QUEST'
     },

@@ -328,15 +328,15 @@ const CLASSES = {
 
 const CONSUMABLES = {
     // HEALING
-    'minor_potion': { name: 'Minor Health Potion', cost: 200, effect: 'heal', value: 30, desc: 'Restores 30 HP. A basic potion for minor wounds.', icon: '🧪' },
-    'health_potion': { name: 'Health Potion', cost: 500, effect: 'heal', value: 60, desc: 'Restores 60 HP. Standard issue for adventurers.', icon: '💊' },
-    'major_potion': { name: 'Major Health Potion', cost: 1200, effect: 'heal', value: 120, desc: 'Restores 120 HP. Essential for dangerous raids.', icon: '⚗️' },
-    'elixir': { name: 'Full Restore Elixir', cost: 3000, effect: 'heal', value: 999, desc: 'Fully restores HP. Rare and powerful alchemy.', icon: '🍶' },
-    'regen_salve': { name: 'Regeneration Salve', cost: 800, effect: 'regen', value: 15, duration: 3, desc: 'Heals 15 HP per turn for 3 turns.', icon: '🧴' },
+    'minor_potion': { name: 'Minor Health Potion', cost: 280, effect: 'heal', effectValue: 0.15, desc: 'Restores 15% of Max HP. A basic potion for minor wounds.', icon: '🧪' },
+    'health_potion': { name: 'Health Potion', cost: 700, effect: 'heal', effectValue: 0.35, desc: 'Restores 35% of Max HP. Standard issue for adventurers.', icon: '💊' },
+    'major_potion': { name: 'Major Health Potion', cost: 1680, effect: 'heal', effectValue: 0.60, desc: 'Restores 60% of Max HP. Essential for dangerous raids.', icon: '⚗️' },
+    'elixir': { name: 'Full Restore Elixir', cost: 4200, effect: 'heal', effectValue: 1.0, desc: 'Fully restores HP. Rare and powerful alchemy.', icon: '🍶' },
+    'regen_salve': { name: 'Regeneration Salve', cost: 1120, effect: 'regen', effectValue: 0.10, duration: 3, desc: 'Heals 10% of Max HP per turn for 3 turns.', icon: '🧴' },
     
     // MANA (for abilities)
-    'mana_potion': { name: 'Mana Potion', cost: 400, effect: 'restore_energy', value: 30, desc: 'Restores 30 Energy. Refreshes your combat focus.', icon: '💙' },
-    'ether': { name: 'Ether', cost: 1000, effect: 'restore_energy', value: 999, desc: 'Fully restores Energy. Pure arcane energy in a bottle.', icon: '🔵' },
+    'mana_potion': { name: 'Mana Potion', cost: 400, effect: 'restore_energy', effectValue: 0.40, desc: 'Restores 40% of Max Energy. Refreshes your combat focus.', icon: '💙' },
+    'ether': { name: 'Ether', cost: 1000, effect: 'restore_energy', effectValue: 1.0, desc: 'Fully restores Energy. Pure arcane energy in a bottle.', icon: '🔵' },
     
     // BUFFS
     'strength_brew': { name: 'Strength Brew', cost: 600, effect: 'buff_atk', value: 25, duration: 3, desc: 'Increases ATK by 25% for 3 turns.', icon: '💪' },
@@ -346,12 +346,12 @@ const CONSUMABLES = {
     'berserker_pill': { name: 'Berserker Pill', cost: 1500, effect: 'buff_all_damage', value: 50, duration: 2, desc: 'Massive damage boost, but lowers defense.', icon: '💥' },
     
     // UTILITY
-    'phoenix_down': { name: 'Phoenix Down', cost: 2500, effect: 'revive', value: 50, desc: 'Revives a fallen ally with 50% HP.', icon: '🪶' },
+    'phoenix_down': { name: 'Phoenix Down', cost: 3500, effect: 'revive', effectValue: 0.5, desc: 'Revives a fallen ally with 50% HP.', icon: '🪶' },
     'smoke_bomb': { name: 'Smoke Bomb', cost: 500, effect: 'flee', chance: 80, desc: 'Allows the party to escape combat (80% chance).', icon: '💨' },
     'bomb': { name: 'Bomb', cost: 1000, effect: 'damage_aoe', value: 80, desc: 'Deals 80 area damage to all enemies.', icon: '💣' },
     
     // BUNDLES
-    'bundle_pack': { name: 'Explorer Pack', cost: 1200, effect: 'bundle', items: ['health_potion', 'mana_potion', 'minor_potion'], desc: 'A bundle containing a Health Potion, Energy Elixir, and Minor Potion.', icon: '🎒' },
+    'bundle_pack': { name: 'Explorer Pack', cost: 1680, effect: 'bundle', items: ['health_potion', 'mana_potion', 'minor_potion'], desc: 'A bundle containing a Health Potion, Energy Elixir, and Minor Potion.', icon: '🎒' },
 };
 
 const SHOP_LIST = [
@@ -853,6 +853,15 @@ function rollD20() {
 function calculateDamage(attacker, target, power, type = 'physical', element = 'PHYSICAL') {
     let damage = power;
     
+    // 💡 RANK DAMAGE BONUS (D-rank and up = DOUBLE damage)
+    if (attacker.adventurerRank) {
+        const rankValueMap = { 'F': 1, 'E': 2, 'D': 3, 'C': 4, 'B': 5, 'A': 6, 'S': 7, 'SS': 8, 'SSS': 9 };
+        const rankVal = rankValueMap[attacker.adventurerRank] || 1;
+        if (rankVal >= 3) { // D-rank is 3
+            damage *= 2.0;
+        }
+    }
+
     // Defense mitigation
     const def = type === 'physical' ? (target.stats.def || 0) : (target.stats.mag || 0) * 0.5;
     
@@ -1639,19 +1648,26 @@ async function performAction(sock, player, action, chatId) {
                 
                 switch (item.effect) {
                     case 'heal':
-                        const heal = Math.min(item.effectValue || 0, target.stats.maxHp - target.stats.hp);
-                        target.stats.hp += heal;
+                        const healVal = item.effectValue || 0.3; // Default 30%
+                        const healAmt = Math.floor(target.stats.maxHp * healVal);
+                        const actualHeal = Math.min(healAmt, target.stats.maxHp - target.stats.hp);
+                        target.stats.hp += actualHeal;
                         target.currentHP = target.stats.hp; // Sync
-                        resultMsg += `\n💖 Restored ${heal} HP to ${target.name}!`;
-                        turnInfo.healing = heal;
+                        resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)`;
+                        turnInfo.healing = actualHeal;
                         break;
                     case 'regen':
-                        applyStatusEffect(target, 'regen', item.duration || 3, item.effectValue || 15);
-                        resultMsg += `\n🧴 Applied regeneration salve to ${target.name}!`;
+                        const regVal = item.effectValue || 0.1;
+                        const regAmt = Math.floor(target.stats.maxHp * regVal);
+                        applyStatusEffect(target, 'regen', item.duration || 3, regAmt);
+                        resultMsg += `\n🧴 Applied regeneration salve to ${target.name}! (+${regAmt} HP/turn)`;
                         break;
                     case 'restore_energy':
-                        target.stats.energy = Math.min(100, target.stats.energy + (item.effectValue || 0));
-                        resultMsg += `\n⚡ Restored energy to ${target.name}!`;
+                        const enVal = item.effectValue || 0.4;
+                        const maxEn = target.stats.maxEnergy || 100;
+                        const enAmt = Math.floor(maxEn * enVal);
+                        target.stats.energy = Math.min(maxEn, target.stats.energy + enAmt);
+                        resultMsg += `\n⚡ Restored ${enAmt} energy to ${target.name}! (${Math.round(enVal * 100)}%)`;
                         break;
                     case 'buff_atk':
                         applyStatusEffect(target, 'haste', 3, item.effectValue || 0);
@@ -1670,7 +1686,7 @@ async function performAction(sock, player, action, chatId) {
                         resultMsg += `\n🍀 Buffed ${target.name}'s luck!`;
                         break;
                     case 'buff_all_damage':
-                        applyStatusEffect(target, 'rage', 2, item.effectValue || 0);
+                        applyStatusEffect(target, 'berserk', 2, item.effectValue || 50);
                         resultMsg += `\n💥 ${target.name} enters a BERSERKER RAGE! (+Damage, -Defense)`;
                         break;
                     case 'damage_aoe':
@@ -1686,9 +1702,10 @@ async function performAction(sock, player, action, chatId) {
                     case 'revive':
                         if (target.isDead) {
                             target.isDead = false;
-                            target.stats.hp = Math.floor(target.stats.maxHp * ((item.effectValue || 50) / 100));
+                            const revivePct = item.effectValue || 0.5;
+                            target.stats.hp = Math.floor(target.stats.maxHp * revivePct);
                             target.currentHP = target.stats.hp; // Sync
-                            resultMsg += `\n🪶 Revived ${target.name}!`;
+                            resultMsg += `\n🪶 Revived ${target.name}! (${Math.round(revivePct * 100)}% HP)`;
                             turnInfo.healing = target.stats.hp;
                         } else {
                             resultMsg += `\n(Target was already alive)`;
@@ -2325,12 +2342,16 @@ const joinAdventure = (chatId, senderJid, senderName) => {
         return "⚠️ You're already in the party!";
     }
     
+    const user = economy.getUser(senderJid);
+    const adventurerRank = user?.adventurerRank || 'F';
+
     // Initialize player with default stats (class assigned later)
     state.players.push({
         jid: senderJid,
         name: senderName || 'Unknown Hero',
         class: null,
         level: 1,
+        adventurerRank: adventurerRank,
         stats: {
             hp: 100,
             maxHp: 100,
@@ -2410,8 +2431,10 @@ async function startJourney(sock, chatId) {
                 economy.saveUser(p.jid);
             }
             p.spriteIndex = user.spriteIndex;
+            p.adventurerRank = user.adventurerRank || 'F';
         } else {
             p.spriteIndex = Math.floor(Math.random() * 100);
+            p.adventurerRank = 'F';
         }
         
         // Use user stats including progression, bonuses AND equipment
