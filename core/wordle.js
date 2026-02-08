@@ -257,11 +257,12 @@ function getAllScores() {
 // ============================================
 
 class WordleGame {
-  constructor(playerJid, playerName, difficulty = 'medium') {
+  constructor(playerJid, playerName, difficulty = 'medium', chatId, sock, botMarker) {
     this.playerJid = normalizeJid(playerJid);
     this.fullJid = playerJid;
     this.playerName = playerName;
     this.difficulty = difficulty;
+    this.chatId = chatId;
     
     // Select word from appropriate difficulty pool
     const wordPool = WORDS_BY_DIFFICULTY[difficulty] || WORDS_BY_DIFFICULTY.medium;
@@ -278,6 +279,32 @@ class WordleGame {
     this.gameOver = false;
     this.won = false;
     this.startTime = Date.now();
+
+    // Set timeout for 10 minutes
+    this.timeout = setTimeout(async () => {
+      if (activeGames.has(this.playerJid)) {
+        activeGames.delete(this.playerJid);
+        try {
+          if (sock) await sock.sendMessage(this.chatId, { 
+            text: botMarker + "⌛ *WORDLE TIMEOUT!* ⌛\n\nYour game has been cancelled due to inactivity." 
+          });
+        } catch (e) {}
+      }
+    }, 10 * 60 * 1000);
+  }
+
+  resetTimeout(sock, botMarker) {
+    if (this.timeout) clearTimeout(this.timeout);
+    this.timeout = setTimeout(async () => {
+      if (activeGames.has(this.playerJid)) {
+        activeGames.delete(this.playerJid);
+        try {
+          if (sock) await sock.sendMessage(this.chatId, { 
+            text: botMarker + "⌛ *WORDLE TIMEOUT!* ⌛\n\nYour game has been cancelled due to inactivity." 
+          });
+        } catch (e) {}
+      }
+    }, 10 * 60 * 1000);
   }
 
   makeGuess(word) {
@@ -439,8 +466,8 @@ class WordleGame {
 // GAME MANAGEMENT
 // ============================================
 
-function createGame(playerJid, playerName, difficulty = 'medium') {
-  const game = new WordleGame(playerJid, playerName, difficulty);
+function createGame(playerJid, playerName, difficulty = 'medium', chatId, sock, botMarker) {
+  const game = new WordleGame(playerJid, playerName, difficulty, chatId, sock, botMarker);
   activeGames.set(normalizeJid(playerJid), game);
   return game;
 }
@@ -450,6 +477,8 @@ function getGame(playerJid) {
 }
 
 function deleteGame(playerJid) {
+  const game = activeGames.get(normalizeJid(playerJid));
+  if (game && game.timeout) clearTimeout(game.timeout);
   activeGames.delete(normalizeJid(playerJid));
 }
 
@@ -472,7 +501,7 @@ module.exports = {
       difficulty = 'medium';
     }
 
-    const game = createGame(senderJid, playerName, difficulty);
+    const game = createGame(senderJid, playerName, difficulty, chatId, sock, botMarker);
     
     // Difficulty display
     const difficultyEmoji = { easy: '🟢', medium: '🟡', hard: '🔴' };
@@ -512,6 +541,7 @@ module.exports = {
     }
 
     const result = game.makeGuess(word);
+    game.resetTimeout(sock, botMarker);
 
     if (!result.success) {
       return {

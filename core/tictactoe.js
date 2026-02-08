@@ -205,7 +205,7 @@ function isDrawInevitable(board, gridSize) {
 // GAME LOGIC
 // ============================================
 
-function createGame(playerAJid, playerBJid, chatId, gridSize = 3) {
+function createGame(playerAJid, playerBJid, chatId, gridSize = 3, sock, botMarker) {
   const boardSize = gridSize * gridSize;
   const gameState = {
     board: Array(boardSize).fill(null),
@@ -217,17 +217,37 @@ function createGame(playerAJid, playerBJid, chatId, gridSize = 3) {
     lastMoveIndex: null,
     chatId: chatId,
     gridSize: gridSize,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    lastAction: Date.now()
   };
+
+  // Set timeout for 5 minutes
+  gameState.timeout = setTimeout(async () => {
+    if (activeGames.has(chatId)) {
+      activeGames.delete(chatId);
+      try {
+        await sock.sendMessage(chatId, { 
+          text: botMarker + "⌛ *GAME TIMEOUT!* ⌛\n\nThe Tic-Tac-Toe game has been cancelled due to inactivity." 
+        });
+      } catch (e) {
+        console.error("Failed to send TTT timeout message:", e.message);
+      }
+    }
+  }, 5 * 60 * 1000);
+
   activeGames.set(chatId, gameState);
   return gameState;
 }
 
 function getGame(chatId) {
-  return activeGames.get(chatId) || null;
+  const game = activeGames.get(chatId);
+  if (game) game.lastAction = Date.now();
+  return game || null;
 }
 
 function deleteGame(chatId) {
+  const game = activeGames.get(chatId);
+  if (game && game.timeout) clearTimeout(game.timeout);
   activeGames.delete(chatId);
 }
 
@@ -255,6 +275,24 @@ function makeMove(chatId, playerJid, cellIndex) {
   const marker = getPlayerMarker(game, playerJid);
   game.board[cellIndex] = marker;
   game.lastMoveIndex = cellIndex;
+  game.lastAction = Date.now();
+
+  // Reset timeout
+  if (game.timeout) {
+    clearTimeout(game.timeout);
+    game.timeout = setTimeout(async () => {
+      const sock = require('./engine').getSock(); // Fallback if sock not easily accessible
+      const botMarker = `*${require('../botConfig').getBotName()}*\n\n`;
+      if (activeGames.has(chatId)) {
+        activeGames.delete(chatId);
+        try {
+          if (sock) await sock.sendMessage(chatId, { 
+            text: botMarker + "⌛ *GAME TIMEOUT!* ⌛\n\nThe Tic-Tac-Toe game has been cancelled due to inactivity." 
+          });
+        } catch (e) {}
+      }
+    }, 5 * 60 * 1000);
+  }
 
   const winPattern = checkWin(game.board, marker, game.gridSize);
   if (winPattern) {
@@ -326,7 +364,7 @@ module.exports = {
     const opponentJid = mentionedJids[0];
     if (normalizeJid(senderJid) === normalizeJid(opponentJid)) return sock.sendMessage(chatId, { text: botMarker + '❌ You can\'t play against yourself' }, { quoted: m });
 
-    const game = createGame(senderJid, opponentJid, chatId, gridSize);
+    const game = createGame(senderJid, opponentJid, chatId, gridSize, sock, botMarker);
     
     console.log(`🎮 Rendering ${gridSize}x${gridSize} board...`);
     const imageBuffer = await renderBoard(game.board, gridSize);
