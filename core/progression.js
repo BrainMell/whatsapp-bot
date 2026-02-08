@@ -33,8 +33,18 @@ const XP_CONFIG = {
 // ==========================================
 
 const STAT_GROWTH = {
-    BASE: {
-        hp: 10, atk: 2, def: 1, mag: 1, spd: 1, luck: 1, crit: 0.5
+    // Base values that scale up at higher levels
+    getBaseGrowth: (level) => {
+        const factor = 1 + Math.floor(level / 15); // Increase base growth every 15 levels
+        return {
+            hp: 10 * factor, 
+            atk: 2 * factor, 
+            def: 1.5 * factor, 
+            mag: 2 * factor, 
+            spd: 1.2 * factor, 
+            luck: 1 * factor, 
+            crit: 0.5 * factor
+        };
     },
     CLASS_MODIFIERS: {
         FIGHTER: { hp: 1.5, atk: 1.3, def: 1.2, mag: 0.5, spd: 1.0, luck: 1.0, crit: 1.0 },
@@ -55,8 +65,8 @@ const STAT_GROWTH = {
         MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
         CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 }
     },
-    STAT_POINTS_PER_LEVEL: 3,
-    MILESTONE_BONUSES: { 10: 5, 25: 10, 50: 15, 75: 20 }
+    STAT_POINTS_PER_LEVEL: 5, // Increased from 3
+    MILESTONE_BONUSES: { 10: 10, 25: 25, 50: 50, 75: 75, 100: 100 }
 };
 
 // ==========================================
@@ -207,8 +217,10 @@ function getBaseStats(userId, classId) {
     const classModifier = STAT_GROWTH.CLASS_MODIFIERS[classId] || STAT_GROWTH.CLASS_MODIFIERS.FIGHTER;
     const levelsGained = user.level - 1;
     
-    for (const [stat, baseGrowth] of Object.entries(STAT_GROWTH.BASE)) {
-        baseStats[stat] = (baseStats[stat] || 0) + Math.floor(baseGrowth * (classModifier[stat] || 1.0) * levelsGained);
+    // NEW: Non-linear base growth
+    const currentBaseGrowth = STAT_GROWTH.getBaseGrowth(user.level);
+    for (const [stat, baseVal] of Object.entries(currentBaseGrowth)) {
+        baseStats[stat] = (baseStats[stat] || 0) + Math.floor(baseVal * (classModifier[stat] || 1.0) * levelsGained);
     }
     
     const allocated = user.allocatedStats || {};
@@ -225,9 +237,9 @@ function getBaseStats(userId, classId) {
     }
     
     baseStats.maxHp = baseStats.hp;
-    baseStats.evasion = Math.min(40, (baseStats.spd * 0.1));
-    baseStats.dmgReduction = Math.min(75, (baseStats.def * 0.5));
-    baseStats.rareDropRate = (baseStats.luck * 0.05);
+    baseStats.evasion = Math.min(45, (baseStats.spd * 0.12)); // Increased evasion cap
+    baseStats.dmgReduction = Math.min(80, (baseStats.def * 0.55)); // Increased DR cap
+    baseStats.rareDropRate = (baseStats.luck * 0.06);
     
     return baseStats;
 }
@@ -238,13 +250,25 @@ function allocateStatPoint(userId, stat, amount = 1) {
     if (user.statPoints < amount) return { success: false, message: `Not enough stat points! Have: ${user.statPoints}, Need: ${amount}` };
     
     const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
-    if (!validStats.includes(stat.toLowerCase())) return { success: false, message: `Invalid stat!` };
+    const s = stat.toLowerCase();
+    if (!validStats.includes(s)) return { success: false, message: `Invalid stat!` };
     
-    const statValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
-    user.allocatedStats[stat] = (user.allocatedStats[stat] || 0) + (statValues[stat] * amount);
+    // NEW: Tier-based scaling for point values
+    const mainUser = economy.getUser(userId);
+    const classSystem = require('./classSystem');
+    const classData = classSystem.getClassById(mainUser.class);
+    
+    let tierMultiplier = 1.0;
+    if (classData.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
+    if (classData.tier === 'ASCENDED') tierMultiplier = 4.0; // Massive leap
+    
+    const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+    const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
+    
+    user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
     user.statPoints -= amount;
     saveProgression(userId);
-    return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: statValues[stat] * amount, remainingPoints: user.statPoints };
+    return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
 }
 
 function resetStats(userId) {

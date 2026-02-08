@@ -27,14 +27,14 @@ const combatIntegration = require('./combatIntegration');
 
 const DUNGEON_RANKS = {
     F: { name: 'F-Rank', encounters: 3, minMobs: 1, maxMobs: 2, difficulty: 0.8, boss: 'INFECTED_COLOSSUS', pool: 1, xpMult: 0.8 },
-    E: { name: 'E-Rank', encounters: 4, minMobs: 2, maxMobs: 4, difficulty: 1.0, boss: 'CORRUPTED_GUARDIAN', pool: 1, xpMult: 1.0 },
-    D: { name: 'D-Rank', encounters: 7, minMobs: 2, maxMobs: 4, difficulty: 1.5, boss: 'ELEMENTAL_ARCHON', pool: 2, xpMult: 1.5 },
-    C: { name: 'C-Rank', encounters: 7, minMobs: 2, maxMobs: 5, difficulty: 2.0, boss: 'MUTATION_PRIME', pool: 2, xpMult: 2.0 },
-    B: { name: 'B-Rank', encounters: 8, minMobs: 3, maxMobs: 5, difficulty: 2.8, boss: 'VOID_CORRUPTED', pool: 3, xpMult: 2.8 },
-    A: { name: 'A-Rank', encounters: 9, minMobs: 3, maxMobs: 6, difficulty: 4.5, boss: 'PRIMORDIAL_CHAOS', pool: 4, xpMult: 4.5 },
-    S: { name: 'S-Rank', encounters: 10, minMobs: 4, maxMobs: 6, difficulty: 7.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 7.0 },
-    SS: { name: 'SS-Rank', encounters: 11, minMobs: 4, maxMobs: 7, difficulty: 10.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 10.0 },
-    SSS: { name: 'SSS-Rank', encounters: 13, minMobs: 5, maxMobs: 8, difficulty: 20.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 20.0 }
+    E: { name: 'E-Rank', encounters: 4, minMobs: 2, maxMobs: 4, difficulty: 1.2, boss: 'CORRUPTED_GUARDIAN', pool: 1, xpMult: 1.2 },
+    D: { name: 'D-Rank', encounters: 7, minMobs: 2, maxMobs: 4, difficulty: 2.0, boss: 'ELEMENTAL_ARCHON', pool: 2, xpMult: 2.0 },
+    C: { name: 'C-Rank', encounters: 7, minMobs: 2, maxMobs: 5, difficulty: 3.5, boss: 'MUTATION_PRIME', pool: 2, xpMult: 3.5 },
+    B: { name: 'B-Rank', encounters: 8, minMobs: 3, maxMobs: 5, difficulty: 6.0, boss: 'VOID_CORRUPTED', pool: 3, xpMult: 6.0 },
+    A: { name: 'A-Rank', encounters: 9, minMobs: 3, maxMobs: 6, difficulty: 10.0, boss: 'PRIMORDIAL_CHAOS', pool: 4, xpMult: 10.0 },
+    S: { name: 'S-Rank', encounters: 10, minMobs: 4, maxMobs: 6, difficulty: 18.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 18.0 },
+    SS: { name: 'SS-Rank', encounters: 11, minMobs: 4, maxMobs: 7, difficulty: 35.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 35.0 },
+    SSS: { name: 'SSS-Rank', encounters: 13, minMobs: 5, maxMobs: 8, difficulty: 75.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 75.0 }
 };
 
 const GAME_CONFIG = {

@@ -3503,6 +3503,14 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             return;
         }
 
+        // .j allocate <stat> [amount]
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} allocate`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addstat`)) {
+            const parts = lowerTxt.split(' ');
+            const args = parts.slice(2);
+            await progressionCommands.handleAllocateCommand(sock, chatId, senderJid, args, m);
+            return;
+        }
+
         // .j inventory - View inventory
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} inventory` ||
             lowerTxt === `${botConfig.getPrefix().toLowerCase()} inv` ||
@@ -3684,6 +3692,75 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} delete`) {
     });
   }
   
+  return;
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` lock - only admins can send messages
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lock`) {
+  if (!canUseAdminCommands) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Admins only.` });
+  }
+  if (!botIsAdmin) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ I need to be an admin to lock the group." });
+  }
+  try {
+    await sock.groupSettingUpdate(chatId, 'announcement');
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "🔒 *GROUP LOCKED*\n\nOnly admins can now send messages in this group." });
+  } catch (err) {
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to lock group: " + err.message });
+  }
+  return;
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` unlock/open - everyone can send messages
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} unlock` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} open`) {
+  if (!canUseAdminCommands) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Admins only.` });
+  }
+  if (!botIsAdmin) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ I need to be an admin to unlock the group." });
+  }
+  try {
+    await sock.groupSettingUpdate(chatId, 'not_announcement');
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "🔓 *GROUP UNLOCKED*\n\nEveryone can now send messages in this group." });
+  } catch (err) {
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to unlock group: " + err.message });
+  }
+  return;
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` pin - pin the replied-to message
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin`) {
+  if (!canUseAdminCommands) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Admins only.` });
+  }
+  if (!botIsAdmin) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ I need to be an admin to pin messages." });
+  }
+
+  const contextInfo = m.message.extendedTextMessage?.contextInfo;
+  if (!contextInfo || !contextInfo.stanzaId) {
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "📌 Reply to a message to pin it!" });
+  }
+
+  try {
+    await sock.sendMessage(chatId, {
+      pin: {
+        key: {
+          remoteJid: chatId,
+          fromMe: contextInfo.participant === jidNormalizedUser(sock.user.id),
+          id: contextInfo.stanzaId,
+          participant: contextInfo.participant
+        },
+        type: 1, // 1 to pin
+        time: 2592000 // 30 days
+      }
+    });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Message pinned successfully!" });
+  } catch (err) {
+    console.error("Pin error:", err);
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to pin message. Make sure the message is still available." });
+  }
   return;
 }
 

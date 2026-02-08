@@ -59,6 +59,10 @@ const COMMAND_REGISTRY = {
     { cmd: 'unmute', desc: 'Unmute a user immediately.', usage: 'unmute @user' },
     { cmd: 'tagall', desc: 'Mention every single person in the group.', usage: 'tagall' },
     { cmd: 'hidetag', desc: 'Send a message that tags everyone invisibly.', usage: 'hidetag <msg>' },
+    { cmd: 'lock', desc: 'Only admins can send messages in the group.', usage: 'lock' },
+    { cmd: 'unlock', desc: 'Everyone can send messages in the group.', usage: 'unlock' },
+    { cmd: 'open', desc: 'Alias for unlock. Open the group chat.', usage: 'open' },
+    { cmd: 'pin', desc: 'Pin a message in the group (Reply to msg).', usage: 'pin (reply)' },
     { cmd: 'news', desc: 'Toggle automatic anime news broadcasts for this group.', usage: 'news on/off' }
   ],
   GUILDS: [
