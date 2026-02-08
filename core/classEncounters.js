@@ -727,7 +727,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // 3. Level Scale: +5% stats per level (Base growth)
     
     const partyFactor = 1 + ((partySize - 1) * 0.2);
-    const levelFactor = 1 + (avgLevel * 0.08); // Increased to 8% per level to keep up with players
+    const levelFactor = 1 + (avgLevel * 0.05); // Smoother scaling
     const combinedScale = partyFactor * difficulty * levelFactor;
     
     scaled.stats = { ...enemy.stats };

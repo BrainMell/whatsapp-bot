@@ -354,6 +354,51 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
   }
 }
 
+/*
+ * Handle ${getPrefix()} allocate <stat> [amount]
+ */
+async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
+  try {
+    const stat = args[0];
+    const amount = parseInt(args[1]) || 1;
+
+    if (!stat) {
+      const sheet = progression.getCharacterSheet(senderJid);
+      let msg = `✨ *STAT ALLOCATION* ✨\n\n`;
+      msg += `Available Points: *${sheet.statPoints}*\n\n`;
+      msg += `Spend points to increase your power:\n`;
+      msg += `• *HP*: +15-60 HP\n`;
+      msg += `• *ATK*: +3-12 Attack\n`;
+      msg += `• *DEF*: +2-8 Defense\n`;
+      msg += `• *MAG*: +3-12 Magic\n`;
+      msg += `• *SPD*: +2-8 Speed\n`;
+      msg += `• *LUCK*: +2-8 Luck\n`;
+      msg += `• *CRIT*: +1-4% Crit\n\n`;
+      msg += `💡 *Higher class tiers get more value per point!*\n\n`;
+      msg += `Usage: \`${getPrefix()} allocate <stat> [amount]\`\n`;
+      msg += `Example: \`${getPrefix()} allocate atk 5\``;
+      
+      return await sock.sendMessage(chatId, { text: getBotMarker() + msg }, { quoted: m });
+    }
+
+    const result = progression.allocateStatPoint(senderJid, stat, amount);
+    if (!result.success) {
+      return await sock.sendMessage(chatId, { text: getBotMarker() + result.message }, { quoted: m });
+    }
+
+    let successMsg = `✅ *ALLOCATION SUCCESSFUL!*\n\n`;
+    successMsg += `Spent *${result.pointsSpent}* points on *${result.stat}*.\n`;
+    successMsg += `Gained: *+${result.valueGained}* ${result.stat}!\n`;
+    successMsg += `Remaining Points: *${result.remainingPoints}*`;
+
+    await sock.sendMessage(chatId, { text: getBotMarker() + successMsg }, { quoted: m });
+
+  } catch (err) {
+    console.error("Error in handleAllocateCommand:", err.message);
+    await sock.sendMessage(chatId, { text: getBotMarker() + "❌ Error allocating points." }, { quoted: m });
+  }
+}
+
 // ============================================
 // EXPORTS
 // ============================================
@@ -365,7 +410,8 @@ module.exports = {
   handleXPTopCommand,
   handleGPTopCommand,
   handleAchievementsCommand,
-  handleRankCommand
+  handleRankCommand,
+  handleAllocateCommand
 };
 
 
