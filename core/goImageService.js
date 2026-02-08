@@ -114,7 +114,7 @@ class GoImageService {
             return response.data;
         } catch (error) {
             console.error('GoService Pinterest Error:', error.message);
-            return { images: [] };
+            return { images: [], count: 0 };
         }
     }
 

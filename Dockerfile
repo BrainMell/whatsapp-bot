@@ -16,6 +16,10 @@ RUN apt-get update && apt-get install -y \
     libpangocairo-1.0-0 \
     libgtk-3-0 \
     fonts-liberation \
+    ffmpeg \
+    python3 \
+    python3-pip \
+    && pip3 install yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
