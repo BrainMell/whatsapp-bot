@@ -145,6 +145,38 @@ class LudoGame {
     this.gameOver = false;
     this.winner = null;
     this.created = Date.now();
+    this.lastAction = Date.now();
+    this.timeout = setTimeout(async () => {
+      if (activeGames.has(chatId)) {
+        activeGames.delete(chatId);
+        const engine = require('./engine');
+        const sock = engine.getSock();
+        const botMarker = `*${botConfig.getBotName()}*\n\n`;
+        try {
+          if (sock) await sock.sendMessage(chatId, { 
+            text: botMarker + "⌛ *LUDO TIMEOUT!* ⌛\n\nThe game has been cancelled due to inactivity." 
+          });
+        } catch (e) {}
+      }
+    }, 10 * 60 * 1000); // 10 minutes for Ludo
+  }
+
+  resetTimeout() {
+    if (this.timeout) clearTimeout(this.timeout);
+    this.lastAction = Date.now();
+    this.timeout = setTimeout(async () => {
+      if (activeGames.has(this.chatId)) {
+        activeGames.delete(this.chatId);
+        const engine = require('./engine');
+        const sock = engine.getSock();
+        const botMarker = `*${botConfig.getBotName()}*\n\n`;
+        try {
+          if (sock) await sock.sendMessage(this.chatId, { 
+            text: botMarker + "⌛ *LUDO TIMEOUT!* ⌛\n\nThe game has been cancelled due to inactivity." 
+          });
+        } catch (e) {}
+      }
+    }, 10 * 60 * 1000);
   }
 
   getCurrentPlayer() {
@@ -443,6 +475,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const rollResult = game.rollDice();
+    game.resetTimeout();
     const player = game.getCurrentPlayer();
     const movablePieces = game.getMovablePieces(player);
 
@@ -509,6 +542,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const moveResult = game.movePiece(player, pieceNum);
+    game.resetTimeout();
     if (!moveResult.success) {
       await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${moveResult.error}` }, { quoted: m });
       return { success: false };

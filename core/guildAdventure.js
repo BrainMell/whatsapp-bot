@@ -715,34 +715,80 @@ const ENCOUNTER_TYPES = {
 // 🎮 MULTI-SESSION STATE MANAGEMENT
 // ==========================================
 
-const gameStates = new Map(); // chatId -> state
+const gameStates = new Map(); // sessionKey -> state
 
-function getGameState(chatId) {
+function getGameState(chatId, senderJid = null) {
     if (!chatId) return null;
-    return gameStates.get(chatId);
-}
-
-function deleteGameState(chatId) {
-    const state = gameStates.get(chatId);
-    if (state && state.timers) {
-        Object.values(state.timers).forEach(t => clearTimeout(t));
-    }
-    gameStates.delete(chatId);
-}
-
-function checkChatLimits(chatId, isSolo) {
-    let soloCount = 0;
-    let groupActive = false;
     
-    for (const state of gameStates.values()) {
-        if (state.chatId === chatId && state.active) {
-            if (state.solo) soloCount++;
-            else groupActive = true;
+    // 1. If senderJid is provided, check for THEIR solo raid first
+    if (senderJid) {
+        const soloKey = `${chatId}_${senderJid}`;
+        if (gameStates.has(soloKey)) return gameStates.get(soloKey);
+    }
+    
+    // 2. Check for group raid (keyed by chatId)
+    if (gameStates.has(chatId)) return gameStates.get(chatId);
+    
+    // 3. Fallback: Search all states for a solo raid in this chat by this user
+    if (senderJid) {
+        for (const state of gameStates.values()) {
+            if (state.chatId === chatId && state.players.some(p => p.jid === senderJid)) return state;
         }
     }
     
-    if (isSolo && soloCount >= 2) return { allowed: false, msg: "❌ Max 2 Solo raids allowed per chat!" };
-    if (!isSolo && groupActive) return { allowed: false, msg: "❌ A Group raid is already active in this chat!" };
+    return null;
+}
+
+function deleteGameState(chatId, senderJid = null) {
+    // Determine the key
+    let key = chatId;
+    if (senderJid) {
+        const soloKey = `${chatId}_${senderJid}`;
+        if (gameStates.has(soloKey)) key = soloKey;
+    }
+    
+    const state = gameStates.get(key);
+    if (!state) {
+        // Fallback search
+        for (const [k, s] of gameStates.entries()) {
+            if (s.chatId === chatId && (!senderJid || s.players.some(p => p.jid === senderJid))) {
+                key = k;
+                break;
+            }
+        }
+    }
+
+    const finalState = gameStates.get(key);
+    if (finalState && finalState.timers) {
+        Object.values(finalState.timers).forEach(t => {
+            if (t) clearTimeout(t);
+        });
+    }
+    gameStates.delete(key);
+}
+
+function checkChatLimits(chatId, isSolo, senderJid) {
+    let soloCount = 0;
+    let groupActive = false;
+    let userHasSolo = false;
+    
+    for (const state of gameStates.values()) {
+        if (state.chatId === chatId && state.active) {
+            if (state.solo) {
+                soloCount++;
+                if (state.players.some(p => p.jid === senderJid)) userHasSolo = true;
+            } else {
+                groupActive = true;
+            }
+        }
+    }
+    
+    if (isSolo) {
+        if (userHasSolo) return { allowed: false, msg: "❌ You already have an active Solo raid in this chat!" };
+        if (soloCount >= 2) return { allowed: false, msg: "❌ Max 2 Solo raids allowed per chat!" };
+    } else {
+        if (groupActive) return { allowed: false, msg: "❌ A Group raid is already active in this chat!" };
+    }
     
     return { allowed: true };
 }
@@ -2096,10 +2142,9 @@ async function endCombat(sock, victory, chatId) {
         }, state.solo ? 1000 : GAME_CONFIG.BREAK_TIME); // Added 1s delay for solo
     } else {
         state.isEndingCombat = false;
-        if (state.mode === 'PERMADEATH') {
-            state.active = false;
-        }
         state.active = false;
+        state.phase = 'IDLE';
+        deleteGameState(chatId); // Full cleanup on defeat
     }
 }
 
@@ -2163,11 +2208,12 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
 
 const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, rankInput = null, senderJid = null, smartGroqCall = null) => {
     // Check limits
-    const limitCheck = checkChatLimits(chatId, solo);
+    const limitCheck = checkChatLimits(chatId, solo, senderJid);
     if (!limitCheck.allowed) return { success: false, msg: limitCheck.msg };
 
-    if (gameStates.has(chatId)) {
-        return { success: false, msg: "❌ An adventure is already active in this chat!" };
+    const sessionKey = solo ? `${chatId}_${senderJid}` : chatId;
+    if (gameStates.has(sessionKey)) {
+        return { success: false, msg: solo ? "❌ You already have an active Solo raid!" : "❌ A Group raid is already active in this chat!" };
     }
 
     if (!rankInput) {
@@ -2416,9 +2462,36 @@ async function startJourney(sock, chatId) {
     }
 }
 
-const stopQuest = (chatId) => {
-    const state = getGameState(chatId);
-    if (!state || !state.active) return "❌ No quest is currently active!";
+const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
+    // 1. If admin, check for ANY active quest in this chat
+    if (isAdmin) {
+        let stoppedAny = false;
+        let wasSolo = false;
+        
+        // Search all states for ANY quest in this chatId
+        for (const [key, state] of gameStates.entries()) {
+            if (state.chatId === chatId && state.active) {
+                wasSolo = state.solo;
+                state.active = false;
+                state.phase = 'IDLE';
+                if (state.timers) {
+                    Object.values(state.timers).forEach(timer => { if (timer) clearTimeout(timer); });
+                }
+                gameStates.delete(key);
+                stoppedAny = true;
+            }
+        }
+        
+        if (stoppedAny) return "🛡️ *Admin Override:* All active quests in this chat have been cancelled.";
+    }
+
+    // 2. Standard user check (their own solo or the group quest)
+    const state = getGameState(chatId, senderJid);
+    if (!state || !state.active) return "❌ No active adventure found for you in this chat!";
+    
+    const wasSolo = state.solo;
+    state.active = false;
+    state.phase = 'IDLE';
     
     // Clear all active timers
     if (state.timers) {
@@ -2427,10 +2500,7 @@ const stopQuest = (chatId) => {
         });
     }
     
-    const wasSolo = state.solo;
-    state.active = false;
-    state.phase = 'IDLE';
-    deleteGameState(chatId);
+    deleteGameState(chatId, senderJid);
     
     return wasSolo ? "✅ Solo quest cancelled!" : "✅ Raid quest cancelled!";
 };
@@ -2946,6 +3016,7 @@ async function endAdventure(sock, chatId, victory = true) {
     }
     
     state.active = false;
+    deleteGameState(chatId); // Full cleanup
 }
 
 // ==========================================
@@ -2953,7 +3024,7 @@ async function endAdventure(sock, chatId, victory = true) {
 // ==========================================
 
 const handleBuy = (chatId, senderJid, itemIndex) => {
-    const state = getGameState(chatId);
+    const state = getGameState(chatId, senderJid);
     if (!state) return "❌ No active adventure!";
     
     const isShoppingPhase = state.phase === 'SHOPPING';
@@ -3020,7 +3091,7 @@ const handleBuy = (chatId, senderJid, itemIndex) => {
 // ==========================================
 
 const handleCombatAction = async (sock, chatId, senderJid, actionType, target) => {
-    const state = getGameState(chatId);
+    const state = getGameState(chatId, senderJid);
     if (!state || !state.inCombat) {
         return "❌ Not in combat!";
     }
@@ -3606,7 +3677,7 @@ module.exports = {
     handleBuy,
     handleCombatAction,
     handleVote: (chatId, jid, vote) => {
-        const state = getGameState(chatId);
+        const state = getGameState(chatId, jid);
         if (!state) return "❌ No active adventure!";
         if (state.phase !== 'PLAYING' || state.inCombat || state.voteProcessing) {
             return "❌ Not voting time or already processing.";

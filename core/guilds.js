@@ -216,12 +216,31 @@ function getGuildInfo() {
 function createGuild(guildName, creatorJid, archetype = 'ADVENTURER') {
   const info = globalGuildData;
 
+  // Cleanup orphaned ownership if guild doesn't exist anymore
+  if (info.guildOwners[creatorJid] && !info.guilds[info.guildOwners[creatorJid]]) {
+    console.log(`[Guild] Cleaning up orphaned ownership for ${creatorJid}`);
+    delete info.guildOwners[creatorJid];
+  }
+
   if (info.guildOwners[creatorJid]) {
     return {
       success: false,
       message: `❌ You already own the guild "${info.guildOwners[creatorJid]}"!
 
 Delete it first with: ${botConfig.getPrefix()} guild delete`
+    };
+  }
+
+  // Also check if they are in a guild they don't own
+  if (info.memberGuilds[creatorJid] && !info.guilds[info.memberGuilds[creatorJid]]) {
+    console.log(`[Guild] Cleaning up orphaned membership for ${creatorJid}`);
+    delete info.memberGuilds[creatorJid];
+  }
+
+  if (info.memberGuilds[creatorJid]) {
+    return {
+      success: false,
+      message: `❌ You're already in a guild: "${info.memberGuilds[creatorJid]}"! Leave it first.`
     };
   }
 
@@ -340,10 +359,15 @@ function deleteGuild(userJid) {
   }
 
   const guild = info.guilds[guildName];
-
-  guild.members.forEach(memberJid => {
-    delete info.memberGuilds[memberJid];
-  });
+  const members = guild ? [...guild.members] : [];
+  
+  if (guild) {
+    guild.members.forEach(memberJid => {
+      delete info.memberGuilds[memberJid];
+    });
+  } else {
+    console.warn(`[Guild] Found orphaned owner ${userJid} for missing guild ${guildName}`);
+  }
 
   delete info.guildOwners[userJid];
   delete info.guilds[guildName];
@@ -354,7 +378,8 @@ function deleteGuild(userJid) {
 
   return {
     success: true,
-    message: `✅ Guild "${guildName}" has been disbanded!`
+    message: `✅ Guild "${guildName}" has been disbanded!`,
+    members: members
   };
 }
 
@@ -414,13 +439,16 @@ function leaveGuild(userJid) {
   }
 
   const guild = info.guilds[guildName];
+  if (guild) {
+    guild.members = guild.members.filter(m => m !== userJid);
+    guild.admins = guild.admins.filter(a => a !== userJid);
+    delete guild.titles[userJid];
+    syncGuild(guildName);
+  } else {
+    console.warn(`[Guild] Found orphaned member ${userJid} for missing guild ${guildName}`);
+  }
 
-  guild.members = guild.members.filter(m => m !== userJid);
-  guild.admins = guild.admins.filter(a => a !== userJid);
-  delete guild.titles[userJid];
   delete info.memberGuilds[userJid];
-
-  syncGuild(guildName);
   syncGuildSystem();
 
   return {

@@ -2727,7 +2727,9 @@ We are happy to have you here.
           console.log(`\n📢 NEWSLETTER JID DETECTED: ${newsletterJid}\n`);
         }
 
-        let lowerTxt = txt.toLowerCase().replace(/\s+/g, ' ');
+        // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, _, ~) for command parsing
+        const cleanTxt = txt.replace(/[*_~]/g, '');
+        let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, ' ');
         const isSelf = !!m.key.fromMe;
         if (isSelf) return;
 
@@ -5168,6 +5170,10 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild members` || lower
     }
     
     const guild = info.guilds[userGuild];
+    if (!guild) {
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Guild data is corrupted or guild no longer exists." });
+      return;
+    }
     const members = Array.isArray(guild.members) ? guild.members : [];
     
     let text = `🏰 *${userGuild}*\n`;
@@ -7499,11 +7505,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} quest`) || lower
     
     // Check for stop
     if (lowerTxt.endsWith(' stop')) {
-        if (!canUseAdminCommands) {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only admins can stop an active quest!" });
-            return;
-        }
-        const result = guildAdventure.stopQuest(chatId);
+        const result = guildAdventure.stopQuest(chatId, senderJid, canUseAdminCommands);
         await sock.sendMessage(chatId, { text: BOT_MARKER + result });
         return;
     }
@@ -7551,7 +7553,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
 
     // Check for stop
     if (lowerTxt.endsWith(' stop')) {
-        const result = guildAdventure.stopQuest(chatId);
+        const result = guildAdventure.stopQuest(chatId, senderJid, canUseAdminCommands);
         await sock.sendMessage(chatId, { text: BOT_MARKER + result });
         return;
     }
@@ -10033,4 +10035,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
   });
 }
 
-module.exports = { startBot };
+function getSock() {
+  return sock;
+}
+
+module.exports = { startBot, getSock };

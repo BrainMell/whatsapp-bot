@@ -63,7 +63,7 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  */
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        const text = victory ? "ENCOUNTER COMPLETE" : "DEFEATED";
+        const text = victory ? "VICTORY" : "DEFEATED";
         return await combatImageGen.generateEndScreenImage(text);
     } catch (error) {
         console.error('Combat end render error:', error);
@@ -219,42 +219,28 @@ function generateEndCaption(players, enemies, victory, rewards) {
     
     if (victory) {
         caption += `┃   🎉 VICTORY!\n`;
-        caption += `┗━━━━━━━━━━━━━━━┛\n\n`;
-        
-        caption += `✨ *Battle Complete!*\n\n`;
+        caption += `┗━━━━━━━━━━━━━━━┛\n`;
         
         if (rewards) {
-            caption += `🎁 *REWARDS:*\n`;
-            caption += `💰 ${ZENI_SYM}: ${rewards.gold.toLocaleString()}\n`;
-            caption += `⭐ XP: ${rewards.xp.toLocaleString()}\n`;
+            caption += `🎁 *REWARDS:* 💰 ${rewards.gold.toLocaleString()} | ⭐ ${rewards.xp.toLocaleString()} XP\n`;
             
             if (rewards.items && rewards.items.length > 0) {
-                caption += `\n📦 *ITEMS:*\n`;
-                for (const item of rewards.items) {
-                    caption += `• ${item.name}\n`;
-                }
+                const itemNames = rewards.items.map(item => item.name).join(', ');
+                caption += `📦 *ITEMS:* ${itemNames}\n`;
             }
         }
         
-        caption += `\n👥 *Survivors:*\n`;
-        for (const player of players) {
-            if (player.currentHP > 0) {
-                caption += `✅ ${player.name} - ${player.currentHP}/${player.stats.maxHp || player.stats.hp} HP\n`;
-            }
-        }
+        const survivors = players.filter(p => p.currentHP > 0).map(p => p.name).join(', ');
+        if (survivors) caption += `\n👥 *Survivors:* ${survivors}\n`;
     } else {
         caption += `┃   💀 DEFEAT\n`;
-        caption += `┗━━━━━━━━━━━━━━━┛\n\n`;
-        
-        caption += `The party has been wiped out...\n\n`;
-        
-        caption += `💀 *Fallen Heroes:*\n`;
-        for (const player of players) {
-            caption += `• ${player.name}\n`;
-        }
+        caption += `┗━━━━━━━━━━━━━━━┛\n`;
+        caption += `The party has been wiped out...\n`;
+        const fallen = players.map(p => p.name).join(', ');
+        caption += `\n💀 *Fallen:* ${fallen}\n`;
     }
     
-    caption += `\n━━━━━━━━━━━━━━━`;
+    caption += `━━━━━━━━━━━━━━━`;
     return caption;
 }
 
