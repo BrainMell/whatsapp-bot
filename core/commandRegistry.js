@@ -62,7 +62,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'lock', desc: 'Only admins can send messages in the group.', usage: 'lock' },
     { cmd: 'unlock', desc: 'Everyone can send messages in the group.', usage: 'unlock' },
     { cmd: 'open', desc: 'Alias for unlock. Open the group chat.', usage: 'open' },
-    { cmd: 'pin', desc: 'Pin a message in the group (Reply to msg).', usage: 'pin (reply)' },
+    { cmd: 'pin', desc: 'Pin a message in the group for a set time (Reply to msg).', usage: 'pin [24h/7d/30d]' },
     { cmd: 'news', desc: 'Toggle automatic anime news broadcasts for this group.', usage: 'news on/off' }
   ],
   GUILDS: [
