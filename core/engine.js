@@ -720,7 +720,7 @@ async function smartGroqCall(options, retries = 2) {
 console.log(`✅ Groq API initialized with ${GROQ_API_KEYS.length} key(s)`);
 // --- FFMPEG Path ---
 const FFMPEG_PATH = process.env.FFMPEG_PATH || `ffmpeg`;
-const YTDLP_PATH = process.env.YTDLP_PATH || `C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe` || `yt-dlp`;
+const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
 
 // can't use any bot commands
 const blockedUsers = new Set();
@@ -1226,9 +1226,9 @@ setInterval(() => {
   const now = Date.now();
 
   // spamTracker: remove users with no recent messages
-  for (const [userId, data] of spamTracker.entries()) {
+  for (const [key, data] of spamTracker.entries()) {
     if (data.messages.length === 0 && now - (data.lastWarning || 0) > 600000) {
-      spamTracker.delete(userId);
+      spamTracker.delete(key);
     }
   }
 
@@ -1288,18 +1288,19 @@ function getChatActivity(chatId) {
 }
 
 // Spam detection - checks if user is sending too many messages too fast
-function checkSpam(userId) {
-  if (!spamTracker.has(userId)) {
-    spamTracker.set(userId, { messages: [], lastWarning: 0 });
+function checkSpam(userId, chatId) {
+  const key = `${userId}_${chatId}`;
+  if (!spamTracker.has(key)) {
+    spamTracker.set(key, { messages: [], lastWarning: 0 });
   }
-  
-  const userData = spamTracker.get(userId);
+
+  const userData = spamTracker.get(key);
   const now = Date.now();
-  
+
   // Remove messages older than 5 seconds
   userData.messages = userData.messages.filter(time => now - time < 5000);
   userData.messages.push(now);
-  
+
   // If more than 5 messages in 5 seconds = spam
   if (userData.messages.length > 5) {
     // Only warn once per minute so we dont spam them back lol
@@ -1308,10 +1309,9 @@ function checkSpam(userId) {
       return true;
     }
   }
-  
+
   return false;
 }
-
 // ✅ FIXED: Parse time duration (e.g., "10s", "5m", "2h", "1d")
 // so u can say .mute @user 10s for 10 seconds, 5m for 5 minutes, etc
 function parseDuration(duration) {
@@ -2692,7 +2692,7 @@ We are happy to have you here.
           // 2. Antispam Detection
           const settings = getGroupSettings(chatId);
           if (settings.antispam && !isOwner) {
-            const isSpamming = checkSpam(senderJid);
+            const isSpamming = checkSpam(senderJid, chatId);
             if (isSpamming) {
               console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
               await sock.sendMessage(chatId, { 
@@ -6038,16 +6038,22 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
       '-o', fileName
     ]);
 
-    // Hard-kill timer: 60 seconds
+    let errorOutput = "";
+    dl.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    // Hard-kill timer: 120 seconds (increased from 60)
     const killTimer = setTimeout(() => {
       dl.kill('SIGKILL');
       if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
       console.log(`[YouTube] Killed hung process for: ${video.title}`);
-    }, 60000);
+    }, 120000);
 
     // Auto-delete on spawn error
-    dl.on('error', () => { 
+    dl.on('error', (err) => { 
       clearTimeout(killTimer);
+      console.error(`[YouTube] Spawn error: ${err.message}`);
       if (fs.existsSync(fileName)) fs.unlinkSync(fileName); 
     });
 
@@ -6087,6 +6093,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
         }
       } else {
         if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
+        console.error(`[YouTube] Download failed with code ${code}. Error: ${errorOutput}`);
         await sock.sendMessage(chatId, { react: { text: "⚠️", key: m.key } });
         await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Download failed." });
       }
