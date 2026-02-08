@@ -1038,6 +1038,14 @@ function getMentionOrReply(m) {
   return null;
 }
 
+function toEmojiNumber(num) {
+  const emojiMap = {
+    '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+    '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
+  };
+  return num.toString().split('').map(digit => emojiMap[digit] || digit).join('');
+}
+
 // Conversation memory per USER (not per chat)
 const conversationMemory = new Map();
 
@@ -3730,7 +3738,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} unlock` || lowerTxt ===
 }
 
 // `${botConfig.getPrefix().toLowerCase()}` pin - pin the replied-to message
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin`) {
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pin `)) {
   if (!canUseAdminCommands) {
     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Admins only.` });
   }
@@ -3738,12 +3746,26 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin`) {
     return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ I need to be an admin to pin messages." });
   }
 
-  const contextInfo = m.message.extendedTextMessage?.contextInfo;
+  const contextInfo = m.message.extendedTextMessage?.contextInfo || m.message.imageMessage?.contextInfo || m.message.videoMessage?.contextInfo || m.message.stickerMessage?.contextInfo;
+  
   if (!contextInfo || !contextInfo.stanzaId) {
-    return await sock.sendMessage(chatId, { text: BOT_MARKER + "📌 Reply to a message to pin it!" });
+    return await sock.sendMessage(chatId, { 
+      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} pin <duration>\` (Reply to a message)\n\n• Duration: 24h, 7d, 30d (Default: 30d)\n\nExample: Reply to a message with \`${botConfig.getPrefix()} pin 24h\`` 
+    });
+  }
+
+  // Parse duration
+  const args = lowerTxt.split(' ');
+  let time = 2592000; // Default 30 days in seconds
+  
+  if (args[2]) {
+    const durStr = args[2].toLowerCase();
+    if (durStr.endsWith('h')) time = parseInt(durStr) * 3600;
+    else if (durStr.endsWith('d')) time = parseInt(durStr) * 86400;
   }
 
   try {
+    // Attempt standard pin
     await sock.sendMessage(chatId, {
       pin: {
         key: {
@@ -3753,13 +3775,31 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin`) {
           participant: contextInfo.participant
         },
         type: 1, // 1 to pin
-        time: 2592000 // 30 days
+        time: time
       }
     });
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Message pinned successfully!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Message pinned for ${args[2] || '30 days'}!` });
   } catch (err) {
-    console.error("Pin error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to pin message. Make sure the message is still available." });
+    console.log("Pin failed, attempting relayMessage fallback...");
+    try {
+      // Fallback for some versions of Baileys/WhatsApp
+      await sock.relayMessage(chatId, {
+        pinInChatMessage: {
+          key: {
+            remoteJid: chatId,
+            fromMe: contextInfo.participant === jidNormalizedUser(sock.user.id),
+            id: contextInfo.stanzaId,
+            participant: contextInfo.participant
+          },
+          type: 1,
+          time: time
+        }
+      }, {});
+      await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Message pinned for ${args[2] || '30 days'}! (Relay)` });
+    } catch (relayErr) {
+      console.error("Pin relay error:", relayErr);
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to pin message. Make sure I have admin permissions and the message exists." });
+    }
   }
   return;
 }
@@ -4283,9 +4323,10 @@ if ((lowerTxt === `${botConfig.getPrefix().toLowerCase()} tagall` || lowerTxt.st
   const customText = txt.substring(`${botConfig.getPrefix().toLowerCase()} tagall`.length).trim();
   
   // Check if user replied to a message
-  const quotedMessage = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const quotedMsgKey = m.message?.extendedTextMessage?.contextInfo?.stanzaId;
-  const quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
+  const contextInfo = m.message?.extendedTextMessage?.contextInfo;
+  const quotedMessage = contextInfo?.quotedMessage;
+  const quotedMsgKey = contextInfo?.stanzaId;
+  const quotedParticipant = contextInfo?.participant;
   
   let contentToSend = null;
   let messageType = 'text';
@@ -4359,34 +4400,39 @@ if ((lowerTxt === `${botConfig.getPrefix().toLowerCase()} tagall` || lowerTxt.st
     }
   }
   
-  // Create stylish member list with ASCII design
+  // Create stylish member list with emoji numbers
   const memberList = participants.map((jid, index) => {
     const number = jid.split('@')[0];
-    const emoji = index === 0 ? '⌯⌲' : ['ᯓ★', '┈➤', '─.✦', ' ͟͟͞͞➳❥', ' ͟͟͞:➛'][index % 5];
-    return `${emoji} @${number}`;
+    const emojiNum = toEmojiNumber(index + 1);
+    return `${emojiNum} @${number}`;
   }).join('\n');
   
   // Build the announcement text
   let announcementText = '';
+  const senderHeader = `\n👤 *Message by:* @${senderJid.split('@')[0]}\n`;
+  let replyTag = '';
+  if (quotedParticipant) {
+    replyTag = `📢 *Attention:* @${quotedParticipant.split('@')[0]}\n\n`;
+  }
   
   if (customText) {
     announcementText = `┏━━━━━━━━━━━━━┓
 ┃ 📢 *ANNOUNCEMENT* 📢
 ┗━━━━━━━━━━━━━┛
-
-${customText}
+${senderHeader}
+${replyTag}${customText}
 
 ━━━━━━━━━━━━━━━`;
   } else if (contentToSend && messageType === 'text') {
     announcementText = `┏━━━━━━━━━━━━━━┓
 ┃ 📢 *ANNOUNCEMENT* 📢
 ┗━━━━━━━━━━━━━━┛
-
-${contentToSend}
+${senderHeader}
+${replyTag}${contentToSend}
 
 ━━━━━━━━━━━━━━`;
   } else {
-    announcementText = `━━━━━━━━━━━━━━`;
+    announcementText = `━━━━━━━━━━━━━━\n${senderHeader}${replyTag}`;
   }
   
   announcementText += `
@@ -4394,6 +4440,12 @@ ${contentToSend}
 ━━━━━━━━━━━━━
 
 ${memberList}`;
+
+  // Mentions list should include all participants + quoted user
+  const allMentions = [...participants];
+  if (quotedParticipant && !allMentions.includes(quotedParticipant)) {
+    allMentions.push(quotedParticipant);
+  }
   
   // Send based on content type
   try {
@@ -4401,13 +4453,13 @@ ${memberList}`;
       await sock.sendMessage(chatId, {
         image: contentToSend,
         caption: BOT_MARKER + announcementText,
-        contextInfo: { mentionedJid: participants }
+        contextInfo: { mentionedJid: allMentions }
       });
     } else if (messageType === 'video' && contentToSend) {
       await sock.sendMessage(chatId, {
         video: contentToSend,
         caption: BOT_MARKER + announcementText,
-        contextInfo: { mentionedJid: participants }
+        contextInfo: { mentionedJid: allMentions }
       });
     } else if (messageType === 'sticker' && contentToSend) {
       // Send sticker first
@@ -4417,13 +4469,13 @@ ${memberList}`;
       // Then send announcement with PROPER TAGS
       await sock.sendMessage(chatId, { 
         text: BOT_MARKER + announcementText, 
-        contextInfo: { mentionedJid: participants }
+        contextInfo: { mentionedJid: allMentions }
       });
     } else {
       // Just send text with PROPER TAGS
       await sock.sendMessage(chatId, { 
         text: BOT_MARKER + announcementText, 
-        contextInfo: { mentionedJid: participants }
+        contextInfo: { mentionedJid: allMentions }
       });
     }
     
@@ -4477,9 +4529,10 @@ ${memberList}`;
           const customText = txt.substring(`${botConfig.getPrefix().toLowerCase()} hidetag`.length).trim();
           
           // Check if user replied to a message
-          const quotedMessage = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const quotedMsgKey = m.message?.extendedTextMessage?.contextInfo?.stanzaId;
-          const quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
+          const contextInfo = m.message?.extendedTextMessage?.contextInfo;
+          const quotedMessage = contextInfo?.quotedMessage;
+          const quotedMsgKey = contextInfo?.stanzaId;
+          const quotedParticipant = contextInfo?.participant;
           
           let contentToSend = null;
           let messageType = 'text';
@@ -4561,9 +4614,21 @@ ${memberList}`;
           // Build message with member count info
           let messageText = customText || contentToSend || '';
           
+          const senderHeader = `👤 *Message by:* @${senderJid.split('@')[0]}\n`;
+          let replyTag = '';
+          if (quotedParticipant) {
+            replyTag = `📢 *Attention:* @${quotedParticipant.split('@')[0]}\n\n`;
+          }
+
+          // Mentions list should include all participants + quoted user
+          const allMentions = [...participants];
+          if (quotedParticipant && !allMentions.includes(quotedParticipant)) {
+            allMentions.push(quotedParticipant);
+          }
+
           // Add member count footer
           const memberCount = participants.length;
-          const footer = `\n\n━━━━━━━━━━━━━\n👥 ${memberCount} members tagged silently`;
+          const footer = `\n\n━━━━━━━━━━━━━\n${senderHeader}${replyTag}👥 ${memberCount} members tagged silently`;
           
           if (messageType === 'text') {
             messageText = messageText + footer;
@@ -4575,13 +4640,13 @@ ${memberList}`;
               await sock.sendMessage(chatId, {
                 image: contentToSend,
                 caption: BOT_MARKER + (customText || '') + footer,
-                mentions: participants
+                contextInfo: { mentionedJid: allMentions }
               });
             } else if (messageType === 'video' && contentToSend) {
               await sock.sendMessage(chatId, {
                 video: contentToSend,
                 caption: BOT_MARKER + (customText || '') + footer,
-                mentions: participants
+                contextInfo: { mentionedJid: allMentions }
               });
             } else if (messageType === 'sticker' && contentToSend) {
               await sock.sendMessage(chatId, {
@@ -4589,12 +4654,12 @@ ${memberList}`;
               });
               await sock.sendMessage(chatId, { 
                 text: BOT_MARKER + (customText || 'Tagged silently') + footer, 
-                mentions: participants 
+                contextInfo: { mentionedJid: allMentions }
               });
             } else {
               await sock.sendMessage(chatId, { 
                 text: BOT_MARKER + messageText, 
-                mentions: participants 
+                contextInfo: { mentionedJid: allMentions }
               });
             }
             

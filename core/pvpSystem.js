@@ -290,6 +290,16 @@ setInterval(() => {
     for (const [chatId, duel] of activeDuels.entries()) {
       if (now - duel.lastAction > 300000) {
         activeDuels.delete(chatId);
+        
+        // Notify chat
+        const engine = require('./engine');
+        const sock = engine.getSock();
+        const botMarker = `*${botConfig.getBotName()}*\n\n`;
+        if (sock) {
+          sock.sendMessage(chatId, { 
+            text: botMarker + "⌛ *DUEL TIMEOUT!* ⌛\n\nThe duel has been cancelled due to inactivity." 
+          }).catch(() => {});
+        }
       }
     }
   }, 60000); // check every minute
