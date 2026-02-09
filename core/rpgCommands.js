@@ -422,6 +422,12 @@ async function sellItem(sock, chatId, senderJid, itemId, quantity = 1) {
 `;
     msg += `💵 Sold for: ${getCurrency().symbol}${result.soldFor.toLocaleString()}
 `;
+
+    if (result.guildContribution) {
+        msg += `🏛️ Guild Contribution: ${getCurrency().symbol}${result.guildContribution.amount.toLocaleString()} (${result.guildContribution.xp} XP, ${result.guildContribution.bank} Bank)
+`;
+    }
+
     if (result.remaining > 0) { 
         msg += `📦 Remaining: ${result.remaining}`;
     }

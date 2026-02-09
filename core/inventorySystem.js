@@ -5,6 +5,7 @@
 
 const economy = require('./economy');
 const lootSystem = require('./lootSystem');
+const guilds = require('./guilds');
 
 // ==========================================
 // 📦 INVENTORY CONFIGURATION
@@ -473,11 +474,36 @@ function sellItem(userId, itemId, quantity = 1) {
     // Special case for gold currency item: 1:15 exchange rate (100% of base value)
     if (itemId === 'gold') sellMultiplier = 1.0;
     
-    const sellValue = Math.floor(baseValue * sellMultiplier * quantity);
-    
-    // Remove item and add money
+    const totalValue = Math.floor(baseValue * sellMultiplier * quantity);
+    let sellValue = totalValue;
+    let guildContribution = null;
+
+    // Remove item
     const removeResult = removeItem(userId, itemId, quantity);
     if (!removeResult.success) return removeResult;
+
+    // Guild House Contribution System (5% tax)
+    const guildName = guilds.getUserGuild(userId);
+    if (guildName) {
+        const taxAmount = Math.floor(totalValue * 0.05);
+        if (taxAmount > 0) {
+            const guildXP = Math.floor(taxAmount * 0.6);
+            const guildBank = taxAmount - guildXP;
+            
+            guilds.addGuildPoints(guildName, guildXP, `Tax from ${itemId} sale`);
+            guilds.addGuildBalance(guildName, guildBank);
+            
+            sellValue = totalValue - taxAmount;
+            guildContribution = {
+                amount: taxAmount,
+                xp: guildXP,
+                bank: guildBank,
+                guildName: guildName
+            };
+        }
+        // Merchant Tracking: Log Zeni earned to guild board
+        guilds.updateBoardProgress(guildName, 'EARN_ZENI', totalValue);
+    }
     
     economy.addMoney(userId, sellValue);
     
@@ -485,7 +511,9 @@ function sellItem(userId, itemId, quantity = 1) {
         success: true,
         itemId,
         quantity,
+        totalValue: totalValue,
         soldFor: sellValue,
+        guildContribution: guildContribution,
         remaining: removeResult.remaining
     };
 }

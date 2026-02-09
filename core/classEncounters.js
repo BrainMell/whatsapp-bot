@@ -721,38 +721,39 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
 function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1) {
     const scaled = { ...enemy };
     
-    // 💡 IMPROVED SCALING FORMULA
-    // 1. Party Scale: +20% stats per extra player
-    // 2. Difficulty Scale: Multiplier (1.0 - 20.0)
-    // 3. Level Scale: +5% stats per level (Base growth)
+    // 💡 NEW SCALING FORMULA (from notes.md)
+    // RankIndex is based on difficulty multiplier passed from guildAdventure
+    // Formula: Stat * (1 + RankIndex * Multiplier)
+    const rankIndex = difficulty; 
     
-    const partyFactor = 1 + ((partySize - 1) * 0.2);
-    const levelFactor = 1 + (avgLevel * 0.05); // Smoother scaling
-    const combinedScale = partyFactor * difficulty * levelFactor;
+    // Damage scaling: +12% per rank
+    const dmgMult = 1 + (rankIndex * 0.12);
+    // Speed scaling: +6% per rank
+    const spdMult = 1 + (rankIndex * 0.06);
+    // Party scaling: +20% per extra player
+    const partyFactor = 1 + ((partySize - 1) * 0.20);
     
     scaled.stats = { ...enemy.stats };
-    for (const [stat, value] of Object.entries(scaled.stats)) {
-        // Apply scaling
-        scaled.stats[stat] = Math.floor(value * combinedScale);
-    }
     
-    // ⚡ SPEED FIX: Ensure enemies are fast enough to get turns
-    // Minimum Speed = Base Speed + (Level / 2)
-    const minSpeed = (enemy.stats.spd || 10) + Math.floor(avgLevel * 0.4);
-    scaled.stats.spd = Math.max(scaled.stats.spd, minSpeed);
+    // Check if it's an ELITE enemy (determined by ID or property)
+    // notes.md: +25% HP, +20% speed, NO raw damage buff
+    const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') || (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
 
-    // ⚔️ ATTACK FIX: Ensure enemies pierce defense
-    // Boost ATK slightly more to avoid "1 damage" scenarios against tanks
-    scaled.stats.atk = Math.floor(scaled.stats.atk * 1.2); 
-    scaled.stats.mag = Math.floor(scaled.stats.mag * 1.2);
+    // Base Stat Scaling
+    scaled.stats.hp = Math.floor(enemy.stats.hp * partyFactor * (1 + (rankIndex * 0.15))); // HP scales slightly faster
+    if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
 
-    // 💡 DYNAMIC SKILLS BASED ON ARCHETYPE
-    if (enemy.archetype) {
-        scaled.abilities = monsterSkills.getSkillsForMonster(enemy.archetype, avgLevel).map(s => s.id);
-    } else {
-        scaled.abilities = enemy.skills || [];
-    }
+    // Apply Damage Scaling (ATK/MAG)
+    scaled.stats.atk = Math.floor(enemy.stats.atk * partyFactor * dmgMult);
+    scaled.stats.mag = Math.floor(enemy.stats.mag * partyFactor * dmgMult);
     
+    // Apply Speed Scaling
+    scaled.stats.spd = Math.floor(enemy.stats.spd * partyFactor * spdMult);
+    if (isElite) scaled.stats.spd = Math.floor(scaled.stats.spd * 1.20);
+
+    // Defense scaling (linear)
+    scaled.stats.def = Math.floor(enemy.stats.def * partyFactor * (1 + (rankIndex * 0.08)));
+
     // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
     
@@ -761,10 +762,18 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.mana = 100;
     scaled.maxMana = 100;
     
-    scaled.xpReward = Math.floor(enemy.xpReward * difficulty * levelFactor);
+    // Dynamic skills
+    if (enemy.archetype) {
+        scaled.abilities = monsterSkills.getSkillsForMonster(enemy.archetype, avgLevel).map(s => s.id);
+    } else {
+        scaled.abilities = enemy.skills || [];
+    }
+    
+    // Rewards
+    scaled.xpReward = Math.floor(enemy.xpReward * (1 + (rankIndex * 0.2)));
     scaled.goldReward = [
-        Math.floor(enemy.goldReward[0] * difficulty * levelFactor),
-        Math.floor(enemy.goldReward[1] * difficulty * levelFactor)
+        Math.floor(enemy.goldReward[0] * (1 + (rankIndex * 0.15))),
+        Math.floor(enemy.goldReward[1] * (1 + (rankIndex * 0.15)))
     ];
     
     scaled.statusEffects = [];
@@ -776,34 +785,38 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
 
 function scaleBossStats(boss, partySize, difficulty, avgLevel = 1) {
     const scaled = { ...boss };
-    const scaleFactor = 1 + ((partySize - 1) * 0.15) * difficulty;
+    const rankIndex = difficulty;
+    
+    // Standardize Party Factor to 20% per extra player
+    const partyFactor = 1 + ((partySize - 1) * 0.20);
+    const dmgMult = 1 + (rankIndex * 0.15);
+    const spdMult = 1 + (rankIndex * 0.08);
     
     scaled.stats = { ...boss.stats };
-    for (const [stat, value] of Object.entries(scaled.stats)) {
-        scaled.stats[stat] = Math.floor(value * scaleFactor);
-    }
     
-    // 💡 BOSS SKILLS
-    scaled.abilities = boss.skills || [];
+    scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * 0.3)));
+    scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
+    scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
+    scaled.stats.spd = Math.floor(boss.stats.spd * partyFactor * spdMult);
+    scaled.stats.def = Math.floor(boss.stats.def * partyFactor * (1 + (rankIndex * 0.1)));
     
-    // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
-    
     scaled.currentHP = scaled.stats.hp;
     scaled.maxHP = scaled.stats.hp;
-    scaled.mana = 100;
-    scaled.maxMana = 100;
+    scaled.mana = 200;
+    scaled.maxMana = 200;
     
-    scaled.xpReward = Math.floor(boss.xpReward * difficulty);
+    scaled.xpReward = Math.floor(boss.xpReward * (1 + (rankIndex * 0.3)));
     scaled.goldReward = [
-        Math.floor(boss.goldReward[0] * difficulty),
-        Math.floor(boss.goldReward[1] * difficulty)
+        Math.floor(boss.goldReward[0] * (1 + (rankIndex * 0.2))),
+        Math.floor(boss.goldReward[1] * (1 + (rankIndex * 0.2)))
     ];
     
     scaled.statusEffects = [];
     scaled.isEnemy = true;
     scaled.isBoss = true;
     scaled.currentPhase = 0;
+    scaled.abilities = boss.skills || [];
     
     return scaled;
 }

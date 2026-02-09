@@ -544,49 +544,48 @@ const ITEM_DATABASE = {
     'deer_antler': { name: 'Deer Antlers', description: 'Majestic and useful for crafting.', rarity: 'UNCOMMON', value: 200, type: 'MATERIAL' },
     'bear_claw': { name: 'Bear Claws', description: 'Sharp and dangerous.', rarity: 'RARE', value: 800, type: 'MATERIAL' },
 
-    // --- CRAFTED GEAR ---
-    'steel_sabre': { name: 'Steel Sabre', description: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)', rarity: 'RARE', value: 8000, type: 'EQUIPMENT', stats: { atk: 25, spd: 5 }, slot: 'main_hand', reqLevel: 10, element: 'PHYSICAL' },
-    'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies magical resonance. (+40 MAG, +10 HP)', rarity: 'EPIC', value: 15000, type: 'EQUIPMENT', stats: { mag: 40, hp: 10 }, slot: 'main_hand', reqLevel: 20, element: 'MAGICAL', isTwoHanded: true },
-    'reinforced_plate': { name: 'Reinforced Plate', description: 'Impenetrable steel plating. (+45 DEF, +50 HP)', rarity: 'EPIC', value: 12000, type: 'EQUIPMENT', stats: { def: 45, hp: 50 }, slot: 'armor', reqLevel: 15 },
-
-    // --- NEW GEAR: WEAPONS ---
-    'shadow_dagger': { name: 'Shadow Dagger', description: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 7500, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 12, element: 'DARK' },
-    'warhammer': { name: 'Paladin Warhammer', description: 'Heavy and blessed. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 8500, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, element: 'HOLY', isTwoHanded: true },
-    'death_scythe': { name: 'Reaper Scythe', description: 'Harvests the souls of the living. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 14000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, element: 'DEATH', isTwoHanded: true },
-    'chrono_blade': { name: 'Chrono Blade', description: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 16000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 25, element: 'TIME' },
-    'golden_cane': { name: 'Merchant Cane', description: 'Wealth is power. (+20 ATK, +50 LUCK)', rarity: 'RARE', value: 9000, type: 'EQUIPMENT', stats: { atk: 20, luck: 50 }, slot: 'main_hand', reqLevel: 10 },
-    'multi_tool': { name: 'Artificer Tool', description: 'A gadget for every situation. (+25 ATK, +25 MAG, +10 DEF)', rarity: 'RARE', value: 9500, type: 'EQUIPMENT', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand', reqLevel: 10 },
-    'greataxe': { name: 'Berserker Axe', description: 'Pure, unadulterated rage. (+55 ATK, -10 DEF)', rarity: 'EPIC', value: 13000, type: 'EQUIPMENT', stats: { atk: 55, def: -10 }, slot: 'main_hand', reqLevel: 20, element: 'PHYSICAL', isTwoHanded: true },
-    'elemental_wand': { name: 'Prism Wand', description: 'Channels the four elements. (+50 MAG)', rarity: 'EPIC', value: 14500, type: 'EQUIPMENT', stats: { mag: 50 }, slot: 'main_hand', reqLevel: 20, element: 'ELEMENTAL' },
-    'storm_bow': { name: 'Storm Bow', description: 'Shoots arrows of pure lightning. (+40 ATK, +20 SPD)', rarity: 'EPIC', value: 15500, type: 'EQUIPMENT', stats: { atk: 40, spd: 20 }, slot: 'main_hand', reqLevel: 20, element: 'LIGHTNING', isTwoHanded: true },
-    'excalibur_fake': { name: 'Excaliburn', description: 'A very convincing replica. (+60 ATK)', rarity: 'LEGENDARY', value: 25000, type: 'EQUIPMENT', stats: { atk: 60 }, slot: 'main_hand', reqLevel: 30, element: 'PHYSICAL' },
-
-    // --- NEW GEAR: ARMOR ---
-    'stealth_garb': { name: 'Stealth Garb', description: 'Quiet and lightweight. (+15 DEF, +30 SPD)', rarity: 'RARE', value: 6500, type: 'EQUIPMENT', stats: { def: 15, spd: 30 }, slot: 'armor', reqLevel: 12 },
-    'holy_raiment': { name: 'Holy Raiment', description: 'Blessed by the divine. (+25 DEF, +40 MAG)', rarity: 'RARE', value: 8000, type: 'EQUIPMENT', stats: { def: 25, mag: 40 }, slot: 'armor', reqLevel: 15 },
-    'dragon_plate': { name: 'Dragon Armor', description: 'Forged from dragon scales. (+60 DEF, +100 HP)', rarity: 'LEGENDARY', value: 30000, type: 'EQUIPMENT', stats: { def: 60, hp: 100 }, slot: 'armor', reqLevel: 35 },
-    'void_cloak': { name: 'Void Cloak', description: 'Absorbs light and damage. (+40 DEF, +20% Evasion)', rarity: 'EPIC', value: 18000, type: 'EQUIPMENT', stats: { def: 40, spd: 25 }, slot: 'armor', reqLevel: 25, element: 'VOID' },
-    'archmage_robes': { name: 'Archmage Robes', description: 'The pinnacle of wizardry. (+20 DEF, +80 MAG)', rarity: 'LEGENDARY', value: 35000, type: 'EQUIPMENT', stats: { def: 20, mag: 80 }, slot: 'armor', reqLevel: 40, element: 'MAGICAL' },
-    'knight_shield': { name: 'Knight Shield', description: 'A sturdy heater shield. (+35 DEF)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { def: 35 }, slot: 'off_hand', reqLevel: 5, isShield: true },
-
-    // --- NEW GEAR: HELMETS ---
-    'iron_helm': { name: 'Iron Helmet', description: 'Basic protection. (+10 DEF)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { def: 10 }, slot: 'helmet', reqLevel: 1 },
-    'wizard_hat': { name: 'Wizard Hat', description: 'Classic pointy hat. (+15 MAG)', rarity: 'UNCOMMON', value: 2500, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'helmet', reqLevel: 5 },
-    'assassin_hood': { name: 'Shadow Hood', description: 'Hides your face. (+5 DEF, +10 SPD, +5% Crit)', rarity: 'RARE', value: 5000, type: 'EQUIPMENT', stats: { def: 5, spd: 10, crit: 5 }, slot: 'helmet', reqLevel: 10 },
-    'dragon_horn_crown': { name: 'Dragon Crown', description: 'Crown of a dragon slayer. (+20 DEF, +30 ATK)', rarity: 'EPIC', value: 15000, type: 'EQUIPMENT', stats: { def: 20, atk: 30 }, slot: 'helmet', reqLevel: 30 },
-
-    // --- NEW GEAR: BOOTS ---
-    'leather_boots': { name: 'Leather Boots', description: 'Simple walking boots. (+5 SPD)', rarity: 'COMMON', value: 800, type: 'EQUIPMENT', stats: { spd: 5 }, slot: 'boots', reqLevel: 1 },
-    'heavy_greaves': { name: 'Heavy Greaves', description: 'Protected but slow. (+20 DEF, -5 SPD)', rarity: 'UNCOMMON', value: 3500, type: 'EQUIPMENT', stats: { def: 20, spd: -5 }, slot: 'boots', reqLevel: 10 },
-    'winged_sandals': { name: 'Winged Sandals', description: 'Feel as light as a feather. (+40 SPD)', rarity: 'EPIC', value: 12000, type: 'EQUIPMENT', stats: { spd: 40 }, slot: 'boots', reqLevel: 25 },
-
-    // --- NEW GEAR: ACCESSORIES ---
-    'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'UNCOMMON', value: 4000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 1 },
-    'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 10 },
-    'intellect_ring': { name: 'Sage Ring', description: 'Increases magical power. (+20 MAG)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { mag: 20 }, slot: 'ring', reqLevel: 10 },
-    'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves', reqLevel: 5 },
-
-    // --- CRAFTED CONSUMABLES ---
+        // --- CRAFTED GEAR ---
+        'steel_sabre': { name: 'Steel Sabre', description: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 25, spd: 5 }, slot: 'main_hand', reqLevel: 10, element: 'PHYSICAL' },
+        'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies magical resonance. (+40 MAG, +10 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { mag: 40, hp: 10 }, slot: 'main_hand', reqLevel: 20, element: 'MAGICAL', isTwoHanded: true },
+        'reinforced_plate': { name: 'Reinforced Plate', description: 'Impenetrable steel plating. (+45 DEF, +50 HP)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { def: 45, hp: 50 }, slot: 'armor', reqLevel: 15 },
+    
+        // --- NEW GEAR: WEAPONS ---
+        'shadow_dagger': { name: 'Shadow Dagger', description: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 12, element: 'DARK' },
+        'warhammer': { name: 'Paladin Warhammer', description: 'Heavy and blessed. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 17000, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, element: 'HOLY', isTwoHanded: true },
+        'death_scythe': { name: 'Reaper Scythe', description: 'Harvests the souls of the living. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 28000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, element: 'DEATH', isTwoHanded: true },
+        'chrono_blade': { name: 'Chrono Blade', description: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 32000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 25, element: 'TIME' },
+        'golden_cane': { name: 'Merchant Cane', description: 'Wealth is power. (+20 ATK, +50 LUCK)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 20, luck: 50 }, slot: 'main_hand', reqLevel: 10 },
+        'multi_tool': { name: 'Artificer Tool', description: 'A gadget for every situation. (+25 ATK, +25 MAG, +10 DEF)', rarity: 'RARE', value: 19000, type: 'EQUIPMENT', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand', reqLevel: 10 },
+        'greataxe': { name: 'Berserker Axe', description: 'Pure, unadulterated rage. (+55 ATK, -10 DEF)', rarity: 'EPIC', value: 26000, type: 'EQUIPMENT', stats: { atk: 55, def: -10 }, slot: 'main_hand', reqLevel: 20, element: 'PHYSICAL', isTwoHanded: true },
+        'elemental_wand': { name: 'Prism Wand', description: 'Channels the four elements. (+50 MAG)', rarity: 'EPIC', value: 29000, type: 'EQUIPMENT', stats: { mag: 50 }, slot: 'main_hand', reqLevel: 20, element: 'ELEMENTAL' },
+        'storm_bow': { name: 'Storm Bow', description: 'Shoots arrows of pure lightning. (+40 ATK, +20 SPD)', rarity: 'EPIC', value: 31000, type: 'EQUIPMENT', stats: { atk: 40, spd: 20 }, slot: 'main_hand', reqLevel: 20, element: 'LIGHTNING', isTwoHanded: true },
+        'excalibur_fake': { name: 'Excaliburn', description: 'A very convincing replica. (+60 ATK)', rarity: 'LEGENDARY', value: 50000, type: 'EQUIPMENT', stats: { atk: 60 }, slot: 'main_hand', reqLevel: 30, element: 'PHYSICAL' },
+    
+        // --- NEW GEAR: ARMOR ---
+        'stealth_garb': { name: 'Stealth Garb', description: 'Quiet and lightweight. (+15 DEF, +30 SPD)', rarity: 'RARE', value: 13000, type: 'EQUIPMENT', stats: { def: 15, spd: 30 }, slot: 'armor', reqLevel: 12 },
+        'holy_raiment': { name: 'Holy Raiment', description: 'Blessed by the divine. (+25 DEF, +40 MAG)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 25, mag: 40 }, slot: 'armor', reqLevel: 15 },
+        'dragon_plate': { name: 'Dragon Armor', description: 'Forged from dragon scales. (+60 DEF, +100 HP)', rarity: 'LEGENDARY', value: 60000, type: 'EQUIPMENT', stats: { def: 60, hp: 100 }, slot: 'armor', reqLevel: 35 },
+        'void_cloak': { name: 'Void Cloak', description: 'Absorbs light and damage. (+40 DEF, +20% Evasion)', rarity: 'EPIC', value: 36000, type: 'EQUIPMENT', stats: { def: 40, spd: 25 }, slot: 'armor', reqLevel: 25, element: 'VOID' },
+        'archmage_robes': { name: 'Archmage Robes', description: 'The pinnacle of wizardry. (+20 DEF, +80 MAG)', rarity: 'LEGENDARY', value: 70000, type: 'EQUIPMENT', stats: { def: 20, mag: 80 }, slot: 'armor', reqLevel: 40, element: 'MAGICAL' },
+        'knight_shield': { name: 'Knight Shield', description: 'A sturdy heater shield. (+35 DEF)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { def: 35 }, slot: 'off_hand', reqLevel: 5, isShield: true },
+    
+        // --- NEW GEAR: HELMETS ---
+        'iron_helm': { name: 'Iron Helmet', description: 'Basic protection. (+10 DEF)', rarity: 'COMMON', value: 2000, type: 'EQUIPMENT', stats: { def: 10 }, slot: 'helmet', reqLevel: 1 },
+        'wizard_hat': { name: 'Wizard Hat', description: 'Classic pointy hat. (+15 MAG)', rarity: 'UNCOMMON', value: 5000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'helmet', reqLevel: 5 },
+        'assassin_hood': { name: 'Shadow Hood', description: 'Hides your face. (+5 DEF, +10 SPD, +5% Crit)', rarity: 'RARE', value: 10000, type: 'EQUIPMENT', stats: { def: 5, spd: 10, crit: 5 }, slot: 'helmet', reqLevel: 10 },
+        'dragon_horn_crown': { name: 'Dragon Crown', description: 'Crown of a dragon slayer. (+20 DEF, +30 ATK)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { def: 20, atk: 30 }, slot: 'helmet', reqLevel: 30 },
+    
+        // --- NEW GEAR: BOOTS ---
+        'leather_boots': { name: 'Leather Boots', description: 'Simple walking boots. (+5 SPD)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { spd: 5 }, slot: 'boots', reqLevel: 1 },
+        'heavy_greaves': { name: 'Heavy Greaves', description: 'Protected but slow. (+20 DEF, -5 SPD)', rarity: 'UNCOMMON', value: 7000, type: 'EQUIPMENT', stats: { def: 20, spd: -5 }, slot: 'boots', reqLevel: 10 },
+        'winged_sandals': { name: 'Winged Sandals', description: 'Feel as light as a feather. (+40 SPD)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { spd: 40 }, slot: 'boots', reqLevel: 25 },        
+    
+        // --- NEW GEAR: ACCESSORIES ---
+        'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'UNCOMMON', value: 8000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 1 },
+        'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 10 },
+        'intellect_ring': { name: 'Sage Ring', description: 'Increases magical power. (+20 MAG)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { mag: 20 }, slot: 'ring', reqLevel: 10 },
+        'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves', reqLevel: 5 }, 
+        // --- CRAFTED CONSUMABLES ---
     'mega_potion': { name: 'Mega Health Potion', description: 'Restores 80% HP.', rarity: 'RARE', value: 2800, usable: true, effect: 'heal', effectValue: 0.8 },
     'elixir_of_power': { name: 'Elixir of Power', description: 'Boosts ATK and MAG by 50% for 5 turns.', rarity: 'EPIC', value: 5000, usable: true, effect: 'buff_all', effectValue: 50, duration: 5 },
     'liquid_courage': { name: 'Liquid Courage', description: 'Grants a massive temporary shield.', rarity: 'RARE', value: 3500, usable: true, effect: 'shield_max', effectValue: 100 },
