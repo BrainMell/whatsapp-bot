@@ -6037,6 +6037,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--geo-bypass',
+      '--ffmpeg-location', FFMPEG_PATH,
       '--max-filesize', '50M',
       '-o', fileName
     ]);
