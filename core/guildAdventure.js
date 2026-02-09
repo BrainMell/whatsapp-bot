@@ -20,6 +20,7 @@ const lootSystem = require('./lootSystem');
 const bossMechanics = require('./bossMechanics');
 const classEncounters = require('./classEncounters');
 const combatIntegration = require('./combatIntegration');
+const guilds = require('./guilds');
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -35,6 +36,79 @@ const DUNGEON_RANKS = {
     S: { name: 'S-Rank', encounters: 10, minMobs: 4, maxMobs: 6, difficulty: 18.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 18.0 },
     SS: { name: 'SS-Rank', encounters: 11, minMobs: 4, maxMobs: 7, difficulty: 35.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 35.0 },
     SSS: { name: 'SSS-Rank', encounters: 13, minMobs: 5, maxMobs: 8, difficulty: 75.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 75.0 }
+};
+
+const DUNGEON_ENVIRONMENTS = {
+    FIRE_CAVE: { 
+        id: 'FIRE_CAVE', name: 'Fire Cave', asset: 'env1.png', 
+        mobs: ['FLAME', 'ELDER_FLAME', 'MAGMA_BRUTE', 'HELLFIRE_DEMON'],
+        bosses: ['INFERNAL_OVERLORD', 'PRIMORDIAL_FLAME'],
+        modifier: { type: 'HEAT_EXHAUSTION', desc: '-5% Max HP per turn in lava', damage: 0.05 },
+        enemyBonus: { type: 'DAMAGE', value: 0.10, element: 'fire' }
+    },
+    ICE_CAVE: { 
+        id: 'ICE_CAVE', name: 'Ice Cave', asset: 'env2.png', 
+        mobs: ['FROST_GHOUL', 'GLACIAL_BEAST', 'BLIZZARD_WRAITH'],
+        bosses: ['PERMAFROST_TITAN'],
+        modifier: { type: 'FROSTBITE', desc: '-10% Speed penalty', spdReduction: 0.10 },
+        enemyBonus: { type: 'DEFENSE', value: 0.20 }
+    },
+    TOXIC_CAVE: { 
+        id: 'TOXIC_CAVE', name: 'Toxic Cave', asset: 'env3.png', 
+        mobs: ['DROWNED_ONE', 'TIDE_LURKER', 'MIST_WALKER'],
+        bosses: ['LEVIATHAN_SPAWN'],
+        modifier: { type: 'TOXIC_MIST', desc: '-30% Healing effectiveness', healReduction: 0.30 },
+        enemyBonus: { type: 'DOT', effect: 'poison', value: 5 }
+    },
+    VOID_DIMENSION: { 
+        id: 'VOID_DIMENSION', name: 'Void Dimension', asset: 'env4.png', 
+        mobs: ['VOID_CORRUPTED', 'ABYSSAL_HORROR'],
+        bosses: ['VOID_TITAN', 'PRIMORDIAL_CHAOS'],
+        modifier: { type: 'TIME_DILATION', desc: 'Random turn order manipulation' },
+        enemyBonus: { type: 'RANDOM_TP', chance: 0.10 }
+    },
+    SCI_FI_CITY: { 
+        id: 'SCI_FI_CITY', name: 'Sci-Fi City', asset: 'env5.png', 
+        mobs: ['TSUNAMI_WALKER', 'ABYSSAL_HORROR'],
+        bosses: ['KRAKEN_SPAWN'],
+        modifier: { type: 'COVER_SYSTEM', desc: 'Defense bonus from structures' },
+        enemyBonus: { type: 'RANGED', rangeBonus: 1 }
+    },
+    DEMON_CASTLE: { 
+        id: 'DEMON_CASTLE', name: 'Demon Castle', asset: 'env6.png', 
+        mobs: ['HELLFIRE_DEMON', 'STAR_EATER'],
+        bosses: ['MUTATION_PRIME', 'ELEMENTAL_ARCHON', 'INFERNAL_OVERLORD', 'PRIMORDIAL_FLAME'],
+        modifier: { type: 'CURSED_GROUND', desc: 'Healing reduced to 50%', healReduction: 0.50 },
+        enemyBonus: { type: 'MAGIC_EMPOWER', value: 0.20 }
+    },
+    DESERT: { 
+        id: 'DESERT', name: 'Desert', asset: 'env7.png', 
+        mobs: ['STONE_HULK', 'CRYSTAL_CORRUPTED', 'EARTH_WARDEN'],
+        bosses: ['GOLEM_KING', 'MOUNTAIN_COLOSSUS'],
+        modifier: { type: 'SANDSTORM', desc: 'Accuracy penalty', accuracyReduction: 0.15 },
+        enemyBonus: { type: 'STAMINA_DRAIN', energyCostInc: 0.10 }
+    },
+    INFECTED_AFTERLIFE: { 
+        id: 'INFECTED_AFTERLIFE', name: 'Infected Afterlife', asset: 'env8.png', 
+        mobs: ['FLESH_ABOMINATION', 'CHIMERA_BEAST'],
+        bosses: ['PERFECT_MUTATION'],
+        modifier: { type: 'CORRUPTION', desc: 'Damage increases over time' },
+        enemyBonus: { type: 'RESURRECTION', chance: 0.10 }
+    },
+    PRE_INFECTED_AFTERLIFE: { 
+        id: 'PRE_INFECTED_AFTERLIFE', name: 'Pre-Infected Afterlife', asset: 'env9.png', 
+        mobs: ['FROST_FLAME_WARDEN', 'STORM_EARTH_TITAN'],
+        bosses: ['ELEMENTAL_SOVEREIGN'],
+        modifier: { type: 'PURITY_AURA', desc: 'Cleanses debuffs randomly' },
+        enemyBonus: { type: 'HOLY_GROUND', healBonus: 0.50 }
+    },
+    SIMPLE_FOREST: { 
+        id: 'SIMPLE_FOREST', name: 'Simple Forest', asset: 'env10.png', 
+        mobs: ['OBSIDIAN_JUGGERNAUT', 'DIAMOND_SENTINEL'],
+        bosses: ['MOUNTAIN_COLOSSUS'],
+        modifier: { type: 'DENSE_FOLIAGE', desc: 'Line-of-sight blocked' },
+        enemyBonus: { type: 'CAMOUFLAGE', evasionBonus: 0.15 }
+    }
 };
 
 const GAME_CONFIG = {
@@ -349,6 +423,7 @@ const CONSUMABLES = {
     'phoenix_down': { name: 'Phoenix Down', cost: 3500, effect: 'revive', effectValue: 0.5, desc: 'Revives a fallen ally with 50% HP.', icon: '🪶' },
     'smoke_bomb': { name: 'Smoke Bomb', cost: 500, effect: 'flee', chance: 80, desc: 'Allows the party to escape combat (80% chance).', icon: '💨' },
     'bomb': { name: 'Bomb', cost: 1000, effect: 'damage_aoe', value: 80, desc: 'Deals 80 area damage to all enemies.', icon: '💣' },
+    'abyssal_detonator': { name: 'Abyssal Detonator', cost: 50000, effect: 'percent_hp_damage', effectValue: 0.25, desc: 'Deals 25% of target MAX HP as true damage.', icon: '💥🌀' },
     
     // BUNDLES
     'bundle_pack': { name: 'Explorer Pack', cost: 1680, effect: 'bundle', items: ['health_potion', 'mana_potion', 'minor_potion'], desc: 'A bundle containing a Health Potion, Energy Elixir, and Minor Potion.', icon: '🎒' },
@@ -358,51 +433,51 @@ const SHOP_LIST = [
     'minor_potion', 'health_potion', 'major_potion', 'elixir', 'regen_salve',
     'mana_potion', 'ether',
     'strength_brew', 'defense_tonic', 'speed_elixir', 'lucky_charm', 'berserker_pill',
-    'phoenix_down', 'bomb', 'smoke_bomb'
+    'phoenix_down', 'bomb', 'smoke_bomb', 'abyssal_detonator'
 ];
 
 const EQUIPMENT = {
     // WEAPONS
-    'rusty_sword': { name: 'Rusty Sword', type: 'weapon', cost: 500, stats: { atk: 5 }, icon: '🗡️', slot: 'weapon' },
-    'iron_sword': { name: 'Iron Sword', type: 'weapon', cost: 1500, stats: { atk: 12 }, icon: '⚔️', slot: 'weapon' },
-    'steel_blade': { name: 'Steel Blade', type: 'weapon', cost: 3500, stats: { atk: 20, crit: 5 }, icon: '🗡️', slot: 'weapon' },
-    'mythril_sword': { name: 'Mythril Sword', type: 'weapon', cost: 7000, stats: { atk: 30, crit: 10 }, icon: '⚔️', slot: 'weapon' },
-    'excalibur': { name: 'Excalibur', type: 'weapon', cost: 15000, stats: { atk: 50, crit: 15, mag: 10 }, icon: '🗡️✨', slot: 'weapon', special: 'holy_damage' },
+    'rusty_sword': { name: 'Rusty Sword', type: 'weapon', cost: 1000, stats: { atk: 5 }, icon: '🗡️', slot: 'weapon' },
+    'iron_sword': { name: 'Iron Sword', type: 'weapon', cost: 3000, stats: { atk: 12 }, icon: '⚔️', slot: 'weapon' },
+    'steel_blade': { name: 'Steel Blade', type: 'weapon', cost: 7000, stats: { atk: 20, crit: 5 }, icon: '🗡️', slot: 'weapon' },
+    'mythril_sword': { name: 'Mythril Sword', type: 'weapon', cost: 14000, stats: { atk: 30, crit: 10 }, icon: '⚔️', slot: 'weapon' },
+    'excalibur': { name: 'Excalibur', type: 'weapon', cost: 30000, stats: { atk: 50, crit: 15, mag: 10 }, icon: '🗡️✨', slot: 'weapon', special: 'holy_damage' },
     
-    'wooden_staff': { name: 'Wooden Staff', type: 'weapon', cost: 500, stats: { mag: 8 }, icon: '🪄', slot: 'weapon' },
-    'magic_wand': { name: 'Magic Wand', type: 'weapon', cost: 2000, stats: { mag: 15 }, icon: '✨', slot: 'weapon' },
-    'arcane_staff': { name: 'Arcane Staff', type: 'weapon', cost: 5000, stats: { mag: 28, atk: 5 }, icon: '🔮', slot: 'weapon' },
-    'staff_of_ages': { name: 'Staff of Ages', type: 'weapon', cost: 12000, stats: { mag: 45, spd: 10 }, icon: '🪄✨', slot: 'weapon', special: 'spell_power' },
+    'wooden_staff': { name: 'Wooden Staff', type: 'weapon', cost: 1000, stats: { mag: 8 }, icon: '🪄', slot: 'weapon' },
+    'magic_wand': { name: 'Magic Wand', type: 'weapon', cost: 4000, stats: { mag: 15 }, icon: '✨', slot: 'weapon' },
+    'arcane_staff': { name: 'Arcane Staff', type: 'weapon', cost: 10000, stats: { mag: 28, atk: 5 }, icon: '🔮', slot: 'weapon' },
+    'staff_of_ages': { name: 'Staff of Ages', type: 'weapon', cost: 24000, stats: { mag: 45, spd: 10 }, icon: '🪄✨', slot: 'weapon', special: 'spell_power' },
     
-    'short_bow': { name: 'Short Bow', type: 'weapon', cost: 800, stats: { atk: 10, spd: 5 }, icon: '🏹', slot: 'weapon' },
-    'longbow': { name: 'Longbow', type: 'weapon', cost: 2500, stats: { atk: 18, spd: 8 }, icon: '🏹', slot: 'weapon' },
-    'hunters_bow': { name: 'Hunter\'s Bow', type: 'weapon', cost: 6000, stats: { atk: 28, spd: 12, crit: 12 }, icon: '🏹✨', slot: 'weapon', special: 'piercing' },
+    'short_bow': { name: 'Short Bow', type: 'weapon', cost: 1600, stats: { atk: 10, spd: 5 }, icon: '🏹', slot: 'weapon' },
+    'longbow': { name: 'Longbow', type: 'weapon', cost: 5000, stats: { atk: 18, spd: 8 }, icon: '🏹', slot: 'weapon' },
+    'hunters_bow': { name: 'Hunter\'s Bow', type: 'weapon', cost: 12000, stats: { atk: 28, spd: 12, crit: 12 }, icon: '🏹✨', slot: 'weapon', special: 'piercing' },
     
     // ARMOR
-    'cloth_armor': { name: 'Cloth Armor', type: 'armor', cost: 400, stats: { def: 5, mag: 3 }, icon: '👕', slot: 'armor' },
-    'leather_armor': { name: 'Leather Armor', type: 'armor', cost: 1200, stats: { def: 10, spd: 2 }, icon: '🧥', slot: 'armor' },
-    'chainmail': { name: 'Chainmail', type: 'armor', cost: 3000, stats: { def: 18 }, icon: '⛓️', slot: 'armor' },
-    'plate_armor': { name: 'Plate Armor', type: 'armor', cost: 6000, stats: { def: 30, hp: 20 }, icon: '🛡️', slot: 'armor' },
-    'dragon_scale': { name: 'Dragon Scale Armor', type: 'armor', cost: 15000, stats: { def: 50, hp: 40, mag: 10 }, icon: '🐉', slot: 'armor', special: 'fire_resist' },
+    'cloth_armor': { name: 'Cloth Armor', type: 'armor', cost: 800, stats: { def: 5, mag: 3 }, icon: '👕', slot: 'armor' },
+    'leather_armor': { name: 'Leather Armor', type: 'armor', cost: 2400, stats: { def: 10, spd: 2 }, icon: '🧥', slot: 'armor' },
+    'chainmail': { name: 'Chainmail', type: 'armor', cost: 6000, stats: { def: 18 }, icon: '⛓️', slot: 'armor' },
+    'plate_armor': { name: 'Plate Armor', type: 'armor', cost: 12000, stats: { def: 30, hp: 20 }, icon: '🛡️', slot: 'armor' },
+    'dragon_scale': { name: 'Dragon Scale Armor', type: 'armor', cost: 30000, stats: { def: 50, hp: 40, mag: 10 }, icon: '🐉', slot: 'armor', special: 'fire_resist' },
     
     // ACCESSORIES
-    'ring_str': { name: 'Ring of Strength', type: 'accessory', cost: 2000, stats: { atk: 10 }, icon: '💍', slot: 'ring' },
-    'ring_int': { name: 'Ring of Intelligence', type: 'accessory', cost: 2000, stats: { mag: 10 }, icon: '💍', slot: 'ring' },
-    'ring_vit': { name: 'Ring of Vitality', type: 'accessory', cost: 2000, stats: { hp: 30 }, icon: '💍', slot: 'ring' },
-    'ring_luck': { name: 'Ring of Fortune', type: 'accessory', cost: 3000, stats: { luck: 20 }, icon: '💍', slot: 'ring' },
-    'ring_crit': { name: 'Ring of Precision', type: 'accessory', cost: 3500, stats: { crit: 15 }, icon: '💍', slot: 'ring' },
+    'ring_str': { name: 'Ring of Strength', type: 'accessory', cost: 4000, stats: { atk: 10 }, icon: '💍', slot: 'ring' },
+    'ring_int': { name: 'Ring of Intelligence', type: 'accessory', cost: 4000, stats: { mag: 10 }, icon: '💍', slot: 'ring' },
+    'ring_vit': { name: 'Ring of Vitality', type: 'accessory', cost: 4000, stats: { hp: 30 }, icon: '💍', slot: 'ring' },
+    'ring_luck': { name: 'Ring of Fortune', type: 'accessory', cost: 6000, stats: { luck: 20 }, icon: '💍', slot: 'ring' },
+    'ring_crit': { name: 'Ring of Precision', type: 'accessory', cost: 7000, stats: { crit: 15 }, icon: '💍', slot: 'ring' },
     
-    'amulet_hp': { name: 'Amulet of Life', type: 'accessory', cost: 2500, stats: { hp: 50 }, icon: '📿', slot: 'amulet' },
-    'amulet_regen': { name: 'Amulet of Regeneration', type: 'accessory', cost: 3500, stats: { hp: 20 }, icon: '📿', slot: 'amulet', special: 'regen_5' },
-    'amulet_elemental': { name: 'Elemental Amulet', type: 'accessory', cost: 5000, stats: { mag: 15, def: 10 }, icon: '📿', slot: 'amulet', special: 'elemental_resist' },
+    'amulet_hp': { name: 'Amulet of Life', type: 'accessory', cost: 5000, stats: { hp: 50 }, icon: '📿', slot: 'amulet' },
+    'amulet_regen': { name: 'Amulet of Regeneration', type: 'accessory', cost: 7000, stats: { hp: 20 }, icon: '📿', slot: 'amulet', special: 'regen_5' },
+    'amulet_elemental': { name: 'Elemental Amulet', type: 'accessory', cost: 10000, stats: { mag: 15, def: 10 }, icon: '📿', slot: 'amulet', special: 'elemental_resist' },
     
-    'boots_speed': { name: 'Boots of Speed', type: 'accessory', cost: 1800, stats: { spd: 15 }, icon: '👢', slot: 'boots' },
-    'boots_tank': { name: 'Iron Boots', type: 'accessory', cost: 1800, stats: { def: 12, hp: 15 }, icon: '👢', slot: 'boots' },
-    'winged_boots': { name: 'Winged Boots', type: 'accessory', cost: 4500, stats: { spd: 25, def: 5 }, icon: '👢✨', slot: 'boots', special: 'first_strike' },
+    'boots_speed': { name: 'Boots of Speed', type: 'accessory', cost: 3600, stats: { spd: 15 }, icon: '👢', slot: 'boots' },
+    'boots_tank': { name: 'Iron Boots', type: 'accessory', cost: 3600, stats: { def: 12, hp: 15 }, icon: '👢', slot: 'boots' },
+    'winged_boots': { name: 'Winged Boots', type: 'accessory', cost: 9000, stats: { spd: 25, def: 5 }, icon: '👢✨', slot: 'boots', special: 'first_strike' },
     
-    'cloak_stealth': { name: 'Cloak of Stealth', type: 'accessory', cost: 3000, stats: { spd: 10, luck: 10 }, icon: '🧥', slot: 'cloak', special: 'dodge_15' },
-    'cloak_mage': { name: 'Mage\'s Cloak', type: 'accessory', cost: 3500, stats: { mag: 20, def: 5 }, icon: '🧥', slot: 'cloak' },
-    'cloak_vampire': { name: 'Vampire Cloak', type: 'accessory', cost: 6000, stats: { atk: 15, mag: 15 }, icon: '🧥', slot: 'cloak', special: 'lifesteal_10' },
+    'cloak_stealth': { name: 'Cloak of Stealth', type: 'accessory', cost: 6000, stats: { spd: 10, luck: 10 }, icon: '🧥', slot: 'cloak', special: 'dodge_15' },
+    'cloak_mage': { name: 'Mage\'s Cloak', type: 'accessory', cost: 7000, stats: { mag: 20, def: 5 }, icon: '🧥', slot: 'cloak' },
+    'cloak_vampire': { name: 'Vampire Cloak', type: 'accessory', cost: 12000, stats: { atk: 15, mag: 15 }, icon: '🧥', slot: 'cloak', special: 'lifesteal_10' },
 };
 
 const CRAFTING_MATERIALS = {
@@ -503,7 +578,18 @@ function generateCombatEncounter(chatId) {
     const state = getGameState(chatId);
     if (!state) return null;
     const rankData = DUNGEON_RANKS[state.dungeonRank];
-    return classEncounters.generateEncounter(
+    const env = state.environment || DUNGEON_ENVIRONMENTS.SIMPLE_FOREST;
+    
+    // Progressive Environment Mixing Logic
+    const rankIndexMap = { 'F': 1, 'E': 2, 'D': 3, 'C': 4, 'B': 5, 'A': 6, 'S': 7, 'SS': 8, 'SSS': 9 };
+    const rankIdx = rankIndexMap[state.dungeonRank] || 1;
+    
+    let mixRate = 0.10; // F-E Rank
+    if (rankIdx >= 3 && rankIdx <= 4) mixRate = 0.30; // D-C Rank
+    else if (rankIdx >= 5 && rankIdx <= 6) mixRate = 0.50; // B-A Rank
+    else if (rankIdx >= 7) mixRate = 0.70; // S+ Rank
+
+    const encounter = classEncounters.generateEncounter(
         state.players,
         'COMBAT',
         state.difficulty || 1.0,
@@ -512,13 +598,53 @@ function generateCombatEncounter(chatId) {
             maxMobs: rankData.maxMobs
         }
     );
+
+    // Override enemies with Environment Mixing
+    encounter.enemies = encounter.enemies.map(e => {
+        const isMixed = Math.random() < mixRate;
+        let selectedMobId;
+        
+        if (!isMixed) {
+            // Use native mob
+            selectedMobId = env.mobs[Math.floor(Math.random() * env.mobs.length)];
+        } else {
+            // Pick from ANY environment
+            const allEnvs = Object.values(DUNGEON_ENVIRONMENTS);
+            const randomEnv = allEnvs[Math.floor(Math.random() * allEnvs.length)];
+            selectedMobId = randomEnv.mobs[Math.floor(Math.random() * randomEnv.mobs.length)];
+        }
+
+        // Re-scale the selected mob
+        const baseMob = classEncounters.INFECTED_POOLS.FIRE_LOW.COMMON.find(m => m.id === selectedMobId) || 
+                        Object.values(classEncounters.INFECTED_POOLS).flatMap(p => p.COMMON).find(m => m.id === selectedMobId);
+        
+        if (baseMob) {
+            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty, e.enemyIndex, encounter.avgLevel);
+        }
+        return e;
+    });
+
+    encounter.theme = {
+        theme: env.name,
+        description: env.modifier.desc
+    };
+
+    return encounter;
 }
 
 function generateEliteCombatEncounter(chatId) {
     const state = getGameState(chatId);
     if (!state) return null;
     const rankData = DUNGEON_RANKS[state.dungeonRank];
-    return classEncounters.generateEncounter(
+    const env = state.environment || DUNGEON_ENVIRONMENTS.SIMPLE_FOREST;
+
+    // Mixing Logic
+    const rankIndexMap = { 'F': 1, 'E': 2, 'D': 3, 'C': 4, 'B': 5, 'A': 6, 'S': 7, 'SS': 8, 'SSS': 9 };
+    const rankIdx = rankIndexMap[state.dungeonRank] || 1;
+    let mixRate = 0.15; 
+    if (rankIdx >= 5) mixRate = 0.40;
+
+    const encounter = classEncounters.generateEncounter(
         state.players,
         'ELITE_COMBAT',
         (state.difficulty || 1.0) * 1.2,
@@ -527,6 +653,36 @@ function generateEliteCombatEncounter(chatId) {
             maxMobs: 2
         }
     );
+
+    encounter.enemies = encounter.enemies.map(e => {
+        const isMixed = Math.random() < mixRate;
+        let selectedMobId;
+        
+        if (!isMixed) {
+            // Find an elite from this env's mob list
+            selectedMobId = env.mobs[Math.floor(Math.random() * env.mobs.length)];
+        } else {
+            const allEnvs = Object.values(DUNGEON_ENVIRONMENTS);
+            const randomEnv = allEnvs[Math.floor(Math.random() * allEnvs.length)];
+            selectedMobId = randomEnv.mobs[Math.floor(Math.random() * randomEnv.mobs.length)];
+        }
+
+        // Find the elite version if possible
+        const baseMob = Object.values(classEncounters.INFECTED_POOLS).flatMap(p => p.ELITE).find(m => m.id.includes(selectedMobId)) || 
+                        Object.values(classEncounters.INFECTED_POOLS).flatMap(p => p.ELITE)[0];
+        
+        if (baseMob) {
+            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty * 1.2, e.enemyIndex, encounter.avgLevel);
+        }
+        return e;
+    });
+
+    encounter.theme = {
+        theme: `Elite ${env.name}`,
+        description: `Dangerous elites have adapted to the ${env.name}!`
+    };
+
+    return encounter;
 }
 
 // ==========================================
@@ -850,7 +1006,7 @@ function rollD20() {
     return rollDice(20);
 }
 
-function calculateDamage(attacker, target, power, type = 'physical', element = 'PHYSICAL') {
+function calculateDamage(attacker, target, power, type = 'physical', element = 'PHYSICAL', chatId = null) {
     let damage = power;
     
     // 💡 RANK DAMAGE BONUS (D-rank and up = DOUBLE damage)
@@ -862,54 +1018,85 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
         }
     }
 
+    // 💡 ENVIRONMENT MODIFIERS
+    if (chatId) {
+        const state = getGameState(chatId);
+        const env = state?.environment;
+        if (env) {
+            // Fire Cave: Enemy fire bonus
+            if (env.id === 'FIRE_CAVE' && attacker.isEnemy && element.toUpperCase() === 'FIRE') {
+                damage *= (1 + (env.enemyBonus?.value || 0.10));
+            }
+            // Demon Castle: Dark magic empowerment
+            if (env.id === 'DEMON_CASTLE' && attacker.isEnemy && type === 'magic') {
+                damage *= (1 + (env.enemyBonus?.value || 0.20));
+            }
+        }
+    }
+
     // Defense mitigation
     const def = type === 'physical' ? (target.stats.def || 0) : (target.stats.mag || 0) * 0.5;
-    
+
     // 💡 DAMAGE REDUCTION (Secondary Stat)
     const dr = target.stats.dmgReduction || 0;
     damage = damage * (1 - (dr / 100));
-    
+
     damage -= (def * 0.5);
-    
+
     // Random variance (±10%)
     const variance = 0.9 + (Math.random() * 0.2);
     damage *= variance;
-    
+
     // 💡 ELEMENTAL MODIFIER
     const targetElement = target.element || 'PHYSICAL';
     const chart = ELEMENT_CHART[element.toUpperCase()] || ELEMENT_CHART.PHYSICAL;
-    
+
     if (chart.strongVs.includes(targetElement)) {
         damage *= 1.5;
     } else if (chart.weakTo.includes(targetElement)) {
         damage *= 0.75;
     }
-    
+
     // Critical hit
     let isCrit = false;
     if (Math.random() * 100 < (attacker.stats.crit || 0)) {
         damage *= 1.5;
         isCrit = true;
     }
-    
+
     // 💡 EVASION CHECK (Secondary Stat)
     let evasionChance = target.stats.evasion || 0;
-    
+
     // 🌍 WEATHER: Foggy (-15% Accuracy = +15% Evasion)
     const hours = new Date().getHours();
     if (Math.floor(hours / 6) % 4 === 1) evasionChance += 15;
 
+    // 🌍 ENVIRONMENT EVASION
+    if (chatId) {
+        const state = getGameState(chatId);
+        const env = state?.environment;
+        if (env) {
+            // Desert: Sandstorm (accuracy penalty)
+            if (env.id === 'DESERT') {
+                evasionChance += (env.modifier.accuracyReduction * 100);
+            }
+            // Forest: Camouflage (evasion bonus for enemies)
+            if (env.id === 'SIMPLE_FOREST' && target.isEnemy) {
+                evasionChance += (env.enemyBonus.evasionBonus * 100);
+            }
+        }
+    }
+
     if (Math.random() * 100 < evasionChance) {
         return { damage: 0, isCrit: false, wasEvaded: true };
     }
-    
-    return { 
-        damage: Math.max(1, Math.floor(damage)), 
+
+    return {
+        damage: Math.max(1, Math.floor(damage)),
         isCrit,
         wasEvaded: false
     };
 }
-
 function applyStatusEffect(target, effectType, duration = 3, value = 0, source = null) {
     if (!target) return;
     if (!target.statusEffects) target.statusEffects = [];
@@ -1372,18 +1559,23 @@ async function processCombatTurn(sock, chatId) {
             // Prevent infinite loop if everyone is dead or insanely slow
             while (!activeActor && ticks < maxTicks) {
                 ticks++;
-                for (const c of state.turnOrder) {
-                    // Skip dead
-                    if (c.stats.hp <= 0) continue;
-
-                    c.actionGauge = (c.actionGauge || 0) + Math.max(1, (c.stats.spd || 10));
-
-                    if (c.actionGauge >= 100) {
-                        activeActor = c;
-                        break; // Found someone!
-                    }
-                }
-            }
+                                  for (const c of state.turnOrder) {
+                                      // Skip dead
+                                      if (c.stats.hp <= 0) continue;
+                
+                                      // ICE CAVE: Frostbite penalty for players
+                                      let speed = c.stats.spd || 10;
+                                      if (state.environment?.id === 'ICE_CAVE' && !c.isEnemy) {
+                                          speed = Math.floor(speed * 0.9);
+                                      }
+                
+                                      c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
+                
+                                      if (c.actionGauge >= 100) {
+                                          activeActor = c;
+                                          break; // Found someone!
+                                      }
+                                  }            }
 
             if (!activeActor) return;
 
@@ -1391,10 +1583,18 @@ async function processCombatTurn(sock, chatId) {
             activeActor.actionGauge -= 100;
             state.activeCombatant = activeActor;
 
-            // Process status effects at start of turn
-            const statusMessages = processStatusEffects(activeActor);
-            if (statusMessages.length > 0) {
-                try {
+                          // Process status effects at start of turn
+                          const statusMessages = processStatusEffects(activeActor);
+            
+                          // FIRE CAVE: Heat Exhaustion
+                          if (state.environment?.id === 'FIRE_CAVE') {
+                              const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
+                              activeActor.stats.hp -= heatDmg;
+                              activeActor.currentHP = Math.max(0, activeActor.stats.hp);
+                              statusMessages.push(`🌋 *Heat Exhaustion:* ${activeActor.name} takes ${heatDmg} fire damage!`);
+                          }
+            
+                          if (statusMessages.length > 0) {                try {
                     await sock.sendMessage(state.chatId, { text: statusMessages.join('\n') });
                 } catch (err) {
                     console.error("Failed to send status messages in processCombatTurn:", err.message);
@@ -1545,7 +1745,7 @@ async function performAction(sock, player, action, chatId) {
             const mainHand = player.equipment?.main_hand;
             const element = mainHand ? (lootSystem.getItemInfo(mainHand.id).element || 'PHYSICAL') : 'PHYSICAL';
             
-            const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk, 'physical', element);
+            const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk, 'physical', element, chatId);
             
             if (wasEvaded) {
                 resultMsg += `💨 *MISS!* ${target.icon} ${target.name} evaded the attack.`;
@@ -1633,7 +1833,7 @@ async function performAction(sock, player, action, chatId) {
         } else {
             inventorySystem.removeItem(player.jid, itemKey, 1);
             let target;
-            const isNegative = ['damage_aoe', 'apply_poison', 'freeze_enemy', 'flee', 'bribe'].includes(item.effect);
+            const isNegative = ['damage_aoe', 'apply_poison', 'freeze_enemy', 'flee', 'bribe', 'percent_hp_damage'].includes(item.effect);
             if (action.targetIndex !== undefined) {
                 target = isNegative ? state.enemies[action.targetIndex] : state.players.find(p => !p.isDead && state.players.indexOf(p) === action.targetIndex);
             } else {
@@ -1648,12 +1848,13 @@ async function performAction(sock, player, action, chatId) {
                 
                 switch (item.effect) {
                     case 'heal':
-                        const healVal = item.effectValue || 0.3; // Default 30%
+                        const hMult = getHealMult(chatId);
+                        const healVal = (item.effectValue || 0.3) * hMult; // Adjusted by environment
                         const healAmt = Math.floor(target.stats.maxHp * healVal);
                         const actualHeal = Math.min(healAmt, target.stats.maxHp - target.stats.hp);
                         target.stats.hp += actualHeal;
                         target.currentHP = target.stats.hp; // Sync
-                        resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)`;
+                        resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)${hMult < 1 ? ' (Healing Reduced)' : ''}`;
                         turnInfo.healing = actualHeal;
                         break;
                     case 'regen':
@@ -1698,6 +1899,16 @@ async function performAction(sock, player, action, chatId) {
                             }
                         });
                         turnInfo.damage = item.effectValue || 0;
+                        break;
+                    case 'percent_hp_damage':
+                        // True damage based on % of Max HP (ignores defense)
+                        const rawDmg = Math.floor(target.stats.maxHp * (item.effectValue || 0.25));
+                        // Counterplay: Bomb resistance check
+                        const finalDmg = target.stats.bomb_resistance ? Math.floor(rawDmg * 0.5) : rawDmg;
+                        target.stats.hp -= finalDmg;
+                        target.currentHP = target.stats.hp;
+                        resultMsg += `\n💥 The Abyssal Detonator consumes ${target.name}! Dealt ${finalDmg} TRUE damage!`;
+                        turnInfo.damage = finalDmg;
                         break;
                     case 'revive':
                         if (target.isDead) {
@@ -1796,7 +2007,7 @@ async function performEnemyAction(sock, enemy, chatId) {
                 resultMsg += `\n⚠️ ${target.name} failed to defend and takes DOUBLE damage!`;
             }
             
-            const { damage } = calculateDamage(enemy, target, power * weatherMult, ability.damageType || 'physical');
+            const { damage } = calculateDamage(enemy, target, power * weatherMult, ability.damageType || 'physical', 'PHYSICAL', chatId);
             target.stats.hp -= damage;
             target.currentHP = Math.max(0, target.stats.hp);
             resultMsg += `\n- Hit ${target.name} for 💥 ${damage} damage!`;
@@ -1856,7 +2067,7 @@ async function performEnemyAction(sock, enemy, chatId) {
             turnInfo.action = { name: ability.name };
 
             for (const target of targets) {
-                const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk * (ability.damage || 1.0));
+                const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk * (ability.damage || 1.0), 'physical', 'PHYSICAL', chatId);
                 if (wasEvaded) {
                     resultMsg += `\n- ${target.name} evaded!`;
                 } else {
@@ -1900,7 +2111,7 @@ async function performEnemyAction(sock, enemy, chatId) {
     const alivePlayers = state.players.filter(p => !p.isDead);
     if (alivePlayers.length > 0) {
         const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-        const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk);
+        const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk, 'physical', 'PHYSICAL', chatId);
         
         turnInfo.target = target;
         turnInfo.action = { name: 'Basic Attack' };
@@ -1936,11 +2147,21 @@ async function handleDeath(sock, entity, chatId, lastKiller = "The Infection") {
     if (!state) return;
     entity.isDead = true;
     entity.stats.hp = 0;
-    entity.currentHP = 0; // Sync
-    entity.justDied = true;
+        entity.currentHP = 0; // Sync
+        entity.justDied = true;
     
-    if (!entity.isEnemy) {
-        // Player death
+        if (entity.isEnemy) {
+            state.stats.monstersKilled++;
+            // Adventurer Tracking: Log kills to guild board for all party members
+            state.players.forEach(p => {
+                const userGuild = guilds.getUserGuild(p.jid);
+                if (userGuild) {
+                    guilds.updateBoardProgress(userGuild, entity.type, 1);
+                }
+            });
+        }
+    
+        if (!entity.isEnemy) {        // Player death
         if (state.mode === 'PERMADEATH' || state.mode === 'HARDCORE') {
             // Callback to index.js to record in graveyard
             if (state.onHardcoreDeath) {
@@ -2263,28 +2484,34 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
         }
     }
     
-    // Set game state
-    const rankData = DUNGEON_RANKS[upperRank];
+        // Set game state
+        const rankData = DUNGEON_RANKS[upperRank];
+        
+        // Select Random Environment
+        const envKeys = Object.keys(DUNGEON_ENVIRONMENTS);
+        const randomEnvKey = envKeys[Math.floor(Math.random() * envKeys.length)];
+        const environment = DUNGEON_ENVIRONMENTS[randomEnvKey];
     
-    const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
-    Object.assign(state, {
-        active: true,
-        phase: 'REGISTRATION',
-        chatId,
-        mode,
-        solo,
-        sock,
-        groq,
-        smartGroqCall,
-        dungeonRank: upperRank,
-        difficulty: rankData.difficulty,
-        encounter: 0,
-        maxEncounters: rankData.encounters,
-        players: [],
-        votes: {},
-        timers: {}
-    });
-    
+        const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
+        Object.assign(state, {
+            active: true,
+            phase: 'REGISTRATION',
+            chatId,
+            mode,
+            solo,
+            sock,
+            groq,
+            smartGroqCall,
+            dungeonRank: upperRank,
+            difficulty: rankData.difficulty,
+            environment: environment,
+            backgroundPath: `rpgasset/environment/${environment.asset}`,
+            encounter: 0,
+            maxEncounters: rankData.encounters,
+            players: [],
+            votes: {},
+            timers: {}
+        });    
     gameStates.set(chatId, state);
     
     // Auto-join for solo
@@ -3000,7 +3227,15 @@ async function endAdventure(sock, chatId, victory = true) {
     msg += `📊 *FINAL STATS:*\n`;
     msg += `☠️ Monsters Slain: ${state.stats.monstersKilled}\n`;
     msg += `👑 Bosses Defeated: ${state.stats.bossesDefeated}\n`;
-    msg += `💎 Treasures Found: ${state.stats.treasuresFound}\n\n`;
+    msg += `💎 Treasures Found: ${state.stats.treasuresFound}\n`;
+
+    // Aggregate party stats
+    const totalDamage = state.players.reduce((sum, p) => sum + (p.combatStats.damageDealt || 0), 0);
+    const totalHealed = state.players.reduce((sum, p) => sum + (p.combatStats.healed || 0), 0);
+    
+    msg += `💥 Total Damage Dealt: ${totalDamage.toLocaleString()}\n`;
+    msg += `💖 Total Healing Done: ${totalHealed.toLocaleString()}\n\n`;
+
     msg += `🏆 *INDIVIDUAL REWARDS:*\n\n`;
     
     const multiplier = state.mode === 'PERMADEATH' ? GAME_CONFIG.PERMADEATH_MULTIPLIER : 1;
@@ -3482,16 +3717,18 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     }
     
     // HEALING ABILITIES
+    // HEALING ABILITIES
     if (effect.type === 'heal' || effect.type.includes('heal')) {
         const target = getHealTarget(player, targetIndex, chatId);
         if (target) {
-            const healAmount = Math.min(effect.value, target.stats.maxHp - target.stats.hp);
+            const hMult = getHealMult(chatId);
+            const healAmount = Math.min(Math.floor(effect.value * hMult), target.stats.maxHp - target.stats.hp);
             target.stats.hp += healAmount;
             target.currentHP = target.stats.hp; 
             totalHealing += healAmount;
             
             const targetIcon = target.class?.icon || '👤';
-            msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!\n`;
+            msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? ' (Healing Reduced)' : (hMult > 1 ? ' (Holy Ground!)' : '')}\n`;
             player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
         }
     }
@@ -3499,14 +3736,15 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     // TEAM HEAL
     if (effect.type === 'heal_team') {
         const allies = state.players.filter(p => !p.isDead);
+        const hMult = getHealMult(chatId);
         for (const ally of allies) {
-            const healAmount = Math.min(effect.value, ally.stats.maxHp - ally.stats.hp);
+            const healAmount = Math.min(Math.floor(effect.value * hMult), ally.stats.maxHp - ally.stats.hp);
             ally.stats.hp += healAmount;
             ally.currentHP = ally.stats.hp; 
             totalHealing += healAmount;
             
             const allyIcon = ally.class?.icon || '👤';
-            msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP\n`;
+            msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? ' (Reduced)' : ''}\n`;
         }
         player.combatStats.healed = (player.combatStats.healed || 0) + totalHealing;
     }
@@ -3580,7 +3818,7 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
         if (target) {
             let totalMultiDamage = 0;
             for (let i = 0; i < effect.hits; i++) {
-                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk * effect.multiplier);
+                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk * effect.multiplier, 'physical', 'PHYSICAL', chatId);
                 if (!wasEvaded) {
                     target.stats.hp -= damage;
                     totalMultiDamage += damage;
@@ -3638,11 +3876,22 @@ function getHealTarget(player, targetIndex, chatId) {
     if (!targetIndex) {
         return player; // Self by default
     }
-    
+
     const index = parseInt(targetIndex) - 1;
     return allies[index] || player;
 }
 
+function getHealMult(chatId) {
+    const state = getGameState(chatId);
+    const env = state?.environment;
+    if (!env) return 1.0;
+
+    if (env.id === 'TOXIC_CAVE') return 0.7;
+    if (env.id === 'DEMON_CASTLE') return 0.5;
+    if (env.id === 'PRE_INFECTED_AFTERLIFE') return 1.5;
+    
+    return 1.0;
+}
 function applyBuff(target, buffType, value, duration) {
     if (!target.buffs) target.buffs = [];
     

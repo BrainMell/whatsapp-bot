@@ -1,5 +1,5 @@
 # Use Node 20 (LTS) with full system libraries
-FROM node:20-bullseye
+FROM node:20-bookworm
 
 # Install the missing Linux libraries that sharp and pureimage need
 RUN apt-get update && apt-get install -y \
@@ -19,8 +19,10 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     python3-pip \
-    && pip3 install yt-dlp \
     && rm -rf /var/lib/apt/lists/*
+
+# Install yt-dlp globally using pip
+RUN pip3 install --break-system-packages yt-dlp
 
 # Set working directory
 WORKDIR /app
