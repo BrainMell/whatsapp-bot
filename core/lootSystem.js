@@ -584,9 +584,11 @@ const ITEM_DATABASE = {
         'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'UNCOMMON', value: 8000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 1 },
         'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 10 },
         'intellect_ring': { name: 'Sage Ring', description: 'Increases magical power. (+20 MAG)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { mag: 20 }, slot: 'ring', reqLevel: 10 },
-        'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves', reqLevel: 5 }, 
-        // --- CRAFTED CONSUMABLES ---
-    'mega_potion': { name: 'Mega Health Potion', description: 'Restores 80% HP.', rarity: 'RARE', value: 2800, usable: true, effect: 'heal', effectValue: 0.8 },
+                  'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves',
+        reqLevel: 5 },
+                  // --- CRAFTED CONSUMABLES ---
+              'abyssal_detonator': { name: 'Abyssal Detonator', description: 'Tactical nuke that deals 25% Max HP True Damage.', rarity: 'LEGENDARY', value: 50000, usable: true, effect: 'percent_hp_damage', effectValue: 0.25 },
+              'mega_potion': { name: 'Mega Health Potion', description: 'Restores 80% HP.', rarity: 'RARE', value: 2800, usable: true, effect: 'heal', effectValue: 0.8 },
     'elixir_of_power': { name: 'Elixir of Power', description: 'Boosts ATK and MAG by 50% for 5 turns.', rarity: 'EPIC', value: 5000, usable: true, effect: 'buff_all', effectValue: 50, duration: 5 },
     'liquid_courage': { name: 'Liquid Courage', description: 'Grants a massive temporary shield.', rarity: 'RARE', value: 3500, usable: true, effect: 'shield_max', effectValue: 100 },
     'fire_bomb': { name: 'Fire Bomb', description: 'Deals 150 fire damage to all enemies.', rarity: 'UNCOMMON', value: 1500, usable: true, effect: 'aoe_damage', effectValue: 150 },

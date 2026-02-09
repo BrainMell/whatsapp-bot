@@ -700,27 +700,37 @@ const ADVENTURER_RANKS = {
 // ==========================================
 
 const CLASS_SHOP_ITEMS = {
-    class_change_ticket: {
-        id: 'class_change_ticket',
-        name: 'Class Change Ticket',
-        icon: '🎫',
-        desc: 'Reroll your starter class (random)',
-        cost: 200,
-        type: 'CLASS_CHANGE',
-        category: 'CLASS'
-    },
-    
-    evolution_stone: {
-        id: 'evolution_stone',
-        name: 'Evolution Stone',
-        icon: '💎',
-        desc: 'Evolve your class (choose evolution path)',
-        cost: 4000,
-        type: 'EVOLUTION',
-        category: 'CLASS',
-        requirement: 'Must be starter class at level 10+'
-    },
-    
+      class_change_ticket: {
+          id: 'class_change_ticket',
+          name: 'Class Change Ticket',
+          icon: '🎫',
+          desc: 'Reroll your starter class (random)',
+          cost: 400,
+          type: 'CLASS_CHANGE',
+          category: 'CLASS'
+      },
+      
+      evolution_stone: {
+          id: 'evolution_stone',
+          name: 'Evolution Stone',
+          icon: '💎',
+          desc: 'Evolve your class (choose evolution path)',
+          cost: 8000,
+          type: 'EVOLUTION',
+          category: 'CLASS',
+          requirement: 'Must be starter class at level 10+'
+      },
+
+      stat_manual: {
+          id: 'stat_manual',
+          name: 'Ancient Stat Manual',
+          icon: '📜',
+          desc: 'A permanent boost to all your base stats (+5 to all).',
+          cost: 100000,
+          type: 'STAT_BOOST_PERM',
+          category: 'PERMANENT',
+          rarity: 'EPIC'
+      },    
     skill_reset: {
         id: 'skill_reset',
         name: 'Skill Reset Scroll',
