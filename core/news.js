@@ -44,9 +44,26 @@ async function getLatestNews() {
 
             // Get initial image
             const imgElement = $(el).find('img');
-            let img = imgElement.attr('data-src') || imgElement.attr('data-lazy-src') || imgElement.attr('data-original') || imgElement.attr('src');
+            const holderElement = $(el).find('.penci-image-holder');
+            const bgContainer = $(el).find('.acwp-image-placeholder-container');
+
+            let img = imgElement.attr('data-src') || 
+                      imgElement.attr('data-lazy-src') || 
+                      imgElement.attr('data-original') || 
+                      imgElement.attr('src') ||
+                      holderElement.attr('data-bgset') ||
+                      holderElement.attr('data-src');
             
+            // Fallback to background-image in style
+            if (!img && bgContainer.length > 0) {
+                const style = bgContainer.attr('style') || "";
+                const bgMatch = style.match(/url\((.*?)\)/);
+                if (bgMatch) img = bgMatch[1].replace(/['"]/g, "");
+            }
+
             if (img && img.startsWith('//')) img = 'https:' + img;
+            // Handle comma-separated srcset in data-bgset
+            if (img && img.includes(',')) img = img.split(',')[0].trim().split(' ')[0];
 
             let summary = "";
             
