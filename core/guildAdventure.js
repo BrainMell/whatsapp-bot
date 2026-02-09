@@ -1891,11 +1891,17 @@ async function performAction(sock, player, action, chatId) {
                         resultMsg += `\n💥 ${target.name} enters a BERSERKER RAGE! (+Damage, -Defense)`;
                         break;
                     case 'damage_aoe':
-                        state.enemies.forEach(e => {
+                        state.enemies.forEach(async (e) => {
                             if (e.stats.hp > 0) {
-                                e.stats.hp -= (item.effectValue || 0);
+                                const dmg = (item.effectValue || 0);
+                                e.stats.hp -= dmg;
                                 e.currentHP = e.stats.hp; // Sync
-                                resultMsg += `\n💥 ${e.name} takes ${item.effectValue || 0} damage!`;
+                                player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + dmg;
+                                resultMsg += `\n💥 ${e.name} takes ${dmg} damage!`;
+                                if (e.stats.hp <= 0) {
+                                    await handleDeath(sock, e, chatId, player.name);
+                                    resultMsg += `\n💀 ${e.name} has fallen!`;
+                                }
                             }
                         });
                         turnInfo.damage = item.effectValue || 0;
@@ -1907,8 +1913,13 @@ async function performAction(sock, player, action, chatId) {
                         const finalDmg = target.stats.bomb_resistance ? Math.floor(rawDmg * 0.5) : rawDmg;
                         target.stats.hp -= finalDmg;
                         target.currentHP = target.stats.hp;
+                        player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + finalDmg;
                         resultMsg += `\n💥 The Abyssal Detonator consumes ${target.name}! Dealt ${finalDmg} TRUE damage!`;
                         turnInfo.damage = finalDmg;
+                        if (target.stats.hp <= 0) {
+                            await handleDeath(sock, target, chatId, player.name);
+                            resultMsg += `\n💀 ${target.name} has fallen!`;
+                        }
                         break;
                     case 'revive':
                         if (target.isDead) {

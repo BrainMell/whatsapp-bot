@@ -122,6 +122,7 @@ async function buyItem(sock, chatId, senderJid, input) {
             result = await handleReset(senderJid);
             break;
         case 'STAT_BOOST':
+        case 'STAT_BOOST_PERM':
             result = await handleStatBoost(senderJid, item);
             break;
         case 'EQUIPMENT':
@@ -209,6 +210,19 @@ async function handleReset(senderJid) {
 }
 
 async function handleStatBoost(senderJid, item) {
+    if (item.type === 'STAT_BOOST_PERM') {
+        // Boost all stats by 5
+        const stats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck'];
+        stats.forEach(s => {
+            economy.addStatBonus(senderJid, s, 5);
+        });
+
+        return {
+            success: true,
+            message: `📜 *ANCIENT KNOWLEDGE UNLOCKED!*\n\nYour core potential has expanded! (+5 to ALL base stats).`
+        };
+    }
+
     if (!item.boost) {
         return { success: false, message: '❌ Invalid boost item!' };
     }
