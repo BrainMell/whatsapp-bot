@@ -6030,17 +6030,23 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
 
     const fileName = path.join(__dirname, 'temp', `audio_${Date.now()}.mp3`);
 
-    const dl = spawn(YTDLP_PATH, [
+    const ytdlpArgs = [
       video.url,
       '-f', 'bestaudio[ext=m4a]/bestaudio/best', 
       '-x', '--audio-format', 'mp3',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--geo-bypass',
-      '--ffmpeg-location', FFMPEG_PATH,
       '--max-filesize', '50M',
       '-o', fileName
-    ]);
+    ];
+
+    // Only add ffmpeg location if it's an absolute path
+    if (FFMPEG_PATH.includes('/') || FFMPEG_PATH.includes('\\')) {
+      ytdlpArgs.push('--ffmpeg-location', FFMPEG_PATH);
+    }
+
+    const dl = spawn(YTDLP_PATH, ytdlpArgs);
 
     let errorOutput = "";
     dl.stderr.on('data', (data) => {
