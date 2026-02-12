@@ -2453,9 +2453,9 @@ async function broadcastUpdate(sock) {
     return;
   }
 
-  let msg = `╔══════════════════════════╗\n`;
+  let msg = `╔══════════════════╗\n`;
   msg += `    📢 *VERSION ${currentVersion} UPDATE* \n`;
-  msg += `╚══════════════════════════╝\n\n`;
+  msg += `╚══════════════════╝\n\n`;
   
   msg += `*The Ultimate RPG Overhaul is here!* 🚀\n\n`;
   
@@ -4971,9 +4971,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
     // RPG GUIDE SYSTEM - THE ULTIMATE HANDBOOK
     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rpg guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} handbook`) {
-        let msg = `╔══════════════════════════╗\n`;
+        let msg = `╔═════════════════════╗\n`;
         msg += `    📔 *THE ADVENTURER'S HANDBOOK* \n`;
-        msg += `╚══════════════════════════╝\n\n`;
+        msg += `╚═════════════════════╝\n\n`;
         
         msg += `Welcome, traveler! Use the commands below to explore every corner of the world:\n\n`;
         
