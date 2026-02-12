@@ -2370,208 +2370,44 @@ async function broadcastNews(sock) {
   }
 }
 
-/*
- * Broadcasts a one-time update message for new versions
- */
 async function broadcastUpdate(sock) {
-  const currentVersion = botConfig.getVersion();
-  const lastVersion = await system.get('last_broadcasted_version');
-  
-  // Only broadcast if the version has changed
-  if (lastVersion === currentVersion) return;
-
-  console.log(`📢 Broadcasting v${currentVersion} update...`);
-  
-  // Reuse groupSettings to find where to broadcast
-  loadGroupSettings();
-  const targetChats = [];
-  for (const [chatId, config] of groupSettings.entries()) {
-    targetChats.push(chatId);
-  }
-
-  if (targetChats.length === 0) {
-    await system.set('last_broadcasted_version', currentVersion);
+  const v = botConfig.getVersion();
+  const lastV = await system.get('last_v');
+  if (lastV === v) return;
+  const groups = Array.from(enabledChats);
+  if (groups.length === 0) {
+    await system.set('last_v', v);
     return;
   }
-
-  let msg = `╔══════════════════════════╗\n`;
-  msg += `    📢 *VERSION ${currentVersion} UPDATE* \n`;
-  msg += `╚══════════════════════════╝\n\n`;
-  
-  msg += `*The Ultimate RPG Overhaul is here!* 🚀\n\n`;
-  
-  msg += `📜 *I. THE MASTER GUIDE*\n`;
-  msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
-  
-  msg += `🎭 *II. EVOLUTION TIERS*\n`;
-  msg += `Class advancement now requires *Evolution Stones (T2)* and *Ascension Stones (T3)*. Check the shop for these new items!\n\n`;
-  
-  msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
-  msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
-  
-  msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
-  msg += `• Fighter's *Execute* skill fixed.\n`;
-  msg += `• Berserker gets a new reality-bending skill: *Dimensional Slash*.\n`;
-  msg += `• Adjusted combat UI for better visibility.\n\n`;
-  
-  msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
-
-  for (const chatId of targetChats) {
+  let m = "╭───────────────────╮\n  📢 *UPDATE v" + v + "* \n╰───────────────────╯\n\n*RPG Overhaul is here!* 🚀\n\n📜 *I. THE MASTER GUIDE*\nModular guide system active. Use `" + botConfig.getPrefix() + " guide`!\n\n🎭 *II. EVOLUTION*\nStones (T2/T3) now required.\n\n🐲 *III. DRAGONSLAYER*\nNew feats & lore.\n\n⚔️ *IV. COMBAT*\nFixed Execute & added Dimensional Slash.";
+  for (const g of groups) {
     try {
-      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-      await new Promise(res => setTimeout(res, 2000));
-    } catch (err) {
-      console.error(`❌ Update broadcast to ${chatId} failed:`, err.message);
-    }
+      await sock.sendMessage(g, { text: BOT_MARKER + m });
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) {}
   }
-
-  // Save the version so we don't broadcast again
-  await system.set('last_broadcasted_version', currentVersion);
+  await system.set('last_v', v);
 }
 
-/*
- * Broadcasts a one-time update message for new versions
- */
-async function broadcastUpdate(sock) {
-  const currentVersion = botConfig.getVersion();
-  const lastVersion = await system.get('last_broadcasted_version');
-  
-  // Only broadcast if the version has changed
-  if (lastVersion === currentVersion) return;
-
-  console.log(`📢 Broadcasting v${currentVersion} update...`);
-  
-  // Reuse groupSettings to find where to broadcast
-  loadGroupSettings();
-  const targetChats = [];
-  for (const [chatId, config] of groupSettings.entries()) {
-    targetChats.push(chatId);
-  }
-
-  if (targetChats.length === 0) {
-    await system.set('last_broadcasted_version', currentVersion);
-    return;
-  }
-
-  let msg = `╔══════════════════╗\n`;
-  msg += `    📢 *VERSION ${currentVersion} UPDATE* \n`;
-  msg += `╚══════════════════╝\n\n`;
-  
-  msg += `*The Ultimate RPG Overhaul is here!* 🚀\n\n`;
-  
-  msg += `📜 *I. THE MASTER GUIDE*\n`;
-  msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
-  
-  msg += `🎭 *II. EVOLUTION TIERS*\n`;
-  msg += `Class advancement now requires *Evolution Stones (T2)* and *Ascension Stones (T3)*. Check the shop for these new items!\n\n`;
-  
-  msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
-  msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
-  
-  msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
-  msg += `• Fighter's *Execute* skill fixed.\n`;
-  msg += `• Berserker gets a new reality-bending skill: *Dimensional Slash*.\n`;
-  msg += `• Adjusted combat UI for better visibility.\n\n`;
-  
-  msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
-
-  for (const chatId of targetChats) {
-    try {
-      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-      await new Promise(res => setTimeout(res, 2000));
-    } catch (err) {
-      console.error(`❌ Update broadcast to ${chatId} failed:`, err.message);
-    }
-  }
-
-  // Save the version so we don't broadcast again
-  await system.set('last_broadcasted_version', currentVersion);
-}
-
-// ============================================
-// MAIN BOT FUNCTION - this is where the magic happens 
-// ============================================
 async function initSocket() {
-  if (botStarting) {
-    console.log(`⚠️ initSocket() for ${BOT_ID} already running — ignoring duplicate call.`);
-    return;
-  }
-
+  if (botStarting) return;
   botStarting = true;
-  console.log(`🚀 Starting ${BOT_ID} (${botConfig.getBotName()})...`);
-  
-  // Track enabled chats (moved up for initialization safety)
-  const enabledChats = new Set();
-  
-  function loadEnabledChats() {
-    try {
-      const data = system.get(BOT_ID + "_enabled_chats", []);
-      data.forEach(chatId => enabledChats.add(chatId));
-      console.log(`✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`);
-    } catch (err) {
-      console.error("Error loading enabled chats:", err.message);
-    }
-  }
-
-  function saveEnabledChats() {
-    system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
-  }
-
-    try {
-      // 1. Load Everything from Database FIRST in Parallel
-      await Promise.all([
-        system.loadSystemData(),
-        economy.loadEconomy(),
-        guilds.loadGuilds(),
-        loans.loadLoans()
-      ]);
-      
-      // Initialize enabled chats list
-      loadEnabledChats();
-      console.log(`📡 Bot Prefix is set to: "${botConfig.getPrefix()}"`);
-      
-      const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());    // Fetch latest version to avoid 405 (Method Not Allowed) errors
+  try {
+    await Promise.all([
+      system.loadSystemData(),
+      economy.loadEconomy(),
+      guilds.loadGuilds(),
+      loans.loadLoans()
+    ]);
+    loadEnabledChats();
+    const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
     const { version } = await fetchLatestBaileysVersion();
-    
-    // Flag to ignore broadcasts (status updates) only during initial boot/reconnect
-    let ignoreBroadcasts = true;
-
-    sock = makeWASocket({
-      version,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, logger),
-      },
-      logger: logger,
-      msgRetryCounterCache,
-      syncFullHistory: false,
-      shouldSyncHistoryMessage: () => false,
-      getMessage: async (key) => {
-        return { conversation: '' };
-      },
-      printQRInTerminal: false,
-      browser: [`${botConfig.getBotName()} Bot`, 'Chrome', '1.0.0'],
-      // Filter broadcasts only while booting/reconnecting
-      shouldIgnoreJid: (jid) => ignoreBroadcasts && jid.includes('@broadcast'),
-      // Optimization: lower resource usage and faster startup
-      experimentalStore: true,
-    });
-
-    // Route ALL outgoing messages through the queue so callers don't spam WS while reconnecting.
-    // This also makes stale sock references far less harmful across reconnects.
+    sock = makeWASocket({ version, auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })) }, logger: P({ level: 'silent' }), experimentalStore: true });
     sendQueue.bind(sock);
-    sock.sendMessage = (jid, content, options = {}) => sendQueue.send(jid, content, options);
-
+    sock.sendMessage = (j, m, o = {}) => sendQueue.send(j, m, o);
     sock.ev.on("creds.update", saveCreds);
-
-    // Set bot start time
     botStartTime = Date.now();
-    console.log("🕐 Bot start time:", new Date(botStartTime).toISOString());
-
-    // ============================================
-    // CONNECTION HANDLER
-    // ============================================
-    sock.ev.on('connection.update', async (update) => {
+sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && !qrShown) {
@@ -4971,16 +4807,26 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
     // RPG GUIDE SYSTEM - THE ULTIMATE HANDBOOK
     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rpg guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} handbook`) {
-        let msg = `╔═════════════════════╗\n`;
-        msg += `    📔 *THE ADVENTURER'S HANDBOOK* \n`;
-        msg += `╚═════════════════════╝\n\n`;
+        let msg = `╭───────────────────╮\n`;
+        msg += `  📔 *RPG HANDBOOK* \n`;
+        msg += `╰───────────────────╯\n\n`;
         
         msg += `Welcome, traveler! Use the commands below to explore every corner of the world:\n\n`;
         
         msg += `⚔️ \`${botConfig.getPrefix()} guide combat\` - Mechanics & Strategy\n`;
-        msg += `🎭 \`${botConfig.getPrefix()} guide classes\` - Full Evolution Trees\n`;
+        msg += `📊 \`${botConfig.getPrefix()} guide stats\` - Stats & Attributes\n`;
+        msg += `🎭 \`${botConfig.getPrefix()} guide classes\` - Evolution Tiers\n`;
+        msg += `🔴 \`${botConfig.getPrefix()} guide fighter\` - Warrior, Berserker, Dragonslayer...\n`;
+        msg += `🟢 \`${botConfig.getPrefix()} guide scout\` - Rogue, Monk, Ninja, Samurai...\n`;
+        msg += `🔵 \`${botConfig.getPrefix()} guide mage\` - Mage, Warlock, Necromancer...\n`;
+        msg += `🟡 \`${botConfig.getPrefix()} guide support\` - Cleric, Bard, Merchant...\n`;
+        msg += `👹 \`${botConfig.getPrefix()} guide monsters\` - Monster Archetypes\n`;
+        msg += `📜 \`${botConfig.getPrefix()} guide lore\` - World History & Background\n`;
+        msg += `💎 \`${botConfig.getPrefix()} guide mastery\` - Masterworks & Professions\n`;
+        msg += `🚀 \`${botConfig.getPrefix()} guide advanced\` - Hardcore, Synergy & Titles\n`;
         msg += `🎒 \`${botConfig.getPrefix()} guide items\` - Loot, Gear & Rarity\n`;
         msg += `⚒️ \`${botConfig.getPrefix()} guide work\` - Mining & Crafting\n`;
+        msg += `🐲 \`${botConfig.getPrefix()} guide dragons\` - Dragonslayer Legacy\n`;
         msg += `🏰 \`${botConfig.getPrefix()} guide guilds\` - Guilds & Archetypes\n`;
         msg += `👹 \`${botConfig.getPrefix()} guide raids\` - Dungeons & Bosses\n`;
         msg += `🏟️ \`${botConfig.getPrefix()} guide pvp\` - Arena & Duels\n`;
@@ -5038,6 +4884,68 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg += `• *Examples:* Warrior ➔ Warlord, Mage ➔ Archmage, Dragonslayer ➔ Dragon God.\n\n`;
             
             msg += `💡 Use \`${botConfig.getPrefix()} class info\` to see your specific next steps!`;
+        } else if (topic === "fighter") {
+            msg = `🔴 *FIGHTER EVOLUTIONS (The Vanguard)*\n\n`;
+            msg += `• *Warrior ➔ Warlord:* Frontline tanks with unmatched defense. (Ascension: 100 Victories).\n`;
+            msg += `• *Berserker ➔ Doomslayer:* High-risk, high-damage bruisers. (Ascension: 500 Kills).\n`;
+            msg += `• *Paladin ➔ Templar:* Holy defenders who heal and reflect damage. (Ascension: 200 Undead Kills).\n`;
+            msg += `• *Dragonslayer ➔ Dragon God:* Elite dragon hunters. (Ascension: 50 Dragon Kills).\n\n`;
+            msg += `*Role:* To soak damage and protect the team from Boss telegraphs.`;
+        } else if (topic === "scout") {
+            msg = `🟢 *SCOUT EVOLUTIONS (The Striker)*\n\n`;
+            msg += `• *Rogue ➔ Nightblade:* Master of critical hits and stealth. (Ascension: 150 Assassinations).\n`;
+            msg += `• *Monk ➔ Zenmaster:* Agile martial artists with high evasion. (Ascension: 200 Perfect Dodges).\n`;
+            msg += `• *Samurai ➔ Shogun:* Honor-bound warriors with high ATK/DEF. (Ascension: 200 Victories).\n`;
+            msg += `• *Ninja ➔ Kage:* Masters of stealth who never miss. (Ascension: 100 Shadow Kills).\n\n`;
+            msg += `*Role:* High speed and precise strikes to finish off low-HP targets.`;
+        } else if (topic === "mage") {
+            msg = `🔵 *APPRENTICE EVOLUTIONS (The Arcane)*\n\n`;
+            msg += `• *Mage ➔ Archmage:* Specialists in burst and AOE spells. (Ascension: 1000 Spells Cast).\n`;
+            msg += `• *Warlock ➔ Voidwalker:* Dark casters who drain life and weaken foes. (Ascension: 300 Souls harvested).\n`;
+            msg += `• *Necromancer ➔ Lich:* Masters of undeath and summons. (Ascension: 500 Undead raised).\n`;
+            msg += `• *Elementalist ➔ Avatar:* Wields all elements simultaneously. (Ascension: 100 Mastery).\n`;
+            msg += `• *Chronomancer ➔ Timelord:* Manipulates time and cooldowns. (Ascension: 200 Manipulations).\n`;
+            msg += `• *Reaper ➔ Death Lord:* Collector of souls. (Ascension: Lv.40, 1000 Souls).\n\n`;
+            msg += `*Role:* Massive magical damage and area control.`;
+        } else if (topic === "support") {
+            msg = `🟡 *ACOLYTE EVOLUTIONS (The Guardian)*\n\n`;
+            msg += `• *Cleric ➔ Saint:* Divine healers and protectors. (Ascension: 1000 Allies Healed).\n`;
+            msg += `• *Bard ➔ Virtuoso:* Buffs the team with music. (Ascension: 500 Songs played).\n`;
+            msg += `• *Merchant ➔ Tycoon:* Uses Zeni as power. (Ascension: 500k Zeni earned).\n`;
+            msg += `• *Artificer ➔ Grand Inventor:* Tech genius with automated turrets. (Ascension: 100 Items Crafted).\n`;
+            msg += `• *God Hand ➔ Divine Fist:* Martial legends who ignore defense. (Ascension: Lv.40, 10 Boss Kills).\n`;
+            msg += `• *Druid ➔ Archdruid:* Nature shapeshifters. (Ascension: 300 Transformations).\n\n`;
+            msg += `*Role:* Keeping the team alive and boosting their effectiveness.`;
+        } else if (topic === "dragons") {
+            msg = `🐲 *DRAGONSLAYER LEGACY*\n\n`;
+            msg += `• *Dragonslayer (Tier 2):* The elite hunter. Gains *Dragon Bane* (3x damage vs dragons).\n`;
+            msg += `• *Dragon God (Tier 3):* Ascended deity. Gains *Dragon Heart* (Immunity to all status effects + 50% damage reduction).\n\n`;
+            msg += `*Feats:* To become a Dragon God, you must defeat 50 dragons and reach level 30!`;
+        } else if (topic === "monsters") {
+            msg = `👹 *MONSTER ARCHETYPES*\n\n`;
+            msg += `• *Guardians (Tanks):* High DEF, use taunts and stuns. Use Magic or True damage.\n`;
+            msg += `• *Ravagers (Brutes):* Massive physical damage and AOE cleaves. Evasion is key.\n`;
+            msg += `• *Acolytes (Casters):* Low HP but high MAG. Can heal other monsters or burn you.\n`;
+            msg += `• *Stalkers (Assassins):* Extremely fast with high crit. Block or use CC to survive.\n\n`;
+            msg += `💡 *Tip:* Use \`${botConfig.getPrefix()} monster guide\` for a list of known species.`;
+        } else if (topic === "lore") {
+            msg = `📜 *WORLD LORE: THE DIVINE SPARK*\n\n`;
+            msg += `The world was born from the *Divine Architect* and the *Primordial Chaos*. After eons of peace, Chaos corrupted the land, creating *The Infected*.\n\n`;
+            msg += `You are an *Adventurer*, chosen to carry a fragment of the celestial *Divine Spark*. Only you can enter the corrupted Dungeons and cleanse the heart of the void.\n\n`;
+            msg += `💡 Use \`${botConfig.getPrefix()} lore\` for the full history.`;
+        } else if (topic === "mastery") {
+            msg = `💎 *PROFESSION MASTERY*\n\n`;
+            msg += `• *Masterworks:* At high Crafting levels, you have a 10% chance to create a **Masterwork** item with +20% base stats.\n`;
+            msg += `• *Mining Nodes:* Rarer ores like *Mythril* and *Dark Matter* only appear in high-level nodes.\n`;
+            msg += `• *Dismantling:* Always dismantle gear you don't need to fund your next big craft!\n\n`;
+            msg += `💡 Check \`${botConfig.getPrefix()} recipes\` often as you level up.`;
+        } else if (topic === "advanced") {
+            msg = `🚀 *ADVANCED MECHANICS*\n\n`;
+            msg += `• *Hardcore Mode:* If you die in a Hardcore instance, your character is added to the \`${botConfig.getPrefix()} graveyard\` and you lose significant XP.\n`;
+            msg += `• *Party Synergy:* Combining specific classes (e.g., Warrior + Mage) grants hidden combat bonuses like "Spell Blade".\n`;
+            msg += `• *Dynamic Titles:* Perform great feats to earn titles like "The Hive-Slayer" or "God's Favorite".\n`;
+            msg += `• *Marriage:* Link souls with another player for shared XP bonuses! (Coming Soon).\n\n`;
+            msg += `💡 Use \`${botConfig.getPrefix()} profile\` to see your active titles and synergies.`;
         } else if (topic === "items") {
             msg = `🎒 *EQUIPMENT & LOOT*\n\n`;
             msg += `• *Rarity:* ⚪ Common ➔ 🟢 Uncommon ➔ 🔵 Rare ➔ 🟣 Epic ➔ 🟡 Legendary ➔ 🔴 Mythic\n`;
