@@ -2340,25 +2340,34 @@ async function broadcastNews(sock) {
 
 async function broadcastUpdate(sock, customMessage = null) {
   const v = botConfig.getVersion();
-  // Get all known JIDs from groupSettings and filter for groups only (@g.us)
-  const allGroups = Array.from(groupSettings.keys()).filter(id => id.endsWith('@g.us'));
+  
+  let allGroups = [];
+  try {
+    // Dynamically fetch every group the bot is currently a member of
+    const groupsData = await sock.groupFetchAllParticipating();
+    allGroups = Object.keys(groupsData);
+  } catch (err) {
+    console.error("❌ Failed to fetch groups from WhatsApp:", err.message);
+    // Fallback to groupSettings if WhatsApp fetch fails
+    allGroups = Array.from(groupSettings.keys()).filter(id => id.endsWith('@g.us'));
+  }
   
   if (allGroups.length === 0) {
-    console.log("📢 No known groups to broadcast to.");
+    console.log("📢 No groups found to broadcast to.");
     return 0;
   }
 
   const m = customMessage || "╭───────────────────╮\n  📢 *BOT UPDATE v" + v + "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `.g menu` to see all commands.";
   
   let sentCount = 0;
-  console.log(`📡 Starting broadcast to ${allGroups.length} groups...`);
+  console.log(`📡 Starting live broadcast to ${allGroups.length} groups...`);
   
   for (const g of allGroups) {
     try {
       await sock.sendMessage(g, { text: BOT_MARKER + m });
       sentCount++;
-      // Anti-spam gap: 1 second between groups
-      await new Promise(r => setTimeout(r, 1000)); 
+      // Anti-spam gap: 1.5 seconds between groups for safety
+      await new Promise(r => setTimeout(r, 1500)); 
     } catch (e) {
       console.error(`❌ Failed broadcast to ${g}:`, e.message);
     }
