@@ -1350,6 +1350,26 @@ const SKILL_TREES = {
                         animation: '⚔️💥💢',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
+                    dimensional_slash: {
+                        id: 'dimensional_slash',
+                        name: 'Dimensional Slash',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 5,
+                        prerequisite: ['warcry'],
+                        energyCost: [40, 38, 36, 34, 30],
+                        cooldown: 5,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 5.0],
+                        damageType: 'TRUE',
+                        targeting: 'SINGLE',
+                        effects: {
+                            vulnerability: { value: [20, 25, 30, 35, 40], duration: 2 },
+                            ignoreArmor: { value: 100 }
+                        },
+                        description: 'Slash through reality, ignoring all armor and weakening the target',
+                        animation: '🌌⚔️💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
                     last_stand: {
                         id: 'last_stand',
                         name: 'Last Stand',
@@ -3430,6 +3450,9 @@ function getSkillEffect(skill, level) {
                     effect.cc = effId;
                     effect.ccChance = chance || 100;
                     effect.ccDuration = dur || 1;
+                } else if (effId === 'instantKill') {
+                    effect.type = 'execute';
+                    effect.threshold = val.threshold || 30;
                 } else if (effId === 'dot' || effId === 'burn' || effId === 'poison' || effId === 'bleed') {
                     effect.dot = effData.element || effId;
                     effect.dotDuration = dur || 3;
