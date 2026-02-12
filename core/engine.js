@@ -2578,6 +2578,49 @@ We are happy to have you here.
 });
 
     // ============================================
+    // REACTION HANDLER - for spectator system
+    // ============================================
+    sock.ev.on("messages.reaction", async (reactions) => {
+        try {
+            for (const reaction of reactions) {
+                const { key, reaction: reactionObj } = reaction;
+                const chatId = key.remoteJid;
+                
+                // Only care about reactions during a debate
+                if (!chatId.endsWith('@g.us') || !debate.isDebateActive(chatId)) continue;
+
+                // Reacting user
+                const senderJid = jidNormalizedUser(reaction.sender || reactionObj.sender || (reaction.key.fromMe ? sock.user.id : null));
+                if (!senderJid) continue;
+
+                // Get reaction emoji
+                const emoji = reactionObj.text;
+                
+                // Trigger spectator mode on specific emojis
+                if (['🙋', '🙋‍♂️', '🙋‍♀️', '💬', '✋'].includes(emoji)) {
+                    // Check if sender is already a debater
+                    const activeDebate = debate.getActiveDebate(chatId);
+                    if (senderJid === activeDebate.debater1 || senderJid === activeDebate.debater2) continue;
+
+                    // Check if they are admin already
+                    const metadata = await getGroupMetadata(chatId);
+                    const isAdmin = metadata?.participants.some(p => p.id === senderJid && (p.admin === 'admin' || p.admin === 'superadmin'));
+
+                    const result = await debate.addSpectator(sock, chatId, senderJid, isAdmin, BOT_MARKER);
+                    if (result?.message) {
+                        await sock.sendMessage(chatId, { 
+                            text: BOT_MARKER + result.message,
+                            contextInfo: { mentionedJid: [senderJid] }
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Reaction handler error:", err);
+        }
+    });
+
+    // ============================================
     // MESSAGE HANDLER - processes every incoming message
     // ============================================
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
@@ -2717,7 +2760,36 @@ We are happy to have you here.
 
         // Record debate arguments
         if (chatId.endsWith('@g.us') && debate.isDebateActive(chatId)) {
+          // 1. Check if sender is a regular debater
           debate.recordArgument(chatId, senderJid, txt);
+
+          // 2. Check if sender is a temporary spectator
+          if (debate.isSpectator(chatId, senderJid)) {
+            const activeDebate = debate.getActiveDebate(chatId);
+            
+            // Check relevance via AI
+            const relevance = await debate.checkRelevance(txt, activeDebate, smartGroqCall, MODELS);
+            
+            if (relevance.relevant) {
+              console.log(`✅ Spectator ${senderJid} contribution accepted: ${relevance.reasoning}`);
+              // Log moderation decision
+              debate.logModeration(chatId, senderJid, txt, true, relevance.reasoning);
+              // Contribution accepted, remove spectator pass (one message limit per pass)
+              await debate.removeSpectator(sock, chatId, senderJid, BOT_MARKER, "Contribution complete");
+            } else {
+              console.log(`❌ Spectator ${senderJid} contribution rejected: ${relevance.reasoning}`);
+              // Log moderation decision
+              debate.logModeration(chatId, senderJid, txt, false, relevance.reasoning);
+              // Irrelevant - delete message and revoke pass
+              try {
+                await sock.sendMessage(chatId, { delete: m.key });
+                await debate.removeSpectator(sock, chatId, senderJid, BOT_MARKER, "Irrelevant content");
+              } catch (delErr) {
+                console.error("Failed to delete irrelevant spectator message:", delErr.message);
+              }
+              return; // Stop processing this message
+            }
+          }
         }
 
         const isBotCommand = lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`);
@@ -9947,6 +10019,20 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate off`) {
   const result = await debate.cancelDebate(sock, chatId, BOT_MARKER);
   await sock.sendMessage(chatId, { text: result.message });
   return;
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` debate leaderboard
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate leaderboard` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate lb`) {
+    const result = debate.getDebateLeaderboard(BOT_MARKER);
+    if (typeof result === 'string') {
+        await sock.sendMessage(chatId, { text: result });
+    } else {
+        await sock.sendMessage(chatId, { 
+            text: result.text, 
+            contextInfo: { mentionedJid: result.mentions } 
+        });
+    }
+    return;
 }
 
 // `${botConfig.getPrefix().toLowerCase()}` judge (end debate and get AI verdict)

@@ -9,15 +9,42 @@ const system = require('./system'); // NEW: Database System Module
 
 // Active debates storage
 let activeDebates = {};
+let debateLeaderboard = {};
+let spectators = new Map(); // chatId -> Map(userId -> { expiry, msgCount })
 
-// Load debates from system cache
+// Load debates and leaderboard from system cache
 function loadDebates() {
     activeDebates = system.get('active_debates', {});
+    debateLeaderboard = system.get('debate_leaderboard', {});
 }
 
-// Save debates to MongoDB
+// Save data to MongoDB
 function saveDebates() {
     system.set('active_debates', activeDebates);
+}
+
+function saveLeaderboard() {
+    system.set('debate_leaderboard', debateLeaderboard);
+}
+
+// Update leaderboard stats
+function updateLeaderboard(winnerJid, score) {
+    if (!debateLeaderboard[winnerJid]) {
+        debateLeaderboard[winnerJid] = { wins: 0, totalScore: 0, debates: 0 };
+    }
+    debateLeaderboard[winnerJid].wins += 1;
+    debateLeaderboard[winnerJid].totalScore += score;
+    debateLeaderboard[winnerJid].debates += 1;
+    saveLeaderboard();
+}
+
+function recordParticipation(jid, score) {
+    if (!debateLeaderboard[jid]) {
+        debateLeaderboard[jid] = { wins: 0, totalScore: 0, debates: 0 };
+    }
+    debateLeaderboard[jid].totalScore += score;
+    debateLeaderboard[jid].debates += 1;
+    saveLeaderboard();
 }
 
 // Initial load
@@ -150,7 +177,8 @@ Type \`${botConfig.getPrefix()} judge\` when ready for verdict!
             .map(arg => arg.message)
             .join('\n\n');
 
-        const judgePrompt = `You are a professional debate judge analyzing a debate between two people.
+        const judgePrompt = `You are a highly analytical and professional debate judge. 
+Analyze the following debate deeply, looking for logical consistency, use of evidence, rhetorical skill, and overall persuasiveness.
 
 DEBATE TOPIC: ${debate.topic}
 
@@ -160,20 +188,25 @@ ${debater1Args}
 DEBATER 2 (@${debater2Name}):
 ${debater2Args}
 
-Analyze this debate and provide:
-1. Winner (Debater 1 or Debater 2)
-2. Score (0-100 for each)
-3. Reasoning (2-3 sentences)
-4. Best argument from each side
+Provide a comprehensive verdict:
+1. Winner (Debater 1 or Debater 2).
+2. Scores (0-100) based on logic, rhetoric, and evidence.
+3. Detailed Reasoning (4-5 sentences) covering why the winner won.
+4. Logical fallacies detected (if any) for each side.
+5. Best argument from each side and why it was effective.
 
 Respond ONLY in this JSON format:
 {
   "winner": "Debater 1" or "Debater 2",
   "debater1_score": <number>,
   "debater2_score": <number>,
-  "reasoning": "<text>",
-  "best_arg_d1": "<text>",
-  "best_arg_d2": "<text>"
+  "reasoning": "<detailed_text>",
+  "fallacies": {
+    "d1": "<text>",
+    "d2": "<text>"
+  },
+  "best_arg_d1": { "text": "<text>", "impact": "<text>" },
+  "best_arg_d2": { "text": "<text>", "impact": "<text>" }
 }`;
 
         try {
@@ -181,14 +214,12 @@ Respond ONLY in this JSON format:
             const completion = await smartGroqCall({
                 model: MODELS.SMART,
                 messages: [
-                    { role: "system", content: "You are a professional debate judge. Respond only in JSON format." },
+                    { role: "system", content: "You are a professional debate judge. Respond only in valid JSON format." },
                     { role: "user", content: judgePrompt }
                 ]
             });
 
             let judgeResponse = completion.choices[0].message.content.trim();
-            
-            // Clean JSON
             judgeResponse = judgeResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             
             const verdict = JSON.parse(judgeResponse);
@@ -196,6 +227,12 @@ Respond ONLY in this JSON format:
             // Determine winner JID
             const winnerJid = verdict.winner === "Debater 1" ? debate.debater1 : debate.debater2;
             const loserJid = verdict.winner === "Debater 1" ? debate.debater2 : debate.debater1;
+            const winnerScore = verdict.winner === "Debater 1" ? verdict.debater1_score : verdict.debater2_score;
+            const loserScore = verdict.winner === "Debater 1" ? verdict.debater2_score : verdict.debater1_score;
+
+            // Update leaderboard
+            updateLeaderboard(winnerJid, winnerScore);
+            recordParticipation(loserJid, loserScore);
 
             // Build verdict message
             const verdictMessage = BOT_MARKER + `━━━━━━━━━━━━━━━━━━━━
@@ -210,16 +247,22 @@ Respond ONLY in this JSON format:
 @${debater1Name}: ${verdict.debater1_score}/100
 @${debater2Name}: ${verdict.debater2_score}/100
 
-💭 *REASONING:*
+💭 *ANALYSIS:*
 ${verdict.reasoning}
+
+🚫 *LOGICAL FALLACIES:*
+📌 @${debater1Name}: ${verdict.fallacies.d1}
+📌 @${debater2Name}: ${verdict.fallacies.d2}
 
 🔥 *BEST ARGUMENTS:*
 
 📌 @${debater1Name}:
-"${verdict.best_arg_d1}"
+"${verdict.best_arg_d1.text}"
+*Impact:* ${verdict.best_arg_d1.impact}
 
 📌 @${debater2Name}:
-"${verdict.best_arg_d2}"
+"${verdict.best_arg_d2.text}"
+*Impact:* ${verdict.best_arg_d2.impact}
 
 ━━━━━━━━━━━━━━━━━━━━
 Total Arguments: ${debate.arguments.length}
@@ -264,6 +307,26 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)} minutes
 
     isDebateActive: (chatId) => {
         return !!activeDebates[chatId];
+    },
+
+    getDebateLeaderboard: (BOT_MARKER) => {
+        if (Object.keys(debateLeaderboard).length === 0) {
+            return BOT_MARKER + "📊 *DEBATE LEADERBOARD*\n\nNo records yet! Start a debate to appear here.";
+        }
+
+        const sorted = Object.entries(debateLeaderboard)
+            .map(([jid, stats]) => ({ jid, ...stats }))
+            .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
+            .slice(0, 10);
+
+        let msg = BOT_MARKER + "🏆 *DEBATE LEADERBOARD* 🏆\n\n";
+        sorted.forEach((u, i) => {
+            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "👤";
+            msg += `${medal} @${u.jid.split('@')[0]}\n`;
+            msg += `   Wins: ${u.wins} | Avg Score: ${Math.round(u.totalScore / u.debates)}\n\n`;
+        });
+
+        return { text: msg, mentions: sorted.map(u => u.jid) };
     },
 
     getActiveDebate: (chatId) => {
@@ -316,6 +379,17 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)} minutes
             if (!debate.debater2WasAdmin) {
                 await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote');
             }
+            
+            // Cleanup spectators
+            if (spectators.has(chatId)) {
+                const groupSpectators = spectators.get(chatId);
+                for (const [jid, data] of groupSpectators.entries()) {
+                    if (!data.wasAdmin) {
+                        await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
+                    }
+                }
+                spectators.delete(chatId);
+            }
         } catch (err) {
             console.log('⚠️ Error during timeout cleanup:', err.message);
         }
@@ -328,5 +402,125 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)} minutes
         // Clear debate
         delete activeDebates[chatId];
         saveDebates();
+    },
+
+    addSpectator: async (sock, chatId, userId, wasAdmin, BOT_MARKER) => {
+        const debate = activeDebates[chatId];
+        if (!debate) return;
+
+        if (!spectators.has(chatId)) {
+            spectators.set(chatId, new Map());
+        }
+
+        const groupSpectators = spectators.get(chatId);
+        
+        // Prevent spam adding
+        if (groupSpectators.has(userId)) return;
+
+        // Limit active spectators to 5
+        if (groupSpectators.size >= 5) {
+            return { success: false, message: "❌ Too many active spectators. Wait for someone to finish." };
+        }
+
+        const expiry = Date.now() + (2 * 60 * 1000); // 2 minutes to respond
+        
+        groupSpectators.set(userId, { 
+            expiry, 
+            msgCount: 0, 
+            wasAdmin,
+            timeout: setTimeout(async () => {
+                await module.exports.removeSpectator(sock, chatId, userId, BOT_MARKER, "Time expired");
+            }, 2 * 60 * 1000)
+        });
+
+        if (!wasAdmin) {
+            try {
+                await sock.groupParticipantsUpdate(chatId, [userId], 'promote');
+            } catch (e) {
+                groupSpectators.delete(userId);
+                return { success: false, message: "❌ Failed to grant permissions." };
+            }
+        }
+
+        return { 
+            success: true, 
+            message: `🎫 @${userId.split('@')[0]} is now a temporary spectator! You have 2 minutes to contribute 1 relevant message.` 
+        };
+    },
+
+    removeSpectator: async (sock, chatId, userId, BOT_MARKER, reason = "") => {
+        if (!spectators.has(chatId)) return;
+        const groupSpectators = spectators.get(chatId);
+        const data = groupSpectators.get(userId);
+        
+        if (!data) return;
+
+        clearTimeout(data.timeout);
+        
+        if (!data.wasAdmin) {
+            await sock.groupParticipantsUpdate(chatId, [userId], 'demote').catch(() => {});
+        }
+
+        groupSpectators.delete(userId);
+        if (groupSpectators.size === 0) spectators.delete(chatId);
+
+        if (reason) {
+            await sock.sendMessage(chatId, { 
+                text: BOT_MARKER + `🎫 @${userId.split('@')[0]}'s spectator pass revoked: ${reason}`,
+                contextInfo: { mentionedJid: [userId] }
+            });
+        }
+    },
+
+    isSpectator: (chatId, userId) => {
+        if (!spectators.has(chatId)) return false;
+        return spectators.get(chatId).has(userId);
+    },
+
+    logModeration: (chatId, userId, content, approved, reasoning) => {
+        const logs = system.get('debate_moderation_logs', []);
+        logs.push({
+            chatId,
+            userId,
+            content,
+            approved,
+            reasoning,
+            timestamp: Date.now()
+        });
+        // Keep only last 1000 logs
+        if (logs.length > 1000) logs.shift();
+        system.set('debate_moderation_logs', logs);
+    },
+
+    checkRelevance: async (prompt, debate, smartGroqCall, MODELS) => {
+        const checkPrompt = `Compare this spectator comment to the current debate.
+TOPIC: ${debate.topic}
+DEBATERS: ${debate.debater1} and ${debate.debater2}
+
+COMMENT: "${prompt}"
+
+Is this comment relevant to the debate topic or current arguments?
+Respond with a JSON object:
+{
+  "relevant": boolean,
+  "reasoning": "brief explanation"
+}`;
+
+        try {
+            const completion = await smartGroqCall({
+                model: MODELS.SMART,
+                messages: [
+                    { role: "system", content: "You are a debate moderator evaluating relevance. Respond only in JSON." },
+                    { role: "user", content: checkPrompt }
+                ]
+            });
+
+            let response = completion.choices[0].message.content.trim();
+            response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            return JSON.parse(response);
+        } catch (e) {
+            console.error("Relevance check error:", e);
+            return { relevant: true }; // Default to true on error to avoid blocking valid input
+        }
     }
 };
