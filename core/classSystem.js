@@ -359,7 +359,7 @@ const EVOLVED_CLASSES = {
         id: 'DRAGONSLAYER',
         name: 'Dragonslayer',
         icon: '🐲⚔️',
-        desc: 'Specialized dragon hunter',
+        desc: 'Legendary dragon hunter. Dragonslayers are specialized warriors who have mastered the art of slaying ancient drakes. Their techniques are designed to bypass dragon scales and neutralize elemental breath. Known for their "Dragon-Bane" feat, they deal massive damage to all draconic beings.',
         tier: 'EVOLVED',
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
@@ -373,7 +373,7 @@ const EVOLVED_CLASSES = {
         id: 'DRAGON_GOD',
         name: 'Dragon God',
         icon: '🐲👑',
-        desc: 'Ascended being with the power of the ancient dragons.',
+        desc: 'The ultimate draconic deity. A Dragonslayer who has bathed in the blood of countless dragons and consumed their hearts to attain divinity. They command the elements of dragonfire and possess the "Dragon Heart" feat, making them immune to status effects and virtually indestructible.',
         tier: 'ASCENDED',
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
@@ -712,13 +712,24 @@ const CLASS_SHOP_ITEMS = {
       
       evolution_stone: {
           id: 'evolution_stone',
-          name: 'Evolution Stone',
+          name: 'Evolution Stone (T2)',
           icon: '💎',
-          desc: 'Evolve your class (choose evolution path)',
+          desc: 'Evolve from Starter to Evolved class.',
           cost: 8000,
           type: 'EVOLUTION',
           category: 'CLASS',
           requirement: 'Must be starter class at level 10+'
+      },
+
+      ascension_stone: {
+          id: 'ascension_stone',
+          name: 'Ascension Stone (T3)',
+          icon: '🔮',
+          desc: 'Evolve from Evolved to Ascended class.',
+          cost: 50000,
+          type: 'ASCENSION',
+          category: 'CLASS',
+          requirement: 'Must be evolved class at level 30+'
       },
 
       stat_manual: {

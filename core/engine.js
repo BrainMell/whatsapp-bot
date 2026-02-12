@@ -2370,6 +2370,124 @@ async function broadcastNews(sock) {
   }
 }
 
+/**
+ * Broadcasts a one-time update message for new versions
+ */
+async function broadcastUpdate(sock) {
+  const currentVersion = botConfig.getVersion();
+  const lastVersion = await system.get('last_broadcasted_version');
+  
+  // Only broadcast if the version has changed
+  if (lastVersion === currentVersion) return;
+
+  console.log(`📢 Broadcasting v${currentVersion} update...`);
+  
+  // Reuse groupSettings to find where to broadcast
+  loadGroupSettings();
+  const targetChats = [];
+  for (const [chatId, config] of groupSettings.entries()) {
+    targetChats.push(chatId);
+  }
+
+  if (targetChats.length === 0) {
+    await system.set('last_broadcasted_version', currentVersion);
+    return;
+  }
+
+  let msg = `╔══════════════════════════╗\n`;
+  msg += `    📢 *VERSION ${currentVersion} UPDATE* \n`;
+  msg += `╚══════════════════════════╝\n\n`;
+  
+  msg += `*The Ultimate RPG Overhaul is here!* 🚀\n\n`;
+  
+  msg += `📜 *I. THE MASTER GUIDE*\n`;
+  msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
+  
+  msg += `🎭 *II. EVOLUTION TIERS*\n`;
+  msg += `Class advancement now requires **Evolution Stones (T2)** and **Ascension Stones (T3)**. Check the shop for these new items!\n\n`;
+  
+  msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
+  msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
+  
+  msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
+  msg += `• Fighter's **Execute** skill fixed.\n`;
+  msg += `• Berserker gets a new reality-bending skill: **Dimensional Slash**.\n`;
+  msg += `• Adjusted combat UI for better visibility.\n\n`;
+  
+  msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
+
+  for (const chatId of targetChats) {
+    try {
+      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+      await new Promise(res => setTimeout(res, 2000));
+    } catch (err) {
+      console.error(`❌ Update broadcast to ${chatId} failed:`, err.message);
+    }
+  }
+
+  // Save the version so we don't broadcast again
+  await system.set('last_broadcasted_version', currentVersion);
+}
+
+/**
+ * Broadcasts a one-time update message for new versions
+ */
+async function broadcastUpdate(sock) {
+  const currentVersion = botConfig.getVersion();
+  const lastVersion = await system.get('last_broadcasted_version');
+  
+  // Only broadcast if the version has changed
+  if (lastVersion === currentVersion) return;
+
+  console.log(`📢 Broadcasting v${currentVersion} update...`);
+  
+  // Reuse groupSettings to find where to broadcast
+  loadGroupSettings();
+  const targetChats = [];
+  for (const [chatId, config] of groupSettings.entries()) {
+    targetChats.push(chatId);
+  }
+
+  if (targetChats.length === 0) {
+    await system.set('last_broadcasted_version', currentVersion);
+    return;
+  }
+
+  let msg = `╔══════════════════════════╗\n`;
+  msg += `    📢 *VERSION ${currentVersion} UPDATE* \n`;
+  msg += `╚══════════════════════════╝\n\n`;
+  
+  msg += `*The Ultimate RPG Overhaul is here!* 🚀\n\n`;
+  
+  msg += `📜 *I. THE MASTER GUIDE*\n`;
+  msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
+  
+  msg += `🎭 *II. EVOLUTION TIERS*\n`;
+  msg += `Class advancement now requires **Evolution Stones (T2)** and **Ascension Stones (T3)**. Check the shop for these new items!\n\n`;
+  
+  msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
+  msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
+  
+  msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
+  msg += `• Fighter's **Execute** skill fixed.\n`;
+  msg += `• Berserker gets a new reality-bending skill: **Dimensional Slash**.\n`;
+  msg += `• Adjusted combat UI for better visibility.\n\n`;
+  
+  msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
+
+  for (const chatId of targetChats) {
+    try {
+      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+      await new Promise(res => setTimeout(res, 2000));
+    } catch (err) {
+      console.error(`❌ Update broadcast to ${chatId} failed:`, err.message);
+    }
+  }
+
+  // Save the version so we don't broadcast again
+  await system.set('last_broadcasted_version', currentVersion);
+}
+
 // ============================================
 // MAIN BOT FUNCTION - this is where the magic happens 
 // ============================================
@@ -2486,6 +2604,12 @@ async function initSocket() {
         
         retryCount = 0;
         botStarting = false; // CLEAR GUARD
+        
+        // --- BROADCAST ONE-TIME UPDATE MESSAGE ---
+        setTimeout(async () => {
+          await broadcastUpdate(sock);
+        }, 5000);
+
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
           reconnectTimer = null;
@@ -2604,6 +2728,9 @@ We are happy to have you here.
 
             // 🔴 GOODBYE MESSAGE (Optional)
             else if (action === 'remove') {
+                const settings = getGroupSettings(id);
+                if (settings.byeEnabled === false) return; // Silent if disabled
+
                 const phoneNumber = participantJid.split('@')[0];
                 
                 // Try to get their saved name from group metadata
@@ -2613,12 +2740,11 @@ We are happy to have you here.
                     if (member && member.notify) {
                         memberName = member.notify;
                     }
-                } catch (e) {
-                    // Fallback to phone number
-                }
+                } catch (e) {}
                 
-                const byeText = `👋(@${phoneNumber}) has left the group. Goodbye! SUCKER!!!`;
-                
+                let byeText = settings.byeMessage || `👋(@${phoneNumber}) has left the group. Goodbye! SUCKER!!!`;
+                byeText = byeText.replace(/@user/g, `@${phoneNumber}`);
+
                 await sock.sendMessage(id, { 
                     text: byeText,
                     mentions: [participantJid]
@@ -2682,13 +2808,41 @@ We are happy to have you here.
           botId: BOT_ID
         }).catch(err => {});
 
+        // 1. Get Group Metadata & Admin Status EARLY (Needed for Security & Commands)
+        let groupMetadata = null;
+        let botIsAdmin = false;
+        let senderIsAdmin = false;
+        
+        if (isGroupChat) {
+          try {
+            groupMetadata = await getGroupMetadata(chatId);
+            if (groupMetadata) {
+              const myNumber = sock.user.id.split(':')[0].split('@')[0];
+              const myLid = sock.authState.creds?.me?.lid;
+              const myLidNumber = myLid ? myLid.split(':')[0] : null;
+              const senderNumber = senderJid.split(':')[0].split('@')[0];
+
+              botIsAdmin = groupMetadata.participants.some(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                const isMe = pNumber === myNumber || (myLidNumber && pNumber === myLidNumber);
+                return isMe && (p.admin === 'admin' || p.admin === 'superadmin');
+              });
+
+              senderIsAdmin = groupMetadata.participants.some(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                return pNumber === senderNumber && (p.admin === 'admin' || p.admin === 'superadmin');
+              });
+            }
+          } catch (e) {}
+        }
+
         // ============================================
         // SECURITY & SPAM DETECTION
         // ============================================
         if (!m.key.fromMe) {
           // 1. Antilink Security (Skip for admins)
-          // We'll check admin status later if needed, but for now use the helper
-          await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount);
+          // Pass groupMetadata to avoid redundant fetches
+          await runSecurity.handleSecurity(sock, m, groupSettings, addWarning, getWarningCount, groupMetadata);
 
           // 2. Antispam Detection
           const settings = getGroupSettings(chatId);
@@ -2721,34 +2875,6 @@ We are happy to have you here.
         
         // 🧠 BRAIN: Context-Aware Extraction System
         contextEngine.onMessage(m, txt);
-
-        // 1. Get Group Metadata & Admin Status EARLY
-        let groupMetadata = null;
-        let botIsAdmin = false;
-        let senderIsAdmin = false;
-        
-        if (isGroupChat) {
-          try {
-            groupMetadata = await getGroupMetadata(chatId);
-            if (groupMetadata) {
-              const myNumber = sock.user.id.split(':')[0].split('@')[0];
-              const myLid = sock.authState.creds?.me?.lid;
-              const myLidNumber = myLid ? myLid.split(':')[0] : null;
-              const senderNumber = senderJid.split(':')[0].split('@')[0];
-
-              botIsAdmin = groupMetadata.participants.some(p => {
-                const pNumber = p.id.split(':')[0].split('@')[0];
-                const isMe = pNumber === myNumber || (myLidNumber && pNumber === myLidNumber);
-                return isMe && (p.admin === 'admin' || p.admin === 'superadmin');
-              });
-
-              senderIsAdmin = groupMetadata.participants.some(p => {
-                const pNumber = p.id.split(':')[0].split('@')[0];
-                return pNumber === senderNumber && (p.admin === 'admin' || p.admin === 'superadmin');
-              });
-            }
-          } catch (e) {}
-        }
 
         const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
 
@@ -3833,60 +3959,94 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin` || lowerTxt.starts
 
           // Welcome message for Group chat
         // Welcome Message Commands
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} welcomemessage` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} welcomemessage `)) {
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} welcomemessage` || 
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} welcomemessage `) ||
+    lowerTxt === `${botConfig.getPrefix().toLowerCase()} setwelcome` ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} setwelcome `)) {
+    
     if (!isGroupChat) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `Groups only.` });
     }
 
-    // Check admin status
-    const metadata = await sock.groupMetadata(chatId);
-    const participants = metadata.participants;
-    
-    const senderParticipant = participants.find(p => normalizeJid(p.id) === normalizeJid(senderJid));
-    const isSenderAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
-
-    if (!isSenderAdmin && !hasOverride && !isOwner) {
+    if (!canUseAdminCommands) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
     }
 
-    const welcomeMsg = txt.substring(`${botConfig.getPrefix().toLowerCase()} welcomemessage `.length).trim();
-    if (!welcomeMsg) {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} welcomemessage <your_welcome_text>\`\nUse @user to mention new members.` });
+    const settings = getGroupSettings(chatId);
+    const cmdName = lowerTxt.includes('setwelcome') ? 'setwelcome' : 'welcomemessage';
+    const welcomeMsg = txt.substring(`${botConfig.getPrefix().toLowerCase()} ${cmdName} `.length).trim();
+    
+    if (!welcomeMsg || lowerTxt.endsWith(cmdName)) {
+        const current = settings.welcomeMessage || "Not set (using default).";
+        return await sock.sendMessage(chatId, { 
+            text: BOT_MARKER + `👋 *Current Welcome Message:*\n\n${current}\n\n*To change:* \`${botConfig.getPrefix()} setwelcome <text>\`\n*Tip:* Use @user to tag the new member.` 
+        });
     }
 
-    const settings = getGroupSettings(chatId);
     settings.welcomeMessage = welcomeMsg;
-    groupSettings.set(chatId, settings);
     saveGroupSettings();
 
-    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Set: ${welcomeMsg}` });
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Welcome message updated!` });
 }
 
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} welcome on` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} welcome off`) {
-
-  const myNumber = sock.user.id.split(':')[0].split('@')[0];
-  const myLid = sock.authState.creds?.me?.lid || `${myNumber}:7@lid`;
     if (!isGroupChat) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `Groups only.` });
     }
 
-    // Check admin status
-    const metadata = await sock.groupMetadata(chatId);
-    const participants = metadata.participants;
-    const senderParticipant = participants.find(p => normalizeJid(p.id) === normalizeJid(senderJid));
-    const isSenderAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
-
-    if (!isSenderAdmin) {
+    if (!canUseAdminCommands) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
     }
 
     const settings = getGroupSettings(chatId);
-    
     const enable = lowerTxt.endsWith('on');
     settings.welcomeEnabled = enable;
     saveGroupSettings();
 
     return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Welcomes ${enable ? 'ON' : 'OFF'}.` });
+}
+
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} bye on` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} bye off`) {
+    if (!isGroupChat) {
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `Groups only.` });
+    }
+
+    if (!canUseAdminCommands) {
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+    }
+
+    const settings = getGroupSettings(chatId);
+    const enable = lowerTxt.endsWith('on');
+    settings.byeEnabled = enable;
+    saveGroupSettings();
+
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Goodbye messages ${enable ? 'ON' : 'OFF'}.` });
+}
+
+// `${botConfig.getPrefix().toLowerCase()}` setbye - set goodbye message
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} setbye` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} setbye `)) {
+    if (!isGroupChat) {
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `Groups only.` });
+    }
+
+    if (!canUseAdminCommands) {
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+    }
+
+    const settings = getGroupSettings(chatId);
+    const byeMsg = txt.substring(`${botConfig.getPrefix().toLowerCase()} setbye `.length).trim();
+    
+    if (!byeMsg || lowerTxt.endsWith('setbye')) {
+        const current = settings.byeMessage || "Not set (using default).";
+        return await sock.sendMessage(chatId, { 
+            text: BOT_MARKER + `👋 *Current Goodbye Message:*\n\n${current}\n\n*To change:* \`${botConfig.getPrefix()} setbye <text>\`\n*Tip:* Use @user to tag the member.` 
+        });
+    }
+
+    settings.byeMessage = byeMsg;
+    saveGroupSettings();
+
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Goodbye message updated!` });
 }
    
 
@@ -4809,58 +4969,132 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
     return;
 }
 
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rpg guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} handbook`) {
-    let msg = `╔═══════════════════════╗\n`;
-    msg += `   📔 *THE ULTIMATE ADVENTURER'S HANDBOOK* \n`;
-    msg += `╚════════════════════╝\n\n`;
+    // RPG GUIDE SYSTEM - THE ULTIMATE HANDBOOK
+    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rpg guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} guide` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} handbook`) {
+        let msg = `╔══════════════════════════╗\n`;
+        msg += `    📔 *THE ADVENTURER'S HANDBOOK* \n`;
+        msg += `╚══════════════════════════╝\n\n`;
+        
+        msg += `Welcome, traveler! Use the commands below to explore every corner of the world:\n\n`;
+        
+        msg += `⚔️ \`${botConfig.getPrefix()} guide combat\` - Mechanics & Strategy\n`;
+        msg += `🎭 \`${botConfig.getPrefix()} guide classes\` - Full Evolution Trees\n`;
+        msg += `🎒 \`${botConfig.getPrefix()} guide items\` - Loot, Gear & Rarity\n`;
+        msg += `⚒️ \`${botConfig.getPrefix()} guide work\` - Mining & Crafting\n`;
+        msg += `🏰 \`${botConfig.getPrefix()} guide guilds\` - Guilds & Archetypes\n`;
+        msg += `👹 \`${botConfig.getPrefix()} guide raids\` - Dungeons & Bosses\n`;
+        msg += `🏟️ \`${botConfig.getPrefix()} guide pvp\` - Arena & Duels\n`;
+        msg += `💰 \`${botConfig.getPrefix()} guide economy\` - Wealth & Investments\n`;
+        msg += `📊 \`${botConfig.getPrefix()} guide stats\` - Stats & Attributes\n`;
+        msg += `⭐ \`${botConfig.getPrefix()} guide ranks\` - Ranks & Progression\n`;
+        msg += `📜 \`${botConfig.getPrefix()} guide commands\` - Full Command List\n\n`;
+        
+        msg += `💡 *Quick Tip:* Start your legend with \`${botConfig.getPrefix()} register\`!`;
+        
+        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        return;
+    }
 
-    msg += `📜 *I. THE JOURNEY BEGINS*\n`;
-    msg += `To start your legend, use \`${botConfig.getPrefix()} register\`. You will be assigned a random *Starter Class*. Your goal is to complete *Quests* to earn XP, Gold, and Quest Points (QP).\n\n`;
+    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guide `)) {
+        const topic = lowerTxt.substring(`${botConfig.getPrefix().toLowerCase()} guide `.length).trim();
+        let msg = "";
 
-    msg += `📊 *II. UNDERSTANDING YOUR STATS*\n`;
-    msg += `• ❤️ *HP*: Your health. Hit 0 = "Fallen".\n`;
-    msg += `• ⚡ *Energy*: Used for Skills. Restore with \`rest\` or items.\n`;
-    msg += `• ⚔️ *ATK/MAG*: Power for Physical/Magic skills.\n`;
-    msg += `• 🛡️ *DEF*: Increases \`🕊️ Damage Reduction\` (Blocks % damage).\n`;
-    msg += `• 💨 *SPD*: Increases \`🕊️ Evasion\` (Dodge chance) and turn frequency.\n`;
-    msg += `• 🍀 *LUCK*: Increases \`🎁 Rare Drop Rate\` and Crit chance.\n\n`;
+        if (topic === "combat") {
+            msg = `⚔️ *COMBAT MECHANICS*\n\n`;
+            msg += `• *Initiative (SPD):* Determines turn frequency. Faster players act more often.\n`;
+            msg += `• *Energy:* Required for skills. Restore +15 per turn by using \`rest\`.\n`;
+            msg += `• *Damage Types:* \n`;
+            msg += `  - Physical: Blocked by DEF.\n`;
+            msg += `  - Magical: Partially ignores DEF, scales with MAG.\n`;
+            msg += `  - True: Ignores all armor and damage reduction.\n`;
+            msg += `• *Telegraphs:* Bosses "charge" massive hits. If you see a warning, use a defensive skill or take double damage!\n`;
+            msg += `• *Synergy:* Certain classes boost each other when in the same party.`;
+        } else if (topic === "stats") {
+            msg = `📊 *ATTRIBUTES & STATS*\n\n`;
+            msg += `• ❤️ *HP:* Your life force. If it hits 0, you fall in battle.\n`;
+            msg += `• ⚡ *Energy:* Used to cast abilities. If you run out, you must \`rest\`.\n`;
+            msg += `• ⚔️ *ATK:* Boosts all **Physical** damage skills.\n`;
+            msg += `• 🔮 *MAG:* Boosts all **Magical** damage skills and healing power.\n`;
+            msg += `• 🛡️ *DEF:* Reduces damage taken from physical and magic attacks.\n`;
+            msg += `• 💨 *SPD:* Increases turn frequency and evasion (dodge) chance.\n`;
+            msg += `• 🍀 *LUCK:* Increases critical hit chance and rare loot drop rates.`;
+        } else if (topic === "classes") {
+            msg = `🎭 *EVOLUTION TIERS & REQS*\n\n`;
+            msg += `*🟢 TIER 1: STARTER*\n`;
+            msg += `• Fighter, Scout, Apprentice, Acolyte.\n\n`;
+            
+            msg += `*🔵 TIER 2: EVOLVED*\n`;
+            msg += `• *Reqs:* Level 10+, 3 Quests, 5,000 Zeni.\n`;
+            msg += `• *Item:* **Evolution Stone (T2)**\n`;
+            msg += `• *Paths:* \n`;
+            msg += `  - Fighter ➔ Warrior, Berserker, Paladin, Dragonslayer\n`;
+            msg += `  - Scout ➔ Rogue, Monk, Samurai, Ninja\n`;
+            msg += `  - Apprentice ➔ Mage, Warlock, Elementalist, Necromancer, Chronomancer, Reaper\n`;
+            msg += `  - Acolyte ➔ Cleric, Druid, Merchant, Bard, Artificer, God Hand\n\n`;
+            
+            msg += `*🟣 TIER 3: ASCENDED*\n`;
+            msg += `• *Reqs:* Level 30+, 15 Quests, 50,000 Zeni.\n`;
+            msg += `• *Item:* **Ascension Stone (T3)**\n`;
+            msg += `• *Examples:* Warrior ➔ Warlord, Mage ➔ Archmage, Dragonslayer ➔ Dragon God.\n\n`;
+            
+            msg += `💡 Use \`${botConfig.getPrefix()} class info\` to see your specific next steps!`;
+        } else if (topic === "items") {
+            msg = `🎒 *EQUIPMENT & LOOT*\n\n`;
+            msg += `• *Rarity:* ⚪ Common ➔ 🟢 Uncommon ➔ 🔵 Rare ➔ 🟣 Epic ➔ 🟡 Legendary ➔ 🔴 Mythic\n`;
+            msg += `• *Slots:* Main Hand, Off-Hand, Armor, Helmet, Boots, Rings, Amulets.\n`;
+            msg += `• *Level Reqs:* Most gear requires you to be a certain level to equip it.\n`;
+            msg += `• *Materials:* Items can be dismantled into ores, leather, and arcane dust for crafting.\n`;
+            msg += `• *Pouch:* Materials don't take up inventory space! They go into your infinite Pouch.`;
+        } else if (topic === "work") {
+            msg = `⚒️ *PROFESSIONS GUIDE*\n\n`;
+            msg += `• *Mining:* Use \`${botConfig.getPrefix()} mine\` to extract ores. Leveling unlocks new mines like the 'Crystal Depths'.\n`;
+            msg += `• *Crafting:* Use \`${botConfig.getPrefix()} craft\` to create gear from recipes. Higher levels allow crafting **Masterwork** items with bonus stats.\n`;
+            msg += `• *Brewing:* Create potions to heal or buff yourself during quests.\n`;
+            msg += `• *Stamina:* Work actions cost Energy. Efficient miners use less!`;
+        } else if (topic === "guilds") {
+            msg = `🏰 *GUILD SYSTEM*\n\n`;
+            msg += `• *Creation:* Start a guild with \`${botConfig.getPrefix()} guild create <name>\`.\n`;
+            msg += `• *Archetypes:* \n`;
+            msg += `  - *Adventurer:* Bonus XP and Raid drops.\n`;
+            msg += `  - *Merchant:* Reduced shop prices and market fees.\n`;
+            msg += `  - *Research:* Faster crafting and profession leveling.\n`;
+            msg += `• *Benefits:* Shared bank, private raids, and global buffs for all members.`;
+        } else if (topic === "raids") {
+            msg = `👹 *DUNGEONS & RAIDS*\n\n`;
+            msg += `• *Solo:* Practice and level up in solo instances.\n`;
+            msg += `• *Dungeons:* 3-player instances with elite loot.\n`;
+            msg += `• *Raids:* Large-scale battles against World Bosses. Requires a balanced team of Tanks, DPS, and Support.\n`;
+            msg += `• *Boss Mechanics:* Look for 'Shields', 'Regeneration', or 'Berserk' phases. Communication is key!`;
+        } else if (topic === "pvp") {
+            msg = ` Arena 🏟️ *PVP & DUELS*\n\n`;
+            msg += `• *Duels:* Challenge anyone with \`${botConfig.getPrefix()} pvp <@user>\` for bragging rights.\n`;
+            msg += `• *Wager:* Bet Zeni on your combat skills.\n`;
+            msg += `• *Arena:* Climb the seasonal leaderboard for unique titles and Mythic gear rewards.`;
+        } else if (topic === "economy") {
+            msg = `💰 *ECONOMY & INVESTMENTS*\n\n`;
+            msg += `• *Zeni:* The lifeblood of the RPG.\n`;
+            msg += `• *Investment:* Use \`${botConfig.getPrefix()} invest\` to put your money into the Stock Market or Bank.\n`;
+            msg += `• *Market:* Prices for materials fluctuate based on global supply and demand.\n`;
+            msg += `• *Loans:* Use \`${botConfig.getPrefix()} loan\` if you're short on cash for that evolution stone.`;
+        } else if (topic === "ranks") {
+            msg = `⭐ *ADVENTURER PROGRESSION*\n\n`;
+            msg += `• *Rank:* Your letter grade (F to SSS). Higher ranks = Better loot.\n`;
+            msg += `• *Milestones:* Certain features only unlock at higher ranks.\n`;
+            msg += `• *Stats:* Every level up grants points to spend or auto-assign to your core stats.`;
+        } else if (topic === "commands") {
+            msg = `📜 *COMMAND LIST*\n\n`;
+            msg += `• *Basic:* \`register\`, \`profile\`, \`stats\`, \`bal\`\n`;
+            msg += `• *Action:* \`quest\`, \`solo\`, \`raid\`, \`mine\`, \`craft\`\n`;
+            msg += `• *Social:* \`guild\`, \`gift\`, \`marry\`, \`pvp\`\n`;
+            msg += `• *Growth:* \`evolve\`, \`skills\`, \`skill up\`, \`equip\`\n`;
+            msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`\n`;
+        } else {
+            msg = `❌ Topic not found. Use \`${botConfig.getPrefix()} guide\` for the main menu.`;
+        }
 
-    msg += `🏆 *III. RANK PROGRESSION*\n`;
-    // ... (rest remains)
-    msg += `• ⭐ *S-Rank*: Lv.40 + 60 Quests\n\n`;
-
-    msg += `🎭 *IV. CLASSES & EVOLUTION*\n`;
-    // ... (rest remains)
-    msg += `• Acolyte ➔ *Cleric*, *Druid*, *Merchant*, *God Hand*\n\n`;
-
-    msg += `⚔️ *V. ADVANCED COMBAT*\n`;
-    msg += `• ⏱️ **Initiative**: Turn order is based on **SPD**. Faster heroes act more often!\n`;
-    msg += `• 🧘 \`rest\`: Skips turn to recover **15 Energy**.\n`;
-    msg += `• 🏃 \`flee\`: Attempt to escape based on party speed.\n`;
-    msg += `• ⚠️ **Telegraphs**: Bosses warn before big hits. **DEFEND** or take 2x damage!\n`;
-    msg += `• 🗳️ \`vote <1|2>\`: Vote for your path at the forks in dungeons.\n\n`;
-
-    msg += `🎒 *VI. EQUIPMENT & SLOTS*\n`;
-    msg += `1. **Auto-Equip**: Use \`${botConfig.getPrefix()} equip <bag_#>\`. The bot detects the slot!\n`;
-    msg += `2. **Hands**: Use \`main_hand\` and \`off_hand\`. 2-Handed weapons take both!\n`;
-    msg += `3. **Recycle**: Use \`${botConfig.getPrefix()} dismantle <bag_#>\` to break items for 40% materials.\n`;
-    msg += `4. **Levels**: Gear now has **Level Requirements**. Check your bag for comparisons.\n\n`;
-
-    msg += `🛠️ *VII. PROFESSIONS & MASTERY*\n`;
-    msg += `• ⛏️ **Mining**: Level up to unlock harder mines and decrease Energy costs.\n`;
-    msg += `• ⚒️ **Crafting**: Higher levels give a chance to create **Masterwork** (+stats) gear.\n`;
-    msg += `• 📜 **Inventory**: Materials are stored in an infinite **Material Pouch**!\n\n`;
-
-    msg += `💰 *VIII. ECONOMY & ASSETS*\n`;
-    msg += `• ❄️ **Frozen Assets**: Defaulting on a loan freezes your funds until cleared.\n`;
-    msg += `• 📊 **Global Stats**: Use \`${botConfig.getPrefix()} stats\` to see market insights and wealth share.\n\n`;
-
-    msg += `💡 *FINAL TIPS:*\n`;
-
-    await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-    return;
-}
-
+        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        return;
+    }
 // `${botConfig.getPrefix().toLowerCase()}` guild create <name>
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild create `)) {
   const guildName = txt.substring(`${botConfig.getPrefix().toLowerCase()} guild create `.length).trim();
@@ -5700,6 +5934,9 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild challenge 
 
         // `${botConfig.getPrefix().toLowerCase()}` inactive - show inactive members
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} inactive` && isGroupChat && groupMetadata) {
+          if (!canUseAdminCommands) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+          }
           const activity = getChatActivity(chatId);
           const activeUsers = new Set(activity.map(a => a.userId));
           const inactive = groupMetadata.participants
@@ -7911,7 +8148,82 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel` || lowerTxt.start
     }
     return;
 }
-// ... [Accept/Decline blocks]
+// ACCEPT invitation (Guild, Duel, Loan)
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} accept`) {
+    // 1. Check Duel Invites
+    const duelInvite = pvpSystem.getInvite(chatId, senderJid);
+    if (duelInvite) {
+        const result = await pvpSystem.acceptChallenge(sock, chatId, senderJid);
+        if (result.success) {
+            if (result.image?.success) {
+                await sock.sendMessage(chatId, { image: { url: result.image.path }, caption: BOT_MARKER + result.message });
+            } else {
+                await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+            }
+        } else {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+        }
+        return;
+    }
+
+    // 2. Check Guild Invites
+    const guildInvite = guilds.checkGuildInvite(senderJid);
+    if (guildInvite) {
+        const result = guilds.acceptGuildInvite(senderJid);
+        if (result.success) {
+            await sock.sendMessage(chatId, { 
+                text: BOT_MARKER + `⭐ *WELCOME!* ⭐\n\n@${senderJid.split('@')[0]} has accepted the invitation and joined *${result.guild}*!`,
+                mentions: [senderJid]
+            });
+        } else {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+        }
+        return;
+    }
+
+    // 3. Check Loan Invites
+    const loanRequest = loans.getPendingRequest(senderJid);
+    if (loanRequest) {
+        const result = loans.acceptLoan(senderJid);
+        if (result.success) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Loan of ${ZENI}${result.amount.toLocaleString()} accepted! funds transferred to your wallet.` });
+        } else {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + result.msg });
+        }
+        return;
+    }
+
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You don't have any pending invitations to accept!" });
+}
+
+// DECLINE invitation
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} decline`) {
+    // 1. Check Duel
+    const duelInvite = pvpSystem.getInvite(chatId, senderJid);
+    if (duelInvite) {
+        pvpSystem.declineChallenge(chatId, senderJid);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Duel invitation declined.` });
+        return;
+    }
+
+    // 2. Check Guild
+    const guildInvite = guilds.checkGuildInvite(senderJid);
+    if (guildInvite) {
+        const result = guilds.declineGuildInvite(senderJid);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+        return;
+    }
+
+    // 3. Check Loan
+    const loanRequest = loans.getPendingRequest(senderJid);
+    if (loanRequest) {
+        const result = loans.declineLoan(senderJid);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Loan request declined." });
+        return;
+    }
+
+    return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You don't have any pending invitations to decline." });
+}
 // PVP ACTIONS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pvp `)) {
     const parts = lowerTxt.split(' ');

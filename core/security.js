@@ -1,239 +1,158 @@
-// security.js - FIXED for groupStatusMentionMessage detection
+// security.js - ENHANCED for comprehensive link and status detection
 module.exports = {
-    handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount) {
+    handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null) {
         try {
             if (!msg || !msg.message) return;
             const chatId = msg.key.remoteJid;
             const sender = msg.key.participant || msg.key.remoteJid;
 
             // Only work in group chats
-            if (!chatId.endsWith('@g.us')) {
-                return;
-            }
+            if (!chatId.endsWith('@g.us')) return;
 
-            // Get group settings - check if antilink is enabled
+            // Get group settings
             const settings = groupSettings.get(chatId);
-            if (!settings) {
-                // console.log(`[Security] No settings for group ${chatId}`);
-                return;
-            }
-            
-            if (!settings.antilink) {
-                // console.log(`[Security] Antilink disabled for ${chatId}`);
-                return;
-            }
+            if (!settings || !settings.antilink) return;
 
-            // Get group metadata to check if sender is admin
-            const groupMetadata = await sock.groupMetadata(chatId);
+            // Get group metadata (prefer cached)
+            const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
+            if (!groupMetadata) return;
+
             const senderIsAdmin = groupMetadata.participants.some(
                 p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin')
             );
 
-            // Admins are exempt from antilink
-            if (senderIsAdmin) {
-                return;
-            }
+            // Admins are exempt
+            if (senderIsAdmin) return;
 
-            console.log(`[Security] Checking message from ${sender} in ${chatId}...`);
             const violations = [];
             
-            // ============================================
-            // 🎯 STATUS MENTION DETECTION - THE REAL WAY!
-            // ============================================
-            
-            // Check for groupStatusMentionMessage (when someone mentions this group in their status)
-            if (msg.message?.groupStatusMentionMessage) {
-                console.log('🎯 GROUP STATUS MENTION DETECTED!');
+            // 🎯 1. DIRECT STATUS MENTION (Baileys specific)
+            if (msg.message.groupStatusMentionMessage) {
                 violations.push('📢 group status mention');
             }
 
-            // ============================================
-            // Regular content checks (links, invites, etc.)
-            // ============================================
-            
-            let text = '';
-            let contextInfo = null;
-            
-            if (msg.message) {
-                // Extract text from various message types
-                text = msg.message.conversation || 
-                       msg.message.extendedTextMessage?.text || 
-                       msg.message.imageMessage?.caption || 
-                       msg.message.videoMessage?.caption || 
-                       '';
+            // 🔍 2. RECURSIVE TEXT & CONTENT EXTRACTION
+            const extractAllText = (obj) => {
+                let found = [];
+                if (!obj) return found;
                 
-                // Extract ContextInfo
-                contextInfo = msg.message.extendedTextMessage?.contextInfo ||
-                             msg.message.imageMessage?.contextInfo ||
-                             msg.message.videoMessage?.contextInfo ||
-                             null;
+                // Common text fields in WhatsApp messages
+                const fields = [
+                    'conversation', 'text', 'caption', 'contentText', 'description', 
+                    'footerText', 'hydratedContentText', 'hydratedFooterText', 
+                    'name', 'selectedDisplayText', 'title', 'subtitle', 'body'
+                ];
+                
+                for (const field of fields) {
+                    if (obj[field] && typeof obj[field] === 'string') {
+                        found.push(obj[field]);
+                    }
+                }
+                
+                // Nested structures
+                if (obj.extendedTextMessage) found.push(...extractAllText(obj.extendedTextMessage));
+                if (obj.imageMessage) found.push(...extractAllText(obj.imageMessage));
+                if (obj.videoMessage) found.push(...extractAllText(obj.videoMessage));
+                if (obj.documentMessage) found.push(...extractAllText(obj.documentMessage));
+                if (obj.templateMessage) found.push(...extractAllText(obj.templateMessage));
+                if (obj.interactiveMessage) found.push(...extractAllText(obj.interactiveMessage));
+                if (obj.buttonsMessage) found.push(...extractAllText(obj.buttonsMessage));
+                if (obj.listMessage) found.push(...extractAllText(obj.listMessage));
+                if (obj.viewOnceMessage) found.push(...extractAllText(obj.viewOnceMessage.message));
+                if (obj.viewOnceMessageV2) found.push(...extractAllText(obj.viewOnceMessageV2.message));
+                if (obj.ephemeralMessage) found.push(...extractAllText(obj.ephemeralMessage.message));
+                
+                // Polls
+                if (obj.pollCreationMessage || obj.pollCreationMessageV2 || obj.pollCreationMessageV3) {
+                    const poll = obj.pollCreationMessage || obj.pollCreationMessageV2 || obj.pollCreationMessageV3;
+                    found.push(poll.name || '');
+                    if (poll.options) poll.options.forEach(o => found.push(o.optionName || ''));
+                }
+
+                return found;
+            };
+
+            const allText = extractAllText(msg.message).join(' ');
+            const lowerText = allText.toLowerCase();
+
+            // 🎯 3. STATUS CHECKS (Text & Mentioned JIDs)
+            if (lowerText.includes('@status') || lowerText.includes('@broadcast') || lowerText.includes('status@broadcast')) {
+                violations.push('📢 status mention');
             }
 
-            // Check text for violations
-            if (text) {
-                // Links (HTTP, HTTPS, WWW)
-                const linkRegex = /((https?:\/\/)|(www\.))[^\s]+/gi;
-                if (text.match(linkRegex)) {
-                    violations.push('🔗 link');
-                }
+            const contextInfo = msg.message.extendedTextMessage?.contextInfo || 
+                               msg.message.imageMessage?.contextInfo || 
+                               msg.message.videoMessage?.contextInfo ||
+                               msg.message.documentMessage?.contextInfo;
 
-                // Group invites
-                const groupInviteRegex = /(https?:\/\/)?(chat\.whatsapp\.com|wa\.me\/invite)\/[^\s]+/gi;
-                if (text.match(groupInviteRegex)) {
-                    violations.push('👥 group invite');
-                }
-
-                // Channel links
-                const channelRegex = /(https?:\/\/)?(whatsapp\.com\/channel)\/[^\s]+/gi;
-                if (text.match(channelRegex)) {
-                    violations.push('📺 channel link');
-                }
-
-                // @status text mentions
-                const statusTextRegex = /@(status|broadcast)/gi;
-                if (text.match(statusTextRegex)) {
-                    violations.push('📢 status text mention');
-                }
-            }
-
-            // Check ContextInfo for additional violations
             if (contextInfo) {
-                // Check for status@broadcast in mentionedJid
                 const mentionedJids = contextInfo.mentionedJid || [];
-                const hasStatusMention = mentionedJids.some(jid => 
-                    jid.includes('status@broadcast') || jid.includes('broadcast')
-                );
+                if (mentionedJids.some(jid => jid.includes('status@broadcast') || jid.includes('broadcast'))) {
+                    violations.push('📢 status mention');
+                }
                 
-                if (hasStatusMention && !violations.includes('📢 status text mention')) {
-                    violations.push('📢 status text mention');
+                // Group Mentions
+                if (contextInfo.groupMentions?.some(gm => (gm.groupJid || gm) === chatId)) {
+                    violations.push('📢 group status mention');
                 }
 
-                // Check for groupMentions (secondary check, though groupStatusMentionMessage is primary)
-                const groupMentions = contextInfo.groupMentions || [];
-                if (groupMentions.length > 0) {
-                    const thisGroupMentioned = groupMentions.some(gm => {
-                        const mentionedGroupJid = gm.groupJid || gm;
-                        return mentionedGroupJid === chatId;
-                    });
-                    
-                    if (thisGroupMentioned && !violations.includes('📢 group status mention')) {
-                        violations.push('📢 group status mention');
+                // Check externalAdReply (sometimes contains links)
+                if (contextInfo.externalAdReply) {
+                    const ad = contextInfo.externalAdReply;
+                    const adText = (ad.title || '') + ' ' + (ad.body || '') + ' ' + (ad.sourceUrl || '');
+                    if (/(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|whatsapp\.com\/channel)/gi.test(adText)) {
+                        violations.push('🔗 link (ad)');
                     }
                 }
             }
 
+            // 🎯 4. COMPREHENSIVE LINK DETECTION
+            // This regex covers: http/https, www, group invites, wa.me, and channels
+            const linkRegex = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|whatsapp\.com\/channel\/)[^\s]{2,}/gi;
+            if (linkRegex.test(allText)) {
+                if (allText.includes('chat.whatsapp.com')) violations.push('👥 group invite');
+                else if (allText.includes('whatsapp.com/channel')) violations.push('📺 channel link');
+                else violations.push('🔗 link');
+            }
+
             // ============================================
-            // Take action if violations detected
+            // ACTION PHASE
             // ============================================
             
             if (violations.length > 0) {
-                const violationType = violations.join(', ');
+                const violationType = [...new Set(violations)].join(', ');
                 const userName = sender.split('@')[0];
-                console.log(`🚨 Non-admin ${userName} sent prohibited content: ${violationType}`);
-                
                 const action = settings.antilinkAction || 'delete';
 
-                // Delete the message
-                try {
-                    await sock.sendMessage(chatId, { delete: msg.key });
-                    console.log(`🗑️ Deleted message from ${userName}`);
-                } catch (delErr) {
-                    console.log('Failed to delete message:', delErr.message);
-                }
+                // Delete first
+                try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
 
-                // Get current warnings (PER GROUP)
+                // Warn/Kick logic
                 let warningCount = 0;
                 if (addWarning && getWarningCount) {
                     warningCount = addWarning(sender, chatId, `Antilink violation: ${violationType}`);
                 }
 
-                // Take action based on settings
-                switch (action) {
-                    case 'kick':
-                        const kickMsg = `
-╔═══════════════════════╗
-   ⚠️  *ANTILINK VIOLATION*  ⚠️
-╚═══════════════════════╝
-
-*User:* @${userName}
-*Violation:* ${violationType}
-*Action:* Removed from group
-
-━━━━━━━━━━━━━━━━━━
-🛡️ This group has antilink protection enabled.
-`.trim();
-
-                        await sock.sendMessage(chatId, {
-                            text: kickMsg,
-                            contextInfo: { mentionedJid: [sender] }
-                        });
-
-                        setTimeout(async () => {
-                            try {
-                                await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
-                                console.log(`✅ Kicked ${userName} for: ${violationType}`);
-                            } catch (err) {
-                                console.log('Failed to remove participant:', err.message);
-                            }
-                        }, 1000);
-                        break;
-
-                    case 'warn':
-                        const strikeEmoji = warningCount === 1 ? '⚠️' : warningCount === 2 ? '⚠️⚠️' : '⚠️⚠️⚠️';
-                        const warnMsg = `
-╔═══════════════════════╗
-   ${strikeEmoji}  *WARNING*  ${strikeEmoji}
-╚═══════════════════════╝
-
-*User:* @${userName}
-*Violation:* ${violationType}
-*Warnings:* ${warningCount}/3
-
-${warningCount >= 3 ? '🔴 *Final warning!* Next violation = removal.' : 
-  warningCount === 2 ? '🟡 *Be careful!* One more strike and you\'re out.' : 
-  '🟢 *First warning.* Avoid prohibited content.'}
-
-━━━━━━━━━━━━━━━━━━
-🛡️ Prohibited: Links • Group invites • Status mentions • Channels
-`.trim();
-
-                        await sock.sendMessage(chatId, {
-                            text: warnMsg,
-                            contextInfo: { mentionedJid: [sender] }
-                        });
-                        
-                        console.log(`✅ Warned ${userName} (${warningCount}/3) for: ${violationType}`);
-
-                        if (warningCount >= 3) {
-                            setTimeout(async () => {
-                                try {
-                                    await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
-                                    console.log(`✅ Auto-kicked ${userName} after 3 warnings`);
-                                    
-                                    await sock.sendMessage(chatId, {
-                                        text: `🔴 @${userName} has been removed after 3 warnings.`,
-                                        contextInfo: { mentionedJid: [sender] }
-                                    });
-                                } catch (err) {
-                                    console.log('Failed to auto-kick:', err.message);
-                                }
-                            }, 2000);
-                        }
-                        break;
-
-                    case 'delete':
-                    default:
-                        console.log(`✅ Silently deleted message from ${userName} for: ${violationType}`);
-                        break;
+                if (action === 'kick') {
+                    const kickMsg = `*🚨 ANTILINK VIOLATION 🚨*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Action:* REMOVED`;
+                    await sock.sendMessage(chatId, { text: kickMsg, contextInfo: { mentionedJid: [sender] } });
+                    setTimeout(() => sock.groupParticipantsUpdate(chatId, [sender], 'remove').catch(() => {}), 1000);
+                } 
+                else if (action === 'warn') {
+                    const strike = '⚠️'.repeat(Math.min(warningCount, 3));
+                    const warnMsg = `*${strike} WARNING ${strike}*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Count:* ${warningCount}/3\n\n_Don't send links or mention status._`;
+                    await sock.sendMessage(chatId, { text: warnMsg, contextInfo: { mentionedJid: [sender] } });
+                    if (warningCount >= 3) {
+                        setTimeout(() => sock.groupParticipantsUpdate(chatId, [sender], 'remove').catch(() => {}), 2000);
+                    }
                 }
             }
         } catch (err) {
-            console.log('Error in security handler:', err.message);
-            console.error(err);
+            console.error('[Security Error]', err.message);
         }
     },
 
-    handleLinks: async function(sock, msg, groupSettings, addWarning, getWarningCount) {
-        return this.handleSecurity(sock, msg, groupSettings, addWarning, getWarningCount);
+    handleLinks: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata) {
+        return this.handleSecurity(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata);
     }
 };

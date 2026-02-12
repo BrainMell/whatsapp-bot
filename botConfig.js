@@ -11,7 +11,7 @@ class BotConfig {
       botId: "bot1",
       botName: "Joker",
       prefix: ".j",
-      version: "4.0",
+      version: "5.3.0",
       symbol: ".",
       currency: {
         symbol: "Ꞩ",
