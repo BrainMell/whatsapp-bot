@@ -559,9 +559,6 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const inventorySystem = require('./inventorySystem');
     
     // Check for Evolution/Ascension Stone
-    const requiredStone = currentClass.tier === 'STARTER' ? 'evolution_stone' : 'ascension_stone';
-    const stoneName = requiredStone === 'evolution_stone' ? 'Evolution Stone (T2)' : 'Ascension Stone (T3)';
-
     if (!inventorySystem.hasItem(senderJid, requiredStone)) {
         return sock.sendMessage(chatId, { text: `❌ You need an *${stoneName}* to evolve! Buy one from the shop.` });
     }
