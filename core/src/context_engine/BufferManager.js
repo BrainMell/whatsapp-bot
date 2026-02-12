@@ -1,6 +1,6 @@
 const botConfig = require('../../../botConfig');
 
-/**
+/*
  * Manages conversational context buffers per chat.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */
@@ -16,7 +16,7 @@ class BufferManager {
         setInterval(() => this.cleanupStaleWindows(), 60000);
     }
 
-    /**
+    /*
      * Add a message to the chat's context window
      */
     addMessage(msg) {
@@ -44,7 +44,7 @@ class BufferManager {
         }
     }
 
-    /**
+    /*
      * Get context around a specific message
      */
     getContext(chatId, aroundMsgId, before = 15, after = 5) {
@@ -65,7 +65,7 @@ class BufferManager {
         return messages.slice(start, end);
     }
 
-    /**
+    /*
      * Remove stale conversation windows
      */
     cleanupStaleWindows() {

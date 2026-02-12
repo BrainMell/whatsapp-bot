@@ -6,7 +6,7 @@ const economy = require('../../economy'); // To interact with MongoDB users
 const Baileys = require("@whiskeysockets/baileys");
 const jidNormalizedUser = Baileys.jidNormalizedUser;
 
-/**
+/*
  * Main Orchestrator for the Context Extraction System.
  */
 class ContextEngine {
@@ -21,7 +21,7 @@ class ContextEngine {
         console.log("🚀 Context-Aware Extraction Engine Ready.");
     }
 
-    /**
+    /*
      * Entry point for every message from index.js
      */
     async onMessage(rawMsg, body) {
@@ -66,7 +66,7 @@ class ContextEngine {
         }
     }
 
-    /**
+    /*
      * Save extracted results to MongoDB
      */
     async saveResults(data) {

@@ -1,4 +1,4 @@
-/**
+/*
  * Detects conversation triggers for personal information extraction.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */
@@ -82,7 +82,7 @@ class TriggerDetector {
         console.log(`🎯 Trigger Detector initialized (${this.patterns.length} trigger types loaded)`);
     }
 
-    /**
+    /*
      * Detect triggers in a message
      * @returns {Array} Array of { type, confidence }
      */
@@ -105,7 +105,7 @@ class TriggerDetector {
         return results;
     }
 
-    /**
+    /*
      * Fine-tune confidence based on message properties
      */
     calculateConfidence(type, base, content) {

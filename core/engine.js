@@ -969,7 +969,7 @@ async function searchPinterest(query, count = 10) {
     }
 }
 
-/**
+/*
  * Search Klipy Stickers (Go Service)
  */
 async function searchStickers(query, count = 10) {
@@ -1800,7 +1800,7 @@ async function detectMood(text) {
   }
 }
 
-/**
+/*
  * Awards progression (XP/GP) to a user for interacting with the bot.
  * Handles level-up notifications.
  */
@@ -1914,7 +1914,7 @@ const NEWSLETTER_JID = '120363425532756870@newsletter';
 
 
 
-/**
+/*
 
  * Helper to send menu messages with an image banner if available.
 
@@ -2370,7 +2370,7 @@ async function broadcastNews(sock) {
   }
 }
 
-/**
+/*
  * Broadcasts a one-time update message for new versions
  */
 async function broadcastUpdate(sock) {
@@ -2404,14 +2404,14 @@ async function broadcastUpdate(sock) {
   msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
   
   msg += `🎭 *II. EVOLUTION TIERS*\n`;
-  msg += `Class advancement now requires **Evolution Stones (T2)** and **Ascension Stones (T3)**. Check the shop for these new items!\n\n`;
+  msg += `Class advancement now requires *Evolution Stones (T2)* and *Ascension Stones (T3)*. Check the shop for these new items!\n\n`;
   
   msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
   msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
   
   msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
-  msg += `• Fighter's **Execute** skill fixed.\n`;
-  msg += `• Berserker gets a new reality-bending skill: **Dimensional Slash**.\n`;
+  msg += `• Fighter's *Execute* skill fixed.\n`;
+  msg += `• Berserker gets a new reality-bending skill: *Dimensional Slash*.\n`;
   msg += `• Adjusted combat UI for better visibility.\n\n`;
   
   msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
@@ -2429,7 +2429,7 @@ async function broadcastUpdate(sock) {
   await system.set('last_broadcasted_version', currentVersion);
 }
 
-/**
+/*
  * Broadcasts a one-time update message for new versions
  */
 async function broadcastUpdate(sock) {
@@ -2463,14 +2463,14 @@ async function broadcastUpdate(sock) {
   msg += `We've introduced a brand-new modular guide system. Use \`${botConfig.getPrefix()} guide\` to access specific sections like Combat, Stats, Classes, and more!\n\n`;
   
   msg += `🎭 *II. EVOLUTION TIERS*\n`;
-  msg += `Class advancement now requires **Evolution Stones (T2)** and **Ascension Stones (T3)**. Check the shop for these new items!\n\n`;
+  msg += `Class advancement now requires *Evolution Stones (T2)* and *Ascension Stones (T3)*. Check the shop for these new items!\n\n`;
   
   msg += `🐲 *III. DRAGONSLAYER LEGACY*\n`;
   msg += `The Dragonslayer and Dragon God classes have been fleshed out with new feats and lore. High-tier requirements are now active!\n\n`;
   
   msg += `⚔️ *IV. COMBAT REFINEMENTS*\n`;
-  msg += `• Fighter's **Execute** skill fixed.\n`;
-  msg += `• Berserker gets a new reality-bending skill: **Dimensional Slash**.\n`;
+  msg += `• Fighter's *Execute* skill fixed.\n`;
+  msg += `• Berserker gets a new reality-bending skill: *Dimensional Slash*.\n`;
   msg += `• Adjusted combat UI for better visibility.\n\n`;
   
   msg += `💡 *Tip:* Check \`${botConfig.getPrefix()} guide classes\` to see the new requirements!`;
@@ -5013,8 +5013,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg = `📊 *ATTRIBUTES & STATS*\n\n`;
             msg += `• ❤️ *HP:* Your life force. If it hits 0, you fall in battle.\n`;
             msg += `• ⚡ *Energy:* Used to cast abilities. If you run out, you must \`rest\`.\n`;
-            msg += `• ⚔️ *ATK:* Boosts all **Physical** damage skills.\n`;
-            msg += `• 🔮 *MAG:* Boosts all **Magical** damage skills and healing power.\n`;
+            msg += `• ⚔️ *ATK:* Boosts all *Physical* damage skills.\n`;
+            msg += `• 🔮 *MAG:* Boosts all *Magical* damage skills and healing power.\n`;
             msg += `• 🛡️ *DEF:* Reduces damage taken from physical and magic attacks.\n`;
             msg += `• 💨 *SPD:* Increases turn frequency and evasion (dodge) chance.\n`;
             msg += `• 🍀 *LUCK:* Increases critical hit chance and rare loot drop rates.`;
@@ -5025,7 +5025,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             
             msg += `*🔵 TIER 2: EVOLVED*\n`;
             msg += `• *Reqs:* Level 10+, 3 Quests, 5,000 Zeni.\n`;
-            msg += `• *Item:* **Evolution Stone (T2)**\n`;
+            msg += `• *Item:* *Evolution Stone (T2)*\n`;
             msg += `• *Paths:* \n`;
             msg += `  - Fighter ➔ Warrior, Berserker, Paladin, Dragonslayer\n`;
             msg += `  - Scout ➔ Rogue, Monk, Samurai, Ninja\n`;
@@ -5034,7 +5034,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             
             msg += `*🟣 TIER 3: ASCENDED*\n`;
             msg += `• *Reqs:* Level 30+, 15 Quests, 50,000 Zeni.\n`;
-            msg += `• *Item:* **Ascension Stone (T3)**\n`;
+            msg += `• *Item:* *Ascension Stone (T3)*\n`;
             msg += `• *Examples:* Warrior ➔ Warlord, Mage ➔ Archmage, Dragonslayer ➔ Dragon God.\n\n`;
             
             msg += `💡 Use \`${botConfig.getPrefix()} class info\` to see your specific next steps!`;
@@ -5048,7 +5048,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
         } else if (topic === "work") {
             msg = `⚒️ *PROFESSIONS GUIDE*\n\n`;
             msg += `• *Mining:* Use \`${botConfig.getPrefix()} mine\` to extract ores. Leveling unlocks new mines like the 'Crystal Depths'.\n`;
-            msg += `• *Crafting:* Use \`${botConfig.getPrefix()} craft\` to create gear from recipes. Higher levels allow crafting **Masterwork** items with bonus stats.\n`;
+            msg += `• *Crafting:* Use \`${botConfig.getPrefix()} craft\` to create gear from recipes. Higher levels allow crafting *Masterwork* items with bonus stats.\n`;
             msg += `• *Brewing:* Create potions to heal or buff yourself during quests.\n`;
             msg += `• *Stamina:* Work actions cost Energy. Efficient miners use less!`;
         } else if (topic === "guilds") {
@@ -5825,7 +5825,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild upgrade`))
   const buildingId = parts[3]; // .j(0) guild(1) upgrade(2) <id>(3)
 
   if (!buildingId) {
-    let msg = `🏠 **GUILD UPGRADES** 🏠\n\n`;
+    let msg = `🏠 *GUILD UPGRADES* 🏠\n\n`;
     msg += `Spend Guild Points to upgrade your base!\n\n`;
     
     for (const [id, data] of Object.entries(guilds.GUILD_UPGRADES)) {
@@ -8385,7 +8385,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} economy`) {
     const totalDebt = loans.getTotalDebt();
     const marketCap = stockMarket.getMarketCap();
     
-    let msg = `📊 **Global Economy Statistics**\n`;
+    let msg = `📊 *Global Economy Statistics*\n`;
     msg += `​Total Users: ${stats.totalUsers}\n`;
     msg += `​Total Wealth: ${stats.totalWealth.toLocaleString()} ${economy.getZENI()}\n`;
     msg += `​In Wallets: ${stats.totalWallet.toLocaleString()} ${economy.getZENI()}\n`;
@@ -8395,7 +8395,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} economy`) {
     msg += `​Active Businesses: 0\n`;
     msg += `​Outstanding Loan Debt: ${totalDebt.toLocaleString()} ${economy.getZENI()}\n\n`;
     
-    msg += `​🔍 **Deep Insights**\n`;
+    msg += `​🔍 *Deep Insights*\n`;
     msg += `​Avg Wealth: ${stats.avgWealth.toLocaleString()} ${economy.getZENI()}\n`;
     msg += `​Frozen Assets: ${stats.totalFrozen.toLocaleString()} ${economy.getZENI()}\n`;
     msg += `​Market Cap (Stocks): ${marketCap.toLocaleString()} ${economy.getZENI()}\n`;
@@ -8411,7 +8411,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} economy`) {
 // STOCK MARKET COMMANDS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} stocks`) {
     const stockMarket = require('./stockMarket');
-    let msg = `📈 **ZENI STOCK EXCHANGE** 📈\n\n`;
+    let msg = `📈 *ZENI STOCK EXCHANGE* 📈\n\n`;
     for (const [symbol, s] of Object.entries(stockMarket.STOCKS)) {
         msg += `• *${s.name}* (\`${symbol}\`)\n  Price: ${economy.getZENI()}${s.price.toLocaleString()}\n\n`;
     }
@@ -8439,7 +8439,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} buy stock `) || 
 // INVESTMENT COMMANDS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} invest`) {
     const invest = require('./investment');
-    let msg = `🏦 **INVESTMENT PROGRAMS** 🏦\n\n`;
+    let msg = `🏦 *INVESTMENT PROGRAMS* 🏦\n\n`;
     for (const [id, plan] of Object.entries(invest.INVESTMENT_PLANS)) {
         msg += `• *${plan.name}* (\`${id}\`)\n  Rate: +${(plan.interest*100).toFixed(0)}% | Time: ${plan.durationDays} days\n  Min: ${economy.getZENI()}${plan.minDeposit.toLocaleString()}\n\n`;
     }
@@ -8470,7 +8470,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} invest `)) {
 
 // STOCK MARKET COMMANDS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} stocks` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} market`) {
-    let msg = `📈 **GLOBAL STOCK MARKET** 📈\n\n`;
+    let msg = `📈 *GLOBAL STOCK MARKET* 📈\n\n`;
     for (const [symbol, stock] of Object.entries(stockMarket.STOCKS)) {
         msg += `• *${stock.name}* (\`${symbol}\`)\n  Price: ${economy.getZENI()}${stock.price.toLocaleString()}\n\n`;
     }
@@ -8490,13 +8490,13 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} stocks `)) {
             return sock.sendMessage(chatId, { text: BOT_MARKER + "📊 You don't own any stocks yet!" });
         }
         
-        let msg = `📊 **YOUR PORTFOLIO** 📊\n\n`;
+        let msg = `📊 *YOUR PORTFOLIO* 📊\n\n`;
         let totalValue = 0;
         portfolio.forEach(s => {
             msg += `• *${s.name}* (${s.symbol})\n  Shares: ${s.amount} | Value: ${economy.getZENI()}${s.totalValue.toLocaleString()}\n\n`;
             totalValue += s.totalValue;
         });
-        msg += `━━━━━━━━━━━━━━━\n💰 **Total Portfolio Value:** ${economy.getZENI()}${totalValue.toLocaleString()}`;
+        msg += `━━━━━━━━━━━━━━━\n💰 *Total Portfolio Value:* ${economy.getZENI()}${totalValue.toLocaleString()}`;
         return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
     }
     
@@ -8519,7 +8519,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} stocks `)) {
 
 // MEMBERSHIP COMMANDS
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} membership` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} premium`) {
-    let msg = `💎 **ADVENTURER MEMBERSHIPS** 💎\n\n`;
+    let msg = `💎 *ADVENTURER MEMBERSHIPS* 💎\n\n`;
     for (const [id, tier] of Object.entries(economy.MEMBERSHIP_TIERS)) {
         msg += `• *${tier.name}* (\`${id}\`)\n  Cost: ${economy.getZENI()}${tier.cost.toLocaleString()} / 30 days\n  Daily: +${economy.getZENI()}${tier.dailyBonus.toLocaleString()}\n  Bank Tax: ${(tier.bankTax*100).toFixed(0)}%\n\n`;
     }
@@ -8545,7 +8545,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} monster guide` || lower
     let msg = monsterSkills.formatMonsterGuide();
     
     msg += `━━━━━━━━━━━━━━━━━\n`;
-    msg += `👑 **ELITE BOSS SKILLS** 👑\n\n`;
+    msg += `👑 *ELITE BOSS SKILLS* 👑\n\n`;
     
     for (const [id, ability] of Object.entries(bossMechanics.BOSS_ABILITIES)) {
         msg += `• *${ability.name}* ${ability.isTelegraphed ? '⚠️' : ''}\n`;

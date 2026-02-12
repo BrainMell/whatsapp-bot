@@ -636,7 +636,7 @@ async function displayRecipes(sock, chatId, page = 1) {
 
     msg += `━━━━━━━━━━━━━
 `;
-    msg += `💡 **HOW TO CREATE:**
+    msg += `💡 *HOW TO CREATE:*
 `;
     msg += `Type: \`${getPrefix()} craft <id>\` or \`${getPrefix()} brew <id>\`
 `;
@@ -655,7 +655,7 @@ async function craftItem(sock, chatId, senderJid, recipeId) {
     if (result.success) { 
         await sock.sendMessage(chatId, { text: result.message });
     } else { 
-        await sock.sendMessage(chatId, { text: `❌ **CRAFTING FAILED**\n\n${result.reason || result.message}` });
+        await sock.sendMessage(chatId, { text: `❌ *CRAFTING FAILED*\n\n${result.reason || result.message}` });
     }
 }
 
@@ -732,7 +732,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
         msg += `━━━━━━━━━━━━━
 `;
-        msg += `💡 **HOW TO MINE:**
+        msg += `💡 *HOW TO MINE:*
 `;
         msg += `Type: \`${getPrefix()} mine <location_id>\`
 `;
@@ -755,7 +755,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const miningLevelReq = loc.req.miningLevel || 1;
 
     if (sheet.level < loc.req.level || userRankIdx < reqRankIdx || miningLevel < miningLevelReq) { 
-        await sock.sendMessage(chatId, { text: `❌ **LOCATION LOCKED**\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and Mining Lv.${miningLevelReq} to enter the ${loc.name}.` });
+        await sock.sendMessage(chatId, { text: `❌ *LOCATION LOCKED*\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and Mining Lv.${miningLevelReq} to enter the ${loc.name}.` });
         return;
     }
 
@@ -778,7 +778,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     
     economy.saveUser(senderJid);
 
-    let msg = `⛏️ **MINING: ${loc.name.toUpperCase()}** ⛏️\n\n`;
+    let msg = `⛏️ *MINING: ${loc.name.toUpperCase()}* ⛏️\n\n`;
     msg += `You strike the veins of the earth...\n\n`;
 
     // Roll for results based on LUCK and Mining Level
@@ -816,7 +816,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     });
 
     if (luckyFinds > 0) { 
-        msg += `\n💰 **LUCKY FIND!** You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!
+        msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!
 `;
     }
 
@@ -824,7 +824,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 `;
     msg += `📈 Mining XP: +${xpGained}`;
     if (levelUp?.leveledUp) { 
-        msg += `\n✨ **LEVEL UP!** Mining is now Level ${levelUp.newLevel}!`;
+        msg += `\n✨ *LEVEL UP!* Mining is now Level ${levelUp.newLevel}!`;
     }
 
     await sock.sendMessage(chatId, { text: msg });
@@ -886,9 +886,9 @@ async function showItemSource(sock, chatId, itemId) {
             });
         });
 
-        msg += `💎 **Mining Ores:**\n${[...new Set(categories['Mining'])].join(', ')}\n\n`;
-        msg += `👹 **Monster Drops:**\n${[...new Set(categories['Drops'])].join(', ')}\n\n`;
-        msg += `🛠️ **Craftables:**\n${[...new Set(categories['Crafting'])].join(', ')}\n\n`;
+        msg += `💎 *Mining Ores:*\n${[...new Set(categories['Mining'])].join(', ')}\n\n`;
+        msg += `👹 *Monster Drops:*\n${[...new Set(categories['Drops'])].join(', ')}\n\n`;
+        msg += `🛠️ *Craftables:*\n${[...new Set(categories['Crafting'])].join(', ')}\n\n`;
         msg += `💡 Use \`${getPrefix()} source <id>\` for exact details.`;
 
         await sock.sendMessage(chatId, { text: msg });
@@ -917,14 +917,14 @@ async function showItemSource(sock, chatId, itemId) {
     // Check Mining (new detailed check)
     for (const loc of Object.values(miningLocs)) { 
         if (loc.ores.some(o => o.id === id)) { 
-            sources.push(`• **Mining**: Found in the **${loc.name}**.`);
+            sources.push(`• *Mining*: Found in the *${loc.name}*.`);
         }
     }
 
     // Check Common Tables
     for (const [tableName, table] of Object.entries(lootSystem.LOOT_TABLES)) { 
         if (table.items.some(i => i.id === id)) { 
-            sources.push(`• **${tableName.replace('_', ' ')}**: Found in standard drops.`);
+            sources.push(`• *${tableName.replace('_', ' ')}*: Found in standard drops.`);
         }
     }
 
@@ -933,13 +933,13 @@ async function showItemSource(sock, chatId, itemId) {
         const inGuaranteed = drops.guaranteed.some(i => i.id === id);
         const inSpecial = drops.special.some(i => i.id === id);
         if (inGuaranteed || inSpecial) { 
-            sources.push(`• **${bossName.replace('_', ' ')}**: Drops from this boss.`);
+            sources.push(`• *${bossName.replace('_', ' ')}*: Drops from this boss.`);
         }
     }
 
     // Check Recipes
     if (recipes[id]) { 
-        sources.push(`• **Crafting**: Can be created using \`${getPrefix()} craft ${id}\`.`);
+        sources.push(`• *Crafting*: Can be created using \`${getPrefix()} craft ${id}\`.`);
     }
 
     if (sources.length > 0) { 

@@ -1,4 +1,4 @@
-/**
+/*
  * Builds optimized prompts for personal info extraction.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */
@@ -9,10 +9,10 @@ class PromptBuilder {
 Your task is to extract ONLY information that is EXPLICITLY stated in the conversation. Do not infer or assume.
 
 Extract the following for each relevant user:
-1. **Preferences**: Things they explicitly like/love or dislike/hate
-2. **Experiences**: Activities they've done, places visited, content consumed
-3. **Interests**: Topics, hobbies, or domains they're passionate about
-4. **Other Facts**: Identity markers (how they describe themselves), recommendations they give, or specific facts.
+1. *Preferences*: Things they explicitly like/love or dislike/hate
+2. *Experiences*: Activities they've done, places visited, content consumed
+3. *Interests*: Topics, hobbies, or domains they're passionate about
+4. *Other Facts*: Identity markers (how they describe themselves), recommendations they give, or specific facts.
 
 For each extraction:
 - Include exact message timestamp and username
@@ -49,7 +49,7 @@ For each extraction:
 }`;
     }
 
-    /**
+    /*
      * Build the batch extraction prompt
      */
     buildPrompt(conversationStr, tasks) {

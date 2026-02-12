@@ -127,7 +127,7 @@ module.exports = {
             .map(([id, s]) => ({ id, ...s, currentEffect: s.effect(level) }));
     },
     formatMonsterGuide: () => {
-        let msg = `👹 **MONSTER ARCHE TYPES & SKILLS** 👹\n\n`;
+        let msg = `👹 *MONSTER ARCHE TYPES & SKILLS* 👹\n\n`;
         for (const [id, data] of Object.entries(MONSTER_ARCHETYPES)) {
             msg += `◈ *${data.name}* (\`${id}\`)\n`;
             for (const [sid, skill] of Object.entries(data.skills)) {

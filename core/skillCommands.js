@@ -528,14 +528,14 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     // If no choice specified, show options
     if (!args[0]) {
         let text = `🌟 *CLASS EVOLUTION AVAILABLE* 🌟\n\n`;
-        text += `Choose your evolution path for **${currentClass.name}**!\n\n`;
+        text += `Choose your evolution path for *${currentClass.name}*!\n\n`;
         
         availablePaths.forEach((evo, i) => {
             text += `*${i + 1}. ${evo.icon} ${evo.name}*\n`;
             text += `📝 ${evo.desc}\n`;
-            text += `🎭 **Role:** ${evo.role}\n`;
-            text += `💰 **Cost:** ${evo.evolutionCost} Zeni\n`;
-            text += `⚡ **Passive:** ${evo.passive.name}\n\n`;
+            text += `🎭 *Role:* ${evo.role}\n`;
+            text += `💰 *Cost:* ${evo.evolutionCost} Zeni\n`;
+            text += `⚡ *Passive:* ${evo.passive.name}\n\n`;
         });
 
         text += `Use: \`${getPrefix()} evolve <number>\` to choose.\n`;
@@ -558,7 +558,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const stoneName = requiredStone === 'evolution_stone' ? 'Evolution Stone (T2)' : 'Ascension Stone (T3)';
 
     if (!inventorySystem.hasItem(senderJid, requiredStone)) {
-        return sock.sendMessage(chatId, { text: `❌ You need an **${stoneName}** to evolve! Buy one from the shop.` });
+        return sock.sendMessage(chatId, { text: `❌ You need an *${stoneName}* to evolve! Buy one from the shop.` });
     }
 
     // Check gold
@@ -591,7 +591,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     economy.saveUser(senderJid);
 
     let successMsg = `✨ *EVOLUTION COMPLETE!* ✨\n\n`;
-    successMsg += `**${oldClassName}** ➔ **${chosen.name}** ${chosen.icon}\n\n`;
+    successMsg += `*${oldClassName}* ➔ *${chosen.name}* ${chosen.icon}\n\n`;
     
     successMsg += `📊 *New Stats:*\n`;
     Object.entries(chosen.stats).forEach(([stat, val]) => {
@@ -601,7 +601,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     successMsg += `\n💎 *Skill Points Refunded:* ${spentPoints}\n`;
     successMsg += `📊 *Available Points:* ${user.skillPoints}\n\n`;
     
-    successMsg += `⚡ *New Passive:* **${chosen.passive.name}**\n`;
+    successMsg += `⚡ *New Passive:* *${chosen.passive.name}*\n`;
     successMsg += `_${chosen.passive.desc}_\n\n`;
     
     successMsg += `💡 Use \`${getPrefix()} skills\` to view your new abilities!`;

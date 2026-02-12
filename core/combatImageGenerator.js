@@ -7,7 +7,7 @@ const botConfig = require('../botConfig');
 
 const goService = new GoImageService();
 
-/**
+/*
  * Generate Combat Image using Go Microservice
  */
 async function generateCombatImage(players, enemies, options = {}) {

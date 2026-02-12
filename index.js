@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-/**
+/*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
  * Intercepts hardcoded library logs that serialize large Buffer objects.
  */
