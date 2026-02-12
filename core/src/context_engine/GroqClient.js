@@ -1,7 +1,7 @@
 const axios = require('axios');
 const botConfig = require('../../../botConfig');
 
-/**
+/*
  * Modular Groq client for structured extraction.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */
@@ -14,7 +14,7 @@ class GroqClient {
         console.log(`🔌 Groq Client initialized (Model: ${this.model})`);
     }
 
-    /**
+    /*
      * Call Groq with JSON mode enabled
      */
     async extract(prompt) {

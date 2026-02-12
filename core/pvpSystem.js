@@ -16,7 +16,7 @@ function getDuel(chatId) {
     return activeDuels.get(chatId);
 }
 
-/**
+/*
  * Challenge another player
  */
 function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
@@ -44,7 +44,7 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
     return { success: true };
 }
 
-/**
+/*
  * Accept a challenge
  */
 async function acceptChallenge(sock, chatId, targetJid) {
@@ -119,7 +119,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
     return { success: true, duel: duelState, image };
 }
 
-/**
+/*
  * Generate image with PIVOT camera logic
  */
 async function generateDuelImage(duel) {

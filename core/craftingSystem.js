@@ -430,7 +430,7 @@ function performCraft(userId, recipeId) {
 
     return { 
         success: true, 
-        message: `⚒️ **CRAFT SUCCESSFUL: ${recipe.name}**\n\nYou created 1x ${recipe.name}!${guildMsg}` 
+        message: `⚒️ *CRAFT SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}` 
     };
 }
 
@@ -454,7 +454,7 @@ function dismantleItem(userId, itemId) {
         returned[ingId] = amount;
     }
 
-    let msg = `♻️ **DISMANTLED: ${itemData.name || itemId}**\n\nRecovered materials:\n`;
+    let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;
     for (const [id, qty] of Object.entries(returned)) {
         msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`;
     }

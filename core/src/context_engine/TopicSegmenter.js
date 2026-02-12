@@ -1,4 +1,4 @@
-/**
+/*
  * Segments conversation into topic-based chunks.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */
@@ -13,7 +13,7 @@ class TopicSegmenter {
         console.log(`🧵 Topic Segmenter initialized (Silence threshold: ${this.silenceThreshold}s)`);
     }
 
-    /**
+    /*
      * Splits a list of messages into segments based on time and content
      */
     segmentConversation(messages) {
@@ -60,7 +60,7 @@ class TopicSegmenter {
         return segments;
     }
 
-    /**
+    /*
      * Find the specific segment that contains our target message
      */
     findRelevantSegment(targetId, segments) {

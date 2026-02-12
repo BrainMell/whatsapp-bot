@@ -713,7 +713,7 @@ function buyMembership(userId, tierId) {
     }
     
     scheduleSave(userId);
-    return { success: true, message: `💎 **UPGRADED!**\n\nYou are now a **${tier.name}**!\nExpires: ${new Date(user.membership.expires).toLocaleDateString()}` };
+    return { success: true, message: `💎 *UPGRADED!*\n\nYou are now a *${tier.name}*!\nExpires: ${new Date(user.membership.expires).toLocaleDateString()}` };
 }
 
 function getUserStats(userId) {

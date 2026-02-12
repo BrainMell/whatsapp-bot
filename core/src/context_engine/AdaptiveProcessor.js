@@ -1,7 +1,7 @@
 const promptBuilder = require('./PromptBuilder');
 const groqClient = require('./GroqClient');
 
-/**
+/*
  * Handles batching and scheduling of extraction tasks.
  * Ported from WhatsApp Context Bot Guide (JS Implementation)
  */

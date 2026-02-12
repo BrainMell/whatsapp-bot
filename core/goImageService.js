@@ -20,7 +20,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Generate Combat Image
      */
     async generateCombatImage(data) {
@@ -35,7 +35,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Generate Combat End Screen
      */
     async generateCombatEndScreen(text) {
@@ -50,7 +50,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Render Ludo Board
      */
     async renderLudoBoard(data, pfpUrls = {}) {
@@ -73,7 +73,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Render Tic-Tac-Toe Board
      */
     async renderTicTacToeBoard(data) {
@@ -88,7 +88,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Render Tic-Tac-Toe Leaderboard
      */
     async renderTicTacToeLeaderboard(scores) {
@@ -103,7 +103,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Search Pinterest
      */
     async searchPinterest(query, maxResults = 10) {
@@ -118,7 +118,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Search Stickers (Klipy GIF API)
      */
     async searchStickers(query, maxResults = 10) {
@@ -133,7 +133,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * Search Rule34 (NSFW)
      * @param {string} query
      * @param {number} maxResults
@@ -150,7 +150,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * VS Battles Search
      */
     async searchVSBattles(characterName) {
@@ -165,7 +165,7 @@ class GoImageService {
         }
     }
 
-    /**
+    /*
      * VS Battles Detail
      */
     async getVSBattlesDetail(url) {

@@ -24,7 +24,7 @@ const PeakLogic = {
     }
 };
 
-/**
+/*
  * Search VS Battles Wiki for characters
  * @param {string} characterName
  * @returns {Promise<Array>} Array of {name, url}
@@ -39,7 +39,7 @@ async function searchVSB(characterName) {
     }
 }
 
-/**
+/*
  * Scrape detailed character stats from VS Battles page
  * @param {string} pageUrl
  * @returns {Promise<Object>} Character details
@@ -77,7 +77,7 @@ async function scrapeVSBPage(pageUrl) {
     }
 }
 
-/**
+/*
  * Extract and clean stats (now done by Go service, but kept for compatibility)
  * @param {string} htmlContent - Not used anymore
  * @returns {Promise<Object>} Cleaned stats
@@ -86,7 +86,7 @@ async function extractStatsWithGroq(htmlContent) {
     return {};
 }
 
-/**
+/*
  * Format powerscale data for display
  * @param {string} characterName
  * @param {Object} stats
@@ -105,7 +105,7 @@ function formatPowerScale(characterName, stats, pageUrl) {
     return message;
 }
 
-/**
+/*
  * Complete powerscale workflow (updated for Go service)
  * @param {string} characterName
  * @returns {Promise<Object>} {message, imageUrl}

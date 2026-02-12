@@ -51,7 +51,7 @@ function startInvestment(userId, planId, amount) {
     
     return { 
         success: true, 
-        message: `📊 **INVESTMENT STARTED!**\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amount.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleDateString()}`
+        message: `📊 *INVESTMENT STARTED!*\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amount.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleDateString()}`
     };
 }
 
@@ -92,15 +92,15 @@ function claimInvestment(userId) {
     }
     
     user.investments = active;
-    let msg = `📊 **CLAIM SUMMARY**\n\n`;
+    let msg = `📊 *CLAIM SUMMARY*\n\n`;
     
     if (totalPayout > 0) {
         economy.addMoney(userId, totalPayout, "Matured Investment Payout");
-        msg += `✅ **Success:** Received ${economy.getZENI()}${totalPayout.toLocaleString()}\n`;
+        msg += `✅ *Success:* Received ${economy.getZENI()}${totalPayout.toLocaleString()}\n`;
     }
     
     if (totalLoss > 0) {
-        msg += `❌ **Loss:** ${economy.getZENI()}${totalLoss.toLocaleString()} lost to market volatility.\n`;
+        msg += `❌ *Loss:* ${economy.getZENI()}${totalLoss.toLocaleString()} lost to market volatility.\n`;
     }
     
     economy.saveUser(userId);

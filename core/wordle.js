@@ -618,7 +618,7 @@ module.exports = {
 
     let message = botMarker + `🛑 Game ended! The word was *${word}*`;
     if (!isAdmin) {
-      message += `\n💀 Counted as a **LOSS** for quitting.`;
+      message += `\n💀 Counted as a *LOSS* for quitting.`;
     }
 
     await sock.sendMessage(chatId, {
