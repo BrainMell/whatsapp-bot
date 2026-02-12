@@ -223,6 +223,56 @@ async function startBot(configInstance) {
       system.set(BOT_ID + "_muted_users", Object.fromEntries(mutedUsers));
     }
 
+    const temporaryContext = new Map();
+    const pendingTagRequests = new Map();
+    const activityTracker = new Map();
+    const spamTracker = new Map();
+
+    function addWarning(userId, groupId, reason) {
+      const key = `${userId}@${groupId}`;
+      if (!userWarnings.has(key)) {
+        userWarnings.set(key, []);
+      }
+      userWarnings.get(key).push({
+        reason,
+        timestamp: new Date().toISOString()
+      });
+      saveUserWarnings();
+      return userWarnings.get(key).length;
+    }
+
+    function resetWarnings(userId, groupId) {
+      const key = groupId ? `${userId}@${groupId}` : userId;
+      userWarnings.delete(key);
+      saveUserWarnings();
+    }
+
+    function getWarningCount(userId, groupId) {
+      const key = `${userId}@${groupId}`;
+      return userWarnings.has(key) ? userWarnings.get(key).length : 0;
+    }
+
+    function trackActivity(chatId, userId) {
+      const key = `${chatId}_${userId}`;
+      const now = Date.now();
+      if (!activityTracker.has(key)) {
+        activityTracker.set(key, { count: 0, firstSeen: now, lastMessage: now });
+      }
+      const data = activityTracker.get(key);
+      data.count++;
+      data.lastMessage = now;
+    }
+
+    function getActivity(chatId, userId) {
+      return activityTracker.get(`${chatId}_${userId}`);
+    }
+
+    function getChatActivity(chatId) {
+      return Array.from(activityTracker.entries())
+        .filter(([key]) => key.startsWith(chatId + '_'))
+        .map(([key, data]) => ({ userId: key.split('_')[1], ...data }));
+    }
+
     // ============================================
     // GROUP CHAT SUMMARY SYSTEM
     // ============================================
@@ -1169,15 +1219,9 @@ function getMentionOrReply(m) {
   return null;
 }
 
-// ✅ Activity tracking - who's active and who's not
-const activityTracker = new Map();
-
 // ✅ Blacklist - banned words or blocked users
 const blacklistWords = new Set();
 const blacklistedUsers = new Set();
-
-// ✅ Spam prevention
-const spamTracker = new Map();
 
 setInterval(() => {
   const now = Date.now();
@@ -1210,39 +1254,7 @@ setInterval(() => {
 }, 120000); // every 2 min
 
 // Activity tracking - who sent how many messages
-function trackActivity(chatId, userId) {
-  if (!activityTracker.has(chatId)) {
-    activityTracker.set(chatId, new Map());
-  }
-  
-  const chatActivity = activityTracker.get(chatId);
-  if (!chatActivity.has(userId)) {
-    chatActivity.set(userId, {
-      count: 0,
-      firstSeen: Date.now(),
-      lastMessage: Date.now()
-    });
-  }
-  
-  const userActivity = chatActivity.get(userId);
-  userActivity.count++;
-  userActivity.lastMessage = Date.now();
-}
-
-function getActivity(chatId, userId) {
-  if (!activityTracker.has(chatId)) return null;
-  const chatActivity = activityTracker.get(chatId);
-  return chatActivity.get(userId) || null;
-}
-
-function getChatActivity(chatId) {
-  if (!activityTracker.has(chatId)) return [];
-  const chatActivity = activityTracker.get(chatId);
-  return Array.from(chatActivity.entries()).map(([userId, data]) => ({
-    userId,
-    ...data
-  }));
-}
+// (Handled by top-level functions defined in startBot)
 
 // Spam detection - checks if user is sending too many messages too fast
 function checkSpam(userId, chatId) {
@@ -2335,7 +2347,7 @@ async function broadcastUpdate(sock) {
     await system.set('last_v', v);
     return;
   }
-  let m = "╭───────────────────╮\n  📢 *UPDATE v" + v + "* \n╰───────────────────╯\n\n*RPG Overhaul is here!* 🚀\n\n📜 *I. THE MASTER GUIDE*\nModular guide system active. Use `" + botConfig.getPrefix() + " guide`!\n\n🎭 *II. EVOLUTION*\nStones (T2/T3) now required.\n\n🐲 *III. DRAGONSLAYER*\nNew feats & lore.\n\n⚔️ *IV. COMBAT*\nFixed Execute & added Dimensional Slash.";
+  let m = "╭───────────────────╮\n  📢 *UPDATE v" + v + "* \n╰───────────────────╯\n\n*Admin & Group Update!* 🛡️\n\n👮 *I. ADMIN TOOLS*\nNew commands: `.setwelcome`, `.setbye`, `.bye on/off`.\n\n🛡️ *II. SECURITY*\nImproved Antilink & Status protection.\n\n✅ *III. QoL*\nFixed `.g join` vs `.g accept` confusion.\n\n⚙️ *IV. SYSTEM*\nStability fixes & crash prevention.";
   for (const g of groups) {
     try {
       await sock.sendMessage(g, { text: BOT_MARKER + m });
