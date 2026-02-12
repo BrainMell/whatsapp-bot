@@ -525,6 +525,10 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     
     const availablePaths = evolutionCheck.evolutions;
 
+    const nextTier = currentClass.tier === 'STARTER' ? 'EVOLVED' : 'ASCENDED';
+    const requiredStone = nextTier === 'EVOLVED' ? 'evolution_stone' : 'ascension_stone';
+    const stoneName = requiredStone === 'evolution_stone' ? 'Evolution Stone (T2)' : 'Ascension Stone (T3)';
+
     // If no choice specified, show options
     if (!args[0]) {
         let text = `🌟 *CLASS EVOLUTION AVAILABLE* 🌟\n\n`;
@@ -538,6 +542,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             text += `⚡ *Passive:* ${evo.passive.name}\n\n`;
         });
 
+        text += `*Required:* 💎 ${stoneName}\n\n`;
         text += `Use: \`${getPrefix()} evolve <number>\` to choose.\n`;
         text += `⚠️ *Note:* This decision is permanent and will reset your skills!`;
         

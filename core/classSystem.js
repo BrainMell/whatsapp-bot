@@ -989,19 +989,28 @@ function getRandomStarterClass() {
 
 function canEvolve(currentClassId, userLevel, questsCompleted) {
     const currentClass = getClassById(currentClassId);
-    if (!currentClass || currentClass.tier !== 'STARTER') {
-        return { canEvolve: false, reason: 'Already evolved or invalid class' };
+    if (!currentClass) {
+        return { canEvolve: false, reason: 'Invalid class' };
+    }
+
+    if (currentClass.tier === 'ASCENDED') {
+        return { canEvolve: false, reason: 'Already reached maximum evolution tier' };
     }
     
     const evolutions = currentClass.evolves_into;
+    if (!evolutions || evolutions.length === 0) {
+        return { canEvolve: false, reason: 'No further evolutions available for this class' };
+    }
+
     const availableEvolutions = [];
+    const allClasses = getAllClasses();
     
     for (const evoId of evolutions) {
-        const evoClass = EVOLVED_CLASSES[evoId];
+        const evoClass = allClasses[evoId];
         if (evoClass) {
             const meetsReqs = 
-                userLevel >= evoClass.requirement.level &&
-                questsCompleted >= evoClass.requirement.questsCompleted;
+                userLevel >= (evoClass.requirement?.level || 0) &&
+                questsCompleted >= (evoClass.requirement?.questsCompleted || 0);
             
             if (meetsReqs) {
                 availableEvolutions.push(evoClass);
@@ -1010,9 +1019,15 @@ function canEvolve(currentClassId, userLevel, questsCompleted) {
     }
     
     if (availableEvolutions.length === 0) {
+        // Find the first evolution to show requirements
+        const firstEvoId = evolutions[0];
+        const firstEvo = allClasses[firstEvoId];
+        const reqLevel = firstEvo?.requirement?.level || 10;
+        const reqQuests = firstEvo?.requirement?.questsCompleted || 3;
+
         return { 
             canEvolve: false, 
-            reason: `Need level 10 and 3 quests completed`,
+            reason: `Need level ${reqLevel} and ${reqQuests} quests completed`,
             currentLevel: userLevel,
             currentQuests: questsCompleted
         };
