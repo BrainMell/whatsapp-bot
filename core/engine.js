@@ -2338,23 +2338,32 @@ async function broadcastNews(sock) {
   }
 }
 
-async function broadcastUpdate(sock) {
+async function broadcastUpdate(sock, customMessage = null) {
   const v = botConfig.getVersion();
-  const lastV = await system.get('last_v');
-  if (lastV === v) return;
-  const groups = Array.from(enabledChats);
-  if (groups.length === 0) {
-    await system.set('last_v', v);
-    return;
+  // Get all known JIDs from groupSettings and filter for groups only (@g.us)
+  const allGroups = Array.from(groupSettings.keys()).filter(id => id.endsWith('@g.us'));
+  
+  if (allGroups.length === 0) {
+    console.log("📢 No known groups to broadcast to.");
+    return 0;
   }
-  let m = "╭───────────────────╮\n  📢 *UPDATE v" + v + "* \n╰───────────────────╯\n\n*Admin & Group Update!* 🛡️\n\n👮 *I. ADMIN TOOLS*\nNew commands: `.setwelcome`, `.setbye`, `.bye on/off`.\n\n🛡️ *II. SECURITY*\nImproved Antilink & Status protection.\n\n✅ *III. QoL*\nFixed `.g join` vs `.g accept` confusion.\n\n⚙️ *IV. SYSTEM*\nStability fixes & crash prevention.";
-  for (const g of groups) {
+
+  const m = customMessage || "╭───────────────────╮\n  📢 *BOT UPDATE v" + v + "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `.g menu` to see all commands.";
+  
+  let sentCount = 0;
+  console.log(`📡 Starting broadcast to ${allGroups.length} groups...`);
+  
+  for (const g of allGroups) {
     try {
       await sock.sendMessage(g, { text: BOT_MARKER + m });
-      await new Promise(r => setTimeout(r, 2000));
-    } catch (e) {}
+      sentCount++;
+      // Anti-spam gap: 1 second between groups
+      await new Promise(r => setTimeout(r, 1000)); 
+    } catch (e) {
+      console.error(`❌ Failed broadcast to ${g}:`, e.message);
+    }
   }
-  await system.set('last_v', v);
+  return sentCount;
 }
 
 async function initSocket() {
@@ -2413,11 +2422,6 @@ sock.ev.on('connection.update', async (update) => {
         retryCount = 0;
         botStarting = false; // CLEAR GUARD
         
-        // --- BROADCAST ONE-TIME UPDATE MESSAGE ---
-        setTimeout(async () => {
-          await broadcastUpdate(sock);
-        }, 5000);
-
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
           reconnectTimer = null;
@@ -9811,6 +9815,20 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} summary`) || low
           enabledChats.delete(chatId);
           saveEnabledChats();
           await sock.sendMessage(chatId, { text: BOT_MARKER + `🤖 ${botConfig.getBotName()} AI is now *disabled* in this chat!` });
+          return;
+        }
+
+        // `${botConfig.getPrefix().toLowerCase()}` updateall [custom_message] - OWNER ONLY manual broadcast
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} updateall` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} updateall `)) {
+          if (!isOwner) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the bot owner can use this command." });
+          }
+          
+          const customMsg = txt.substring(`${botConfig.getPrefix().toLowerCase()} updateall `.length).trim();
+          await sock.sendMessage(chatId, { text: BOT_MARKER + "🔄 Starting group broadcast..." });
+          
+          const count = await broadcastUpdate(sock, customMsg || null);
+          await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Broadcast complete! Sent to ${count} groups.` });
           return;
         }
         
