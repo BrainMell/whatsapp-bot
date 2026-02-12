@@ -229,6 +229,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'powerscale', desc: 'Get character power stats.', usage: 'powerscale <char>' },
     { cmd: 'debate on', desc: 'Start an AI-judged debate between two users.', usage: 'debate on <topic>' },
     { cmd: 'debate off', desc: 'Cancel an active debate.', usage: 'debate off' },
+    { cmd: 'debate leaderboard', desc: 'View the debate rankings.', usage: 'debate leaderboard' },
     { cmd: 'judge', desc: 'Let the AI judge the current debate.', usage: 'judge' }
   ],
   ANIME: [
