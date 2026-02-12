@@ -104,12 +104,128 @@ async function startBot(configInstance) {
     let BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;   // BOT MArker for messages
 
     // ============================================
-    // GROUP CHAT SUMMARY SYSTEM
+    // UTILS & CORE DATA (Moved Up for initSocket)
     // ============================================
 
-    // Store group messages in memory (per group)
+    function toEmojiNumber(num) {
+      const emojiMap = {
+        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
+      };
+      return num.toString().split('').map(digit => emojiMap[digit] || digit).join('');
+    }
+
+    const groupSettings = new Map();
+    const enabledChats = new Set();
+    const supportUsage = new Map();
+    const userWarnings = new Map();
     const groupMessageHistory = new Map();
+    const conversationMemory = new Map();
     const MAX_HISTORY_PER_GROUP = 200;
+
+    function loadEnabledChats() {
+      try {
+        const data = system.get(BOT_ID + "_enabled_chats", []);
+        enabledChats.clear();
+        data.forEach(chatId => enabledChats.add(chatId));
+        console.log(`✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`);
+      } catch (err) {
+        console.error("Error loading enabled chats:", err.message);
+      }
+    }
+
+    function saveEnabledChats() {
+      system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
+    }
+
+    function loadGroupSettings() {
+      try {
+        const data = system.get(BOT_ID + "_group_settings", {});
+        groupSettings.clear();
+        Object.entries(data).forEach(([key, value]) => {
+          groupSettings.set(key, value);
+        });
+        console.log(`✅ [${BOT_ID}] Loaded group settings from MongoDB`);
+      } catch (err) {
+        console.error("Error loading group settings:", err.message);
+      }
+    }
+
+    function saveGroupSettings() {
+      system.set(BOT_ID + "_group_settings", Object.fromEntries(groupSettings));
+    }
+
+    function getGroupSettings(chatId) {
+      if (!groupSettings.has(chatId)) {
+        groupSettings.set(chatId, {
+          antilink: false,
+          antilinkAction: 'delete',
+          welcomeMessage: null,
+          antispam: false,
+          recording: false,
+          blacklist: []
+        });
+        saveGroupSettings();
+      }
+      return groupSettings.get(chatId);
+    }
+
+    function loadSupportUsage() {
+      try {
+        const data = system.get(BOT_ID + "_support_usage", {});
+        supportUsage.clear();
+        for (const [userId, count] of Object.entries(data)) {
+          supportUsage.set(userId, count);
+        }
+        console.log(`✅ [${BOT_ID}] Loaded support usage from MongoDB`);
+      } catch (err) {
+        console.error("Error loading support usage:", err.message);
+      }
+    }
+
+    function saveSupportUsage() {
+      system.set(BOT_ID + "_support_usage", Object.fromEntries(supportUsage));
+    }
+
+    function loadUserWarnings() {
+      try {
+        const data = system.get(BOT_ID + "_user_warnings", {});
+        userWarnings.clear();
+        Object.entries(data).forEach(([key, value]) => {
+          userWarnings.set(key, value);
+        });
+        console.log(`✅ [${BOT_ID}] Loaded warnings from MongoDB`);
+      } catch (err) {
+        console.error("Error loading warnings:", err.message);
+      }
+    }
+
+    function saveUserWarnings() {
+      system.set(BOT_ID + "_user_warnings", Object.fromEntries(userWarnings));
+    }
+
+    const mutedUsers = new Map();
+
+    function loadMutedUsers() {
+      try {
+        const data = system.get(BOT_ID + "_muted_users", {});
+        mutedUsers.clear();
+        Object.entries(data).forEach(([userId, muteData]) => {
+          mutedUsers.set(userId, muteData);
+        });
+        console.log(`🔇 [${BOT_ID}] Loaded ${mutedUsers.size} muted users from MongoDB`);
+      } catch (err) {
+        console.error("Error loading muted users:", err.message);
+      }
+    }
+
+    function saveMutedUsers() {
+      system.set(BOT_ID + "_muted_users", Object.fromEntries(mutedUsers));
+    }
+
+    // ============================================
+    // GROUP CHAT SUMMARY SYSTEM
+    // ============================================
 
     // Track messages for summarization
     function trackGroupMessage(chatId, sender, senderName, text, timestamp) {
@@ -1051,166 +1167,6 @@ function getMentionOrReply(m) {
   }
   
   return null;
-}
-
-function toEmojiNumber(num) {
-  const emojiMap = {
-    '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
-    '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
-  };
-  return num.toString().split('').map(digit => emojiMap[digit] || digit).join('');
-}
-
-// Conversation memory per USER (not per chat)
-const conversationMemory = new Map();
-
-// Evict stale conversation histories (idle > 2 hours)
-setInterval(() => {
-  const cutoff = Date.now() - 7200000; // 2 hours
-  for (const [jid, history] of conversationMemory.entries()) {
-    const lastMsg = history[history.length - 1];
-    if (!lastMsg || (lastMsg._ts && lastMsg._ts < cutoff)) {
-      conversationMemory.delete(jid);
-    }
-  }
-}, 300000); // run every 5 min
-
-const temporaryContext = new Map();
-const pendingTagRequests = new Map();
-
-
-// Group settings - MongoDB
-const groupSettings = new Map();
-
-function loadGroupSettings() {
-  try {
-    const data = system.get(BOT_ID + "_group_settings", {});
-    Object.entries(data).forEach(([key, value]) => {
-      groupSettings.set(key, value);
-    });
-    console.log(`✅ [${BOT_ID}] Loaded group settings from MongoDB`);
-  } catch (err) {
-    console.error("Error loading group settings:", err.message);
-  }
-}
-
-function saveGroupSettings() {
-  system.set(BOT_ID + "_group_settings", Object.fromEntries(groupSettings));
-}
-
-function getGroupSettings(chatId) {
-  if (!groupSettings.has(chatId)) {
-    groupSettings.set(chatId, {
-      antilink: false,
-      antilinkAction: 'delete',
-      welcomeMessage: null,
-      antispam: false,
-      recording: false,
-      blacklist: []
-    });
-    saveGroupSettings();
-  }
-  return groupSettings.get(chatId);
-}
-
-// Support usage tracking - MongoDB
-const supportUsage = new Map();
-
-function loadSupportUsage() {
-  try {
-    const data = system.get(BOT_ID + "_support_usage", {});
-    for (const [userId, count] of Object.entries(data)) {
-      supportUsage.set(userId, count);
-    }
-    console.log(`✅ [${BOT_ID}] Loaded support usage from MongoDB`);
-  } catch (err) {
-    console.error("Error loading support usage:", err.message);
-  }
-}
-
-function saveSupportUsage() {
-  system.set(BOT_ID + "_support_usage", Object.fromEntries(supportUsage));
-}
-
-function checkSupportUsage(userId) {
-  const usage = supportUsage.get(userId) || 0;
-  return usage;
-}
-
-function incrementSupportUsage(userId) {
-  const usage = supportUsage.get(userId) || 0;
-  supportUsage.set(userId, usage + 1);
-  saveSupportUsage();
-  return usage + 1;
-}
-
-function isBlockedFromBot(userId) {
-  const usage = supportUsage.get(userId) || 0;
-  return usage >= 10; // Capped at 10 for safety
-}
-
-// User warnings - MongoDB
-const userWarnings = new Map();
-
-function loadUserWarnings() {
-  try {
-    const data = system.get(BOT_ID + "_user_warnings", {});
-    Object.entries(data).forEach(([key, value]) => {
-      userWarnings.set(key, value);
-    });
-    console.log(`✅ [${BOT_ID}] Loaded warnings from MongoDB`);
-  } catch (err) {
-    console.error("Error loading warnings:", err.message);
-  }
-}
-
-function saveUserWarnings() {
-  system.set(BOT_ID + "_user_warnings", Object.fromEntries(userWarnings));
-}
-
-// Muted users - MongoDB
-const mutedUsers = new Map();
-
-function loadMutedUsers() {
-  try {
-    const data = system.get(BOT_ID + "_muted_users", {});
-    Object.entries(data).forEach(([userId, muteData]) => {
-      mutedUsers.set(userId, muteData);
-    });
-    console.log(`🔇 [${BOT_ID}] Loaded ${mutedUsers.size} muted users from MongoDB`);
-  } catch (err) {
-    console.error("Error loading muted users:", err.message);
-  }
-}
-
-function saveMutedUsers() {
-  system.set(BOT_ID + "_muted_users", Object.fromEntries(mutedUsers));
-}
-
-function addWarning(userId, groupId, reason) {
-  // Key format: "userId@groupId" for per-group warnings
-  const key = `${userId}@${groupId}`;
-  
-  if (!userWarnings.has(key)) {
-    userWarnings.set(key, []);
-  }
-  userWarnings.get(key).push({
-    reason,
-    timestamp: new Date().toISOString()
-  });
-  saveUserWarnings();
-  return userWarnings.get(key).length;
-}
-
-function resetWarnings(userId, groupId) {
-  const key = groupId ? `${userId}@${groupId}` : userId;
-  userWarnings.delete(key);
-  saveUserWarnings();
-}
-
-function getWarningCount(userId, groupId) {
-  const key = `${userId}@${groupId}`;
-  return userWarnings.has(key) ? userWarnings.get(key).length : 0;
 }
 
 // ✅ Activity tracking - who's active and who's not
@@ -2400,6 +2356,10 @@ async function initSocket() {
       loans.loadLoans()
     ]);
     loadEnabledChats();
+    loadGroupSettings();
+    loadSupportUsage();
+    loadMutedUsers();
+    loadUserWarnings();
     const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
     const { version } = await fetchLatestBaileysVersion();
     sock = makeWASocket({ version, auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })) }, logger: P({ level: 'silent' }), experimentalStore: true });
