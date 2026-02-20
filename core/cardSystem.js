@@ -138,9 +138,9 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+`▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
         🎴  *A CARD APPEARED!*
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
   *${card.cardName}*
   _${card.animeName}_
@@ -152,10 +152,10 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   🎨  *Art by*  ›  ${card.creator || 'Unknown'}
   🪙  *Value*   ›  ${ZENI()}${price.toLocaleString()}
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
   🆔  \`${card.id}\`
   _Type_  *.g claim ${card.id}*  _to collect_
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -389,7 +389,7 @@ async function cmdColl(senderJid, reply) {
     lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  🏷️ _[LISTED]_' : ''}`);
   }
 
-  const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗃️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  by acquired time_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗃️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  by acquired time_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
   for (let s = 0; s < lines.length; s += 30) {
     await reply((s === 0 ? header : '') + lines.slice(s, s + 30).join('\n'));
@@ -410,7 +410,7 @@ async function cmdCollByTier(senderJid, reply) {
     byTier[t].push({ uc, card });
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const tier of ['S', '6', '5', '4', '3', '2', '1']) {
     const group = byTier[tier];
     if (!group?.length) continue;
@@ -436,7 +436,7 @@ async function cmdDuplicate(senderJid, reply) {
 
   if (!dupes.length) return reply('✅ No duplicates! Every copy you own is unique.');
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔁  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔁  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const [cardId, count] of dupes) {
     const card = CARD_INDEX[cardId];
     if (!card) continue;
@@ -489,7 +489,7 @@ async function cmdSearchCard(args, reply) {
 
   if (!matches.length) return reply(`❌ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔍  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔍  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const card of matches.slice(0, 10)) {
     const stat    = await CardStat.findOne({ cardId: card.id });
     const spawned = stat?.totalSpawned  || 0;
@@ -579,7 +579,7 @@ async function cmdBuyCard(args, senderJid, economy, reply) {
   if (isNaN(buyIndex)) {
     // Show market
     if (!listings.length) return reply('🏪 Marketplace is empty. No cards are for sale.');
-    let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏪  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+    let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏪  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
     listings.forEach((l, i) => {
       const card = CARD_INDEX[l.cardId];
       msg += `*${i + 1}.*  ${card?.cardName || l.cardId}  _(${card?.animeName || ''})_\n`;
@@ -659,7 +659,7 @@ async function cmdDeck(senderJid, reply) {
   const slotMap   = {};
   for (const uc of deckCards) slotMap[uc.mainDeckSlot] = uc;
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🃏  *YOUR DECK*  (${deckCards.length}/${MAIN_DECK_SIZE})\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🃏  *YOUR DECK*  (${deckCards.length}/${MAIN_DECK_SIZE})\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
   for (let slot = 1; slot <= MAIN_DECK_SIZE; slot++) {
     const uc = slotMap[slot];
@@ -799,7 +799,7 @@ ${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
     );
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   if (!deck.cards.length) { msg += '_(Empty — add cards with *.g t2cdeck*)_'; }
   else {
     for (let i = 0; i < deck.cards.length; i++) {
@@ -816,7 +816,7 @@ ${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
 async function cmdListDecks(senderJid, reply) {
   const decks = await CardDeck.find({ userId: senderJid });
   if (!decks.length) return reply('📭 No custom decks.\n_Create one with_ *.g create deck <name>*');
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📂  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📂  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   decks.forEach((d, i) => { msg += `*${i + 1}.*  📁  *${d.name}*  —  ${d.cards.length} card${d.cards.length !== 1 ? 's' : ''}\n`; });
   msg += `\n_View: *.g cdeck <name>*_`;
   return reply(msg);
@@ -872,7 +872,7 @@ async function cmdCollector(args, reply) {
   if (!sorted.length) return reply(`📭 Nobody owns any *${seriesCards[0].animeName}* cards yet.`);
 
   const medals = ['🥇', '🥈', '🥉'];
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏆  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏆  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   sorted.forEach(([uid, count], i) => {
     msg += `${medals[i]}  @${uid.split('@')[0]}  —  *${count}* card${count !== 1 ? 's' : ''}\n`;
   });
@@ -896,7 +896,7 @@ async function cmdSeries(args, senderJid, reply) {
   cards.sort((a, b) => (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9));
 
   const actualSeries = cards[0].animeName;
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   let currentTier = null;
   for (const card of cards) {
     const t = String(card.tier);
