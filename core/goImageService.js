@@ -104,6 +104,24 @@ class GoImageService {
     }
 
     /*
+     * Generate Card Collection/Deck GIF
+     */
+    async generateCardGif(imageUrls, title) {
+        try {
+            const response = await this.client.post('/api/cards/gif', {
+                images: imageUrls,
+                title: title
+            }, {
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService Card GIF Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
      * Search Pinterest
      */
     async searchPinterest(query, maxResults = 10) {
