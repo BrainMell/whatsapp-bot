@@ -6230,87 +6230,53 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
     // 3. React to show download started
     await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
-    const fileName = path.join(__dirname, 'temp', `audio_${Date.now()}.mp3`);
-
-    const ytdlpArgs = [
-      video.url,
-      '-f', 'bestaudio[ext=m4a]/bestaudio/best', 
-      '-x', '--audio-format', 'mp3',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      '--no-check-certificates',
-      '--geo-bypass',
-      '--max-filesize', '50M',
-      '-o', fileName
-    ];
-
-    // Only add ffmpeg location if it's an absolute path
-    if (FFMPEG_PATH.includes('/') || FFMPEG_PATH.includes('\\')) {
-      ytdlpArgs.push('--ffmpeg-location', FFMPEG_PATH);
+    const fileName = path.join(__dirname, 'temp', `audio_.mp3`);
+    
+    if (!fs.existsSync(path.join(__dirname, 'temp'))) {
+        fs.mkdirSync(path.join(__dirname, 'temp'), { recursive: true });
     }
 
-    const dl = spawn(YTDLP_PATH, ytdlpArgs);
-
-    let errorOutput = "";
-    dl.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    // Hard-kill timer: 120 seconds (increased from 60)
-    const killTimer = setTimeout(() => {
-      dl.kill('SIGKILL');
-      if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
-      console.log(`[YouTube] Killed hung process for: ${video.title}`);
-    }, 120000);
-
-    // Auto-delete on spawn error
-    dl.on('error', (err) => { 
-      clearTimeout(killTimer);
-      console.error(`[YouTube] Spawn error: ${err.message}`);
-      if (fs.existsSync(fileName)) fs.unlinkSync(fileName); 
-    });
-
-    dl.on('close', async (code) => {
-      clearTimeout(killTimer);
-      if (code === 0 && fs.existsSync(fileName)) {
-        try {
-          await sock.sendMessage(chatId, { 
-            audio: { url: fileName }, 
-            mimetype: 'audio/mpeg',
-            fileName: `${video.title}.mp3`,
-            contextInfo: {
-              mentionedJid: [senderJid], // Tag the person who requested
-              externalAdReply: {
-                title: video.title,
-                body: `${video.author.name} | ${video.timestamp}`,
-                thumbnail: thumbnailBuffer,
-                mediaType: 2,
-                mediaUrl: video.url,
-                sourceUrl: video.url
-              }
-              
+    // Using play-dl to get the stream
+    const stream = await play.stream(video.url, { quality: 2 });
+    
+    // Using fluent-ffmpeg to convert to mp3
+    ffmpeg(stream.stream)
+        .inputFormat(stream.type)
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .toFormat('mp3')
+        .on('error', async (err) => {
+            console.error(`[FFMPEG] Error: `);
+            await sock.sendMessage(chatId, { react: { text: '⚠�', key: m.key } });
+            await sock.sendMessage(chatId, { text: BOT_MARKER + '� Failed to process audio.' });
+            if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
+        })
+        .on('end', async () => {
+            try {
+                await sock.sendMessage(chatId, {
+                    audio: { url: fileName },
+                    mimetype: 'audio/mpeg',
+                    fileName: `.mp3`,
+                    contextInfo: {
+                        mentionedJid: [senderJid],
+                        externalAdReply: {
+                            title: video.title,
+                            body: ` | `,
+                            thumbnail: thumbnailBuffer,
+                            mediaType: 2,
+                            mediaUrl: video.url,
+                            sourceUrl: video.url
+                        }
+                    }
+                });
+                await sock.sendMessage(chatId, { react: { text: '▶�', key: m.key } });
+            } catch (sendErr) {
+                console.error(''[YouTube] Send failed:'', sendErr.message);
+            } finally {
+                if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
             }
-          });
-          // Final success reaction
-          await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-        } catch (sendErr) {
-          // Contingency: Plain audio if rich fails
-          await sock.sendMessage(chatId, { 
-            audio: { url: fileName }, 
-            mimetype: 'audio/mpeg',
-            contextInfo: { mentionedJid: [senderJid] } // Tag requester
-          });
-        } finally {
-          // UNIVERSAL CLEANUP: Delete immediately
-          if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
-        }
-      } else {
-        if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
-        console.error(`[YouTube] Download failed with code ${code}. Error: ${errorOutput}`);
-        await sock.sendMessage(chatId, { react: { text: "⚠️", key: m.key } });
-        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Download failed." });
-      }
-    });
-
+        })
+        .save(fileName);
   } catch (err) {
     console.error("Audio Error:", err);
     await sock.sendMessage(chatId, { react: { text: "❗", key: m.key } });
