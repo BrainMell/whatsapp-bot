@@ -287,36 +287,31 @@ setInterval(() => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── 7.1  .g cards on/off ───────────────────────────────────────────────────
-async function cmdToggle(sub, senderJid, groupJid, reply) {
+async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
   const inst = getInst();
-  if (!inst.adminJids.has(senderJid) && senderJid !== inst.ownerJid) {
+  // Allow Global Admins, Owner, OR WhatsApp Group Admins to toggle
+  if (!inst.adminJids.has(senderJid) && senderJid !== inst.ownerJid && !senderIsAdmin) {
     return reply('❌ Only admins can toggle the card system.');
   }
-  if (sub === 'on') {
-    if (inst.isActive) return reply('⚠️ Card system is already *ON*.');
-    inst.isActive      = true;
-    inst.spawnGroupJid = groupJid;
-    doSpawn(); // spawn one immediately
-    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
-    inst.spawnTimer = setInterval(() => { if (inst.isActive) doSpawn(); }, 30 * 60 * 1000);
-    return reply(
-`✅ *CARD SYSTEM IS NOW ONLINE*
-
-🃏  Cards will spawn in this group every *30 minutes*
-🏷️  Players claim with *.g claim <id>*
-📦  View collection with *.g coll*
-
-_Use_ *.g cards off* _to stop._`
-    );
-  }
-  if (sub === 'off') {
-    if (!inst.isActive) return reply('⚠️ Card system is already *OFF*.');
-    inst.isActive = false;
-    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
-    inst.spawnTimer = null;
-    return reply('🔴 *Card system is now OFF.* Automatic spawns stopped.');
-  }
+... [1022 characters omitted] ...
   return reply('Usage: *.g cards on* or *.g cards off*');
+}
+
+// ─── 7.1b  Mod Management (Owner Only) ───────────────────────────────────────
+async function cmdManageRole(type, action, targetJid, reply) {
+  const inst = getInst();
+  if (!targetJid) return reply('❌ Tag a user.');
+  
+  const set = type === 'admin' ? inst.adminJids : inst.modJids;
+  const label = type === 'admin' ? 'Card Admin' : 'Card Moderator';
+
+  if (action === 'add') {
+    set.add(targetJid);
+    return reply(`✅ @${targetJid.split('@')[0]} is now a *${label}*.`);
+  } else {
+    set.delete(targetJid);
+    return reply(`👤 @${targetJid.split('@')[0]} removed from *${label}* roles.`);
+  }
 }
 
 // ─── 7.2  .g claim <id> ─────────────────────────────────────────────────────
@@ -960,8 +955,16 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   const arg = (skipWords) => txt.trim().split(/\s+/).slice(skipWords);
 
   // ── Toggle ──────────────────────────────────────────────────────────────
-  if (is('cards on'))  return (await cmdToggle('on',  senderJid, chatId, reply)), true;
-  if (is('cards off')) return (await cmdToggle('off', senderJid, chatId, reply)), true;
+  if (is('cards on'))  return (await cmdToggle('on',  senderJid, chatId, reply, senderIsAdmin)), true;
+  if (is('cards off')) return (await cmdToggle('off', senderJid, chatId, reply, senderIsAdmin)), true;
+
+  // ── Role Management (Owner Only) ─────────────────────────────────────────
+  if (isOwner) {
+    if (has('addmod'))   return (await cmdManageRole('mod',   'add', mentioned, reply)), true;
+    if (has('delmod'))   return (await cmdManageRole('mod',   'del', mentioned, reply)), true;
+    if (has('addadmin')) return (await cmdManageRole('admin', 'add', mentioned, reply)), true;
+    if (has('deladmin')) return (await cmdManageRole('admin', 'del', mentioned, reply)), true;
+  }
 
   // ── Claim ────────────────────────────────────────────────────────────────
   if (has('claim') || is('claim')) {
