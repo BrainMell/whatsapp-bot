@@ -1455,9 +1455,11 @@ async function startCombat(sock, groq, encounter, chatId) {
         'START',
         {
             rank: state.dungeonRank, // Pass rank explicitly
+            backgroundPath: state.backgroundPath, // Consistent with TURN phase
             encounterInfo: {
                 ...encounter,
                 rank: state.dungeonRank, // Also in encounterInfo
+                backgroundPath: state.backgroundPath, // CRITICAL FIX for renderCombatStart
                 narration: narration, // Pass narration to caption generator
                 theme: encounter.theme || { theme: 'Battle', description: 'A fierce fight breaks out!' }
             }
@@ -2523,7 +2525,7 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
             votes: {},
             timers: {}
         });    
-    gameStates.set(chatId, state);
+    gameStates.set(sessionKey, state);
     
     // Auto-join for solo
     if (solo && senderJid) {
