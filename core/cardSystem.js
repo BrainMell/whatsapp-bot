@@ -138,20 +138,20 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price, captcha) {
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
   return (
-`▬▬▬▬▬▬▬▬▬▬▬
+`▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🎴  A CARD HAS MANIFESTED!
-▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
 🗯️  Description ›  "${card.description || 'No description available.'}"
 ✦  ${label}  ✦
 🎨  Art ›  ${card.creator || 'Unknown'}
 🪙  Value ›  ${ZENI()}${price.toLocaleString()}
-▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
 🔐  Captcha ›  *${captcha}*
 ⌨️  Type  ${P()} claim ${card.id} ${captcha}  to collect
-▬▬▬▬▬▬▬▬▬▬▬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -423,7 +423,7 @@ async function cmdColl(senderJid, reply, chatId) {
     lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  🏷️ _[LISTED]_' : ''}`);
   }
 
-  const header = `▬▬▬▬▬▬▬▬▬▬▬\n   🗃️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  unslotted_\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗃️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  unslotted_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
   if (gifBuffer) {
     await inst.sock_ref.sendMessage(chatId, { 
@@ -475,7 +475,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
   const imageUrls = top5.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = await goService.generateCardGif(imageUrls, `Top Tiers: ${senderJid.split('@')[0]}`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   const order = ['S', '6', '5', '4', '3', '2', '1'];
 
   for (const t of order) {
@@ -508,7 +508,7 @@ async function cmdDuplicate(senderJid, reply) {
 
   if (!dupes.length) return reply('✅ No duplicates! Every copy you own is unique.');
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   🔁  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔁  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const [cardId, count] of dupes) {
     const card = CARD_INDEX[cardId];
     if (!card) continue;
@@ -561,7 +561,7 @@ async function cmdSearchCard(args, reply) {
 
   if (!matches.length) return reply(`❌ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   🔍  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔍  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const card of matches.slice(0, 10)) {
     const stat    = await CardStat.findOne({ cardId: card.id });
     const spawned = stat?.totalSpawned  || 0;
@@ -651,7 +651,7 @@ async function cmdBuyCard(args, senderJid, economy, reply) {
   if (isNaN(buyIndex)) {
     // Show market
     if (!listings.length) return reply('🏪 Marketplace is empty. No cards are for sale.');
-    let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   🏪  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+    let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏪  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
     listings.forEach((l, i) => {
       const card = CARD_INDEX[l.cardId];
       msg += `*${i + 1}.*  ${card?.cardName || l.cardId}  _(${card?.animeName || ''})_\n`;
@@ -728,25 +728,46 @@ _Outbid someone with_ *${P()} bid <higher>*`
 // ─── 7.13  .g deck ───────────────────────────────────────────────────────────
 async function cmdDeck(senderJid, reply, chatId) {
   const inst = getInst();
-  const deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
-  const slotMap   = {};
+  let deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  
+  // SELF-HEALING: Assign slots to cards that don't have them
+  let changed = false;
+  const usedSlots = new Set(deckCards.map(c => c.mainDeckSlot).filter(s => s >= 1 && s <= MAIN_DECK_SIZE));
+  
+  for (const uc of deckCards) {
+    if (!uc.mainDeckSlot || uc.mainDeckSlot < 1 || uc.mainDeckSlot > MAIN_DECK_SIZE) {
+      // Find first free slot
+      for (let s = 1; s <= MAIN_DECK_SIZE; s++) {
+        if (!usedSlots.has(s)) {
+          uc.mainDeckSlot = s;
+          usedSlots.add(s);
+          await uc.save();
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+  if (changed) deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+
+  const slotMap = {};
   for (const uc of deckCards) slotMap[uc.mainDeckSlot] = uc;
 
   // Animation: GIF Slideshow of all cards in deck
   const imageUrls = deckCards.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = imageUrls.length > 0 ? await goService.generateCardGif(imageUrls, `Deck: Main Deck`) : null;
 
-  let msg = `🎴 *Deck | Main Deck* 🎴\n━━━━━━━━━━━━━━━━━━━━\n`;
+  let msg = `🎴 *Deck | Main Deck* 🎴\n━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total Cards:* ${deckCards.length}/${MAIN_DECK_SIZE}\n\n`;
 
   for (let slot = 1; slot <= MAIN_DECK_SIZE; slot++) {
     const uc = slotMap[slot];
     msg += `🔹 *#${slot}*\n`;
     if (!uc) {
-      msg += `🃏 Name: ░ (empty)\n✨ Tier: -\n━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `🃏 Name: ░ (empty)\n✨ Tier: -\n━━━━━━━━━━━━━━━\n`;
     } else {
       const card = CARD_INDEX[uc.cardId];
-      msg += `🃏 Name: ${card?.cardName || uc.cardId}\n✨ Tier: ${card?.tier || '-'}\n━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `🃏 Name: ${card?.cardName || uc.cardId}\n✨ Tier: ${card?.tier || '-'}\n━━━━━━━━━━━━━━━\n`;
     }
   }
 
@@ -896,7 +917,7 @@ ${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
     );
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   if (!deck.cards.length) { msg += `_(Empty — add cards with *${P()} t2cdeck*)_`; }
   else {
     for (let i = 0; i < deck.cards.length; i++) {
@@ -913,7 +934,7 @@ ${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
 async function cmdListDecks(senderJid, reply) {
   const decks = await CardDeck.find({ userId: senderJid });
   if (!decks.length) return reply(`📭 No custom decks.\n_Create one with_ *${P()} create deck <name>*`);
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   📂  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📂  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   decks.forEach((d, i) => { msg += `*${i + 1}.*  📁  *${d.name}*  —  ${d.cards.length} card${d.cards.length !== 1 ? 's' : ''}\n`; });
   msg += `\n_View: *${P()} cdeck <name>*_`;
   return reply(msg);
@@ -970,7 +991,7 @@ async function cmdCollector(args, reply) {
   if (!sorted.length) return reply(`📭 Nobody owns any *${seriesCards[0].animeName}* cards yet.`);
 
   const medals = ['🥇', '🥈', '🥉'];
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   🏆  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏆  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   sorted.forEach(([uid, count], i) => {
     msg += `${medals[i]}  @${uid.split('@')[0]}  —  *${count}* card${count !== 1 ? 's' : ''}\n`;
   });
@@ -994,7 +1015,7 @@ async function cmdSeries(args, senderJid, reply) {
   cards.sort((a, b) => (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9));
 
   const actualSeries = cards[0].animeName;
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   let currentTier = null;
   for (const card of cards) {
     const t = String(card.tier);
@@ -1076,7 +1097,7 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
   
   const caption = 
 `🎴  *CARD DETAIL*
-▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card?.cardName || uc.cardId}
 📺  Series ›  ${card?.animeName || 'Unknown'}
 🗯️  Description ›  "${card?.description || 'No description available.'}"
@@ -1085,7 +1106,7 @@ ${stars}  ${TIER_LABEL[String(card?.tier)]}  ${stars}
 📋  Copy ›  #${uc.copyNumber} of ${stat?.maxCopies || 200}
 🎨  Art ›  ${card?.creator || 'Unknown'}
 🪙  Value ›  ${ZENI()}${calcPrice(card?.tier, uc.copyNumber, stat?.maxCopies || 200).toLocaleString()}
-▬▬▬▬▬▬▬▬▬▬▬`;
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`;
 
   try {
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
