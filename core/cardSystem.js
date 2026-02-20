@@ -94,8 +94,7 @@ function getInst() {
   if (!instances.has(id)) {
     instances.set(id, {
       sock_ref:      null,
-      spawnGroupJid: null,
-      isActive:      false,
+      activeGroups:  new Set(), // JIDs where cards are ON
       spawnTimer:    null,
       ownerJid:      null,
       adminJids:     new Set(),
@@ -188,7 +187,7 @@ async function getOrInitStat(cardId, tier) {
 
 async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, targetGroup = null) {
   const inst  = getInst();
-  const group = targetGroup || inst.spawnGroupJid;
+  const group = targetGroup;
   if (!inst.sock_ref || !group) return;
 
   let card = null;
@@ -294,28 +293,42 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
     return reply('❌ Only admins can toggle the card system.');
   }
   if (sub === 'on') {
-    if (inst.isActive) return reply('⚠️ Card system is already *ON*.');
-    inst.isActive      = true;
-    inst.spawnGroupJid = groupJid;
-    doSpawn(); // spawn one immediately
-    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
-    inst.spawnTimer = setInterval(() => { if (inst.isActive) doSpawn(); }, 30 * 60 * 1000);
+    if (inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *ON* in this group.');
+    inst.activeGroups.add(groupJid);
+    
+    // Spawn one immediately for THIS group
+    doSpawn(null, null, false, groupJid);
+
+    // Setup singleton timer for this instance if not already running
+    if (!inst.spawnTimer) {
+      inst.spawnTimer = setInterval(() => {
+        for (const gid of inst.activeGroups) {
+          doSpawn(null, null, false, gid);
+        }
+      }, 30 * 60 * 1000);
+    }
+
     return reply(
 `✅ *CARD SYSTEM IS NOW ONLINE*
 
 🃏  Cards will spawn in this group every *30 minutes*
-🏷️  Players claim with *.g claim <id>*
+🕹️  Players claim with *.g claim <id>*
 📦  View collection with *.g coll*
 
 _Use_ *.g cards off* _to stop._`
     );
   }
   if (sub === 'off') {
-    if (!inst.isActive) return reply('⚠️ Card system is already *OFF*.');
-    inst.isActive = false;
-    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
-    inst.spawnTimer = null;
-    return reply('🔴 *Card system is now OFF.* Automatic spawns stopped.');
+    if (!inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *OFF* in this group.');
+    inst.activeGroups.delete(groupJid);
+    
+    // If no more groups, we can stop the timer (optional optimization)
+    if (inst.activeGroups.size === 0 && inst.spawnTimer) {
+      clearInterval(inst.spawnTimer);
+      inst.spawnTimer = null;
+    }
+
+    return reply('🔴 *Card system is now OFF in this group.*');
   }
   return reply('Usage: *.g cards on* or *.g cards off*');
 }
@@ -937,11 +950,13 @@ Examples:
 
   if (!card) return reply(`❌ No card found matching: *${query}*${tierArg ? ` (Tier ${tierArg})` : ''}`);
 
-  if (!inst.spawnGroupJid) return reply('❌ Card system is not ON in any group. Turn it on first with *.g cards on* in the target group.');
+  if (inst.activeGroups.size === 0) return reply('❌ Card system is not ON in any group. Turn it on first with *.g cards on* in the target group.');
 
-  const result = await doSpawn(card.id, String(card.tier), true, inst.spawnGroupJid);
+  // Send to the first active group found
+  const targetGroup = [...inst.activeGroups][0];
+  const result = await doSpawn(card.id, String(card.tier), true, targetGroup);
   if (result) {
-    return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to active card group.`);
+    return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to active group.`);
   } else {
     return reply('❌ Spawn failed. Check that the card image URL is still live.');
   }
