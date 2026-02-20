@@ -144,7 +144,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 
   *${card.cardName}*
   _${card.animeName}_
-
+${card.description ? `\n  _"${card.description}"_\n` : ''}
   ${stars}  *${label}*  ${stars}
   ${rarity.emoji}  *${rarity.label}*
   📋  Copy  *#${copyNumber}*  of  *${maxCopies}*
