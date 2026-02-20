@@ -3,6 +3,7 @@ const axios = require('axios');
 class GoImageService {
     constructor(overrideUrl = null) {
         this.baseUrl = overrideUrl || process.env.GO_IMAGE_SERVICE_URL || 'http://localhost:8080';
+        console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 60000, // 60s timeout for heavy ops
@@ -117,6 +118,37 @@ class GoImageService {
             return Buffer.from(response.data);
         } catch (error) {
             console.error('GoService Card GIF Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
+     * Search YouTube (Go Service)
+     */
+    async searchYoutube(query) {
+        try {
+            const response = await this.client.get('/api/scrape/youtube/search', {
+                params: { query }
+            });
+            return response.data.videos || [];
+        } catch (error) {
+            console.error('GoService YouTube Search Error:', error.message);
+            return [];
+        }
+    }
+
+    /*
+     * Download YouTube Audio (Go Service)
+     */
+    async downloadYoutubeAudio(url) {
+        try {
+            const response = await this.client.get('/api/scrape/youtube/audio', {
+                params: { url },
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService YouTube Audio Error:', error.message);
             return null;
         }
     }
