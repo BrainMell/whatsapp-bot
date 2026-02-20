@@ -1,9 +1,9 @@
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║                        CARD SYSTEM  —  cardSystem.js                    ║
-// ║                                                                          ║
-// ║  Drop this file in the same directory as engine.js.                     ║
-// ║  See README_CARDS.md for setup instructions.                            ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
+﻿// â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+// â•‘                        CARD SYSTEM  â€”  cardSystem.js                    â•‘
+// â•‘                                                                          â•‘
+// â•‘  Drop this file in the same directory as engine.js.                     â•‘
+// â•‘  See README_CARDS.md for setup instructions.                            â•‘
+// â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 'use strict';
 
@@ -11,23 +11,24 @@ const fs      = require('fs');
 const path    = require('path');
 const axios   = require('axios');
 
-// ── Mongoose Models ──────────────────────────────────────────────────────────
+// â”€â”€ Mongoose Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CardStat   = require('./models/CardStat');
 const UserCard   = require('./models/UserCard');
 const CardMarket = require('./models/CardMarket');
 const CardDeck   = require('./models/CardDeck');
 
-// ── Config ───────────────────────────────────────────────────────────────────
+// â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const botConfig  = require('../botConfig');
 const ZENI       = () => botConfig.getCurrency().symbol;
+const P          = () => botConfig.getPrefix().toLowerCase();
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 1 — CARD DATABASE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 1 â€” CARD DATABASE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const CARDS_DB_PATH = path.join(__dirname, 'data', 'cards_data.json');
 let ALL_CARDS     = [];   // flat array of every card object
-let CARD_INDEX    = {};   // { "1-00001": cardObject } — O(1) lookup
+let CARD_INDEX    = {};   // { "1-00001": cardObject } â€” O(1) lookup
 let CARDS_BY_TIER = {};   // { "1": [cards], "2": [cards], ... }
 
 function loadCardsDB() {
@@ -49,16 +50,16 @@ function loadCardsDB() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 2 — CONSTANTS & TABLES
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 2 â€” CONSTANTS & TABLES
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const BASE_MAX   = { '1': 200, '2': 120, '3': 60, '4': 30, '5': 8, '6': 3, 'S': 1 };
 const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999 };
 
 const TIER_STARS = {
-  '1': '✦', '2': '✦✦', '3': '✦✦✦',
-  '4': '✦✦✦✦', '5': '✦✦✦✦✦', '6': '❖❖❖❖❖❖', 'S': '👑'
+  '1': 'âœ¦', '2': 'âœ¦âœ¦', '3': 'âœ¦âœ¦âœ¦',
+  '4': 'âœ¦âœ¦âœ¦âœ¦', '5': 'âœ¦âœ¦âœ¦âœ¦âœ¦', '6': 'â–â–â–â–â–â–', 'S': 'ðŸ‘‘'
 };
 
 const TIER_LABEL = {
@@ -66,7 +67,7 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S'
 };
 
-// Weighted auto-spawn table — weights sum to 79 (the remaining 21% chance goes to T6 check + T5 guarantee)
+// Weighted auto-spawn table â€” weights sum to 79 (the remaining 21% chance goes to T6 check + T5 guarantee)
 const SPAWN_WEIGHTS = [
   { tier: '1', w: 30 },
   { tier: '2', w: 20 },
@@ -75,7 +76,7 @@ const SPAWN_WEIGHTS = [
   { tier: '5', w:  4 },
 ];
 
-// T6 = once every 3–4 days avg = once per ~168 half-hour intervals
+// T6 = once every 3â€“4 days avg = once per ~168 half-hour intervals
 const T6_PER_INTERVAL = 1 / 168;
 
 // Cards expire if not claimed within this window
@@ -83,9 +84,9 @@ const CLAIM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
 const MAIN_DECK_SIZE = 12;
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 3 — RUNTIME STATE (Multi-Tenant)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 3 â€” RUNTIME STATE (Multi-Tenant)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const instances = new Map();
 
@@ -105,19 +106,19 @@ function getInst() {
   return instances.get(id);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 4 — RARITY & PRICE ENGINE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 4 â€” RARITY & PRICE ENGINE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function getRarityLabel(copyNumber, maxCopies) {
   const pct = copyNumber / maxCopies;
-  if (copyNumber === 1) return { label: 'SOLO COPY',             emoji: '💠' };
-  if (copyNumber <= 3)  return { label: 'TOP 3 COPY',            emoji: '💎' };
-  if (pct <= 0.05)      return { label: 'ULTRA RARE',            emoji: '✨' };
-  if (pct <= 0.15)      return { label: 'LEGENDARY CIRCULATION', emoji: '🔮' };
-  if (pct <= 0.35)      return { label: 'RARE',                  emoji: '🌟' };
-  if (pct <= 0.70)      return { label: 'UNCOMMON',              emoji: '🎴' };
-  return                       { label: 'COMMON',                emoji: '📦' };
+  if (copyNumber === 1) return { label: 'SOLO COPY',             emoji: 'ðŸ’ ' };
+  if (copyNumber <= 3)  return { label: 'TOP 3 COPY',            emoji: 'ðŸ’Ž' };
+  if (pct <= 0.05)      return { label: 'ULTRA RARE',            emoji: 'âœ¨' };
+  if (pct <= 0.15)      return { label: 'LEGENDARY CIRCULATION', emoji: 'ðŸ”®' };
+  if (pct <= 0.35)      return { label: 'RARE',                  emoji: 'ðŸŒŸ' };
+  if (pct <= 0.70)      return { label: 'UNCOMMON',              emoji: 'ðŸŽ´' };
+  return                       { label: 'COMMON',                emoji: 'ðŸ“¦' };
 }
 
 function calcPrice(tier, totalSpawned, maxCopies) {
@@ -126,35 +127,35 @@ function calcPrice(tier, totalSpawned, maxCopies) {
   return Math.max(Math.round(base * ratio), base);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 5 — CARD CAPTION BUILDER
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 5 â€” CARD CAPTION BUILDER
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const rarity = getRarityLabel(copyNumber, maxCopies);
-  const stars  = TIER_STARS[tier]  || '✦';
+  const stars  = TIER_STARS[tier]  || 'âœ¦';
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-        🎴  *A CARD APPEARED!*
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+`â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
+        ðŸŽ´  *A CARD APPEARED!*
+â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
 
   *${card.cardName}*
   _${card.animeName}_
 ${card.description ? `\n  _"${card.description}"_\n` : ''}
   ${stars}  *${label}*  ${stars}
   ${rarity.emoji}  *${rarity.label}*
-  📋  Copy  *#${copyNumber}*  of  *${maxCopies}*
+  ðŸ“‹  Copy  *#${copyNumber}*  of  *${maxCopies}*
 
-  🎨  *Art by*  ›  ${card.creator || 'Unknown'}
-  🪙  *Value*   ›  ${ZENI()}${price.toLocaleString()}
+  ðŸŽ¨  *Art by*  â€º  ${card.creator || 'Unknown'}
+  ðŸª™  *Value*   â€º  ${ZENI()}${price.toLocaleString()}
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-  🆔  \`${card.id}\`
-  _Type_  *.g claim ${card.id}*  _to collect_
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
+  ðŸ†”  \`${card.id}\`
+  _Type_  *${P()} claim ${card.id}*  _to collect_
+â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬`
   );
 }
 
@@ -164,9 +165,9 @@ function cardLine(index, card, uc, stat) {
   return `*#${index}*  ${TIER_STARS[tier]}  ${card.cardName}  _(${card.animeName})_  ${rarity.emoji} ${rarity.label}`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 6 — SPAWN ENGINE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 6 â€” SPAWN ENGINE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function pickSpawnTier() {
   if (Math.random() < T6_PER_INTERVAL) return '6';
@@ -265,7 +266,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     return { card, copyNumber, stat, price };
 
   } catch (err) {
-    console.error('[CardSystem] Image send failed — rolling back:', err.message);
+    console.error('[CardSystem] Image send failed â€” rolling back:', err.message);
     stat.totalSpawned -= 1;
     await stat.save();
   }
@@ -281,19 +282,19 @@ setInterval(() => {
   }
 }, 60_000);
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 7 — ALL COMMAND HANDLERS
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 7 â€” ALL COMMAND HANDLERS
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ─── 7.1  .g cards on/off ───────────────────────────────────────────────────
+// â”€â”€â”€ 7.1  ${P()} cards on/off â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
   const inst = getInst();
   // Allow Global Admins, Owner, OR WhatsApp Group Admins to toggle
   if (!inst.adminJids.has(senderJid) && senderJid !== inst.ownerJid && !senderIsAdmin) {
-    return reply('❌ Only admins can toggle the card system.');
+    return reply('âŒ Only admins can toggle the card system.');
   }
   if (sub === 'on') {
-    if (inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *ON* in this group.');
+    if (inst.activeGroups.has(groupJid)) return reply('âš ï¸ Card system is already *ON* in this group.');
     inst.activeGroups.add(groupJid);
     
     // Spawn one immediately for THIS group
@@ -309,17 +310,17 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
     }
 
     return reply(
-`✅ *CARD SYSTEM IS NOW ONLINE*
+`âœ… *CARD SYSTEM IS NOW ONLINE*
 
-🃏  Cards will spawn in this group every *30 minutes*
-🕹️  Players claim with *.g claim <id>*
-📦  View collection with *.g coll*
+ðŸƒ  Cards will spawn in this group every *30 minutes*
+ðŸ•¹ï¸  Players claim with *${P()} claim <id>*
+ðŸ“¦  View collection with *${P()} coll*
 
-_Use_ *.g cards off* _to stop._`
+_Use_ *${P()} cards off* _to stop._`
     );
   }
   if (sub === 'off') {
-    if (!inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *OFF* in this group.');
+    if (!inst.activeGroups.has(groupJid)) return reply('âš ï¸ Card system is already *OFF* in this group.');
     inst.activeGroups.delete(groupJid);
     
     // If no more groups, we can stop the timer (optional optimization)
@@ -328,32 +329,32 @@ _Use_ *.g cards off* _to stop._`
       inst.spawnTimer = null;
     }
 
-    return reply('🔴 *Card system is now OFF in this group.*');
+    return reply('ðŸ”´ *Card system is now OFF in this group.*');
   }
-  return reply('Usage: *.g cards on* or *.g cards off*');
+  return reply('Usage: *${P()} cards on* or *${P()} cards off*');
 }
 
-// ─── 7.1b  Mod Management (Owner Only) ───────────────────────────────────────
+// â”€â”€â”€ 7.1b  Mod Management (Owner Only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdManageRole(type, action, targetJid, reply) {
   const inst = getInst();
-  if (!targetJid) return reply('❌ Tag a user.');
+  if (!targetJid) return reply('âŒ Tag a user.');
   
   const set = type === 'admin' ? inst.adminJids : inst.modJids;
   const label = type === 'admin' ? 'Card Admin' : 'Card Moderator';
 
   if (action === 'add') {
     set.add(targetJid);
-    return reply(`✅ @${targetJid.split('@')[0]} is now a *${label}*.`);
+    return reply(`âœ… @${targetJid.split('@')[0]} is now a *${label}*.`);
   } else {
     set.delete(targetJid);
-    return reply(`👤 @${targetJid.split('@')[0]} removed from *${label}* roles.`);
+    return reply(`ðŸ‘¤ @${targetJid.split('@')[0]} removed from *${label}* roles.`);
   }
 }
 
-// ─── 7.2  .g claim <id> ─────────────────────────────────────────────────────
+// â”€â”€â”€ 7.2  ${P()} claim <id> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdClaim(cardId, senderJid, reply) {
   const inst = getInst();
-  if (!cardId) return reply('❌ Usage: *.g claim <card-id>*\nExample: `.g claim 1-00001`');
+  if (!cardId) return reply('âŒ Usage: *${P()} claim <card-id>*\nExample: `${P()} claim 1-00001`');
 
   const now = Date.now();
   for (const [id, sp] of inst.activeSpawns.entries()) {
@@ -361,7 +362,7 @@ async function cmdClaim(cardId, senderJid, reply) {
   }
 
   const spawn = inst.activeSpawns.get(cardId);
-  if (!spawn) return reply(`❌ No active card with ID \`${cardId}\`\n_It was already claimed, expired, or the ID is wrong._`);
+  if (!spawn) return reply(`âŒ No active card with ID \`${cardId}\`\n_It was already claimed, expired, or the ID is wrong._`);
 
   try {
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
@@ -375,23 +376,23 @@ async function cmdClaim(cardId, senderJid, reply) {
     return reply(
 `${rarity.emoji}  *CLAIMED!*
 
-*${spawn.card.cardName}*  —  _${spawn.card.animeName}_
-${TIER_STARS[tier]}  ${TIER_LABEL[tier]}  •  ${rarity.label}
-📋  Copy *#${spawn.copyNumber}* of *${spawn.stat.maxCopies}*
-🎨  Art by *${spawn.card.creator || 'Unknown'}*
+*${spawn.card.cardName}*  â€”  _${spawn.card.animeName}_
+${TIER_STARS[tier]}  ${TIER_LABEL[tier]}  â€¢  ${rarity.label}
+ðŸ“‹  Copy *#${spawn.copyNumber}* of *${spawn.stat.maxCopies}*
+ðŸŽ¨  Art by *${spawn.card.creator || 'Unknown'}*
 
-_Added to your collection!  Check it with_ *.g coll*`
+_Added to your collection!  Check it with_ *${P()} coll*`
     );
   } catch (err) {
     console.error('[CardSystem] Claim error:', err.message);
-    return reply('❌ Claim failed. Please try again.');
+    return reply('âŒ Claim failed. Please try again.');
   }
 }
 
-// ─── 7.3  .g coll ───────────────────────────────────────────────────────────
+// â”€â”€â”€ 7.3  ${P()} coll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdColl(senderJid, reply) {
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
-  if (!owned.length) return reply('📭 You have no cards yet.\n_Wait for one to spawn and use_ *.g claim <id>*');
+  if (!owned.length) return reply('ðŸ“­ You have no cards yet.\n_Wait for one to spawn and use_ *${P()} claim <id>*');
 
   const lines = [];
   for (let i = 0; i < owned.length; i++) {
@@ -399,20 +400,20 @@ async function cmdColl(senderJid, reply) {
     const card = CARD_INDEX[uc.cardId];
     if (!card) continue;
     const stat = await CardStat.findOne({ cardId: uc.cardId });
-    lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  🏷️ _[LISTED]_' : ''}`);
+    lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  ðŸ·ï¸ _[LISTED]_' : ''}`);
   }
 
-  const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗃️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  by acquired time_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const header = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ—ƒï¸  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  â€¢  by acquired time_\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
 
   for (let s = 0; s < lines.length; s += 30) {
     await reply((s === 0 ? header : '') + lines.slice(s, s + 30).join('\n'));
   }
 }
 
-// ─── 7.4  .g card --tier ─────────────────────────────────────────────────────
+// â”€â”€â”€ 7.4  ${P()} card --tier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdCollByTier(senderJid, reply) {
   const owned = await UserCard.find({ userId: senderJid });
-  if (!owned.length) return reply('📭 You have no cards yet.');
+  if (!owned.length) return reply('ðŸ“­ You have no cards yet.');
 
   const byTier = {};
   for (const uc of owned) {
@@ -423,7 +424,7 @@ async function cmdCollByTier(senderJid, reply) {
     byTier[t].push({ uc, card });
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ—‚ï¸  *COLLECTION BY TIER*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
   for (const tier of ['S', '6', '5', '4', '3', '2', '1']) {
     const group = byTier[tier];
     if (!group?.length) continue;
@@ -431,40 +432,40 @@ async function cmdCollByTier(senderJid, reply) {
     for (const { uc, card } of group) {
       const stat   = await CardStat.findOne({ cardId: uc.cardId });
       const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
-      msg += `  •  ${card.cardName}  _(${card.animeName})_  ${rarity.emoji}\n`;
+      msg += `  â€¢  ${card.cardName}  _(${card.animeName})_  ${rarity.emoji}\n`;
     }
     msg += '\n';
   }
   return reply(msg);
 }
 
-// ─── 7.5  .g duplicate ──────────────────────────────────────────────────────
+// â”€â”€â”€ 7.5  ${P()} duplicate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdDuplicate(senderJid, reply) {
   const owned = await UserCard.find({ userId: senderJid });
-  if (!owned.length) return reply('📭 You own no cards.');
+  if (!owned.length) return reply('ðŸ“­ You own no cards.');
 
   const counts = {};
   for (const uc of owned) counts[uc.cardId] = (counts[uc.cardId] || 0) + 1;
   const dupes = Object.entries(counts).filter(([, c]) => c > 1);
 
-  if (!dupes.length) return reply('✅ No duplicates! Every copy you own is unique.');
+  if (!dupes.length) return reply('âœ… No duplicates! Every copy you own is unique.');
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔁  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ”  *YOUR DUPLICATES*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
   for (const [cardId, count] of dupes) {
     const card = CARD_INDEX[cardId];
     if (!card) continue;
-    msg += `${TIER_STARS[String(card.tier)]}  *${card.cardName}*  ×${count}  _${card.animeName}_\n`;
+    msg += `${TIER_STARS[String(card.tier)]}  *${card.cardName}*  Ã—${count}  _${card.animeName}_\n`;
   }
-  msg += `\n_Use_ *.g merge <card-id>* _to combine duplicates._`;
+  msg += `\n_Use_ *${P()} merge <card-id>* _to combine duplicates._`;
   return reply(msg);
 }
 
-// ─── 7.6  .g merge <card-id> ────────────────────────────────────────────────
+// â”€â”€â”€ 7.6  ${P()} merge <card-id> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdMerge(cardId, senderJid, reply) {
-  if (!cardId) return reply('❌ Usage: *.g merge <card-id>*\nYou need 2+ copies to merge.\nExample: `.g merge 1-00001`');
+  if (!cardId) return reply('âŒ Usage: *${P()} merge <card-id>*\nYou need 2+ copies to merge.\nExample: `${P()} merge 1-00001`');
 
   const copies = await UserCard.find({ userId: senderJid, cardId }).sort({ copyNumber: 1 });
-  if (copies.length < 2) return reply(`❌ You only own *${copies.length}* copy of \`${cardId}\`. Need at least 2.`);
+  if (copies.length < 2) return reply(`âŒ You only own *${copies.length}* copy of \`${cardId}\`. Need at least 2.`);
 
   const card = CARD_INDEX[cardId];
   const stat = await CardStat.findOne({ cardId });
@@ -475,57 +476,57 @@ async function cmdMerge(cardId, senderJid, reply) {
 
   const rarity = getRarityLabel(keep.copyNumber, stat?.maxCopies || BASE_MAX[String(card?.tier)] || 200);
   return reply(
-`♻️  *MERGE COMPLETE*
+`â™»ï¸  *MERGE COMPLETE*
 
-*${card?.cardName || cardId}*  —  _${card?.animeName}_
+*${card?.cardName || cardId}*  â€”  _${card?.animeName}_
 ${TIER_STARS[String(card?.tier)]}  ${TIER_LABEL[String(card?.tier)]}
 
-📉  2 copies  →  1 copy
-📋  Kept Copy *#${keep.copyNumber}*  (${rarity.emoji} ${rarity.label})
-🗑️  Duplicate destroyed.
+ðŸ“‰  2 copies  â†’  1 copy
+ðŸ“‹  Kept Copy *#${keep.copyNumber}*  (${rarity.emoji} ${rarity.label})
+ðŸ—‘ï¸  Duplicate destroyed.
 
 _You now own ${copies.length - 1} cop${copies.length - 1 === 1 ? 'y' : 'ies'} of this card._`
   );
 }
 
-// ─── 7.7  .g cs <name> [tier <n>] ───────────────────────────────────────────
+// â”€â”€â”€ 7.7  ${P()} cs <name> [tier <n>] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdSearchCard(args, reply) {
   const raw        = args.join(' ');
   const tierMatch  = raw.match(/tier\s*(\w)/i);
   const tierNum    = tierMatch ? tierMatch[1].toUpperCase() : null;
   const name       = raw.replace(/tier\s*\w/i, '').trim();
 
-  if (!name) return reply('❌ Usage: *.g cs <card name>* or *.g cs <card name> tier <n>*\nExample: `.g cs Edward Elric tier 5`');
+  if (!name) return reply('âŒ Usage: *${P()} cs <card name>* or *${P()} cs <card name> tier <n>*\nExample: `${P()} cs Edward Elric tier 5`');
 
   let matches = ALL_CARDS.filter(c => c.cardName.toLowerCase().includes(name.toLowerCase()));
   if (tierNum) matches = matches.filter(c => String(c.tier).toUpperCase() === tierNum);
 
-  if (!matches.length) return reply(`❌ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
+  if (!matches.length) return reply(`âŒ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔍  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ”  *CARD SEARCH*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
   for (const card of matches.slice(0, 10)) {
     const stat    = await CardStat.findOne({ cardId: card.id });
     const spawned = stat?.totalSpawned  || 0;
     const maxCop  = stat?.maxCopies     || BASE_MAX[String(card.tier)] || 200;
     const owners  = stat?.uniqueOwners  || 0;
     msg += `${TIER_STARS[String(card.tier)]}  *${card.cardName}*  _(${card.animeName})_\n`;
-    msg += `   🆔 \`${card.id}\`  •  🎨 ${card.creator || 'Unknown'}\n`;
-    msg += `   📋 ${spawned}/${maxCop} copies  •  👤 ${owners} owner${owners !== 1 ? 's' : ''}\n\n`;
+    msg += `   ðŸ†” \`${card.id}\`  â€¢  ðŸŽ¨ ${card.creator || 'Unknown'}\n`;
+    msg += `   ðŸ“‹ ${spawned}/${maxCop} copies  â€¢  ðŸ‘¤ ${owners} owner${owners !== 1 ? 's' : ''}\n\n`;
   }
   if (matches.length > 10) msg += `_...and ${matches.length - 10} more results. Narrow your search._`;
   return reply(msg);
 }
 
-// ─── 7.8  .g cg @user Deck <n> ──────────────────────────────────────────────
+// â”€â”€â”€ 7.8  ${P()} cg @user Deck <n> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdGiveCard(args, senderJid, mentionedJid, reply) {
-  if (!mentionedJid) return reply('❌ Tag the recipient.\nExample: `.g cg @User Deck 4`');
+  if (!mentionedJid) return reply('âŒ Tag the recipient.\nExample: `${P()} cg @User Deck 4`');
   const deckNumMatch = args.join(' ').match(/deck\s+(\d+)/i);
   const deckNum      = deckNumMatch ? parseInt(deckNumMatch[1]) : null;
-  if (!deckNum) return reply('❌ Specify deck slot.\nExample: `.g cg @User Deck 4`');
+  if (!deckNum) return reply('âŒ Specify deck slot.\nExample: `${P()} cg @User Deck 4`');
 
   const deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
   const target    = deckCards.find(uc => uc.mainDeckSlot === deckNum);
-  if (!target) return reply(`❌ No card in Deck slot *#${deckNum}*.`);
+  if (!target) return reply(`âŒ No card in Deck slot *#${deckNum}*.`);
 
   const card = CARD_INDEX[target.cardId];
   target.userId = mentionedJid; target.inMainDeck = false; target.mainDeckSlot = null;
@@ -534,81 +535,81 @@ async function cmdGiveCard(args, senderJid, mentionedJid, reply) {
   const stat   = await CardStat.findOne({ cardId: target.cardId });
   const rarity = getRarityLabel(target.copyNumber, stat?.maxCopies || BASE_MAX[String(card?.tier)] || 200);
   return reply(
-`🎁  *CARD GIVEN!*
+`ðŸŽ  *CARD GIVEN!*
 
-*${card?.cardName || target.cardId}*  —  _${card?.animeName}_
+*${card?.cardName || target.cardId}*  â€”  _${card?.animeName}_
 ${TIER_STARS[String(card?.tier)]}  ${rarity.emoji} ${rarity.label}
-📋  Copy *#${target.copyNumber}*
+ðŸ“‹  Copy *#${target.copyNumber}*
 
-👤  Sent to  @${mentionedJid.split('@')[0]}`
+ðŸ‘¤  Sent to  @${mentionedJid.split('@')[0]}`
   );
 }
 
-// ─── 7.9  .g sc <deck#> <price> ─────────────────────────────────────────────
+// â”€â”€â”€ 7.9  ${P()} sc <deck#> <price> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdSellCard(args, senderJid, reply) {
   const deckNum = parseInt(args[0]);
   const price   = parseInt(String(args[1] || '').replace(/,/g, ''));
   if (!deckNum || isNaN(price) || price <= 0) {
-    return reply('❌ Usage: *.g sc <deck-slot> <price>*\nExample: `.g sc 2 400000`');
+    return reply('âŒ Usage: *${P()} sc <deck-slot> <price>*\nExample: `${P()} sc 2 400000`');
   }
   const deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
   const target    = deckCards.find(uc => uc.mainDeckSlot === deckNum);
-  if (!target) return reply(`❌ No card in Deck slot *#${deckNum}*.`);
-  if (target.forSale) return reply('⚠️ That card is already listed. Use *.g cancel sale* first.');
+  if (!target) return reply(`âŒ No card in Deck slot *#${deckNum}*.`);
+  if (target.forSale) return reply('âš ï¸ That card is already listed. Use *${P()} cancel sale* first.');
 
   const card = CARD_INDEX[target.cardId];
   target.forSale = true; target.salePrice = price; await target.save();
   await CardMarket.create({ userCardId: target._id, cardId: target.cardId, sellerId: senderJid, type: 'sale', price });
 
   return reply(
-`🏷️  *CARD LISTED*
+`ðŸ·ï¸  *CARD LISTED*
 
 *${card?.cardName || target.cardId}*
-💰  Price: *${ZENI()}${price.toLocaleString()}*
+ðŸ’°  Price: *${ZENI()}${price.toLocaleString()}*
 
-_Players buy it with_ *.g buycard*
-_Remove listing with_ *.g cancel sale*`
+_Players buy it with_ *${P()} buycard*
+_Remove listing with_ *${P()} cancel sale*`
   );
 }
 
-// ─── 7.10  .g cancel sale ────────────────────────────────────────────────────
+// â”€â”€â”€ 7.10  ${P()} cancel sale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdCancelSale(senderJid, reply) {
   const listing = await CardMarket.findOne({ sellerId: senderJid, status: 'active', type: 'sale' });
-  if (!listing) return reply('❌ You have no active sale listings.');
+  if (!listing) return reply('âŒ You have no active sale listings.');
 
   const uc = await UserCard.findById(listing.userCardId);
   if (uc) { uc.forSale = false; uc.salePrice = null; await uc.save(); }
   listing.status = 'cancelled'; await listing.save();
 
   const card = CARD_INDEX[listing.cardId];
-  return reply(`✅ *Sale cancelled.* *${card?.cardName || listing.cardId}* removed from market.`);
+  return reply(`âœ… *Sale cancelled.* *${card?.cardName || listing.cardId}* removed from market.`);
 }
 
-// ─── 7.11  .g buycard [listing#] ─────────────────────────────────────────────
+// â”€â”€â”€ 7.11  ${P()} buycard [listing#] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdBuyCard(args, senderJid, economy, reply) {
   const listings = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ price: 1 }).limit(20);
   const buyIndex = parseInt(args[0]) - 1;
 
   if (isNaN(buyIndex)) {
     // Show market
-    if (!listings.length) return reply('🏪 Marketplace is empty. No cards are for sale.');
-    let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏪  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+    if (!listings.length) return reply('ðŸª Marketplace is empty. No cards are for sale.');
+    let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸª  *CARD MARKETPLACE*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
     listings.forEach((l, i) => {
       const card = CARD_INDEX[l.cardId];
       msg += `*${i + 1}.*  ${card?.cardName || l.cardId}  _(${card?.animeName || ''})_\n`;
-      msg += `      💰 ${ZENI()}${l.price.toLocaleString()}  •  Seller: @${l.sellerId.split('@')[0]}\n\n`;
+      msg += `      ðŸ’° ${ZENI()}${l.price.toLocaleString()}  â€¢  Seller: @${l.sellerId.split('@')[0]}\n\n`;
     });
-    msg += `_To buy: *.g buycard <number>*_`;
+    msg += `_To buy: *${P()} buycard <number>*_`;
     return reply(msg);
   }
 
   const listing = listings[buyIndex];
-  if (!listing) return reply('❌ Invalid number. Type *.g buycard* to see the market.');
-  if (listing.sellerId === senderJid) return reply('❌ You can\'t buy your own listing.');
+  if (!listing) return reply('âŒ Invalid number. Type *${P()} buycard* to see the market.');
+  if (listing.sellerId === senderJid) return reply('âŒ You can\'t buy your own listing.');
 
   const balance = economy.getBalance(senderJid);
   if (balance < listing.price) {
-    return reply(`❌ Need ${ZENI()}${listing.price.toLocaleString()}, you have ${ZENI()}${balance.toLocaleString()}.`);
+    return reply(`âŒ Need ${ZENI()}${listing.price.toLocaleString()}, you have ${ZENI()}${balance.toLocaleString()}.`);
   }
 
   economy.removeMoney(senderJid,      listing.price, 'Card purchase');
@@ -623,30 +624,30 @@ async function cmdBuyCard(args, senderJid, economy, reply) {
 
   const card = CARD_INDEX[listing.cardId];
   return reply(
-`✅  *PURCHASE COMPLETE*
+`âœ…  *PURCHASE COMPLETE*
 
 *${card?.cardName || listing.cardId}*  acquired!
-💰  Spent: *${ZENI()}${listing.price.toLocaleString()}*
-💳  Balance: *${ZENI()}${(balance - listing.price).toLocaleString()}*
+ðŸ’°  Spent: *${ZENI()}${listing.price.toLocaleString()}*
+ðŸ’³  Balance: *${ZENI()}${(balance - listing.price).toLocaleString()}*
 
-_View it with_ *.g coll*`
+_View it with_ *${P()} coll*`
   );
 }
 
-// ─── 7.12  .g bid <amount> ───────────────────────────────────────────────────
+// â”€â”€â”€ 7.12  ${P()} bid <amount> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdBid(args, senderJid, economy, reply) {
   const amount = parseInt(String(args[0] || '').replace(/,/g, ''));
-  if (!amount || amount <= 0) return reply('❌ Usage: *.g bid <amount>*\nExample: `.g bid 300000`');
+  if (!amount || amount <= 0) return reply('âŒ Usage: *${P()} bid <amount>*\nExample: `${P()} bid 300000`');
 
   const auction = await CardMarket.findOne({ status: 'active', type: 'auction', auctionEndsAt: { $gt: new Date() } });
-  if (!auction) return reply('❌ No active auction right now.');
-  if (auction.sellerId === senderJid) return reply('❌ Can\'t bid on your own auction.');
+  if (!auction) return reply('âŒ No active auction right now.');
+  if (auction.sellerId === senderJid) return reply('âŒ Can\'t bid on your own auction.');
 
   const minBid = auction.currentBid > 0 ? auction.currentBid + 1 : auction.price;
-  if (amount < minBid) return reply(`❌ Min bid is *${ZENI()}${minBid.toLocaleString()}*. Current: ${ZENI()}${auction.currentBid.toLocaleString()}`);
+  if (amount < minBid) return reply(`âŒ Min bid is *${ZENI()}${minBid.toLocaleString()}*. Current: ${ZENI()}${auction.currentBid.toLocaleString()}`);
 
   const balance = economy.getBalance(senderJid);
-  if (balance < amount) return reply(`❌ Not enough funds. Balance: ${ZENI()}${balance.toLocaleString()}`);
+  if (balance < amount) return reply(`âŒ Not enough funds. Balance: ${ZENI()}${balance.toLocaleString()}`);
 
   auction.bids.push({ bidderId: senderJid, amount });
   auction.currentBid   = amount;
@@ -656,224 +657,224 @@ async function cmdBid(args, senderJid, economy, reply) {
   const card     = CARD_INDEX[auction.cardId];
   const timeLeft = Math.max(0, Math.round((new Date(auction.auctionEndsAt) - Date.now()) / 60000));
   return reply(
-`🔨  *BID PLACED*
+`ðŸ”¨  *BID PLACED*
 
 *${card?.cardName || auction.cardId}*
-💰  Your bid: *${ZENI()}${amount.toLocaleString()}*
-⏱️  Time left: *${timeLeft} min${timeLeft !== 1 ? 's' : ''}*
+ðŸ’°  Your bid: *${ZENI()}${amount.toLocaleString()}*
+â±ï¸  Time left: *${timeLeft} min${timeLeft !== 1 ? 's' : ''}*
 
-_Outbid someone with_ *.g bid <higher>*`
+_Outbid someone with_ *${P()} bid <higher>*`
   );
 }
 
-// ─── 7.13  .g deck ───────────────────────────────────────────────────────────
+// â”€â”€â”€ 7.13  ${P()} deck â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdDeck(senderJid, reply) {
   const deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
   const slotMap   = {};
   for (const uc of deckCards) slotMap[uc.mainDeckSlot] = uc;
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🃏  *YOUR DECK*  (${deckCards.length}/${MAIN_DECK_SIZE})\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸƒ  *YOUR DECK*  (${deckCards.length}/${MAIN_DECK_SIZE})\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
 
   for (let slot = 1; slot <= MAIN_DECK_SIZE; slot++) {
     const uc = slotMap[slot];
-    if (!uc) { msg += `*${slot}.*  ░ _(empty)_\n`; continue; }
+    if (!uc) { msg += `*${slot}.*  â–‘ _(empty)_\n`; continue; }
     const card   = CARD_INDEX[uc.cardId];
     const stat   = await CardStat.findOne({ cardId: uc.cardId });
     const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[String(card?.tier)] || 200);
-    msg += `*${slot}.*  ${TIER_STARS[String(card?.tier)] || '✦'}  *${card?.cardName || uc.cardId}*  ${rarity.emoji}\n`;
+    msg += `*${slot}.*  ${TIER_STARS[String(card?.tier)] || 'âœ¦'}  *${card?.cardName || uc.cardId}*  ${rarity.emoji}\n`;
   }
 
-  msg += `\n_*.g t2deck <coll#>* to add  •  *.g swap card <a> and <b>* to rearrange_`;
+  msg += `\n_*${P()} t2deck <coll#>* to add  â€¢  *${P()} swap card <a> and <b>* to rearrange_`;
   return reply(msg);
 }
 
-// ─── 7.14  .g swap card <a> and <b> ─────────────────────────────────────────
+// â”€â”€â”€ 7.14  ${P()} swap card <a> and <b> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdSwapCard(args, senderJid, reply) {
   const nums = args.join(' ').replace(/and/gi, '').match(/\d+/g);
-  if (!nums || nums.length < 2) return reply('❌ Usage: *.g swap card <slot-a> and <slot-b>*\nExample: `.g swap card 2 and 4`');
+  if (!nums || nums.length < 2) return reply('âŒ Usage: *${P()} swap card <slot-a> and <slot-b>*\nExample: `${P()} swap card 2 and 4`');
   const [slotA, slotB] = [parseInt(nums[0]), parseInt(nums[1])];
   if (slotA < 1 || slotA > MAIN_DECK_SIZE || slotB < 1 || slotB > MAIN_DECK_SIZE) {
-    return reply(`❌ Slots must be between 1 and ${MAIN_DECK_SIZE}.`);
+    return reply(`âŒ Slots must be between 1 and ${MAIN_DECK_SIZE}.`);
   }
   const [cardA] = await UserCard.find({ userId: senderJid, inMainDeck: true, mainDeckSlot: slotA });
   const [cardB] = await UserCard.find({ userId: senderJid, inMainDeck: true, mainDeckSlot: slotB });
-  if (!cardA && !cardB) return reply(`❌ Both slots ${slotA} and ${slotB} are empty.`);
+  if (!cardA && !cardB) return reply(`âŒ Both slots ${slotA} and ${slotB} are empty.`);
   if (cardA) { cardA.mainDeckSlot = slotB; await cardA.save(); }
   if (cardB) { cardB.mainDeckSlot = slotA; await cardB.save(); }
   const nameA = cardA ? (CARD_INDEX[cardA.cardId]?.cardName || cardA.cardId) : '_(empty)_';
   const nameB = cardB ? (CARD_INDEX[cardB.cardId]?.cardName || cardB.cardId) : '_(empty)_';
-  return reply(`🔀  *SWAPPED*\n\nSlot *${slotA}* ↔ Slot *${slotB}*\n_${nameA}_  ↔  _${nameB}_`);
+  return reply(`ðŸ”€  *SWAPPED*\n\nSlot *${slotA}* â†” Slot *${slotB}*\n_${nameA}_  â†”  _${nameB}_`);
 }
 
-// ─── 7.15  .g t2deck <coll#> ─────────────────────────────────────────────────
+// â”€â”€â”€ 7.15  ${P()} t2deck <coll#> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdT2Deck(args, senderJid, reply) {
   const collNum = parseInt(args[0]);
-  if (!collNum) return reply('❌ Usage: *.g t2deck <collection-number>*\nExample: `.g t2deck 300`');
+  if (!collNum) return reply('âŒ Usage: *${P()} t2deck <collection-number>*\nExample: `${P()} t2deck 300`');
   const owned  = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const target = owned[collNum - 1];
-  if (!target) return reply(`❌ No card at collection position #${collNum}.`);
-  if (target.inMainDeck) return reply('⚠️ That card is already in your deck.');
+  if (!target) return reply(`âŒ No card at collection position #${collNum}.`);
+  if (target.inMainDeck) return reply('âš ï¸ That card is already in your deck.');
   const deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true });
-  if (deckCards.length >= MAIN_DECK_SIZE) return reply(`❌ Deck is full (${MAIN_DECK_SIZE}/${MAIN_DECK_SIZE}). Remove a card first with *.g t2coll <slot>*`);
+  if (deckCards.length >= MAIN_DECK_SIZE) return reply(`âŒ Deck is full (${MAIN_DECK_SIZE}/${MAIN_DECK_SIZE}). Remove a card first with *${P()} t2coll <slot>*`);
   const usedSlots = new Set(deckCards.map(c => c.mainDeckSlot));
   let freeSlot = null;
   for (let s = 1; s <= MAIN_DECK_SIZE; s++) { if (!usedSlots.has(s)) { freeSlot = s; break; } }
   target.inMainDeck = true; target.mainDeckSlot = freeSlot; await target.save();
   const card = CARD_INDEX[target.cardId];
-  return reply(`✅  *${card?.cardName || target.cardId}*  →  Deck Slot *#${freeSlot}*\n_Use_ *.g deck* _to view._`);
+  return reply(`âœ…  *${card?.cardName || target.cardId}*  â†’  Deck Slot *#${freeSlot}*\n_Use_ *${P()} deck* _to view._`);
 }
 
-// ─── 7.16  .g t2coll <deck#> ─────────────────────────────────────────────────
+// â”€â”€â”€ 7.16  ${P()} t2coll <deck#> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdT2Coll(args, senderJid, reply) {
   const deckNum = parseInt(args[0]);
-  if (!deckNum) return reply('❌ Usage: *.g t2coll <deck-slot>*\nExample: `.g t2coll 4`');
+  if (!deckNum) return reply('âŒ Usage: *${P()} t2coll <deck-slot>*\nExample: `${P()} t2coll 4`');
   const [target] = await UserCard.find({ userId: senderJid, inMainDeck: true, mainDeckSlot: deckNum });
-  if (!target) return reply(`❌ No card in deck slot *#${deckNum}*.`);
+  if (!target) return reply(`âŒ No card in deck slot *#${deckNum}*.`);
   target.inMainDeck = false; target.mainDeckSlot = null; await target.save();
   const card = CARD_INDEX[target.cardId];
-  return reply(`✅  *${card?.cardName || target.cardId}*  returned to collection from slot #${deckNum}.`);
+  return reply(`âœ…  *${card?.cardName || target.cardId}*  returned to collection from slot #${deckNum}.`);
 }
 
-// ─── 7.17  .g t2cdeck <DeckName> <coll#> ────────────────────────────────────
+// â”€â”€â”€ 7.17  ${P()} t2cdeck <DeckName> <coll#> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdT2CDeck(args, senderJid, reply) {
-  if (args.length < 2) return reply('❌ Usage: *.g t2cdeck <Deck Name> <coll-number>*\nExample: `.g t2cdeck My Bawls 12`');
+  if (args.length < 2) return reply('âŒ Usage: *${P()} t2cdeck <Deck Name> <coll-number>*\nExample: `${P()} t2cdeck My Bawls 12`');
   const collNum  = parseInt(args[args.length - 1]);
   const deckName = args.slice(0, -1).join(' ');
-  if (!collNum || !deckName) return reply('❌ Usage: *.g t2cdeck <Deck Name> <coll-number>*');
+  if (!collNum || !deckName) return reply('âŒ Usage: *${P()} t2cdeck <Deck Name> <coll-number>*');
   const deck = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${deckName}$`, 'i') });
-  if (!deck) return reply(`❌ No deck named *"${deckName}"*. Create one with *.g create deck ${deckName}*`);
+  if (!deck) return reply(`âŒ No deck named *"${deckName}"*. Create one with *${P()} create deck ${deckName}*`);
   const owned  = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const target = owned[collNum - 1];
-  if (!target) return reply(`❌ No card at collection position #${collNum}.`);
-  if (target.inCustomDeck) return reply('⚠️ That card is already in a custom deck.');
+  if (!target) return reply(`âŒ No card at collection position #${collNum}.`);
+  if (target.inCustomDeck) return reply('âš ï¸ That card is already in a custom deck.');
   deck.cards.push(target._id); await deck.save();
   target.inCustomDeck = true; target.customDeckName = deck.name; target.customDeckSlot = deck.cards.length; await target.save();
   const card = CARD_INDEX[target.cardId];
-  return reply(`✅  *${card?.cardName || target.cardId}*  added to *"${deck.name}"*  (slot #${deck.cards.length})`);
+  return reply(`âœ…  *${card?.cardName || target.cardId}*  added to *"${deck.name}"*  (slot #${deck.cards.length})`);
 }
 
-// ─── 7.18  .g t2ccoll <DeckName> <slot#> ────────────────────────────────────
+// â”€â”€â”€ 7.18  ${P()} t2ccoll <DeckName> <slot#> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdT2CColl(args, senderJid, reply) {
-  if (args.length < 2) return reply('❌ Usage: *.g t2ccoll <Deck Name> <slot-number>*\nExample: `.g t2ccoll My Bawls 3`');
+  if (args.length < 2) return reply('âŒ Usage: *${P()} t2ccoll <Deck Name> <slot-number>*\nExample: `${P()} t2ccoll My Bawls 3`');
   const slotNum  = parseInt(args[args.length - 1]);
   const deckName = args.slice(0, -1).join(' ');
   const deck = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${deckName}$`, 'i') });
-  if (!deck) return reply(`❌ No deck named *"${deckName}"*.`);
+  if (!deck) return reply(`âŒ No deck named *"${deckName}"*.`);
   const cardObjId = deck.cards[slotNum - 1];
-  if (!cardObjId) return reply(`❌ No card in slot #${slotNum} of *"${deckName}"*.`);
+  if (!cardObjId) return reply(`âŒ No card in slot #${slotNum} of *"${deckName}"*.`);
   const uc = await UserCard.findById(cardObjId);
-  if (!uc) return reply('❌ Card record not found.');
+  if (!uc) return reply('âŒ Card record not found.');
   deck.cards.splice(slotNum - 1, 1); await deck.save();
   uc.inCustomDeck = false; uc.customDeckName = null; uc.customDeckSlot = null; await uc.save();
   const card = CARD_INDEX[uc.cardId];
-  return reply(`✅  *${card?.cardName || uc.cardId}*  returned to collection from *"${deck.name}"*.`);
+  return reply(`âœ…  *${card?.cardName || uc.cardId}*  returned to collection from *"${deck.name}"*.`);
 }
 
-// ─── 7.19  .g create deck <name>  (admin/owner only) ────────────────────────
+// â”€â”€â”€ 7.19  ${P()} create deck <name>  (admin/owner only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdCreateDeck(deckName, senderJid, reply) {
-  if (!deckName) return reply('❌ Usage: *.g create deck <name>*\nExample: `.g create deck My Bawls`');
+  if (!deckName) return reply('âŒ Usage: *${P()} create deck <name>*\nExample: `${P()} create deck My Bawls`');
   const exists = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${deckName}$`, 'i') });
-  if (exists) return reply(`❌ You already have a deck called *"${deckName}"*.`);
+  if (exists) return reply(`âŒ You already have a deck called *"${deckName}"*.`);
   await CardDeck.create({ userId: senderJid, name: deckName, cards: [] });
   return reply(
-`✅  *CUSTOM DECK CREATED*
+`âœ…  *CUSTOM DECK CREATED*
 
-📁  *"${deckName}"*
-_Add cards:_ *.g t2cdeck ${deckName} <coll#>*
-_View:_ *.g cdeck ${deckName}*
-_List all:_ *.g list decks*`
+ðŸ“  *"${deckName}"*
+_Add cards:_ *${P()} t2cdeck ${deckName} <coll#>*
+_View:_ *${P()} cdeck ${deckName}*
+_List all:_ *${P()} list decks*`
   );
 }
 
-// ─── 7.20  .g cdeck <name> [slot#] ──────────────────────────────────────────
+// â”€â”€â”€ 7.20  ${P()} cdeck <name> [slot#] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdCDeck(args, senderJid, reply) {
   const slotMaybe = parseInt(args[args.length - 1]);
   let deckName, slotNum = null;
   if (!isNaN(slotMaybe)) { slotNum = slotMaybe; deckName = args.slice(0, -1).join(' '); }
   else deckName = args.join(' ');
-  if (!deckName) return reply('❌ Usage: *.g cdeck <Deck Name>* or *.g cdeck <Deck Name> <slot#>*');
+  if (!deckName) return reply('âŒ Usage: *${P()} cdeck <Deck Name>* or *${P()} cdeck <Deck Name> <slot#>*');
 
   const deck = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${deckName}$`, 'i') }).populate('cards');
-  if (!deck) return reply(`❌ No deck named *"${deckName}"*. Use *.g list decks* to see yours.`);
+  if (!deck) return reply(`âŒ No deck named *"${deckName}"*. Use *${P()} list decks* to see yours.`);
 
   if (slotNum !== null) {
     const uc = deck.cards[slotNum - 1];
-    if (!uc) return reply(`❌ No card in slot #${slotNum} of *"${deckName}"*.`);
+    if (!uc) return reply(`âŒ No card in slot #${slotNum} of *"${deckName}"*.`);
     const card   = CARD_INDEX[uc.cardId];
     const stat   = await CardStat.findOne({ cardId: uc.cardId });
     const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || 200);
     return reply(
-`📁  *"${deckName}"*  —  Slot *#${slotNum}*
+`ðŸ“  *"${deckName}"*  â€”  Slot *#${slotNum}*
 
-${TIER_STARS[String(card?.tier)] || '✦'}  *${card?.cardName || uc.cardId}*
+${TIER_STARS[String(card?.tier)] || 'âœ¦'}  *${card?.cardName || uc.cardId}*
 _${card?.animeName}_
-${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
-🎨  Art by *${card?.creator || 'Unknown'}*`
+${rarity.emoji}  ${rarity.label}  â€¢  Copy *#${uc.copyNumber}*
+ðŸŽ¨  Art by *${card?.creator || 'Unknown'}*`
     );
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
-  if (!deck.cards.length) { msg += '_(Empty — add cards with *.g t2cdeck*)_'; }
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“  *${deck.name}*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  if (!deck.cards.length) { msg += '_(Empty â€” add cards with *${P()} t2cdeck*)_'; }
   else {
     for (let i = 0; i < deck.cards.length; i++) {
       const uc   = deck.cards[i];
       const card = CARD_INDEX[uc.cardId];
-      msg += `*${i + 1}.*  ${TIER_STARS[String(card?.tier)] || '✦'}  *${card?.cardName || uc.cardId}*  _(${card?.animeName || ''})_\n`;
+      msg += `*${i + 1}.*  ${TIER_STARS[String(card?.tier)] || 'âœ¦'}  *${card?.cardName || uc.cardId}*  _(${card?.animeName || ''})_\n`;
     }
   }
   msg += `\n_${deck.cards.length} card${deck.cards.length !== 1 ? 's' : ''} in deck_`;
   return reply(msg);
 }
 
-// ─── 7.21  .g list decks ─────────────────────────────────────────────────────
+// â”€â”€â”€ 7.21  ${P()} list decks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdListDecks(senderJid, reply) {
   const decks = await CardDeck.find({ userId: senderJid });
-  if (!decks.length) return reply('📭 No custom decks.\n_Create one with_ *.g create deck <name>*');
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📂  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
-  decks.forEach((d, i) => { msg += `*${i + 1}.*  📁  *${d.name}*  —  ${d.cards.length} card${d.cards.length !== 1 ? 's' : ''}\n`; });
-  msg += `\n_View: *.g cdeck <name>*_`;
+  if (!decks.length) return reply('ðŸ“­ No custom decks.\n_Create one with_ *${P()} create deck <name>*');
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“‚  *YOUR CUSTOM DECKS*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  decks.forEach((d, i) => { msg += `*${i + 1}.*  ðŸ“  *${d.name}*  â€”  ${d.cards.length} card${d.cards.length !== 1 ? 's' : ''}\n`; });
+  msg += `\n_View: *${P()} cdeck <name>*_`;
   return reply(msg);
 }
 
-// ─── 7.22  .g rename deck <old> | <new> ─────────────────────────────────────
+// â”€â”€â”€ 7.22  ${P()} rename deck <old> | <new> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdRenameDeck(args, senderJid, reply) {
   const raw   = args.join(' ');
   const parts = raw.split('|').map(s => s.trim());
   if (parts.length < 2 || !parts[0] || !parts[1]) {
-    return reply('❌ Usage: *.g rename deck <Old Name> | <New Name>*\nExample: `.g rename deck Alchemy | My Bawls`');
+    return reply('âŒ Usage: *${P()} rename deck <Old Name> | <New Name>*\nExample: `${P()} rename deck Alchemy | My Bawls`');
   }
   const [oldName, newName] = parts;
   const deck = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${oldName}$`, 'i') });
-  if (!deck) return reply(`❌ No deck named *"${oldName}"*.`);
+  if (!deck) return reply(`âŒ No deck named *"${oldName}"*.`);
   await UserCard.updateMany({ userId: senderJid, customDeckName: deck.name }, { $set: { customDeckName: newName } });
   deck.name = newName; await deck.save();
-  return reply(`✅  *"${oldName}"*  →  *"${newName}"*`);
+  return reply(`âœ…  *"${oldName}"*  â†’  *"${newName}"*`);
 }
 
-// ─── 7.23  .g delete deck <name> ─────────────────────────────────────────────
+// â”€â”€â”€ 7.23  ${P()} delete deck <name> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdDeleteDeck(args, senderJid, reply) {
   const deckName = args.join(' ').trim();
-  if (!deckName) return reply('❌ Usage: *.g delete deck <name>*');
+  if (!deckName) return reply('âŒ Usage: *${P()} delete deck <name>*');
   const deck = await CardDeck.findOne({ userId: senderJid, name: new RegExp(`^${deckName}$`, 'i') }).populate('cards');
-  if (!deck) return reply(`❌ No deck named *"${deckName}"*.`);
+  if (!deck) return reply(`âŒ No deck named *"${deckName}"*.`);
   const cardCount = deck.cards.length;
   if (cardCount > 0) await UserCard.deleteMany({ _id: { $in: deck.cards.map(c => c._id) } });
   await CardDeck.deleteOne({ _id: deck._id });
   return reply(
-`🗑️  *DECK DELETED*
+`ðŸ—‘ï¸  *DECK DELETED*
 
 *"${deckName}"* permanently removed.
-${cardCount > 0 ? `⚠️  *${cardCount} card${cardCount !== 1 ? 's' : ''}* inside were also deleted.` : '_The deck was empty._'}`
+${cardCount > 0 ? `âš ï¸  *${cardCount} card${cardCount !== 1 ? 's' : ''}* inside were also deleted.` : '_The deck was empty._'}`
   );
 }
 
-// ─── 7.24  .g cltr <series> ──────────────────────────────────────────────────
+// â”€â”€â”€ 7.24  ${P()} cltr <series> â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdCollector(args, reply) {
   const seriesName = args.join(' ').trim();
-  if (!seriesName) return reply('❌ Usage: *.g cltr <series name>*\nExample: `.g cltr Dragon Ball`');
+  if (!seriesName) return reply('âŒ Usage: *${P()} cltr <series name>*\nExample: `${P()} cltr Dragon Ball`');
 
   const seriesCards = ALL_CARDS.filter(c => c.animeName.toLowerCase().includes(seriesName.toLowerCase()));
-  if (!seriesCards.length) return reply(`❌ No cards found for series *"${seriesName}"*.`);
+  if (!seriesCards.length) return reply(`âŒ No cards found for series *"${seriesName}"*.`);
 
   const cardIdSet = new Set(seriesCards.map(c => c.id));
   const owned     = await UserCard.find({ cardId: { $in: [...cardIdSet] } });
@@ -882,49 +883,49 @@ async function cmdCollector(args, reply) {
   for (const uc of owned) userCounts[uc.userId] = (userCounts[uc.userId] || 0) + 1;
 
   const sorted = Object.entries(userCounts).sort(([, a], [, b]) => b - a).slice(0, 3);
-  if (!sorted.length) return reply(`📭 Nobody owns any *${seriesCards[0].animeName}* cards yet.`);
+  if (!sorted.length) return reply(`ðŸ“­ Nobody owns any *${seriesCards[0].animeName}* cards yet.`);
 
-  const medals = ['🥇', '🥈', '🥉'];
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🏆  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const medals = ['ðŸ¥‡', 'ðŸ¥ˆ', 'ðŸ¥‰'];
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ†  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
   sorted.forEach(([uid, count], i) => {
-    msg += `${medals[i]}  @${uid.split('@')[0]}  —  *${count}* card${count !== 1 ? 's' : ''}\n`;
+    msg += `${medals[i]}  @${uid.split('@')[0]}  â€”  *${count}* card${count !== 1 ? 's' : ''}\n`;
   });
   msg += `\n_Series total: ${seriesCards.length} cards_`;
   return reply(msg);
 }
 
-// ─── 7.25  .g series <name>  (mod only) ──────────────────────────────────────
+// â”€â”€â”€ 7.25  ${P()} series <name>  (mod only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdSeries(args, senderJid, reply) {
   const inst = getInst();
   if (!inst.modJids.has(senderJid) && senderJid !== inst.ownerJid) {
-    return reply('❌ This command is for moderators only.');
+    return reply('âŒ This command is for moderators only.');
   }
   const seriesName = args.join(' ').trim();
-  if (!seriesName) return reply('❌ Usage: *.g series <series name>*');
+  if (!seriesName) return reply('âŒ Usage: *${P()} series <series name>*');
 
   const cards = ALL_CARDS.filter(c => c.animeName.toLowerCase().includes(seriesName.toLowerCase()));
-  if (!cards.length) return reply(`❌ No series found matching *"${seriesName}"*.`);
+  if (!cards.length) return reply(`âŒ No series found matching *"${seriesName}"*.`);
 
   const tierOrder = { S: 0, '6': 1, '5': 2, '4': 3, '3': 4, '2': 5, '1': 6 };
   cards.sort((a, b) => (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9));
 
   const actualSeries = cards[0].animeName;
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“‹  *${actualSeries.toUpperCase()}*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
   let currentTier = null;
   for (const card of cards) {
     const t = String(card.tier);
     if (t !== currentTier) { msg += `\n${TIER_STARS[t]}  *${TIER_LABEL[t]}*\n`; currentTier = t; }
-    msg += `  •  \`${card.id}\`  ${card.cardName}  _by ${card.creator || 'Unknown'}_\n`;
+    msg += `  â€¢  \`${card.id}\`  ${card.cardName}  _by ${card.creator || 'Unknown'}_\n`;
   }
   msg += `\n_${cards.length} card${cards.length !== 1 ? 's' : ''} total_`;
   return reply(msg);
 }
 
-// ─── 7.26  .g spawn | <name or id> | <tier>  (owner DMs only) ───────────────
+// â”€â”€â”€ 7.26  ${P()} spawn | <name or id> | <tier>  (owner DMs only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdOwnerSpawn(rawArgs, senderJid, chatId, reply) {
   const inst = getInst();
-  if (senderJid !== inst.ownerJid) return reply('❌ This command is exclusive to the server owner.');
-  if (chatId.endsWith('@g.us')) return reply('❌ The *.g spawn* command only works in DMs with Olivier. Cannot be used in group chats.');
+  if (senderJid !== inst.ownerJid) return reply('âŒ This command is exclusive to the server owner.');
+  if (chatId.endsWith('@g.us')) return reply('âŒ The *${P()} spawn* command only works in DMs with Olivier. Cannot be used in group chats.');
 
   const parts   = rawArgs.split('|').map(s => s.trim()).filter(Boolean);
   const query   = parts[0] || '';
@@ -932,12 +933,12 @@ async function cmdOwnerSpawn(rawArgs, senderJid, chatId, reply) {
 
   if (!query) {
     return reply(
-`❌ Usage: *.g spawn | <card name or ID> | <tier>*
+`âŒ Usage: *${P()} spawn | <card name or ID> | <tier>*
 
 Examples:
-\`.g spawn | Edward Elric | 5\`
-\`.g spawn | 3-04521\`
-\`.g spawn | Naruto | S\``
+\`${P()} spawn | Edward Elric | 5\`
+\`${P()} spawn | 3-04521\`
+\`${P()} spawn | Naruto | S\``
     );
   }
 
@@ -948,23 +949,23 @@ Examples:
     card = pool[0];
   }
 
-  if (!card) return reply(`❌ No card found matching: *${query}*${tierArg ? ` (Tier ${tierArg})` : ''}`);
+  if (!card) return reply(`âŒ No card found matching: *${query}*${tierArg ? ` (Tier ${tierArg})` : ''}`);
 
-  if (inst.activeGroups.size === 0) return reply('❌ Card system is not ON in any group. Turn it on first with *.g cards on* in the target group.');
+  if (inst.activeGroups.size === 0) return reply('âŒ Card system is not ON in any group. Turn it on first with *${P()} cards on* in the target group.');
 
   // Send to the first active group found
   const targetGroup = [...inst.activeGroups][0];
   const result = await doSpawn(card.id, String(card.tier), true, targetGroup);
   if (result) {
-    return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to active group.`);
+    return reply(`âœ¨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  â†’  sent to active group.`);
   } else {
-    return reply('❌ Spawn failed. Check that the card image URL is still live.');
+    return reply('âŒ Spawn failed. Check that the card image URL is still live.');
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 8 — MAIN COMMAND ROUTER
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 8 â€” MAIN COMMAND ROUTER
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Call this from engine.js inside your messages.upsert handler,
@@ -979,24 +980,36 @@ Examples:
  * @param {object} opts.economy       Your economy module (getBalance, addMoney, removeMoney)
  * @param {boolean} opts.isOwner      Is sender the bot owner?
  * @param {boolean} opts.senderIsAdmin Is sender a group admin?
- * @returns {boolean} true if a card command was matched and handled — caller should return early
+ * @returns {boolean} true if a card command was matched and handled â€” caller should return early
  */
 async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin }) {
   const inst   = getInst();
-  const P      = botConfig.getPrefix().toLowerCase();
   const reply  = (text) => inst.sock_ref.sendMessage(chatId, { text });
   const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || null;
 
-  // Helper: check starts with prefix + command word
-  const is  = (cmd)       => lowerTxt === `${P} ${cmd}`;
-  const has = (cmd)       => lowerTxt.startsWith(`${P} ${cmd} `);
-  const arg = (skipWords) => txt.trim().split(/\s+/).slice(skipWords);
+  // Helper: check starts with prefix + command word (flexible space)
+  const is = (cmd) => {
+    const p = P();
+    return lowerTxt === `${p}${cmd}` || lowerTxt === `${p} ${cmd}`;
+  };
+  const has = (cmd) => {
+    const p = P();
+    return lowerTxt.startsWith(`${p}${cmd} `) || lowerTxt.startsWith(`${p} ${cmd} `);
+  };
+  const arg = (skipWords) => {
+    const p = P();
+    const parts = txt.trim().split(/\s+/);
+    // If the first part is JUST the prefix (e.g. ".g"), we skip 'skipWords'
+    if (parts[0].toLowerCase() === p) return parts.slice(skipWords);
+    // If the first part STARTS with prefix (e.g. ".gclaim"), we skip 'skipWords - 1'
+    return parts.slice(skipWords - 1);
+  };
 
-  // ── Toggle ──────────────────────────────────────────────────────────────
+  // â”€â”€ Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (is('cards on'))  return (await cmdToggle('on',  senderJid, chatId, reply, senderIsAdmin)), true;
   if (is('cards off')) return (await cmdToggle('off', senderJid, chatId, reply, senderIsAdmin)), true;
 
-  // ── Role Management (Owner Only) ─────────────────────────────────────────
+  // â”€â”€ Role Management (Owner Only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (isOwner) {
     if (has('addmod'))   return (await cmdManageRole('mod',   'add', mentioned, reply)), true;
     if (has('delmod'))   return (await cmdManageRole('mod',   'del', mentioned, reply)), true;
@@ -1004,51 +1017,51 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     if (has('deladmin')) return (await cmdManageRole('admin', 'del', mentioned, reply)), true;
   }
 
-  // ── Claim ────────────────────────────────────────────────────────────────
+  // â”€â”€ Claim â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('claim') || is('claim')) {
     await cmdClaim(arg(2)[0] || null, senderJid, reply);
     return true;
   }
 
-  // ── Collection views ─────────────────────────────────────────────────────
+  // â”€â”€ Collection views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (is('coll'))                                   return (await cmdColl(senderJid, reply)), true;
   if (is('card --tier') || is('card--tier'))        return (await cmdCollByTier(senderJid, reply)), true;
   if (is('duplicate') || is('dupes'))               return (await cmdDuplicate(senderJid, reply)), true;
 
-  // ── Merge ────────────────────────────────────────────────────────────────
+  // â”€â”€ Merge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('merge') || is('merge'))  return (await cmdMerge(arg(2)[0] || null, senderJid, reply)), true;
 
-  // ── Card search ──────────────────────────────────────────────────────────
+  // â”€â”€ Card search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('cs'))  return (await cmdSearchCard(arg(2), reply)), true;
 
-  // ── Give card ────────────────────────────────────────────────────────────
+  // â”€â”€ Give card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('cg') || is('cg'))  return (await cmdGiveCard(arg(2), senderJid, mentioned, reply)), true;
 
-  // ── Sell card ─────────────────────────────────────────────────────────────
+  // â”€â”€ Sell card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('sc'))  return (await cmdSellCard(arg(2), senderJid, reply)), true;
 
-  // ── Cancel sale ──────────────────────────────────────────────────────────
+  // â”€â”€ Cancel sale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (is('cancel sale'))  return (await cmdCancelSale(senderJid, reply)), true;
 
-  // ── Buy card ─────────────────────────────────────────────────────────────
+  // â”€â”€ Buy card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (is('buycard') || has('buycard'))  return (await cmdBuyCard(arg(2), senderJid, economy, reply)), true;
 
-  // ── Bid ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Bid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('bid'))  return (await cmdBid(arg(2), senderJid, economy, reply)), true;
 
-  // ── Main deck ────────────────────────────────────────────────────────────
+  // â”€â”€ Main deck â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (is('deck'))         return (await cmdDeck(senderJid, reply)), true;
   if (has('swap card'))   return (await cmdSwapCard(arg(3), senderJid, reply)), true;
 
-  // ── t2cdeck / t2ccoll must be checked BEFORE t2deck / t2coll (longer match first)
+  // â”€â”€ t2cdeck / t2ccoll must be checked BEFORE t2deck / t2coll (longer match first)
   if (has('t2cdeck'))  return (await cmdT2CDeck(arg(2), senderJid, reply)), true;
   if (has('t2ccoll'))  return (await cmdT2CColl(arg(2), senderJid, reply)), true;
   if (has('t2deck'))   return (await cmdT2Deck(arg(2), senderJid, reply)), true;
   if (has('t2coll'))   return (await cmdT2Coll(arg(2), senderJid, reply)), true;
 
-  // ── Custom decks ─────────────────────────────────────────────────────────
+  // â”€â”€ Custom decks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('create deck')) {
-    if (!isOwner && !inst.adminJids.has(senderJid)) return reply('❌ Custom deck creation is admin-only.'), true;
+    if (!isOwner && !inst.adminJids.has(senderJid)) return reply('âŒ Custom deck creation is admin-only.'), true;
     return (await cmdCreateDeck(arg(3).join(' '), senderJid, reply)), true;
   }
   if (is('list decks'))    return (await cmdListDecks(senderJid, reply)), true;
@@ -1056,31 +1069,31 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (has('rename deck'))  return (await cmdRenameDeck(arg(3), senderJid, reply)), true;
   if (has('delete deck'))  return (await cmdDeleteDeck(arg(3), senderJid, reply)), true;
 
-  // ── Discovery ────────────────────────────────────────────────────────────
+  // â”€â”€ Discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('cltr'))    return (await cmdCollector(arg(2), reply)), true;
   if (has('series'))  return (await cmdSeries(arg(2), senderJid, reply)), true;
 
-  // ── Owner spawn (DMs only) ────────────────────────────────────────────────
+  // â”€â”€ Owner spawn (DMs only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (has('spawn') || is('spawn')) {
     const rawArgs = txt.trim().slice(`${botConfig.getPrefix()} spawn`.length).trim();
     await cmdOwnerSpawn(rawArgs, senderJid, chatId, reply);
     return true;
   }
 
-  return false; // No card command matched — let engine.js continue to other commands
+  return false; // No card command matched â€” let engine.js continue to other commands
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 9 — INIT
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SECTION 9 â€” INIT
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Call this once in engine.js after your socket is open.
  *
  * @param {object}   sock    Baileys socket instance
- * @param {string[]} admins  JIDs who can toggle .g cards on/off
- * @param {string[]} mods    JIDs who can use .g series
- * @param {string}   owner   Server owner JID (exclusive .g spawn access)
+ * @param {string[]} admins  JIDs who can toggle ${P()} cards on/off
+ * @param {string[]} mods    JIDs who can use ${P()} series
+ * @param {string}   owner   Server owner JID (exclusive ${P()} spawn access)
  */
 function init(sock, admins = [], mods = [], owner = null) {
   const inst = getInst();
@@ -1092,5 +1105,6 @@ function init(sock, admins = [], mods = [], owner = null) {
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 module.exports = { init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances };
+
