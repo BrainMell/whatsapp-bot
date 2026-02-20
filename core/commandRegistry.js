@@ -193,6 +193,28 @@ const COMMAND_REGISTRY = {
     { cmd: 'penalty', desc: 'Score a penalty goal against the bot.', usage: 'penalty <amt> <l/c/r>' },
     { cmd: 'guess', desc: 'Guess a number between 1-10.', usage: 'guess <amt> <1-10>' }
   ],
+  CARDS: [
+    { cmd: 'g claim', desc: 'Claim a spawned card by its ID.', usage: 'g claim <id>' },
+    { cmd: 'g coll', desc: 'View your full card collection.', usage: 'g coll' },
+    { cmd: 'g card --tier', desc: 'View your collection sorted by tier.', usage: 'g card --tier' },
+    { cmd: 'g deck', desc: 'View your 12-slot main card deck.', usage: 'g deck' },
+    { cmd: 'g t2deck', desc: 'Move a card from collection to main deck.', usage: 'g t2deck <coll#>' },
+    { cmd: 'g t2coll', desc: 'Move a card from main deck back to collection.', usage: 'g t2coll <deck#>' },
+    { cmd: 'g swap card', desc: 'Rearrange cards in your main deck.', usage: 'g swap card <a> and <b>' },
+    { cmd: 'g buycard', desc: 'Browse the card market or buy a listing.', usage: 'g buycard [n]' },
+    { cmd: 'g sc', desc: 'List a card from your deck for sale.', usage: 'g sc <slot> <price>' },
+    { cmd: 'g cancel sale', desc: 'Remove your active sale listing.', usage: 'g cancel sale' },
+    { cmd: 'g bid', desc: 'Place a bid on an active card auction.', usage: 'g bid <amount>' },
+    { cmd: 'g merge', desc: 'Combine 2 copies of the same card into 1 better copy.', usage: 'g merge <id>' },
+    { cmd: 'g cs', desc: 'Search for card availability and stats.', usage: 'g cs <name> [tier n]' },
+    { cmd: 'g cg', desc: 'Give a card from your deck to another user.', usage: 'g cg @user Deck <n>' },
+    { cmd: 'g cltr', desc: 'See top collectors of a specific series.', usage: 'g cltr <series>' },
+    { cmd: 'g list decks', desc: 'List all your custom card decks.', usage: 'g list decks' },
+    { cmd: 'g create deck', desc: 'Create a new custom card deck.', usage: 'g create deck <name>' },
+    { cmd: 'g cdeck', desc: 'View contents of a custom deck.', usage: 'g cdeck <name> [slot]' },
+    { cmd: 'g rename deck', desc: 'Rename one of your custom decks.', usage: 'g rename deck <old> | <new>' },
+    { cmd: 'g delete deck', desc: 'Delete a custom deck (Cards inside are deleted!).', usage: 'g delete deck <name>' }
+  ],
   FUN: [
     { cmd: 'joke', desc: 'Get a random funny joke.', usage: 'joke' },
     { cmd: 'truth', desc: 'Get a Truth or Dare truth question.', usage: 'truth' },
