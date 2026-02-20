@@ -1252,3 +1252,4 @@ function init(sock, admins = [], mods = [], owner = null) {
 module.exports = { init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances };
 
 
+
