@@ -1851,9 +1851,9 @@ const CATEGORY_EMOJIS = {
 
   GROUP: '👥',
 
-  PROGRESSION: '📈',
-
-  ECONOMY: '💰',
+    PROGRESSION: '📈',
+    CARDS: '🃏',
+    ECONOMY: '💰',
 
   GAMBLING: '🎰',
 
