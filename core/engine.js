@@ -65,6 +65,7 @@ const shopCommands = require('./shopCommands');
 const skillCommands = require('./skillCommands');
 const classCommands = require('./classCommands');
 const pvpSystem = require('./pvpSystem');
+const cardSystem = require('./cardSystem');
 const contextEngine = require('./src/context_engine/Engine'); // NEW: Brain system
 const NodeCache = require("node-cache");
 
@@ -2436,6 +2437,14 @@ sock.ev.on('connection.update', async (update) => {
           reconnectTimer = null;
         }
         qrShown = false;
+
+        // Initialize Card System
+        cardSystem.init(
+          sock,
+          ['233201487480@s.whatsapp.net', '251453323092189@s.whatsapp.net'], // Admins
+          ['233201487480@s.whatsapp.net'], // Mods
+          '233201487480@s.whatsapp.net' // Owner
+        );
       }
 
       if (connection === 'close') {
@@ -2755,6 +2764,21 @@ We are happy to have you here.
         // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, _, ~) for command parsing
         const cleanTxt = txt.replace(/[*_~]/g, '');
         let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, ' ');
+
+        // ── CARD SYSTEM INTERCEPT ──────────────────
+        const cardHandled = await cardSystem.handleCommand({
+            lowerTxt,       // cleaned, lowercased text
+            txt,            // original text
+            senderJid,      // sender's JID
+            chatId,         // group or DM JID
+            m,              // raw Baileys message object
+            economy,        // economy module
+            isOwner,        // boolean
+            senderIsAdmin,  // boolean
+        });
+        if (cardHandled) return; // stop further processing if handled by cards
+        // ───────────────────────────────────────────
+
         const isSelf = !!m.key.fromMe;
         if (isSelf) return;
 
