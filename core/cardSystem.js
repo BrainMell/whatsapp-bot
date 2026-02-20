@@ -116,11 +116,11 @@ function getRarityLabel(copyNumber, maxCopies) {
   const pct = copyNumber / maxCopies;
   if (copyNumber === 1) return { label: 'SOLO COPY',             emoji: 'ðŸ’ ' };
   if (copyNumber <= 3)  return { label: 'TOP 3 COPY',            emoji: 'ðŸ’Ž' };
-  if (pct <= 0.05)      return { label: 'ULTRA RARE',            emoji: 'âœ¨' };
+  if (pct <= 0.05)      return { label: 'ULTRA RARE',            emoji: '✨' };
   if (pct <= 0.15)      return { label: 'LEGENDARY CIRCULATION', emoji: 'ðŸ”®' };
-  if (pct <= 0.35)      return { label: 'RARE',                  emoji: 'ðŸŒŸ' };
-  if (pct <= 0.70)      return { label: 'UNCOMMON',              emoji: 'ðŸŽ´' };
-  return                       { label: 'COMMON',                emoji: 'ðŸ“¦' };
+  if (pct <= 0.35)      return { label: 'RARE',                  emoji: '🌟' };
+  if (pct <= 0.70)      return { label: 'UNCOMMON',              emoji: '🎴' };
+  return                       { label: 'COMMON',                emoji: '📦' };
 }
 
 function calcPrice(tier, totalSpawned, maxCopies) {
@@ -138,20 +138,20 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price, captcha) {
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
   return (
-`â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
-ðŸŽ´  A CARD HAS MANIFESTED!
-â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
+`▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+🎴  A CARD HAS MANIFESTED!
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 ðŸ·ï¸  Name â€º  ${card.cardName}
 ðŸ“º  Series â€º  ${card.animeName}
 ðŸ—¯ï¸  Description â€º  "${card.description || 'No description available.'}"
 âœ¦  ${label}  âœ¦
 ðŸŽ¨  Art â€º  ${card.creator || 'Unknown'}
 ðŸª™  Value â€º  ${ZENI()}${price.toLocaleString()}
-â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 ðŸ†”  ${card.id}
 ðŸ”  Captcha â€º  *${captcha}*
 âŒ¨ï¸  Type  ${P()} claim ${card.id} ${captcha}  to collect
-â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -309,9 +309,9 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
     return reply(
 `âœ… *CARD SYSTEM IS NOW ONLINE*
 
-ðŸƒ  Cards will spawn in this group every *30 minutes*
+🃏  Cards will spawn in this group every *30 minutes*
 ðŸ•¹ï¸  Players claim with *${P()} claim <id> <captcha>*
-ðŸ“¦  View collection with *${P()} coll*
+📦  View collection with *${P()} coll*
 
 _Use_ *${P()} cards off* _to stop._`
     );
@@ -423,7 +423,7 @@ async function cmdColl(senderJid, reply, chatId) {
     lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  ðŸ·ï¸ _[LISTED]_' : ''}`);
   }
 
-  const header = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ—ƒï¸  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  â€¢  unslotted_\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ—ƒï¸  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  â€¢  unslotted_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
   if (gifBuffer) {
     await inst.sock_ref.sendMessage(chatId, { 
@@ -448,11 +448,11 @@ async function cmdCollByTier(senderJid, reply, chatId) {
   const tierMap = { 
     'S': { label: 'Tier S', emoji: 'ðŸ‘‘' },
     '6': { label: 'Tier 6', emoji: 'ðŸ’Ž' },
-    '5': { label: 'Tier 5', emoji: 'âœ¨' },
-    '4': { label: 'Tier 4', emoji: 'ðŸŽ—' },
-    '3': { label: 'Tier 3', emoji: 'ðŸŒŸ' },
-    '2': { label: 'Tier 2', emoji: 'ðŸŽ´' },
-    '1': { label: 'Tier 1', emoji: 'ðŸ“¦' }
+    '5': { label: 'Tier 5', emoji: '✨' },
+    '4': { label: 'Tier 4', emoji: '🎗' },
+    '3': { label: 'Tier 3', emoji: '🌟' },
+    '2': { label: 'Tier 2', emoji: '🎴' },
+    '1': { label: 'Tier 1', emoji: '📦' }
   };
 
   const categories = {};
@@ -475,7 +475,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
   const imageUrls = top5.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = await goService.generateCardGif(imageUrls, `Top Tiers: ${senderJid.split('@')[0]}`);
 
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ—‚ï¸  *COLLECTION BY TIER*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   const order = ['S', '6', '5', '4', '3', '2', '1'];
 
   for (const t of order) {
@@ -485,7 +485,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
     
     // Eclipse Style: Reset numbering for each tier
     categories[t].forEach((item, i) => {
-      msg += `  #${i + 1} âž³ ${item.card.cardName}\n`;
+      msg += `  #${i + 1} ➳ ${item.card.cardName}\n`;
     });
     msg += '\n';
   }
@@ -508,7 +508,7 @@ async function cmdDuplicate(senderJid, reply) {
 
   if (!dupes.length) return reply('âœ… No duplicates! Every copy you own is unique.');
 
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ”  *YOUR DUPLICATES*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ”  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const [cardId, count] of dupes) {
     const card = CARD_INDEX[cardId];
     if (!card) continue;
@@ -561,7 +561,7 @@ async function cmdSearchCard(args, reply) {
 
   if (!matches.length) return reply(`âŒ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
 
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ”  *CARD SEARCH*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ”  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const card of matches.slice(0, 10)) {
     const stat    = await CardStat.findOne({ cardId: card.id });
     const spawned = stat?.totalSpawned  || 0;
@@ -651,7 +651,7 @@ async function cmdBuyCard(args, senderJid, economy, reply) {
   if (isNaN(buyIndex)) {
     // Show market
     if (!listings.length) return reply('ðŸª Marketplace is empty. No cards are for sale.');
-    let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸª  *CARD MARKETPLACE*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+    let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸª  *CARD MARKETPLACE*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
     listings.forEach((l, i) => {
       const card = CARD_INDEX[l.cardId];
       msg += `*${i + 1}.*  ${card?.cardName || l.cardId}  _(${card?.animeName || ''})_\n`;
@@ -728,27 +728,36 @@ _Outbid someone with_ *${P()} bid <higher>*`
 // â”€â”€â”€ 7.13  .g deck â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cmdDeck(senderJid, reply, chatId) {
   const inst = getInst();
-  let deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  // Query by either flag OR slot presence to catch any out-of-sync records
+  let deckCards = await UserCard.find({ 
+    userId: senderJid, 
+    $or: [{ inMainDeck: true }, { mainDeckSlot: { $ne: null } }] 
+  }).sort({ mainDeckSlot: 1 });
   
-  // SELF-HEALING: Assign slots to cards that don't have them
+  // SELF-HEALING: Assign slots or fix flags
   let changed = false;
   const usedSlots = new Set(deckCards.map(c => c.mainDeckSlot).filter(s => s >= 1 && s <= MAIN_DECK_SIZE));
   
   for (const uc of deckCards) {
+    let ucChanged = false;
+    if (!uc.inMainDeck) { uc.inMainDeck = true; ucChanged = true; }
+
     if (!uc.mainDeckSlot || uc.mainDeckSlot < 1 || uc.mainDeckSlot > MAIN_DECK_SIZE) {
       // Find first free slot
       for (let s = 1; s <= MAIN_DECK_SIZE; s++) {
         if (!usedSlots.has(s)) {
           uc.mainDeckSlot = s;
           usedSlots.add(s);
-          await uc.save();
-          changed = true;
+          ucChanged = true;
           break;
         }
       }
     }
+    if (ucChanged) { await uc.save(); changed = true; }
   }
-  if (changed) deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  if (changed) {
+    deckCards = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  }
 
   const slotMap = {};
   for (const uc of deckCards) slotMap[uc.mainDeckSlot] = uc;
@@ -757,17 +766,17 @@ async function cmdDeck(senderJid, reply, chatId) {
   const imageUrls = deckCards.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = imageUrls.length > 0 ? await goService.generateCardGif(imageUrls, `Deck: Main Deck`) : null;
 
-  let msg = `ðŸŽ´ *Deck | Main Deck* ðŸŽ´\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n`;
-  msg += `ðŸ“¦ *Total Cards:* ${deckCards.length}/${MAIN_DECK_SIZE}\n\n`;
+  let msg = `🎴 *Deck | Main Deck* 🎴\n━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${deckCards.length}/${MAIN_DECK_SIZE}\n\n`;
 
   for (let slot = 1; slot <= MAIN_DECK_SIZE; slot++) {
     const uc = slotMap[slot];
-    msg += `ðŸ”¹ *#${slot}*\n`;
+    msg += `🔹 *#${slot}*\n`;
     if (!uc) {
-      msg += `ðŸƒ Name: â–‘ (empty)\nâœ¨ Tier: -\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n`;
+      msg += `🃏 Name: â–‘ (empty)\n✨ Tier: -\n━━━━━━━━━━━\n`;
     } else {
       const card = CARD_INDEX[uc.cardId];
-      msg += `ðŸƒ Name: ${card?.cardName || uc.cardId}\nâœ¨ Tier: ${card?.tier || '-'}\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n`;
+      msg += `🃏 Name: ${card?.cardName || uc.cardId}\n✨ Tier: ${card?.tier || '-'}\n━━━━━━━━━━━\n`;
     }
   }
 
@@ -917,7 +926,7 @@ ${rarity.emoji}  ${rarity.label}  â€¢  Copy *#${uc.copyNumber}*
     );
   }
 
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“  *${deck.name}*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ“  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   if (!deck.cards.length) { msg += `_(Empty â€” add cards with *${P()} t2cdeck*)_`; }
   else {
     for (let i = 0; i < deck.cards.length; i++) {
@@ -934,7 +943,7 @@ ${rarity.emoji}  ${rarity.label}  â€¢  Copy *#${uc.copyNumber}*
 async function cmdListDecks(senderJid, reply) {
   const decks = await CardDeck.find({ userId: senderJid });
   if (!decks.length) return reply(`ðŸ“­ No custom decks.\n_Create one with_ *${P()} create deck <name>*`);
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“‚  *YOUR CUSTOM DECKS*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ“‚  *YOUR CUSTOM DECKS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   decks.forEach((d, i) => { msg += `*${i + 1}.*  ðŸ“  *${d.name}*  â€”  ${d.cards.length} card${d.cards.length !== 1 ? 's' : ''}\n`; });
   msg += `\n_View: *${P()} cdeck <name>*_`;
   return reply(msg);
@@ -991,7 +1000,7 @@ async function cmdCollector(args, reply) {
   if (!sorted.length) return reply(`ðŸ“­ Nobody owns any *${seriesCards[0].animeName}* cards yet.`);
 
   const medals = ['ðŸ¥‡', 'ðŸ¥ˆ', 'ðŸ¥‰'];
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ†  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ†  *TOP COLLECTORS*\n   _${seriesCards[0].animeName}_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   sorted.forEach(([uid, count], i) => {
     msg += `${medals[i]}  @${uid.split('@')[0]}  â€”  *${count}* card${count !== 1 ? 's' : ''}\n`;
   });
@@ -1015,7 +1024,7 @@ async function cmdSeries(args, senderJid, reply) {
   cards.sort((a, b) => (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9));
 
   const actualSeries = cards[0].animeName;
-  let msg = `â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n   ðŸ“‹  *${actualSeries.toUpperCase()}*\nâ–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   ðŸ“‹  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
   let currentTier = null;
   for (const card of cards) {
     const t = String(card.tier);
@@ -1065,7 +1074,7 @@ Examples:
   const targetGroup = [...inst.activeGroups][0];
   const result = await doSpawn(card.id, String(card.tier), true, targetGroup);
   if (result) {
-    return reply(`âœ¨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  â†’  sent to active group.`);
+    return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  â†’  sent to active group.`);
   } else {
     return reply('âŒ Spawn failed. Check that the card image URL is still live.');
   }
@@ -1096,8 +1105,8 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
   const stars = TIER_STARS[String(card?.tier)] || 'âœ¦';
   
   const caption = 
-`ðŸŽ´  *CARD DETAIL*
-â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬
+`🎴  *CARD DETAIL*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 ðŸ·ï¸  Name â€º  ${card?.cardName || uc.cardId}
 ðŸ“º  Series â€º  ${card?.animeName || 'Unknown'}
 ðŸ—¯ï¸  Description â€º  "${card?.description || 'No description available.'}"
@@ -1106,7 +1115,7 @@ ${stars}  ${TIER_LABEL[String(card?.tier)]}  ${stars}
 ðŸ“‹  Copy â€º  #${uc.copyNumber} of ${stat?.maxCopies || 200}
 ðŸŽ¨  Art â€º  ${card?.creator || 'Unknown'}
 ðŸª™  Value â€º  ${ZENI()}${calcPrice(card?.tier, uc.copyNumber, stat?.maxCopies || 200).toLocaleString()}
-â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬â–¬`;
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`;
 
   try {
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
