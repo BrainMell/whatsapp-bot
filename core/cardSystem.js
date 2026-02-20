@@ -293,7 +293,30 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
   if (!inst.adminJids.has(senderJid) && senderJid !== inst.ownerJid && !senderIsAdmin) {
     return reply('❌ Only admins can toggle the card system.');
   }
-... [1022 characters omitted] ...
+  if (sub === 'on') {
+    if (inst.isActive) return reply('⚠️ Card system is already *ON*.');
+    inst.isActive      = true;
+    inst.spawnGroupJid = groupJid;
+    doSpawn(); // spawn one immediately
+    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
+    inst.spawnTimer = setInterval(() => { if (inst.isActive) doSpawn(); }, 30 * 60 * 1000);
+    return reply(
+`✅ *CARD SYSTEM IS NOW ONLINE*
+
+🃏  Cards will spawn in this group every *30 minutes*
+🏷️  Players claim with *.g claim <id>*
+📦  View collection with *.g coll*
+
+_Use_ *.g cards off* _to stop._`
+    );
+  }
+  if (sub === 'off') {
+    if (!inst.isActive) return reply('⚠️ Card system is already *OFF*.');
+    inst.isActive = false;
+    if (inst.spawnTimer) clearInterval(inst.spawnTimer);
+    inst.spawnTimer = null;
+    return reply('🔴 *Card system is now OFF.* Automatic spawns stopped.');
+  }
   return reply('Usage: *.g cards on* or *.g cards off*');
 }
 
