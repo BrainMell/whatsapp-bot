@@ -2196,7 +2196,8 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     if (!state || !state.inCombat) return;
 
     const chatId = state.chatId;
-    // 💡 Generate incremental combat image if action just happened    if (lastTurnInfo) {
+    // 💡 Generate incremental combat image if action just happened
+    if (lastTurnInfo) {
         try {
             const scene = await combatIntegration.generateCombatScene(
                 state.players,
