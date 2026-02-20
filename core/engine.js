@@ -720,13 +720,13 @@ async function updateBotNameOnWhatsApp(sock, retryCount = 0) {
     } catch (e) {
       if (e.message.includes('myAppStateKey')) {
         if (retryCount < 1) {
-          console.log(`⚠️ [${BOT_ID}] Business Account detected or Key Syncing. Retrying name update in 60s...`);
+          console.log(`⚠️️ [${BOT_ID}] Business Account detected or Key Syncing. Retrying name update in 60s...`);
           setTimeout(() => updateBotNameOnWhatsApp(sock, retryCount + 1), 60000);
         } else {
           console.log(`💡 [${BOT_ID}] Note: WhatsApp Business accounts often restrict name changes via API. Please change it manually in the WhatsApp Business app to "${configName}" if it hasn't updated.`);
         }
       } else {
-        console.error(`❌ [${BOT_ID}] Failed to update WhatsApp profile name:`, e.message);
+        console.error(`❌ [${BOT_ID}]❌ Failed to update WhatsApp profile name:`, e.message);
       }
     }
   }
@@ -828,7 +828,7 @@ function getNextGroqClient() {
   let apiKey = GROQ_API_KEYS[currentKeyIndex];
   const failures = keyFailureCounts.get(apiKey) || 0;
   if (failures >= MAX_FAILURES_PER_KEY && GROQ_API_KEYS.length > 1) {
-    console.log("⚠️ API Key ${currentKeyIndex + 1} has ${failures} failures, switching...");
+    console.log("⚠️️ API Key ${currentKeyIndex + 1} has ${failures} failures, switching...");
     currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
     apiKey = GROQ_API_KEYS[currentKeyIndex];
   }
@@ -1578,7 +1578,7 @@ function detectPersonContext(text, chatId, mentionedJids = []) {
     }
     
   } catch (err) {
-    console.log("⚠️ Person context detection error:", err.message);
+    console.log("⚠️️ Person context detection error:", err.message);
   }
   
   return context;
@@ -2174,7 +2174,7 @@ async function cleanupOldSessions() {
       // No log - silent optimization
     }
   } catch (err) {
-    // console.log('⚠️ Session cleanup failed:', err.message);
+    // console.log('⚠️️ Session cleanup failed:', err.message);
   }
 }
 
@@ -2260,7 +2260,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           sent = true;
           console.log(`✅ Sent news IMAGE (via URL) to ${chatId}`);
         } catch (urlErr) {
-          console.log(`⚠️ Failed to send via URL, trying buffer: ${urlErr.message}`);
+          console.log(`⚠️️❌ Failed to send via URL, trying buffer: ${urlErr.message}`);
           // Fallback to fetching buffer
           try {
             const response = await axios.get(a.img, { 
@@ -2303,7 +2303,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       successCount++;
       await new Promise(r => setTimeout(r, 2000)); 
     } catch (err) {
-      console.error(`❌ Failed to send article to ${chatId}:`, err.message);
+      console.error(`❌❌ Failed to send article to ${chatId}:`, err.message);
     }
   }
   return successCount > 0;
@@ -2347,7 +2347,7 @@ async function broadcastUpdate(sock, customMessage = null) {
     const groupsData = await sock.groupFetchAllParticipating();
     allGroups = Object.keys(groupsData);
   } catch (err) {
-    console.error("❌ Failed to fetch groups from WhatsApp:", err.message);
+    console.error("❌❌ Failed to fetch groups from WhatsApp:", err.message);
     // Fallback to groupSettings if WhatsApp fetch fails
     allGroups = Array.from(groupSettings.keys()).filter(id => id.endsWith('@g.us'));
   }
@@ -2369,7 +2369,7 @@ async function broadcastUpdate(sock, customMessage = null) {
       // Anti-spam gap: 1.5 seconds between groups for safety
       await new Promise(r => setTimeout(r, 1500)); 
     } catch (e) {
-      console.error(`❌ Failed broadcast to ${g}:`, e.message);
+      console.error(`❌❌ Failed broadcast to ${g}:`, e.message);
     }
   }
   return sentCount;
@@ -2496,7 +2496,7 @@ async function getGroupMetadata(id, forceRefresh = false) {
     groupMetadataCache.set(id, metadata);
     return metadata;
   } catch (e) {
-    console.error(`❌ Failed to fetch metadata for ${id}:`, e.message);
+    console.error(`❌❌ Failed to fetch metadata for ${id}:`, e.message);
     return cached || null;
   }
 }
@@ -2715,7 +2715,7 @@ We are happy to have you here.
             if (isSpamming) {
               console.log(`🚨 Spam detected from ${senderJid} in ${chatId}`);
               await sock.sendMessage(chatId, { 
-                      text: BOT_MARKER + "⚠️ *STOP SPAMMING!* ⚠️\n\nYou're sending messages too fast. Slow down or you'll be muted."
+                      text: BOT_MARKER + "⚠️️ *STOP SPAMMING!* ⚠️️\n\nYou're sending messages too fast. Slow down or you'll be muted."
                     });
                     // Auto-mute for 1 minute
                     muteUser(senderJid, chatId, 60000);
@@ -2863,7 +2863,7 @@ We are happy to have you here.
               const timeLeft = (globalExpiration - now) / 1000;
               await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
               return await sock.sendMessage(chatId, { 
-                text: BOT_MARKER + `⚠️ *SLOW DOWN!* ⚠️\n\nPlease wait *${timeLeft.toFixed(1)}s* before using another command.` 
+                text: BOT_MARKER + `⚠️️ *SLOW DOWN!* ⚠️️\n\nPlease wait *${timeLeft.toFixed(1)}s* before using another command.` 
               }, { quoted: m });
             }
           }
@@ -2934,7 +2934,7 @@ if (m.pushName && !isSelf) {
               await sock.sendMessage(chatId, { delete: m.key });            console.log(`🔇 Deleted message from muted user: ${senderJid}`);
             return; // stop processing this message
           } catch (err) {
-            console.log("❌ Failed to delete muted user message:", err.message);
+            console.log("❌❌ Failed to delete muted user message:", err.message);
           }
         }
 
@@ -3019,7 +3019,7 @@ Built with 💙 by Mellow`;
           
           let warningText = '';
           if (newUsage >= 3) {
-            warningText = `\n\n⚠️ *WARNING:* ${remaining} use${remaining !== 1 ? 's' : ''} remaining before you're blocked!`;
+            warningText = `\n\n⚠️️ *WARNING:* ${remaining} use${remaining !== 1 ? 's' : ''} remaining before you're blocked!`;
           }
           
           const supportMsg = GET_BANNER(`🛠️ SUPPORT`) + `
@@ -3374,14 +3374,14 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
       });
     } else {
       await sock.sendMessage(chatId, { 
-        text: BOT_MARKER + `⚠️ Sent ${successCount}/${images.length} stickers (some failed)` 
+        text: BOT_MARKER + `⚠️️ Sent ${successCount}/${images.length} stickers (some failed)` 
       });
     }
 
   } catch (err) {
     console.error("Pinterest Sticker Error:", err);
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ Search failed or timed out." });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️️ Search failed or timed out." });
   }
   
   return;
@@ -3469,7 +3469,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
     try {
         await execPromise(toGif);
     } catch (gifErr) {
-        console.log("⚠️ WebP to GIF failed, attempting direct path...");
+        console.log("⚠️️ WebP to GIF failed, attempting direct path...");
         const toMp4Direct = `"${FFMPEG_PATH}" -ignore_loop 0 -c:v webp -i "${tempSticker}" -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
         await execPromise(toMp4Direct);
     }
@@ -3535,7 +3535,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             msg += `⭐ GP: ${gp.toLocaleString()}\n`;
             msg += `🗡️ Quests Completed: ${user.questsCompleted || 0}\n`;
             msg += `✅ Quests Won: ${user.questsWon || 0}\n`;
-            msg += `❌ Quests Failed: ${user.questsFailed || 0}\n\n`;
+            msg += `❌ Quests❌ Failed: ${user.questsFailed || 0}\n\n`;
             msg += `💰 *Benefits:*\n`;
             msg += `+${rankData.benefits.questRewardBonus}% Quest Rewards\n\n`;
             
@@ -3760,7 +3760,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lock`) {
     await sock.groupSettingUpdate(chatId, 'announcement');
     await sock.sendMessage(chatId, { text: BOT_MARKER + "🔒 *GROUP LOCKED*\n\nOnly admins can now send messages in this group." });
   } catch (err) {
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to lock group: " + err.message });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to lock group: " + err.message });
   }
   return;
 }
@@ -3777,7 +3777,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} unlock` || lowerTxt ===
     await sock.groupSettingUpdate(chatId, 'not_announcement');
     await sock.sendMessage(chatId, { text: BOT_MARKER + "🔓 *GROUP UNLOCKED*\n\nEveryone can now send messages in this group." });
   } catch (err) {
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to unlock group: " + err.message });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to unlock group: " + err.message });
   }
   return;
 }
@@ -3843,7 +3843,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin` || lowerTxt.starts
       await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Message pinned for ${args[2] || '30 days'}! (Relay)` });
     } catch (relayErr) {
       console.error("Pin relay error:", relayErr);
-      await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to pin message. Make sure I have admin permissions and the message exists." });
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to pin message. Make sure I have admin permissions and the message exists." });
     }
   }
   return;
@@ -3985,7 +3985,7 @@ Change with: ${botConfig.getPrefix().toLowerCase()} antilink action <delete/warn
               if (args[3] === 'delete') {
                 actionDesc = '🔇 Silent mode - Messages deleted without notification';
               } else if (args[3] === 'warn') {
-                actionDesc = '⚠️ Warning mode - Tracks violations (3 strikes = auto-kick)';
+                actionDesc = '⚠️️ Warning mode - Tracks violations (3 strikes = auto-kick)';
               } else if (args[3] === 'kick') {
                 actionDesc = '🔴 Instant kick - Immediate removal on first violation';
               }
@@ -4037,7 +4037,7 @@ Commands:
             const isAnnouncementGroup = groupMetadata?.announcement;
             if (isAnnouncementGroup && !botIsAdmin) {
               await sock.sendMessage(chatId, { 
-                text: BOT_MARKER + "⚠️ *WARNING:* This is an announcement-only group. I MUST be an admin here to send news updates automatically. Please promote me to admin!" 
+                text: BOT_MARKER + "⚠️️ *WARNING:* This is an announcement-only group. I MUST be an admin here to send news updates automatically. Please promote me to admin!" 
               });
             }
             
@@ -4054,7 +4054,7 @@ Commands:
                 await sendNewsToGroup(sock, chatId, currentNews);
               }
             } catch (err) {
-              console.error("❌ Failed to send initial news:", err.message);
+              console.error("❌❌ Failed to send initial news:", err.message);
             }
           } else if (args[2] === 'off') {
             settings.animeNews = false;
@@ -4121,7 +4121,7 @@ Commands:
             
             const warnCount = addWarning(targetUser, chatId, reason);
             await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + `⚠️ @${targetPhone} has been warned (${warnCount}/5 in THIS group)\n\n*Reason:* ${reason}`,
+              text: BOT_MARKER + `⚠️️ @${targetPhone} has been warned (${warnCount}/5 in THIS group)\n\n*Reason:* ${reason}`,
               contextInfo: { mentionedJid: [targetUser] }
             });
             
@@ -4169,7 +4169,7 @@ Commands:
               contextInfo: { mentionedJid: [targetUser] }
             });
           } else {
-            let msg = BOT_MARKER + `⚠️ @${targetName} has ${warnCount} warning(s) in this group:\n\n`;
+            let msg = BOT_MARKER + `⚠️️ @${targetName} has ${warnCount} warning(s) in this group:\n\n`;
             warnings.forEach((w, i) => {
               const date = new Date(w.timestamp).toLocaleDateString();
               msg += `${i + 1}. ${w.reason} (${date})\n`;
@@ -4577,7 +4577,7 @@ ${memberList}`;
       });
       console.log(`✅ Deleted original tagall command`);
     } catch (delErr) {
-      console.log("⚠️ Couldn't delete original message:", delErr.message);
+      console.log("⚠️️ Couldn't delete original message:", delErr.message);
     }
     
     // If there was a quoted message, try to delete that too
@@ -4593,14 +4593,14 @@ ${memberList}`;
         });
         console.log("✅ Deleted quoted message");
       } catch (delErr) {
-        console.log("⚠️ Couldn't delete quoted message:", delErr.message);
+        console.log("⚠️️ Couldn't delete quoted message:", delErr.message);
       }
     }
     
   } catch (err) {
     console.error("❌ Tagall send error:", err);
     await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + "❌ Failed to send announcement." 
+      text: BOT_MARKER + "❌❌ Failed to send announcement." 
     });
   }
   
@@ -4760,7 +4760,7 @@ ${memberList}`;
                 delete: m.key
               });
             } catch (delErr) {
-              console.log(`⚠️ Couldn't delete original message: ${delErr.message}`);
+              console.log(`⚠️️ Couldn't delete original message: ${delErr.message}`);
             }
             
             // If there was a quoted message, try to delete that too
@@ -4775,14 +4775,14 @@ ${memberList}`;
                   }
                 });
               } catch (delErr) {
-                console.log("⚠️ Couldn't delete quoted message:", delErr.message);
+                console.log("⚠️️ Couldn't delete quoted message:", delErr.message);
               }
             }
             
           } catch (err) {
             console.error("❌ Hidetag send error:", err);
             await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + "❌ Failed to send hidden tag message." 
+              text: BOT_MARKER + "❌❌ Failed to send hidden tag message." 
             });
           }
           
@@ -5094,7 +5094,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild create `))
     await sock.sendMessage(chatId, { text: BOT_MARKER + result.message + `\n\n💡 Use \`${botConfig.getPrefix()} guild create <name> | <type>\` to choose a path: ADVENTURER, MERCHANT, or RESEARCH.` });
   } catch (err) {
     console.error("Guild create error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to create guild!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to create guild!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5118,7 +5118,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild delete`) {
     }
   } catch (err) {
     console.error("Guild delete error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to delete guild!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to delete guild!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5140,7 +5140,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild join `)) {
     await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
   } catch (err) {
     console.error("Guild join error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to join guild!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to join guild!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5153,7 +5153,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild leave`) {
     await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
   } catch (err) {
     console.error("Guild leave error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to leave guild!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to leave guild!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5165,7 +5165,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild board` || lowerTx
     await guilds.displayGuildBoard(sock, chatId, senderJid);
   } catch (err) {
     console.error("Guild board error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch guild board!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to fetch guild board!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5211,7 +5211,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild invite`)) 
     }
   } catch (err) {
     console.error("Guild invite error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to send invite!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to send invite!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5246,7 +5246,7 @@ Type:
     });
   } catch (err) {
     console.error("Guild invites error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to check invites!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to check invites!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5285,7 +5285,7 @@ Admins can:
     }
   } catch (err) {
     console.error("Guild promote error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to promote member!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to promote member!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5316,7 +5316,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild demote`)) 
     }
   } catch (err) {
     console.error("Guild demote error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to demote admin!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to demote admin!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5350,7 +5350,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild kick`)) {
     }
   } catch (err) {
     console.error("Guild kick error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to kick member!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to kick member!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5386,7 +5386,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild title `)) 
         await sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetUser] });
     } catch (err) {
         console.error("Guild title error:", err);
-        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to set guild title!" });
+        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to set guild title!" });
     }
     await awardProgression(senderJid, chatId);
     return;
@@ -5531,7 +5531,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild list`) {
     });
   } catch (err) {
     console.error("Guild list error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to load guild list!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to load guild list!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5601,7 +5601,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild members` || lower
     });
   } catch (err) {
     console.error("Guild members error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to load members!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to load members!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5618,7 +5618,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild tag `)) {
     }
   } catch (err) {
     console.error(`Guild tag error:`, err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to tag guild members!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to tag guild members!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5669,7 +5669,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild leaderboard` || l
     await sock.sendMessage(chatId, { text: BOT_MARKER + leaderboardText });
   } catch (err) {
     console.error("Guild leaderboard error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to load leaderboard!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to load leaderboard!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5736,7 +5736,7 @@ if (/^\`${botConfig.getPrefix().toLowerCase()}`\s+guild\s+(points?|pts)$/.test(l
   } catch (err) {
     console.error("Guild points error:", err);
     await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + "❌ Failed to load guild points!",
+      text: BOT_MARKER + "❌❌ Failed to load guild points!",
       mentions: [senderJid]
     });
   }
@@ -5777,7 +5777,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild pointsboard`) {
   } catch (err) {
     console.error("Guild pointsboard error:", err);
     await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + "❌ Failed to load points leaderboard!" 
+      text: BOT_MARKER + "❌❌ Failed to load points leaderboard!" 
     });
   }
   await awardProgression(senderJid, chatId);
@@ -5828,7 +5828,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild challenges`) {
     await sock.sendMessage(chatId, { text: BOT_MARKER + text });
   } catch (err) {
     console.error("Guild challenges error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to load challenge types!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to load challenge types!" });
   }
   await awardProgression(senderJid, chatId);
   return;
@@ -5865,7 +5865,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild challenge 
     await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
   } catch (err) {
     console.error("Guild challenge issue error:", err);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to issue challenge!" });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to issue challenge!" });
   }
   return;
 }
@@ -6033,7 +6033,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} 18+` || lowerTxt.starts
     } catch (err) {
         console.error("❌ Command Error:", err);
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch images." });
+        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌❌ Failed to fetch images." });
     }
 
     return;
@@ -6113,7 +6113,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfw` || lowerTxt.start
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
             } catch (imgErr) {
-                console.error(`❌ Failed to send image ${i + 1}:`, imgErr.message);
+                console.error(`❌❌ Failed to send image ${i + 1}:`, imgErr.message);
                 continue;
             }
         }
@@ -6192,7 +6192,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
     } catch (err) {
         console.error("Pinterest Command Error:", err);
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(chatId, { text: "⚠️ Search failed or timed out." });
+        await sock.sendMessage(chatId, { text: "⚠️️ Search failed or timed out." });
     }
     return;
 }
@@ -6247,8 +6247,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
         .toFormat('mp3')
         .on('error', async (err) => {
             console.error(`[FFMPEG] Error: `);
-            await sock.sendMessage(chatId, { react: { text: '⚠�', key: m.key } });
-            await sock.sendMessage(chatId, { text: BOT_MARKER + '� Failed to process audio.' });
+            await sock.sendMessage(chatId, { react: { text: '⚠️', key: m.key } });
+            await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to process audio.' });
             if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
         })
         .on('end', async () => {
@@ -6269,9 +6269,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
                         }
                     }
                 });
-                await sock.sendMessage(chatId, { react: { text: '▶�', key: m.key } });
+                await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
             } catch (sendErr) {
-                console.error(''[YouTube] Send failed:'', sendErr.message);
+                console.error('[YouTube] Send failed:', sendErr.message);
             } finally {
                 if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
             }
@@ -6394,7 +6394,7 @@ _Latest anime updates • Anime Corner_
       }
     } else {
       await sock.sendMessage(chatId, {
-        text: BOT_MARKER + caption + "\n\n⚠️ _Image not available_"
+        text: BOT_MARKER + caption + "\n\n⚠️️ _Image not available_"
       }, { quoted: m });
     }
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
@@ -6794,7 +6794,7 @@ ${(pick.synopsis || 'Plot details coming soon.').slice(0, 300)}...
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
 
   } catch (err) {
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ API is busy. Please try again in a few seconds." });
+    await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️️ API is busy. Please try again in a few seconds." });
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
   return;
@@ -6829,7 +6829,7 @@ ${(pick.synopsis || 'No synopsis.').slice(0, 350)}...
     try {
       const fallback = await axios.get('https://api.jikan.moe/v4/seasons/now?limit=10');
       const pick = fallback.data.data[0];
-      await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ Top Anime API is slow. Showing a current hit instead:\n\n*${pick.title}*\n⭐ ${pick.score}` });
+      await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️️ Top Anime API is slow. Showing a current hit instead:\n\n*${pick.title}*\n⭐ ${pick.score}` });
     } catch {
       await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ All anime services are currently busy. Try again shortly.' });
     }
@@ -7101,7 +7101,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`) {
     inventorySystem.addItem(senderJid, itemKey, 1);
     
     let msg = GET_BANNER(`🏹 HUNTING`) + `\n\n`;
-    if (isInfected) msg += `⚠️ *ANOMALY DETECTED!*\n`;
+    if (isInfected) msg += `⚠️️ *ANOMALY DETECTED!*\n`;
     msg += `You tracked and took down a target!\n\n`;
     msg += `${emoji} *${item.name}*\n`;
     msg += `▫️ Rarity: ${item.rarity}\n`;
@@ -7308,7 +7308,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
                     break;
                 }
             } catch (e) {
-                console.log(`⚠️ [${BOT_ID}] Skipping ${res.name}: ${e.message}`);
+                console.log(`⚠️️ [${BOT_ID}] Skipping ${res.name}: ${e.message}`);
             }
         }
 
@@ -7367,7 +7367,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
         console.error("❌ Powerscale Error:", err);
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(chatId, {
-            text: BOT_MARKER + ` Failed to fetch power scaling data.\nError: ${err.message}`
+            text: BOT_MARKER + `❌ Failed to fetch power scaling data.\nError: ${err.message}`
         });
         await awardProgression(senderJid, chatId);
     }
@@ -8479,7 +8479,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} monster guide` || lower
     msg += `👑 *ELITE BOSS SKILLS* 👑\n\n`;
     
     for (const [id, ability] of Object.entries(bossMechanics.BOSS_ABILITIES)) {
-        msg += `• *${ability.name}* ${ability.isTelegraphed ? '⚠️' : ''}\n`;
+        msg += `• *${ability.name}* ${ability.isTelegraphed ? '⚠️️' : ''}\n`;
         msg += `  ${ability.telegraphMessage || `Deals ${ability.damage}x ATK`}\n\n`;
     }
     
@@ -8909,7 +8909,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rich` || lowerTxt === `
   } catch (err) {
     console.error("Rich leaderboard error:", err);
     await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + "❌ Failed to load leaderboard!" 
+      text: BOT_MARKER + "❌❌ Failed to load leaderboard!" 
     });
   }
   return;
@@ -9537,7 +9537,7 @@ async function fetchAndSaveProfilePicture(sock, jid) {
         return pfpPath;
       }
     } catch (pfpErr) {
-      console.log(`⚠️ PFP not available for ${normalizedJid}: ${pfpErr.message}`);
+      console.log(`⚠️️ PFP not available for ${normalizedJid}: ${pfpErr.message}`);
     }
     
     return null;
@@ -9624,7 +9624,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} profile` || lowerTxt ==
       try {
         guildName = guilds.getUserGuild(targetJid) || null;
       } catch (guildErr) {
-        console.log("⚠️ Guild data unavailable:", guildErr.message);
+        console.log("⚠️️ Guild data unavailable:", guildErr.message);
       }
     }
     
@@ -9769,7 +9769,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ''}
           if (metadata) {
             await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Group metadata refreshed!\n📊 Members: ${metadata.participants.length}` });
           } else {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to refresh metadata. Make sure I am in this group!` });
+            await sock.sendMessage(chatId, { text: BOT_MARKER + `❌❌ Failed to refresh metadata. Make sure I am in this group!` });
           }
           return;
         }
@@ -9832,7 +9832,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} summary`) || low
             } catch (err) {
         console.error("Summary Error:", err.message);
         await sock.sendMessage(chatId, { 
-            text: BOT_MARKER + "❌ Failed to create summary." 
+            text: BOT_MARKER + "❌❌ Failed to create summary." 
         });
     }
     return;
@@ -10431,7 +10431,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
           const reply = await askAI(senderJid, prompt, mentionedJids, chatId);
           
           if (!reply || reply.trim().length === 0) {
-            console.log("⚠️ AI returned empty response, skipping...");
+            console.log("⚠️️ AI returned empty response, skipping...");
             return;
           }
 
@@ -10463,7 +10463,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
     // Just skip these, WhatsApp usually resyncs them after a while
     return;
   }
-  console.log("⚠️ Skipping message:", err.message);
+  console.log("⚠️️ Skipping message:", err.message);
   return;
 }
     }); // END messages.upsert
