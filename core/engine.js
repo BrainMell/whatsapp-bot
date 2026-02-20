@@ -6194,29 +6194,35 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
 
         if (images.length === 0) {
             await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-            return await sock.sendMessage(chatId, { text: "❌ No results found." });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found. The search service might be undergoing maintenance." });
         }
 
         await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
 
+        let sentCount = 0;
         for (let i = 0; i < images.length; i++) {
             try {
                 await sock.sendMessage(chatId, { 
                     image: { url: images[i] }, 
                 }, { quoted: m });
                 
+                sentCount++;
                 // 100ms delay to prevent spam detection
                 await new Promise(res => setTimeout(res, 100)); 
             } catch (e) {
-                console.log("Skipping a broken pin link...");
+                console.log(`Skipping a broken pin link: ${images[i]}`);
             }
         }
         
+        if (sentCount === 0) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️️ All image links found were unreachable." });
+        }
+
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
     } catch (err) {
         console.error("Pinterest Command Error:", err);
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(chatId, { text: "⚠️️ Search failed or timed out." });
+        await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️️ Search failed or timed out. Ensure the GO_IMAGE_SERVICE_URL is set correctly." });
     }
     return;
 }
@@ -6237,11 +6243,13 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
     // 1. React to show search started
     await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
 
-    const r = await yts(query);
-    const video = r.videos[0];
+    // Offload Search to Go Service
+    const videos = await goService.searchYoutube(query);
+    const video = videos[0];
+    
     if (!video) {
       await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found on YouTube." });
     }
 
     // 2. Fetch Thumbnail
@@ -6254,53 +6262,36 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.star
     // 3. React to show download started
     await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
-    const fileName = path.join(__dirname, 'temp', `audio_.mp3`);
+    // Offload Download to Go Service
+    const audioBuffer = await goService.downloadYoutubeAudio(video.url);
     
-    if (!fs.existsSync(path.join(__dirname, 'temp'))) {
-        fs.mkdirSync(path.join(__dirname, 'temp'), { recursive: true });
+    if (!audioBuffer) {
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to process audio via external service." });
     }
 
-    // Using play-dl to get the stream
-    const stream = await play.stream(video.url, { quality: 2 });
-    
-    // Using fluent-ffmpeg to convert to mp3
-    ffmpeg(stream.stream)
-        .inputFormat(stream.type)
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .toFormat('mp3')
-        .on('error', async (err) => {
-            console.error(`[FFMPEG] Error: `);
-            await sock.sendMessage(chatId, { react: { text: '⚠️', key: m.key } });
-            await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to process audio.' });
-            if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
-        })
-        .on('end', async () => {
-            try {
-                await sock.sendMessage(chatId, {
-                    audio: { url: fileName },
-                    mimetype: 'audio/mpeg',
-                    fileName: `.mp3`,
-                    contextInfo: {
-                        mentionedJid: [senderJid],
-                        externalAdReply: {
-                            title: video.title,
-                            body: ` | `,
-                            thumbnail: thumbnailBuffer,
-                            mediaType: 2,
-                            mediaUrl: video.url,
-                            sourceUrl: video.url
-                        }
-                    }
-                });
-                await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
-            } catch (sendErr) {
-                console.error('[YouTube] Send failed:', sendErr.message);
-            } finally {
-                if (fs.existsSync(fileName)) fs.unlinkSync(fileName);
+    try {
+        await sock.sendMessage(chatId, {
+            audio: audioBuffer,
+            mimetype: 'audio/mpeg',
+            fileName: `${video.title}.mp3`,
+            contextInfo: {
+                mentionedJid: [senderJid],
+                externalAdReply: {
+                    title: video.title,
+                    body: `Duration: ${video.duration}`,
+                    thumbnail: thumbnailBuffer,
+                    mediaType: 2,
+                    mediaUrl: video.url,
+                    sourceUrl: video.url
+                }
             }
-        })
-        .save(fileName);
+        });
+        await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
+    } catch (sendErr) {
+        console.error('[YouTube] Send failed:', sendErr.message);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to send audio file." });
+    }
   } catch (err) {
     console.error("Audio Error:", err);
     await sock.sendMessage(chatId, { react: { text: "❗", key: m.key } });
