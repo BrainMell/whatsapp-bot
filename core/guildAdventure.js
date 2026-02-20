@@ -885,11 +885,10 @@ function getGameState(chatId, senderJid = null) {
     // 2. Check for group raid (keyed by chatId)
     if (gameStates.has(chatId)) return gameStates.get(chatId);
     
-    // 3. Fallback: Search all states for a solo raid in this chat by this user
-    if (senderJid) {
-        for (const state of gameStates.values()) {
-            if (state.chatId === chatId && state.players.some(p => p.jid === senderJid)) return state;
-        }
+    // 3. Fallback: If no senderJid but we need the state (e.g. from a timer), 
+    // find the FIRST active raid in this chat
+    for (const [key, state] of gameStates.entries()) {
+        if (state.chatId === chatId && state.active) return state;
     }
     
     return null;
@@ -1404,9 +1403,10 @@ function generateEventEncounter(chatId) {
 // ⚔️ COMBAT SYSTEM
 // ==========================================
 
-async function startCombat(sock, groq, encounter, chatId) {
-    const state = getGameState(chatId);
+async function startCombat(sock, groq, encounter, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
+    const chatId = state.chatId;
     if (!groq) groq = state.groq;
     state.inCombat = true;
     
@@ -1532,17 +1532,18 @@ async function startCombat(sock, groq, encounter, chatId) {
             });
             
             await sock.sendMessage(state.chatId, { text: turnMsg });
-            await processCombatTurn(sock, chatId);
+            await processCombatTurn(sock, sessionKey);
         } catch (err) {
             console.error("[Quest] combatStart timer error:", err?.message || err);
         }
     }, startDelay);
 }
 
-async function processCombatTurn(sock, chatId) {
-    const state = getGameState(chatId);
+async function processCombatTurn(sock, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
 
+    const chatId = state.chatId;
     // Prevent overlapping turn processing (timers + user actions can collide).
     if (state.combatProcessing) return;
     state.combatProcessing = true;
@@ -1605,14 +1606,14 @@ async function processCombatTurn(sock, chatId) {
 
             // Check if dead from status effects
             if (activeActor.stats.hp <= 0) {
-                await handleDeath(sock, activeActor, chatId);
+                await handleDeath(sock, activeActor, sessionKey);
                 
                 // 💡 CRITICAL FIX: Check if combat should end immediately
                 const playersDead = state.players.every(p => p.isDead);
                 const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
                 
                 if (playersDead || enemiesDead) {
-                    await endCombat(sock, enemiesDead, chatId);
+                    await endCombat(sock, enemiesDead, sessionKey);
                     return;
                 }
                 
@@ -1637,12 +1638,12 @@ async function processCombatTurn(sock, chatId) {
 
             if (activeActor.isEnemy) {
                 // AI Turn
-                await performEnemyAction(sock, activeActor, chatId);
+                await performEnemyAction(sock, activeActor, sessionKey);
                 return;
             }
 
             // Player Turn
-            await promptPlayerAction(sock, activeActor, chatId);
+            await promptPlayerAction(sock, activeActor, sessionKey);
             return;
         }
     } catch (err) {
@@ -1652,9 +1653,10 @@ async function processCombatTurn(sock, chatId) {
     }
 }
 
-async function promptPlayerAction(sock, player, chatId) {
-    const state = getGameState(chatId);
+async function promptPlayerAction(sock, player, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
+    const chatId = state.chatId;
     const icon = player.class?.icon || '👤';
     const inventory = inventorySystem.formatInventory(player.jid);
     const usableItems = !inventory.isEmpty ? inventory.items.filter(item => {
@@ -1712,7 +1714,7 @@ async function promptPlayerAction(sock, player, chatId) {
     state.timers.combat = setTimeout(async () => {
         try {
             if (state.inCombat && !state.pendingActions[player.jid]) {
-                await performAction(sock, player, { type: 'defend' }, chatId);
+                await performAction(sock, player, { type: 'defend' }, sessionKey);
             }
         } catch (err) {
             console.error("Error in combat timer performAction:", err.message);
@@ -1720,9 +1722,10 @@ async function promptPlayerAction(sock, player, chatId) {
     }, turnTime);
 }
 
-async function performAction(sock, player, action, chatId) {
-    const state = getGameState(chatId);
+async function performAction(sock, player, action, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
+    const chatId = state.chatId;
     clearTimeout(state.timers.combat);
     
     const icon = player.class?.icon || '👤';
@@ -1747,7 +1750,7 @@ async function performAction(sock, player, action, chatId) {
             const mainHand = player.equipment?.main_hand;
             const element = mainHand ? (lootSystem.getItemInfo(mainHand.id).element || 'PHYSICAL') : 'PHYSICAL';
             
-            const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk, 'physical', element, chatId);
+            const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk, 'physical', element, sessionKey);
             
             if (wasEvaded) {
                 resultMsg += `💨 *MISS!* ${target.icon} ${target.name} evaded the attack.`;
@@ -1850,7 +1853,7 @@ async function performAction(sock, player, action, chatId) {
                 
                 switch (item.effect) {
                     case 'heal':
-                        const hMult = getHealMult(chatId);
+                        const hMult = getHealMult(sessionKey);
                         const healVal = (item.effectValue || 0.3) * hMult; // Adjusted by environment
                         const healAmt = Math.floor(target.stats.maxHp * healVal);
                         const actualHeal = Math.min(healAmt, target.stats.maxHp - target.stats.hp);
@@ -1901,7 +1904,7 @@ async function performAction(sock, player, action, chatId) {
                                 player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + dmg;
                                 resultMsg += `\n💥 ${e.name} takes ${dmg} damage!`;
                                 if (e.stats.hp <= 0) {
-                                    await handleDeath(sock, e, chatId, player.name);
+                                    await handleDeath(sock, e, sessionKey, player.name);
                                     resultMsg += `\n💀 ${e.name} has fallen!`;
                                 }
                             }
@@ -1919,7 +1922,7 @@ async function performAction(sock, player, action, chatId) {
                         resultMsg += `\n💥 The Abyssal Detonator consumes ${target.name}! Dealt ${finalDmg} TRUE damage!`;
                         turnInfo.damage = finalDmg;
                         if (target.stats.hp <= 0) {
-                            await handleDeath(sock, target, chatId, player.name);
+                            await handleDeath(sock, target, sessionKey, player.name);
                             resultMsg += `\n💀 ${target.name} has fallen!`;
                         }
                         break;
@@ -1953,13 +1956,14 @@ async function performAction(sock, player, action, chatId) {
     }
     
     // Process the turn image update in nextTurn/processCombatTurn
-    await nextTurn(sock, turnInfo, chatId);
+    await nextTurn(sock, turnInfo, sessionKey);
 }
 
-async function performEnemyAction(sock, enemy, chatId) {
-    const state = getGameState(chatId);
+async function performEnemyAction(sock, enemy, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
     
+    const chatId = state.chatId;
     // 🌍 WEATHER EFFECT INTEGRATION
     let weatherMult = 1.0;
     const hours = new Date().getHours();
@@ -1978,7 +1982,7 @@ async function performEnemyAction(sock, enemy, chatId) {
         applyStatusEffect(enemy, 'shield', 1, 50);
         await sock.sendMessage(state.chatId, { text: resultMsg });
         return setTimeout(() => {
-            nextTurn(sock, null, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+            nextTurn(sock, null, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
         }, turnDelay);
     }
 
@@ -2036,7 +2040,7 @@ async function performEnemyAction(sock, enemy, chatId) {
             turnInfo.target = target;
             turnInfo.damage += damage;
             if (target.stats.hp <= 0) {
-                await handleDeath(sock, target, chatId, enemy.name);
+                await handleDeath(sock, target, sessionKey, enemy.name);
                 resultMsg += `\n💀 ${target.name} has fallen!`;
             }
         }
@@ -2047,7 +2051,7 @@ async function performEnemyAction(sock, enemy, chatId) {
             console.error("Failed to send boss telegraph result:", err.message);
         }
         setTimeout(() => {
-            nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+            nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
         }, turnDelay);
         return;
     }
@@ -2068,7 +2072,7 @@ async function performEnemyAction(sock, enemy, chatId) {
                     console.error("Failed to send boss mechanic telegraph:", err.message);
                 }
                 setTimeout(() => {
-                    nextTurn(sock, null, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+                    nextTurn(sock, null, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
                 }, turnDelay);
                 return;
             }
@@ -2103,7 +2107,7 @@ async function performEnemyAction(sock, enemy, chatId) {
                     turnInfo.damage += damage;
 
                     if (target.stats.hp <= 0) {
-                        await handleDeath(sock, target, chatId, enemy.name);
+                        await handleDeath(sock, target, sessionKey, enemy.name);
                         resultMsg += `\n💀 ${target.name} has fallen!`;
                     }
                 }
@@ -2114,7 +2118,7 @@ async function performEnemyAction(sock, enemy, chatId) {
                 console.error("Failed to send enemy ability result:", err.message);
             }
             setTimeout(() => {
-                nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+                nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
             }, turnDelay);
             return;
         }
@@ -2139,7 +2143,7 @@ async function performEnemyAction(sock, enemy, chatId) {
             turnInfo.damage = damage;
 
             if (target.stats.hp <= 0) {
-                await handleDeath(sock, target, chatId, enemy.name);
+                await handleDeath(sock, target, sessionKey, enemy.name);
                 resultMsg += `\n💀 ${target.name} has fallen!`;
             }
         }
@@ -2151,13 +2155,14 @@ async function performEnemyAction(sock, enemy, chatId) {
             console.error("Failed to send enemy action result:", err.message);
         }
         setTimeout(() => {
-            nextTurn(sock, turnInfo, chatId).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
+            nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
         }, turnDelay);
     }
 
-async function handleDeath(sock, entity, chatId, lastKiller = "The Infection") {
-    const state = getGameState(chatId);
+async function handleDeath(sock, entity, sessionKey, lastKiller = "The Infection") {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
+    const chatId = state.chatId;
     entity.isDead = true;
     entity.stats.hp = 0;
         entity.currentHP = 0; // Sync
@@ -2186,12 +2191,12 @@ async function handleDeath(sock, entity, chatId, lastKiller = "The Infection") {
     }
 }
 
-async function nextTurn(sock, lastTurnInfo = null, chatId) {
-    const state = getGameState(chatId);
+async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
-    
-    // 💡 Generate incremental combat image if action just happened
-    if (lastTurnInfo) {
+
+    const chatId = state.chatId;
+    // 💡 Generate incremental combat image if action just happened    if (lastTurnInfo) {
         try {
             const scene = await combatIntegration.generateCombatScene(
                 state.players,
@@ -2245,11 +2250,12 @@ async function nextTurn(sock, lastTurnInfo = null, chatId) {
 }
 
 
-async function endCombat(sock, victory, chatId) {
-    const state = getGameState(chatId);
+async function endCombat(sock, victory, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state || state.isEndingCombat) return;
     state.isEndingCombat = true; // Guard to prevent double processing
 
+    const chatId = state.chatId;
     console.log(`[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`);
     state.inCombat = false;
     
@@ -2389,13 +2395,13 @@ async function endCombat(sock, victory, chatId) {
         
         setTimeout(() => {
             state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 1000 : GAME_CONFIG.BREAK_TIME); // Added 1s delay for solo
     } else {
         state.isEndingCombat = false;
         state.active = false;
         state.phase = 'IDLE';
-        deleteGameState(chatId); // Full cleanup on defeat
+        deleteGameState(sessionKey); // Full cleanup on defeat
     }
 }
 
@@ -2545,7 +2551,7 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
 
     const regTime = solo ? 0 : GAME_CONFIG.REGISTRATION_TIME;
     state.timers.reg = setTimeout(() => {
-        startJourney(sock, chatId).catch(e => console.error("[Quest] startJourney timer error:", e?.message || e));
+        startJourney(sock, sessionKey).catch(e => console.error("[Quest] startJourney timer error:", e?.message || e));
     }, regTime);
 
     const modeEmoji = mode === 'PERMADEATH' ? '💀' : '🗺️';
@@ -2629,21 +2635,21 @@ const joinAdventure = (chatId, senderJid, senderName) => {
     return `✅ *${senderName}* has joined the adventure! (${state.players.length}/${state.solo ? 1 : GAME_CONFIG.MAX_PLAYERS})`;
 };
 
-async function startJourney(sock, chatId) {
-    const state = getGameState(chatId);
+async function startJourney(sock, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
 
+    const chatId = state.chatId;
     const minPlayers = state.solo ? 1 : GAME_CONFIG.MIN_PLAYERS;
-    
+
     if (state.players.length < minPlayers) {
         state.active = false;
-        await sock.sendMessage(chatId, { 
-            text: `❌ Quest cancelled. Need at least ${minPlayers} hero${minPlayers > 1 ? 'es' : ''}!` 
+        await sock.sendMessage(chatId, {
+            text: `❌ Quest cancelled. Need at least ${minPlayers} hero${minPlayers > 1 ? 'es' : ''}!`
         });
-        deleteGameState(chatId);
+        deleteGameState(sessionKey);
         return;
     }
-
     state.phase = 'SHOPPING';
     
     state.players.forEach(p => {
@@ -2705,7 +2711,7 @@ async function startJourney(sock, chatId) {
     // Shopping phase - Instant for solo
     const shopDelay = state.solo ? 0 : 1000;
     setTimeout(() => {
-        openShop(sock, chatId).catch(e => console.error("[Quest] openShop timer error:", e?.message || e));
+        openShop(sock, sessionKey).catch(e => console.error("[Quest] openShop timer error:", e?.message || e));
     }, shopDelay);
 
     // 💡 HIVE MIND WHISPERS (5% chance)
@@ -2768,10 +2774,11 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
     return wasSolo ? "✅ Solo quest cancelled!" : "✅ Raid quest cancelled!";
 };
 
-async function openShop(sock, chatId) {
-    const state = getGameState(chatId);
+async function openShop(sock, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
 
+    const chatId = state.chatId;
     let msg = `╔═══════════════════╗\n`;
     msg += `   🏪 *PRE-RAID SHOP* \n`;
     msg += `╚═══════════════════╝\n\n`;
@@ -2798,15 +2805,16 @@ async function openShop(sock, chatId) {
     const shopTime = GAME_CONFIG.SHOP_TIME;
     state.timers.shop = setTimeout(() => {
         state.phase = 'PLAYING';
-        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, shopTime);
 }
 
-async function nextStage(sock, groq, chatId) {
-    const state = getGameState(chatId);
+async function nextStage(sock, groq, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
     
-    console.log(`[Quest] nextStage triggered for ${chatId}. isProcessing: ${state.isProcessing}, Encounter: ${state.encounter}/${state.maxEncounters}`);
+    const chatId = state.chatId;
+    console.log(`[Quest] nextStage triggered for ${sessionKey}. isProcessing: ${state.isProcessing}, Encounter: ${state.encounter}/${state.maxEncounters}`);
     
     if (state.isProcessing) {
         console.warn(`[Quest] nextStage blocked: already processing for ${chatId}`);
@@ -2882,7 +2890,7 @@ async function nextStage(sock, groq, chatId) {
             else encounterType = 'NON_COMBAT';
         }
         
-        await executeEncounter(sock, groq, encounterType, chatId);
+        await executeEncounter(sock, groq, encounterType, sessionKey);
     } finally {
         state.isProcessing = false;
     }
@@ -2892,11 +2900,11 @@ async function processBranchChoice(sock, type, chatId) {
     const state = getGameState(chatId);
     if (!state) return;
     state.isProcessing = true;
-    await executeEncounter(sock, state.groq, type, chatId);
+    await executeEncounter(sock, state.groq, type, sessionKey);
     state.isProcessing = false;
 }
 
-async function executeEncounter(sock, groq, encounterType, chatId) {
+async function executeEncounter(sock, groq, encounterType, sessionKey) {
     const state = getGameState(chatId);
     if (!state) return;
     const rankData = DUNGEON_RANKS[state.dungeonRank];
@@ -2926,7 +2934,7 @@ async function executeEncounter(sock, groq, encounterType, chatId) {
         console.error(`❌ Failed to generate encounter of type: ${encounterType}`);
         // Try to recover by skipping or ending
         setTimeout(() => {
-            nextStage(sock, groq, chatId).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
+            nextStage(sock, groq, sessionKey).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
         }, 1000);
         return;
     }
@@ -2977,7 +2985,7 @@ async function handleRestEncounter(sock, encounter, chatId) {
     }
     
     setTimeout(() => {
-        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
@@ -3045,7 +3053,7 @@ async function handleMerchantEncounter(sock, encounter, chatId) {
     state.timers.merchant = setTimeout(() => {
         if (state.active) {
             state.isMerchantActive = false;
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }
     }, merchantTime);
 }
@@ -3120,7 +3128,7 @@ async function processVotes(sock, encounter, chatId) {
     if (!encounter || !encounter.choices) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
         setTimeout(() => {
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3133,7 +3141,7 @@ async function processVotes(sock, encounter, chatId) {
             console.error("Failed to send invalid choice message in processVotes:", err.message);
         }
         setTimeout(() => {
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3201,7 +3209,7 @@ async function processVotes(sock, encounter, chatId) {
     state.votes = {};
     state.voteProcessing = false;
     setTimeout(() => {
-        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
