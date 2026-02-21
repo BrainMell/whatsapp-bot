@@ -2901,12 +2901,12 @@ async function processBranchChoice(sock, type, chatId) {
     const state = getGameState(chatId);
     if (!state) return;
     state.isProcessing = true;
-    await executeEncounter(sock, state.groq, type, sessionKey);
+    await executeEncounter(sock, state.groq, type, chatId);
     state.isProcessing = false;
 }
 
 async function executeEncounter(sock, groq, encounterType, sessionKey) {
-    const state = getGameState(chatId);
+    const state = getGameState(sessionKey);
     if (!state) return;
     const rankData = DUNGEON_RANKS[state.dungeonRank];
     let encounter;
@@ -2918,7 +2918,7 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
             description: 'The party finds a safe spot to rest and recover. The crackling fire brings comfort.'
         };
     } else if (encounterType === 'NON_COMBAT') {
-        encounter = selectRandomEncounter(chatId);
+        encounter = selectRandomEncounter(sessionKey);
     } else {
         encounter = classEncounters.generateEncounter(
             state.players,
@@ -2948,11 +2948,11 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
         if (encounter.type === 'ELITE_COMBAT' && state.encounter % 3 === 0) {
             state.difficulty *= 2.0; 
         }
-        await startCombat(sock, groq, encounter, chatId);
+        await startCombat(sock, groq, encounter, sessionKey);
     } else if (encounter.type === 'REST') {
-        await handleRestEncounter(sock, encounter, chatId);
+        await handleRestEncounter(sock, encounter, sessionKey);
     } else {
-        await handleNonCombatEncounter(sock, encounter, chatId);
+        await handleNonCombatEncounter(sock, encounter, sessionKey);
     }
 }
 
@@ -2986,7 +2986,7 @@ async function handleRestEncounter(sock, encounter, chatId) {
     }
     
     setTimeout(() => {
-        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
@@ -3054,7 +3054,7 @@ async function handleMerchantEncounter(sock, encounter, chatId) {
     state.timers.merchant = setTimeout(() => {
         if (state.active) {
             state.isMerchantActive = false;
-            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }
     }, merchantTime);
 }
@@ -3129,7 +3129,7 @@ async function processVotes(sock, encounter, chatId) {
     if (!encounter || !encounter.choices) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
         setTimeout(() => {
-            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3142,7 +3142,7 @@ async function processVotes(sock, encounter, chatId) {
             console.error("Failed to send invalid choice message in processVotes:", err.message);
         }
         setTimeout(() => {
-            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3210,7 +3210,7 @@ async function processVotes(sock, encounter, chatId) {
     state.votes = {};
     state.voteProcessing = false;
     setTimeout(() => {
-        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
