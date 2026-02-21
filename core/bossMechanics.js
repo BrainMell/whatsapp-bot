@@ -725,6 +725,58 @@ const VOID_TITAN_BOSS = {
 };
 
 // ==========================================
+// 🐲 ANCIENT DRAGON - Elemental Predator
+// ==========================================
+
+const ANCIENT_DRAGON_BOSS = {
+    id: 'ancient_dragon_boss',
+    name: 'Igneel the Fire King',
+    icon: '🐲🔥',
+    level: 15,
+    
+    stats: {
+        hp: 3000,
+        maxHp: 3000,
+        energy: 400,
+        maxEnergy: 400,
+        atk: 75,
+        def: 60,
+        mag: 80,
+        spd: 15,
+        luck: 30,
+        crit: 20
+    },
+    
+    phases: [
+        {
+            name: 'Dragon Breath',
+            threshold: 100,
+            abilities: ['dragon_claw', 'fire_breath', 'wing_buffet'],
+            message: '🐲 "You dare enter my nesting ground?!"'
+        },
+        {
+            name: 'Inferno',
+            threshold: 50,
+            abilities: ['fire_storm', 'draconic_roar', 'meteor_strike'],
+            effects: [
+                { type: 'stat_boost', stat: 'mag', value: 40 },
+                { type: 'stat_boost', stat: 'atk', value: 20 }
+            ],
+            message: '🔥 THE AIR GROWS SCORCHING HOT!'
+        }
+    ],
+    
+    enrageTimer: 25,
+    
+    loot: {
+        guaranteed: ['dragon_heart'],
+        possible: ['dragon_scale_armor', 'dragon_fang_dagger'],
+        gold: 5000,
+        xp: 3000
+    }
+};
+
+// ==========================================
 // 🌟 PRIMORDIAL CHAOS - Final Boss
 // ==========================================
 
@@ -1006,6 +1058,35 @@ const BOSS_ABILITIES = {
             { type: 'poison', duration: 3 }
         ]
     },
+
+    // Dragon Abilities
+    dragon_claw: {
+        name: 'Draconic Claw',
+        damage: 2.5,
+        targeting: 'single',
+        effects: [{ type: 'bleed', chance: 50, duration: 3 }]
+    },
+    fire_breath: {
+        name: 'Ancient Fire Breath',
+        damage: 3.0,
+        damageType: 'magical',
+        targeting: 'aoe',
+        effects: [{ type: 'burn', chance: 80, duration: 2 }]
+    },
+    wing_buffet: {
+        name: 'Wing Buffet',
+        damage: 1.5,
+        targeting: 'aoe',
+        effects: [{ type: 'stun', chance: 30, duration: 1 }]
+    },
+    meteor_strike: {
+        name: 'Draconic Meteor',
+        damage: 5.0,
+        damageType: 'magical',
+        targeting: 'single',
+        isTelegraphed: true,
+        telegraphMessage: ' Igneel calls upon the heavens... a massive fire rock descends! ⚠️ *DEFEND NOW!*'
+    },
     
     // Add more abilities as needed...
 };
@@ -1134,6 +1215,7 @@ module.exports = {
     DEMON_LORD_BOSS,
     VOID_TITAN_BOSS,
     PRIMORDIAL_CHAOS_BOSS,
+    ANCIENT_DRAGON_BOSS,
     BOSS_ABILITIES,
     BossPhaseManager,
     BossFightManager,

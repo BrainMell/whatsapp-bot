@@ -13,6 +13,54 @@ const monsterSkills = require('./monsterSkills');
 
 const INFECTED_POOLS = {
     // ==========================================
+    // 🐲 DRAGON LAIR (Special Dungeon)
+    // ==========================================
+    DRAGON_LAIR: {
+        theme: 'Dragon’s Lair',
+        description: 'The ancient nesting ground of drakes and dragons',
+        levelRange: [15, 100],
+        
+        COMMON: [
+            {
+                id: 'DRAKE_SCOUT',
+                name: 'Young Drake',
+                icon: '🦎',
+                desc: 'A small but aggressive dragon-kin.',
+                stats: { hp: 450, atk: 25, def: 18, mag: 10, spd: 15, luck: 10, crit: 12 },
+                archetype: 'STALKER',
+                xpReward: 400,
+                goldReward: [100, 250],
+                element: 'fire'
+            },
+            {
+                id: 'FIRE_BREATHER',
+                name: 'Lesser Wyvern',
+                icon: '🐲',
+                desc: 'A winged predator that breathes scorching flames.',
+                stats: { hp: 600, atk: 30, def: 25, mag: 25, spd: 12, luck: 15, crit: 10 },
+                archetype: 'BRUTE',
+                xpReward: 550,
+                goldReward: [200, 400],
+                element: 'fire'
+            }
+        ],
+        
+        ELITE: [
+            {
+                id: 'ANCIENT_DRAGON',
+                name: 'Ancient Dragon',
+                icon: '🐉',
+                desc: 'A massive, gold-scaled dragon of immense power.',
+                stats: { hp: 2500, atk: 65, def: 55, mag: 60, spd: 10, luck: 30, crit: 20 },
+                archetype: 'TANK',
+                xpReward: 2500,
+                goldReward: [1000, 3000],
+                element: 'fire'
+            }
+        ]
+    },
+
+    // ==========================================
     // 🔥 FIRE INFECTED (Level 1-10)
     // ==========================================
     FIRE_LOW: {

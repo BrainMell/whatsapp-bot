@@ -364,8 +364,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 190, atk: 14, def: 13, mag: 3, spd: 7, luck: 8, crit: 10 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 15, questsCompleted: 5, gold: 10000, item: 'dragon_heart' },
+        evolutionCost: 10000,
         passive: { name: 'Dragon Bane', desc: 'Deal 3x damage to dragons.' },
         evolves_into: ['DRAGON_GOD']
     },
@@ -732,6 +732,17 @@ const CLASS_SHOP_ITEMS = {
           requirement: 'Must be evolved class at level 30+'
       },
 
+      dragon_key: {
+          id: 'dragon_key',
+          name: 'Dragon Hunter Key',
+          icon: '🔑🐲',
+          desc: 'Unlocks the secret Dragon’s Lair dungeon. Required to become a Dragonslayer.',
+          cost: 15000,
+          type: 'SPECIAL_KEY',
+          category: 'CLASS',
+          requirement: 'Must be level 15+'
+      },
+
       stat_manual: {
           id: 'stat_manual',
           name: 'Ancient Stat Manual',
@@ -987,7 +998,7 @@ function getRandomStarterClass() {
     return STARTER_CLASSES[randomKey];
 }
 
-function canEvolve(currentClassId, userLevel, questsCompleted) {
+function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0) {
     const currentClass = getClassById(currentClassId);
     if (!currentClass) {
         return { canEvolve: false, reason: 'Invalid class' };
@@ -1010,7 +1021,8 @@ function canEvolve(currentClassId, userLevel, questsCompleted) {
         if (evoClass) {
             const meetsReqs = 
                 userLevel >= (evoClass.requirement?.level || 0) &&
-                questsCompleted >= (evoClass.requirement?.questsCompleted || 0);
+                questsCompleted >= (evoClass.requirement?.questsCompleted || 0) &&
+                dragonsKilled >= (evoClass.requirement?.dragonsKilled || 0);
             
             if (meetsReqs) {
                 availableEvolutions.push(evoClass);
@@ -1024,12 +1036,17 @@ function canEvolve(currentClassId, userLevel, questsCompleted) {
         const firstEvo = allClasses[firstEvoId];
         const reqLevel = firstEvo?.requirement?.level || 10;
         const reqQuests = firstEvo?.requirement?.questsCompleted || 3;
+        const reqDragons = firstEvo?.requirement?.dragonsKilled || 0;
+
+        let reason = `Need level ${reqLevel} and ${reqQuests} quests completed`;
+        if (reqDragons > 0) reason += ` and ${reqDragons} dragons killed`;
 
         return { 
             canEvolve: false, 
-            reason: `Need level ${reqLevel} and ${reqQuests} quests completed`,
+            reason: reason,
             currentLevel: userLevel,
-            currentQuests: questsCompleted
+            currentQuests: questsCompleted,
+            currentDragons: dragonsKilled
         };
     }
     

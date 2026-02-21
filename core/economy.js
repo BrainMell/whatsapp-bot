@@ -879,6 +879,14 @@ function incrementQuestCounter(userId, won = true) {
   return addQuestProgress(userId, 1.0, won);
 }
 
+function incrementDragonKills(userId, amount = 1) {
+  const user = getUser(userId);
+  if (!user) return;
+  if (!user.stats) user.stats = {};
+  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + amount;
+  scheduleSave(userId);
+}
+
 function addQuestProgress(userId, amount, won = true) {
   const user = getUser(userId);
   if (!user) return;
@@ -1096,6 +1104,7 @@ module.exports = {
   updateAdventurerRank,
   addStatBonus,
   incrementQuestCounter,
+  incrementDragonKills,
   addQuestProgress,
   hasItem,
   getGold,
