@@ -496,7 +496,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     const currentClass = classSystem.getClassById(user.class);
-    const level = progression.calculateLevel(user.xp || 0);
+    const level = progression.getLevel(senderJid);
 
     // Check if can evolve
     const evolutionCheck = classSystem.canEvolve(
@@ -511,18 +511,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             return sock.sendMessage(chatId, { text: '✨ You have reached the pinnacle of power!' });
         }
         
-        let reqMsg = `📋 *Evolution Requirements for ${currentClass.name}*\n\n`;
-        const nextTier = currentClass.tier === 'STARTER' ? 'EVOLVED' : 'ASCENDED';
-        const reqLevel = nextTier === 'EVOLVED' ? 10 : 30;
-        const reqQuests = nextTier === 'EVOLVED' ? 3 : 15;
-        const reqGold = nextTier === 'EVOLVED' ? 5000 : 50000;
-        const balance = economy.getBalance(senderJid);
-
-        reqMsg += `• Level: ${level}/${reqLevel} ${level >= reqLevel ? '✅' : '❌'}\n`;
-        reqMsg += `• Quests: ${user.questsCompleted || 0}/${reqQuests} ${(user.questsCompleted || 0) >= reqQuests ? '✅' : '❌'}\n`;
-        reqMsg += `• Zeni: ${balance}/${reqGold} ${balance >= reqGold ? '✅' : '❌'}\n`;
-        
-        return sock.sendMessage(chatId, { text: reqMsg });
+        return sock.sendMessage(chatId, { text: `❌ *EVOLUTION REQUIREMENTS NOT MET*\n\n${evolutionCheck.reason}` });
     }
     
     const availablePaths = evolutionCheck.evolutions;
