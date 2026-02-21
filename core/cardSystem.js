@@ -799,8 +799,8 @@ async function cmdDeck(senderJid, reply, chatId) {
   const slotMap = {};
   for (const uc of deckCards) slotMap[uc.mainDeckSlot] = uc;
 
-  // Animation: GIF Slideshow of all cards in deck
-  const imageUrls = deckCards.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
+  // Animation: GIF Slideshow of all cards in deck (Max 6 for memory safety)
+  const imageUrls = deckCards.slice(0, 6).map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = imageUrls.length > 0 ? await goService.generateCardGif(imageUrls, `Deck: Main Deck`) : null;
 
   let msg = `🎴 *Deck | Main Deck* 🎴\n━━━━━━━━━━━\n`;
