@@ -533,6 +533,7 @@ const ITEM_DATABASE = {
     'evolution_stone': { name: 'Evolution Stone (T2)', description: 'A pulsing gem that triggers evolution. Required for T2 class advancement.', rarity: 'RARE', value: 8000 },
     'ascension_stone': { name: 'Ascension Stone (T3)', description: 'A celestial gem containing divine energy. Required for T3 class advancement.', rarity: 'EPIC', value: 50000 },
     'dragon_key': { name: 'Dragon Hunter Key', description: 'A glowing key etched with draconic runes. Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000 },
+    'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'A ring that grants the wearer the ability to pierce draconic hide. Required to deal damage to dragons.', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', slot: 'ring', stats: { atk: 5 } },
     'dragon_heart': { name: 'Dragon Heart', description: 'A massive, still-beating heart of an ancient dragon. Radiates immense power.', rarity: 'LEGENDARY', value: 25000 },
     'dragon_scale_armor': { name: 'Dragon-Scale Plate', description: 'Armor forged from impenetrable dragon scales. (+80 DEF, +150 HP)', rarity: 'LEGENDARY', value: 45000, type: 'EQUIPMENT', stats: { def: 80, hp: 150 }, slot: 'armor', reqLevel: 30 },
     'dragon_fang_dagger': { name: 'Dragon-Fang Dagger', description: 'A blade carved from a wyvern’s tooth. (+50 ATK, +15% Crit)', rarity: 'EPIC', value: 22000, type: 'EQUIPMENT', stats: { atk: 50, crit: 15 }, slot: 'main_hand', reqLevel: 25, element: 'FIRE' },

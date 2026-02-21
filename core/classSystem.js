@@ -364,8 +364,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 190, atk: 14, def: 13, mag: 3, spd: 7, luck: 8, crit: 10 },
-        requirement: { level: 25, questsCompleted: 10, gold: 25000, item: 'dragon_heart', fighterBase: true },
-        evolutionCost: 25000,
+        requirement: { level: 40, questsCompleted: 25, gold: 100000, item: 'dragon_heart', fighterBase: true },
+        evolutionCost: 100000,
         passive: { name: 'Dragon Bane', desc: 'Deal 3x damage to dragons.' },
         evolves_into: ['DRAGON_GOD']
     },
@@ -378,8 +378,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
         stats: { hp: 420, atk: 35, def: 35, mag: 20, spd: 12, luck: 15, crit: 15 },
-        requirement: { level: 30, questsCompleted: 15, dragonsKilled: 50, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 60, questsCompleted: 50, dragonsKilled: 100, gold: 250000 },
+        evolutionCost: 250000,
         passive: { name: 'Dragon Heart', desc: 'Immune to all status effects. 50% damage reduction.' }
     },
 
@@ -741,6 +741,19 @@ const CLASS_SHOP_ITEMS = {
           type: 'SPECIAL_KEY',
           category: 'CLASS',
           requirement: 'Must be level 15+'
+      },
+
+      dragon_seal_ring: {
+          id: 'dragon_seal_ring',
+          name: 'Dragon Seal Ring',
+          icon: '💍🐲',
+          desc: 'Ancient ring required to deal damage to dragons. Without this, your attacks are useless against them.',
+          cost: 20000,
+          type: 'EQUIPMENT',
+          category: 'CLASS',
+          requirement: 'Must be level 40+',
+          slot: 'ring',
+          stats: { atk: 5 }
       },
 
       stat_manual: {

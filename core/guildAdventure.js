@@ -1018,6 +1018,15 @@ function rollD20() {
 function calculateDamage(attacker, target, power, type = 'physical', element = 'PHYSICAL', chatId = null) {
     let damage = power;
     
+    // 💡 DRAGON SEAL RING REQUIREMENT
+    if (target.id && (target.id.startsWith('DRAKE') || target.id.includes('DRAGON') || target.id.includes('Ancient Dragon'))) {
+        if (!attacker.isEnemy && attacker.jid) {
+            if (!inventorySystem.hasItem(attacker.jid, 'dragon_seal_ring')) {
+                return { damage: 0, isCrit: false, wasEvaded: false, message: "🛡️ Your attacks slide off the dragon's scales! You need the Dragon Seal Ring!" };
+            }
+        }
+    }
+
     // 💡 RANK DAMAGE BONUS (D-rank and up = DOUBLE damage)
     if (attacker.adventurerRank) {
         const rankValueMap = { 'F': 1, 'E': 2, 'D': 3, 'C': 4, 'B': 5, 'A': 6, 'S': 7, 'SS': 8, 'SSS': 9 };

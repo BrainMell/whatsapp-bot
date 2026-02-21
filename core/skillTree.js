@@ -2066,11 +2066,42 @@ const SKILL_TREES = {
                         animation: '💥🛡️',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
+                    tail_cleaver: {
+                        id: 'tail_cleaver',
+                        name: 'Tail Cleaver',
+                        tier: 3,
+                        requiredLevel: 6,
+                        maxLevel: 5,
+                        energyCost: [35, 33, 31, 29, 27],
+                        cooldown: 4,
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'A wide sweep that strikes all enemies.',
+                        animation: '⚔️🌀',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    slayers_focus: {
+                        id: 'slayers_focus',
+                        name: 'Slayer’s Focus',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            critBuff: { value: [20, 30, 40, 50, 60], duration: 3 }
+                        },
+                        description: 'Sharpen your senses, greatly increasing critical hit chance.',
+                        animation: '🎯✨',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
                     dragonfall: {
                         id: 'dragonfall',
                         name: 'Dragonfall',
                         tier: 4,
-                        requiredLevel: 8,
+                        requiredLevel: 10,
                         maxLevel: 3,
                         energyCost: [70, 65, 60],
                         cooldown: 8,
@@ -2089,19 +2120,34 @@ const SKILL_TREES = {
                 name: 'Dragon Guard',
                 icon: '🛡️',
                 skills: {
+                    ancient_blood: {
+                        id: 'ancient_blood',
+                        name: 'Ancient Blood',
+                        tier: 1,
+                        requiredLevel: 1,
+                        maxLevel: 5,
+                        energyCost: [10, 9, 8, 7, 5],
+                        cooldown: 6,
+                        targeting: 'SELF',
+                        effects: {
+                            heal: { value: [15, 25, 35, 45, 60] }
+                        },
+                        description: 'Channel ancient draconic energy to regenerate health.',
+                        animation: '🩸✨',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
                     dragon_scale: {
                         id: 'dragon_scale',
                         name: 'Dragon Scale',
                         tier: 1,
-                        requiredLevel: 1,
+                        requiredLevel: 2,
                         maxLevel: 5,
                         energyCost: [15, 14, 13, 12, 10],
                         cooldown: 5,
-                        type: 'BUFF_SELF',
-                        buffs: [
-                            { stat: 'def', value: [20, 30, 40, 50, 60] }
-                        ],
-                        duration: 3,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'defense', value: [20, 30, 40, 50, 60], duration: 3 }
+                        },
                         description: 'Hardens skin to mimic dragon scales.',
                         animation: '🛡️🐉',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -2114,14 +2160,45 @@ const SKILL_TREES = {
                         maxLevel: 5,
                         energyCost: [20, 18, 16, 14, 12],
                         cooldown: 6,
-                        type: 'BUFF_SELF',
-                        buffs: [
-                            { stat: 'mag_def', value: [30, 45, 60, 75, 90] }
-                        ],
-                        duration: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'mag_def', value: [30, 45, 60, 75, 90], duration: 4 }
+                        },
                         description: 'Greatly reduces damage from dragon breath.',
                         animation: '🧊🔥',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    hunter_roar: {
+                        id: 'hunter_roar',
+                        name: 'Hunter’s Roar',
+                        tier: 3,
+                        requiredLevel: 6,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 6,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
+                        },
+                        description: 'A terrifying roar that inspires allies, boosting team ATK.',
+                        animation: '🦁📢',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    piercing_shout: {
+                        id: 'piercing_shout',
+                        name: 'Piercing Shout',
+                        tier: 4,
+                        requiredLevel: 9,
+                        maxLevel: 5,
+                        energyCost: [45, 43, 41, 39, 37],
+                        cooldown: 7,
+                        targeting: 'AOE',
+                        effects: {
+                            debuff: { stat: 'defense', value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Emit a sonic boom that weakens all enemies’ defenses.',
+                        animation: '🔊💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     }
                 }
             }
