@@ -304,7 +304,12 @@ async function displayCharacter(sock, chatId, senderJid, senderName) {
     msg += `${rankData.icon} *Rank:* ${rankData.name}\n`;
     msg += `📊 Level: ${level}\n`;
     msg += `⭐ GP: ${gp.toLocaleString()}\n`;
-    msg += `🗡️ Quests: ${user.questsCompleted || 0} (Won: ${user.questsWon || 0})\n\n`;
+    msg += `🗡️ Quests: ${user.questsCompleted || 0} (Won: ${user.questsWon || 0})\n`;
+    
+    if (user.stats?.dragonsKilled) {
+        msg += `🐲 Dragon Kills: ${user.stats.dragonsKilled}\n`;
+    }
+    msg += `\n`;
     
     // Stats
     if (stats) {
