@@ -139,10 +139,11 @@ async function buyItem(sock, chatId, senderJid, input) {
             break;
         case 'CONSUMABLE':
         case 'BOOSTER':
+        case 'SPECIAL_KEY':
             result = await handleConsumable(senderJid, item);
             break;
         default:
-            result = { success: false, message: '❌ Unknown item type!' };
+            result = { success: false, message: `❌ Unknown item type: ${item.type}` };
     }
     
     if (result.success) {
@@ -251,64 +252,6 @@ async function handleConsumable(senderJid, item) {
         success: true,
         message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with \`${getPrefix()} combat item <number>\``
     };
-}
-
-// ==========================================
-// 🔄 EVOLUTION COMMAND
-// ==========================================
-
-async function handleEvolutionChoice(sock, chatId, senderJid, choiceNumber) {
-    const currentClass = economy.getUserClass(senderJid);
-    if (!currentClass || currentClass.tier !== 'STARTER') {
-        await sock.sendMessage(chatId, {
-            text: '❌ You must have a starter class to evolve!'
-        });
-        return;
-    }
-    
-    // Get available evolutions
-    const user = economy.getUser(senderJid);
-    const level = progression.getLevel(senderJid);
-    const evolutionCheck = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0, user.stats?.dragonsKilled || 0);
-    
-    if (!evolutionCheck.canEvolve) {
-        await sock.sendMessage(chatId, { text: evolutionCheck.reason });
-        return;
-    }
-    
-    const choice = parseInt(choiceNumber) - 1;
-    if (choice < 0 || choice >= evolutionCheck.evolutions.length) {
-        await sock.sendMessage(chatId, { text: '❌ Invalid choice!' });
-        return;
-    }
-    
-    const selectedEvo = evolutionCheck.evolutions[choice];
-
-    if (!selectedEvo.meetsRequirements) {
-        await sock.sendMessage(chatId, { text: `❌ *PATH LOCKED*\n\nNeed: ${selectedEvo.missingRequirements.join(', ')}` });
-        return;
-    }
-    
-    // Check balance for evolution cost
-    const balance = economy.getBalance(senderJid);
-    if (balance < selectedEvo.evolutionCost) {
-        await sock.sendMessage(chatId, {
-            text: `❌ Insufficient funds!\n\nEvolution Cost: ${getZENI()}${selectedEvo.evolutionCost.toLocaleString()}\nYour Balance: ${getZENI()}${balance.toLocaleString()}`
-        });
-        return;
-    }
-    
-    // Perform evolution
-    const result = economy.evolveClass(senderJid, selectedEvo.id);
-    
-    if (result.success) {
-        economy.removeMoney(senderJid, selectedEvo.evolutionCost);
-        await sock.sendMessage(chatId, {
-            text: `${result.message}\n\n💸 Paid: ${getZENI()}${selectedEvo.evolutionCost.toLocaleString()}`
-        });
-    } else {
-        await sock.sendMessage(chatId, { text: result.message });
-    }
 }
 
 // ==========================================
@@ -432,7 +375,6 @@ async function displayCharacter(sock, chatId, senderJid, senderName) {
 module.exports = {
     displayShop,
     buyItem,
-    handleEvolutionChoice,
     displayCharacter
 };
 
