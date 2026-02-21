@@ -4910,6 +4910,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
         msg += `🐲 \`${botConfig.getPrefix()} guide dragons\` - Dragonslayer Legacy\n`;
         msg += `🏰 \`${botConfig.getPrefix()} guide guilds\` - Guilds & Archetypes\n`;
         msg += `👹 \`${botConfig.getPrefix()} guide raids\` - Dungeons & Bosses\n`;
+        msg += `✨ \`${botConfig.getPrefix()} guide special\` - Special Dungeons\n`;
         msg += `🏟️ \`${botConfig.getPrefix()} guide pvp\` - Arena & Duels\n`;
         msg += `💰 \`${botConfig.getPrefix()} guide economy\` - Wealth & Investments\n`;
         msg += `📊 \`${botConfig.getPrefix()} guide stats\` - Stats & Attributes\n`;
@@ -5001,7 +5002,12 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg = `🐲 *DRAGONSLAYER LEGACY*\n\n`;
             msg += `• *Dragonslayer (Tier 2):* The elite hunter. Gains *Dragon Bane* (3x damage vs dragons).\n`;
             msg += `• *Dragon God (Tier 3):* Ascended deity. Gains *Dragon Heart* (Immunity to all status effects + 50% damage reduction).\n\n`;
-            msg += `*Feats:* To become a Dragon God, you must defeat 50 dragons and reach level 30!`;
+            msg += `*How to become a Dragonslayer:* \n`;
+            msg += `1. Reach Level 15 as a Fighter.\n`;
+            msg += `2. Buy a *Dragon Hunter Key* 🔑🐲 from the shop.\n`;
+            msg += `3. Enter the *Dragon's Lair* using \`${botConfig.getPrefix()} solo dragon\`.\n`;
+            msg += `4. Defeat the Ancient Dragon boss to earn a *Dragon Heart*.\n`;
+            msg += `5. Use \`${botConfig.getPrefix()} evolve\` to unlock the class!`;
         } else if (topic === "monsters") {
             msg = `👹 *MONSTER ARCHETYPES*\n\n`;
             msg += `• *Guardians (Tanks):* High DEF, use taunts and stuns. Use Magic or True damage.\n`;
@@ -5053,7 +5059,16 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg += `• *Solo:* Practice and level up in solo instances.\n`;
             msg += `• *Dungeons:* 3-player instances with elite loot.\n`;
             msg += `• *Raids:* Large-scale battles against World Bosses. Requires a balanced team of Tanks, DPS, and Support.\n`;
+            msg += `• *Special Dungeons:* Hidden paths like the *Dragon's Lair*. These require unique keys and are not shown in standard menus.\n`;
             msg += `• *Boss Mechanics:* Look for 'Shields', 'Regeneration', or 'Berserk' phases. Communication is key!`;
+        } else if (topic === "special") {
+            msg = `✨ *SPECIAL DUNGEONS*\n\n`;
+            msg += `Special dungeons are secret locations that offer unique rewards and class evolutions.\n\n`;
+            msg += `• *Dragon's Lair:* \n`;
+            msg += `  - *Entry:* Requires *Dragon Hunter Key* 🔑🐲.\n`;
+            msg += `  - *Command:* \`${botConfig.getPrefix()} solo dragon\`\n`;
+            msg += `  - *Reward:* *Dragon Heart* (Required for Dragonslayer class).\n\n`;
+            msg += `💡 Keep an eye on the shop for rare keys to other secret realms!`;
         } else if (topic === "pvp") {
             msg = ` Arena 🏟️ *PVP & DUELS*\n\n`;
             msg += `• *Duels:* Challenge anyone with \`${botConfig.getPrefix()} pvp <@user>\` for bragging rights.\n`;

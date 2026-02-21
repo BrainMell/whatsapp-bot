@@ -502,7 +502,8 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const evolutionCheck = classSystem.canEvolve(
         user.class,
         level,
-        user.questsCompleted || 0
+        user.questsCompleted || 0,
+        user.stats?.dragonsKilled || 0
     );
 
     if (!evolutionCheck.canEvolve) {
@@ -563,6 +564,15 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         return sock.sendMessage(chatId, { text: `❌ You need an *${stoneName}* to evolve! Buy one from the shop.` });
     }
 
+    // Check for Special Class Requirements (like Dragon Heart)
+    if (chosen.requirement && chosen.requirement.item) {
+        const reqItem = chosen.requirement.item;
+        const itemInfo = require('./lootSystem').getItemInfo(reqItem);
+        if (!inventorySystem.hasItem(senderJid, reqItem)) {
+            return sock.sendMessage(chatId, { text: `❌ You need a *${itemInfo.name}* to evolve into this class! Acquire it from the corresponding special dungeon.` });
+        }
+    }
+
     // Check gold
     if ((user.gold || 0) < chosen.evolutionCost) {
         return sock.sendMessage(chatId, { text: `❌ You need ${chosen.evolutionCost} Zeni! (You have: ${user.gold || 0})` });
@@ -570,6 +580,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
     // Perform evolution
     inventorySystem.removeItem(senderJid, requiredStone, 1);
+    if (chosen.requirement && chosen.requirement.item) {
+        inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
+    }
     user.gold -= chosen.evolutionCost;
     const oldClassName = currentClass.name;
     user.class = chosen.id;

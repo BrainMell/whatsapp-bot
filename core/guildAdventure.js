@@ -35,10 +35,19 @@ const DUNGEON_RANKS = {
     A: { name: 'A-Rank', encounters: 9, minMobs: 3, maxMobs: 6, difficulty: 10.0, boss: 'PRIMORDIAL_CHAOS', pool: 4, xpMult: 10.0 },
     S: { name: 'S-Rank', encounters: 10, minMobs: 4, maxMobs: 6, difficulty: 18.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 18.0 },
     SS: { name: 'SS-Rank', encounters: 11, minMobs: 4, maxMobs: 7, difficulty: 35.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 35.0 },
-    SSS: { name: 'SSS-Rank', encounters: 13, minMobs: 5, maxMobs: 8, difficulty: 75.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 75.0 }
+    SSS: { name: 'SSS-Rank', encounters: 13, minMobs: 5, maxMobs: 8, difficulty: 75.0, boss: 'PRIMORDIAL_CHAOS', pool: 5, xpMult: 75.0 },
+    DRAGON: { name: 'Dragon’s Lair', encounters: 5, minMobs: 2, maxMobs: 3, difficulty: 5.0, boss: 'ANCIENT_DRAGON_BOSS', pool: 'DRAGON_LAIR', xpMult: 5.0, isSpecial: true }
 };
 
 const DUNGEON_ENVIRONMENTS = {
+    DRAGON_LAIR: { 
+        id: 'DRAGON_LAIR', name: 'Dragon’s Lair', asset: 'env10.png', 
+        mobs: ['DRAKE_SCOUT', 'FIRE_BREATHER'],
+        bosses: ['ANCIENT_DRAGON_BOSS'],
+        modifier: { type: 'DRAGON_FEAR', desc: '-10% ATK due to draconic presence', damage: 0 },
+        enemyBonus: { type: 'DEFENSE', value: 0.20 },
+        isSpecial: true
+    },
     FIRE_CAVE: { 
         id: 'FIRE_CAVE', name: 'Fire Cave', asset: 'env1.png', 
         mobs: ['FLAME', 'ELDER_FLAME', 'MAGMA_BRUTE', 'HELLFIRE_DEMON'],
@@ -2170,6 +2179,14 @@ async function handleDeath(sock, entity, sessionKey, lastKiller = "The Infection
     
         if (entity.isEnemy) {
             state.stats.monstersKilled++;
+            
+            // Dragon Tracking
+            if (entity.id.startsWith('DRAKE') || entity.id.includes('DRAGON')) {
+                state.players.forEach(p => {
+                    economy.incrementDragonKills(p.jid, 1);
+                });
+            }
+
             // Adventurer Tracking: Log kills to guild board for all party members
             state.players.forEach(p => {
                 const userGuild = guilds.getUserGuild(p.jid);
@@ -2436,6 +2453,7 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
     };
     
     for (const [key, data] of Object.entries(DUNGEON_RANKS)) {
+        if (data.isSpecial) continue;
         const dungeonIndex = ranks.indexOf(key);
         // Solo cap check: can only play 3 ranks above current
         const isLocked = isSolo && dungeonIndex > userRankIndex + 3;
@@ -2483,8 +2501,22 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
         return { success: false, msg: `❌ Invalid Dungeon Rank: ${rankInput}.\n\n` + getDungeonMenu(solo) };
     }
 
-    // Rank Restriction Logic
-    if (solo && senderJid) {
+    const rankData = DUNGEON_RANKS[upperRank];
+
+    // Special Dungeon Key Check
+    if (rankData.isSpecial && senderJid) {
+        if (upperRank === 'DRAGON') {
+            if (!inventorySystem.hasItem(senderJid, 'dragon_key')) {
+                return { success: false, msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Buy one from the shop or find it as a rare drop.` };
+            }
+            // Consume key? User didn't say, but usually special keys are consumed.
+            // I'll leave it for now or check if user wants it consumed.
+            // "u buy a special key and meet specific requirement"
+        }
+    }
+
+    // Rank Restriction Logic (Skip for Special Dungeons or apply specific ones)
+    if (solo && senderJid && !rankData.isSpecial) {
         const user = economy.getUser(senderJid);
         const adventurerRank = user?.adventurerRank || 'F';
         const ranks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
@@ -2507,10 +2539,15 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
         // Set game state
         const rankData = DUNGEON_RANKS[upperRank];
         
-        // Select Random Environment
-        const envKeys = Object.keys(DUNGEON_ENVIRONMENTS);
-        const randomEnvKey = envKeys[Math.floor(Math.random() * envKeys.length)];
-        const environment = DUNGEON_ENVIRONMENTS[randomEnvKey];
+        // Select Environment (Specific for special, Random for others)
+        let environment;
+        if (rankData.isSpecial && rankData.pool && DUNGEON_ENVIRONMENTS[rankData.pool]) {
+            environment = DUNGEON_ENVIRONMENTS[rankData.pool];
+        } else {
+            const envKeys = Object.keys(DUNGEON_ENVIRONMENTS).filter(k => !DUNGEON_ENVIRONMENTS[k].isSpecial);
+            const randomEnvKey = envKeys[Math.floor(Math.random() * envKeys.length)];
+            environment = DUNGEON_ENVIRONMENTS[randomEnvKey];
+        }
     
         const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
         Object.assign(state, {

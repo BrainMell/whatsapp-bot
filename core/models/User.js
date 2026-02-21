@@ -49,6 +49,7 @@ const UserSchema = new mongoose.Schema({
     biggestWin: { type: Number, default: 0 },
     biggestLoss: { type: Number, default: 0 },
     questsCompleted: { type: Number, default: 0 },
+    dragonsKilled: { type: Number, default: 0 },
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },

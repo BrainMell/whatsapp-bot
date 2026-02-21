@@ -261,7 +261,7 @@ async function handleEvolutionChoice(sock, chatId, senderJid, choiceNumber) {
     // Get available evolutions
     const user = economy.getUser(senderJid);
     const level = progression.getLevel(senderJid);
-    const canEvo = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0);
+    const canEvo = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0, user.stats?.dragonsKilled || 0);
     
     if (!canEvo.canEvolve) {
         await sock.sendMessage(chatId, { text: canEvo.reason });
