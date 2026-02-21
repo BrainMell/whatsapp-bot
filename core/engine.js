@@ -5004,12 +5004,16 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg += `• *Dragon God (Tier 3):* Ascended deity. Gains *Dragon Heart* (Immunity to all status effects + 50% damage reduction).\n\n`;
             msg += `*Path of the Hunter:* \n`;
             msg += `1. Must be a member of the *Fighter* lineage (Warrior, Berserker, Paladin).\n`;
-            msg += `2. Reach Level 40 and complete 25 Quests.\n`;
+            msg += `2. Reach Level 40 and complete 30 Quests.\n`;
             msg += `3. Buy a *Dragon Seal Ring* 💍🐲 (20,000 Zeni) - Required to damage dragons!\n`;
             msg += `4. Buy a *Dragon Hunter Key* 🔑🐲 from the shop (15,000 Zeni).\n`;
             msg += `5. Enter the *Dragon's Lair* using \`${botConfig.getPrefix()} solo dragon\`.\n`;
             msg += `6. Slay the Ancient Dragon to earn a *Dragon Heart*.\n`;
-            msg += `7. Use \`${botConfig.getPrefix()} evolve\` with the heart and 100,000 Zeni!`;
+            msg += `7. Use \`${botConfig.getPrefix()} evolve\` with the heart and 150,000 Zeni!\n\n`;
+            msg += `*Path of the Deity:* \n`;
+            msg += `1. Reach Level 70 and complete 75 Quests.\n`;
+            msg += `2. Defeat 200 Dragons.\n`;
+            msg += `3. Pay 500,000 Zeni to ascend.`;
         } else if (topic === "monsters") {
             msg = `👹 *MONSTER ARCHETYPES*\n\n`;
             msg += `• *Guardians (Tanks):* High DEF, use taunts and stuns. Use Magic or True damage.\n`;
