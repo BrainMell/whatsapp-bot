@@ -21,6 +21,7 @@ const bossMechanics = require('./bossMechanics');
 const classEncounters = require('./classEncounters');
 const combatIntegration = require('./combatIntegration');
 const guilds = require('./guilds');
+const classSystem = require('./classSystem');
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -2503,15 +2504,22 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
 
     const rankData = DUNGEON_RANKS[upperRank];
 
-    // Special Dungeon Key Check
+    // Special Dungeon Key & Lineage Check
     if (rankData.isSpecial && senderJid) {
         if (upperRank === 'DRAGON') {
+            // Check Lineage
+            const currentClass = economy.getUserClass(senderJid);
+            if (!classSystem.isFighterLineage(currentClass?.id)) {
+                return { success: false, msg: `❌ *DRACONIC BARRIER*\n\nOnly those of the *Fighter* lineage possess the physical fortitude to survive the Dragon’s Lair. Come back when you have followed the path of the warrior!` };
+            }
+
+            // Check Key
             if (!inventorySystem.hasItem(senderJid, 'dragon_key')) {
                 return { success: false, msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Buy one from the shop or find it as a rare drop.` };
             }
-            // Consume key? User didn't say, but usually special keys are consumed.
-            // I'll leave it for now or check if user wants it consumed.
-            // "u buy a special key and meet specific requirement"
+
+            // Consume Key
+            inventorySystem.removeItem(senderJid, 'dragon_key', 1);
         }
     }
 
