@@ -191,7 +191,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 function cardLine(index, card, uc, stat) {
   const tier   = String(card.tier);
   const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
-  return `  #${index} ➳ ${card.cardName} ${rarity.emoji}`;
+  return `  #${index} ➳ ${TIER_STARS[tier]} ${card.cardName} _(${card.animeName})_ ${rarity.emoji}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -438,49 +438,29 @@ async function cmdColl(senderJid, reply, chatId) {
   
   const gifBuffer = await goService.generateCardGif(imageUrls, `Collection: ${senderJid.split('@')[0]}`);
 
-  const tierMap = { 
-    'S': { label: 'Tier S', emoji: '👑' },
-    '6': { label: 'Tier 6', emoji: '💎' },
-    '5': { label: 'Tier 5', emoji: '✨' },
-    '4': { label: 'Tier 4', emoji: '🎗' },
-    '3': { label: 'Tier 3', emoji: '🌟' },
-    '2': { label: 'Tier 2', emoji: '🎴' },
-    '1': { label: 'Tier 1', emoji: '📦' }
-  };
-
-  const categories = {};
-  for (const uc of owned) {
+  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const lines = [];
+  for (let i = 0; i < owned.length; i++) {
+    const uc   = owned[i];
     const card = CARD_INDEX[uc.cardId];
     if (!card) continue;
-    const t = String(card.tier).toUpperCase();
-    if (!categories[t]) categories[t] = [];
-    categories[t].push({ card, uc });
+    const stat = await CardStat.findOne({ cardId: uc.cardId });
+    lines.push(`${cardLine(i + 1, card, uc, stat)}${uc.forSale ? '  🏷️ _[LISTED]_' : ''}`);
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
-  const order = ['S', '6', '5', '4', '3', '2', '1'];
-  let globalIdx = 1;
-
-  for (const t of order) {
-    if (!categories[t] || !categories[t].length) continue;
-    const meta = tierMap[t] || { label: `Tier ${t}`, emoji: '◈' };
-    msg += `${meta.emoji}  *${meta.label.toUpperCase()}*\n`;
-    for (const item of categories[t]) {
-      const stat = await CardStat.findOne({ cardId: item.uc.cardId });
-      msg += `${cardLine(globalIdx++, item.card, item.uc, stat)}${item.uc.forSale ? '  🏷️ _[LISTED]_' : ''}\n`;
-    }
-    msg += '\n';
-  }
+  const caption = msg + lines.slice(0, 30).join('\n');
 
   if (gifBuffer && gifBuffer.length > 100) {
     await inst.sock_ref.sendMessage(chatId, { 
       video: gifBuffer, 
       gifPlayback: true, 
       mimetype: 'video/mp4',
-      caption: msg
+      caption: caption
     });
   } else {
-    return reply(msg);
+    for (let s = 0; s < lines.length; s += 30) {
+      await reply((s === 0 ? msg : '') + lines.slice(s, s + 30).join('\n'));
+    }
   }
 }
 
