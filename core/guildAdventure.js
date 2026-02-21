@@ -2562,7 +2562,6 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
     }
     
         // Set game state
-        const rankData = DUNGEON_RANKS[upperRank];
         
         // Select Environment (Specific for special, Random for others)
         let environment;
