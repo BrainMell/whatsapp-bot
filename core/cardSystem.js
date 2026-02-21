@@ -401,8 +401,9 @@ async function cmdColl(senderJid, reply, chatId) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Your collection is empty (or all cards are in decks).\n_Check your deck or claim new cards!_');
 
-  // Animation: GIF Slideshow of top 5 rarest
-  const sortedByRarity = [...owned].sort((a,b) => {
+  // Animation: GIF Slideshow of top 5 rarest (including deck cards)
+  const allOwned = await UserCard.find({ userId: senderJid });
+  const sortedByRarity = [...allOwned].sort((a,b) => {
     const cardA = CARD_INDEX[a.cardId];
     const cardB = CARD_INDEX[b.cardId];
     const order = { S: 0, '6': 1, '5': 2, '4': 3, '3': 4, '2': 5, '1': 6 };
@@ -464,8 +465,9 @@ async function cmdCollByTier(senderJid, reply, chatId) {
     categories[t].push({ card, uc });
   }
 
-  // Animation: GIF Slideshow of top 5 rarest
-  const sortedByRarity = [...owned].sort((a,b) => {
+  // Animation: GIF Slideshow of top 5 rarest (including deck cards)
+  const allOwned = await UserCard.find({ userId: senderJid });
+  const sortedByRarity = [...allOwned].sort((a,b) => {
     const cardA = CARD_INDEX[a.cardId];
     const cardB = CARD_INDEX[b.cardId];
     const order = { S: 0, '6': 1, '5': 2, '4': 3, '3': 4, '2': 5, '1': 6 };
