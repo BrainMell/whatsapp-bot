@@ -116,7 +116,8 @@ async function buyItem(sock, chatId, senderJid, input) {
             result = await handleClassChange(senderJid);
             break;
         case 'EVOLUTION':
-            result = await handleEvolution(sock, chatId, senderJid);
+        case 'ASCENSION':
+            result = await handleConsumable(senderJid, item);
             break;
         case 'RESET':
             result = await handleReset(senderJid);
@@ -158,51 +159,6 @@ async function handleClassChange(senderJid) {
     
     const result = economy.changeClass(senderJid);
     return result;
-}
-
-async function handleEvolution(sock, chatId, senderJid) {
-    // Initialize class if needed
-    economy.initializeClass(senderJid);
-    
-    const currentClass = economy.getUserClass(senderJid);
-    if (!currentClass) {
-        return { success: false, message: '❌ No class assigned!' };
-    }
-    
-    if (currentClass.tier !== 'STARTER') {
-        return { success: false, message: '❌ Already evolved!' };
-    }
-    
-    // Check requirements
-    const user = economy.getUser(senderJid);
-    const level = progression.getLevel(senderJid);
-    const canEvo = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0);
-    
-    if (!canEvo.canEvolve) {
-        return { success: false, message: canEvo.reason };
-    }
-    
-    // Show evolution options
-    let msg = `┏━━━━━━━━━━━━━━━┓\n`;
-    msg += `┃   🔮 EVOLVE     ┃\n`;
-    msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
-    msg += `${currentClass.icon} Current: *${currentClass.name}*\n\n`;
-    msg += `Available Paths:\n\n`;
-    
-    canEvo.evolutions.forEach((evo, index) => {
-        msg += `${index + 1}. ${evo.icon} *${evo.name}* \n`;
-        msg += `   📝 ${evo.desc}\n`;
-        msg += `   ⚡ Role: ${evo.role}\n`;
-        msg += `   💰 Cost: ${getZENI()}${evo.evolutionCost.toLocaleString()}\n\n`;
-    });
-    
-    msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `💬 Choose: \`${getPrefix()} evolve <#>\`\n`;
-    msg += `📌 Example: \`${getPrefix()} evolve 1\``;
-    
-    await sock.sendMessage(chatId, { text: msg });
-    
-    return { success: false, message: '🔮 Evolution options shown above!' };
 }
 
 async function handleReset(senderJid) {
@@ -422,7 +378,11 @@ async function displayCharacter(sock, chatId, senderJid, senderName) {
     if (classData && classData.tier === 'STARTER') {
         msg += `\n━━━━━━━━━━━━━━━\n`;
         msg += `💡 *Can evolve at Level 10 with 3 quests!*\n`;
-        msg += `Buy Evolution Stone from shop!`;
+        msg += `Use \`${getPrefix()} evolve\` to see paths.`;
+    } else if (classData && classData.tier === 'EVOLVED') {
+        msg += `\n━━━━━━━━━━━━━━━\n`;
+        msg += `💡 *Can ascend at Level 30 with 15 quests!*\n`;
+        msg += `Use \`${getPrefix()} evolve\` to see paths.`;
     }
     
     // Handle PFP
