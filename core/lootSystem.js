@@ -530,6 +530,8 @@ const ITEM_DATABASE = {
     'dragon_blood': { name: 'Dragon Blood', description: 'Smells like cinnamon and regret.', rarity: 'LEGENDARY', value: 5000 },
     'iron_shard': { name: 'Iron Shard', description: 'Metal fragments. Collect enough to build a personality.', rarity: 'COMMON', value: 100 },
     'gold_pile': { name: 'Pile of Gold', description: 'A small pile of glinting coins.', rarity: 'COMMON', value: 1 },
+    'evolution_stone': { name: 'Evolution Stone (T2)', description: 'A pulsing gem that triggers evolution. Required for T2 class advancement.', rarity: 'RARE', value: 8000 },
+    'ascension_stone': { name: 'Ascension Stone (T3)', description: 'A celestial gem containing divine energy. Required for T3 class advancement.', rarity: 'EPIC', value: 50000 },
     'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated essence of the Hive. DO NOT TOUCH.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
 
