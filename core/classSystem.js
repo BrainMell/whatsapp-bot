@@ -364,8 +364,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 190, atk: 14, def: 13, mag: 3, spd: 7, luck: 8, crit: 10 },
-        requirement: { level: 40, questsCompleted: 25, gold: 100000, item: 'dragon_heart', fighterBase: true },
-        evolutionCost: 100000,
+        requirement: { level: 40, questsCompleted: 30, gold: 150000, item: 'dragon_heart', fighterBase: true },
+        evolutionCost: 150000,
         passive: { name: 'Dragon Bane', desc: 'Deal 3x damage to dragons.' },
         evolves_into: ['DRAGON_GOD']
     },
@@ -378,8 +378,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
         stats: { hp: 420, atk: 35, def: 35, mag: 20, spd: 12, luck: 15, crit: 15 },
-        requirement: { level: 60, questsCompleted: 50, dragonsKilled: 100, gold: 250000 },
-        evolutionCost: 250000,
+        requirement: { level: 70, questsCompleted: 75, dragonsKilled: 200, gold: 500000 },
+        evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: 'Immune to all status effects. 50% damage reduction.' }
     },
 

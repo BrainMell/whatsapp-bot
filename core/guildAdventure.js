@@ -1022,7 +1022,12 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
     if (target.id && (target.id.startsWith('DRAKE') || target.id.includes('DRAGON') || target.id.includes('Ancient Dragon'))) {
         if (!attacker.isEnemy && attacker.jid) {
             if (!inventorySystem.hasItem(attacker.jid, 'dragon_seal_ring')) {
-                return { damage: 0, isCrit: false, wasEvaded: false, message: "🛡️ Your attacks slide off the dragon's scales! You need the Dragon Seal Ring!" };
+                return { 
+                    damage: 0, 
+                    isCrit: false, 
+                    wasEvaded: false, 
+                    noDamageReason: "🛡️ Your attacks slide off the dragon's scales! You need the *Dragon Seal Ring* 💍🐲 to pierce their hide!" 
+                };
             }
         }
     }
@@ -1769,9 +1774,12 @@ async function performAction(sock, player, action, sessionKey) {
             const mainHand = player.equipment?.main_hand;
             const element = mainHand ? (lootSystem.getItemInfo(mainHand.id).element || 'PHYSICAL') : 'PHYSICAL';
             
-            const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk, 'physical', element, sessionKey);
+            const { damage, isCrit, wasEvaded, noDamageReason } = calculateDamage(player, target, player.stats.atk, 'physical', element, sessionKey);
             
-            if (wasEvaded) {
+            if (noDamageReason) {
+                resultMsg += noDamageReason;
+                turnInfo.action = { name: 'Failed Attack' };
+            } else if (wasEvaded) {
                 resultMsg += `💨 *MISS!* ${target.icon} ${target.name} evaded the attack.`;
                 turnInfo.action = { name: 'Missed Attack' };
             } else {
@@ -3629,6 +3637,16 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
         for (const target of targets) {
             if (target.stats.hp <= 0) continue;
             
+            // 💡 DRAGON SEAL RING REQUIREMENT
+            if (target.id && (target.id.startsWith('DRAKE') || target.id.includes('DRAGON') || target.id.includes('Ancient Dragon'))) {
+                if (!player.isEnemy && player.jid) {
+                    if (!inventorySystem.hasItem(player.jid, 'dragon_seal_ring')) {
+                        msg += `🛡️ Your attacks slide off ${target.name}'s scales! You need the *Dragon Seal Ring* 💍🐲 to pierce their hide!\n`;
+                        continue;
+                    }
+                }
+            }
+
             let baseDamage;
             if (effect.damageType === 'magic') {
                 baseDamage = player.stats.mag || player.stats.atk;
