@@ -56,7 +56,7 @@ async function generateEndScreenImage(text, options = {}) {
         const imageBuffer = await goService.generateCombatEndScreen(text);
         return { success: true, buffer: imageBuffer };
     } catch (error) {
-        console.error('âŒ End screen generation failed:', error.message);
+        console.error('❌ End screen generation failed:', error.message);
         return { success: false, error: error.message };
     }
 }
