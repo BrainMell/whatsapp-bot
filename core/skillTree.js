@@ -2013,7 +2013,7 @@ const SKILL_TREES = {
         skillPointsPerLevel: 2,
         trees: {
             SLAYER: {
-                name: 'Slayer Path',
+                name: 'Dragon Hunting',
                 icon: '🐲',
                 skills: {
                     dragon_strike: {
@@ -2028,9 +2028,43 @@ const SKILL_TREES = {
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
                         bonusVsDragons: [3.0, 3.3, 3.6, 3.9, 4.2],
-                        description: 'Devastating blow against dragons',
+                        description: 'Devastating blow against dragons.',
                         animation: '⚔️🐲',
                         skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    wing_clipper: {
+                        id: 'wing_clipper',
+                        name: 'Wing Clipper',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [25, 24, 23, 22, 20],
+                        cooldown: 4,
+                        damageMultiplier: [1.2, 1.3, 1.4, 1.5, 1.6],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: [
+                            { type: 'stun', chance: [40, 50, 60, 70, 80], duration: 1 }
+                        ],
+                        description: 'Grounds a dragon, potentially stunning it.',
+                        animation: '✂️🐲',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    scale_breaker: {
+                        id: 'scale_breaker',
+                        name: 'Scale Breaker',
+                        tier: 3,
+                        requiredLevel: 5,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 3,
+                        damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        ignoreDefense: [10, 20, 30, 40, 50],
+                        description: 'Pierces through thick dragon scales.',
+                        animation: '💥🛡️',
+                        skillPointCost: [3, 4, 5, 6, 7]
                     },
                     dragonfall: {
                         id: 'dragonfall',
@@ -2044,10 +2078,50 @@ const SKILL_TREES = {
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
                         bonusVsDragons: [10.0, 12.0, 15.0],
-                        description: 'The ultimate dragon-killing strike',
+                        description: 'The ultimate dragon-killing strike.',
                         animation: '⚔️🐲💀💥',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    }
+                }
+            },
+            GUARD: {
+                name: 'Dragon Guard',
+                icon: '🛡️',
+                skills: {
+                    dragon_scale: {
+                        id: 'dragon_scale',
+                        name: 'Dragon Scale',
+                        tier: 1,
+                        requiredLevel: 1,
+                        maxLevel: 5,
+                        energyCost: [15, 14, 13, 12, 10],
+                        cooldown: 5,
+                        type: 'BUFF_SELF',
+                        buffs: [
+                            { stat: 'def', value: [20, 30, 40, 50, 60] }
+                        ],
+                        duration: 3,
+                        description: 'Hardens skin to mimic dragon scales.',
+                        animation: '🛡️🐉',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    fire_resistance: {
+                        id: 'fire_resistance',
+                        name: 'Dragon Breath Res',
+                        tier: 2,
+                        requiredLevel: 4,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 6,
+                        type: 'BUFF_SELF',
+                        buffs: [
+                            { stat: 'mag_def', value: [30, 45, 60, 75, 90] }
+                        ],
+                        duration: 4,
+                        description: 'Greatly reduces damage from dragon breath.',
+                        animation: '🧊🔥',
+                        skillPointCost: [2, 3, 4, 5, 6]
                     }
                 }
             }

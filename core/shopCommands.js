@@ -99,6 +99,14 @@ async function buyItem(sock, chatId, senderJid, input) {
     
     const itemId = item.id;
     
+    // Lineage Restriction for Dragon Key
+    if (itemId === 'dragon_key') {
+        const currentClass = economy.getUserClass(senderJid);
+        if (!classSystem.isFighterLineage(currentClass?.id)) {
+            return sock.sendMessage(chatId, { text: `❌ *DRAGON HUNTER LINEAGE REQUIRED*\n\nOnly members of the *Fighter* lineage can purchase this key. Dragonslayers are born from true warriors!` });
+        }
+    }
+
     // Check balance
     const balance = economy.getBalance(senderJid);
     if (balance < item.cost) {

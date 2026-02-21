@@ -5002,12 +5002,13 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
             msg = `🐲 *DRAGONSLAYER LEGACY*\n\n`;
             msg += `• *Dragonslayer (Tier 2):* The elite hunter. Gains *Dragon Bane* (3x damage vs dragons).\n`;
             msg += `• *Dragon God (Tier 3):* Ascended deity. Gains *Dragon Heart* (Immunity to all status effects + 50% damage reduction).\n\n`;
-            msg += `*How to become a Dragonslayer:* \n`;
-            msg += `1. Reach Level 15 as a Fighter.\n`;
-            msg += `2. Buy a *Dragon Hunter Key* 🔑🐲 from the shop.\n`;
-            msg += `3. Enter the *Dragon's Lair* using \`${botConfig.getPrefix()} solo dragon\`.\n`;
-            msg += `4. Defeat the Ancient Dragon boss to earn a *Dragon Heart*.\n`;
-            msg += `5. Use \`${botConfig.getPrefix()} evolve\` to unlock the class!`;
+            msg += `*Path of the Hunter:* \n`;
+            msg += `1. Must be a member of the *Fighter* lineage (Warrior, Berserker, Paladin).\n`;
+            msg += `2. Reach Level 25 and complete 10 Quests.\n`;
+            msg += `3. Buy a *Dragon Hunter Key* 🔑🐲 from the shop (15,000 Zeni).\n`;
+            msg += `4. Enter the *Dragon's Lair* using \`${botConfig.getPrefix()} solo dragon\`.\n`;
+            msg += `5. Slay the Ancient Dragon to earn a *Dragon Heart*.\n`;
+            msg += `6. Use \`${botConfig.getPrefix()} evolve\` with the heart and 25,000 Zeni!`;
         } else if (topic === "monsters") {
             msg = `👹 *MONSTER ARCHETYPES*\n\n`;
             msg += `• *Guardians (Tanks):* High DEF, use taunts and stuns. Use Magic or True damage.\n`;
