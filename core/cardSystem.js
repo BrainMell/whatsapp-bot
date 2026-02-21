@@ -426,14 +426,14 @@ async function cmdColl(senderJid, reply, chatId) {
 
   const header = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n   _${owned.length} card${owned.length !== 1 ? 's' : ''}  •  unslotted_\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
-    if (gifBuffer) {
-      await inst.sock_ref.sendMessage(chatId, {
-        video: gifBuffer,
-        gifPlayback: true,
-        mimetype: 'video/mp4',
-        caption: header + lines.slice(0, 30).join('\n')
-      });
-    } else {    for (let s = 0; s < lines.length; s += 30) {
+      if (gifBuffer && gifBuffer.length > 100) {
+        await inst.sock_ref.sendMessage(chatId, { 
+          video: gifBuffer, 
+          gifPlayback: true, 
+          mimetype: 'video/mp4',
+          caption: header + lines.slice(0, 30).join('\n') 
+        });
+      } else {    for (let s = 0; s < lines.length; s += 30) {
       await reply((s === 0 ? header : '') + lines.slice(s, s + 30).join('\n'));
     }
   }
@@ -477,7 +477,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
   const imageUrls = top5.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = await goService.generateCardGif(imageUrls, `Top Tiers: ${senderJid.split('@')[0]}`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
   const order = ['S', '6', '5', '4', '3', '2', '1'];
 
   for (const t of order) {
@@ -492,7 +492,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
     msg += '\n';
   }
 
-  if (gifBuffer) {
+  if (gifBuffer && gifBuffer.length > 100) {
     await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, mimetype: 'video/mp4', caption: msg });
   } else {
     return reply(msg);
@@ -785,7 +785,7 @@ async function cmdDeck(senderJid, reply, chatId) {
   msg += `\n_Use !showdeck Main Deck <card_index> to see more detail about this card_`;
   msg += `\n\n_*${P()} t2deck <coll#>* to add  •  *${P()} swap card <a> and <b>* to rearrange_`;
 
-  if (gifBuffer) {
+  if (gifBuffer && gifBuffer.length > 100) {
     await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, mimetype: 'video/mp4', caption: msg });
   } else {
     return reply(msg);
