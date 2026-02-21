@@ -18,6 +18,7 @@ const CardStat   = require('./models/CardStat');
 const UserCard   = require('./models/UserCard');
 const CardMarket = require('./models/CardMarket');
 const CardDeck   = require('./models/CardDeck');
+const System     = require('./models/System');
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const botConfig  = require('../botConfig');
@@ -108,6 +109,39 @@ function getInst() {
   return instances.get(id);
 }
 
+async function saveActiveGroups() {
+  const inst = getInst();
+  const id = botConfig.getBotId();
+  await System.findOneAndUpdate(
+    { key: `card_active_groups_${id}` },
+    { value: Array.from(inst.activeGroups) },
+    { upsert: true }
+  );
+}
+
+async function loadActiveGroups() {
+  const inst = getInst();
+  const id = botConfig.getBotId();
+  const data = await System.findOne({ key: `card_active_groups_${id}` });
+  if (data && Array.isArray(data.value)) {
+    inst.activeGroups = new Set(data.value);
+    if (inst.activeGroups.size > 0) {
+      ensureTimerRunning();
+    }
+  }
+}
+
+function ensureTimerRunning() {
+  const inst = getInst();
+  if (!inst.spawnTimer && inst.activeGroups.size > 0) {
+    inst.spawnTimer = setInterval(() => {
+      for (const gid of inst.activeGroups) {
+        doSpawn(null, null, false, gid);
+      }
+    }, 30 * 60 * 1000);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 4 — RARITY & PRICE ENGINE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -139,7 +173,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 
   return (
 `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-🎴  A CARD HAS MANIFESTED!
+🎴  A CARD HAS APPEARED!
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
@@ -291,18 +325,13 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
   if (sub === 'on') {
     if (inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *ON* in this group.');
     inst.activeGroups.add(groupJid);
+    await saveActiveGroups();
     
     // Spawn one immediately for THIS group
     doSpawn(null, null, false, groupJid);
 
-    // Setup singleton timer for this instance if not already running
-    if (!inst.spawnTimer) {
-      inst.spawnTimer = setInterval(() => {
-        for (const gid of inst.activeGroups) {
-          doSpawn(null, null, false, gid);
-        }
-      }, 30 * 60 * 1000);
-    }
+    // Setup singleton timer for this instance
+    ensureTimerRunning();
 
     return reply(
 `✅ *CARD SYSTEM IS NOW ONLINE*
@@ -317,8 +346,9 @@ _Use_ *${P()} cards off* _to stop._`
   if (sub === 'off') {
     if (!inst.activeGroups.has(groupJid)) return reply('⚠️ Card system is already *OFF* in this group.');
     inst.activeGroups.delete(groupJid);
+    await saveActiveGroups();
     
-    // If no more groups, we can stop the timer (optional optimization)
+    // If no more groups, we can stop the timer
     if (inst.activeGroups.size === 0 && inst.spawnTimer) {
       clearInterval(inst.spawnTimer);
       inst.spawnTimer = null;
@@ -1249,6 +1279,7 @@ function init(sock, admins = [], mods = [], owner = null) {
   inst.adminJids = new Set(admins);
   inst.modJids   = new Set(mods);
   loadCardsDB();
+  loadActiveGroups();
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
