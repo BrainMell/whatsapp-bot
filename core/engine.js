@@ -8021,12 +8021,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} buy `)) {
     return;
 }
 
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve `)) {
-    const choice = lowerTxt.split(' ')[2];
-    await shopCommands.handleEvolutionChoice(sock, chatId, senderJid, choice);
-    return;
-}
-
 // ============================================
 // 🌳 SKILL TREE COMMANDS
 // ============================================
@@ -8039,8 +8033,10 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill tree` ||
 }
 
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve`)) {
-    const parts = txt.split(' ');
-    const args = parts.slice(1);
+    const parts = txt.trim().split(/\s+/);
+    // .j evolve -> parts is [".j", "evolve"], args is []
+    // .j evolve 1 -> parts is [".j", "evolve", "1"], args is ["1"]
+    const args = parts.slice(2);
     await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, args);
     return;
 }
