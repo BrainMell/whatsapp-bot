@@ -119,6 +119,21 @@ async function saveActiveGroups() {
   );
 }
 
+async function saveRoles() {
+  const inst = getInst();
+  const id = botConfig.getBotId();
+  await System.findOneAndUpdate(
+    { key: `card_roles_${id}` },
+    { 
+      value: { 
+        admins: Array.from(inst.adminJids), 
+        mods: Array.from(inst.modJids) 
+      } 
+    },
+    { upsert: true }
+  );
+}
+
 async function loadActiveGroups() {
   const inst = getInst();
   const id = botConfig.getBotId();
@@ -128,6 +143,16 @@ async function loadActiveGroups() {
     if (inst.activeGroups.size > 0) {
       ensureTimerRunning();
     }
+  }
+}
+
+async function loadRoles() {
+  const inst = getInst();
+  const id = botConfig.getBotId();
+  const data = await System.findOne({ key: `card_roles_${id}` });
+  if (data && data.value) {
+    if (Array.isArray(data.value.admins)) data.value.admins.forEach(j => inst.adminJids.add(j));
+    if (Array.isArray(data.value.mods)) data.value.mods.forEach(j => inst.modJids.add(j));
   }
 }
 
@@ -369,9 +394,11 @@ async function cmdManageRole(type, action, targetJid, reply) {
 
   if (action === 'add') {
     set.add(targetJid);
+    await saveRoles();
     return reply(`✅ @${targetJid.split('@')[0]} is now a *${label}*.`);
   } else {
     set.delete(targetJid);
+    await saveRoles();
     return reply(`👤 @${targetJid.split('@')[0]} removed from *${label}* roles.`);
   }
 }
@@ -1065,11 +1092,10 @@ async function cmdSeries(args, senderJid, reply) {
 // ─── 7.26  .g spawn | <name or id> | <tier>  (owner/mod DMs only) ─────────
 async function cmdOwnerSpawn(rawArgs, senderJid, chatId, reply) {
   const inst = getInst();
-  // Fix: mods can now spawn too
+  // mods can spawn too
   if (senderJid !== inst.ownerJid && !inst.modJids.has(senderJid)) {
     return reply('❌ This command is exclusive to the server owner and moderators.');
   }
-  if (chatId.endsWith('@g.us')) return reply(`❌ The *${P()} spawn* command only works in DMs with Olivier. Cannot be used in group chats.`);
 
   const parts   = rawArgs.split('|').map(s => s.trim()).filter(Boolean);
   const query   = parts[0] || '';
@@ -1097,11 +1123,27 @@ Examples:
 
   if (inst.activeGroups.size === 0) return reply(`❌ Card system is not ON in any group. Turn it on first with *${P()} cards on* in the target group.`);
 
-  // Send to the first active group found
-  const targetGroup = [...inst.activeGroups][0];
+  // Determine target group:
+  // 1. If in a group and cards are ON there, use it.
+  // 2. Otherwise, use the first active group found.
+  let targetGroup = null;
+  if (chatId.endsWith('@g.us')) {
+    if (inst.activeGroups.has(chatId)) {
+      targetGroup = chatId;
+    } else {
+      return reply(`❌ Card system is not ON in this group. Turn it on first with *${P()} cards on*.`);
+    }
+  } else {
+    targetGroup = [...inst.activeGroups][0];
+  }
+
+  if (!targetGroup) return reply('❌ No active group found to spawn the card.');
+
   const result = await doSpawn(card.id, String(card.tier), true, targetGroup);
   if (result) {
-    return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to active group.`);
+    if (!chatId.endsWith('@g.us')) {
+      return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to group: ${targetGroup.split('@')[0]}`);
+    }
   } else {
     return reply('❌ Spawn failed. Check that the card image URL is still live.');
   }
@@ -1282,6 +1324,7 @@ function init(sock, admins = [], mods = [], owner = null) {
   inst.modJids   = new Set(mods);
   loadCardsDB();
   loadActiveGroups();
+  loadRoles();
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
