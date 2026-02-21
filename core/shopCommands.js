@@ -269,20 +269,25 @@ async function handleEvolutionChoice(sock, chatId, senderJid, choiceNumber) {
     // Get available evolutions
     const user = economy.getUser(senderJid);
     const level = progression.getLevel(senderJid);
-    const canEvo = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0, user.stats?.dragonsKilled || 0);
+    const evolutionCheck = classSystem.canEvolve(currentClass.id, level, user.questsCompleted || 0, user.stats?.dragonsKilled || 0);
     
-    if (!canEvo.canEvolve) {
-        await sock.sendMessage(chatId, { text: canEvo.reason });
+    if (!evolutionCheck.canEvolve) {
+        await sock.sendMessage(chatId, { text: evolutionCheck.reason });
         return;
     }
     
     const choice = parseInt(choiceNumber) - 1;
-    if (choice < 0 || choice >= canEvo.evolutions.length) {
+    if (choice < 0 || choice >= evolutionCheck.evolutions.length) {
         await sock.sendMessage(chatId, { text: '❌ Invalid choice!' });
         return;
     }
     
-    const selectedEvo = canEvo.evolutions[choice];
+    const selectedEvo = evolutionCheck.evolutions[choice];
+
+    if (!selectedEvo.meetsRequirements) {
+        await sock.sendMessage(chatId, { text: `❌ *PATH LOCKED*\n\nNeed: ${selectedEvo.missingRequirements.join(', ')}` });
+        return;
+    }
     
     // Check balance for evolution cost
     const balance = economy.getBalance(senderJid);
