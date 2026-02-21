@@ -516,10 +516,11 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         const reqLevel = nextTier === 'EVOLVED' ? 10 : 30;
         const reqQuests = nextTier === 'EVOLVED' ? 3 : 15;
         const reqGold = nextTier === 'EVOLVED' ? 5000 : 50000;
+        const balance = economy.getBalance(senderJid);
 
         reqMsg += `• Level: ${level}/${reqLevel} ${level >= reqLevel ? '✅' : '❌'}\n`;
         reqMsg += `• Quests: ${user.questsCompleted || 0}/${reqQuests} ${(user.questsCompleted || 0) >= reqQuests ? '✅' : '❌'}\n`;
-        reqMsg += `• Gold: ${user.gold || 0}/${reqGold} ${(user.gold || 0) >= reqGold ? '✅' : '❌'}\n`;
+        reqMsg += `• Zeni: ${balance}/${reqGold} ${balance >= reqGold ? '✅' : '❌'}\n`;
         
         return sock.sendMessage(chatId, { text: reqMsg });
     }
@@ -574,8 +575,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     // Check gold
-    if ((user.gold || 0) < chosen.evolutionCost) {
-        return sock.sendMessage(chatId, { text: `❌ You need ${chosen.evolutionCost} Zeni! (You have: ${user.gold || 0})` });
+    const balance = economy.getBalance(senderJid);
+    if (balance < chosen.evolutionCost) {
+        return sock.sendMessage(chatId, { text: `❌ You need ${chosen.evolutionCost} Zeni! (You have: ${balance})` });
     }
 
     // Perform evolution
@@ -583,7 +585,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     if (chosen.requirement && chosen.requirement.item) {
         inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
     }
-    user.gold -= chosen.evolutionCost;
+    economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
     const oldClassName = currentClass.name;
     user.class = chosen.id;
 
