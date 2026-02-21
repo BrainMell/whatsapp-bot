@@ -133,7 +133,7 @@ function calcPrice(tier, totalSpawned, maxCopies) {
 //  SECTION 5 — CARD CAPTION BUILDER
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildSpawnCaption(card, copyNumber, maxCopies, price, captcha) {
+function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
@@ -149,8 +149,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price, captcha) {
 🪙  Value ›  ${ZENI()}${price.toLocaleString()}
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
-🔐  Captcha ›  *${captcha}*
-⌨️  Type  ${P()} claim ${card.id} ${captcha}  to collect
+⌨️  Type  ${P()} claim ${card.id}  to collect
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
@@ -237,8 +236,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 
   const copyNumber = stat.totalSpawned;
   const price      = calcPrice(card.tier, copyNumber, stat.maxCopies);
-  const captcha    = Math.random().toString(36).substring(2, 6).toUpperCase();
-  const caption    = buildSpawnCaption(card, copyNumber, stat.maxCopies, price, captcha);
+  const caption    = buildSpawnCaption(card, copyNumber, stat.maxCopies, price);
 
   try {
     const res = await axios.get(card.imageUrl, {
@@ -253,7 +251,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     });
 
     inst.activeSpawns.set(card.id, {
-      card, copyNumber, stat, price, captcha,
+      card, copyNumber, stat, price,
       groupJid:  group,
       spawnedAt: Date.now(),
       expiresAt: Date.now() + CLAIM_WINDOW_MS
@@ -310,7 +308,7 @@ async function cmdToggle(sub, senderJid, groupJid, reply, senderIsAdmin) {
 `✅ *CARD SYSTEM IS NOW ONLINE*
 
 🃏  Cards will spawn in this group every *30 minutes*
-🕹️  Players claim with *${P()} claim <id> <captcha>*
+🕹️  Players claim with *${P()} claim <id>*
 📦  View collection with *${P()} coll*
 
 _Use_ *${P()} cards off* _to stop._`
@@ -351,11 +349,10 @@ async function cmdManageRole(type, action, targetJid, reply) {
 // ─── 7.2  .g claim <id> <captcha> ──────────────────────────────────────────
 async function cmdClaim(args, senderJid, reply) {
   const inst = getInst();
-  // Fix: ID Parser ignores spaces. Extract last arg as captcha if provided.
-  const captchaInput = args.length > 1 ? args[args.length - 1].toUpperCase() : '';
-  const cardId = args.length > 1 ? args.slice(0, -1).join('').replace(/\s+/g, '') : (args[0] || '').replace(/\s+/g, '');
+  // Fix: ID Parser ignores spaces.
+  const cardId = args.join('').replace(/\s+/g, '');
 
-  if (!cardId) return reply(`❌ Usage: *${P()} claim <card-id> <captcha>*\nExample: \`${P()} claim 1-00001 ABCD\``);
+  if (!cardId) return reply(`❌ Usage: *${P()} claim <card-id>*\nExample: \`${P()} claim 1-00001\``);
 
   const now = Date.now();
   for (const [id, sp] of inst.activeSpawns.entries()) {
@@ -364,10 +361,6 @@ async function cmdClaim(args, senderJid, reply) {
 
   const spawn = inst.activeSpawns.get(cardId);
   if (!spawn) return reply(`❌ No active card with ID \`${cardId}\`\n_It was already claimed, expired, or the ID is wrong._`);
-
-  if (captchaInput !== spawn.captcha) {
-    return reply(`🔐 *INVALID CAPTCHA*\n\nThe code for \`${cardId}\` is *${spawn.captcha}*.\nTry again: \`${P()} claim ${cardId} ${spawn.captcha}\``);
-  }
 
   try {
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
@@ -477,7 +470,7 @@ async function cmdCollByTier(senderJid, reply, chatId) {
   const imageUrls = top5.map(uc => CARD_INDEX[uc.cardId]?.imageUrl).filter(Boolean);
   const gifBuffer = await goService.generateCardGif(imageUrls, `Top Tiers: ${senderJid.split('@')[0]}`);
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬\n   🗂️  *COLLECTION BY TIER*\n▬▬▬▬▬▬▬\n\n`;
   const order = ['S', '6', '5', '4', '3', '2', '1'];
 
   for (const t of order) {
@@ -510,7 +503,7 @@ async function cmdDuplicate(senderJid, reply) {
 
   if (!dupes.length) return reply('✅ No duplicates! Every copy you own is unique.');
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n   🔐  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🔐  *YOUR DUPLICATES*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
   for (const [cardId, count] of dupes) {
     const card = CARD_INDEX[cardId];
     if (!card) continue;
