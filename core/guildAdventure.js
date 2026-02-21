@@ -825,6 +825,12 @@ const STATUS_EFFECTS = {
         icon: '💔',
         effect: 'reduce_defense',
         value: 30
+    },
+    blessing: {
+        name: 'Blessing',
+        icon: '✨',
+        effect: 'increase_stats',
+        value: 20
     }
 };
 
@@ -1058,7 +1064,20 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
     }
 
     // Defense mitigation
-    const def = type === 'physical' ? (target.stats.def || 0) : (target.stats.mag || 0) * 0.5;
+    let def = type === 'physical' ? (target.stats.def || 0) : (target.stats.mag || 0) * 0.5;
+
+    // 💡 STATUS EFFECT MODIFIERS (Defense)
+    const targetEffects = target.statusEffects || [];
+    if (targetEffects.some(e => e.type === 'shield')) def *= 1.5;
+    if (targetEffects.some(e => e.type === 'vulnerability')) def *= 0.7;
+    if (targetEffects.some(e => e.type === 'berserk')) def *= 0.7; // Berserk penalty
+    if (targetEffects.some(e => e.type === 'curse' || e.type === 'weak')) def *= 0.8;
+
+    // 💡 STATUS EFFECT MODIFIERS (Attack Power)
+    const attackerEffects = attacker.statusEffects || [];
+    if (attackerEffects.some(e => e.type === 'blessing')) damage *= 1.2;
+    if (attackerEffects.some(e => e.type === 'berserk')) damage *= 1.5; // Berserk bonus
+    if (attackerEffects.some(e => e.type === 'curse' || e.type === 'weak')) damage *= 0.8;
 
     // 💡 DAMAGE REDUCTION (Secondary Stat)
     const dr = target.stats.dmgReduction || 0;
@@ -1596,6 +1615,12 @@ async function processCombatTurn(sock, sessionKey) {
                                           speed = Math.floor(speed * 0.9);
                                       }
                 
+                                      // 💡 SPEED STATUS EFFECTS
+                                      const cEffects = c.statusEffects || [];
+                                      if (cEffects.some(e => e.type === 'haste')) speed *= 1.3;
+                                      if (cEffects.some(e => e.type === 'slow')) speed *= 0.5;
+                                      if (cEffects.some(e => e.type === 'curse' || e.type === 'weak')) speed *= 0.8;
+
                                       c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
                 
                                       if (c.actionGauge >= 100) {
@@ -1900,10 +1925,11 @@ async function performAction(sock, player, action, sessionKey) {
                         const maxEn = target.stats.maxEnergy || 100;
                         const enAmt = Math.floor(maxEn * enVal);
                         target.stats.energy = Math.min(maxEn, target.stats.energy + enAmt);
+                        target.currentEnergy = target.stats.energy;
                         resultMsg += `\n⚡ Restored ${enAmt} energy to ${target.name}! (${Math.round(enVal * 100)}%)`;
                         break;
                     case 'buff_atk':
-                        applyStatusEffect(target, 'haste', 3, item.effectValue || 0);
+                        applyStatusEffect(target, 'blessing', 3, item.effectValue || 0);
                         resultMsg += `\n💪 Buffed ${target.name}'s attack!`;
                         break;
                     case 'buff_def':
@@ -1918,14 +1944,24 @@ async function performAction(sock, player, action, sessionKey) {
                         applyStatusEffect(target, 'blessing', 3, item.effectValue || 0);
                         resultMsg += `\n🍀 Buffed ${target.name}'s luck!`;
                         break;
+                    case 'buff_all':
+                        applyStatusEffect(target, 'blessing', item.duration || 3, item.effectValue || 20);
+                        applyStatusEffect(target, 'haste', item.duration || 3, 20);
+                        resultMsg += `\n✨ ${target.name} is overflowing with power! (+All Stats)`;
+                        break;
                     case 'buff_all_damage':
                         applyStatusEffect(target, 'berserk', 2, item.effectValue || 50);
                         resultMsg += `\n💥 ${target.name} enters a BERSERKER RAGE! (+Damage, -Defense)`;
                         break;
+                    case 'shield_max':
+                        applyStatusEffect(target, 'shield', 5, 100); // Massive shield
+                        resultMsg += `\n🛡️ ${target.name} is encased in a massive energy barrier!`;
+                        break;
                     case 'damage_aoe':
+                    case 'aoe_damage':
                         state.enemies.forEach(async (e) => {
                             if (e.stats.hp > 0) {
-                                const dmg = (item.effectValue || 0);
+                                const dmg = (item.effectValue || 80);
                                 e.stats.hp -= dmg;
                                 e.currentHP = e.stats.hp; // Sync
                                 player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + dmg;
@@ -1936,7 +1972,21 @@ async function performAction(sock, player, action, sessionKey) {
                                 }
                             }
                         });
-                        turnInfo.damage = item.effectValue || 0;
+                        turnInfo.damage = item.effectValue || 80;
+                        break;
+                    case 'aoe_debuff_damage':
+                        state.enemies.forEach(async (e) => {
+                            if (e.stats.hp > 0) {
+                                const dmg = (item.effectValue || 150);
+                                e.stats.hp -= dmg;
+                                e.currentHP = e.stats.hp;
+                                applyStatusEffect(e, 'vulnerability', 3, 20);
+                                resultMsg += `\n💥 ${e.name} takes ${dmg} damage and is weakened!`;
+                                if (e.stats.hp <= 0) {
+                                    await handleDeath(sock, e, sessionKey, player.name);
+                                }
+                            }
+                        });
                         break;
                     case 'percent_hp_damage':
                         // True damage based on % of Max HP (ignores defense)
@@ -1953,6 +2003,9 @@ async function performAction(sock, player, action, sessionKey) {
                             resultMsg += `\n💀 ${target.name} has fallen!`;
                         }
                         break;
+                    case 'flee':
+                        resultMsg += `\n💨 The smoke bomb creates a diversion! The party escapes!`;
+                        return endAdventure(sock, chatId, false); // End without victory but alive
                     case 'revive':
                         if (target.isDead) {
                             target.isDead = false;
@@ -3737,6 +3790,16 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             const target = enemies[i];
             if (!target) continue;
             
+            // 💡 DRAGON SEAL RING REQUIREMENT
+            if (target.id && (target.id.startsWith('DRAKE') || target.id.includes('DRAGON') || target.id.includes('Ancient Dragon'))) {
+                if (!player.isEnemy && player.jid) {
+                    if (!inventorySystem.hasItem(player.jid, 'dragon_seal_ring')) {
+                        msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
+                        continue;
+                    }
+                }
+            }
+
             let baseDamage = effect.damageType === 'magic' ? player.stats.mag : player.stats.atk;
             let damage = Math.floor(baseDamage * effect.multiplier);
             
