@@ -1038,63 +1038,37 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
         return { canEvolve: false, reason: 'Already reached maximum evolution tier' };
     }
     
-    const evolutions = currentClass.evolves_into;
-    if (!evolutions || evolutions.length === 0) {
+    const evolutionIds = currentClass.evolves_into;
+    if (!evolutionIds || evolutionIds.length === 0) {
         return { canEvolve: false, reason: 'No further evolutions available for this class' };
     }
 
-    const availableEvolutions = [];
+    const evolutions = [];
     const allClasses = getAllClasses();
     
-    for (const evoId of evolutions) {
+    for (const evoId of evolutionIds) {
         const evoClass = allClasses[evoId];
         if (evoClass) {
-            let meetsReqs = 
-                userLevel >= (evoClass.requirement?.level || 0) &&
-                questsCompleted >= (evoClass.requirement?.questsCompleted || 0) &&
-                dragonsKilled >= (evoClass.requirement?.dragonsKilled || 0);
+            const missing = [];
+            if (userLevel < (evoClass.requirement?.level || 0)) missing.push(`Level ${evoClass.requirement.level}`);
+            if (questsCompleted < (evoClass.requirement?.questsCompleted || 0)) missing.push(`${evoClass.requirement.questsCompleted} Quests`);
+            if (dragonsKilled < (evoClass.requirement?.dragonsKilled || 0)) missing.push(`${evoClass.requirement.dragonsKilled} Dragons`);
             
-            // Check for Fighter Lineage if required (specifically for Dragonslayer)
+            let lineageOk = true;
             if (evoClass.requirement?.fighterBase && !isFighterLineage(currentClassId)) {
-                meetsReqs = false;
+                lineageOk = false;
+                missing.push('Fighter Lineage');
             }
 
-            if (meetsReqs) {
-                availableEvolutions.push(evoClass);
-            }
+            evolutions.push({
+                ...evoClass,
+                meetsRequirements: missing.length === 0,
+                missingRequirements: missing
+            });
         }
     }
     
-    if (availableEvolutions.length === 0) {
-        // Find the first evolution to show requirements
-        const firstEvoId = evolutions[0];
-        const firstEvo = allClasses[firstEvoId];
-        
-        // Specifically check if it's a lineage issue
-        if (firstEvo?.requirement?.fighterBase && !isFighterLineage(currentClassId)) {
-            return {
-                canEvolve: false,
-                reason: `This evolution path is only available to the Fighter lineage!`
-            };
-        }
-
-        const reqLevel = firstEvo?.requirement?.level || 10;
-        const reqQuests = firstEvo?.requirement?.questsCompleted || 3;
-        const reqDragons = firstEvo?.requirement?.dragonsKilled || 0;
-
-        let reason = `Need level ${reqLevel} and ${reqQuests} quests completed`;
-        if (reqDragons > 0) reason += ` and ${reqDragons} dragons killed`;
-
-        return { 
-            canEvolve: false, 
-            reason: reason,
-            currentLevel: userLevel,
-            currentQuests: questsCompleted,
-            currentDragons: dragonsKilled
-        };
-    }
-    
-    return { canEvolve: true, evolutions: availableEvolutions };
+    return { canEvolve: true, evolutions };
 }
 
 function calculateAdventurerRank(level, questsCompleted, gp) {

@@ -510,30 +510,30 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         if (currentClass.tier === 'ASCENDED') {
             return sock.sendMessage(chatId, { text: '✨ You have reached the pinnacle of power!' });
         }
-        
-        return sock.sendMessage(chatId, { text: `❌ *EVOLUTION REQUIREMENTS NOT MET*\n\n${evolutionCheck.reason}` });
+        return sock.sendMessage(chatId, { text: `❌ *EVOLUTION NOT AVAILABLE*\n\n${evolutionCheck.reason}` });
     }
     
-    const availablePaths = evolutionCheck.evolutions;
+    const allPaths = evolutionCheck.evolutions;
 
     const nextTier = currentClass.tier === 'STARTER' ? 'EVOLVED' : 'ASCENDED';
     const requiredStone = nextTier === 'EVOLVED' ? 'evolution_stone' : 'ascension_stone';
     const stoneName = requiredStone === 'evolution_stone' ? 'Evolution Stone (T2)' : 'Ascension Stone (T3)';
 
-    // If no choice specified, show options
+    // If no choice specified, show all possible options
     if (!args[0]) {
-        let text = `🌟 *CLASS EVOLUTION AVAILABLE* 🌟\n\n`;
-        text += `Choose your evolution path for *${currentClass.name}*!\n\n`;
+        let text = `🌟 *CLASS EVOLUTION PATHS* 🌟\n\n`;
+        text += `Choose your future for *${currentClass.name}*!\n\n`;
         
-        availablePaths.forEach((evo, i) => {
-            text += `*${i + 1}. ${evo.icon} ${evo.name}*\n`;
+        allPaths.forEach((evo, i) => {
+            const status = evo.meetsRequirements ? '✅ *AVAILABLE*' : `🔒 *LOCKED* (Needs: ${evo.missingRequirements.join(', ')})`;
+            text += `*${i + 1}. ${evo.icon} ${evo.name}* [${status}]\n`;
             text += `📝 ${evo.desc}\n`;
             text += `🎭 *Role:* ${evo.role}\n`;
-            text += `💰 *Cost:* ${evo.evolutionCost} Zeni\n`;
+            text += `💰 *Cost:* ${evo.evolutionCost.toLocaleString()} Zeni\n`;
             text += `⚡ *Passive:* ${evo.passive.name}\n\n`;
         });
 
-        text += `*Required:* 💎 ${stoneName}\n\n`;
+        text += `*Required Item:* 💎 ${stoneName}\n\n`;
         text += `Use: \`${getPrefix()} evolve <number>\` to choose.\n`;
         text += `⚠️ *Note:* This decision is permanent and will reset your skills!`;
         
@@ -542,11 +542,16 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
     // Process choice
     const choiceNum = parseInt(args[0]);
-    if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > availablePaths.length) {
+    if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > allPaths.length) {
         return sock.sendMessage(chatId, { text: '❌ Invalid choice! Use a number from the list.' });
     }
     
-    const chosen = availablePaths[choiceNum - 1];
+    const chosen = allPaths[choiceNum - 1];
+
+    if (!chosen.meetsRequirements) {
+        return sock.sendMessage(chatId, { text: `❌ *PATH LOCKED*\n\nYou haven't met the requirements for *${chosen.name}* yet:\n\n• ${chosen.missingRequirements.join('\n• ')}` });
+    }
+
     const inventorySystem = require('./inventorySystem');
     
     // Check for Evolution/Ascension Stone
