@@ -22,6 +22,7 @@ const classEncounters = require('./classEncounters');
 const combatIntegration = require('./combatIntegration');
 const guilds = require('./guilds');
 const classSystem = require('./classSystem');
+const monsterSkills = require('./monsterSkills');
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -539,51 +540,9 @@ const ELEMENT_CHART = {
 // 👹 MONSTER ABILITY DATABASE
 // ==========================================
 
-const MONSTER_ABILITIES = {
-    // PHYSICAL SKILLS
-    'quick_stab': { name: 'Quick Stab', type: 'damage', multiplier: 1.2, cost: 15, msg: 'thrusts their weapon with blinding speed!' },
-    'club_smash': { name: 'Club Smash', type: 'damage', multiplier: 1.8, cost: 25, effect: 'stun', chance: 30, msg: 'brings down a massive club with bone-crushing force!' },
-    'bite': { name: 'Vicious Bite', type: 'damage', multiplier: 1.4, cost: 20, effect: 'bleed', chance: 40, msg: 'sinks its teeth deep into flesh!' },
-    'slash': { name: 'Cleaving Slash', type: 'damage', multiplier: 1.5, cost: 20, msg: 'swings wildly at the frontline!' },
-    'poison_bite': { name: 'Venomous Bite', type: 'damage', multiplier: 1.2, cost: 25, effect: 'poison', chance: 70, msg: 'injects a deadly toxin!' },
-    'bone_slash': { name: 'Bone Blade', type: 'damage', multiplier: 1.6, cost: 20, msg: 'swipes with a blade made of sharp bone!' },
-    'tail_swipe': { name: 'Tail Swipe', type: 'aoe', multiplier: 1.0, cost: 30, msg: 'whips its tail across the entire party!' },
-    'claw': { name: 'Rending Claw', type: 'damage', multiplier: 1.5, cost: 20, effect: 'vulnerability', chance: 30, msg: 'tears through armor with sharp claws!' },
-
-    // MAGIC SKILLS
-    'dark_bolt': { name: 'Dark Bolt', type: 'magic', multiplier: 1.8, cost: 20, msg: 'fires a bolt of pure shadow energy!' },
-    'hex': { name: 'Hex', type: 'debuff', stat: 'atk', value: 20, duration: 3, cost: 25, msg: 'casts a debilitating curse!' },
-    'hellfire': { name: 'Hellfire', type: 'aoe_magic', multiplier: 1.2, cost: 35, effect: 'burn', chance: 50, msg: 'summons pillars of infernal flame!' },
-    'life_drain': { name: 'Life Drain', type: 'lifesteal', multiplier: 1.4, healPercent: 50, cost: 30, msg: 'siphons the very soul of their target!' },
-    'curse': { name: 'Ancient Curse', type: 'debuff', stat: 'all', value: 15, duration: 4, cost: 30, msg: 'whispers words of doom that weaken the body!' },
-    'void_pulse': { name: 'Void Pulse', type: 'aoe_magic', multiplier: 1.5, cost: 40, msg: 'releases a wave of reality-warping energy!' },
-    'judgment': { name: 'Final Judgment', type: 'magic', multiplier: 3.0, cost: 50, msg: 'calls down a beam of blinding light!' },
-    'chaos_bolt': { name: 'Chaos Bolt', type: 'magic', multiplier: 2.5, cost: 30, effect: 'random_status', msg: 'hurls a swirling mass of unpredictable energy!' },
-
-    // SPECIAL / BOSS
-    'berserker_rage': { name: 'Berserker Rage', type: 'buff', stat: 'atk', value: 50, duration: 5, cost: 0, msg: 'roars in fury, their muscles bulging with raw power!' },
-    'harden': { name: 'Stone Skin', type: 'buff', stat: 'def', value: 100, duration: 3, cost: 20, msg: 'turns its skin into impenetrable rock!' },
-    'soul_drain': { name: 'Soul Feast', type: 'aoe_lifesteal', multiplier: 1.0, healPercent: 30, cost: 45, msg: 'devours the spirit of everyone nearby!' },
-    'oblivion': { name: 'Edge of Oblivion', type: 'damage', multiplier: 4.0, cost: 60, msg: 'points a finger, commanding the target to cease existing!' },
-    'reality_tear': { name: 'Reality Tear', type: 'aoe', multiplier: 2.0, cost: 50, msg: 'rips the fabric of space, damaging all dimensions!' },
-
-    // --- ARCHETYPE SKILLS ---
-    'harden': { name: 'Obsidian Skin', type: 'buff', stat: 'def', value: 30, duration: 3, cost: 20, msg: 'turns their skin into impenetrable obsidian!' },
-    'taunt': { name: 'Provoke', type: 'cc', cc: 'taunt', duration: 2, cost: 15, msg: 'roars a deafening challenge!' },
-    'shield_bash': { name: 'Crushing Bash', type: 'damage_cc', multiplier: 1.2, cc: 'stun', chance: 40, cost: 25, msg: 'slams forward with a massive shield!' },
-    'smash': { name: 'Heavy Smash', type: 'damage', multiplier: 1.6, cost: 25, msg: 'unleashes a bone-crushing strike!' },
-    'cleave': { name: 'Whirlwind Cleave', type: 'aoe', multiplier: 1.2, cost: 40, msg: 'spins wildly, striking everyone!' },
-    'backstab': { name: 'Vile Strike', type: 'damage', multiplier: 1.8, cost: 15, msg: 'strikes a vital organ from the shadows!' },
-    'poison': { name: 'Toxic Blade', type: 'dot', element: 'poison', value: 15, duration: 3, cost: 20, msg: 'coats their weapon in a deadly toxin!' },
-    'firebolt': { name: 'Chaos Bolt', type: 'magic', multiplier: 1.6, element: 'fire', cost: 20, msg: 'hurls a ball of flickering chaos!' },
-    'heal': { name: 'Dark Mend', type: 'heal', value: 100, cost: 25, msg: 'knits wounds together with dark energy!' },
-    'buff': { name: 'Unholy Zeal', type: 'buff_team', stat: 'atk', value: 20, duration: 3, cost: 20, msg: 'empowers their allies with frantic chanting!' }
-};
-
 // ==========================================
 // 🎲 CORE GAME FUNCTIONS
 // ==========================================
-
 function generateCombatEncounter(chatId) {
     const state = getGameState(chatId);
     if (!state) return null;
@@ -3705,9 +3664,8 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     let totalHealing = 0;
     
     // DAMAGE ABILITIES
-    if (effect.type === 'damage' || effect.type.includes('damage')) {
-        const targets = getTargets(effect, targetIndex, chatId);
-        
+          if (effect.type === 'damage' || effect.type.includes('damage')) {
+              const targets = getTargets(player, effect, targetIndex, chatId);        
         for (const target of targets) {
             if (target.stats.hp <= 0) continue;
             
@@ -3858,18 +3816,17 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
             msg += `\n`;
 
-            // Apply DoT (Damage over Time)
-            if (effect.dot) {
-                applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage);
-                msg += `🔥 Applied ${effect.dot} to ${target.name}!\n`;
-            }
+                          // Apply DoT (Damage over Time)
+                          if (effect.dot) {
+                              const sRes = applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage, player.name);
+                              msg += `🔥 Applied ${effect.dot} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }
             
-            // Apply CC (Crowd Control)
-            if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
-                applyStatusEffect(target, effect.cc, effect.ccDuration, 0);
-                msg += `💫 Applied ${effect.cc} to ${target.name}!\n`;
-            }
-
+                          // Apply CC (Crowd Control)
+                          if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
+                              const sRes = applyStatusEffect(target, effect.cc, effect.ccDuration, 0, player.name);
+                              msg += `💫 Applied ${effect.cc} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }
                           // Apply Specific Debuffs (Slow, etc found in keys)
                           ['slow', 'stun', 'freeze', 'burn', 'shock', 'poison'].forEach(debuff => {
                                if (effect[debuff] !== undefined) {
@@ -3917,18 +3874,18 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     
     // TEAM HEAL
     if (effect.type === 'heal_team') {
-        const allies = state.players.filter(p => !p.isDead);
+        const friendlySide = player.isEnemy ? state.enemies.filter(e => e.stats.hp > 0) : state.players.filter(p => !p.isDead);
         const hMult = getHealMult(chatId);
-        for (const ally of allies) {
-            const healAmount = Math.min(Math.floor(effect.value * hMult), ally.stats.maxHp - ally.stats.hp);
+        for (const ally of friendlySide) {
+            const healAmount = Math.min(Math.floor(effect.value * hMult), (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp);
             ally.stats.hp += healAmount;
             ally.currentHP = ally.stats.hp; 
             totalHealing += healAmount;
             
-            const allyIcon = ally.class?.icon || '👤';
+            const allyIcon = ally.isEnemy ? ally.icon : (ally.class?.icon || '👤');
             msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? ' (Reduced)' : ''}\n`;
         }
-        player.combatStats.healed = (player.combatStats.healed || 0) + totalHealing;
+        if (!player.isEnemy) player.combatStats.healed = (player.combatStats.healed || 0) + totalHealing;
     }
     
     // BUFF ABILITIES
@@ -3947,13 +3904,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 applyBuff(player, 'crit', effect.critBuff, effect.critBuffDuration || 2);
                 msg += `✨ ${player.name} gains Crit Chance!\n`;
             }
-        } else if (effect.type === 'buff_team') {
-            const allies = state.players.filter(p => !p.isDead);
-            for (const ally of allies) {
-                applyBuff(ally, effect.buffType, effect.value, effect.duration);
-            }
-            msg += `✨ Team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;
-        } else if (effect.type === 'buff_target') {
+                } else if (effect.type === 'buff_team') {
+                    const friendlySide = player.isEnemy ? state.enemies.filter(e => e.stats.hp > 0) : state.players.filter(p => !p.isDead);
+                    for (const ally of friendlySide) {
+                        applyBuff(ally, effect.buffType, effect.value, effect.duration);
+                    }
+                    msg += `✨ ${player.isEnemy ? 'Enemy' : 'Player'} team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;        } else if (effect.type === 'buff_target') {
             const target = getHealTarget(player, targetIndex, chatId);
             if (target) {
                 applyBuff(target, effect.buffType, effect.value, effect.duration);
@@ -3970,30 +3926,28 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 applyDebuff(target, effect.debuffType, effect.value, effect.duration);
                 msg += `💀 ${target.name} receives -${effect.value}% ${effect.debuffType}!\n`;
             }
-        } else if (effect.type === 'debuff_enemies') {
-            const enemies = state.enemies.filter(e => e.stats.hp > 0);
-            for (const enemy of enemies) {
-                applyDebuff(enemy, effect.debuffType, effect.value, effect.duration);
-            }
-            msg += `💀 All enemies receive -${effect.value}% ${effect.debuffType}!\n`;
-        }
+                } else if (effect.type === 'debuff_enemies') {
+                    const opponentSide = player.isEnemy ? state.players.filter(p => !p.isDead) : state.enemies.filter(e => e.stats.hp > 0);
+                    for (const target of opponentSide) {
+                        applyDebuff(target, effect.debuffType, effect.value, effect.duration);
+                    }
+                    msg += `💀 All enemies receive -${effect.value}% ${effect.debuffType}!\n`;        }
     }
     
     // REVIVE
-    if (effect.type === 'revive') {
-        const deadAllies = state.players.filter(p => p.isDead);
-        if (deadAllies.length > 0) {
-            const target = deadAllies[0]; 
-            target.isDead = false;
-            target.stats.hp = Math.floor(target.stats.maxHp * ((effect.hpPercent || 50) / 100));
-            target.currentHP = target.stats.hp;
-            msg += `👼 ${target.name} has been resurrected with ${target.stats.hp} HP!\n`;
-            player.combatStats.healed = (player.combatStats.healed || 0) + target.stats.hp;
-        } else {
-            msg += `(No fallen allies to revive)\n`;
+        if (effect.type === 'revive') {
+            const deadFriendly = player.isEnemy ? state.enemies.filter(e => e.stats.hp <= 0) : state.players.filter(p => p.isDead);
+            if (deadFriendly.length > 0) {
+                const target = deadFriendly[0];
+                target.isDead = false;
+                target.stats.hp = Math.floor((target.stats.maxHp || target.stats.hp) * ((effect.hpPercent || 50) / 100));
+                target.currentHP = target.stats.hp;
+                msg += `👼 ${target.name} has been resurrected with ${target.stats.hp} HP!\n`;
+                if (!player.isEnemy) player.combatStats.healed = (player.combatStats.healed || 0) + target.stats.hp;
+            } else {
+                msg += `(No fallen allies to revive)\n`;
+            }
         }
-    }
-
     // MULTI-HIT
     if (effect.type === 'multi_hit') {
         const target = getTargets(effect, targetIndex, chatId)[0];
@@ -4024,48 +3978,77 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.currentHP = 0;
             }
         }
-    }
-
-    return { message: msg, damage: totalDamage, healing: totalHealing };
-}
-
+          }
+    
+          // 🧪 NEW FORMAT SUPPORT (effects object)
+          if (effect.effects) {
+              for (const [effType, effData] of Object.entries(effect.effects)) {
+                  const dur = effData.duration || 3;
+                  const val = Array.isArray(effData.value) ? effData.value[Math.min((player.level || 1) - 1, effData.value.length - 1)] : (effData.value || 0);
+                  
+                  const opponentSide = player.isEnemy ? state.players.filter(p => !p.isDead) : state.enemies.filter(e => e.stats.hp > 0);
+                  const friendlySide = player.isEnemy ? state.enemies.filter(e => e.stats.hp > 0) : state.players.filter(p => !p.isDead);
+                  
+                  // Determine targets based on the skill's overall targeting
+                  let targets = [];
+                  if (effect.targeting === 'AOE' || effect.targeting === 'ALL_ENEMIES' || effect.targeting === 'CHAIN') {
+                      targets = opponentSide;
+                  } else if (effect.targeting === 'TEAM' || effect.targeting === 'ALL_ALLIES') {
+                      targets = friendlySide;
+                  } else if (effect.targeting === 'SELF') {
+                      targets = [player];
+                  } else {
+                      targets = [getHealTarget(player, targetIndex, chatId)];
+                  }
+    
+                  for (const target of targets) {
+                      const statusResult = applyStatusEffect(target, effType, dur, val, player.name);
+                      if (statusResult.synergyMsg) msg += `\n✨ ${statusResult.synergyMsg}`;
+                  }
+              }
+          }
+    
+          return { message: msg, damage: totalDamage, healing: totalHealing };
+      }
 // ==========================================
 // 🎯 TARGET SELECTION HELPERS
 // ==========================================
 
-function getTargets(effect, targetIndex, chatId) {
+function getTargets(attacker, effect, targetIndex, chatId) {
     const state = getGameState(chatId);
     if (!state) return [];
-    const enemies = state.enemies.filter(e => e.stats.hp > 0);
     
-    if (effect.type === 'aoe') {
-        return enemies.slice(0, effect.targets || 99);
+    const opponentSide = attacker.isEnemy ? state.players.filter(p => !p.isDead) : state.enemies.filter(e => e.stats.hp > 0);
+
+    if (effect.type === 'aoe' || effect.targeting === 'aoe' || effect.targeting === 'ALL_ENEMIES') {
+        return opponentSide.slice(0, effect.targets || 99);
     }
-    
-    const index = parseInt(targetIndex) - 1;
-    const target = enemies[index];
-    
-    if (!target) {
-        // Default to first enemy if invalid target
-        return enemies.length > 0 ? [enemies[0]] : [];
+
+    const index = parseInt(targetIndex);
+    const target = isNaN(index) ? opponentSide[0] : (attacker.isEnemy ? state.players[index] : state.enemies[index]);
+
+    if (!target || target.isDead || (target.stats && target.stats.hp <= 0)) {
+        return opponentSide.length > 0 ? [opponentSide[0]] : [];
     }
-    
+
     return [target];
 }
 
-function getHealTarget(player, targetIndex, chatId) {
+function getHealTarget(attacker, targetIndex, chatId) {
     const state = getGameState(chatId);
-    if (!state) return player;
-    const allies = state.players.filter(p => !p.isDead);
+    if (!state) return attacker;
     
-    if (!targetIndex) {
-        return player; // Self by default
+    const friendlySide = attacker.isEnemy ? state.enemies.filter(e => e.stats.hp > 0) : state.players.filter(p => !p.isDead);
+
+    if (targetIndex === undefined || targetIndex === null) {
+        return attacker; // Self by default
     }
 
-    const index = parseInt(targetIndex) - 1;
-    return allies[index] || player;
+    const index = parseInt(targetIndex);
+    const target = attacker.isEnemy ? state.enemies[index] : state.players[index];
+    
+    return (target && !target.isDead) ? target : attacker;
 }
-
 function getHealMult(chatId) {
     const state = getGameState(chatId);
     const env = state?.environment;
