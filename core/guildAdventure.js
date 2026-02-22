@@ -834,6 +834,22 @@ const STATUS_EFFECTS = {
         icon: '✨',
         effect: 'increase_stats',
         value: 20
+    },
+    wet: {
+        name: 'Wet',
+        icon: '💧',
+        effect: 'synergy_primer'
+    },
+    oil: {
+        name: 'Oiled',
+        icon: '🛢️',
+        effect: 'synergy_primer'
+    },
+    brittle: {
+        name: 'Brittle',
+        icon: '❄️💔',
+        effect: 'increase_physical_damage_taken',
+        value: 50
     }
 };
 
@@ -1071,9 +1087,10 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
 
     // 💡 STATUS EFFECT MODIFIERS (Defense)
     const targetEffects = target.statusEffects || [];
-    if (targetEffects.some(e => e.type === 'shield')) def *= 1.5;
-    if (targetEffects.some(e => e.type === 'vulnerability')) def *= 0.7;
-    if (targetEffects.some(e => e.type === 'berserk')) def *= 0.7; // Berserk penalty
+          if (targetEffects.some(e => e.type === 'shield')) def *= 1.5;
+          if (targetEffects.some(e => e.type === 'vulnerability')) def *= 0.7;
+          if (targetEffects.some(e => e.type === 'brittle') && type === 'physical') damage *= 1.5;
+          if (targetEffects.some(e => e.type === 'berserk')) def *= 0.7; // Berserk penalty
     if (targetEffects.some(e => e.type === 'curse' || e.type === 'weak')) def *= 0.8;
 
     // 💡 STATUS EFFECT MODIFIERS (Attack Power)
@@ -1143,27 +1160,56 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
     };
 }
 function applyStatusEffect(target, effectType, duration = 3, value = 0, source = null) {
-    if (!target) return;
+    if (!target) return { applied: false };
     if (!target.statusEffects) target.statusEffects = [];
-    
-    // Check if already has this effect
-    const existing = target.statusEffects.find(e => e.type === effectType);
-    if (existing) {
-        existing.duration = Math.max(existing.duration, duration);
-        existing.value = Math.max(existing.value || 0, value);
-        return;
+
+    // 🧪 SYNERGY LOGIC
+    const currentTypes = target.statusEffects.map(s => s.type);
+    let finalType = effectType;
+    let finalDuration = duration;
+    let finalValue = value;
+    let synergyMsg = "";
+
+    // 1. WET + SHOCK = ELECTROCUTED (Stun)
+    if (effectType === 'shock' && currentTypes.includes('wet')) {
+        target.statusEffects = target.statusEffects.filter(s => s.type !== 'wet');
+        finalType = 'stun';
+        finalDuration = 1;
+        synergyMsg = `⚡💧 *ELECTRO-CHARGE!* The water amplifies the shock, STUNNING ${target.name}!`;
     }
-    
-    // Safety check: Don't spread undefined
-    const effectData = STATUS_EFFECTS[effectType] || { name: effectType, icon: '❓', effect: 'none' };
-    
+    // 2. WET + FREEZE = DEEP FREEZE
+    else if (effectType === 'freeze' && currentTypes.includes('wet')) {
+        target.statusEffects = target.statusEffects.filter(s => s.type !== 'wet');
+        finalDuration = 2;
+        synergyMsg = `❄️💧 *DEEP FREEZE!* ${target.name} is frozen solid!`;
+    }
+    // 3. OIL + FIRE = EXPLOSION
+    else if (effectType === 'burn' && currentTypes.includes('oil')) {
+        target.statusEffects = target.statusEffects.filter(s => s.type !== 'oil');
+        const explosionDmg = Math.floor(target.stats.maxHp * 0.15);
+        target.stats.hp -= explosionDmg;
+        target.currentHP = Math.max(0, target.stats.hp);
+        synergyMsg = `🔥🛢️ *BOOM!* The oil ignites, dealing ${explosionDmg} explosive damage!`;
+    }
+
+    // Check if already has this effect
+    const existing = target.statusEffects.find(e => e.type === finalType);
+    if (existing) {
+        existing.duration = Math.max(existing.duration, finalDuration);
+        existing.value = Math.max(existing.value || 0, finalValue);
+        return { applied: true, synergyMsg };
+    }
+
+    const effectData = STATUS_EFFECTS[finalType] || { name: finalType, icon: '❓', effect: 'none' };
     target.statusEffects.push({
-        type: effectType,
-        duration: duration,
-        value: value,
+        type: finalType,
+        duration: finalDuration,
+        value: finalValue,
         source: source,
         ...effectData
     });
+
+    return { applied: true, synergyMsg };
 }
 
 function processStatusEffects(entity) {
@@ -1634,12 +1680,33 @@ async function processCombatTurn(sock, sessionKey) {
 
             if (!activeActor) return;
 
-            // Reset actor gauge
-            activeActor.actionGauge -= 100;
-            state.activeCombatant = activeActor;
-
-                          // Process status effects at start of turn
-                          const statusMessages = processStatusEffects(activeActor);
+                          // Reset actor gauge
+                          activeActor.actionGauge -= 100;
+                          state.activeCombatant = activeActor;
+                          state.totalCombatTurns = (state.turnCount || 0) + 1;
+                          state.turnCount = state.totalCombatTurns;
+            
+                          // 👑 BOSS ENRAGE CHECK
+                          if (activeActor.isBoss) {
+                              const boss = activeActor;
+                              // Soft Enrage (Increase stats every turn)
+                              if (state.turnCount > 15) {
+                                  boss.stats.atk = Math.floor(boss.stats.atk * 1.05);
+                                  await sock.sendMessage(state.chatId, { text: `⚠️ *${boss.name}* is growing more violent! (ATK Increased)` });
+                              }
+                              // Hard Enrage (Instant death after 30 turns)
+                              if (state.turnCount > 30) {
+                                  await sock.sendMessage(state.chatId, { text: `💀 *${boss.name}* has reached their absolute limit! UNLEASHING TOTAL ANNIHILATION!` });
+                                  state.players.forEach(p => {
+                                      p.stats.hp = 0;
+                                      p.isDead = true;
+                                  });
+                                  await endCombat(sock, false, sessionKey);
+                                  return;
+                              }
+                          }
+            
+                          // Process status effects at start of turn                          const statusMessages = processStatusEffects(activeActor);
             
                           // FIRE CAVE: Heat Exhaustion
                           if (state.environment?.id === 'FIRE_CAVE') {
@@ -1811,13 +1878,16 @@ async function performAction(sock, player, action, sessionKey) {
                 resultMsg += `💨 *MISS!* ${target.icon} ${target.name} evaded the attack.`;
                 turnInfo.action = { name: 'Missed Attack' };
             } else {
-                target.stats.hp -= damage;
-                target.currentHP = target.stats.hp; 
+                                target.stats.hp -= damage;
+                                target.currentHP = target.stats.hp;
                 
-                if (target.stats.hp <= 0) {
-                    target.justDied = true;
-                }
+                                if (target.stats.hp > 0 && target.isBoss) {
+                                    await checkBossPhase(sock, target, state.chatId);
+                                }
                 
+                                if (target.stats.hp <= 0) {
+                                    target.justDied = true;
+                                }                
                 player.combatStats.damageDealt += damage;
                 target.combatStats = target.combatStats || { damageTaken: 0 };
                 target.combatStats.damageTaken += damage;
@@ -2045,41 +2115,12 @@ async function performAction(sock, player, action, sessionKey) {
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
-    
+
     const chatId = state.chatId;
-    // 🌍 WEATHER EFFECT INTEGRATION
-    let weatherMult = 1.0;
-    const hours = new Date().getHours();
-    if (Math.floor(hours / 6) % 4 === 2) { // Blood Moon
-        weatherMult = 1.25; // 25% more damage from mobs
-    }
-
-    let resultMsg = `┏━━━━━━━━━━━━━━━┓\n`;
-    resultMsg += `┃   👾 ENEMY TURN \n`;
-    resultMsg += `┗━━━━━━━━━━━━━━━┛\n\n`;
-    
-    // 🧠 AI PERSONALITY: COWARDLY
-    const isSmallMob = enemy.name.toLowerCase().includes('crawler') || enemy.name.toLowerCase().includes('soldier');
-    if (isSmallMob && state.enemies.filter(e => e.stats.hp > 0).length === 1 && Math.random() < 0.2) {
-        resultMsg += `${enemy.icon} *${enemy.name}* is terrified and Cowers! (DEF increased)`;
-        applyStatusEffect(enemy, 'shield', 1, 50);
-        await sock.sendMessage(state.chatId, { text: resultMsg });
-        return setTimeout(() => {
-            nextTurn(sock, null, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-        }, turnDelay);
-    }
-
-    // 🧠 AI PERSONALITY: AGGRESSIVE (Heavy mobs / Bosses)
-    const isHeavyMob = enemy.isBoss || enemy.name.toLowerCase().includes('colossus') || enemy.name.toLowerCase().includes('stalker');
-    if (isHeavyMob && Math.random() < 0.3) {
-        resultMsg += `🔥 *${enemy.name}* is ENRAGED! Ignoring DEF but taking more damage!\n`;
-        weatherMult *= 1.5; // Hits harder
-        applyStatusEffect(enemy, 'vulnerability', 2, 20); // Takes more damage
-    }
-
-    resultMsg += `${enemy.icon} *${enemy.name}* is attacking!\n`;
-    
     const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
+
+    // 🧠 AI DECISION MAKING
+    const decision = monsterSkills.evaluateAction(enemy, state.players, state.enemies);
     
     let turnInfo = {
         actor: enemy,
@@ -2089,158 +2130,135 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         effects: []
     };
 
-    // 💡 BOSS TELEGRAPH LOGIC
-    if (enemy.isBoss && enemy.telegraphedAbility) {
-        const ability = enemy.telegraphedAbility;
-        enemy.telegraphedAbility = null; // Reset
+    // --- SKIP TURN (Stunned/Frozen) ---
+    if (decision.action === 'skip') {
+        await sock.sendMessage(chatId, { text: `💤 *${enemy.name}* ${decision.msg}` });
+        return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+    }
 
-        resultMsg += `UNLEASHES ${ability.name.toUpperCase()}! 💥`;
+    // --- RELEASE CHARGE (Meteor, etc) ---
+    if (decision.action === 'release_charge') {
+        const skillId = decision.skillId;
+        const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
         
-        // Find targets
-        const targets = ability.targeting === 'aoe' ? state.players.filter(p => !p.isDead) : [state.players.filter(p => !p.isDead)[Math.floor(Math.random() * state.players.filter(p => !p.isDead).length)]];
-        
-        for (const target of targets) {
-            let power = enemy.stats.atk * ability.damage;
-            // 💡 If player is NOT defending, take massive damage
-            if (!target.statusEffects.some(e => e.type === 'shield')) {
-                power *= 2.0; 
-                resultMsg += `\n⚠️ ${target.name} failed to defend and takes DOUBLE damage!`;
-            }
+        if (skillData && skillData.nextSkill) {
+            const followUpId = skillData.nextSkill;
+            const followUpSkill = monsterSkills.getSkillById(enemy.archetype, followUpId);
+            const target = enemy.chargeTarget || state.players.find(p => !p.isDead);
             
-            const { damage } = calculateDamage(enemy, target, power * weatherMult, ability.damageType || 'physical', 'PHYSICAL', chatId);
-            target.stats.hp -= damage;
-            target.currentHP = Math.max(0, target.stats.hp);
-            resultMsg += `\n- Hit ${target.name} for 💥 ${damage} damage!`;
+            await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` });
             
-            // 💡 APPLY STATUS EFFECTS IF DEFINED (Bosses usually have 100% chance)
-            if (ability.effect && ability.effect !== 'none') {
-                applyStatusEffect(target, ability.effect, ability.duration || 3, ability.value || 0, enemy.name);
-                const effectEmoji = STATUS_EFFECTS[ability.effect]?.icon || '✨';
-                resultMsg += `\n- ${effectEmoji} ${target.name} is now ${ability.effect.toUpperCase()}!`;
-                turnInfo.effects.push(`${target.name}: ${ability.effect}`);
-            }
-
+            // Apply effect (Bosses use Boss Mechanics, standard use MonsterSkills)
+            const effect = followUpSkill.currentEffect || followUpSkill.effect(enemy.level || 1);
+            const result = await applyAbilityEffect(sock, enemy, followUpSkill, effect, state.players.indexOf(target), chatId);
+            
+            turnInfo.action.name = followUpSkill.name;
             turnInfo.target = target;
-            turnInfo.damage += damage;
-            if (target.stats.hp <= 0) {
-                await handleDeath(sock, target, sessionKey, enemy.name);
-                resultMsg += `\n💀 ${target.name} has fallen!`;
-            }
-        }
-        
-        try {
-            await sock.sendMessage(state.chatId, { text: resultMsg });
-        } catch (err) {
-            console.error("Failed to send boss telegraph result:", err.message);
-        }
-        setTimeout(() => {
-            nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-        }, turnDelay);
-        return;
-    }
-
-    // Standard AI logic...
-    const useAbility = Math.random() < (enemy.isBoss ? 0.7 : 0.3);
-    if (useAbility && enemy.abilities && enemy.abilities.length > 0) {
-        const abilityKey = enemy.abilities[Math.floor(Math.random() * enemy.abilities.length)];
-        const ability = enemy.isBoss ? bossMechanics.BOSS_ABILITIES[abilityKey] : MONSTER_ABILITIES[abilityKey];
-        
-        if (ability) {
-            // 💡 Check if this ability should be telegraphed
-            if (ability.isTelegraphed) {
-                enemy.telegraphedAbility = ability;
-                try {
-                    await sock.sendMessage(state.chatId, { text: `${enemy.icon} *BOSS MECHANIC:* ${ability.telegraphMessage}` });
-                } catch (err) {
-                    console.error("Failed to send boss mechanic telegraph:", err.message);
-                }
-                setTimeout(() => {
-                    nextTurn(sock, null, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-                }, turnDelay);
-                return;
-            }
-
-            // Execute standard/boss ability
-            const targets = ability.targeting === 'aoe' ? state.players.filter(p => !p.isDead) : [state.players.filter(p => !p.isDead)[Math.floor(Math.random() * state.players.filter(p => !p.isDead).length)]];
             
-            resultMsg += `uses *${ability.name}*! ✨`;
-            turnInfo.action = { name: ability.name };
+            enemy.isCharging = false;
+            enemy.chargingSkill = null;
+            enemy.chargeTarget = null;
 
-            for (const target of targets) {
-                const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk * (ability.damage || 1.0), 'physical', 'PHYSICAL', chatId);
-                if (wasEvaded) {
-                    resultMsg += `\n- ${target.name} evaded!`;
-                } else {
-                    target.stats.hp -= damage;
-                    target.currentHP = Math.max(0, target.stats.hp);
-                    resultMsg += `\n- Hit ${target.name} for 💥 ${damage} damage!`;
-                    
-                    // 💡 APPLY STATUS EFFECTS IF DEFINED
-                    if (ability.effect && ability.effect !== 'none') {
-                        const chance = ability.chance || 100;
-                        if (Math.random() * 100 < chance) {
-                            applyStatusEffect(target, ability.effect, ability.duration || 3, ability.value || 0, enemy.name);
-                            const effectEmoji = STATUS_EFFECTS[ability.effect]?.icon || '✨';
-                            resultMsg += `\n- ${effectEmoji} ${target.name} is now ${ability.effect.toUpperCase()}!`;
-                            turnInfo.effects.push(`${target.name}: ${ability.effect}`);
-                        }
-                    }
-
-                    turnInfo.target = target;
-                    turnInfo.damage += damage;
-
-                    if (target.stats.hp <= 0) {
-                        await handleDeath(sock, target, sessionKey, enemy.name);
-                        resultMsg += `\n💀 ${target.name} has fallen!`;
-                    }
-                }
-            }
-            try {
-                await sock.sendMessage(state.chatId, { text: resultMsg });
-            } catch (err) {
-                console.error("Failed to send enemy ability result:", err.message);
-            }
-            setTimeout(() => {
-                nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-            }, turnDelay);
-            return;
+            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
         }
     }
-    
-    // Fallback to basic attack if no telegraphed ability or ability used
-    const alivePlayers = state.players.filter(p => !p.isDead);
-    if (alivePlayers.length > 0) {
-        const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-        const { damage, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk, 'physical', 'PHYSICAL', chatId);
+
+    // --- USE SKILL ---
+    if (decision.action === 'skill') {
+        const skill = decision.skill;
+        const target = decision.target;
+
+        if (skill.type === 'charge') {
+            enemy.isCharging = true;
+            enemy.chargingSkill = skill.id;
+            enemy.chargeTarget = target;
+            await sock.sendMessage(chatId, { text: `⚠️ *${enemy.name}* ${skill.msg}` });
+            
+            turnInfo.action.name = "Charging";
+            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+        }
+
+        // Execute regular skill
+        await sock.sendMessage(chatId, { text: `⚡ *${enemy.name}* uses *${skill.name}*!` });
         
+        const effect = skill.currentEffect || (typeof skill.effect === 'function' ? skill.effect(enemy.level || 1) : skill.effect);
+        let targetIdx = (decision.targetType === 'ally' || decision.targetType === 'self') ? state.enemies.indexOf(target) : state.players.indexOf(target);
+        
+        await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+        
+        turnInfo.action.name = skill.name;
         turnInfo.target = target;
-        turnInfo.action = { name: 'Basic Attack' };
 
-        if (wasEvaded) {
-            resultMsg += `Attacks ${target.name} but 💨 MISSES!`;
-        } else {
-            target.stats.hp -= damage;
-            target.currentHP = Math.max(0, target.stats.hp);
-            resultMsg += `Attacks ${target.name} for 💥 ${damage} damage!`;
-            
-            turnInfo.damage = damage;
+        return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+    }
 
-            if (target.stats.hp <= 0) {
-                await handleDeath(sock, target, sessionKey, enemy.name);
-                resultMsg += `\n💀 ${target.name} has fallen!`;
-            }
+    // --- DEFAULT ATTACK ---
+    const target = decision.target;
+    if (!target || target.isDead) {
+        // Find a fallback
+        const alive = state.players.filter(p => !p.isDead);
+        if (alive.length === 0) return;
+        turnInfo.target = alive[0];
+    } else {
+        turnInfo.target = target;
+    }
+
+    const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', chatId);
+    
+    let resultMsg = `${enemy.icon} *${enemy.name}* `;
+    if (wasEvaded) {
+        resultMsg += `attacks ${turnInfo.target.name} but 💨 MISSES!`;
+    } else {
+        turnInfo.target.stats.hp -= damage;
+        turnInfo.target.currentHP = Math.max(0, turnInfo.target.stats.hp);
+        resultMsg += `attacks ${turnInfo.target.name} for 💥 ${damage} damage!${isCrit ? ' (CRIT!)' : ''}`;
+        turnInfo.damage = damage;
+
+        if (turnInfo.target.stats.hp <= 0) {
+            await handleDeath(sock, turnInfo.target, sessionKey, enemy.name);
+            resultMsg += `\n💀 ${turnInfo.target.name} has fallen!`;
         }
     }
 
-        try {
-            await sock.sendMessage(state.chatId, { text: resultMsg });
-        } catch (err) {
-            console.error("Failed to send enemy action result:", err.message);
+    await sock.sendMessage(chatId, { text: resultMsg });
+    setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+}
+
+async function checkBossPhase(sock, boss, chatId) {
+    if (!boss.isBoss || !boss.phases) return null;
+
+    const hpPct = (boss.stats.hp / (boss.stats.maxHp || boss.stats.hp)) * 100;
+    const nextPhaseIdx = (boss.currentPhase || 0) + 1;
+    const nextPhase = boss.phases[nextPhaseIdx];
+
+    if (nextPhase && hpPct <= nextPhase.threshold) {
+        boss.currentPhase = nextPhaseIdx;
+        boss.abilities = nextPhase.abilities || boss.abilities;
+        
+        // Visual/Audio Feedback
+        let msg = `🌟 *BOSS PHASE TRANSITION* 🌟\n\n`;
+        msg += `${boss.icon} *${boss.name}*: ${nextPhase.message}\n`;
+        
+        // Apply phase effects
+        if (nextPhase.effects) {
+            nextPhase.effects.forEach(eff => {
+                if (eff.type === 'stat_boost') {
+                    boss.stats[eff.stat] = Math.floor(boss.stats[eff.stat] * (1 + eff.value / 100));
+                    msg += `\n📈 ${boss.name}'s ${eff.stat.toUpperCase()} increased!`;
+                }
+                if (eff.type === 'heal') {
+                    boss.stats.hp = Math.min(boss.stats.maxHp, boss.stats.hp + eff.value);
+                    boss.currentHP = boss.stats.hp;
+                    msg += `\n💖 ${boss.name} recovered health!`;
+                }
+            });
         }
-        setTimeout(() => {
-            nextTurn(sock, turnInfo, sessionKey).catch(e => console.error("[Quest] nextTurn timer error:", e?.message || e));
-        }, turnDelay);
+
+        await sock.sendMessage(chatId, { text: msg });
+        return true;
     }
+    return false;
+}
 
 async function handleDeath(sock, entity, sessionKey, lastKiller = "The Infection") {
     const state = gameStates.get(sessionKey);
@@ -3739,15 +3757,18 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 }
             }
             
-            // Apply damage
-            target.stats.hp -= damage;
-            target.currentHP = target.stats.hp; // Sync V2
-            totalDamage += damage;
+                          // Apply damage
+                          target.stats.hp -= damage;
+                          target.currentHP = target.stats.hp; // Sync V2
+                          totalDamage += damage;
             
-            if (target.stats.hp <= 0) {
-                target.justDied = true;
-            }
+                          if (target.stats.hp > 0 && target.isBoss) {
+                              await checkBossPhase(sock, target, chatId);
+                          }
             
+                          if (target.stats.hp <= 0) {
+                              target.justDied = true;
+                          }            
             const targetIcon = target.isEnemy ? target.icon : (target.class?.icon || '👤');
             msg += `💥 ${targetIcon} ${target.name} takes ${damage} damage!`;
             if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
@@ -3769,18 +3790,17 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 player.combatStats.kills = (player.combatStats.kills || 0) + 1;
             }
             
-            // Apply DoT (Damage over Time)
-            if (effect.dot) {
-                applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage);
-                msg += `🔥 Applied ${effect.dot}!\n`;
-            }
+                          // Apply DoT (Damage over Time)
+                          if (effect.dot) {
+                              const sRes = applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage, player.name);
+                              msg += `🔥 Applied ${effect.dot}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }
             
-            // Apply CC (Crowd Control)
-            if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
-                applyStatusEffect(target, effect.cc, effect.ccDuration, 0);
-                msg += `💫 Applied ${effect.cc}!\n`;
-            }
-        }
+                          // Apply CC (Crowd Control)
+                          if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
+                              const sRes = applyStatusEffect(target, effect.cc, effect.ccDuration, 0, player.name);
+                              msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }        }
         
         player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
     }
@@ -3823,14 +3843,17 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 damage = Math.floor(damage * 2.0);
             }
 
-            target.stats.hp -= damage;
-            target.currentHP = target.stats.hp; // Sync V2
-            totalDamage += damage;
+                          target.stats.hp -= damage;
+                          target.currentHP = target.stats.hp; // Sync V2
+                          totalDamage += damage;
             
-            if (target.stats.hp <= 0) {
-                target.justDied = true;
-            }
+                          if (target.stats.hp > 0 && target.isBoss) {
+                              await checkBossPhase(sock, target, chatId);
+                          }
             
+                          if (target.stats.hp <= 0) {
+                              target.justDied = true;
+                          }            
             msg += `💥 ${target.icon} ${target.name} takes ${damage} damage!`;
             if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
             msg += `\n`;
@@ -3847,17 +3870,16 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 msg += `💫 Applied ${effect.cc} to ${target.name}!\n`;
             }
 
-            // Apply Specific Debuffs (Slow, etc found in keys)
-            ['slow', 'stun', 'freeze', 'burn', 'shock', 'poison'].forEach(debuff => {
-                 if (effect[debuff] !== undefined) {
-                     // Check if it's a value or object, though flattening makes it a value usually
-                     const val = effect[debuff];
-                     const dur = effect[debuff + 'Duration'] || 2;
-                     applyStatusEffect(target, debuff, dur, val);
-                     msg += `📉 Applied ${debuff} to ${target.name}!\n`;
-                 }
-            });
-            
+                          // Apply Specific Debuffs (Slow, etc found in keys)
+                          ['slow', 'stun', 'freeze', 'burn', 'shock', 'poison'].forEach(debuff => {
+                               if (effect[debuff] !== undefined) {
+                                   // Check if it's a value or object, though flattening makes it a value usually
+                                   const val = effect[debuff];
+                                   const dur = effect[debuff + 'Duration'] || 2;
+                                   const sRes = applyStatusEffect(target, debuff, dur, val, player.name);
+                                   msg += `📉 Applied ${debuff} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                               }
+                          });            
             if (target.stats.hp <= 0) {
                 // 💡 OVERKILL EXECUTION BONUS
                 const overkillThreshold = target.stats.hp + damage; // HP before this hit
@@ -3984,12 +4006,15 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                     totalMultiDamage += damage;
                 }
             }
-            target.currentHP = Math.max(0, target.stats.hp); 
+                          target.currentHP = Math.max(0, target.stats.hp); 
             
-            if (target.stats.hp <= 0) {
-                target.justDied = true;
-            }
+                          if (target.stats.hp > 0 && target.isBoss) {
+                              await checkBossPhase(sock, target, chatId);
+                          }
             
+                          if (target.stats.hp <= 0) {
+                              target.justDied = true;
+                          }            
             msg += `⚡ Hit ${effect.hits} times for ${totalMultiDamage} total damage!\n`;
             player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalMultiDamage;
             
