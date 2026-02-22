@@ -726,21 +726,22 @@ function getPoolTheme(avgLevel) {
 // ==========================================
 
 function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, options = {}) {
-    // Calculate average player level
+    // Calculate average player level and speed
     const avgLevel = Math.floor(players.reduce((sum, p) => sum + (p.level || 1), 0) / players.length);
+    const avgSpeed = Math.floor(players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / players.length);
     
     const enemies = [];
     
     if (encounterType === 'BOSS') {
         // Single boss
         const boss = selectBoss(avgLevel);
-        enemies.push(scaleBossStats(boss, players.length, difficulty, avgLevel));
+        enemies.push(scaleBossStats(boss, players.length, difficulty, avgLevel, avgSpeed));
     } else if (encounterType === 'ELITE_COMBAT') {
         // 1-2 elite enemies
         const eliteCount = options.maxMobs ? Math.min(options.maxMobs, 4) : Math.min(1 + Math.floor(players.length / 2), 4);
         for (let i = 0; i < eliteCount; i++) {
             const elite = selectRandomEnemy(avgLevel, 'ELITE');
-            enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel));
+            enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     } else {
         // Regular combat
@@ -754,7 +755,7 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
         
         for (let i = 0; i < enemyCount; i++) {
             const enemy = selectRandomEnemy(avgLevel, 'COMMON');
-            enemies.push(scaleEnemyStats(enemy, players.length, difficulty, i, avgLevel));
+            enemies.push(scaleEnemyStats(enemy, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     }
     
@@ -762,11 +763,12 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
         type: encounterType,
         enemies,
         theme: getPoolTheme(avgLevel),
-        avgLevel
+        avgLevel,
+        avgSpeed
     };
 }
 
-function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1) {
+function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10) {
     const scaled = { ...enemy };
     
     // 💡 NEW SCALING FORMULA (from notes.md)
@@ -776,7 +778,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     
     // Damage scaling: +12% per rank
     const dmgMult = 1 + (rankIndex * 0.12);
-    // Speed scaling: +6% per rank
+    // Speed scaling: +6% per rank (base)
     const spdMult = 1 + (rankIndex * 0.06);
     // Party scaling: +20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
@@ -795,9 +797,50 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.stats.atk = Math.floor(enemy.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(enemy.stats.mag * partyFactor * dmgMult);
     
-    // Apply Speed Scaling
-    scaled.stats.spd = Math.floor(enemy.stats.spd * partyFactor * spdMult);
-    if (isElite) scaled.stats.spd = Math.floor(scaled.stats.spd * 1.20);
+    // Apply Speed Scaling with Rubber-Banding Logic
+    // "High level player -> Mob slower. Low level player -> Mob faster."
+    // This implies mobs try to match player speed but deviate based on level gap.
+    
+    let baseSpeed = Math.floor(enemy.stats.spd * partyFactor * spdMult);
+    if (isElite) baseSpeed = Math.floor(baseSpeed * 1.20);
+    
+    // Rubber Banding:
+    // If player is much faster than mob's base level range, slow mob down? 
+    // Or if player level is high relative to mob tier?
+    // Let's implement relative speed scaling:
+    // Mob Speed = Base * (1 +/- (LevelGap * 0.01))
+    
+    // Actually, user said: "if its high then the mob should be slower of its really lo then the mob shpuld be faster"
+    // This sounds like: 
+    // Player Level > Enemy Level Pool -> Enemy Speed Penalty (Easier to outspeed)
+    // Player Level < Enemy Level Pool -> Enemy Speed Bonus (Harder to outspeed)
+    
+    // But we are generating enemy FROM level pool, so levels are roughly matched.
+    // Let's use the average speed directly.
+    
+    // Dynamic Speed: Mix of Mob Base Speed and Player Average Speed
+    // Weighted towards Mob Base, but pulls towards Player Speed.
+    // If Player Speed is HIGH (e.g. 100), and Mob Base is 50. 
+    // "if its high then the mob should be slower" -> This implies relative turn frequency.
+    // If player is fast, they should feel fast. So mob should NOT scale up fully to match.
+    // But if player is slow, mob should be faster.
+    
+    // Let's implement a randomized relative speed:
+    // Mob Speed = (Player Speed * 0.8) + (Random -10% to +10%)
+    // This ensures mob is usually slightly slower than player (allowing player initiative), 
+    // unless it's a "Fast" archetype.
+    
+    let targetSpeed = avgPlayerSpeed;
+    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.2; // Faster mobs
+    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.8; // Slower mobs
+    
+    // Apply the "High Level = Slower Mob" logic
+    // If Average Level > 50, reduce mob speed multiplier by 10%
+    if (avgLevel > 50) targetSpeed *= 0.9;
+    if (avgLevel < 10) targetSpeed *= 1.1; // Low level -> mobs are scary fast
+    
+    // Blend with base calculation
+    scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
 
     // Defense scaling (linear)
     scaled.stats.def = Math.floor(enemy.stats.def * partyFactor * (1 + (rankIndex * 0.08)));
@@ -831,7 +874,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     return scaled;
 }
 
-function scaleBossStats(boss, partySize, difficulty, avgLevel = 1) {
+function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpeed = 10) {
     const scaled = { ...boss };
     const rankIndex = difficulty;
     
@@ -845,7 +888,17 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1) {
     scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * 0.3)));
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
-    scaled.stats.spd = Math.floor(boss.stats.spd * partyFactor * spdMult);
+    
+    // Boss Speed Scaling
+    let baseSpeed = Math.floor(boss.stats.spd * partyFactor * spdMult);
+    
+    // Bosses should generally be slightly faster or matched to players to be threatening
+    // But respecting the "High Level = Slower" rule:
+    let targetSpeed = avgPlayerSpeed * 1.05; // Slightly faster than players
+    if (avgLevel > 60) targetSpeed *= 0.95; // High level players get an edge
+    
+    scaled.stats.spd = Math.floor((baseSpeed * 0.5) + (targetSpeed * 0.5));
+
     scaled.stats.def = Math.floor(boss.stats.def * partyFactor * (1 + (rankIndex * 0.1)));
     
     scaled.stats.maxHp = scaled.stats.hp;

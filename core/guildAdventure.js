@@ -629,7 +629,9 @@ function generateCombatEncounter(chatId) {
                         Object.values(classEncounters.INFECTED_POOLS).flatMap(p => p.COMMON).find(m => m.id === selectedMobId);
         
         if (baseMob) {
-            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty, e.enemyIndex, encounter.avgLevel);
+            // Calculate avgSpeed for correct scaling
+            const avgSpeed = Math.floor(state.players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / state.players.length);
+            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty, e.enemyIndex, encounter.avgLevel, avgSpeed);
         }
         return e;
     });
@@ -682,7 +684,8 @@ function generateEliteCombatEncounter(chatId) {
                         Object.values(classEncounters.INFECTED_POOLS).flatMap(p => p.ELITE)[0];
         
         if (baseMob) {
-            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty * 1.2, e.enemyIndex, encounter.avgLevel);
+            const avgSpeed = Math.floor(state.players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / state.players.length);
+            return classEncounters.scaleEnemyStats(baseMob, state.players.length, state.difficulty * 1.2, e.enemyIndex, encounter.avgLevel, avgSpeed);
         }
         return e;
     });
