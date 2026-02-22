@@ -3600,7 +3600,8 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
                 
                 // Only add if learned and not already in the list
                 if (level > 0 && !learnedAbilities.some(a => a.id === skillId)) {
-                    const energyCost = skill.cost || (Array.isArray(skill.energyCost) ? skill.energyCost[0] : skill.energyCost) || 0;
+                    const getVal = (val, lvl) => Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
+                    const energyCost = skill.cost || getVal(skill.energyCost, level) || 0;
                     
                     if (energyCost > 0) { // Only active abilities for combat
                         learnedAbilities.push({

@@ -2270,9 +2270,58 @@ const SKILL_TREES = {
                         damageMultiplier: [2.5, 2.75, 3.0, 3.25, 3.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
-                        description: 'Masterful strike weakening defenses',
+                        description: 'Masterful strike weakening defenses.',
                         animation: '⚔️📋',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    phalanx_formation: {
+                        id: 'phalanx_formation',
+                        name: 'Phalanx Formation',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'defense', value: [30, 40, 50, 65, 80], duration: 3 }
+                        },
+                        description: 'Organize allies into a defensive wall, massively boosting party DEF.',
+                        animation: '🛡️🛡️🛡️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    rallying_cry: {
+                        id: 'rallying_cry',
+                        name: 'Rallying Cry',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 6,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'attack', value: [20, 25, 30, 35, 45], duration: 3 },
+                            heal_team: { value: [50, 80, 120, 160, 200] }
+                        },
+                        description: 'Inspire your team, restoring health and boosting attack.',
+                        animation: '📢✨⚔️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    strategic_maneuver: {
+                        id: 'strategic_maneuver',
+                        name: 'Strategic Maneuver',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [35, 32, 29, 26, 23],
+                        cooldown: 4,
+                        targeting: 'TEAM',
+                        effects: {
+                            haste: { value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Reposition allies for maximum efficiency, increasing party speed.',
+                        animation: '🏃‍♂️📋⚡',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     total_war: {
                         id: 'total_war',
@@ -2287,7 +2336,7 @@ const SKILL_TREES = {
                         damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Unleash total warfare',
+                        description: 'Unleash total warfare upon all enemies.',
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
                     }
@@ -2316,9 +2365,61 @@ const SKILL_TREES = {
                         damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
-                        description: 'Brutal execution building rage',
-                        animation: '💀⚔️',
+                        description: 'Brutal execution building rage.',
+                        animation: '🪓💥🩸',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    eternal_rage: {
+                        id: 'eternal_rage',
+                        name: 'Eternal Rage',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            berserk: { value: [50, 70, 90, 110, 150], duration: 3 }
+                        },
+                        description: 'Surrender to the eternal rage, massively increasing damage dealt.',
+                        animation: '🩸😡🔥',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    hellfire_blast: {
+                        id: 'hellfire_blast',
+                        name: 'Hellfire Blast',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [35, 33, 31, 29, 27],
+                        cooldown: 4,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: {
+                            burn: { value: [20, 30, 40, 50, 60], duration: 3 }
+                        },
+                        description: 'Release a wave of hellfire that incinerates all enemies.',
+                        animation: '🔥🌪️💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    blood_siphon: {
+                        id: 'blood_siphon',
+                        name: 'Blood Siphon',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 5,
+                        damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            heal: { value: [40, 60, 80, 100, 150] }
+                        },
+                        description: 'Siphon the life force of a wounded foe to heal yourself.',
+                        animation: '💉🩸✨',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     crucible: {
                         id: 'crucible',
@@ -2331,7 +2432,7 @@ const SKILL_TREES = {
                         damageMultiplier: [10.0, 12.0, 15.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Ancient weapon of pure destruction',
+                        description: 'Ancient weapon of pure destruction.',
                         animation: '⚔️🔥💀⚡💥',
                         isUltimate: true,
                         isAscended: true,
@@ -2360,9 +2461,57 @@ const SKILL_TREES = {
                         energyCost: [0, 0, 0, 0, 0],
                         cooldown: 0,
                         targeting: 'PASSIVE',
-                        description: 'Can use all elements simultaneously',
+                        description: 'Can use all elements simultaneously.',
                         animation: '✨🌀',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    primal_barrier: {
+                        id: 'primal_barrier',
+                        name: 'Primal Barrier',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            shield: { value: [30, 40, 50, 60, 80], duration: 3 }
+                        },
+                        description: 'Surround the party with a barrier of all four elements.',
+                        animation: '🌊🔥⚡🌍🛡️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    elemental_nova: {
+                        id: 'elemental_nova',
+                        name: 'Elemental Nova',
+                        tier: 3,
+                        requiredLevel: 36,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 4,
+                        damageMultiplier: [3.5, 4.0, 4.5, 5.0, 6.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        description: 'Explode with the power of the four elements.',
+                        animation: '💥🌊🔥⚡🌍',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    universal_cataclysm: {
+                        id: 'universal_cataclysm',
+                        name: 'Universal Cataclysm',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [150, 135, 120],
+                        cooldown: 12,
+                        damageMultiplier: [15.0, 20.0, 30.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'ALL_ENEMIES',
+                        description: 'The ultimate elemental collapse.',
+                        animation: '🌋🌊⚡🌪️💥💀',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2760,9 +2909,109 @@ const SKILL_TREES = {
                         energyCost: [0],
                         cooldown: 0,
                         targeting: 'PASSIVE',
-                        description: 'Cannot die while phylactery exists',
+                        description: 'Your soul is bound to a phylactery, granting permanent damage reduction.',
                         animation: '💀✨',
                         skillPointCost: [10]
+                    },
+                    death_bolt_asc: {
+                        id: 'death_bolt_asc',
+                        name: 'Death Bolt',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 19, 18, 17, 15],
+                        cooldown: 1,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'A bolt of absolute death energy.',
+                        animation: '💀⚡🌑',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    curse_of_ages: {
+                        id: 'curse_of_ages',
+                        name: 'Curse of Ages',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [35, 33, 31, 29, 27],
+                        cooldown: 5,
+                        targeting: 'AOE',
+                        effects: {
+                            curse: { value: [20, 30, 40, 50, 65], duration: 3 }
+                        },
+                        description: 'A dark curse that saps the life and power of all enemies.',
+                        animation: '💀💨🌑',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    spectral_shroud: {
+                        id: 'spectral_shroud',
+                        name: 'Spectral Shroud',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 6,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [30, 40, 50, 60, 80], duration: 3 }
+                        },
+                        description: 'Become semi-ethereal, greatly increasing your evasion.',
+                        animation: '👻✨🌑',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    soul_bind: {
+                        id: 'soul_bind',
+                        name: 'Soul Bind',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 5,
+                        targeting: 'SINGLE',
+                        effects: {
+                            taunt: { duration: 3 }, // Force enemy to attack Lich (who is tanky/revives)
+                            vulnerability: { value: [20, 30, 40, 50, 60], duration: 3 }
+                        },
+                        description: 'Bind an enemy’s soul to yours, forcing them to focus on you while weakening them.',
+                        animation: '💀🔗🩸',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    eternal_slumber: {
+                        id: 'eternal_slumber',
+                        name: 'Eternal Slumber',
+                        tier: 3,
+                        requiredLevel: 39,
+                        maxLevel: 5,
+                        energyCost: [50, 47, 44, 41, 38],
+                        cooldown: 7,
+                        targeting: 'AOE',
+                        effects: {
+                            sleep: { chance: [40, 55, 70, 85, 100], duration: 2 }
+                        },
+                        description: 'Lull all enemies into a deep, magical sleep.',
+                        animation: '😴🌑✨',
+                        skillPointCost: [5, 6, 7, 8, 10]
+                    },
+                    apocalypse_nova: {
+                        id: 'apocalypse_nova',
+                        name: 'Apocalypse Nova',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [150, 130, 110],
+                        cooldown: 12,
+                        damageMultiplier: [12.0, 16.0, 22.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'ALL_ENEMIES',
+                        effects: {
+                            dot: { value: [30, 50, 80], duration: 3, element: 'death' }
+                        },
+                        description: 'Unleash a wave of absolute annihilation.',
+                        animation: '💀☄️💥🌑🌌',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2787,9 +3036,76 @@ const SKILL_TREES = {
                         energyCost: [0],
                         cooldown: 0,
                         targeting: 'PASSIVE',
-                        description: 'Can take 2 actions per turn',
+                        description: 'Your understanding of time grants you permanent speed and initiative.',
                         animation: '⏳⚡',
                         skillPointCost: [10]
+                    },
+                    chrono_strike: {
+                        id: 'chrono_strike',
+                        name: 'Chrono Strike',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 19, 18, 17, 15],
+                        cooldown: 2,
+                        damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            slow: { value: [20, 30, 40, 50, 65], duration: 2 }
+                        },
+                        description: 'Strike an enemy through time, slowing them down significantly.',
+                        animation: '⚔️⏳💥',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    time_loop: {
+                        id: 'time_loop',
+                        name: 'Time Loop',
+                        tier: 3,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        energyCost: [35, 32, 29, 26, 23],
+                        cooldown: 6,
+                        targeting: 'SINGLE',
+                        effects: {
+                            stun: { chance: [50, 60, 70, 80, 100], duration: 2 }
+                        },
+                        description: 'Trap an enemy in a localized time loop, stunning them for multiple turns.',
+                        animation: '🌀⏳💫',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    temporal_shield: {
+                        id: 'temporal_shield',
+                        name: 'Temporal Shield',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [30, 45, 60, 75, 95], duration: 3 }
+                        },
+                        description: 'Phase yourself slightly out of time, making you nearly impossible to hit.',
+                        animation: '🛡️⏳✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    paradox_wave: {
+                        id: 'paradox_wave',
+                        name: 'Paradox Wave',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [120, 110, 100],
+                        cooldown: 10,
+                        damageMultiplier: [10.0, 14.0, 20.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        description: 'Unleash a wave of temporal paradoxes that ravage all enemies.',
+                        animation: '🌌⏳🌊💥💀',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2814,9 +3130,78 @@ const SKILL_TREES = {
                         energyCost: [0],
                         cooldown: 0,
                         targeting: 'PASSIVE',
-                        description: 'All healing is doubled. Party gains +20% all stats',
+                        description: 'All healing is doubled. Party gains +20% all stats.',
                         animation: '😇✨',
                         skillPointCost: [10]
+                    },
+                    divine_light: {
+                        id: 'divine_light',
+                        name: 'Divine Light',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 3,
+                        targeting: 'TEAM',
+                        effects: {
+                            heal_team: { value: [100, 150, 200, 250, 350] },
+                            blessing: { value: [10, 15, 20, 25, 30], duration: 3 }
+                        },
+                        description: 'A burst of holy light that heals the party and grants a blessing.',
+                        animation: '✨💖🌞',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    holy_resurrection: {
+                        id: 'holy_resurrection',
+                        name: 'Holy Resurrection',
+                        tier: 3,
+                        requiredLevel: 35,
+                        maxLevel: 3,
+                        energyCost: [80, 70, 60],
+                        cooldown: 8,
+                        targeting: 'SINGLE_DEAD',
+                        effects: {
+                            revive: { value: [50, 75, 100] }
+                        },
+                        description: 'Bring a fallen ally back to life with significant HP.',
+                        animation: '👼✨🕊️',
+                        skillPointCost: [5, 7, 10]
+                    },
+                    guardian_angel: {
+                        id: 'guardian_angel',
+                        name: 'Guardian Angel',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [40, 37, 34, 31, 28],
+                        cooldown: 6,
+                        targeting: 'SINGLE',
+                        effects: {
+                            shield: { value: [50, 70, 90, 120, 150], duration: 3 }
+                        },
+                        description: 'Summon a guardian angel to shield a single ally from all harm.',
+                        animation: '👼🛡️✨',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    heavenly_wrath: {
+                        id: 'heavenly_wrath',
+                        name: 'Heavenly Wrath',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [120, 110, 100],
+                        cooldown: 10,
+                        damageMultiplier: [10.0, 12.5, 15.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        effects: {
+                            stun: { chance: [50, 70, 90], duration: 1 }
+                        },
+                        description: 'Smite all enemies with divine fire, potentially stunning them.',
+                        animation: '⚡🔥⚖️☄️',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2843,9 +3228,79 @@ const SKILL_TREES = {
                         damageMultiplier: [3.5, 4.0, 4.5, 5.0, 5.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        description: 'Can summon an army of nature spirits',
+                        description: 'Can summon an army of nature spirits.',
                         animation: '🌳👻✨',
                         skillPointCost: [3, 4, 5, 6, 8]
+                    },
+                    spirit_bond: {
+                        id: 'spirit_bond',
+                        name: 'Spirit Bond',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 5,
+                        targeting: 'SINGLE',
+                        effects: {
+                            buff_target: { stat: 'attack', value: [20, 30, 40, 50, 65], duration: 3 },
+                            heal: { value: [50, 80, 120, 160, 250] }
+                        },
+                        description: 'Bind your spirit to an ally, healing and boosting their attack.',
+                        animation: '🤝🌳✨',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    thorn_armor: {
+                        id: 'thorn_armor',
+                        name: 'Thorn Armor',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            shield: { value: [40, 60, 80, 100, 130], duration: 3 },
+                            bleed: { chance: 100, value: [15, 20, 25, 30, 40], duration: 2 } // Reflective bleed? Or just a buff
+                        },
+                        description: 'Cover yourself in razor-sharp thorns that absorb damage and wound attackers.',
+                        animation: '🛡️🌵🩸',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    ancient_growth: {
+                        id: 'ancient_growth',
+                        name: 'Ancient Growth',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [40, 37, 34, 31, 28],
+                        cooldown: 6,
+                        targeting: 'TEAM',
+                        effects: {
+                            regen: { value: [20, 30, 40, 50, 70], duration: 4 }
+                        },
+                        description: 'Heal the entire party over time with primal energy.',
+                        animation: '🌿💖🍀',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    gais_judgment: {
+                        id: 'gais_judgment',
+                        name: "Gaia's Judgment",
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [120, 110, 100],
+                        cooldown: 10,
+                        damageMultiplier: [12.0, 15.0, 18.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        effects: {
+                            root: { chance: [60, 80, 100], duration: 2 }
+                        },
+                        description: 'The earth rises to swallow your foes, dealing massive damage and rooting them.',
+                        animation: '🌍💥🌋🌿',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2870,9 +3325,76 @@ const SKILL_TREES = {
                         energyCost: [0],
                         cooldown: 0,
                         targeting: 'PASSIVE',
-                        description: 'Gold never decreases. Can buy anything',
+                        description: 'Gold never decreases. Can buy anything.',
                         animation: '💰✨👑',
                         skillPointCost: [15]
+                    },
+                    golden_barrier: {
+                        id: 'golden_barrier',
+                        name: 'Golden Barrier',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            shield: { value: [60, 85, 110, 140, 180], duration: 3 }
+                        },
+                        description: 'A shield made of pure gold that absorbs extreme damage.',
+                        animation: '🛡️💰✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    bribe: {
+                        id: 'bribe',
+                        name: 'Bribe',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [10, 10, 10, 10, 10],
+                        goldCost: [1000, 2000, 3000, 4000, 5000],
+                        cooldown: 4,
+                        targeting: 'SINGLE',
+                        effects: {
+                            charm: { chance: [40, 50, 60, 75, 90], duration: 2 }
+                        },
+                        description: 'Pay an enemy to look the other way (Charm).',
+                        animation: '💸🤝💖',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    market_crash: {
+                        id: 'market_crash',
+                        name: 'Market Crash',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 6,
+                        targeting: 'AOE',
+                        effects: {
+                            debuff: { stat: 'all', value: [15, 20, 25, 30, 40], duration: 3 }
+                        },
+                        description: 'Devastate the enemy team’s morale and stats.',
+                        animation: '📉📉📉',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    zeni_storm: {
+                        id: 'zeni_storm',
+                        name: 'Zeni Storm',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        goldCost: [5000, 10000, 20000],
+                        cooldown: 8,
+                        damageMultiplier: [15.0, 25.0, 40.0],
+                        damageType: 'TRUE',
+                        targeting: 'AOE_LARGE',
+                        description: 'Rain down heavy gold coins, dealing massive true damage.',
+                        animation: '💰⛈️🌪️💥',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -2902,6 +3424,85 @@ const SKILL_TREES = {
                         description: 'Pure arcane power',
                         animation: '🔮✨',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    time_dilation: {
+                        id: 'time_dilation',
+                        name: 'Time Dilation',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            haste: { value: [20, 25, 30, 35, 40], duration: 3 }
+                        },
+                        description: 'Slowing time for yourself, acting more often.',
+                        animation: '⏳✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    spell_shield: {
+                        id: 'spell_shield',
+                        name: 'Mana Shield',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            shield: { value: [30, 40, 50, 60, 80], duration: 3 }
+                        },
+                        description: 'Convert mana into a protective barrier.',
+                        animation: '🛡️🔮',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    reality_warp: {
+                        id: 'reality_warp',
+                        name: 'Reality Warp',
+                        tier: 3,
+                        requiredLevel: 36,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 6,
+                        targeting: 'AOE',
+                        effects: {
+                            confusion: { chance: [30, 40, 50, 60, 75], duration: 2 }
+                        },
+                        description: 'Distort reality, confusing all enemies.',
+                        animation: '🌀✨',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    arcane_rain: {
+                        id: 'arcane_rain',
+                        name: 'Arcane Rain',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 5,
+                        energyCost: [50, 47, 44, 41, 38],
+                        cooldown: 5,
+                        damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        description: 'Call down a shower of arcane bolts upon all foes.',
+                        animation: '🔮🌨️💥',
+                        skillPointCost: [5, 6, 7, 8, 10]
+                    },
+                    mana_surge: {
+                        id: 'mana_surge',
+                        name: 'Mana Surge',
+                        tier: 3,
+                        requiredLevel: 39,
+                        maxLevel: 5,
+                        energyCost: [0, 0, 0, 0, 0],
+                        cooldown: 8,
+                        targeting: 'SELF',
+                        effects: {
+                            restore_energy: { value: [30, 45, 60, 80, 100] }
+                        },
+                        description: 'Overcharge your magical core, restoring massive amounts of energy.',
+                        animation: '⚡🔮🔋',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     singularity: {
                         id: 'singularity',
@@ -2949,6 +3550,88 @@ const SKILL_TREES = {
                         animation: '🌑⚡',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
+                    void_barrier: {
+                        id: 'void_barrier',
+                        name: 'Void Barrier',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            shield: { value: [40, 50, 60, 70, 90], duration: 3 }
+                        },
+                        description: 'A shield of pure void energy that absorbs massive damage.',
+                        animation: '🛡️🌑',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    essence_drain: {
+                        id: 'essence_drain',
+                        name: 'Essence Drain',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 4,
+                        damageMultiplier: [2.0, 2.3, 2.6, 2.9, 3.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            heal: { value: [30, 40, 50, 60, 80] } // Lifesteal
+                        },
+                        description: 'Drain the life force of an enemy to restore your own.',
+                        animation: '🧪💀',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    dimensional_rift: {
+                        id: 'dimensional_rift',
+                        name: 'Dimensional Rift',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 7,
+                        targeting: 'AOE',
+                        effects: {
+                            vulnerability: { value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Tear open a rift, weakening all enemies.',
+                        animation: '🌑💥🌀',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    abyssal_grasp: {
+                        id: 'abyssal_grasp',
+                        name: 'Abyssal Grasp',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 5,
+                        energyCost: [35, 32, 29, 26, 23],
+                        cooldown: 5,
+                        targeting: 'SINGLE',
+                        effects: {
+                            root: { chance: [50, 65, 80, 100, 100], duration: 2 },
+                            dot: { value: [15, 20, 25, 30, 40], duration: 3, element: 'void' }
+                        },
+                        description: 'Summon shadowy hands to entangle and drain an enemy.',
+                        animation: '🌑🤝💀',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    entropy_wave: {
+                        id: 'entropy_wave',
+                        name: 'Entropy Wave',
+                        tier: 3,
+                        requiredLevel: 39,
+                        maxLevel: 5,
+                        energyCost: [55, 52, 49, 46, 43],
+                        cooldown: 6,
+                        damageMultiplier: [2.8, 3.2, 3.6, 4.0, 4.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        description: 'Release a wave of pure entropy that ravages everything.',
+                        animation: '🌑🌊📉💥',
+                        skillPointCost: [5, 6, 7, 8, 10]
+                    },
                     oblivion: {
                         id: 'oblivion',
                         name: 'Oblivion',
@@ -2980,6 +3663,129 @@ const SKILL_TREES = {
                 name: 'Divine Stance',
                 icon: '⛪',
                 skills: {
+                    holy_protection: {
+                        id: 'holy_protection',
+                        name: 'Holy Protection',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [15, 14, 13, 12, 10],
+                        cooldown: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'defense', value: [40, 55, 70, 85, 100], duration: 3 }
+                        },
+                        description: 'Surround yourself with holy energy, massively increasing defense.',
+                        animation: '🛡️✨⛪',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    judgment_strike: {
+                        id: 'judgment_strike',
+                        name: 'Judgment Strike',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 3,
+                        damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            weak: { value: [15, 20, 25, 30, 40], duration: 2 }
+                        },
+                        description: 'A heavy strike that judges the target, weakening them.',
+                        animation: '⚔️⚖️✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    divine_aura: {
+                        id: 'divine_aura',
+                        name: 'Divine Aura',
+                        tier: 3,
+                        requiredLevel: 36,
+                        maxLevel: 5,
+                        energyCost: [40, 37, 34, 31, 28],
+                        cooldown: 6,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'defense', value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Radiate a holy aura that protects the entire party.',
+                        animation: '⛪✨🛡️',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    retribution_aura: {
+                        id: 'retribution_aura',
+                        name: 'Retribution Aura',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
+                        },
+                        description: 'Surround allies with an aura that punishes enemies for attacking.',
+                        animation: '⛪✨⚔️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    sacred_ground: {
+                        id: 'sacred_ground',
+                        name: 'Sacred Ground',
+                        tier: 3,
+                        requiredLevel: 39,
+                        maxLevel: 5,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 7,
+                        targeting: 'TEAM',
+                        effects: {
+                            regen: { value: [25, 35, 45, 60, 80], duration: 4 }
+                        },
+                        description: 'Hallow the ground, restoring health over time to all allies.',
+                        animation: '✨⛪🌱💖',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    heavenly_sanctuary: {
+                        id: 'heavenly_sanctuary',
+                        name: 'Heavenly Sanctuary',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [100, 90, 80],
+                        cooldown: 10,
+                        targeting: 'TEAM',
+                        effects: {
+                            heal_team: { value: [150, 250, 400] },
+                            buff_team: { stat: 'all', value: [20, 30, 40], duration: 3 }
+                        },
+                        description: 'Create a sanctuary of light, healing and buffing the team.',
+                        animation: '🏰✨👼',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [8, 12, 15]
+                    },
+                    divine_intervention: {
+                        id: 'divine_intervention',
+                        name: 'Divine Intervention',
+                        tier: 4,
+                        requiredLevel: 42,
+                        maxLevel: 1,
+                        energyCost: [150],
+                        cooldown: 15,
+                        targeting: 'TEAM',
+                        effects: {
+                            revive_all: { hp: 50 },
+                            shield: { value: 100, duration: 2 }
+                        },
+                        description: 'A miraculous intervention that revives all fallen allies and shields the survivors.',
+                        animation: '✨👼🕊️🛡️',
+                        isUltimate: true,
+                        skillPointCost: [20]
+                    }
+                }
+            }
+        }
+    },
                     sacred_flame: {
                         id: 'sacred_flame',
                         name: 'Sacred Flame',
@@ -3038,9 +3844,59 @@ const SKILL_TREES = {
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
-                        description: 'Dance through shadows striking multiple times',
+                        description: 'Dance through shadows striking multiple times.',
                         animation: '🌑⚔️💨',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    deadly_toxins: {
+                        id: 'deadly_toxins',
+                        name: 'Deadly Toxins',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 4,
+                        targeting: 'SINGLE',
+                        effects: {
+                            poison: { value: [30, 45, 60, 80, 110], duration: 4 }
+                        },
+                        description: 'Coat your blade in lethal toxins, dealing massive poison damage.',
+                        animation: '💉💀🩸',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    shadow_clone: {
+                        id: 'shadow_clone',
+                        name: 'Shadow Clone',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [35, 45, 55, 70, 90], duration: 2 }
+                        },
+                        description: 'Create a clone of yourself to confuse and evade enemies.',
+                        animation: '👤🌑✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    eviscerate: {
+                        id: 'eviscerate',
+                        name: 'Eviscerate',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [35, 32, 29, 26, 23],
+                        cooldown: 4,
+                        damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.5],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            bleed: { value: [25, 35, 45, 55, 70], duration: 3 }
+                        },
+                        description: 'A brutal strike that leaves the target bleeding profusely.',
+                        animation: '⚔️🩸💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     eclipse: {
                         id: 'eclipse',
@@ -3053,7 +3909,7 @@ const SKILL_TREES = {
                         damageMultiplier: [12.0, 14.0, 16.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Total darkness consuming all',
+                        description: 'Total darkness consuming all.',
                         animation: '🌑💀⚔️✨',
                         isUltimate: true,
                         isAscended: true,
@@ -3084,9 +3940,60 @@ const SKILL_TREES = {
                         damageMultiplier: [3.0, 3.4, 3.8, 4.2, 4.6],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
-                        description: 'Flawless attack in perfect harmony',
+                        description: 'Flawless attack in perfect harmony.',
                         animation: '👊✨',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    focused_meditation: {
+                        id: 'focused_meditation',
+                        name: 'Focused Meditation',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [0, 0, 0, 0, 0],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            heal: { value: [60, 100, 150, 200, 300] },
+                            haste: { value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Restore your inner peace and speed up your actions.',
+                        animation: '🧘✨💫',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    ethereal_dodge: {
+                        id: 'ethereal_dodge',
+                        name: 'Ethereal Dodge',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [5, 5, 5, 5, 5],
+                        cooldown: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [40, 55, 70, 85, 100], duration: 2 }
+                        },
+                        description: 'Move between dimensions to avoid all incoming attacks.',
+                        animation: '💨🧘✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    serene_impact: {
+                        id: 'serene_impact',
+                        name: 'Serene Impact',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [10, 10, 10, 10, 10],
+                        cooldown: 4,
+                        damageMultiplier: [3.5, 4.0, 4.5, 5.0, 6.0],
+                        damageType: 'TRUE',
+                        targeting: 'AOE',
+                        effects: {
+                            stun: { chance: [30, 45, 60, 75, 90], duration: 1 }
+                        },
+                        description: 'A calm but forceful wave that stuns and damages all enemies.',
+                        animation: '🧘🌊💥⚡',
+                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     one_with_universe: {
                         id: 'one_with_universe',
@@ -3099,7 +4006,7 @@ const SKILL_TREES = {
                         damageMultiplier: [15.0, 18.0, 20.0],
                         damageType: 'TRUE',
                         targeting: 'ALL',
-                        description: 'Transcend mortality achieving oneness',
+                        description: 'Transcend mortality achieving oneness.',
                         animation: '🧘✨🌌💫',
                         isUltimate: true,
                         isAscended: true,
@@ -3159,9 +4066,60 @@ const SKILL_TREES = {
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
-                        description: 'A strike that commands respect',
+                        description: 'A strike that commands respect.',
                         animation: '⚔️🎖️💥',
                         skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    iaijutsu: {
+                        id: 'iaijutsu',
+                        name: 'Iaijutsu',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [18, 17, 16, 15, 13],
+                        cooldown: 2,
+                        damageMultiplier: [3.2, 3.5, 3.8, 4.1, 4.5],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            guaranteedCrit: true
+                        },
+                        description: 'A lightning-fast draw that always critical hits.',
+                        animation: '⚔️⚡🌸',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    daimyo_authority: {
+                        id: 'daimyo_authority',
+                        name: 'Daimyo’s Authority',
+                        tier: 3,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'attack', value: [20, 25, 30, 35, 45], duration: 3 }
+                        },
+                        description: 'Command your allies, increasing their attack power.',
+                        animation: '🏯📢⚔️',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    empire_strike: {
+                        id: 'empire_strike',
+                        name: 'Empire Strike',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [110, 100, 90],
+                        cooldown: 9,
+                        damageMultiplier: [12.0, 15.0, 18.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'An ultimate strike that decimates all enemies in your wake.',
+                        animation: '🏯⚔️💥💨',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [8, 12, 15]
                     }
                 }
             }
@@ -3188,9 +4146,60 @@ const SKILL_TREES = {
                         damageMultiplier: [5.0, 5.5, 6.0, 6.5, 7.0],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
-                        description: 'Strike from the absolute darkness',
+                        description: 'Strike from the absolute darkness.',
                         animation: '🌑🥷🗡️',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    phantom_step: {
+                        id: 'phantom_step',
+                        name: 'Phantom Step',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 5,
+                        energyCost: [15, 14, 13, 12, 10],
+                        cooldown: 4,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [30, 40, 50, 65, 80], duration: 3 }
+                        },
+                        description: 'Become like a ghost, making you almost impossible to hit.',
+                        animation: '💨🌑✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    poison_needle: {
+                        id: 'poison_needle',
+                        name: 'Poison Needle',
+                        tier: 2,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 3,
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            poison: { value: [20, 30, 40, 50, 70], duration: 4 }
+                        },
+                        description: 'A precise needle strike that injects lethal toxin.',
+                        animation: '💉💀',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    thousand_shadows: {
+                        id: 'thousand_shadows',
+                        name: 'Thousand Shadows',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [100, 90, 80],
+                        cooldown: 10,
+                        damageMultiplier: [8.0, 10.0, 12.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Unleash a flurry of shadow clones to strike every foe.',
+                        animation: '🌑🥷⚔️🌀',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [8, 12, 15]
                     }
                 }
             }
@@ -3219,6 +4228,76 @@ const SKILL_TREES = {
                         description: 'Heal the entire party with music',
                         animation: '🎻✨💖',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    war_march: {
+                        id: 'war_march',
+                        name: 'War March',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            buff_team: { stat: 'attack', value: [30, 40, 50, 65, 80], duration: 3 }
+                        },
+                        description: 'Play a powerful march that pushes allies to their physical limits.',
+                        animation: '🥁⚔️🔥',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    serenade_of_peace: {
+                        id: 'serenade_of_peace',
+                        name: 'Serenade of Peace',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 4,
+                        targeting: 'AOE',
+                        effects: {
+                            sleep: { chance: [30, 45, 60, 75, 90], duration: 2 }
+                        },
+                        description: 'A soothing serenade that lulls enemies into a deep sleep.',
+                        animation: '🎻💤🌙',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    crescendo: {
+                        id: 'crescendo',
+                        name: 'Crescendo',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 6,
+                        damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            stun: { chance: 100, duration: 1 }
+                        },
+                        description: 'A build-up of sound that finishes with a deafening burst.',
+                        animation: '🎻💥📢',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    requiem_of_the_void: {
+                        id: 'requiem_of_the_void',
+                        name: 'Requiem of the Void',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [120, 110, 100],
+                        cooldown: 10,
+                        damageMultiplier: [10.0, 12.5, 15.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        effects: {
+                            curse: { value: [20, 35, 50], duration: 3 }
+                        },
+                        description: 'A song of the end that drains the essence of every enemy.',
+                        animation: '🎻🌑💀🌌',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -3245,9 +4324,74 @@ const SKILL_TREES = {
                         damageMultiplier: [5.5, 6.0, 6.5, 7.0, 7.5],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        description: 'Fire a beam of pure energy',
+                        description: 'Fire a beam of pure energy.',
                         animation: '🦾⚡🔥',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    force_field: {
+                        id: 'force_field',
+                        name: 'Force Field',
+                        tier: 2,
+                        requiredLevel: 32,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 5,
+                        targeting: 'TEAM',
+                        effects: {
+                            shield: { value: [20, 30, 40, 50, 65], duration: 3 }
+                        },
+                        description: 'Deploy a high-tech force field to protect the entire party.',
+                        animation: '🛡️⚙️✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    automated_turret: {
+                        id: 'automated_turret',
+                        name: 'Auto-Turret',
+                        tier: 2,
+                        requiredLevel: 34,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 4,
+                        damageMultiplier: [1.5, 1.8, 2.1, 2.4, 2.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Deploy a turret that sprays bullets at all enemies.',
+                        animation: '🤖🔫💥',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    overclock: {
+                        id: 'overclock',
+                        name: 'Overclock',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 6,
+                        targeting: 'SELF',
+                        effects: {
+                            haste: { value: [40, 55, 70, 85, 100], duration: 3 },
+                            buff_self: { stat: 'attack', value: [20, 30, 40, 50, 60], duration: 3 }
+                        },
+                        description: 'Push your tech to the limit, greatly increasing speed and attack.',
+                        animation: '⚙️⚡🔥',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    orbital_strike: {
+                        id: 'orbital_strike',
+                        name: 'Orbital Strike',
+                        tier: 4,
+                        requiredLevel: 40,
+                        maxLevel: 3,
+                        energyCost: [150, 130, 110],
+                        cooldown: 12,
+                        damageMultiplier: [20.0, 25.0, 35.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_LARGE',
+                        description: 'Call down a devastating laser from space.',
+                        animation: '🛰️⚡☄️💥',
+                        isUltimate: true,
+                        isAscended: true,
+                        skillPointCost: [10, 15, 20]
                     }
                 }
             }
@@ -3277,6 +4421,162 @@ const SKILL_TREES = {
                         description: 'A punch that can break the stars',
                         animation: '👊🌌💥',
                         skillPointCost: [4, 5, 6, 7, 8]
+                    }
+                }
+            }
+        }
+    },
+
+    REAPER: {
+        name: 'Reaper',
+        icon: '⌛💀',
+        skillPointsPerLevel: 2,
+        trees: {
+            HARVEST: {
+                name: 'Soul Harvest',
+                icon: '💀',
+                skills: {
+                    soul_reap: {
+                        id: 'soul_reap',
+                        name: 'Soul Reap',
+                        tier: 1,
+                        requiredLevel: 1,
+                        maxLevel: 5,
+                        energyCost: [15, 14, 13, 12, 10],
+                        cooldown: 2,
+                        damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            heal: { value: [10, 15, 20, 25, 30] }
+                        },
+                        description: 'Harvest the soul of an enemy, healing yourself.',
+                        animation: '💀✨🩸',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    death_mark: {
+                        id: 'death_mark',
+                        name: 'Death Mark',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 4,
+                        targeting: 'SINGLE',
+                        effects: {
+                            vulnerability: { value: [15, 20, 25, 30, 40], duration: 3 }
+                        },
+                        description: 'Mark an enemy for death, making them take more damage.',
+                        animation: '💀🎯',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    soul_shield: {
+                        id: 'soul_shield',
+                        name: 'Soul Shield',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 5,
+                        energyCost: [15, 14, 13, 12, 10],
+                        cooldown: 5,
+                        targeting: 'SELF',
+                        effects: {
+                            shield: { value: [25, 35, 45, 60, 80], duration: 3 }
+                        },
+                        description: 'Form a protective barrier using harvested soul energy.',
+                        animation: '🛡️💀✨',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    grim_reaping: {
+                        id: 'grim_reaping',
+                        name: 'Grim Reaping',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 5,
+                        energyCost: [35, 33, 31, 29, 27],
+                        cooldown: 4,
+                        damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Sweep your scythe in a wide arc, striking all enemies.',
+                        animation: '⚔️💀🌪️',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    }
+                }
+            }
+        }
+    },
+
+    GOD_HAND: {
+        name: 'God Hand',
+        icon: '👊✨',
+        skillPointsPerLevel: 2,
+        trees: {
+            MARTIAL: {
+                name: 'Divine Martial Arts',
+                icon: '👊',
+                skills: {
+                    iron_fist: {
+                        id: 'iron_fist',
+                        name: 'Iron Fist',
+                        tier: 1,
+                        requiredLevel: 1,
+                        maxLevel: 5,
+                        energyCost: [12, 11, 10, 9, 8],
+                        cooldown: 1,
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        description: 'A powerful punch that can break through steel.',
+                        animation: '👊💥',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    pressure_point: {
+                        id: 'pressure_point',
+                        name: 'Pressure Point',
+                        tier: 2,
+                        requiredLevel: 4,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 4,
+                        targeting: 'SINGLE',
+                        effects: {
+                            stun: { chance: [30, 40, 50, 65, 80], duration: 1 }
+                        },
+                        description: 'Strike a precise point to disable the enemy.',
+                        animation: '🎯👊💫',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    ki_blast: {
+                        id: 'ki_blast',
+                        name: 'Ki Blast',
+                        tier: 2,
+                        requiredLevel: 6,
+                        maxLevel: 5,
+                        energyCost: [20, 19, 18, 17, 15],
+                        cooldown: 2,
+                        damageMultiplier: [2.0, 2.3, 2.6, 2.9, 3.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'Release a concentrated burst of inner energy.',
+                        animation: '👊⚡✨',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    meditation: {
+                        id: 'meditation',
+                        name: 'Meditation',
+                        tier: 3,
+                        requiredLevel: 8,
+                        maxLevel: 5,
+                        energyCost: [0, 0, 0, 0, 0],
+                        cooldown: 6,
+                        targeting: 'SELF',
+                        effects: {
+                            heal: { value: [40, 60, 85, 110, 150] },
+                            restore_energy: { value: [15, 20, 25, 30, 40] }
+                        },
+                        description: 'Focus your mind to restore health and energy.',
+                        animation: '🧘✨🔋',
+                        skillPointCost: [3, 4, 5, 6, 7]
                     }
                 }
             }
