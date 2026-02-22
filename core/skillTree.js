@@ -3786,43 +3786,6 @@ const SKILL_TREES = {
             }
         }
     },
-                    sacred_flame: {
-                        id: 'sacred_flame',
-                        name: 'Sacred Flame',
-                        tier: 1,
-                        requiredLevel: 30,
-                        maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
-                        damageMultiplier: [2.8, 3.1, 3.4, 3.7, 4.0],
-                        damageType: 'MAGICAL',
-                        targeting: 'SINGLE',
-                        bonusVsUndead: [5.0, 5.5, 6.0, 6.5, 7.0],
-                        description: 'Holy fire purifying evil',
-                        animation: '✨🔥',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
-                    rapture: {
-                        id: 'rapture',
-                        name: 'Rapture',
-                        tier: 4,
-                        requiredLevel: 40,
-                        maxLevel: 3,
-                        energyCost: [100, 90, 80],
-                        cooldown: 10,
-                        damageMultiplier: [8.0, 9.5, 11.0],
-                        damageType: 'MAGICAL',
-                        targeting: 'ALL_ENEMIES',
-                        description: 'Divine judgment from heaven',
-                        animation: '😇✨⚡💥',
-                        isUltimate: true,
-                        isAscended: true,
-                        skillPointCost: [8, 12, 15]
-                    }
-                }
-            }
-        }
-    },
 
     NIGHTBLADE: {
         name: 'Nightblade',
