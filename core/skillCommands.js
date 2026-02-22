@@ -28,10 +28,13 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         return;
     }
     
-    // Initialize skills if needed
+    // Initialize skills if strictly needed (New user or data corruption)
     if (!user.skills) {
         user.skills = {};
-        user.skillPoints = skillTree.calculateSkillPoints(level);
+        // Only set skillPoints if they are also missing/undefined to prevent overwrite
+        if (user.skillPoints === undefined || user.skillPoints === null) {
+            user.skillPoints = skillTree.calculateSkillPoints(level);
+        }
         economy.saveUser(senderJid);
     }
     
