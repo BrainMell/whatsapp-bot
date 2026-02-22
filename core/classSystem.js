@@ -1101,6 +1101,20 @@ function getNextRankRequirements(currentRank) {
     };
 }
 
+function getLineage(classId) {
+    const lineage = [];
+    let currentId = classId;
+    
+    while (currentId) {
+        lineage.push(currentId);
+        const classData = getClassById(currentId);
+        if (!classData || !classData.evolvedFrom) break;
+        currentId = classData.evolvedFrom;
+    }
+    
+    return lineage;
+}
+
 // ==========================================
 // 📤 EXPORTS
 // ==========================================
@@ -1114,6 +1128,7 @@ module.exports = {
     getClassById,
     getRandomStarterClass,
     isFighterLineage,
+    getLineage,
     canEvolve,
     calculateAdventurerRank,
     getNextRankRequirements

@@ -70,28 +70,44 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
     }
 
-    // 2. Display Basic Techniques (Inherited Skills)
-    if (userClass.evolvedFrom) {
-        let baseClassId = userClass.evolvedFrom.toUpperCase();
-        const baseClass = classSystem.getClassById(baseClassId);
-        const baseTree = skillTree.SKILL_TREES[baseClassId];
-        
-        if (baseTree) {
-            let baseSkillsMsg = "";
-            for (const [treeId, treeData] of Object.entries(baseTree.trees)) {
+    // 2. Display Lineage Techniques (Inherited Skills)
+    const lineage = classSystem.getLineage(userClass.id);
+    if (lineage.length > 1) {
+        // Skip current class (already shown)
+        const parents = lineage.slice(1);
+        let lineageSkillsMsg = "";
+
+        for (const parentId of parents) {
+            const parentClass = classSystem.getClassById(parentId);
+            const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
+            if (!parentTree) continue;
+
+            let parentSection = "";
+            for (const [treeId, treeData] of Object.entries(parentTree.trees)) {
                 for (const [skillId, skill] of Object.entries(treeData.skills)) {
                     const currentLevel = user.skills[skillId] || 0;
                     if (currentLevel > 0) {
-                        baseSkillsMsg += `┃  • *${skill.name}* (Lv.${currentLevel})\n`;
+                        parentSection += `┃  • *${skill.name}* (Lv.${currentLevel})\n`;
+                    } else {
+                        // Allow learning missed skills from previous tiers
+                        const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                        if (canLearn && user.skillPoints > 0) {
+                            parentSection += `┃  ⭕ *${skill.name}* (Learnable)\n`;
+                            parentSection += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
+                        }
                     }
                 }
             }
-            if (baseSkillsMsg) {
-                msg += `┏━━━🔰 *BASIC TECHNIQUES* ━┓\n`;
-                msg += `┃ _Inherited from ${baseClass.name}_\n`;
-                msg += baseSkillsMsg;
-                msg += `┗━━━━━━━━━━━━━━━━━━┛\n\n`;
+
+            if (parentSection) {
+                lineageSkillsMsg += `┃ 💠 *${parentClass.name} Lineage*\n` + parentSection;
             }
+        }
+
+        if (lineageSkillsMsg) {
+            msg += `┏━━━━━🔰 *INHERITED PATHS* ━━━━┓\n`;
+            msg += lineageSkillsMsg;
+            msg += `┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
         }
     }
 
@@ -124,28 +140,32 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         user.skillPoints = skillTree.calculateSkillPoints(level);
     }
     
-    // Find the skill
-    const tree = skillTree.SKILL_TREES[userClass.id];
+    // Find the skill in lineage
+    const lineage = classSystem.getLineage(userClass.id);
     let targetSkill = null;
-    let treeName = null;
+    let foundInClass = null;
     
-    for (const [tName, treeData] of Object.entries(tree.trees)) {
-        for (const [sId, skill] of Object.entries(treeData.skills)) {
-            if (sId.toLowerCase() === skillId.toLowerCase() || 
-                skill.name.toLowerCase().includes(skillId.toLowerCase())) {
-                targetSkill = skill;
-                treeName = tName;
-                break;
+    for (const classId of lineage) {
+        const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+        if (!tree) continue;
+
+        for (const [tName, treeData] of Object.entries(tree.trees)) {
+            for (const [sId, skill] of Object.entries(treeData.skills)) {
+                if (sId.toLowerCase() === skillId.toLowerCase() || 
+                    skill.name.toLowerCase().includes(skillId.toLowerCase())) {
+                    targetSkill = skill;
+                    foundInClass = tree.name;
+                    break;
+                }
             }
+            if (targetSkill) break;
         }
         if (targetSkill) break;
     }
     
     if (!targetSkill) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Skill "${skillId}" not found!\n\nUse 
-	${getPrefix()} skill tree
- to see all skills.` 
+            text: `❌ Skill "${skillId}" not found in your class lineage!\n\nUse \`${getPrefix()} skill tree\` to see all skills.` 
         });
         return;
     }
