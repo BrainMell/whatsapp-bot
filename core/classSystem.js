@@ -65,8 +65,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 200, atk: 12, def: 15, mag: 2, spd: 5, luck: 5, crit: 5 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Tenacity', desc: 'Slowly regenerates 5 HP per hour.' },
         evolves_into: ['WARLORD']
     },
@@ -79,8 +79,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'WARRIOR',
         role: 'TANK',
         stats: { hp: 450, atk: 25, def: 40, mag: 5, spd: 10, luck: 10, crit: 10 },
-        requirement: { level: 30, questsCompleted: 15, victories: 100, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, victories: 100, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Commander', desc: 'Reduces all incoming damage to party by 15% in quests.' }
     },
     
@@ -93,8 +93,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 220, atk: 16, def: 10, mag: 1, spd: 6, luck: 4, crit: 12 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Bloodlust', desc: 'Increases Crit chance by 5% in all combat.' },
         evolves_into: ['DOOMSLAYER']
     },
@@ -107,8 +107,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'BERSERKER',
         role: 'TANK',
         stats: { hp: 500, atk: 45, def: 20, mag: 2, spd: 15, luck: 5, crit: 25 },
-        requirement: { level: 30, questsCompleted: 15, kills: 500, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, kills: 500, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Hell-Walker', desc: 'Damage increases by 2% for every 1% of HP missing.' }
     },
     
@@ -121,8 +121,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 180, atk: 10, def: 18, mag: 8, spd: 4, luck: 7, crit: 3 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Divine Shield', desc: 'Reduces damage taken in quests by 10%.' },
         evolves_into: ['TEMPLAR']
     },
@@ -135,8 +135,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'PALADIN',
         role: 'TANK',
         stats: { hp: 400, atk: 20, def: 45, mag: 25, spd: 8, luck: 15, crit: 10 },
-        requirement: { level: 30, questsCompleted: 15, undeadKills: 200, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, undeadKills: 200, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Holy Retribution', desc: 'Reflects 20% of all damage taken back at the enemy.' }
     },
     
@@ -150,8 +150,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 100, atk: 18, def: 5, mag: 3, spd: 20, luck: 15, crit: 25 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Shadow Cloak', desc: 'Increases Evasion in quests by 15%.' },
         evolves_into: ['NIGHTBLADE']
     },
@@ -164,8 +164,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ROGUE',
         role: 'DPS',
         stats: { hp: 220, atk: 40, def: 10, mag: 10, spd: 45, luck: 30, crit: 40 },
-        requirement: { level: 30, questsCompleted: 15, assassinations: 150, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, assassinations: 150, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Assassins Mark', desc: 'Has a 10% chance to deal 10x damage on any attack.' }
     },
     
@@ -178,8 +178,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 120, atk: 14, def: 8, mag: 6, spd: 18, luck: 10, crit: 15 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Focus', desc: 'Increases accuracy and speed by 10%.' },
         evolves_into: ['ZENMASTER']
     },
@@ -192,8 +192,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'MONK',
         role: 'DPS',
         stats: { hp: 300, atk: 35, def: 20, mag: 30, spd: 40, luck: 20, crit: 25 },
-        requirement: { level: 30, questsCompleted: 15, perfectDodges: 200, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, perfectDodges: 200, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Inner Peace', desc: 'Automatically clears one negative status effect every turn.' }
     },
     
@@ -202,13 +202,13 @@ const EVOLVED_CLASSES = {
         id: 'MAGE',
         name: 'Mage',
         icon: '🔮',
-        desc: 'Advanced arcane spellcasters who have moved beyond basic apprenticeships. Mages specialize in massive burst damage and area-of-effect spells. Their control over pure magical energy allows them to restore their own resources during combat, maintaining a consistent offensive presence.',
+        desc: 'Advanced arcane spellcasters who have moved beyond basic apprenticeships.',
         tier: 'EVOLVED',
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 85, atk: 5, def: 4, mag: 25, spd: 8, luck: 10, crit: 12 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Arcane Well', desc: 'Restores 10 Mana/Energy per turn in combat.' },
         evolves_into: ['ARCHMAGE']
     },
@@ -216,13 +216,13 @@ const EVOLVED_CLASSES = {
         id: 'ARCHMAGE',
         name: 'Archmage',
         icon: '🧙‍♂️✨',
-        desc: 'The pinnacle of arcane mastery. Archmages have achieved such a deep understanding of magical theory that they can warp reality itself. Their mere presence stabilizes magical fields, allowing them to cast even the most taxing spells with significantly reduced effort. At this level, cooldowns and resource costs become secondary to their overwhelming power.',
+        desc: 'The pinnacle of arcane mastery.',
         tier: 'ASCENDED',
         evolvedFrom: 'MAGE',
         role: 'MAGIC_DPS',
         stats: { hp: 180, atk: 10, def: 15, mag: 60, spd: 20, luck: 20, crit: 20 },
-        requirement: { level: 30, questsCompleted: 15, spellsCast: 1000, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, spellsCast: 1000, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Infinity Flow', desc: 'All ability costs are reduced by 50%.' }
     },
     
@@ -235,8 +235,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 95, atk: 6, def: 5, mag: 22, spd: 7, luck: 8, crit: 10 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Soul Siphon', desc: 'Heals for 5% of all magic damage dealt.' },
         evolves_into: ['VOIDWALKER']
     },
@@ -249,8 +249,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'WARLOCK',
         role: 'MAGIC_DPS',
         stats: { hp: 250, atk: 15, def: 20, mag: 55, spd: 15, luck: 10, crit: 15 },
-        requirement: { level: 30, questsCompleted: 15, soulsHarvested: 300, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, soulsHarvested: 300, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Abyssal Presence', desc: 'Lower enemy ATK and DEF by 15% just by being present.' }
     },
     
@@ -263,8 +263,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 90, atk: 6, def: 5, mag: 24, spd: 9, luck: 9, crit: 11 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Elemental Harmony', desc: 'All elemental damage increased by 15%.' },
         evolves_into: ['AVATAR']
     },
@@ -278,8 +278,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 88, atk: 5, def: 4, mag: 23, spd: 7, luck: 7, crit: 9 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Undead Mastery', desc: 'Summons have +30% stats.' },
         evolves_into: ['LICH']
     },
@@ -293,8 +293,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 85, atk: 5, def: 5, mag: 24, spd: 12, luck: 11, crit: 10 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Temporal Flux', desc: 'All cooldowns reduced by 1 turn.' },
         evolves_into: ['TIMELORD']
     },
@@ -308,8 +308,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 130, atk: 17, def: 9, mag: 4, spd: 16, luck: 11, crit: 20 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Bushido', desc: 'Gain +20% ATK and DEF when honorable.' },
         evolves_into: ['SHOGUN']
     },
@@ -322,8 +322,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SAMURAI',
         role: 'DPS',
         stats: { hp: 280, atk: 45, def: 25, mag: 10, spd: 22, luck: 15, crit: 30 },
-        requirement: { level: 30, questsCompleted: 15, victories: 200, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, victories: 200, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Commanders Will', desc: 'Party deals 20% more physical damage.' }
     },
 
@@ -336,8 +336,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 95, atk: 16, def: 4, mag: 5, spd: 22, luck: 16, crit: 28 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Shadow Arts', desc: 'First strike always guaranteed crit.' },
         evolves_into: ['KAGE']
     },
@@ -350,8 +350,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'NINJA',
         role: 'DPS',
         stats: { hp: 200, atk: 48, def: 12, mag: 15, spd: 50, luck: 25, crit: 45 },
-        requirement: { level: 30, questsCompleted: 15, shadowKills: 100, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, shadowKills: 100, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Absolute Stealth', desc: '50% base Evasion. Never missed by attacks.' }
     },
 
@@ -359,7 +359,7 @@ const EVOLVED_CLASSES = {
         id: 'DRAGONSLAYER',
         name: 'Dragonslayer',
         icon: '🐲⚔️',
-        desc: 'Legendary dragon hunter. Dragonslayers are specialized warriors who have mastered the art of slaying ancient drakes. Their techniques are designed to bypass dragon scales and neutralize elemental breath. Known for their "Dragon-Bane" feat, they deal massive damage to all draconic beings.',
+        desc: 'Legendary dragon hunter.',
         tier: 'EVOLVED',
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
@@ -373,12 +373,12 @@ const EVOLVED_CLASSES = {
         id: 'DRAGON_GOD',
         name: 'Dragon God',
         icon: '🐲👑',
-        desc: 'The ultimate draconic deity. A Dragonslayer who has bathed in the blood of countless dragons and consumed their hearts to attain divinity. They command the elements of dragonfire and possess the "Dragon Heart" feat, making them immune to status effects and virtually indestructible.',
+        desc: 'The ultimate draconic deity.',
         tier: 'ASCENDED',
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
         stats: { hp: 420, atk: 35, def: 35, mag: 20, spd: 12, luck: 15, crit: 15 },
-        requirement: { level: 70, questsCompleted: 75, dragonsKilled: 200, gold: 500000 },
+        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 200, gold: 500000 },
         evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: 'Immune to all status effects. 50% damage reduction.' }
     },
@@ -392,8 +392,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 110, atk: 7, def: 9, mag: 20, spd: 9, luck: 13, crit: 7 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Divine Grace', desc: 'Healing spells heal for 25% more.' },
         evolves_into: ['SAINT']
     },
@@ -407,8 +407,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 115, atk: 8, def: 10, mag: 18, spd: 11, luck: 12, crit: 8 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Wild Shape', desc: 'Can transform into animal forms.' },
         evolves_into: ['ARCHDRUID']
     },
@@ -422,8 +422,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 105, atk: 7, def: 8, mag: 12, spd: 10, luck: 25, crit: 9 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Gold Rush', desc: 'Earn 50% more gold from all sources.' },
         evolves_into: ['TYCOON']
     },
@@ -437,8 +437,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Inspiring Song', desc: 'Party members gain +10% all stats.' },
         evolves_into: ['VIRTUOSO']
     },
@@ -451,8 +451,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'BARD',
         role: 'SUPPORT',
         stats: { hp: 220, atk: 15, def: 15, mag: 40, spd: 25, luck: 30, crit: 20 },
-        requirement: { level: 30, questsCompleted: 15, songsPlayed: 500, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, songsPlayed: 500, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Grand Finale', desc: 'When a player dies, 25% chance to revive them instantly with full HP.' }
     },
 
@@ -465,8 +465,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 108, atk: 9, def: 9, mag: 15, spd: 11, luck: 11, crit: 11 },
-        requirement: { level: 10, questsCompleted: 3, gold: 5000 },
-        evolutionCost: 5000,
+        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        evolutionCost: 15000,
         passive: { name: 'Tech Mastery', desc: 'Summons deal 40% more damage.' },
         evolves_into: ['GRAND_INVENTOR']
     },
@@ -479,8 +479,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ARTIFICER',
         role: 'SUPPORT',
         stats: { hp: 250, atk: 20, def: 25, mag: 30, spd: 18, luck: 20, crit: 15 },
-        requirement: { level: 30, questsCompleted: 15, itemsCrafted: 100, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, itemsCrafted: 100, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Hyper-Efficiency', desc: 'Crafting always yields double results. All summons have +50% HP.' }
     },
 
@@ -493,8 +493,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'DPS',
         stats: { hp: 200, atk: 40, def: 20, mag: 20, spd: 30, luck: 15, crit: 15 },
-        requirement: { level: 25, questsCompleted: 10, gold: 15000 },
-        evolutionCost: 15000,
+        requirement: { level: 35, questsCompleted: 30, gold: 20000 },
+        evolutionCost: 20000,
         passive: { name: 'Divine Fist', desc: 'Basic attacks have a 10% chance to stun for 2 turns.' },
         evolves_into: ['DIVINE_FIST']
     },
@@ -507,7 +507,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'GOD_HAND',
         role: 'DPS',
         stats: { hp: 400, atk: 70, def: 30, mag: 25, spd: 45, luck: 20, crit: 25 },
-        requirement: { level: 40, questsCompleted: 25, bossKills: 10, gold: 100000 },
+        requirement: { level: 60, questsCompleted: 150, bossKills: 10, gold: 100000 },
         evolutionCost: 100000,
         passive: { name: 'One-Inch Punch', desc: 'Ignores 100% of enemy defense.' }
     },
@@ -521,8 +521,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'DPS',
         stats: { hp: 160, atk: 35, def: 10, mag: 30, spd: 15, luck: 10, crit: 25 },
-        requirement: { level: 25, questsCompleted: 10, gold: 12000 },
-        evolutionCost: 12000,
+        requirement: { level: 35, questsCompleted: 30, gold: 20000 },
+        evolutionCost: 20000,
         passive: { name: 'Soul Harvest', desc: 'Gain 10% HP and 10% Energy back whenever an enemy dies.' },
         evolves_into: ['DEATH_LORD']
     },
@@ -535,7 +535,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'REAPER',
         role: 'DPS',
         stats: { hp: 350, atk: 65, def: 20, mag: 50, spd: 30, luck: 15, crit: 35 },
-        requirement: { level: 40, questsCompleted: 25, soulCount: 1000, gold: 100000 },
+        requirement: { level: 60, questsCompleted: 150, soulCount: 1000, gold: 100000 },
         evolutionCost: 100000,
         passive: { name: 'Soul Sovereignty', desc: 'Every kill grants a permanent +1 ATK (Max +500).' }
     },
@@ -549,8 +549,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ELEMENTALIST',
         role: 'MAGIC_DPS',
         stats: { hp: 200, atk: 15, def: 18, mag: 65, spd: 25, luck: 20, crit: 22 },
-        requirement: { level: 30, questsCompleted: 15, elementalMastery: 100, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, elementalMastery: 100, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Elemental Avatar', desc: 'Can use all elements simultaneously.' }
     },
 
@@ -563,8 +563,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'NECROMANCER',
         role: 'MAGIC_DPS',
         stats: { hp: 250, atk: 12, def: 20, mag: 58, spd: 18, luck: 15, crit: 18 },
-        requirement: { level: 30, questsCompleted: 15, undeadRaised: 500, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, undeadRaised: 500, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Phylactery', desc: 'Cannot die while phylactery exists (revives at 1 HP).' }
     },
 
@@ -577,8 +577,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'CHRONOMANCER',
         role: 'MAGIC_DPS',
         stats: { hp: 190, atk: 12, def: 16, mag: 62, spd: 50, luck: 25, crit: 20 },
-        requirement: { level: 30, questsCompleted: 15, timeManipulations: 200, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, timeManipulations: 200, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Temporal Mastery', desc: 'Can take 2 actions per turn.' }
     },
 
@@ -591,8 +591,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'CLERIC',
         role: 'SUPPORT',
         stats: { hp: 280, atk: 18, def: 35, mag: 55, spd: 20, luck: 30, crit: 15 },
-        requirement: { level: 30, questsCompleted: 15, alliesHealed: 1000, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, alliesHealed: 1000, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: 'Sainthood', desc: 'All healing is doubled. Party gains +20% all stats.' }
     },
 
@@ -605,8 +605,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'DRUID',
         role: 'SUPPORT',
         stats: { hp: 320, atk: 22, def: 32, mag: 52, spd: 24, luck: 25, crit: 18 },
-        requirement: { level: 30, questsCompleted: 15, transformations: 300, gold: 50000 },
-        evolutionCost: 50000,
+        requirement: { level: 50, questsCompleted: 100, transformations: 300, gold: 100000 },
+        evolutionCost: 100000,
         passive: { name: "Nature's Wrath", desc: 'Can summon an army of nature spirits.' }
     },
 
@@ -619,8 +619,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'MERCHANT',
         role: 'SUPPORT',
         stats: { hp: 240, atk: 20, def: 25, mag: 35, spd: 22, luck: 80, crit: 25 },
-        requirement: { level: 30, questsCompleted: 15, goldEarned: 500000, gold: 100000 },
-        evolutionCost: 100000,
+        requirement: { level: 50, questsCompleted: 100, goldEarned: 500000, gold: 200000 },
+        evolutionCost: 200000,
         passive: { name: 'Infinite Wealth', desc: 'Gold never decreases. Can buy anything.' }
     }
 };
@@ -641,56 +641,56 @@ const ADVENTURER_RANKS = {
         name: 'E-Rank',
         icon: '🥉',
         color: '🟤',
-        requirement: { level: 5, questsCompleted: 3 },
+        requirement: { level: 10, questsCompleted: 10 },
         benefits: { questRewardBonus: 5 }
     },
     D: {
         name: 'D-Rank',
         icon: '🥈',
         color: '⚪',
-        requirement: { level: 10, questsCompleted: 7 },
+        requirement: { level: 20, questsCompleted: 25 },
         benefits: { questRewardBonus: 10 }
     },
     C: {
         name: 'C-Rank',
         icon: '🥇',
         color: '🟡',
-        requirement: { level: 15, questsCompleted: 15 },
+        requirement: { level: 30, questsCompleted: 50 },
         benefits: { questRewardBonus: 15 }
     },
     B: {
         name: 'B-Rank',
         icon: '💎',
         color: '🔵',
-        requirement: { level: 20, questsCompleted: 25 },
+        requirement: { level: 40, questsCompleted: 80 },
         benefits: { questRewardBonus: 20 }
     },
     A: {
         name: 'A-Rank',
         icon: '💠',
         color: '🟢',
-        requirement: { level: 30, questsCompleted: 40 },
+        requirement: { level: 50, questsCompleted: 120 },
         benefits: { questRewardBonus: 30 }
     },
     S: {
         name: 'S-Rank',
         icon: '⭐',
         color: '🟣',
-        requirement: { level: 40, questsCompleted: 60 },
+        requirement: { level: 60, questsCompleted: 180 },
         benefits: { questRewardBonus: 40 }
     },
     SS: {
         name: 'SS-Rank',
         icon: '🌟',
         color: '🔴',
-        requirement: { level: 50, questsCompleted: 100 },
+        requirement: { level: 75, questsCompleted: 250 },
         benefits: { questRewardBonus: 60 }
     },
     SSS: {
         name: 'SSS-Rank',
         icon: '✨',
         color: '🌈',
-        requirement: { level: 75, questsCompleted: 200 },
+        requirement: { level: 90, questsCompleted: 500 },
         benefits: { questRewardBonus: 100 }
     }
 };

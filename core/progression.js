@@ -10,14 +10,14 @@ const economy = require('./economy'); // Integrated with MongoDB
 // ==========================================
 
 const XP_CONFIG = {
-    BASE_XP: 100,           // XP needed for level 2
-    SCALING_FACTOR: 1.15,   // XP increases by 15% per level
+    BASE_XP: 250,           // XP needed for level 2 (Increased from 100)
+    SCALING_FACTOR: 1.18,   // XP increases by 18% per level (Increased from 1.15)
     MAX_LEVEL: 100,         // Level cap
     
     // XP Sources
-    QUEST_BASE_XP: 150,     // Base XP per quest encounter
-    BOSS_MULTIPLIER: 3.0,   // Bosses give 3x XP
-    QUEST_COMPLETION: 500,  // Bonus for completing full quest
+    QUEST_BASE_XP: 50,      // Base XP per quest encounter (Reduced from 150)
+    BOSS_MULTIPLIER: 2.5,   // Bosses give 2.5x XP (Reduced from 3.0)
+    QUEST_COMPLETION: 150,  // Bonus for completing full quest (Drastically reduced from 500)
     
     // Level Milestones (bonus XP needed)
     MILESTONES: {
@@ -37,13 +37,13 @@ const STAT_GROWTH = {
     getBaseGrowth: (level) => {
         const factor = 1 + Math.floor(level / 15); // Increase base growth every 15 levels
         return {
-            hp: 10 * factor, 
-            atk: 2 * factor, 
-            def: 1.5 * factor, 
-            mag: 2 * factor, 
-            spd: 1.2 * factor, 
-            luck: 1 * factor, 
-            crit: 0.5 * factor
+            hp: 8 * factor, 
+            atk: 1.5 * factor, 
+            def: 1.2 * factor, 
+            mag: 1.5 * factor, 
+            spd: 1.0 * factor, 
+            luck: 0.8 * factor, 
+            crit: 0.4 * factor
         };
     },
     CLASS_MODIFIERS: {
@@ -65,8 +65,8 @@ const STAT_GROWTH = {
         MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
         CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 }
     },
-    STAT_POINTS_PER_LEVEL: 5, // Increased from 3
-    MILESTONE_BONUSES: { 10: 10, 25: 25, 50: 50, 75: 75, 100: 100 }
+    STAT_POINTS_PER_LEVEL: 3, // Reduced from 5 to prevent stat bloat
+    MILESTONE_BONUSES: { 10: 5, 25: 10, 50: 20, 75: 35, 100: 50 } // Reduced bonuses
 };
 
 // ==========================================
