@@ -14,7 +14,6 @@ const getPrefix = () => botConfig.getPrefix();
 // ==========================================
 
 async function displaySkillTree(sock, chatId, senderJid, senderName) {
-    // Get user data
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
@@ -28,44 +27,43 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         return;
     }
     
-    // Initialize skills if strictly needed (New user or data corruption)
     if (!user.skills) {
         user.skills = {};
-        // Only set skillPoints if they are also missing/undefined to prevent overwrite
         if (user.skillPoints === undefined || user.skillPoints === null) {
             user.skillPoints = skillTree.calculateSkillPoints(level);
         }
         economy.saveUser(senderJid);
     }
     
-    let msg = `╔═════════════════════╗\n`;
-    msg += `     🌳 *SKILL TREE: ${userClass.name.toUpperCase()}* \n`;
-    msg += `╚═════════════════════╝\n\n`;
+    const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
-    msg += `👤 *Adventurer:* ${senderName}\n`;
-    msg += `${userClass.icon} *Class:* ${userClass.name} (Lv.${level})\n`;
-    msg += `📊 *Available Points:* ${user.skillPoints || 0}\n\n`;
+    let msg = `╔═════════════════════════╗\n`;
+    msg += `  🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
+    msg += `╚═════════════════════════╝\n\n`;
+    msg += `${userClass.icon} *${senderName}* — Lv.${level}\n`;
+    msg += `📊 *Skill Points Available:* ${user.skillPoints || 0}\n\n`;
 
-    // 1. Display Current Specialized Tree (Case-insensitive lookup)
-    const treeId = userClass.id.toUpperCase();
-    const tree = skillTree.SKILL_TREES[treeId];
-    
-    if (tree) {
+    // --- Current class tree (SPECIALIZATION) ---
+    const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
+    if (currentTree) {
         msg += `┏━━━✨ *SPECIALIZATION* ━━━┓\n`;
-        for (const [treeName, treeData] of Object.entries(tree.trees)) {
+        for (const [, treeData] of Object.entries(currentTree.trees)) {
             msg += `┃  ${treeData.icon} *${treeData.name}*\n`;
-            
             for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                const currentLevel = user.skills[skillId] || 0;
+                const curLevel = user.skills[skillId] || 0;
                 const canLearn = skillTree.canLearnSkill(user.skills, skill);
-                const maxed = currentLevel >= skill.maxLevel;
-                
-                let boxIcon = currentLevel > 0 ? '✅' : (canLearn ? '⭕' : '🔒');
-                msg += `┃  ${boxIcon} *${skill.name}*`;
-                if (currentLevel > 0) msg += ` [${currentLevel}/${skill.maxLevel}]`;
-                msg += `\n┃     ╰─ ${skill.desc || skill.description}\n`;
-                
-                if (!maxed && canLearn && user.skillPoints > 0) {
+                const maxed = curLevel >= skill.maxLevel;
+
+                let icon = '🔒';
+                if (maxed) icon = '✅'; // Changed to ✅ for David's style
+                else if (curLevel > 0) icon = '✅';
+                else if (canLearn) icon = '⭕';
+
+                msg += `┃  ${icon} *${skill.name}*`;
+                if (curLevel > 0) msg += ` [${curLevel}/${skill.maxLevel}]`;
+                msg += `\n`;
+                msg += `┃     ╰─ ${skill.desc || skill.description}\n`;
+                if (!maxed && canLearn && (user.skillPoints || 0) > 0) {
                     msg += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
                 }
             }
@@ -73,51 +71,45 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
     }
 
-    // 2. Display Lineage Techniques (Inherited Skills)
-    const lineage = classSystem.getLineage(userClass.id);
+    // --- Lineage / heritage trees ---
     if (lineage.length > 1) {
-        // Skip current class (already shown)
-        const parents = lineage.slice(1);
-        let lineageSkillsMsg = "";
-
+        const parents = lineage.slice(1); // skip current class
         for (const parentId of parents) {
             const parentClass = classSystem.getClassById(parentId);
             const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
-            if (!parentTree) continue;
+            if (!parentTree || !parentClass) continue;
 
-            let parentSection = "";
-            for (const [treeId, treeData] of Object.entries(parentTree.trees)) {
+            let inheritedSection = '';
+            for (const [, treeData] of Object.entries(parentTree.trees)) {
                 for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                    const currentLevel = user.skills[skillId] || 0;
-                    if (currentLevel > 0) {
-                        parentSection += `┃  • *${skill.name}* (Lv.${currentLevel})\n`;
+                    const curLevel = user.skills[skillId] || 0;
+                    const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                    const maxed = curLevel >= skill.maxLevel;
+
+                    if (curLevel > 0) {
+                        const icon = maxed ? '✅' : '✅';
+                        inheritedSection += `┃  ${icon} *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
+                    } else if (canLearn && (user.skillPoints || 0) > 0) {
+                        inheritedSection += `┃  ⭕ *${skill.name}* _(Inherited)_\n`;
+                        inheritedSection += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
                     } else {
-                        // Allow learning missed skills from previous tiers
-                        const canLearn = skillTree.canLearnSkill(user.skills, skill);
-                        if (canLearn && user.skillPoints > 0) {
-                            parentSection += `┃  ⭕ *${skill.name}* (Learnable)\n`;
-                            parentSection += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
-                        }
+                        inheritedSection += `┃  🔒 *${skill.name}*\n`;
                     }
                 }
             }
 
-            if (parentSection) {
-                lineageSkillsMsg += `┃ 💠 *${parentClass.name} Lineage*\n` + parentSection;
+            if (inheritedSection) {
+                msg += `┏━━━ 🔰 *${parentClass.name.toUpperCase()} PATH* ━━┓\n`;
+                msg += inheritedSection;
+                msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
             }
-        }
-
-        if (lineageSkillsMsg) {
-            msg += `┏━━━━━🔰 *INHERITED PATHS* ━━━━┓\n`;
-            msg += lineageSkillsMsg;
-            msg += `┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
         }
     }
 
-    msg += `💡 *Commands:*
-• \`${getPrefix()} skill up <name>\`
-• \`${getPrefix()} skill reset\`
-• \`${getPrefix()} abilities\``;
+    msg += `💡 *Commands:*\n`;
+    msg += `• \`${getPrefix()} skill up <name>\` — Invest a point\n`;
+    msg += `• \`${getPrefix()} skill reset\` — Refund all points (500 Zeni)\n`;
+    msg += `• \`${getPrefix()} abilities\` — View combat ability list`;
     
     await sock.sendMessage(chatId, { text: msg });
 }
@@ -131,33 +123,32 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
+    const classSystem = require('./classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
         return;
     }
     
-    // Initialize skills if needed
     if (!user.skills) {
         user.skills = {};
         user.skillPoints = skillTree.calculateSkillPoints(level);
     }
     
-    // Find the skill in lineage
+    // Search the full class lineage for the skill
     const lineage = classSystem.getLineage(userClass.id);
     let targetSkill = null;
-    let foundInClass = null;
+    let foundInClassName = null;
     
     for (const classId of lineage) {
         const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
         if (!tree) continue;
-
-        for (const [tName, treeData] of Object.entries(tree.trees)) {
+        for (const [, treeData] of Object.entries(tree.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
                 if (sId.toLowerCase() === skillId.toLowerCase() || 
                     skill.name.toLowerCase().includes(skillId.toLowerCase())) {
-                    targetSkill = skill;
-                    foundInClass = tree.name;
+                    targetSkill = { ...skill, id: sId };
+                    foundInClassName = classSystem.getClassById(classId)?.name || classId;
                     break;
                 }
             }
@@ -168,41 +159,38 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     if (!targetSkill) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Skill "${skillId}" not found in your class lineage!\n\nUse \`${getPrefix()} skill tree\` to see all skills.` 
+            text: `❌ Skill "*${skillId}*" not found in your class lineage!\n\nUse \`${getPrefix()} skill tree\` to see available skills.` 
         });
         return;
     }
     
-    // Check if can learn
     const currentLevel = user.skills[targetSkill.id] || 0;
     
     if (currentLevel >= targetSkill.maxLevel) {
         await sock.sendMessage(chatId, { 
-            text: `❌ ${targetSkill.name} is already maxed at level ${targetSkill.maxLevel}!` 
+            text: `⭐ *${targetSkill.name}* is already maxed at level ${targetSkill.maxLevel}!` 
         });
         return;
     }
     
     if (!skillTree.canLearnSkill(user.skills, targetSkill) && currentLevel === 0) {
         const reqText = Object.entries(targetSkill.requires)
-            .map(([req, lvl]) => `${req} level ${lvl}`)
+            .map(([req, lvl]) => `*${req}* Lv.${lvl}`)
             .join(', ');
         await sock.sendMessage(chatId, { 
-            text: `❌ Cannot learn ${targetSkill.name}!\n\nRequires: ${reqText}` 
+            text: `🔒 Cannot learn *${targetSkill.name}* yet!\n\nRequires: ${reqText}` 
         });
         return;
     }
     
-    // Check skill points
     const cost = skillTree.getSkillCost(currentLevel + 1);
     if ((user.skillPoints || 0) < cost) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Not enough skill points!\n\nNeed: ${cost}\nHave: ${user.skillPoints || 0}\n\n💡 Gain skill points by leveling up!` 
+            text: `❌ Not enough skill points!\n\nNeed: ${cost} | Have: ${user.skillPoints || 0}\n\n💡 Earn points by leveling up!` 
         });
         return;
     }
     
-    // Upgrade!
     user.skills[targetSkill.id] = currentLevel + 1;
     user.skillPoints -= cost;
     economy.saveUser(senderJid);
@@ -210,22 +198,24 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const newLevel = currentLevel + 1;
     const effect = skillTree.getSkillEffect(targetSkill, newLevel);
     
-    let msg = `✨ *SKILL UPGRADED!* ✨\n\n`;
-    msg += `${targetSkill.name} → Level ${newLevel}/${targetSkill.maxLevel}\n\n`;
-    msg += `📊 Skill Points: ${user.skillPoints} remaining\n\n`;
+    const heritageNote = (foundInClassName !== userClass?.name) ? `_(${foundInClassName} Heritage)_\n` : '';
     
-    // Show effect preview
-    if (effect.type === 'damage') {
+    let msg = `✨ *SKILL UPGRADED!*\n\n`;
+    msg += heritageNote;
+    msg += `🌟 *${targetSkill.name}* → Lv.${newLevel}/${targetSkill.maxLevel}\n\n`;
+    msg += `📊 Points Remaining: ${user.skillPoints}\n\n`;
+    
+    if (effect?.type === 'damage' && effect.multiplier) {
         msg += `💥 Damage: ${Math.floor(effect.multiplier * 100)}% ATK\n`;
-    } else if (effect.type === 'heal') {
+    } else if (effect?.type === 'heal') {
         msg += `💚 Healing: ${effect.value} HP\n`;
-    } else if (effect.type === 'buff_self' || effect.type === 'buff_team') {
-        msg += `✨ Buff: +${effect.value}% ${effect.buffType}\n`;
-        msg += `⏱️ Duration: ${effect.duration} turns\n`;
+    } else if (effect?.type === 'buff_self' || effect?.type === 'buff_team') {
+        msg += `✨ Buff: +${effect.value || '?'}% ${effect.buffType || ''}\n`;
+        if (effect.duration) msg += `⏱️ Duration: ${effect.duration} turns\n`;
     }
     
     if (newLevel === targetSkill.maxLevel) {
-        msg += `\n⭐ *MAXED!* This skill is now fully upgraded!`;
+        msg += `\n⭐ *FULLY MASTERED!*`;
     }
     
     await sock.sendMessage(chatId, { text: msg });
@@ -241,9 +231,7 @@ async function resetSkills(sock, chatId, senderJid) {
     const level = progression.getLevel(senderJid);
     
     if (!user.skills || Object.keys(user.skills).length === 0) {
-        await sock.sendMessage(chatId, { 
-            text: '❌ You have no skills to reset!' 
-        });
+        await sock.sendMessage(chatId, { text: '❌ You have no skills to reset!' });
         return;
     }
     
@@ -252,137 +240,147 @@ async function resetSkills(sock, chatId, senderJid) {
     
     if (balance < RESET_COST) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Not enough Zeni!\n\nReset Cost: ${RESET_COST}\nYour Balance: ${balance}` 
+            text: `❌ Not enough Zeni!\n\nReset Cost: ${RESET_COST.toLocaleString()}\nYour Balance: ${balance.toLocaleString()}` 
         });
         return;
     }
     
-    // Reset
-    const totalPoints = skillTree.calculateSkillPoints(level);
+    // Refund ALL invested points
+    const spentPoints = Object.values(user.skills).reduce((sum, lvl) => sum + lvl, 0);
+    const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
     user.skillPoints = totalPoints;
     economy.removeMoney(senderJid, RESET_COST);
     economy.saveUser(senderJid);
     
     await sock.sendMessage(chatId, { 
-        text: `✅ *SKILLS RESET!*
-
-💰 Paid: ${RESET_COST} Zeni
-📊 Skill Points: ${totalPoints}
-
-💡 Use 
-	${getPrefix()} skill tree
- to reallocate your points!` 
+        text: `🔄 *SKILLS RESET!*\n\n💰 Cost: ${RESET_COST.toLocaleString()} Zeni\n📊 Points Restored: ${totalPoints}\n\n💡 Use \`${getPrefix()} skill tree\` to reinvest!` 
     });
 }
 
 // ==========================================
-// 📋 VIEW ABILITIES
+// 📋 VIEW ABILITIES (COMBAT LIST)
 // ==========================================
 
 async function viewAbilities(sock, chatId, senderJid, senderName) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
+    const classSystem = require('./classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
         return;
     }
     
-    const hasRegularSkills = user.skills && Object.keys(user.skills).length > 0;
-    const hasMirroredSkills = user.borrowedSkills && user.borrowedSkills.length > 0;
+    const lineage = classSystem.getLineage(userClass.id);
+    
+    // Collect ALL learned skills, grouped by class origin
+    const abilityGroups = [];
+    
+    for (const classId of lineage) {
+        const classData = classSystem.getClassById(classId);
+        const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+        if (!tree || !classData) continue;
 
-    if (!hasRegularSkills && !hasMirroredSkills) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ No abilities learned yet!\n\n💡 Use ${getPrefix()} skill tree to learn abilities or use the 🪞 Essence Mirror!` 
-        });
-        return;
-    }
-    
-    let msg = `╔═══════════════════════╗\n`;
-    msg += `      ⚡ *YOUR ABILITIES* ⚡\n`;
-    msg += `╚═══════════════════════╝\n\n`;
-    
-    msg += `${userClass.icon} *${userClass.name}*\n\n`;
-    
-    // Get all learned skills from ALL trees
-    const learnedAbilities = [];
-    
-    for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
-        for (const [treeName, treeData] of Object.entries(classData.trees)) {
+        const learnedInClass = [];
+        for (const [, treeData] of Object.entries(tree.trees)) {
             for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                const level = user.skills[skillId] || 0;
-                if (level > 0 && !learnedAbilities.some(a => a.id === skillId)) {
-                    const getVal = (val, lvl) => Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
-                    const actualCost = skill.cost !== undefined ? skill.cost : (getVal(skill.energyCost, level) || 0);
-                    
-                    learnedAbilities.push({
+                const lvl = (user.skills || {})[skillId] || 0;
+                if (lvl > 0) {
+                    const getVal = (val, l) => Array.isArray(val) ? val[Math.min(l - 1, val.length - 1)] : val;
+                    const cost = skill.cost !== undefined ? skill.cost : (getVal(skill.energyCost, lvl) || 0);
+                    const effect = skillTree.getSkillEffect(skill, lvl);
+                    learnedInClass.push({
                         ...skill,
                         id: skillId,
-                        level,
-                        cost: actualCost,
-                        cooldown: getVal(skill.cooldown, level),
-                        treeIcon: treeData.icon || '🛡️',
-                        treeColor: treeData.color || ''
+                        level: lvl,
+                        cost,
+                        cooldown: getVal(skill.cooldown, lvl),
+                        effect,
                     });
                 }
             }
         }
+
+        if (learnedInClass.length > 0) {
+            abilityGroups.push({
+                className: classData.name,
+                classIcon: classData.icon,
+                isCurrentClass: classId === userClass.id,
+                skills: learnedInClass,
+            });
+        }
     }
 
-    // Add Mirrored Skills to the list
-    const mirroredAbilities = [];
-    if (user.borrowedSkills && user.borrowedSkills.length > 0) {
-        user.borrowedSkills.forEach(s => {
-            mirroredAbilities.push({
-                ...s,
-                level: 1,
-                isMirrored: true
-            });
+    const mirroredAbilities = (user.borrowedSkills || []).map(s => ({ ...s, level: 1, isMirrored: true }));
+    const totalCount = abilityGroups.reduce((sum, g) => sum + g.skills.length, 0) + mirroredAbilities.length;
+
+    if (totalCount === 0) {
+        await sock.sendMessage(chatId, { 
+            text: `⚡ *No abilities learned yet!*\n\nUse \`${getPrefix()} skill tree\` to invest skill points into abilities.\n\n📊 You earn 1 point per level + bonus points every 10 levels.` 
         });
+        return;
     }
     
-    if (learnedAbilities.length === 0 && mirroredAbilities.length === 0) {
-        msg += `No active abilities learned yet!`;
-    } else {
-        let count = 1;
-        
-        if (learnedAbilities.length > 0) {
-            msg += `⚔️ *Class Skills:*\n`;
-            learnedAbilities.forEach(ability => {
-                const colorStr = ability.treeColor ? `${ability.treeColor} ` : '';
-                msg += `${count}. ${colorStr}${ability.treeIcon} *${ability.name}* [Lv.${ability.level}]\n`;
-                
-                const costDisplay = (ability.cost > 0) ? `⚡ Energy: ${ability.cost}` : `✨ Passive`;
-                msg += `   ${costDisplay} | ⏱️ CD: ${ability.cooldown || 0}s\n`;
-                
-                // Show effect
-                const effect = skillTree.getSkillEffect(ability, ability.level);
-                if (effect.type === 'damage') {
-                    msg += `   💥 ${Math.floor(effect.multiplier * 100)}% damage\n`;
-                } else if (effect.type === 'heal') {
-                    msg += `   💚 Heals ${effect.value} HP\n`;
+    let msg = `╔═══════════════════════════╗\n`;
+    msg += `    ⚡ *ABILITIES: ${senderName}*\n`;
+    msg += `╚═══════════════════════════╝\n\n`;
+    msg += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities\n\n`;
+
+    let count = 1;
+
+    for (const group of abilityGroups) {
+        const label = group.isCurrentClass
+            ? `${group.classIcon} *${group.className}*`
+            : `${group.classIcon} _${group.className} Heritage_`;
+        msg += `━━━ ${label} ━━━\n`;
+        for (const ability of group.skills) {
+            const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : `✨ Passive`;
+            const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
+            const animation = ability.animation || ability.effect?.animation || '🔮';
+            
+            msg += `*${count}.* ${animation} *${ability.name}* [Lv.${ability.level}/${ability.maxLevel}]\n`;
+            msg += `   ${costDisplay}${cdDisplay}\n`;
+            
+            const e = ability.effect;
+            if (e) {
+                if (e.type === 'damage' && e.multiplier) {
+                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage\n`;
+                } else if (e.type === 'aoe' && e.multiplier) {
+                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ATK — ALL ENEMIES\n`;
+                } else if (e.type === 'heal' || e.type === 'heal_team') {
+                    msg += `   💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}\n`;
+                } else if (e.type === 'buff_self' && e.value) {
+                    msg += `   ✨ +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
+                } else if (e.type === 'buff_team' && e.value) {
+                    msg += `   ✨ Party +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
+                } else if (e.type === 'damage_cc') {
+                    msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ATK + ${e.ccChance}% ${e.cc || 'CC'}\n`;
+                } else if (e.type === 'execute') {
+                    msg += `   ⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)\n`;
+                } else if (e.type === 'passive') {
+                    msg += `   🔹 Passive: ${e.trigger || ''}\n`;
                 }
-                msg += `\n`;
-                count++;
-            });
-        }
-        
-        if (mirroredAbilities.length > 0) {
-            msg += `━━━━━━━━━━━━━━━━━\n`;
-            msg += `🪞 *MIRRORED SKILLS*\n\n`;
-            mirroredAbilities.forEach(ability => {
-                const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
-                msg += `${count}. 🪞 *${ability.name}* [Lv.1]\n`;
-                msg += `   📝 from ${ability.sourceClass}\n`;
-                msg += `   ⚡ Energy: ${Math.floor(energyCost * 1.5)}\n\n`;
-                count++;
-            });
+            }
+            msg += `\n`;
+            count++;
         }
     }
-    
-    msg += `💡 Use \`${getPrefix()} combat ability <number>\` in battle!`;
+
+    if (mirroredAbilities.length > 0) {
+        msg += `━━━ 🪞 *Mirrored Skills* ━━━\n`;
+        for (const ability of mirroredAbilities) {
+            const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
+            msg += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
+            msg += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
+            count++;
+        }
+    }
+
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
+    msg += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
     
     await sock.sendMessage(chatId, { text: msg });
 }
@@ -397,69 +395,27 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 
     if (!economy.hasItem(senderJid, 'essence_mirror')) {
         await sock.sendMessage(chatId, { 
-            text: `❌ You need the 🪞 *Essence Mirror* to learn skills from other classes!\n\nBuy it from the shop for 100,000 Zeni.` 
+            text: `❌ The 🪞 *Essence Mirror* is required to borrow abilities from other class trees.\n\n💰 Available in the shop for 100,000 Zeni.` 
         });
         return;
     }
 
-    // List skills if no ID provided
-    if (!skillId) {
-        let listMsg = `🔮 *ESSENCE MIRROR: LEARNABLE SKILLS* 🔮\n\n`;
-        listMsg += `_You can mirror Tier 1 skills from other classes._\n\n`;
-        
-        for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
-            let classSkills = [];
-            for (const [treeName, treeData] of Object.entries(classData.trees)) {
-                for (const [sId, skill] of Object.entries(treeData.skills)) {
-                    if (skill.tier === 1) {
-                        classSkills.push(`• *${skill.name}* (\`${sId}\`)`);
-                    }
-                }
-            }
-            if (classSkills.length > 0) {
-                listMsg += `${classData.icon} *${classData.name}:*\n${classSkills.join('\n')}\n\n`;
-            }
-        }
-        
-        listMsg += `⚠️ *DISCLAIMERS:*\n`;
-        listMsg += `• You can only mirror up to *2 skills*.\n`;
-        listMsg += `• Mirrored skills are locked at *Level 1*.\n`;
-        listMsg += `• Mirrored skills cost *50% more Energy*.\n\n`;
-        listMsg += `⚔️ *COMBAT:* Use \`${botConfig.getPrefix()} abilities\` to see their number, then \`${botConfig.getPrefix()} combat ability <num>\` during your turn.\n\n`;
-        listMsg += `👉 Usage: \`${botConfig.getPrefix()} skill learn <skill_id>\``;
-        
-        await sock.sendMessage(chatId, { text: listMsg });
-        return;
-    }
+    const classSystem = require('./classSystem');
+    const userClass = economy.getUserClass(senderJid);
+    const lineage = classSystem.getLineage(userClass?.id || '');
 
-    if (!user.borrowedSkills) user.borrowedSkills = [];
-    if (user.borrowedSkills.length >= 2) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ You can only mirror up to 2 skills at a time!` 
-        });
-        return;
-    }
-
-    // Find the skill in any class tree
     let targetSkill = null;
-    let skillClass = null;
+    let sourceClassId = null;
 
+    // Search ALL trees OUTSIDE the player's own lineage
     for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
-        for (const [treeName, treeData] of Object.entries(classData.trees)) {
+        if (lineage.includes(classId)) continue;
+        for (const [, treeData] of Object.entries(classData.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
-                if (sId.toLowerCase() === skillId.toLowerCase() || 
+                if (sId.toLowerCase() === skillId.toLowerCase() ||
                     skill.name.toLowerCase().includes(skillId.toLowerCase())) {
-                    
-                    // Only Tier 1 skills can be mirrored
-                    if (skill.tier !== 1) {
-                        await sock.sendMessage(chatId, { 
-                            text: `❌ You can only mirror Tier 1 skills!` 
-                        });
-                        return;
-                    }
-                    
-                    targetSkill = skill;
-                    skillClass = classData.name;
+                    targetSkill = { ...skill, id: sId };
+                    sourceClassId = classId;
                     break;
                 }
             }
@@ -470,175 +426,172 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 
     if (!targetSkill) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Skill "${skillId}" not found!` 
+            text: `❌ Skill "*${skillId}*" not found outside your lineage.\n\n💡 Skills from your own class evolution can be learned with \`${getPrefix()} skill up\`.` 
         });
         return;
     }
 
-    // Check if player already has this skill (either naturally or mirrored)
-    const userClass = economy.getUserClass(senderJid);
-    if (skillClass === userClass.name) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ This is already a skill for your class! Upgrade it normally.` 
-        });
-        return;
-    }
-
+    if (!user.borrowedSkills) user.borrowedSkills = [];
     if (user.borrowedSkills.some(s => s.id === targetSkill.id)) {
+        await sock.sendMessage(chatId, { text: `❌ You've already mirrored *${targetSkill.name}*!` });
+        return;
+    }
+
+    const MAX_MIRRORED = 3;
+    if (user.borrowedSkills.length >= MAX_MIRRORED) {
         await sock.sendMessage(chatId, { 
-            text: `❌ You already learned this skill!` 
+            text: `❌ Mirror limit reached (${MAX_MIRRORED} skills max).\n\nRemove one with \`${getPrefix()} skill unmirror <number>\`.` 
         });
         return;
     }
 
-    // Learn it! (Always Lv 1, cannot upgrade)
+    const sourceClass = classSystem.getClassById(sourceClassId);
     user.borrowedSkills.push({
         ...targetSkill,
-        level: 1,
-        sourceClass: skillClass
+        sourceClass: sourceClass?.name || sourceClassId
     });
-    
     economy.saveUser(senderJid);
 
     await sock.sendMessage(chatId, { 
-        text: `✨ *SKILL MIRRORED!* ✨\n\nYou have learned *${targetSkill.name}* from the *${skillClass}* class!\n\n💡 *Combat Usage:* Mirrored skills appear in your \`${botConfig.getPrefix()} abilities\` list and can be used with \`${botConfig.getPrefix()} combat ability <num> [target]\`.\n\n⚠️ *Note:* Mirrored skills stay at Level 1 and cost 50% more Energy.` 
+        text: `🪞 *SKILL MIRRORED!*\n\n*${targetSkill.name}* captured from the *${sourceClass?.name || sourceClassId}* tree!\n\n⚠️ Mirrored skills cost 50% more energy in combat.\n📋 Slots used: ${user.borrowedSkills.length}/${MAX_MIRRORED}` 
     });
 }
 
 // ==========================================
-// 📤 EXPORTS
+// 🔄 EVOLVE CLASS
 // ==========================================
 
 async function handleEvolve(sock, chatId, senderJid, senderName, args) {
-    const progression = require('./progression');
     const classSystem = require('./classSystem');
     const user = economy.getUser(senderJid);
     
     if (!user) {
-        return sock.sendMessage(chatId, { text: '❌ You need to start your adventure first! Use `.j register`' });
+        return sock.sendMessage(chatId, { text: `❌ Not registered! Use \`${getPrefix()} register\` first.` });
     }
 
     const currentClass = classSystem.getClassById(user.class);
     const level = progression.getLevel(senderJid);
+    const questsDone = user.questsCompleted || 0;
 
-    // Check if can evolve
     const evolutionCheck = classSystem.canEvolve(
-        user.class,
-        level,
-        user.questsCompleted || 0,
-        user.stats?.dragonsKilled || 0
+        user.class, level, questsDone, user.stats?.dragonsKilled || 0
     );
 
     if (!evolutionCheck.canEvolve) {
-        if (currentClass.tier === 'ASCENDED') {
-            return sock.sendMessage(chatId, { text: '✨ You have reached the pinnacle of power!' });
+        if (currentClass?.tier === 'ASCENDED') {
+            return sock.sendMessage(chatId, { 
+                text: `✨ *${currentClass.name}* — You stand at the very peak of power.\n\nNo higher path exists. Your legend is written.` 
+            });
         }
-        return sock.sendMessage(chatId, { text: `❌ *EVOLUTION NOT AVAILABLE*\n\n${evolutionCheck.reason}` });
+        return sock.sendMessage(chatId, { text: `❌ *Evolution Not Available*\n\n${evolutionCheck.reason}` });
     }
     
     const allPaths = evolutionCheck.evolutions;
-
-    const nextTier = currentClass.tier === 'STARTER' ? 'EVOLVED' : 'ASCENDED';
+    const nextTier = currentClass?.tier === 'STARTER' ? 'EVOLVED' : 'ASCENDED';
     const requiredStone = nextTier === 'EVOLVED' ? 'evolution_stone' : 'ascension_stone';
-    const stoneName = requiredStone === 'evolution_stone' ? 'Evolution Stone (T2)' : 'Ascension Stone (T3)';
+    const stoneName = requiredStone === 'evolution_stone' ? '💎 Evolution Stone (T2)' : '🔮 Ascension Stone (T3)';
 
-    // If no choice specified, show all possible options
     if (!args[0]) {
-        let text = `🌟 *CLASS EVOLUTION PATHS* 🌟\n\n`;
-        text += `Choose your future for *${currentClass.name}*!\n\n`;
+        let text = `┏━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+        text += `┃  🌟 *CLASS EVOLUTION*\n`;
+        text += `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+        text += `*${currentClass?.icon} ${currentClass?.name}* seeks to evolve...\n\n`;
         
         allPaths.forEach((evo, i) => {
-            const status = evo.meetsRequirements ? '✅ *AVAILABLE*' : `🔒 *LOCKED* (Needs: ${evo.missingRequirements.join(', ')})`;
-            text += `*${i + 1}. ${evo.icon} ${evo.name}* [${status}]\n`;
-            text += `📝 ${evo.desc}\n`;
-            text += `🎭 *Role:* ${evo.role}\n`;
-            text += `💰 *Cost:* ${evo.evolutionCost.toLocaleString()} Zeni\n`;
-            text += `⚡ *Passive:* ${evo.passive.name}\n\n`;
+            text += `*${i + 1}. ${evo.icon} ${evo.name}*\n`;
+            text += `   📝 ${evo.desc}\n`;
+            text += `   🎭 ${evo.role}  |  💰 ${evo.evolutionCost.toLocaleString()} Zeni\n`;
+            if (evo.passive) text += `   ⚡ *${evo.passive.name}:* _${evo.passive.desc}_\n`;
+            if (!evo.meetsRequirements) {
+                text += `   🔒 Missing: ${evo.missingRequirements.join(', ')}\n`;
+            } else {
+                text += `   ✅ Available!\n`;
+            }
+            text += `\n`;
         });
-
-        text += `*Required Item:* 💎 ${stoneName}\n\n`;
-        text += `Use: \`${getPrefix()} evolve <number>\` to choose.\n`;
-        text += `⚠️ *Note:* This decision is permanent and will reset your skills!`;
+        
+        text += `📦 Requires: ${stoneName}\n\n`;
+        text += `✅ *Your existing skills are PRESERVED on evolution.*\n`;
+        text += `You keep all learned abilities and receive bonus skill points.\n\n`;
+        text += `\`${getPrefix()} evolve <number>\` to choose.`;
         
         return sock.sendMessage(chatId, { text });
     }
 
-    // Process choice
     const choiceNum = parseInt(args[0]);
     if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > allPaths.length) {
-        return sock.sendMessage(chatId, { text: '❌ Invalid choice! Use a number from the list.' });
+        return sock.sendMessage(chatId, { text: '❌ Invalid choice!' });
     }
     
     const chosen = allPaths[choiceNum - 1];
-
     if (!chosen.meetsRequirements) {
-        return sock.sendMessage(chatId, { text: `❌ *PATH LOCKED*\n\nYou haven't met the requirements for *${chosen.name}* yet:\n\n• ${chosen.missingRequirements.join('\n• ')}` });
+        return sock.sendMessage(chatId, { 
+            text: `🔒 *Path Locked*\n\n*${chosen.name}* requires:\n• ${chosen.missingRequirements.join('\n• ')}` 
+        });
     }
 
     const inventorySystem = require('./inventorySystem');
     
-    // Check for Evolution/Ascension Stone
     if (!inventorySystem.hasItem(senderJid, requiredStone)) {
-        return sock.sendMessage(chatId, { text: `❌ You need an *${stoneName}* to evolve! Buy one from the shop.` });
+        return sock.sendMessage(chatId, { text: `❌ You need a *${stoneName}* to evolve! Buy one from the shop.` });
     }
 
-    // Check for Special Class Requirements (like Dragon Heart)
-    if (chosen.requirement && chosen.requirement.item) {
-        const reqItem = chosen.requirement.item;
-        const itemInfo = require('./lootSystem').getItemInfo(reqItem);
-        if (!inventorySystem.hasItem(senderJid, reqItem)) {
-            return sock.sendMessage(chatId, { text: `❌ You need a *${itemInfo.name}* to evolve into this class! Acquire it from the corresponding special dungeon.` });
-        }
+    if (chosen.requirement?.item && !inventorySystem.hasItem(senderJid, chosen.requirement.item)) {
+        return sock.sendMessage(chatId, { text: `❌ Special item required: *${chosen.requirement.item}*` });
     }
 
-    // Check gold
     const balance = economy.getBalance(senderJid);
     if (balance < chosen.evolutionCost) {
-        return sock.sendMessage(chatId, { text: `❌ You need ${chosen.evolutionCost} Zeni! (You have: ${balance})` });
+        return sock.sendMessage(chatId, { 
+            text: `❌ Need ${chosen.evolutionCost.toLocaleString()} Zeni! (Have: ${balance.toLocaleString()})` 
+        });
     }
 
-    // Perform evolution
+    // === EVOLUTION: RESET + REFUND MODEL ===
     inventorySystem.removeItem(senderJid, requiredStone, 1);
-    if (chosen.requirement && chosen.requirement.item) {
-        inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
-    }
+    if (chosen.requirement?.item) inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
     economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
-    const oldClassName = currentClass.name;
+    
+    const oldClassName = currentClass?.name || 'Unknown';
     user.class = chosen.id;
 
-    // Refund ALL skill points (100% refund)
-    const currentSkillPoints = user.skillPoints || 0;
-    const spentPoints = Object.values(user.skills || {}).reduce((sum, level) => sum + level, 0);
-    user.skillPoints = currentSkillPoints + spentPoints;
-    user.skills = {}; // Reset skills
-
-    // Mark evolution
+    // Reset skills and refund 100% of points
+    if (!user.skills) user.skills = {};
+    const spentPoints = Object.values(user.skills).reduce((sum, lvl) => sum + lvl, 0);
+    const bonusPoints = nextTier === 'ASCENDED' ? 10 : 5;
+    
+    user.skillPoints = (user.skillPoints || 0) + spentPoints + bonusPoints;
+    user.skills = {}; // Wipe skills for fresh build
+    
     user.evolvedAt = level;
-    user.evolutionHistory = user.evolutionHistory || [];
-    user.evolutionHistory.push({
-        from: oldClassName,
-        to: chosen.name,
-        level: level,
-        timestamp: Date.now()
-    });
+    if (!user.evolutionHistory) user.evolutionHistory = [];
+    user.evolutionHistory.push({ from: oldClassName, to: chosen.name, level, timestamp: Date.now() });
     
     economy.saveUser(senderJid);
 
-    let successMsg = `✨ *EVOLUTION COMPLETE!* ✨\n\n`;
-    successMsg += `*${oldClassName}* ➔ *${chosen.name}* ${chosen.icon}\n\n`;
+    const statEmojis = { hp: '❤️', atk: '⚔️', def: '🛡️', mag: '🔮', spd: '💨', luck: '🍀', crit: '💥' };
+
+    let successMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+    successMsg += `┃   ✨ *EVOLUTION COMPLETE!*\n`;
+    successMsg += `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+    successMsg += `*${oldClassName}* ──▶ *${chosen.name}* ${chosen.icon}\n\n`;
     
-    successMsg += `📊 *New Stats:*\n`;
+    successMsg += `📊 *New Base Stats:*\n`;
     Object.entries(chosen.stats).forEach(([stat, val]) => {
-        successMsg += `• ${stat.toUpperCase()}: ${val}\n`;
+        successMsg += `${statEmojis[stat] || '•'} ${stat.toUpperCase()}: ${val}\n`;
     });
     
-    successMsg += `\n💎 *Skill Points Refunded:* ${spentPoints}\n`;
-    successMsg += `📊 *Available Points:* ${user.skillPoints}\n\n`;
+    successMsg += `\n🔄 *Your skills have been reset!*\n`;
+    successMsg += `📊 *Points Restored:* ${spentPoints}\n`;
+    successMsg += `🎁 *Tier Bonus:* +${bonusPoints}\n`;
+    successMsg += `📊 *Total Points Available:* ${user.skillPoints}\n\n`;
     
-    successMsg += `⚡ *New Passive:* *${chosen.passive.name}*\n`;
-    successMsg += `_${chosen.passive.desc}_\n\n`;
+    if (chosen.passive) {
+        successMsg += `⚡ *New Passive — ${chosen.passive.name}:*\n`;
+        successMsg += `_${chosen.passive.desc}_\n\n`;
+    }
     
-    successMsg += `💡 Use \`${getPrefix()} skills\` to view your new abilities!`;
+    successMsg += `🌳 \`${getPrefix()} skill tree\` to rebuild your character!`;
 
     return sock.sendMessage(chatId, { text: successMsg });
 }
@@ -650,14 +603,4 @@ module.exports = {
     viewAbilities,
     learnSkill,
     handleEvolve,
-    skillTreeCommands: (sock, chatId, senderJid, senderName, command, args) => {
-        const lowerCmd = command.toLowerCase();
-        if (lowerCmd === 'skills' || lowerCmd === 'skilltree') return displaySkillTree(sock, chatId, senderJid, senderName);
-        if (lowerCmd === 'skillup' || lowerCmd === 'upgrade') return upgradeSkill(sock, chatId, senderJid, args[0]);
-        if (lowerCmd === 'reset' || lowerCmd === 'skillreset') return resetSkills(sock, chatId, senderJid);
-        if (lowerCmd === 'abilities') return viewAbilities(sock, chatId, senderJid, senderName);
-        if (lowerCmd === 'skilllearn' || lowerCmd === 'learn') return learnSkill(sock, chatId, senderJid, args[0]);
-        if (lowerCmd === 'evolve') return handleEvolve(sock, chatId, senderJid, senderName, args);
-    }
 };
-
