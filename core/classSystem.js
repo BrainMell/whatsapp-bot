@@ -143,7 +143,7 @@ const EVOLVED_CLASSES = {
         id: 'TEMPLAR',
         name: 'Templar',
         icon: '⛪',
-        desc: 'Anointed by the highest divine authority. A Templar's mere presence on the battlefield elevates their party. They reflect evil, absorb punishment meant for others, and strike down the wicked with righteous retribution. The unworthy simply cannot look directly at them.',
+        desc: `Anointed by the highest divine authority. A Templar's mere presence on the battlefield elevates their party. They reflect evil, absorb punishment meant for others, and strike down the wicked with righteous retribution. The unworthy simply cannot look directly at them.`,
         tier: 'ASCENDED',
         evolvedFrom: 'PALADIN',
         role: 'TANK',
