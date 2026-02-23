@@ -196,12 +196,34 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   const stars  = TIER_STARS[tier]  || '✦';
-  const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
-  const price  = calcPrice(card.tier, uc.copyNumber, stat?.maxCopies || 200);
-
+  
+  // Handling for Global Info view (no ownership data)
+  const maxCopies = stat?.maxCopies || BASE_MAX[tier] || 200;
+  let rarityLabel = 'UNKNOWN';
+  let rarityEmoji = '❓';
+  let copyInfo = '—';
+  let ownerInfo = '—';
   let locStr = `📦 *${location}*`;
-  if (uc.inMainDeck) locStr = `🎴 *Main Deck* (Slot #${uc.mainDeckSlot})`;
-  else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
+  let valueStr = '—';
+
+  if (uc) {
+    // Owned card logic
+    const rarity = getRarityLabel(uc.copyNumber, maxCopies);
+    rarityLabel = rarity.label;
+    rarityEmoji = rarity.emoji;
+    copyInfo = `#${uc.copyNumber} / ${maxCopies}`;
+    ownerInfo = `@${uc.userId.split('@')[0]}`;
+    const price = calcPrice(card.tier, uc.copyNumber, maxCopies);
+    valueStr = `${ZENI()}${price.toLocaleString()}`;
+
+    if (uc.inMainDeck) locStr = `🎴 *Main Deck* (Slot #${uc.mainDeckSlot})`;
+    else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
+  } else {
+    // Global info view logic
+    locStr = '🌐 Global Database';
+    const basePrice = BASE_PRICE[tier] || 10;
+    valueStr = `${ZENI()}${basePrice.toLocaleString()} (Base)`;
+  }
 
   return (
 `╔═══════════════════════════╗
@@ -209,17 +231,17 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
 ╚═══════════════════════════╝
 
 🏷️  *Name:* ${card.cardName}
-👤  *Owner:* @${uc.userId.split('@')[0]}
+👤  *Owner:* ${ownerInfo}
 📺  *Series:* ${card.animeName}
 🗯️  *Quote:* _"${card.description || '...'}"_
 
 ${stars}  *${label}*  ${stars}
-💎  *Rarity:* ${rarity.emoji} ${rarity.label}
-📋  *Edition:* #${uc.copyNumber} / ${stat?.maxCopies || 200}
+💎  *Rarity:* ${rarityEmoji} ${rarityLabel}
+📋  *Edition:* ${copyInfo}
 🎨  *Artist:* ${card.creator || 'Unknown'}
 
 📍  *Location:* ${locStr}
-🪙  *Value:* ${ZENI()}${price.toLocaleString()}
+🪙  *Value:* ${valueStr}
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
@@ -1321,6 +1343,132 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
   }
 }
 
+// ─── 7.28  .g card info <name/id> ──────────────────────────────────────────
+async function cmdCardInfo(args, reply, chatId) {
+  const query = args.join(' ').trim();
+  if (!query) return reply(`❌ Usage: *${P()} info <card name/id>*\nExample: \`${P()} info Naruto\``);
+
+  const inst = getInst();
+  let card = CARD_INDEX[query];
+  
+  if (!card) {
+    // Fuzzy search
+    const matches = ALL_CARDS.filter(c => c.cardName.toLowerCase().includes(query.toLowerCase()) || c.animeName.toLowerCase().includes(query.toLowerCase()));
+    if (!matches.length) return reply(`❌ No card found matching "*${query}*".`);
+    card = matches[0];
+  }
+
+  const stat = await CardStat.findOne({ cardId: card.id });
+  const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
+
+  try {
+    const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
+    return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+  } catch (err) {
+    return reply(caption);
+  }
+}
+
+// ─── 7.29  .g auction <slot#> <min_bid> <hours> ──────────────────────────────
+async function cmdStartAuction(args, senderJid, reply) {
+  const slotNum  = parseInt(args[0]);
+  const minBid   = parseInt((args[1] || '0').replace(/,/g, ''));
+  const hours    = parseFloat(args[2] || '1');
+
+  if (!slotNum || isNaN(minBid) || isNaN(hours)) {
+    return reply(`❌ Usage: *${P()} auction <deck-slot> <min-bid> <hours>*\nExample: \`${P()} auction 1 50000 2\``);
+  }
+
+  const activeAuction = await CardMarket.findOne({ status: 'active', type: 'auction' });
+  if (activeAuction) return reply('❌ An auction is already active! Wait for it to finish.');
+
+  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slotNum });
+  if (!uc) return reply(`❌ No card in Deck slot #${slotNum}.`);
+  if (uc.forSale || uc.inAuction) return reply('❌ This card is already listed/auctioned.');
+  if (uc.locked) return reply('❌ This card is LOCKED. Unlock it first.');
+
+  const endTime = new Date(Date.now() + (hours * 60 * 60 * 1000));
+  
+  uc.inAuction = true;
+  await uc.save();
+
+  await CardMarket.create({
+    userCardId: uc._id,
+    cardId: uc.cardId,
+    sellerId: senderJid,
+    type: 'auction',
+    price: minBid, // Starting price
+    currentBid: 0,
+    auctionEndsAt: endTime,
+    bids: []
+  });
+
+  const card = CARD_INDEX[uc.cardId];
+  return reply(
+`🔨  *AUCTION STARTED!*
+
+*${card.cardName}*
+💰  Starting Bid: ${ZENI()}${minBid.toLocaleString()}
+⏱️  Duration: ${hours} hours
+
+_Bid with_ *${P()} bid <amount>*`
+  );
+}
+
+// ─── 7.30  .g lock <slot/id> ────────────────────────────────────────────────
+async function cmdLock(args, senderJid, reply) {
+  const input = args[0];
+  if (!input) return reply(`❌ Usage: *${P()} lock <deck-slot> or <card-id>*`);
+
+  let uc = null;
+  if (input.includes('-')) {
+    uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+  } else {
+    const slot = parseInt(input);
+    if (!isNaN(slot)) uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  }
+
+  if (!uc) return reply('❌ Card not found.');
+  
+  uc.locked = !uc.locked;
+  await uc.save();
+
+  return reply(uc.locked ? `🔒 *LOCKED* ${uc.cardId}` : `🔓 *UNLOCKED* ${uc.cardId}`);
+}
+
+// ─── 7.31  .g mergeall ──────────────────────────────────────────────────────
+async function cmdMergeAll(senderJid, reply) {
+  const allCards = await UserCard.find({ userId: senderJid }).sort({ copyNumber: 1 });
+  const groups = {};
+  
+  for (const c of allCards) {
+    if (c.locked || c.inMainDeck || c.inCustomDeck || c.forSale || c.inAuction) continue; // Skip protected
+    if (!groups[c.cardId]) groups[c.cardId] = [];
+    groups[c.cardId].push(c);
+  }
+
+  let mergedCount = 0;
+  for (const [id, list] of Object.entries(groups)) {
+    if (list.length > 1) {
+      // Keep first (lowest edition), delete rest
+      const toDelete = list.slice(1);
+      const ids = toDelete.map(c => c._id);
+      await UserCard.deleteMany({ _id: { $in: ids } });
+      
+      // Update global circulation stats
+      const stat = await CardStat.findOne({ cardId: id });
+      if (stat) {
+        stat.totalCirculation = Math.max(0, stat.totalCirculation - toDelete.length);
+        await stat.save();
+      }
+      mergedCount += toDelete.length;
+    }
+  }
+
+  if (mergedCount === 0) return reply('✅ No mergeable duplicates found.');
+  return reply(`♻️  *MASS MERGE COMPLETE*\n\nDeleted *${mergedCount}* duplicate cards.`);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 8 — MAIN COMMAND ROUTER
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1374,10 +1522,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (is('duplicate') || is('dupes'))               return (await cmdDuplicate(senderJid, reply)), true;
 
   // ── Merge ────────────────────────────────────────────────────────────────
+  if (is('mergeall'))               return (await cmdMergeAll(senderJid, reply)), true;
   if (has('merge') || is('merge'))  return (await cmdMerge(arg(2).join(''), senderJid, reply)), true;
 
-  // ── Card search ──────────────────────────────────────────────────────────
-  if (has('cs'))  return (await cmdSearchCard(arg(2), reply)), true;
+  // ── Card info/search ─────────────────────────────────────────────────────
+  if (has('info')) return (await cmdCardInfo(arg(2), reply, chatId)), true;
+  if (has('cs'))   return (await cmdSearchCard(arg(2), reply)), true;
 
   // ── Give card ────────────────────────────────────────────────────────────
   if (has('cg') || is('cg'))  return (await cmdGiveCard(arg(2), senderJid, mentioned, reply)), true;
@@ -1385,14 +1535,18 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   // ── Sell card ─────────────────────────────────────────────────────────────
   if (has('sc'))  return (await cmdSellCard(arg(2), senderJid, reply)), true;
 
+  // ── Lock/Unlock ───────────────────────────────────────────────────────────
+  if (has('lock') || has('unlock')) return (await cmdLock(arg(2), senderJid, reply)), true;
+
   // ── Cancel sale ──────────────────────────────────────────────────────────
   if (is('cancel sale'))  return (await cmdCancelSale(senderJid, reply)), true;
 
   // ── Buy card ─────────────────────────────────────────────────────────────
   if (is('buycard') || has('buycard'))  return (await cmdBuyCard(arg(2), senderJid, economy, reply)), true;
 
-  // ── Bid ──────────────────────────────────────────────────────────────────
-  if (has('bid'))  return (await cmdBid(arg(2), senderJid, economy, reply)), true;
+  // ── Auction/Bid ──────────────────────────────────────────────────────────
+  if (has('auction')) return (await cmdStartAuction(arg(2), senderJid, reply)), true;
+  if (has('bid'))     return (await cmdBid(arg(2), senderJid, economy, reply)), true;
 
   // ── Main deck ────────────────────────────────────────────────────────────
   if (is('deck') || has('deck'))         return (await cmdDeck(senderJid, reply, chatId, arg(2))), true;
