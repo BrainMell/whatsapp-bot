@@ -68,10 +68,11 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
 `;
     msg += `💪 *STATS:*
 `;
-    msg += `❤️ HP: ${stats.hp}${equipStats.hp ? ` (+${equipStats.hp})` : ''}
-`;
-    msg += `⚔️ ATK: ${stats.atk}${equipStats.atk ? ` (+${equipStats.atk})` : ''}
-`;
+          msg += `❤️ HP: ${stats.hp}${equipStats.hp ? ` (+${equipStats.hp})` : ''}
+      `;
+          msg += `⚡ EN: ${stats.maxEnergy}
+      `;
+          msg += `⚔️ ATK: ${stats.atk}${equipStats.atk ? ` (+${equipStats.atk})` : ''}`;
     msg += `🛡️ DEF: ${stats.def}${equipStats.def ? ` (+${equipStats.def})` : ''}
 `;
     msg += `🔮 MAG: ${stats.mag}${equipStats.mag ? ` (+${equipStats.mag})` : ''}

@@ -2784,11 +2784,10 @@ async function startJourney(sock, sessionKey) {
         const equipStats = inventorySystem.getEquipmentStats(p.jid);
         const level = progression.getLevel(p.jid);
         
-        p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
-        p.stats.maxHp = p.stats.hp;
-        p.stats.maxEnergy = 100 + (level - 1) * 2; // +2 per level
-        p.stats.energy = p.stats.maxEnergy;
-        p.stats.atk = baseStats.atk;
+                  p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
+                  p.stats.maxHp = p.stats.hp;
+                  p.stats.maxEnergy = baseStats.maxEnergy; 
+                  p.stats.energy = p.stats.maxEnergy;        p.stats.atk = baseStats.atk;
         p.stats.def = baseStats.def;
         p.stats.mag = baseStats.mag;
         p.stats.spd = baseStats.spd;
