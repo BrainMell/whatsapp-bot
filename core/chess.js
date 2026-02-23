@@ -13,8 +13,35 @@ const goService = new GoImageService();
 const activeGames = new Map();
 
 // ============================================
-// GAME STATE MANAGEMENT
+// GAME STATE MANAGEMENT (PERSISTENT)
 // ============================================
+
+// Key for storing active games in the system module
+const CHESS_GAME_KEY = 'active_chess_games';
+
+// Load active games from the system module on initialization
+function loadActiveGames() {
+    const loadedGames = system.get(CHESS_GAME_KEY, {});
+    for (const chatId in loadedGames) {
+        // Re-initialize Chess.js game object from FEN
+        loadedGames[chatId].chess = new Chess(loadedGames[chatId].fen);
+        activeGames.set(chatId, loadedGames[chatId]);
+    }
+    console.log(`[Chess] Loaded ${activeGames.size} active games from DB.`);
+}
+
+// Save all active games to the system module
+function saveActiveGames() {
+    const gamesToSave = {};
+    for (const [chatId, state] of activeGames.entries()) {
+        gamesToSave[chatId] = {
+            ...state,
+            fen: state.chess.fen(), // Save FEN string instead of Chess object
+            chess: null // Remove circular reference
+        };
+    }
+    system.set(CHESS_GAME_KEY, gamesToSave);
+}
 
 function createGame(playerW, playerB, chatId, bet = 0) {
     const game = new Chess();
@@ -26,18 +53,26 @@ function createGame(playerW, playerB, chatId, bet = 0) {
         chatId: chatId,
         startTime: Date.now(),
         lastMove: null,
-        status: 'active'
+        status: 'active',
+        fen: game.fen() // Store current FEN
     };
     activeGames.set(chatId, state);
+    saveActiveGames(); // Persist immediately
     return state;
 }
 
 function getGame(chatId) {
-    return activeGames.get(chatId);
+    const state = activeGames.get(chatId);
+    if (state && state.chess === null && state.fen) {
+        // Reconstruct Chess object if bot restarted
+        state.chess = new Chess(state.fen);
+    }
+    return state;
 }
 
 function deleteGame(chatId) {
     activeGames.delete(chatId);
+    saveActiveGames(); // Persist deletion
 }
 
 function normalizeJid(jid) {
@@ -147,6 +182,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             const move = state.chess.move(moveStr);
             if (!move) throw new Error("Invalid move");
 
+            state.fen = state.chess.fen(); // Update FEN in state
+            saveActiveGames(); // Persist move
+
             let resultMsg = "";
             let gameEnded = false;
 
@@ -175,8 +213,10 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
                     economy.removeMoney(isWhiteTurn ? state.playerB : state.playerW, state.bet);
                 }
                 deleteGame(chatId);
+                saveActiveGames();
             } else if (gameEnded) {
                 deleteGame(chatId);
+                saveActiveGames();
             }
 
             const imageBuffer = await renderBoard(state.chess.fen(), move.from + move.to);
@@ -247,6 +287,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         updateChessScore(winner, 'win');
         updateChessScore(loser, 'loss');
         deleteGame(chatId);
+        saveActiveGames();
 
         return sock.sendMessage(chatId, { 
             text: botMarker + `🏳️ @${normalizeJid(loser)} resigned! @${normalizeJid(winner)} wins!`,
