@@ -2382,13 +2382,13 @@ async function initSocket() {
   botStarting = true;
   try {
     await Promise.all([
-      system.loadSystemData(),
-      economy.loadEconomy(),
-      guilds.loadGuilds(),
-      loans.loadLoans()
-    ]);
-    loadEnabledChats();
-    loadGroupSettings();
+              system.loadSystemData(),
+              economy.loadEconomy(),
+              guilds.loadGuilds(),
+              loans.loadLoans()
+            ]);
+            chess.loadActiveGames();
+            loadEnabledChats();    loadGroupSettings();
     loadSupportUsage();
     loadMutedUsers();
     loadUserWarnings();
