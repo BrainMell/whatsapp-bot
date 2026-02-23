@@ -1,5 +1,10 @@
 // ============================================ 
-// ⚔️ PVP DUEL SYSTEM V2.0 - PHANTOM STANDOFF
+// ⚔️ PVP DUEL SYSTEM — PHANTOM STANDOFF
+// ============================================ 
+// Balance notes:
+//   PvP damage is dampened to prevent one-shots.
+//   Energy regenerates each turn to make ability use meaningful.
+//   Defense mitigation is capped to keep fights dynamic.
 // ============================================ 
 
 const economy = require('./economy');
@@ -7,306 +12,430 @@ const progression = require('./progression');
 const skillTree = require('./skillTree');
 const botConfig = require('../botConfig');
 const combatImageGenerator = require('./combatImageGenerator');
-const fs = require('fs');
 
-const activeDuels = new Map(); // chatId -> duelState
-const duelInvites = new Map(); // chatId -> { challenger, target, stake, timestamp }
+const activeDuels = new Map();  // chatId → duelState
+const duelInvites = new Map();  // chatId → { challenger, target, stake, timestamp }
+
+// ─── PvP Balance Constants ────────────────────
+const PVP_DAMAGE_MULT   = 0.38;  // Base damage dampener — prevents one-shots
+const PVP_ENERGY_REGEN  = 18;    // Energy gained per turn
+const PVP_DEFENSE_CAP   = 0.65;  // Max 65% damage reduction from DEF
+const PVP_ABILITY_MULT  = 0.50;  // Ability damage dampener (slightly higher than basic)
+const PVP_CRIT_MULT     = 1.5;   // Crit multiplier in PvP
+const PVP_TIMEOUT_MS    = 300000; // 5 minutes inactivity = expired duel
+const CHALLENGE_TIMEOUT = 120000; // 2 minutes to accept challenge
 
 function getDuel(chatId) {
     return activeDuels.get(chatId);
 }
 
-/*
- * Challenge another player
- */
+// ==========================================
+// 🗡️ CHALLENGE SYSTEM
+// ==========================================
+
 function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
-    if (activeDuels.has(chatId)) return { success: false, message: "❌ A duel is already active in this chat!" };
+    if (activeDuels.has(chatId)) {
+        return { success: false, message: '❌ A duel is already active in this chat!' };
+    }
     
-    // Check if target is already challenged
     const existing = duelInvites.get(chatId);
-    if (existing && (Date.now() - existing.timestamp < 120000)) {
-        return { success: false, message: "❌ There is already a pending challenge in this chat!" };
+    if (existing && (Date.now() - existing.timestamp < CHALLENGE_TIMEOUT)) {
+        return { success: false, message: '❌ A challenge is already pending! Accept or wait for it to expire.' };
     }
 
-    // Check stakes
     if (stake > 0) {
         const user = economy.getUser(challengerJid);
-        if (user.wallet < stake) return { success: false, message: `❌ You don't have ${botConfig.getCurrency().symbol}${stake.toLocaleString()} to stake!` };
+        if ((user?.wallet || 0) < stake) {
+            return { success: false, message: `❌ Insufficient funds! You need ${botConfig.getCurrency().symbol}${stake.toLocaleString()} to stake.` };
+        }
     }
 
     duelInvites.set(chatId, {
         challenger: challengerJid,
         target: targetJid,
-        stake: stake,
-        timestamp: Date.now()
+        stake,
+        timestamp: Date.now(),
     });
 
     return { success: true };
 }
 
-/*
- * Accept a challenge
- */
+// ==========================================
+// ✅ ACCEPT CHALLENGE
+// ==========================================
+
 async function acceptChallenge(sock, chatId, targetJid) {
     const invite = duelInvites.get(chatId);
-    if (!invite) return { success: false, message: "❌ No pending challenge found." };
-    if (invite.target !== targetJid) return { success: false, message: "❌ This challenge was not meant for you!" };
-    if (Date.now() - invite.timestamp > 120000) {
+    if (!invite) return { success: false, message: '❌ No pending challenge found.' };
+    if (invite.target !== targetJid) return { success: false, message: '❌ This challenge was not issued to you!' };
+    if (Date.now() - invite.timestamp > CHALLENGE_TIMEOUT) {
         duelInvites.delete(chatId);
-        return { success: false, message: "❌ Challenge expired! (120s limit)" };
+        return { success: false, message: '❌ Challenge expired! (2 min limit)' };
     }
 
-    // Check stakes again
+    // Validate stakes
     if (invite.stake > 0) {
         const challenger = economy.getUser(invite.challenger);
         const target = economy.getUser(targetJid);
-        if (challenger.wallet < invite.stake) return { success: false, message: "❌ Challenger no longer has enough Zeni for the stake!" };
-        if (target.wallet < invite.stake) return { success: false, message: `❌ You need ${botConfig.getCurrency().symbol}${invite.stake.toLocaleString()} to accept this duel!` };
-        
-        // Lock the stakes
+        if ((challenger?.wallet || 0) < invite.stake) {
+            return { success: false, message: '❌ Challenger no longer has enough Zeni for the stake!' };
+        }
+        if ((target?.wallet || 0) < invite.stake) {
+            return { success: false, message: `❌ You need ${botConfig.getCurrency().symbol}${invite.stake.toLocaleString()} to accept!` };
+        }
         economy.removeMoney(invite.challenger, invite.stake);
         economy.removeMoney(targetJid, invite.stake);
     }
 
     duelInvites.delete(chatId);
-    
-    // Initialize Duel
-    const p1 = economy.getUser(invite.challenger);
-    const p2 = economy.getUser(targetJid);
-    const p1Stats = progression.getBaseStats(invite.challenger, p1.class);
-    const p2Stats = progression.getBaseStats(targetJid, p2.class);
+
+    // Build duel state
+    const p1Data = economy.getUser(invite.challenger);
+    const p2Data = economy.getUser(targetJid);
+    const p1Stats = progression.getBaseStats(invite.challenger, p1Data.class);
+    const p2Stats = progression.getBaseStats(targetJid, p2Data.class);
+
+    // Cap extreme stat differences to make PvP more fair
+    function capPvPStats(stats) {
+        return {
+            ...stats,
+            atk:  Math.min(stats.atk,  1200),
+            def:  Math.min(stats.def,  500),
+            mag:  Math.min(stats.mag,  1200),
+            spd:  Math.min(stats.spd,  200),
+            crit: Math.min(stats.crit, 80),
+            evasion: Math.min(stats.evasion || 0, 55),
+        };
+    }
 
     const duelState = {
         chatId,
         stake: invite.stake,
-        players: [
-            {
-                jid: invite.challenger,
-                name: p1.nickname || invite.challenger.split('@')[0],
-                hp: p1Stats.hp,
-                maxHp: p1Stats.hp,
-                energy: 100,
-                maxEnergy: 100,
-                stats: p1Stats,
-                level: p1.level || 1,
-                class: economy.getUserClass(invite.challenger),
-                spriteIndex: p1.spriteIndex || 0
-            },
-            {
-                jid: targetJid,
-                name: p2.nickname || targetJid.split('@')[0],
-                hp: p2Stats.hp,
-                maxHp: p2Stats.hp,
-                energy: 100,
-                maxEnergy: 100,
-                stats: p2Stats,
-                level: p2.level || 1,
-                class: economy.getUserClass(targetJid),
-                spriteIndex: p2.spriteIndex || 0
-            }
-        ],
-        turn: 0,
         round: 1,
+        turn: 0, // index into players[]
+        lastAction: Date.now(),
         history: [],
-        lastAction: Date.now()
+        players: [
+            buildDuelPlayer(invite.challenger, p1Data, capPvPStats(p1Stats), 0),
+            buildDuelPlayer(targetJid, p2Data, capPvPStats(p2Stats), 1),
+        ],
     };
 
     activeDuels.set(chatId, duelState);
-    
-    // Generate initial image
     const image = await generateDuelImage(duelState);
     
     return { success: true, duel: duelState, image };
 }
 
-/*
- * Generate image with PIVOT camera logic
- */
-async function generateDuelImage(duel) {
-    const attacker = duel.players[duel.turn];
-    const defender = duel.players[1 - duel.turn];
-    
-    // Pass to generator: [Attacker (Left), Defender (Right)]
-    const result = await combatImageGenerator.generateCombatImage(
-        [attacker, defender], 
-        [], 
-        { combatType: 'PVP' }
-    );
-    return result;
+function buildDuelPlayer(jid, userData, stats, idx) {
+    const classData = economy.getUserClass(jid);
+    return {
+        jid,
+        name: userData.nickname || jid.split('@')[0],
+        hp: stats.maxHp || stats.hp,
+        maxHp: stats.maxHp || stats.hp,
+        energy: 100,
+        maxEnergy: 100,
+        stats,
+        level: userData.level || 1,
+        class: classData,
+        spriteIndex: userData.spriteIndex || idx,
+        statusEffects: [],
+        cooldowns: {},
+    };
 }
+
+// ==========================================
+// ⚔️ HANDLE PVP ACTION
+// ==========================================
 
 async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     const duel = activeDuels.get(chatId);
-    if (!duel) return { success: false, message: "❌ No active duel in this chat!" };
+    if (!duel) return { success: false, message: '❌ No active duel here!' };
 
     const currentPlayer = duel.players[duel.turn];
-    if (currentPlayer.jid !== senderJid) return { success: false, message: "⏳ It's not your turn!" };
-
     const opponent = duel.players[1 - duel.turn];
-    let actionResult = "";
-    let damage = 0;
     
-    // DAMPENER: PvP damage is reduced to prevent one-shots
-    const PVP_MULTIPLIER = 0.4;
-
-    if (action === 'attack') {
-        // Evasion Check
-        if (Math.random() * 100 < (opponent.stats.evasion || 0)) {
-            actionResult = `💨 *MISS!* *${opponent.name}* evaded the attack!`;
-        } else {
-            damage = Math.floor(currentPlayer.stats.atk * (0.8 + Math.random() * 0.4) * PVP_MULTIPLIER);
-            
-            // Crit Check
-            if (Math.random() * 100 < (currentPlayer.stats.crit || 0)) {
-                damage = Math.floor(damage * 1.5);
-                actionResult = `⚔️ *${currentPlayer.name}* Slashed *${opponent.name}*! 💥 *CRIT!*`;
-            } else {
-                actionResult = `⚔️ *${currentPlayer.name}* Attacked *${opponent.name}*!`;
-            }
-
-            // Defense
-            const defense = Math.floor(opponent.stats.def * 0.3);
-            damage = Math.max(5, damage - defense);
-            opponent.hp -= damage;
-        }
-    } else if (action === 'ability') {
-        const abilityIndex = parseInt(target) - 1;
-        const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class.id);
-        const ability = learned[abilityIndex];
-
-        if (!ability) return { success: false, message: "❌ Invalid ability number!" };
-        
-        const skillLevel = economy.getUser(currentPlayer.jid).skills[ability.id] || 1;
-        const effect = skillTree.getSkillEffect(ability, skillLevel);
-        const energyCost = effect.cost || 20;
-
-        if (currentPlayer.energy < energyCost) return { success: false, message: `❌ Not enough energy! (Need ${energyCost})` };
-
-        currentPlayer.energy -= energyCost;
-        
-        if (effect.type === 'damage' || effect.type === 'aoe') {
-            damage = Math.floor((currentPlayer.stats.mag || currentPlayer.stats.atk) * (effect.multiplier || 1.2) * PVP_MULTIPLIER);
-            opponent.hp -= damage;
-            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*! 💥 Deals *${damage}* damage!`;
-        } else if (effect.type === 'buff_self') {
-            // Handle buffs
-            actionResult = `✨ *${currentPlayer.name}* used *${ability.name}*! Stats increased!`;
-            // Simple buff logic for now
-            currentPlayer.stats.def = Math.floor(currentPlayer.stats.def * 1.2);
-        }
+    if (currentPlayer.jid !== senderJid) {
+        return { success: false, message: `⏳ It's not your turn! Waiting on *${currentPlayer.name}*...` };
     }
 
-    // Check Win
+    let actionResult = '';
+    let damage = 0;
+    let healing = 0;
+    let isCrit = false;
+    let missed = false;
+
+    if (action === 'attack') {
+        const result = resolveBasicAttack(currentPlayer, opponent);
+        damage = result.damage;
+        isCrit = result.isCrit;
+        missed = result.missed;
+        
+        if (missed) {
+            actionResult = `💨 *MISS!* ${opponent.name} dodged the attack!`;
+        } else if (isCrit) {
+            opponent.hp -= damage;
+            actionResult = `⚔️ *${currentPlayer.name}* attacks *${opponent.name}*!\n💢 ★ *CRITICAL HIT!* ★ — ${damage} damage!`;
+        } else {
+            opponent.hp -= damage;
+            actionResult = `⚔️ *${currentPlayer.name}* attacks *${opponent.name}*! — *${damage}* damage`;
+        }
+
+    } else if (action === 'ability') {
+        const abilityIndex = parseInt(target) - 1;
+        const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
+        const ability = learned[abilityIndex];
+
+        if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`.j abilities\` to see your list.` };
+
+        const skillLevel = economy.getUser(currentPlayer.jid)?.skills?.[ability.id] || 1;
+        const effect = skillTree.getSkillEffect(ability, skillLevel);
+        const energyCost = effect?.cost || 20;
+
+        if (currentPlayer.energy < energyCost) {
+            return { success: false, message: `❌ Not enough energy! Need ${energyCost}, have ${Math.floor(currentPlayer.energy)}.` };
+        }
+
+        // Check cooldown
+        if (currentPlayer.cooldowns[ability.id]) {
+            return { success: false, message: `⏱️ *${ability.name}* is on cooldown! (${currentPlayer.cooldowns[ability.id]} turns left)` };
+        }
+
+        currentPlayer.energy -= energyCost;
+        if (effect?.cooldown) currentPlayer.cooldowns[ability.id] = effect.cooldown;
+
+        if (effect?.type === 'damage' || effect?.type === 'aoe') {
+            const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
+            damage = Math.floor(statBase * (effect.multiplier || 1.2) * PVP_ABILITY_MULT);
+            // Partial defense mitigation
+            const defReduction = Math.min(opponent.stats.def * 0.2, damage * PVP_DEFENSE_CAP);
+            damage = Math.max(8, Math.floor(damage - defReduction));
+            opponent.hp -= damage;
+            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            
+        } else if (effect?.type === 'heal' || effect?.type === 'heal_team') {
+            healing = Math.floor(effect.value || 80);
+            currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healing);
+            actionResult = `💚 *${currentPlayer.name}* used *${ability.name}*!\nRestored *${healing}* HP! (${currentPlayer.hp}/${currentPlayer.maxHp})`;
+            
+        } else if (effect?.type === 'buff_self') {
+            const statName = effect.buffType || 'atk';
+            const buffVal = Math.floor((effect.value || 20) * 0.5); // Half buffs in PvP
+            currentPlayer.stats[statName] = (currentPlayer.stats[statName] || 0) + buffVal;
+            actionResult = `✨ *${currentPlayer.name}* used *${ability.name}*!\n📈 +${buffVal} ${statName.toUpperCase()} for ${effect.duration || 2} turns!`;
+            
+        } else if (effect?.type === 'damage_cc') {
+            const statBase = currentPlayer.stats.atk;
+            damage = Math.floor(statBase * (effect.multiplier || 1.0) * PVP_ABILITY_MULT);
+            damage = Math.max(5, damage - Math.floor(opponent.stats.def * 0.15));
+            opponent.hp -= damage;
+            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 *${damage}* damage`;
+            if (Math.random() * 100 < (effect.ccChance || 30)) {
+                if (!opponent.statusEffects) opponent.statusEffects = [];
+                opponent.statusEffects.push({ type: effect.cc, duration: effect.ccDuration || 1 });
+                actionResult += ` + *${effect.cc?.toUpperCase()}* applied!`;
+            }
+        } else {
+            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!`;
+        }
+        
+    } else if (action === 'flee') {
+        // Allow fleeing — no reward, no punishment
+        activeDuels.delete(chatId);
+        return { 
+            success: true, 
+            finished: true, 
+            fled: true,
+            message: `🏃 *${currentPlayer.name}* fled the duel!\n\n_The battle ends with no winner..._` 
+        };
+    } else {
+        return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, or \`flee\`` };
+    }
+
+    // ── Check for win ─────────────────────────────
     if (opponent.hp <= 0) {
         opponent.hp = 0;
         const result = await finishDuel(chatId, duel, currentPlayer, opponent);
         activeDuels.delete(chatId);
-        return { success: true, finished: true, message: actionResult + "\n\n" + result };
+        return { success: true, finished: true, message: actionResult + '\n\n' + result };
     }
 
-    // Update state
+    // ── Advance turn ──────────────────────────────
     duel.turn = 1 - duel.turn;
     if (duel.turn === 0) duel.round++;
     duel.lastAction = Date.now();
-    currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + 15);
 
-    // Generate NEW PIVOTED image
+    // Energy regen for attacker
+    currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
+
+    // Tick cooldowns
+    for (const [skillId, cd] of Object.entries(currentPlayer.cooldowns)) {
+        currentPlayer.cooldowns[skillId] = cd - 1;
+        if (currentPlayer.cooldowns[skillId] <= 0) delete currentPlayer.cooldowns[skillId];
+    }
+
+    const nextPlayer = duel.players[duel.turn];
+
     const imageResult = await generateDuelImage(duel);
     
-    let statusMsg = actionResult + `\n\n🎯 *Turn:* @${duel.players[duel.turn].jid.split('@')[0]}\n`;
-    statusMsg += `❤️ *Target HP:* ${opponent.hp}/${opponent.maxHp}`;
+    let statusMsg = actionResult;
+    statusMsg += `\n\n━━━━━━━━━━━━━━━━━━━━━\n`;
+    statusMsg += `❤️ *${currentPlayer.name}:* ${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\n`;
+    statusMsg += `❤️ *${opponent.name}:* ${Math.max(0, opponent.hp)}/${opponent.maxHp}\n`;
+    statusMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    statusMsg += `🎯 *@${nextPlayer.jid.split('@')[0]}* — it's your turn!\n`;
+    statusMsg += `⚡ Energy: ${Math.floor(nextPlayer.energy)}/${nextPlayer.maxEnergy}\n`;
+    statusMsg += `🗡️ \`attack\` | 🔮 \`ability <n>\` | 🏃 \`flee\``;
 
-    return { 
-        success: true, 
-        finished: false, 
-        message: statusMsg, 
+    return {
+        success: true,
+        finished: false,
+        message: statusMsg,
         image: imageResult,
-        mentions: [duel.players[duel.turn].jid]
+        mentions: [nextPlayer.jid],
     };
+}
+
+// ==========================================
+// 🔧 COMBAT HELPERS
+// ==========================================
+
+function resolveBasicAttack(attacker, defender) {
+    // Evasion check
+    if (Math.random() * 100 < (defender.stats.evasion || 0)) {
+        return { damage: 0, isCrit: false, missed: true };
+    }
+
+    let damage = Math.floor(attacker.stats.atk * (0.85 + Math.random() * 0.3) * PVP_DAMAGE_MULT);
+    
+    // Crit
+    const isCrit = Math.random() * 100 < (attacker.stats.crit || 5);
+    if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
+
+    // Defense reduction (capped)
+    const defReduction = Math.min(
+        Math.floor(defender.stats.def * 0.25),
+        Math.floor(damage * PVP_DEFENSE_CAP)
+    );
+    damage = Math.max(5, damage - defReduction);
+
+    return { damage, isCrit, missed: false };
 }
 
 function getLearnedAbilities(userId, classId) {
     const user = economy.getUser(userId);
-    const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+    if (!user?.skills) return [];
+    
+    const classSystem = require('./classSystem');
+    const userClassData = economy.getUserClass(userId);
+    const lineage = classSystem.getLineage(userClassData?.id || classId || '');
+    
     const learned = [];
-    if (tree) {
-        for (const t of Object.values(tree.trees)) {
-            for (const [id, s] of Object.entries(t.skills)) {
-                if (user.skills && user.skills[id]) learned.push({ id, ...s });
+    const seen = new Set();
+    
+    for (const cId of lineage) {
+        const tree = skillTree.SKILL_TREES[cId.toUpperCase()];
+        if (!tree) continue;
+        for (const [, treeData] of Object.entries(tree.trees)) {
+            for (const [sId, skill] of Object.entries(treeData.skills)) {
+                if (!seen.has(sId) && (user.skills[sId] || 0) > 0) {
+                    seen.add(sId);
+                    learned.push({ id: sId, ...skill });
+                }
             }
         }
     }
+    
+    // Add mirrored skills
+    if (user.borrowedSkills) {
+        for (const s of user.borrowedSkills) {
+            if (!seen.has(s.id)) {
+                seen.add(s.id);
+                learned.push(s);
+            }
+        }
+    }
+    
     return learned;
 }
 
+// ==========================================
+// 🏆 FINISH DUEL
+// ==========================================
+
 async function finishDuel(chatId, duel, winner, loser) {
-    const totalPot = duel.stake * 2;
-    const winnerData = economy.getUser(winner.jid);
-    const xpGain = 100 + (loser.level * 20);
+    const ZENI = botConfig.getCurrency().symbol;
+    const xpGain = Math.floor(80 + (loser.level * 15));
     
-    let rewardMsg = "";
+    let rewardMsg = '';
     if (duel.stake > 0) {
-        economy.addMoney(winner.jid, totalPot);
-        rewardMsg = `💰 *Stake Won:* ${botConfig.getCurrency().symbol}${totalPot.toLocaleString()}`;
+        const pot = duel.stake * 2;
+        economy.addMoney(winner.jid, pot);
+        rewardMsg = `💰 Won ${ZENI}${pot.toLocaleString()} (staked pot)`;
     } else {
-        const goldBonus = 200 + (loser.level * 50);
+        const goldBonus = Math.floor(150 + (loser.level * 40));
         economy.addMoney(winner.jid, goldBonus);
-        rewardMsg = `💰 *Prize:* ${botConfig.getCurrency().symbol}${goldBonus.toLocaleString()}`;
+        rewardMsg = `💰 ${ZENI}${goldBonus.toLocaleString()} prize`;
     }
 
-    progression.addXP(winner.jid, xpGain, "PvP Victory");
-    
-    let msg = `[1m[4m┏━━━━━━━━━━━━━━━┓
-`;
-    msg += `┃   🏆 VICTORY!   ┃
-`;
-    msg += `┗━━━━━━━━━━━━━━━┛[0m
+    progression.addXP(winner.jid, xpGain, 'PvP Victory');
 
-`;
-    msg += `👑 *Winner:* ${winner.name}
-`;
-    msg += `💀 *Loser:* ${loser.name}
-
-`;
-    msg += `🎁 *Rewards:*
-${rewardMsg}
-⭐ +${xpGain} XP`;
+    let msg = `╔══════════════════════════╗\n`;
+    msg += `   🏆 *DUEL RESULT*\n`;
+    msg += `╚══════════════════════════╝\n\n`;
+    msg += `👑 *Winner:* ${winner.name}\n`;
+    msg += `💀 *Defeated:* ${loser.name}\n\n`;
+    msg += `🎁 *Rewards:*\n`;
+    msg += `${rewardMsg}\n`;
+    msg += `⭐ +${xpGain} XP\n`;
     
     return msg;
 }
 
-// Periodic sweeper for memory optimization
+// ==========================================
+// 🎨 IMAGE GENERATION
+// ==========================================
+
+async function generateDuelImage(duel) {
+    const attacker = duel.players[duel.turn];
+    const defender = duel.players[1 - duel.turn];
+    
+    return await combatImageGenerator.generateCombatImage(
+        [attacker, defender], [], { combatType: 'PVP' }
+    );
+}
+
+// ==========================================
+// ⏱️ MAINTENANCE SWEEPER
+// ==========================================
+
 setInterval(() => {
     const now = Date.now();
-  
-    // Expire unclaimed invites older than 2 min
+    
     for (const [chatId, invite] of duelInvites.entries()) {
-      if (now - invite.timestamp > 120000) {
-        duelInvites.delete(chatId);
-      }
-    }
-  
-    // Expire abandoned duels with no action in 5 min
-    for (const [chatId, duel] of activeDuels.entries()) {
-      if (now - duel.lastAction > 300000) {
-        activeDuels.delete(chatId);
-        
-        // Notify chat
-        const engine = require('./engine');
-        const sock = engine.getSock();
-        const botMarker = `*${botConfig.getBotName()}*\n\n`;
-        if (sock) {
-          sock.sendMessage(chatId, { 
-            text: botMarker + "⌛ *DUEL TIMEOUT!* ⌛\n\nThe duel has been cancelled due to inactivity." 
-          }).catch(() => {});
+        if (now - invite.timestamp > CHALLENGE_TIMEOUT) {
+            duelInvites.delete(chatId);
         }
-      }
     }
-  }, 60000); // check every minute
+    
+    for (const [chatId, duel] of activeDuels.entries()) {
+        if (now - duel.lastAction > PVP_TIMEOUT_MS) {
+            activeDuels.delete(chatId);
+            const engine = require('./engine');
+            const sock = engine.getSock();
+            if (sock) {
+                sock.sendMessage(chatId, { 
+                    text: `⌛ *DUEL EXPIRED!*\n\nThe duel was cancelled due to ${Math.floor(PVP_TIMEOUT_MS / 60000)} minutes of inactivity.`
+                }).catch(() => {});
+            }
+        }
+    }
+}, 60000);
 
 module.exports = {
     getDuel,
     challengePlayer,
     acceptChallenge,
-    handlePvPAction
+    handlePvPAction,
 };
