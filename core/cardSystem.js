@@ -192,6 +192,38 @@ function calcPrice(tier, totalSpawned, maxCopies) {
 //  SECTION 5 — CARD CAPTION BUILDER
 // ═══════════════════════════════════════════════════════════════════════════
 
+function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
+  const tier   = String(card.tier);
+  const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
+  const stars  = TIER_STARS[tier]  || '✦';
+  const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
+  const price  = calcPrice(card.tier, uc.copyNumber, stat?.maxCopies || 200);
+
+  let locStr = `📦 *${location}*`;
+  if (uc.inMainDeck) locStr = `🎴 *Main Deck* (Slot #${uc.mainDeckSlot})`;
+  else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
+
+  return (
+`╔═══════════════════════════╗
+      🎴  *CARD DETAIL*
+╚═══════════════════════════╝
+
+🏷️  *Name:* ${card.cardName}
+📺  *Series:* ${card.animeName}
+🗯️  *Quote:* _"${card.description || '...'}"_
+
+${stars}  *${label}*  ${stars}
+💎  *Rarity:* ${rarity.emoji} ${rarity.label}
+📋  *Edition:* #${uc.copyNumber} / ${stat?.maxCopies || 200}
+🎨  *Artist:* ${card.creator || 'Unknown'}
+
+📍  *Location:* ${locStr}
+🪙  *Value:* ${ZENI()}${price.toLocaleString()}
+
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+  );
+}
+
 function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
@@ -445,8 +477,45 @@ _Added to your collection!  Check it with_ *${P()} coll*`
 }
 
 // ─── 7.3  .g coll ───────────────────────────────────────────────────────────
-async function cmdColl(senderJid, reply, chatId) {
+async function cmdColl(senderJid, reply, chatId, args = []) {
   const inst = getInst();
+
+  // Handle Detail View: .j coll <number> or <card-id>
+  if (args.length > 0) {
+    const input = args[0];
+    let uc = null;
+
+    if (input.includes('-')) {
+      // Find by unique Card ID
+      uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+    } else {
+      // Find by list index (available cards only)
+      const index = parseInt(input);
+      if (!isNaN(index)) {
+        const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+        uc = owned[index - 1];
+      }
+    }
+
+    if (uc) {
+      const card = CARD_INDEX[uc.cardId];
+      if (!card) return reply('❌ Card data not found.');
+      const stat = await CardStat.findOne({ cardId: uc.cardId });
+      const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
+      
+      try {
+        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
+        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+      } catch (err) {
+        return reply(caption);
+      }
+    } else if (!input.includes('-')) {
+      return reply(`❌ No card found at position #${input} in your available collection.\n_Note: Cards in decks are hidden from the list._`);
+    } else {
+      return reply(`❌ You don't own any copies of card ID \`${input}\`.`);
+    }
+  }
+
   // DECK ISOLATION: Hide cards currently in decks
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Your collection is empty (or all cards are in decks).\n_Check your deck or claim new cards!_');
@@ -641,7 +710,17 @@ async function cmdGiveCard(args, senderJid, mentionedJid, reply) {
   if (!target) return reply(`❌ No card in Deck slot *#${deckNum}*.`);
 
   const card = CARD_INDEX[target.cardId];
-  target.userId = mentionedJid; target.inMainDeck = false; target.mainDeckSlot = null;
+  
+  // Clear ALL deck flags on transfer
+  target.userId = mentionedJid; 
+  target.inMainDeck = false; 
+  target.mainDeckSlot = null;
+  target.inCustomDeck = false;
+  target.customDeckName = null;
+  target.customDeckSlot = null;
+  target.forSale = false;
+  target.salePrice = null;
+  
   await target.save();
 
   const stat   = await CardStat.findOne({ cardId: target.cardId });
@@ -728,7 +807,17 @@ async function cmdBuyCard(args, senderJid, economy, reply) {
   economy.addMoney(listing.sellerId,  listing.price, 'Card sold');
 
   const uc = await UserCard.findById(listing.userCardId);
-  if (uc) { uc.userId = senderJid; uc.forSale = false; uc.salePrice = null; uc.inMainDeck = false; uc.mainDeckSlot = null; await uc.save(); }
+  if (uc) { 
+    uc.userId = senderJid; 
+    uc.forSale = false; 
+    uc.salePrice = null; 
+    uc.inMainDeck = false; 
+    uc.mainDeckSlot = null; 
+    uc.inCustomDeck = false;
+    uc.customDeckName = null;
+    uc.customDeckSlot = null;
+    await uc.save(); 
+  }
 
   const stat = await CardStat.findOne({ cardId: listing.cardId });
   if (stat) { stat.lastTradePrice = listing.price; stat.recentTradePrices = [...(stat.recentTradePrices || []).slice(-4), listing.price]; await stat.save(); }
@@ -780,8 +869,42 @@ _Outbid someone with_ *${P()} bid <higher>*`
 }
 
 // ─── 7.13  .g deck ───────────────────────────────────────────────────────────
-async function cmdDeck(senderJid, reply, chatId) {
+async function cmdDeck(senderJid, reply, chatId, args = []) {
   const inst = getInst();
+
+  // Handle Detail View: .j deck <number> or <card-id>
+  if (args.length > 0) {
+    const input = args[0];
+    let uc = null;
+
+    if (input.includes('-')) {
+      // Find by unique Card ID specifically in the deck
+      uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, cardId: input });
+    } else {
+      // Find by slot number
+      const slotNum = parseInt(input);
+      if (!isNaN(slotNum)) {
+        uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slotNum });
+      }
+    }
+
+    if (uc) {
+      const card = CARD_INDEX[uc.cardId];
+      if (!card) return reply('❌ Card data not found.');
+      const stat = await CardStat.findOne({ cardId: uc.cardId });
+      const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck');
+      
+      try {
+        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
+        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+      } catch (err) {
+        return reply(caption);
+      }
+    } else {
+      return reply(`❌ No card found in Deck ${input.includes('-') ? `with ID ${input}` : `slot #${input}`}.`);
+    }
+  }
+
   // Query by either flag OR slot presence to catch any out-of-sync records
   let deckCards = await UserCard.find({ 
     userId: senderJid, 
@@ -1170,21 +1293,7 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
   
   const card = CARD_INDEX[uc.cardId];
   const stat = await CardStat.findOne({ cardId: uc.cardId });
-  const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || 200);
-  const stars = TIER_STARS[String(card?.tier)] || '✦';
-  
-  const caption = 
-`🎴  *CARD DETAIL*
-▬▬▬▬▬▬▬▬▬▬
-🏷️  Name ›  ${card?.cardName || uc.cardId}
-📺  Series ›  ${card?.animeName || 'Unknown'}
-🗯️  Description ›  "${card?.description || 'No description available.'}"
-${stars}  ${TIER_LABEL[String(card?.tier)]}  ${stars}
-💎  Rarity ›  ${rarity.label}
-📋  Copy ›  #${uc.copyNumber} of ${stat?.maxCopies || 200}
-🎨  Art ›  ${card?.creator || 'Unknown'}
-🪙  Value ›  ${ZENI()}${calcPrice(card?.tier, uc.copyNumber, stat?.maxCopies || 200).toLocaleString()}
-▬▬▬▬▬▬▬▬▬▬`;
+  const caption = buildCardDetailCaption(card, uc, stat, deckName);
 
   try {
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
@@ -1242,7 +1351,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   }
 
   // ── Collection views ─────────────────────────────────────────────────────
-  if (is('coll'))                                   return (await cmdColl(senderJid, reply, chatId)), true;
+  if (is('coll') || has('coll'))                    return (await cmdColl(senderJid, reply, chatId, arg(2))), true;
   if (is('card --tier') || is('card--tier'))        return (await cmdCollByTier(senderJid, reply, chatId)), true;
   if (is('duplicate') || is('dupes'))               return (await cmdDuplicate(senderJid, reply)), true;
 
@@ -1268,7 +1377,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (has('bid'))  return (await cmdBid(arg(2), senderJid, economy, reply)), true;
 
   // ── Main deck ────────────────────────────────────────────────────────────
-  if (is('deck'))         return (await cmdDeck(senderJid, reply, chatId)), true;
+  if (is('deck') || has('deck'))         return (await cmdDeck(senderJid, reply, chatId, arg(2))), true;
   if (has('showdeck'))    return (await cmdShowDeckDetail(arg(2), senderJid, reply, chatId)), true;
   if (has('swap card'))   return (await cmdSwapCard(arg(3), senderJid, reply)), true;
 
