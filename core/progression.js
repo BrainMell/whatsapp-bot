@@ -37,13 +37,13 @@ const STAT_GROWTH = {
     getBaseGrowth: (level) => {
         const factor = 1 + Math.floor(level / 15); // Increase base growth every 15 levels
         return {
-            hp: 8 * factor, 
-            atk: 1.5 * factor, 
-            def: 1.2 * factor, 
-            mag: 1.5 * factor, 
-            spd: 1.0 * factor, 
-            luck: 0.8 * factor, 
-            crit: 0.4 * factor
+            hp: 15 * factor, 
+            atk: 2.5 * factor, 
+            def: 2.0 * factor, 
+            mag: 2.5 * factor, 
+            spd: 1.5 * factor, 
+            luck: 1.2 * factor, 
+            crit: 0.6 * factor
         };
     },
     CLASS_MODIFIERS: {
@@ -63,10 +63,27 @@ const STAT_GROWTH = {
         DRUID: { hp: 1.1, atk: 1.0, def: 1.0, mag: 1.3, spd: 1.1, luck: 1.2, crit: 0.9 },
         NECROMANCER: { hp: 0.9, atk: 0.8, def: 0.9, mag: 1.5, spd: 0.9, luck: 1.0, crit: 1.3 },
         MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
-        CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 }
+        CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 },
+        // --- ASCENDED CLASSES ---
+        ARCHMAGE: { hp: 1.0, atk: 0.8, def: 1.2, mag: 2.2, spd: 1.2, luck: 1.5, crit: 1.5 },
+        WARLORD: { hp: 2.0, atk: 1.6, def: 2.0, mag: 0.5, spd: 0.9, luck: 1.2, crit: 1.2 },
+        DOOMSLAYER: { hp: 2.2, atk: 2.0, def: 1.2, mag: 0.4, spd: 1.2, luck: 1.0, crit: 1.8 },
+        TEMPLAR: { hp: 1.8, atk: 1.4, def: 2.2, mag: 1.2, spd: 0.8, luck: 1.3, crit: 1.0 },
+        NIGHTBLADE: { hp: 1.2, atk: 2.0, def: 0.8, mag: 0.8, spd: 2.5, luck: 1.8, crit: 2.8 },
+        ZENMASTER: { hp: 1.5, atk: 1.6, def: 1.2, mag: 1.2, spd: 2.0, luck: 1.5, crit: 1.8 },
+        VOIDWALKER: { hp: 1.2, atk: 1.0, def: 1.2, mag: 2.0, spd: 1.2, luck: 1.2, crit: 1.5 },
+        AVATAR: { hp: 1.4, atk: 1.2, def: 1.4, mag: 2.0, spd: 1.4, luck: 1.4, crit: 1.6 },
+        LICH: { hp: 1.5, atk: 1.0, def: 1.5, mag: 2.1, spd: 1.0, luck: 1.2, crit: 1.5 },
+        TIMELORD: { hp: 1.2, atk: 1.2, def: 1.2, mag: 1.8, spd: 2.5, luck: 1.5, crit: 1.5 },
+        SAINT: { hp: 1.8, atk: 1.0, def: 1.8, mag: 1.8, spd: 1.2, luck: 1.8, crit: 1.2 },
+        ARCHDRUID: { hp: 1.8, atk: 1.4, def: 1.6, mag: 1.8, spd: 1.4, luck: 1.5, crit: 1.4 },
+        TYCOON: { hp: 1.5, atk: 1.5, def: 1.5, mag: 1.5, spd: 1.5, luck: 3.5, crit: 1.5 },
+        DRAGON_GOD: { hp: 2.5, atk: 2.2, def: 2.2, mag: 1.5, spd: 1.5, luck: 1.8, crit: 1.8 },
+        SHOGUN: { hp: 1.8, atk: 2.0, def: 1.5, mag: 0.8, spd: 1.8, luck: 1.5, crit: 2.2 },
+        KAGE: { hp: 1.4, atk: 2.2, def: 1.0, mag: 1.2, spd: 2.8, luck: 2.0, crit: 3.0 }
     },
-    STAT_POINTS_PER_LEVEL: 3, // Reduced from 5 to prevent stat bloat
-    MILESTONE_BONUSES: { 10: 5, 25: 10, 50: 20, 75: 35, 100: 50 } // Reduced bonuses
+    STAT_POINTS_PER_LEVEL: 5, // Restored from 3
+    MILESTONE_BONUSES: { 10: 10, 25: 20, 50: 40, 75: 60, 100: 100 } // Restored bonuses
 };
 
 // ==========================================
@@ -99,6 +116,20 @@ function getUser(userId) {
     if (p.totalGP === undefined) p.totalGP = 0;
     if (p.commandsUsed === undefined) p.commandsUsed = 0;
     if (!p.achievements) p.achievements = [];
+
+    // --- LEGACY XP FIX ---
+    // If formula changed and user has negative progress, boost their total XP to match their level
+    const minXPForLevel = getXPForLevel(p.level);
+    const xpForNext = getXPForLevel(p.level + 1) - minXPForLevel;
+    
+    if ((p.xp || 0) < minXPForLevel) {
+        // Boost them to 5% progress into their current level so they see a positive number
+        const adjustment = (minXPForLevel + Math.floor(xpForNext * 0.05)) - (p.xp || 0);
+        console.log(`[Progression] Legacy XP adjustment for ${userId} (Lv.${p.level}): +${adjustment}`);
+        p.xp = (p.xp || 0) + adjustment;
+        p.totalXPEarned = (p.totalXPEarned || 0) + adjustment;
+        economy.saveUser(userId);
+    }
     
     return p;
 }
@@ -112,9 +143,12 @@ function getXPForLevel(level) {
     let totalXP = 0;
     for (let i = 1; i < level; i++) {
         let xpNeeded = Math.floor(XP_CONFIG.BASE_XP * Math.pow(XP_CONFIG.SCALING_FACTOR, i - 1));
-        for (const [milestone, multiplier] of Object.entries(XP_CONFIG.MILESTONES)) {
-            if (i >= parseInt(milestone)) xpNeeded = Math.floor(xpNeeded * multiplier);
-        }
+        // Apply milestones
+        if (i >= 10) xpNeeded = Math.floor(xpNeeded * 1.2);
+        if (i >= 25) xpNeeded = Math.floor(xpNeeded * 1.3);
+        if (i >= 50) xpNeeded = Math.floor(xpNeeded * 1.5);
+        if (i >= 75) xpNeeded = Math.floor(xpNeeded * 1.8);
+        
         totalXP += xpNeeded;
     }
     return totalXP;
