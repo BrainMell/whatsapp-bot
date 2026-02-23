@@ -1665,8 +1665,8 @@ async function processCombatTurn(sock, sessionKey) {
                               }
                           }
             
-                          // Process status effects at start of turn                          const statusMessages = processStatusEffects(activeActor);
-            
+                                                      // Process status effects at start of turn
+                                                      const statusMessages = processStatusEffects(activeActor);            
                           // FIRE CAVE: Heat Exhaustion
                           if (state.environment?.id === 'FIRE_CAVE') {
                               const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
