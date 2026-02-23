@@ -209,6 +209,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
 ╚═══════════════════════════╝
 
 🏷️  *Name:* ${card.cardName}
+👤  *Owner:* @${uc.userId.split('@')[0]}
 📺  *Series:* ${card.animeName}
 🗯️  *Quote:* _"${card.description || '...'}"_
 
@@ -505,7 +506,11 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       
       try {
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
-        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+        return await inst.sock_ref.sendMessage(chatId, { 
+          image: Buffer.from(res.data), 
+          caption,
+          mentions: [uc.userId]
+        });
       } catch (err) {
         return reply(caption);
       }
@@ -896,7 +901,11 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
       
       try {
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
-        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+        return await inst.sock_ref.sendMessage(chatId, { 
+          image: Buffer.from(res.data), 
+          caption,
+          mentions: [uc.userId]
+        });
       } catch (err) {
         return reply(caption);
       }
@@ -1090,17 +1099,22 @@ async function cmdCDeck(args, senderJid, reply) {
   if (slotNum !== null) {
     const uc = deck.cards[slotNum - 1];
     if (!uc) return reply(`❌ No card in slot #${slotNum} of *"${deckName}"*.`);
-    const card   = CARD_INDEX[uc.cardId];
-    const stat   = await CardStat.findOne({ cardId: uc.cardId });
-    const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || 200);
-    return reply(
-`📁  *"${deckName}"*  —  Slot *#${slotNum}*
+    
+    const card = CARD_INDEX[uc.cardId];
+    const stat = await CardStat.findOne({ cardId: uc.cardId });
+    const caption = buildCardDetailCaption(card, uc, stat, deckName);
 
-${TIER_STARS[String(card?.tier)] || '✦'}  *${card?.cardName || uc.cardId}*
-_${card?.animeName}_
-${rarity.emoji}  ${rarity.label}  •  Copy *#${uc.copyNumber}*
-🎨  Art by *${card?.creator || 'Unknown'}*`
-    );
+    try {
+      const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+      await inst.sock_ref.sendMessage(chatId, { 
+        image: Buffer.from(res.data), 
+        caption,
+        mentions: [uc.userId]
+      });
+    } catch (err) {
+      return reply(caption);
+    }
+    return;
   }
 
   let msg = `▬▬▬▬▬▬▬▬▬▬\n   📁  *${deck.name}*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
@@ -1297,7 +1311,11 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
 
   try {
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-    await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    await inst.sock_ref.sendMessage(chatId, { 
+      image: Buffer.from(res.data), 
+      caption,
+      mentions: [uc.userId]
+    });
   } catch (err) {
     return reply(caption);
   }
