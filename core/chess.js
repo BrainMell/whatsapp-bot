@@ -61,8 +61,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
         const mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (mentionedJids.length === 0) {
-            return sock.sendMessage(chatId, { text: botMarker + `❌ Tag an opponent!
-Example: `${prefix} chess @user 500`` });
+            return sock.sendMessage(chatId, { text: botMarker + "❌ Tag an opponent!\nExample: `" + prefix + " chess @user 500`" });
         }
 
         const opponentJid = mentionedJids[0];
@@ -79,28 +78,19 @@ Example: `${prefix} chess @user 500`` });
         // Create game (White is challenger for now)
         const state = createGame(senderJid, opponentJid, chatId, bet);
         
-        const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️
-
-` +
-            `⚪ *White:* @${normalizeJid(senderJid)}
-` +
-            `⚫ *Black:* @${normalizeJid(opponentJid)}
-` +
-            `💰 *Bet:* ${bet.toLocaleString()} Zeni
-
-` +
-            `👉 @${normalizeJid(senderJid)} to move!
-` +
-            `Use: `${prefix} move <notation>` (e.g., `e4`, `Nf3`)`;
+        const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
+            `⚪ *White:* @${normalizeJid(senderJid)}\n` +
+            `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
+            `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
+            `👉 @${normalizeJid(senderJid)} to move!\n` +
+            `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
 
         const imageBuffer = await renderBoard(state.chess.fen());
         
         if (imageBuffer) {
             await sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: [senderJid, opponentJid] } });
         } else {
-            await sock.sendMessage(chatId, { text: caption + "
-
-Board: " + state.chess.ascii(), contextInfo: { mentionedJid: [senderJid, opponentJid] } });
+            await sock.sendMessage(chatId, { text: caption + "\n\nBoard: " + state.chess.ascii(), contextInfo: { mentionedJid: [senderJid, opponentJid] } });
         }
         return;
     }
@@ -138,12 +128,9 @@ Board: " + state.chess.ascii(), contextInfo: { mentionedJid: [senderJid, opponen
             }
 
             const nextPlayer = state.chess.turn() === 'w' ? state.playerW : state.playerB;
-            const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*
-
-` +
+            const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*\n\n` +
                 (gameEnded ? resultMsg : `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
-                (state.bet > 0 && gameEnded ? `
-💰 @${normalizeJid(currentPlayer)} takes the ${state.bet * 2} Zeni pot!` : "");
+                (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} takes the ${state.bet * 2} Zeni pot!` : "");
 
             // Handle betting rewards
             if (gameEnded && state.bet > 0) {
@@ -162,14 +149,11 @@ Board: " + state.chess.ascii(), contextInfo: { mentionedJid: [senderJid, opponen
             if (imageBuffer) {
                 await sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
             } else {
-                await sock.sendMessage(chatId, { text: caption + "
-
-" + state.chess.ascii(), contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
+                await sock.sendMessage(chatId, { text: caption + "\n\n" + state.chess.ascii(), contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
             }
 
         } catch (e) {
-            return sock.sendMessage(chatId, { text: botMarker + `❌ Invalid move: *${moveStr}*
-Make sure to use valid algebraic notation.` });
+            return sock.sendMessage(chatId, { text: botMarker + `❌ Invalid move: *${moveStr}*\nMake sure to use valid algebraic notation.` });
         }
         return;
     }
