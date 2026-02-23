@@ -10213,8 +10213,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
       const move = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} move `, '').trim();
       
       // If a chess game is active, try chess move first if it looks like algebraic notation
-      const chessGame = chess.handleChess && require('./chess').getGame ? require('./chess').getGame(chatId) : null;
-      if (chessGame && /^[a-h][1-8]|^[KQRBN][a-h]?[1-8]|^O-O/.test(move)) {
+      const chessGame = (chess && typeof chess.getGame === 'function') ? chess.getGame(chatId) : null;
+      if (chessGame && (/^[a-hKQRBN]/.test(move) || move.includes('O-O'))) {
           return await chess.handleChess(sock, chatId, senderJid, ['move', move], m, BOT_MARKER);
       }
 
