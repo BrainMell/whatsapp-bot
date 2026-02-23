@@ -52,6 +52,21 @@ class GoImageService {
     }
 
     /*
+     * Generate Chess Board
+     */
+    async generateChessBoard(data) {
+        try {
+            const response = await this.client.post('/api/chess', data, {
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService Chess Error:', error.message);
+            throw error;
+        }
+    }
+
+    /*
      * Render Ludo Board
      */
     async renderLudoBoard(data, pfpUrls = {}) {

@@ -43,6 +43,7 @@ ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
 const { getAnikaiBestMatch } = require('./anikaiResolver');
 const runSecurity = require('./security');
 const tictactoe = require('./tictactoe');
+const chess = require('./chess');
 const debate = require('./debate');
 const ludo = require('./ludo');
 const wordle = require('./wordle');
@@ -10203,11 +10204,22 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
     return;
 }
 
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} move `)) {
-    const move = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} move `, '').trim();
-    return await tictactoe.handleMove(sock, chatId, senderJid, move, BOT_MARKER, m, senderName);
-}
-// ============================================
+  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} chess`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} c `)) {
+      const args = lowerTxt.split(' ').slice(1);
+      return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
+  }
+
+  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} move `)) {
+      const move = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} move `, '').trim();
+      
+      // If a chess game is active, try chess move first if it looks like algebraic notation
+      const chessGame = chess.handleChess && require('./chess').getGame ? require('./chess').getGame(chatId) : null;
+      if (chessGame && /^[a-h][1-8]|^[KQRBN][a-h]?[1-8]|^O-O/.test(move)) {
+          return await chess.handleChess(sock, chatId, senderJid, ['move', move], m, BOT_MARKER);
+      }
+
+      return await tictactoe.handleMove(sock, chatId, senderJid, move, BOT_MARKER, m, senderName);
+  }// ============================================
 
 // `${botConfig.getPrefix().toLowerCase()}` wordle top 
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle top` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} wordle leaderboard`) {
