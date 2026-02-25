@@ -364,23 +364,32 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
-  // Build requested template
-  let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
-
-  const limit = 12;
-  const lines = [];
-  for (let i = 0; i < Math.min(owned.length, limit); i++) {
-    const card = CARD_INDEX()[owned[i].cardId];
+  // Group by Tier
+  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+  
+  owned.forEach(uc => {
+    const card = CARD_INDEX()[uc.cardId];
     if (card) {
-      const tier = String(card.tier);
-      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`);
+      const t = String(card.tier);
+      if (tiers[t]) tiers[t].push(card.cardName);
+    }
+  });
+
+  let finalMsg = `🃏 *Cards | Collection*\n\n`;
+  
+  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
+    if (tiers[t].length > 0) {
+      const label = t === 'S' ? 'S' : t;
+      finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
+      tiers[t].forEach((name, i) => {
+        finalMsg += `*#${i + 1} ➳ ${name}*\n`;
+      });
+      finalMsg += `\n`;
     }
   }
-  
-  let finalMsg = msg + lines.join('\n');
-  finalMsg += `\n\n*[Use ${p} coll <card_index> to see more detail about this card]*`;
+
+  finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
 
   // GIF generation for collection
   const imageUrls = owned.slice(0, 15).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
