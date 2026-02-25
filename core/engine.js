@@ -910,8 +910,11 @@ function hasAuth(authPath) {
 
 function getBackoff() {
   // exponential backoff: 5s, 10s, 20s, 40s, capped at 60s
+  // Added random jitter (+/- 2 seconds) to prevent bot instances from clashing
   retryCount = Math.min(retryCount + 1, 6);
-  return Math.min(60000, 5000 * Math.pow(2, retryCount - 1));
+  const baseDelay = Math.min(60000, 5000 * Math.pow(2, retryCount - 1));
+  const jitter = Math.floor(Math.random() * 4000) - 2000; 
+  return Math.max(1000, baseDelay + jitter);
 }
 // --- Sticker folders by mood ---
 // organized by vibes basically lmao
@@ -2464,6 +2467,15 @@ sock.ev.on('connection.update', async (update) => {
           console.log('🔒 Session logged out. Delete ./auth and re-scan.');
           sendQueue.clear('Logged out');
           return;
+        }
+
+        // Special handling for conflicts (Another instance of the bot is running)
+        if (statusCode === 440 || statusCode === 428) {
+          console.log('⚠️ Connection conflict detected! (StatusCode: ' + statusCode + ')');
+          console.log('💡 Ensure Goten and Joker are not using the exact same session data/device.');
+          
+          // Increase retryCount significantly to slow down the clash
+          retryCount = Math.max(retryCount, 3); 
         }
 
         const delayMs = getBackoff();
