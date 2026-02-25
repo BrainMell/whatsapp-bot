@@ -57,7 +57,7 @@ function loadCardsDB() {
 //  SECTION 2 — CONSTANTS & TABLES
 // ═══════════════════════════════════════════════════════════════════════════
 
-const BASE_MAX   = { '1': 200, '2': 120, '3': 60, '4': 30, '5': 8, '6': 3, 'S': 1 };
+const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1 };
 const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999 };
 
 const TIER_STARS = {
@@ -70,17 +70,20 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S'
 };
 
-// Weighted auto-spawn table — weights sum to 79 (the remaining 21% chance goes to T6 check + T5 guarantee)
+// Updated Weights for T1-T4
 const SPAWN_WEIGHTS = [
-  { tier: '1', w: 30 },
-  { tier: '2', w: 20 },
-  { tier: '3', w: 15 },
-  { tier: '4', w: 10 },
-  { tier: '5', w:  4 },
+  { tier: '1', w: 20 },
+  { tier: '2', w: 15 },
+  { tier: '3', w: 10 },
+  { tier: '4', w:  8 },
 ];
 
-// T6 = once every 3–4 days avg = once per ~168 half-hour intervals
-const T6_PER_INTERVAL = 1 / 168;
+// Special Spawns (Global intervals)
+// 30 min interval = 48 intervals/day
+// T5: 1 every 3 days = 1 every 144 intervals
+const T5_PER_INTERVAL = 1 / 144;
+// T6: 1 every 2 weeks = 1 every 672 intervals
+const T6_PER_INTERVAL = 1 / 672;
 
 // Cards expire if not claimed within this window
 const CLAIM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
@@ -159,10 +162,15 @@ async function loadRoles() {
 function ensureTimerRunning() {
   const inst = getInst();
   if (!inst.spawnTimer && inst.activeGroups.size > 0) {
+    let groupIndex = 0;
     inst.spawnTimer = setInterval(() => {
-      for (const gid of inst.activeGroups) {
-        doSpawn(null, null, false, gid);
-      }
+      const groups = Array.from(inst.activeGroups);
+      if (groups.length === 0) return;
+      
+      // Global spawn: pick ONE group from the rotation
+      const gid = groups[groupIndex % groups.length];
+      doSpawn(null, null, false, gid);
+      groupIndex++;
     }, 30 * 60 * 1000);
   }
 }
@@ -192,37 +200,17 @@ function calcPrice(tier, totalSpawned, maxCopies) {
 //  SECTION 5 — CARD CAPTION BUILDER
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
+function buildCardDetailCaption(card, uc, stat, location = 'Collection', index = null) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   const stars  = TIER_STARS[tier]  || '✦';
   
-  // Handling for Global Info view (no ownership data)
-  const maxCopies = stat?.maxCopies || BASE_MAX[tier] || 200;
-  let rarityLabel = 'UNKNOWN';
-  let rarityEmoji = '❓';
-  let copyInfo = '—';
-  let ownerInfo = '—';
   let locStr = `📦 *${location}*`;
-  let valueStr = '—';
+  if (index !== null) locStr += ` (#${index})`;
 
   if (uc) {
-    // Owned card logic
-    const rarity = getRarityLabel(uc.copyNumber, maxCopies);
-    rarityLabel = rarity.label;
-    rarityEmoji = rarity.emoji;
-    copyInfo = `#${uc.copyNumber} / ${maxCopies}`;
-    ownerInfo = `@${uc.userId.split('@')[0]}`;
-    const price = calcPrice(card.tier, uc.copyNumber, maxCopies);
-    valueStr = `${ZENI()}${price.toLocaleString()}`;
-
     if (uc.inMainDeck) locStr = `🎴 *Main Deck* (Slot #${uc.mainDeckSlot})`;
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
-  } else {
-    // Global info view logic
-    locStr = '🌐 Global Database';
-    const basePrice = BASE_PRICE[tier] || 10;
-    valueStr = `${ZENI()}${basePrice.toLocaleString()} (Base)`;
   }
 
   return (
@@ -231,17 +219,11 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection') {
 ╚═══════════════════════════╝
 
 🏷️  *Name:* ${card.cardName}
-👤  *Owner:* ${ownerInfo}
 📺  *Series:* ${card.animeName}
-🗯️  *Quote:* _"${card.description || '...'}"_
-
 ${stars}  *${label}*  ${stars}
-💎  *Rarity:* ${rarityEmoji} ${rarityLabel}
-📋  *Edition:* ${copyInfo}
 🎨  *Artist:* ${card.creator || 'Unknown'}
 
 📍  *Location:* ${locStr}
-🪙  *Value:* ${valueStr}
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
@@ -257,10 +239,8 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 ▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
-🗯️  Description ›  "${card.description || 'No description available.'}"
 ✦  ${label}  ✦
 🎨  Art ›  ${card.creator || 'Unknown'}
-🪙  Value ›  ${ZENI()}${price.toLocaleString()}
 ▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
 ⌨️  Type  ${P()} claim ${card.id}  to collect
@@ -280,6 +260,8 @@ function cardLine(index, card, uc, stat) {
 
 function pickSpawnTier() {
   if (Math.random() < T6_PER_INTERVAL) return '6';
+  if (Math.random() < T5_PER_INTERVAL) return '5';
+  
   const total = SPAWN_WEIGHTS.reduce((s, e) => s + e.w, 0);
   let roll = Math.random() * total;
   for (const { tier, w } of SPAWN_WEIGHTS) {
@@ -515,7 +497,12 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       // Find by list index (available cards only)
       const index = parseInt(input);
       if (!isNaN(index)) {
-        const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+        // Only show cards that are NOT in a main deck and NOT in a custom deck
+        const owned = await UserCard.find({ 
+          userId: senderJid, 
+          inMainDeck: false, 
+          inCustomDeck: false 
+        }).sort({ createdAt: 1 });
         uc = owned[index - 1];
       }
     }
@@ -524,7 +511,8 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const card = CARD_INDEX[uc.cardId];
       if (!card) return reply('❌ Card data not found.');
       const stat = await CardStat.findOne({ cardId: uc.cardId });
-      const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
+      const index = !isNaN(parseInt(input)) ? parseInt(input) : null;
+      const caption = buildCardDetailCaption(card, uc, stat, 'Collection', index);
       
       try {
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 10000 });
@@ -712,16 +700,21 @@ async function cmdSearchCard(args, reply) {
   if (!matches.length) return reply(`❌ No cards matching "*${name}*"${tierNum ? ` Tier ${tierNum}` : ''}.`);
 
   let msg = `▬▬▬▬▬▬▬▬▬▬\n   🔐  *CARD SEARCH*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
-  for (const card of matches.slice(0, 10)) {
-    const stat    = await CardStat.findOne({ cardId: card.id });
-    const spawned = stat?.totalSpawned  || 0;
-    const maxCop  = stat?.maxCopies     || BASE_MAX[String(card.tier)] || 200;
-    const owners  = stat?.uniqueOwners  || 0;
+  for (const card of matches.slice(0, 5)) {
     msg += `${TIER_STARS[String(card.tier)]}  *${card.cardName}*  _(${card.animeName})_\n`;
-    msg += `   🆔 \`${card.id}\`  •  🎨 ${card.creator || 'Unknown'}\n`;
-    msg += `   📋 ${spawned}/${maxCop} copies  •  👤 ${owners} owner${owners !== 1 ? 's' : ''}\n\n`;
+    
+    // Find all copies and their owners
+    const copies = await UserCard.find({ cardId: card.id }).sort({ copyNumber: 1 });
+    if (copies.length === 0) {
+      msg += `   _No copies owned yet._\n\n`;
+    } else {
+      for (const cp of copies) {
+        msg += `   • Copy *#${cp.copyNumber}* › @${cp.userId.split('@')[0]}\n`;
+      }
+      msg += `\n`;
+    }
   }
-  if (matches.length > 10) msg += `_...and ${matches.length - 10} more results. Narrow your search._`;
+  if (matches.length > 5) msg += `_...and ${matches.length - 5} more results. Narrow your search._`;
   return reply(msg);
 }
 
@@ -1224,7 +1217,7 @@ async function cmdCollector(args, reply) {
 // ─── 7.25  .g series <name>  (mod only) ──────────────────────────────────────
 async function cmdSeries(args, senderJid, reply) {
   const inst = getInst();
-  if (!inst.modJids.has(senderJid) && senderJid !== inst.ownerJid) {
+  if (!inst.modJids.has(senderJid) && senderJid !== inst.ownerJid && !inst.adminJids.has(senderJid)) {
     return reply('❌ This command is for moderators only.');
   }
   const seriesName = args.join(' ').trim();
@@ -1233,26 +1226,79 @@ async function cmdSeries(args, senderJid, reply) {
   const cards = ALL_CARDS.filter(c => c.animeName.toLowerCase().includes(seriesName.toLowerCase()));
   if (!cards.length) return reply(`❌ No series found matching *"${seriesName}"*.`);
 
+  const actualSeries = cards[0].animeName;
   const tierOrder = { S: 0, '6': 1, '5': 2, '4': 3, '3': 4, '2': 5, '1': 6 };
   cards.sort((a, b) => (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9));
 
-  const actualSeries = cards[0].animeName;
   let msg = `▬▬▬▬▬▬▬▬▬▬\n   📋  *${actualSeries.toUpperCase()}*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  msg += `*Total Cards:* ${cards.length}\n`;
+  
   let currentTier = null;
   for (const card of cards) {
     const t = String(card.tier);
-    if (t !== currentTier) { msg += `\n${TIER_STARS[t]}  *${TIER_LABEL[t]}*\n`; currentTier = t; }
-    msg += `  •  \`${card.id}\`  ${card.cardName}  _by ${card.creator || 'Unknown'}_\n`;
+    if (t !== currentTier) {
+      msg += `\n${TIER_STARS[t]}  *${TIER_LABEL[t]}*\n`;
+      currentTier = t;
+    }
+    msg += `  • ${card.cardName} (\`${card.id}\`)\n`;
   }
-  msg += `\n_${cards.length} card${cards.length !== 1 ? 's' : ''} total_`;
+  
   return reply(msg);
+}
+
+// ─── 7.32  .g delete <card-id>  (mod only) ──────────────────────────────────
+async function cmdDeleteCard(args, senderJid, reply) {
+  const inst = getInst();
+  if (!inst.modJids.has(senderJid) && senderJid !== inst.ownerJid && !inst.adminJids.has(senderJid)) {
+    return reply('❌ This command is for moderators only.');
+  }
+
+  const cardId = args[0];
+  if (!cardId) return reply(`❌ Usage: *${P()} delete <card-id>*\nExample: \`${P()} delete 1-00421\``);
+
+  const uc = await UserCard.findOne({ cardId });
+  if (!uc) return reply(`❌ Card \`${cardId}\` not found in any collection.`);
+
+  const cardName = CARD_INDEX[uc.cardId]?.cardName || uc.cardId;
+  await UserCard.deleteOne({ _id: uc._id });
+
+  // Update global stats
+  const stat = await CardStat.findOne({ cardId: uc.cardId });
+  if (stat) {
+    stat.totalCirculation = Math.max(0, stat.totalCirculation - 1);
+    await stat.save();
+  }
+
+  return reply(`🗑️  *CARD DELETED*\n\nSuccessfully removed *${cardName}* (\`${cardId}\`) from @${uc.userId.split('@')[0]}'s collection.`, { mentions: [uc.userId] });
+}
+
+// ─── 7.33  .g cancel auction  (owner/mod only) ─────────────────────────────
+async function cmdCancelAuctionAdmin(senderJid, reply) {
+  const inst = getInst();
+  if (!inst.modJids.has(senderJid) && senderJid !== inst.ownerJid && !inst.adminJids.has(senderJid)) {
+    return reply('❌ This command is for moderators only.');
+  }
+
+  const auction = await CardMarket.findOne({ status: 'active', type: 'auction' });
+  if (!auction) return reply('❌ No active auction to cancel.');
+
+  auction.status = 'cancelled';
+  await auction.save();
+
+  const uc = await UserCard.findById(auction.userCardId);
+  if (uc) {
+    uc.inAuction = false;
+    await uc.save();
+  }
+
+  return reply(`🛑  *AUCTION CANCELLED*\n\nThe current auction for *${CARD_INDEX[auction.cardId]?.cardName || auction.cardId}* has been terminated by a moderator.`);
 }
 
 // ─── 7.26  .g spawn | <name or id> | <tier>  (owner/mod DMs only) ─────────
 async function cmdOwnerSpawn(rawArgs, senderJid, chatId, reply) {
   const inst = getInst();
   // mods can spawn too
-  if (senderJid !== inst.ownerJid && !inst.modJids.has(senderJid)) {
+  if (senderJid !== inst.ownerJid && !inst.modJids.has(senderJid) && !inst.adminJids.has(senderJid)) {
     return reply('❌ This command is exclusive to the server owner and moderators.');
   }
 
@@ -1283,14 +1329,14 @@ Examples:
   if (inst.activeGroups.size === 0) return reply(`❌ Card system is not ON in any group. Turn it on first with *${P()} cards on* in the target group.`);
 
   // Determine target group:
-  // 1. If in a group and cards are ON there, use it.
-  // 2. Otherwise, use the first active group found.
   let targetGroup = null;
   if (chatId.endsWith('@g.us')) {
-    if (inst.activeGroups.has(chatId)) {
-      targetGroup = chatId;
-    } else {
-      return reply(`❌ Card system is not ON in this group. Turn it on first with *${P()} cards on*.`);
+    targetGroup = chatId;
+    // Auto-enable if not active? User didn't ask but it helps.
+    if (!inst.activeGroups.has(chatId)) {
+        inst.activeGroups.add(chatId);
+        await saveActiveGroups();
+        ensureTimerRunning();
     }
   } else {
     targetGroup = [...inst.activeGroups][0];
@@ -1300,9 +1346,11 @@ Examples:
 
   const result = await doSpawn(card.id, String(card.tier), true, targetGroup);
   if (result) {
-    if (!chatId.endsWith('@g.us')) {
-      return reply(`✨  Spawned *${result.card.cardName}*  (T${result.card.tier})  copy *#${result.copyNumber}*  →  sent to group: ${targetGroup.split('@')[0]}`);
+    const groupName = targetGroup.split('@')[0];
+    if (chatId !== targetGroup) {
+      return reply(`✨ Spawned *${result.card.cardName}* (T${result.card.tier}) → sent to group: ${groupName}`);
     }
+    // If we are in the target group, doSpawn already sent the message.
   } else {
     return reply('❌ Spawn failed. Check that the card image URL is still live.');
   }
@@ -1329,7 +1377,7 @@ async function cmdShowDeckDetail(args, senderJid, reply, chatId) {
   
   const card = CARD_INDEX[uc.cardId];
   const stat = await CardStat.findOne({ cardId: uc.cardId });
-  const caption = buildCardDetailCaption(card, uc, stat, deckName);
+  const caption = buildCardDetailCaption(card, uc, stat, deckName, slotNum);
 
   try {
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
@@ -1477,9 +1525,14 @@ async function cmdMergeAll(senderJid, reply) {
  * Call this from engine.js inside your messages.upsert handler,
  * BEFORE falling through to other commands.
  */
-async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin }) {
+async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
   const inst   = getInst();
-  const reply  = (text) => inst.sock_ref.sendMessage(chatId, { text });
+  const reply  = (text, options = {}) => inst.sock_ref.sendMessage(chatId, { text, ...options });
+  
+  // Sync mods from engine (overrideUsers)
+  if (isMod && !inst.modJids.has(senderJid)) {
+    inst.modJids.add(senderJid);
+  }
   const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || null;
 
   // Helper: check starts with prefix + command word (flexible space)
@@ -1561,7 +1614,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   // ── Custom decks ─────────────────────────────────────────────────────────
   if (has('create deck') || is('create deck')) {
-    if (!isOwner && !inst.adminJids.has(senderJid)) return reply('❌ Custom deck creation is admin-only.'), true;
+    if (!isOwner && !inst.adminJids.has(senderJid) && !inst.modJids.has(senderJid)) return reply('❌ Custom deck creation is admin-only.'), true;
     const name = arg(3).join(' ');
     if (!name) return reply(`❌ Usage: *${P()} create deck <name>*\nExample: \`${P()} create deck My Deck\``), true;
     return (await cmdCreateDeck(name, senderJid, reply)), true;
@@ -1574,6 +1627,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   // ── Discovery ────────────────────────────────────────────────────────────
   if (has('cltr'))    return (await cmdCollector(arg(2), reply)), true;
   if (has('series'))  return (await cmdSeries(arg(2), senderJid, reply)), true;
+  if (has('delete'))  return (await cmdDeleteCard(arg(2), senderJid, reply)), true;
+  if (is('cancel auction')) return (await cmdCancelAuctionAdmin(senderJid, reply)), true;
 
   // ── Owner spawn (DMs only) ────────────────────────────────────────────────
   if (has('spawn') || is('spawn')) {

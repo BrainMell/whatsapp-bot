@@ -271,7 +271,7 @@ function getBaseStats(userId, classId) {
     }
     
     baseStats.maxHp = baseStats.hp;
-    baseStats.maxEnergy = 100 + (levelsGained * 10) + (Math.floor(baseStats.mag * 2));
+    baseStats.maxEnergy = 100 + (levelsGained * 15) + (Math.floor(baseStats.mag * 3));
     baseStats.evasion = Math.min(45, (baseStats.spd * 0.12)); // Increased evasion cap
     baseStats.dmgReduction = Math.min(80, (baseStats.def * 0.55)); // Increased DR cap
     baseStats.rareDropRate = (baseStats.luck * 0.06);

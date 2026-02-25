@@ -2442,8 +2442,8 @@ sock.ev.on('connection.update', async (update) => {
         // Initialize Card System
         cardSystem.init(
           sock,
-          ['233201487480@s.whatsapp.net', '251453323092189@s.whatsapp.net'], // Admins
-          ['233201487480@s.whatsapp.net'], // Mods
+          [], // Admins (init empty, will load from DB)
+          [], // Mods (init empty, will load from DB)
           '233201487480@s.whatsapp.net' // Owner
         );
       }
@@ -2776,6 +2776,7 @@ We are happy to have you here.
             economy,        // economy module
             isOwner,        // boolean
             senderIsAdmin,  // boolean
+            isMod: overrideUsers.has(senderJid) // added mod flag
         });
         if (cardHandled) return; // stop further processing if handled by cards
         // ───────────────────────────────────────────
