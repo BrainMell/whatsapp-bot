@@ -194,9 +194,9 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
   }
   return (
-`╔═══════════════════════════╗
+`╔═════════════════╗
       🎴  *CARD DETAIL*
-╚═══════════════════════════╝
+╚═════════════════╝
 
 🏷️  *Name:* ${card.cardName}
 📺  *Series:* ${card.animeName}
@@ -205,7 +205,7 @@ ${stars}  *${label}*  ${stars}
 
 📍  *Location:* ${locStr}
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -622,14 +622,16 @@ async function cmdAccept(senderJid, reply, chatId) {
   const inst = getInst();
   const key = `${chatId}_${senderJid}`;
   const pending = inst.pendingBurns.get(key);
-  if (!pending) return; // Silent if no pending
+  if (!pending) return false;
 
   try {
     await UserCard.findByIdAndDelete(pending.ucId);
     inst.pendingBurns.delete(key);
-    return reply(`🔥 *ASHES TO ASHES...*\n\n*${pending.cardName}* has been deleted from your collection forever.`);
+    await reply(`🔥 *ASHES TO ASHES...*\n\n*${pending.cardName}* has been deleted from your collection forever.`);
+    return true;
   } catch (err) {
-    return reply('❌ Failed to delete card.');
+    await reply('❌ Failed to delete card.');
+    return true; // handled but failed
   }
 }
 
@@ -638,8 +640,10 @@ async function cmdDecline(senderJid, reply, chatId) {
   const key = `${chatId}_${senderJid}`;
   if (inst.pendingBurns.has(key)) {
     inst.pendingBurns.delete(key);
-    return reply('✅ *Burn cancelled.* Your card is safe... for now.');
+    await reply('✅ *Burn cancelled.* Your card is safe... for now.');
+    return true;
   }
+  return false;
 }
 
 async function cmdCltr(reply, chatId, args = []) {
@@ -782,13 +786,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   }
 
   if (lowerTxt === `${p}accept`) {
-    await cmdAccept(senderJid, reply, chatId);
-    return true;
+    return await cmdAccept(senderJid, reply, chatId);
   }
 
   if (lowerTxt === `${p}decline`) {
-    await cmdDecline(senderJid, reply, chatId);
-    return true;
+    return await cmdDecline(senderJid, reply, chatId);
   }
 
   if (lowerTxt.startsWith(`${p}spawn`) || lowerTxt.startsWith(`${p} spawn`)) {

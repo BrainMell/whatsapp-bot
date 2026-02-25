@@ -29,6 +29,22 @@ function getDuel(chatId) {
     return activeDuels.get(chatId);
 }
 
+function getInvite(chatId, targetJid) {
+    const invite = duelInvites.get(chatId);
+    if (!invite) return null;
+    if (invite.target === targetJid) return invite;
+    return null;
+}
+
+function declineChallenge(chatId, targetJid) {
+    const invite = duelInvites.get(chatId);
+    if (invite && invite.target === targetJid) {
+        duelInvites.delete(chatId);
+        return true;
+    }
+    return false;
+}
+
 // ==========================================
 // 🗡️ CHALLENGE SYSTEM
 // ==========================================
@@ -435,7 +451,9 @@ setInterval(() => {
 
 module.exports = {
     getDuel,
+    getInvite,
     challengePlayer,
     acceptChallenge,
+    declineChallenge,
     handlePvPAction,
 };
