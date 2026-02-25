@@ -10232,15 +10232,16 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
     return;
 }
 
-  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} chess `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} chess` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} c `)) {
-      const args = lowerTxt.split(' ').slice(1);
-      const subCmd = args[0]?.toLowerCase();
-      
-      // Explicitly allow stopping/resetting even if state detection is weird
-      if (['stop', 'end', 'reset', 'force-reset', 'guide'].includes(subCmd)) {
-          return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
+  const prefix = botConfig.getPrefix().toLowerCase();
+  if (lowerTxt.startsWith(`${prefix} chess`) || lowerTxt.startsWith(`${prefix} c `)) {
+      // Correctly extract subcommands by removing the 'chess' or 'c' trigger
+      let rawArgs = "";
+      if (lowerTxt.startsWith(`${prefix} chess`)) {
+          rawArgs = lowerTxt.substring(`${prefix} chess`.length).trim();
+      } else {
+          rawArgs = lowerTxt.substring(`${prefix} c `.length).trim();
       }
-      
+      const args = rawArgs.split(' ').filter(a => a);
       return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
   }
 

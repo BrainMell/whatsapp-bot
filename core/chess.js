@@ -149,6 +149,12 @@ function updateChessScore(playerJid, result) {
 
 async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const prefix = botConfig.getPrefix();
+    
+    // Safety check: if first arg is 'chess', shift it (prevents parsing mismatch)
+    if (args[0]?.toLowerCase() === 'chess') {
+        args.shift();
+    }
+    
     const cmd = args[0]?.toLowerCase();
     
     let mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -360,14 +366,17 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
     // 8. STOP / END / RESET
     if (cmd === 'stop' || cmd === 'end' || cmd === 'reset' || cmd === 'force-reset') {
-        const state = getGame(chatId);
+        const activeGames = getActiveGames();
+        const state = activeGames.get(chatId);
         
-        // ALLOW RESET/STOP if user is player, or if it's a force reset
-        // We normalize JIDs to ensure 'stop' always works for the players
+        // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
-        
-        if (isPlayer || cmd === 'reset' || cmd === 'force-reset') {
+        const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
+
+        if (isPlayer || cmd === 'reset' || cmd === 'force-reset' || isAdmin) {
+            console.log(`[Chess] Termination triggered in ${chatId} by ${senderJid} (cmd: ${cmd})`);
             deleteGame(chatId);
+            activeGames.delete(chatId); // Double-ensure memory is wiped
             return sock.sendMessage(chatId, { text: botMarker + "🛑 Chess game has been terminated." });
         } else {
             return sock.sendMessage(chatId, { text: botMarker + "❌ Only players can stop the game. Use `.chess reset` to force clear." });
