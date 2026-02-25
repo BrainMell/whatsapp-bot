@@ -428,7 +428,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
-  // Build flat list with Bullet Design (Absolute Index)
+  // Build flat list with Concise Design
   let msg = `🃏 *Cards | Collection*\n`;
   msg += `━━━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total Cards:* ${owned.length}\n\n`;
@@ -437,8 +437,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   for (let i = 0; i < owned.length; i++) {
     const card = CARD_INDEX()[owned[i].cardId];
     if (card) {
-      const tier = String(card.tier);
-      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`);
+      lines.push(cardLine(i + 1, card, owned[i]));
     }
   }
 
@@ -448,17 +447,17 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
     if (gifBuffer) {
       // Send first page with GIF
-      const firstChunk = msg + lines.slice(0, 10).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      const firstChunk = msg + lines.slice(0, 20).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
       await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
           gifPlayback: true, 
           caption: firstChunk 
       });
       
-      // If more than 10, send others as text chunks
-      if (lines.length > 10) {
-        for (let s = 10; s < lines.length; s += 20) {
-          await reply(lines.slice(s, s + 20).join('\n'));
+      // If more than 20, send others as text chunks
+      if (lines.length > 20) {
+        for (let s = 20; s < lines.length; s += 30) {
+          await reply(lines.slice(s, s + 30).join('\n'));
         }
       }
       return;
@@ -466,9 +465,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   // Fallback text-only pagination
-  for (let s = 0; s < lines.length; s += 15) {
-    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 15).join('\n');
-    if (s + 15 >= lines.length) {
+  for (let s = 0; s < lines.length; s += 30) {
+    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 30).join('\n');
+    if (s + 30 >= lines.length) {
        chunk += `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
     }
     await reply(chunk);
@@ -644,6 +643,60 @@ async function cmdDecline(senderJid, reply, chatId) {
   }
 }
 
+async function cmdCltr(reply, chatId, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) {
+    return reply(`❌ *Usage:* \`${p} cltr <series_name>\`\n\nExample: \`${p} cltr fullmetal\``);
+  }
+
+  try {
+    // 1. Find all cards in this series
+    const seriesCards = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query));
+    if (seriesCards.length === 0) {
+      return reply(`🔍 No cards found for series: *"${query}"*`);
+    }
+
+    const cardIds = seriesCards.map(c => c.id);
+
+    // 2. Aggregate owners
+    // We group by userId and count how many documents they have with these cardIds
+    const collectors = await UserCard.aggregate([
+      { $match: { cardId: { $in: cardIds } } },
+      { $group: { _id: "$userId", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    if (collectors.length === 0) {
+      return reply(`📭 No one owns any cards from *"${query}"* yet.`);
+    }
+
+    // 3. Format Message
+    const topSeriesName = seriesCards[0].animeName;
+    let msg = `👑 *Top ${topSeriesName} Collectors* 👑\n\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    const medals = ['🥇', '🥈', '🥉'];
+    const mentions = [];
+
+    collectors.forEach((col, i) => {
+      const emoji = medals[i] || '🔹';
+      msg += `${emoji} *${i + 1}. @${col._id.split('@')[0]}*\n`;
+      msg += `   📊 ${col.count} card(s)\n\n`;
+      mentions.push(col._id);
+    });
+
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🔍 Searched: "${query}"`;
+
+    return reply(msg, { mentions });
+  } catch (err) {
+    console.error('[Cltr] Error:', err);
+    return reply('❌ Failed to fetch top collectors.');
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 5 — ROUTER & INIT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -702,6 +755,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (lowerTxt.startsWith(`${p}deck`) || lowerTxt.startsWith(`${p} deck`)) {
     const deckArgs = lowerTxt.startsWith(`${p} deck`) ? parts.slice(2) : parts.slice(1);
     await cmdDeck(senderJid, reply, chatId, deckArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}cltr`) || lowerTxt.startsWith(`${p} cltr`)) {
+    const cltrArgs = lowerTxt.startsWith(`${p} cltr`) ? parts.slice(2) : parts.slice(1);
+    await cmdCltr(reply, chatId, cltrArgs);
     return true;
   }
 
