@@ -367,24 +367,43 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR COLLECTION");
     if (gifBuffer) {
-      let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+      let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
+      msg += `━━━━━━━━━━━━━━━━━\n`;
+      msg += `📦 *Total Cards:* ${owned.length}\n\n`;
+
       const lines = [];
-      for (let i = 0; i < owned.length; i++) {
+      for (let i = 0; i < Math.min(owned.length, 20); i++) {
         const card = CARD_INDEX()[owned[i].cardId];
-        if (card) lines.push(cardLine(i + 1, card, owned[i]));
+        if (card) {
+          const tier = String(card.tier);
+          lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`);
+        }
       }
-      return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg + lines.slice(0, 20).join('\n') + (lines.length > 20 ? '\n...' : '') });
+      
+      msg += lines.join('\n');
+      msg += `\n\n*[Use ${botConfig.getPrefix()} coll <card_index> to see more detail about this card]*`;
+      
+      return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
     }
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
   const lines = [];
   for (let i = 0; i < owned.length; i++) {
     const card = CARD_INDEX()[owned[i].cardId];
-    if (card) lines.push(cardLine(i + 1, card, owned[i]));
+    if (card) {
+      const tier = String(card.tier);
+      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`);
+    }
   }
-  for (let s = 0; s < lines.length; s += 30) {
-    await reply((s === 0 ? msg : '') + lines.slice(s, s + 30).join('\n'));
+  for (let s = 0; s < lines.length; s += 20) {
+    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 20).join('\n');
+    if (s + 20 >= lines.length) {
+       chunk += `\n\n*[Use ${botConfig.getPrefix()} coll <card_index> to see more detail about this card]*`;
+    }
+    await reply(chunk);
   }
 }
 
@@ -416,21 +435,36 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR MAIN DECK");
     if (gifBuffer) {
-        let msg = `▬▬▬▬▬▬▬▬▬▬\n   🎴  *YOUR MAIN DECK*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+        let msg = `🎴 *Deck | Main Deck* 🎴\n`;
+        msg += `━━━━━━━━━━━━━━━━━\n`;
+        msg += `📦 *Total Cards:* ${deck.length}\n\n`;
+        
         const lines = deck.map(uc => {
             const card = CARD_INDEX()[uc.cardId];
-            return `  Slot #${uc.mainDeckSlot} ➳ ${card ? card.cardName : 'Unknown'}`;
+            if (!card) return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* Unknown\n   ✨ *Tier:* ?\n━━━━━━━━━━━━━━━━━`;
+            const tier = String(card.tier);
+            return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`;
         });
-        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg + lines.join('\n') });
+        
+        msg += lines.join('\n');
+        msg += `\n\n*[Use ${botConfig.getPrefix()} deck <card_index> to see more detail about this card]*`;
+        
+        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
     }
   }
 
-  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🎴  *YOUR MAIN DECK*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  let msg = `🎴 *Deck | Main Deck* 🎴\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${deck.length}\n\n`;
   const lines = deck.map(uc => {
     const card = CARD_INDEX()[uc.cardId];
-    return `  Slot #${uc.mainDeckSlot} ➳ ${card ? card.cardName : 'Unknown'}`;
+    if (!card) return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* Unknown\n   ✨ *Tier:* ?\n━━━━━━━━━━━━━━━━━`;
+    const tier = String(card.tier);
+    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`;
   });
-  return reply(msg + lines.join('\n'));
+  msg += lines.join('\n');
+  msg += `\n\n*[Use ${botConfig.getPrefix()} deck <card_index> to see more detail about this card]*`;
+  return reply(msg);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
