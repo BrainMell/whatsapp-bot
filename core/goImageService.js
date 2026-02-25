@@ -138,6 +138,23 @@ class GoImageService {
     }
 
     /*
+     * Generate Card Burning GIF
+     */
+    async generateBurnGif(imageUrl) {
+        try {
+            const response = await this.client.post('/api/cards/burn', {
+                imageUrl: imageUrl
+            }, {
+                responseType: 'arraybuffer'
+            });
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('GoService Card Burn Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
      * Search YouTube (Go Service)
      */
     async searchYoutube(query) {
