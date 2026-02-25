@@ -234,17 +234,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
 
   return (
-`▬▬▬▬▬▬▬▬▬▬
+`▬▬▬▬▬▬▬▬▬▬▬▬▬
 🎴  A CARD HAS APPEARED!
-▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
 ✦  ${label}  ✦
 🎨  Art ›  ${card.creator || 'Unknown'}
-▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
 ⌨️  Type  ${P()} claim ${card.id}  to collect
-▬▬▬▬▬▬▬▬▬▬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
