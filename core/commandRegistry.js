@@ -11,7 +11,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'decline', desc: 'Decline any pending invitations.', usage: 'decline' }
   ],
   STICKERS: [
-    { cmd: 's', desc: 'Create a sticker from an image/video OR search for images to stickerize.', usage: 's [count] [query]' },
+    { cmd: 's', desc: 'Create a sticker from an image/video (use -c to auto-crop) OR search for images to stickerize.', usage: 's [-c] OR s [count] [query]' },
     { cmd: 'toimg', desc: 'Convert a sticker back into an image.', usage: 'toimg (reply to sticker)' },
     { cmd: 'tovid', desc: 'Convert an animated sticker back into a video.', usage: 'tovid (reply to sticker)' }
   ],
