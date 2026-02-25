@@ -54,7 +54,8 @@ function createGame(playerW, playerB, chatId, bet = 0) {
         startTime: Date.now(),
         lastMove: null,
         status: 'active',
-        fen: game.fen() // Store current FEN
+        fen: game.fen(), // Store current FEN
+        history: [game.fen()]
     };
     activeGames.set(chatId, state);
     saveActiveGames(); // Persist immediately
@@ -106,67 +107,77 @@ function updateChessScore(playerJid, result) {
 async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const prefix = botConfig.getPrefix();
     const cmd = args[0]?.toLowerCase();
-    const mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    
+    // Get mentioned JIDs or the participant of a replied message
+    let mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    const quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
+    if (mentionedJids.length === 0 && quotedParticipant && quotedParticipant !== sock.user.id) {
+        mentionedJids = [quotedParticipant];
+    }
+
+    const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'stop', 'end', 'reset', 'fen', 'undo', 'draw'];
 
     // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
-    if (!cmd || cmd === 'challenge' || mentionedJids.length > 0) {
-        // If cmd is 'move' or 'resign' etc, skip challenge logic
-        const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help'];
-        if (reserved.includes(cmd)) {
-            // fall through
-        } else {
-            if (activeGames.has(chatId)) {
-                return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or resign." });
-            }
+    if (!cmd || cmd === 'challenge' || (mentionedJids.length > 0 && !reserved.includes(cmd))) {
+        if (activeGames.has(chatId)) {
+            return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or use `" + prefix + " chess stop` to end it." });
+        }
 
-            if (mentionedJids.length === 0) {
-                return sock.sendMessage(chatId, { text: botMarker + `♟️ *CHESS SYSTEM* ♟️\n\n` +
-                    `• \`${prefix} chess @user [bet]\` - Challenge\n` +
-                    `• \`${prefix} move <move>\` - Make move\n` +
-                    `• \`${prefix} chess board\` - See board\n` +
-                    `• \`${prefix} chess moves\` - Legal moves\n` +
-                    `• \`${prefix} chess resign\` - Forfeit\n` +
-                    `• \`${prefix} chess stats\` - Your score\n` +
-                    `• \`${prefix} chess top\` - Leaderboard` });
-            }
+        if (mentionedJids.length === 0) {
+            return sock.sendMessage(chatId, { text: botMarker + `♟️ *CHESS SYSTEM* ♟️\n\n` +
+                `• \`${prefix} chess @user [bet]\` - Challenge\n` +
+                `• \`${prefix} move <move>\` - Make move (e.g., e4, Nf3)\n` +
+                `• \`${prefix} chess board\` - See board\n` +
+                `• \`${prefix} chess help\` - Full command list` });
+        }
 
-            const opponentJid = mentionedJids[0];
-            if (opponentJid === senderJid) {
-                return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
-            }
+        const opponentJid = mentionedJids[0];
+        if (opponentJid === senderJid) {
+            return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
+        }
 
-            // Bet can be 2nd or 3rd arg depending on if 'challenge' word was used
-            let betStr = cmd === 'challenge' ? args[2] : args[1];
-            const bet = parseInt(betStr?.replace(/,/g, '')) || 0;
+        // Bet can be 2nd or 3rd arg depending on if 'challenge' word was used
+        let betStr = cmd === 'challenge' ? args[2] : args[1];
+        if (!betStr && mentionedJids.length > 0 && cmd !== 'challenge') {
+             betStr = args[1];
+        }
+        const bet = parseInt(betStr?.replace(/,/g, '')) || 0;
 
-            if (bet > 0) {
-                if (economy.getBalance(senderJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ You don't have enough Zeni for this bet!" });
-                if (economy.getBalance(opponentJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ Your opponent doesn't have enough Zeni!" });
-            }
+        if (bet > 0) {
+            if (economy.getBalance(senderJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ You don't have enough Zeni for this bet!" });
+            if (economy.getBalance(opponentJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ Your opponent doesn't have enough Zeni!" });
+        }
 
-            const state = createGame(senderJid, opponentJid, chatId, bet);
-            
-            const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
-                `⚪ *White:* @${normalizeJid(senderJid)}\n` +
-                `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
-                `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
-                `👉 @${normalizeJid(senderJid)} to move!\n` +
-                `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
+        const state = createGame(senderJid, opponentJid, chatId, bet);
+        
+        const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
+            `⚪ *White:* @${normalizeJid(senderJid)}\n` +
+            `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
+            `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
+            `👉 @${normalizeJid(senderJid)} to move!\n` +
+            `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
 
-            const imageBuffer = await renderBoard(state.chess.fen());
+        const imageBuffer = await renderBoard(state.chess.fen());
+        if (imageBuffer) {
             await sock.sendMessage(chatId, { 
-                image: imageBuffer || Buffer.alloc(0), 
+                image: imageBuffer, 
                 caption, 
                 contextInfo: { mentionedJid: [senderJid, opponentJid] } 
             });
-            return;
+        } else {
+            const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+            await sock.sendMessage(chatId, { 
+                text: caption + "\n\n" + asciiBoard, 
+                contextInfo: { mentionedJid: [senderJid, opponentJid] } 
+            });
         }
+        return;
     }
 
     // 2. MOVE: .j chess move <notation> or .j move <notation>
     if (cmd === 'move' || cmd === 'm') {
         const state = getGame(chatId);
-        if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game! Challenge someone with `.j chess @user`" });
+        if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game! Challenge someone with `" + prefix + " chess @user`" });
 
         const isWhiteTurn = state.chess.turn() === 'w';
         const currentPlayer = isWhiteTurn ? state.playerW : state.playerB;
@@ -182,8 +193,10 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             const move = state.chess.move(moveStr);
             if (!move) throw new Error("Invalid move");
 
-            state.fen = state.chess.fen(); // Update FEN in state
-            saveActiveGames(); // Persist move
+            state.fen = state.chess.fen(); 
+            if (!state.history) state.history = [];
+            state.history.push(state.fen);
+            saveActiveGames(); 
 
             let resultMsg = "";
             let gameEnded = false;
@@ -213,18 +226,24 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
                     economy.removeMoney(isWhiteTurn ? state.playerB : state.playerW, state.bet);
                 }
                 deleteGame(chatId);
-                saveActiveGames();
             } else if (gameEnded) {
                 deleteGame(chatId);
-                saveActiveGames();
             }
 
             const imageBuffer = await renderBoard(state.chess.fen(), move.from + move.to);
-            await sock.sendMessage(chatId, { 
-                image: imageBuffer || Buffer.alloc(0), 
-                caption, 
-                contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } 
-            });
+            if (imageBuffer) {
+                await sock.sendMessage(chatId, { 
+                    image: imageBuffer, 
+                    caption, 
+                    contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } 
+                });
+            } else {
+                const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+                await sock.sendMessage(chatId, { 
+                    text: caption + "\n\n" + asciiBoard, 
+                    contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } 
+                });
+            }
 
         } catch (e) {
             return sock.sendMessage(chatId, { text: botMarker + `❌ Invalid move: *${moveStr}*\n\n💡 Use standard algebraic notation (e4, Nf3, Bb5+).\n👉 Type \`${prefix} chess moves\` to see all possible moves.` });
@@ -242,7 +261,12 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         const caption = botMarker + `♟️ *CURRENT BOARD*\n\n👉 Turn: *${turn}* (@${normalizeJid(player)})`;
 
         const imageBuffer = await renderBoard(state.chess.fen());
-        return sock.sendMessage(chatId, { image: imageBuffer || Buffer.alloc(0), caption, contextInfo: { mentionedJid: [player] } });
+        if (imageBuffer) {
+            return sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: [player] } });
+        } else {
+            const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+            return sock.sendMessage(chatId, { text: caption + "\n\n" + asciiBoard, contextInfo: { mentionedJid: [player] } });
+        }
     }
 
     // 4. LEGAL MOVES: .j chess moves
@@ -253,11 +277,13 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: botMarker + `📜 *LEGAL MOVES:*\n\n${moves.join(', ')}` });
     }
 
-    // 5. STATS: .j chess stats
+    // 5. STATS: .j chess stats [@user]
     if (cmd === 'stats') {
+        const target = mentionedJids[0] || senderJid;
         const scores = system.get('chess_scores', {});
-        const s = scores[senderJid.split('@')[0]] || { wins: 0, losses: 0, draws: 0, elo: 1200 };
-        return sock.sendMessage(chatId, { text: botMarker + `🏆 *CHESS STATS:*\n\n🥇 Wins: ${s.wins}\n💀 Losses: ${s.losses}\n⚖️ Draws: ${s.draws}\n📈 Elo: ${s.elo}` });
+        const s = scores[target.split('@')[0]] || { wins: 0, losses: 0, draws: 0, elo: 1200 };
+        const name = target === senderJid ? "Your" : `@${normalizeJid(target)}'s`;
+        return sock.sendMessage(chatId, { text: botMarker + `🏆 *${name} CHESS STATS:*\n\n🥇 Wins: ${s.wins}\n💀 Losses: ${s.losses}\n⚖️ Draws: ${s.draws}\n📈 Elo: ${s.elo}`, contextInfo: { mentionedJid: [target] } });
     }
 
     // 6. LEADERBOARD: .j chess top
@@ -275,7 +301,8 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     if (cmd === 'resign') {
         const state = getGame(chatId);
         if (!state) return;
-        
+        if (senderJid !== state.playerW && senderJid !== state.playerB) return;
+
         const loser = senderJid;
         const winner = (loser === state.playerW) ? state.playerB : state.playerW;
 
@@ -287,12 +314,98 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         updateChessScore(winner, 'win');
         updateChessScore(loser, 'loss');
         deleteGame(chatId);
-        saveActiveGames();
 
         return sock.sendMessage(chatId, { 
             text: botMarker + `🏳️ @${normalizeJid(loser)} resigned! @${normalizeJid(winner)} wins!`,
             contextInfo: { mentionedJid: [loser, winner] }
         });
+    }
+
+    // 8. STOP / END / RESET
+    if (cmd === 'stop' || cmd === 'end' || cmd === 'reset') {
+        const state = getGame(chatId);
+        if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game to stop." });
+
+        const isPlayer = (senderJid === state.playerW || senderJid === state.playerB);
+        if (isPlayer || cmd === 'reset') {
+            deleteGame(chatId);
+            return sock.sendMessage(chatId, { text: botMarker + "🛑 Chess game has been terminated." });
+        } else {
+            return sock.sendMessage(chatId, { text: botMarker + "❌ Only players or admins can stop the game." });
+        }
+    }
+
+    // 9. HELP
+    if (cmd === 'help') {
+        return sock.sendMessage(chatId, { text: botMarker + `♟️ *CHESS COMMANDS* ♟️\n\n` +
+            `• \`${prefix} chess @user [bet]\` - Start a game\n` +
+            `• \`${prefix} move <notation>\` - Make a move (e4, Nf3, O-O)\n` +
+            `• \`${prefix} chess board\` - Show the current board\n` +
+            `• \`${prefix} chess moves\` - Show legal moves\n` +
+            `• \`${prefix} chess undo\` - Revert last move\n` +
+            `• \`${prefix} chess draw\` - Offer/Accept a draw\n` +
+            `• \`${prefix} chess fen\` - Show FEN notation\n` +
+            `• \`${prefix} chess resign\` - Forfeit the game\n` +
+            `• \`${prefix} chess stop\` - End game without result\n` +
+            `• \`${prefix} chess stats [@user]\` - View stats\n` +
+            `• \`${prefix} chess top\` - Leaderboard` });
+    }
+
+    // 10. FEN
+    if (cmd === 'fen') {
+        const state = getGame(chatId);
+        if (!state) return;
+        return sock.sendMessage(chatId, { text: botMarker + `🧩 *FEN:* \`${state.chess.fen()}\`` });
+    }
+
+    // 11. UNDO
+    if (cmd === 'undo') {
+        const state = getGame(chatId);
+        if (!state) return;
+        if (senderJid !== state.playerW && senderJid !== state.playerB) return;
+
+        if (!state.history || state.history.length <= 1) {
+            return sock.sendMessage(chatId, { text: botMarker + "❌ No moves to undo!" });
+        }
+
+        state.history.pop(); 
+        const lastFen = state.history[state.history.length - 1];
+        state.chess = new Chess(lastFen);
+        state.fen = lastFen;
+        saveActiveGames();
+
+        const turn = state.chess.turn() === 'w' ? 'White' : 'Black';
+        const player = state.chess.turn() === 'w' ? state.playerW : state.playerB;
+        const caption = botMarker + `↩️ *MOVE UNDONE!*\n\n👉 Turn: *${turn}* (@${normalizeJid(player)})`;
+
+        const imageBuffer = await renderBoard(state.chess.fen());
+        if (imageBuffer) {
+            return sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: [player] } });
+        } else {
+            const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+            return sock.sendMessage(chatId, { text: caption + "\n\n" + asciiBoard, contextInfo: { mentionedJid: [player] } });
+        }
+    }
+
+    // 12. DRAW
+    if (cmd === 'draw') {
+        const state = getGame(chatId);
+        if (!state) return;
+        if (senderJid !== state.playerW && senderJid !== state.playerB) return;
+
+        if (state.drawOfferedBy && state.drawOfferedBy !== senderJid) {
+            updateChessScore(state.playerW, 'draw');
+            updateChessScore(state.playerB, 'draw');
+            deleteGame(chatId);
+            return sock.sendMessage(chatId, { text: botMarker + "🤝 *DRAW ACCEPTED!* The game ended in a draw." });
+        } else {
+            state.drawOfferedBy = senderJid;
+            const opponent = senderJid === state.playerW ? state.playerB : state.playerW;
+            return sock.sendMessage(chatId, { 
+                text: botMarker + `⚖️ @${normalizeJid(senderJid)} offered a draw! @${normalizeJid(opponent)}, type \`${prefix} chess draw\` to accept.`,
+                contextInfo: { mentionedJid: [senderJid, opponent] }
+            });
+        }
     }
 }
 
@@ -310,4 +423,4 @@ async function renderBoard(fen, lastMove = "") {
     }
 }
 
-module.exports = { handleChess, getGame, activeGames };
+module.exports = { handleChess, getGame, activeGames, loadActiveGames };
