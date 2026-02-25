@@ -21,24 +21,35 @@ const CHESS_GAME_KEY = 'active_chess_games';
 
 // Load active games from the system module on initialization
 function loadActiveGames() {
-    const loadedGames = system.get(CHESS_GAME_KEY, {});
-    for (const chatId in loadedGames) {
-        // Re-initialize Chess.js game object from FEN
-        loadedGames[chatId].chess = new Chess(loadedGames[chatId].fen);
-        activeGames.set(chatId, loadedGames[chatId]);
+    try {
+        const loadedGames = system.get(CHESS_GAME_KEY, {});
+        for (const chatId in loadedGames) {
+            const state = loadedGames[chatId];
+            if (state && state.fen) {
+                // Re-initialize Chess.js game object from FEN
+                state.chess = new Chess(state.fen);
+                activeGames.set(chatId, state);
+            }
+        }
+        console.log(`[Chess] Loaded ${activeGames.size} active games from DB.`);
+    } catch (err) {
+        console.error("[Chess] Failed to load active games:", err.message);
     }
-    console.log(`[Chess] Loaded ${activeGames.size} active games from DB.`);
 }
 
 // Save all active games to the system module
 function saveActiveGames() {
     const gamesToSave = {};
     for (const [chatId, state] of activeGames.entries()) {
-        gamesToSave[chatId] = {
-            ...state,
-            fen: state.chess.fen(), // Save FEN string instead of Chess object
-            chess: null // Remove circular reference
-        };
+        try {
+            gamesToSave[chatId] = {
+                ...state,
+                fen: state.chess ? state.chess.fen() : state.fen, // Save FEN string
+                chess: null // Remove circular reference
+            };
+        } catch (e) {
+            console.error(`[Chess] Failed to prepare game for save (${chatId}):`, e.message);
+        }
     }
     system.set(CHESS_GAME_KEY, gamesToSave);
 }
@@ -64,9 +75,13 @@ function createGame(playerW, playerB, chatId, bet = 0) {
 
 function getGame(chatId) {
     const state = activeGames.get(chatId);
-    if (state && state.chess === null && state.fen) {
-        // Reconstruct Chess object if bot restarted
-        state.chess = new Chess(state.fen);
+    if (state && !state.chess && state.fen) {
+        try {
+            // Reconstruct Chess object if bot restarted
+            state.chess = new Chess(state.fen);
+        } catch (e) {
+            console.error(`[Chess] Failed to reconstruct game for ${chatId}:`, e.message);
+        }
     }
     return state;
 }
@@ -115,11 +130,12 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         mentionedJids = [quotedParticipant];
     }
 
-    const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'stop', 'end', 'reset', 'fen', 'undo', 'draw'];
+    const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'stop', 'end', 'reset', 'force-reset', 'fen', 'undo', 'draw'];
 
     // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
     if (!cmd || cmd === 'challenge' || (mentionedJids.length > 0 && !reserved.includes(cmd))) {
         if (activeGames.has(chatId)) {
+            console.log(`[Chess] Challenge rejected in ${chatId}: Game already active in Map.`);
             return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or use `" + prefix + " chess stop` to end it." });
         }
 
@@ -136,7 +152,6 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
         }
 
-        // Bet can be 2nd or 3rd arg depending on if 'challenge' word was used
         let betStr = cmd === 'challenge' ? args[2] : args[1];
         if (!betStr && mentionedJids.length > 0 && cmd !== 'challenge') {
              betStr = args[1];
@@ -174,7 +189,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return;
     }
 
-    // 2. MOVE: .j chess move <notation> or .j move <notation>
+    // 2. MOVE
     if (cmd === 'move' || cmd === 'm') {
         const state = getGame(chatId);
         if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game! Challenge someone with `" + prefix + " chess @user`" });
@@ -220,13 +235,11 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
                 (gameEnded ? resultMsg : (resultMsg ? resultMsg + "\n" : "") + `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
                 (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} takes the ${(state.bet * 2).toLocaleString()} Zeni pot!` : "");
 
-            if (gameEnded && state.bet > 0) {
-                if (state.chess.isCheckmate()) {
+            if (gameEnded) {
+                if (state.bet > 0 && state.chess.isCheckmate()) {
                     economy.addMoney(currentPlayer, state.bet);
                     economy.removeMoney(isWhiteTurn ? state.playerB : state.playerW, state.bet);
                 }
-                deleteGame(chatId);
-            } else if (gameEnded) {
                 deleteGame(chatId);
             }
 
@@ -251,7 +264,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return;
     }
 
-    // 3. SHOW BOARD: .j chess board
+    // 3. SHOW BOARD
     if (cmd === 'board' || cmd === 'show') {
         const state = getGame(chatId);
         if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game." });
@@ -269,7 +282,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 4. LEGAL MOVES: .j chess moves
+    // 4. LEGAL MOVES
     if (cmd === 'moves') {
         const state = getGame(chatId);
         if (!state) return;
@@ -277,7 +290,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: botMarker + `📜 *LEGAL MOVES:*\n\n${moves.join(', ')}` });
     }
 
-    // 5. STATS: .j chess stats [@user]
+    // 5. STATS
     if (cmd === 'stats') {
         const target = mentionedJids[0] || senderJid;
         const scores = system.get('chess_scores', {});
@@ -286,7 +299,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: botMarker + `🏆 *${name} CHESS STATS:*\n\n🥇 Wins: ${s.wins}\n💀 Losses: ${s.losses}\n⚖️ Draws: ${s.draws}\n📈 Elo: ${s.elo}`, contextInfo: { mentionedJid: [target] } });
     }
 
-    // 6. LEADERBOARD: .j chess top
+    // 6. LEADERBOARD
     if (cmd === 'top') {
         const scores = system.get('chess_scores', {});
         const sorted = Object.entries(scores).sort(([, a], [, b]) => b.wins - a.wins).slice(0, 10);
@@ -322,12 +335,19 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     }
 
     // 8. STOP / END / RESET
-    if (cmd === 'stop' || cmd === 'end' || cmd === 'reset') {
+    if (cmd === 'stop' || cmd === 'end' || cmd === 'reset' || cmd === 'force-reset') {
+        const hasMapEntry = activeGames.has(chatId);
         const state = getGame(chatId);
-        if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game to stop." });
 
-        const isPlayer = (senderJid === state.playerW || senderJid === state.playerB);
-        if (isPlayer || cmd === 'reset') {
+        if (!hasMapEntry && !state) {
+            return sock.sendMessage(chatId, { text: botMarker + "❌ No active game found in this chat." });
+        }
+
+        const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id); // Simple check
+        const isPlayer = state && (senderJid === state.playerW || senderJid === state.playerB);
+
+        if (isPlayer || cmd === 'reset' || cmd === 'force-reset' || isAdmin) {
+            console.log(`[Chess] Game force-terminated in ${chatId} by ${senderJid} (cmd: ${cmd})`);
             deleteGame(chatId);
             return sock.sendMessage(chatId, { text: botMarker + "🛑 Chess game has been terminated." });
         } else {
@@ -355,7 +375,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     if (cmd === 'fen') {
         const state = getGame(chatId);
         if (!state) return;
-        return sock.sendMessage(chatId, { text: botMarker + `🧩 *FEN:* \`${state.chess.fen()}\`` });
+        return sock.sendMessage(chatId, { text: botMarker + `🧩 *FEN:* \`${state.chess ? state.chess.fen() : state.fen}\`` });
     }
 
     // 11. UNDO
