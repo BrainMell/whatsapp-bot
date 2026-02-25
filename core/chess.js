@@ -365,7 +365,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
     // 8. STOP / END / RESET
     if (cmd === 'stop' || cmd === 'end' || cmd === 'reset' || cmd === 'force-reset') {
-        const hasMapEntry = activeGames.has(chatId);
+        const hasMapEntry = getActiveGames().has(chatId);
         const state = getGame(chatId);
 
         if (!hasMapEntry && !state) {
@@ -497,4 +497,4 @@ async function renderBoard(fen, lastMove = "") {
     }
 }
 
-module.exports = { handleChess, getGame, activeGames, loadActiveGames };
+module.exports = { handleChess, getGame, activeGamesMap, loadActiveGames };

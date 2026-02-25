@@ -382,7 +382,15 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   const reply = (text, options = {}) => inst.sock_ref.sendMessage(chatId, { text, ...options });
   
   const p = P();
+  
+  // STRICT PREFIX CHECK: If it doesn't start with the bot's prefix, IGNORE.
+  // This prevents Goten and Joker from fighting over commands.
+  if (!lowerTxt.startsWith(p)) {
+    return false;
+  }
+
   const parts = txt.trim().split(/\s+/);
+  // Re-calculate cmd based on prefix
   const cmd = parts[0].toLowerCase() === p ? parts[1]?.toLowerCase() : parts[0].toLowerCase().slice(p.length);
   const args = parts[0].toLowerCase() === p ? parts.slice(2) : parts.slice(1);
 
