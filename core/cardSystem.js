@@ -334,12 +334,48 @@ async function cmdClaim(args, senderJid, reply) {
   }
 }
 
+async function cmdCardsTier(senderJid, reply, chatId) {
+  const inst = getInst();
+  const p = P();
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  if (!owned.length) return reply('📭 Collection empty.');
+
+  // Group by Tier
+  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+  
+  owned.forEach(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    if (card) {
+      const t = String(card.tier);
+      if (tiers[t]) tiers[t].push(card.cardName);
+    }
+  });
+
+  let finalMsg = `🃏 *Cards | Tier View*\n\n`;
+  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
+    if (tiers[t].length > 0) {
+      const label = t === 'S' ? 'S' : t;
+      finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
+      tiers[t].forEach((name, i) => {
+        finalMsg += `*#${i + 1} ➳ ${name}*\n`;
+      });
+      finalMsg += `\n`;
+    }
+  }
+
+  finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
+  return reply(finalMsg);
+}
+
 async function cmdColl(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
 
   if (args.length > 0) {
     const input = args[0];
+    if (input === '--tier') return cmdCardsTier(senderJid, reply, chatId);
+    
     let uc = null;
     if (input.includes('-')) uc = await UserCard.findOne({ userId: senderJid, cardId: input });
     else {
@@ -364,47 +400,51 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
-  // Group by Tier
-  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
-  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
-  
-  owned.forEach(uc => {
-    const card = CARD_INDEX()[uc.cardId];
-    if (card) {
-      const t = String(card.tier);
-      if (tiers[t]) tiers[t].push(card.cardName);
-    }
-  });
+  // Build flat list with "Deck Design"
+  let msg = `🃏 *Cards | Collection*\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
 
-  let finalMsg = `🃏 *Cards | Collection*\n\n`;
-  
-  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
-    if (tiers[t].length > 0) {
-      const label = t === 'S' ? 'S' : t;
-      finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
-      tiers[t].forEach((name, i) => {
-        finalMsg += `*#${i + 1} ➳ ${name}*\n`;
-      });
-      finalMsg += `\n`;
+  const lines = [];
+  for (let i = 0; i < owned.length; i++) {
+    const card = CARD_INDEX()[owned[i].cardId];
+    if (card) {
+      const tier = String(card.tier);
+      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n   🆔 *ID:* \`${owned[i].cardId}\`\n━━━━━━━━━━━━━━━━━`);
     }
   }
 
-  finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
-
-  // GIF generation for collection
+  // GIF generation for collection (first 15)
   const imageUrls = owned.slice(0, 15).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR COLLECTION");
     if (gifBuffer) {
-      return await inst.sock_ref.sendMessage(chatId, { 
+      // Send first page with GIF
+      const firstChunk = msg + lines.slice(0, 10).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
           gifPlayback: true, 
-          caption: finalMsg 
+          caption: firstChunk 
       });
+      
+      // If more than 10, send others as text chunks
+      if (lines.length > 10) {
+        for (let s = 10; s < lines.length; s += 20) {
+          await reply(lines.slice(s, s + 20).join('\n'));
+        }
+      }
+      return;
     }
   }
 
-  return reply(finalMsg);
+  // Fallback text-only pagination
+  for (let s = 0; s < lines.length; s += 15) {
+    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 15).join('\n');
+    if (s + 15 >= lines.length) {
+       chunk += `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+    }
+    await reply(chunk);
+  }
 }
 
 async function cmdDeck(senderJid, reply, chatId, args = []) {
@@ -501,6 +541,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     const claimArgs = lowerTxt.startsWith(`${p} claim`) ? parts.slice(2) : parts.slice(1);
     await cmdClaim(claimArgs, senderJid, reply);
     return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}cards`) || lowerTxt.startsWith(`${p} cards`)) {
+    const cardsArgs = lowerTxt.startsWith(`${p} cards`) ? parts.slice(2) : parts.slice(1);
+    if (cardsArgs[0] === '--tier') {
+        await cmdCardsTier(senderJid, reply, chatId);
+        return true;
+    }
   }
 
   if (lowerTxt.startsWith(`${p}coll`) || lowerTxt.startsWith(`${p} coll`)) {
