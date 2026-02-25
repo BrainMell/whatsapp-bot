@@ -2659,45 +2659,47 @@ We are happy to have you here.
     // MESSAGE HANDLER - processes every incoming message
     // ============================================
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
-      // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
-      if (isRekeying) return;
+      // Wrap the entire handler in the instance context
+      await botConfig.storage.run(configInstance, async () => {
+        console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
+        // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
+        if (isRekeying) return;
 
-      // allow 'notify' (standard) and 'append' (sometimes used for new messages)
-      if (type !== 'notify' && type !== 'append') {
-        return;
-      }
-
-      try {
-        const m = messages[0];
-        if (!m || !m.message) return;
-
-        const chatId = m.key.remoteJid;
-        const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
-        
-        // 💡 GLOBAL CONTEXT HELPERS
-        const user = economy.getUser(senderJid);
-        const userProfile = getUserProfile(senderJid) || initializeUserProfile(senderJid);
-        const senderName = user?.nickname || userProfile?.nickname || m.pushName || senderJid.split('@')[0];
-
-        // --- DIAGNOSTIC LOG ---
-        const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media";
-        console.log(`📩 Processing msg from ${senderJid} in ${chatId}: "${msgText.substring(0, 20)}..."`);
-
-        const isGroupChat = chatId.endsWith('@g.us');
-        const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
-
-        // Skip protocol messages
-        if (m.messageStubType || m.message.protocolMessage || m.message.senderKeyDistributionMessage || m.message.reactionMessage) {
+        // allow 'notify' (standard) and 'append' (sometimes used for new messages)
+        if (type !== 'notify' && type !== 'append') {
           return;
         }
-        
-        // Skip if no readable content
-        const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
-        if (!hasContent) return;
 
-        // Persist message to MongoDB (1-hour TTL)
-        const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;
+        try {
+          const m = messages[0];
+          if (!m || !m.message) return;
+
+          const chatId = m.key.remoteJid;
+          const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
+          
+          // 💡 GLOBAL CONTEXT HELPERS
+          const user = economy.getUser(senderJid);
+          const userProfile = getUserProfile(senderJid) || initializeUserProfile(senderJid);
+          const senderName = user?.nickname || userProfile?.nickname || m.pushName || senderJid.split('@')[0];
+
+          // --- DIAGNOSTIC LOG ---
+          const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media";
+          console.log(`📩 [${botConfig.getBotId()}] Processing msg from ${senderJid} in ${chatId}: "${msgText.substring(0, 20)}..."`);
+
+          const isGroupChat = chatId.endsWith('@g.us');
+          const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
+
+          // Skip protocol messages
+          if (m.messageStubType || m.message.protocolMessage || m.message.senderKeyDistributionMessage || m.message.reactionMessage) {
+            return;
+          }
+          
+          // Skip if no readable content
+          const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
+          if (!hasContent) return;
+
+          // Persist message to MongoDB (1-hour TTL)
+          const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;
         ChatMessage.create({
           sender: senderJid,
           body: messageBody,
@@ -10544,6 +10546,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
   console.log("⚠️️ Skipping message:", err.message);
   return;
 }
+      }); // END storage.run
     }); // END messages.upsert
 
     // Start background tasks AFTER handler is registered
