@@ -16,13 +16,14 @@ const activeGames = new Map();
 // GAME STATE MANAGEMENT (PERSISTENT)
 // ============================================
 
-// Key for storing active games in the system module
-const CHESS_GAME_KEY = 'active_chess_games';
+// Key for storing active games in the system module (Instance-specific)
+const getChessKey = () => `active_chess_games_${botConfig.getBotId()}`;
 
 // Load active games from the system module on initialization
 function loadActiveGames() {
     try {
-        const loadedGames = system.get(CHESS_GAME_KEY, {});
+        const key = getChessKey();
+        const loadedGames = system.get(key, {});
         for (const chatId in loadedGames) {
             const state = loadedGames[chatId];
             if (state && state.fen) {
@@ -31,7 +32,7 @@ function loadActiveGames() {
                 activeGames.set(chatId, state);
             }
         }
-        console.log(`[Chess] Loaded ${activeGames.size} active games from DB.`);
+        console.log(`[Chess] Loaded ${activeGames.size} active games from DB (${key}).`);
     } catch (err) {
         console.error("[Chess] Failed to load active games:", err.message);
     }
@@ -39,6 +40,7 @@ function loadActiveGames() {
 
 // Save all active games to the system module
 function saveActiveGames() {
+    const key = getChessKey();
     const gamesToSave = {};
     for (const [chatId, state] of activeGames.entries()) {
         try {
@@ -51,7 +53,7 @@ function saveActiveGames() {
             console.error(`[Chess] Failed to prepare game for save (${chatId}):`, e.message);
         }
     }
-    system.set(CHESS_GAME_KEY, gamesToSave);
+    system.set(key, gamesToSave);
 }
 
 function createGame(playerW, playerB, chatId, bet = 0) {
