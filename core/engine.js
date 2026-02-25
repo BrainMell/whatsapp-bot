@@ -10234,7 +10234,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
       
       // If a chess game is active, try chess move first if it looks like algebraic notation
       const chessGame = (chess && typeof chess.getGame === 'function') ? chess.getGame(chatId) : null;
-      if (chessGame && (/^[a-hKQRBN]/.test(move) || move.includes('O-O'))) {
+      // Improved regex to catch more chess-like moves (including lowercase and explicit pawn 'P')
+      if (chessGame && (/^[a-hKQRBNP]/i.test(move) || move.includes('O-O') || move.includes('x'))) {
           return await chess.handleChess(sock, chatId, senderJid, ['move', move], m, BOT_MARKER);
       }
 
