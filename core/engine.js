@@ -10222,7 +10222,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
       const subCmd = args[0]?.toLowerCase();
       
       // Explicitly allow stopping/resetting even if state detection is weird
-      if (['stop', 'end', 'reset', 'force-reset'].includes(subCmd)) {
+      if (['stop', 'end', 'reset', 'force-reset', 'guide'].includes(subCmd)) {
           return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
       }
       
