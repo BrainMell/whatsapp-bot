@@ -212,17 +212,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬▬
+`▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🎴  A CARD HAS APPEARED!
-▬▬▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
 ✦  ${label}  ✦
 🎨  Art ›  ${card.creator || 'Unknown'}
-▬▬▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
 ⌨️  Type  ${P()} claim ${card.id}  to collect
-▬▬▬▬▬▬▬▬▬▬▬▬▬`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -362,6 +362,21 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
+  // GIF generation for collection
+  const imageUrls = owned.slice(0, 15).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  if (imageUrls.length > 0) {
+    const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR COLLECTION");
+    if (gifBuffer) {
+      let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+      const lines = [];
+      for (let i = 0; i < owned.length; i++) {
+        const card = CARD_INDEX()[owned[i].cardId];
+        if (card) lines.push(cardLine(i + 1, card, owned[i]));
+      }
+      return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg + lines.slice(0, 20).join('\n') + (lines.length > 20 ? '\n...' : '') });
+    }
+  }
+
   let msg = `▬▬▬▬▬▬▬▬▬▬\n   🗂️  *YOUR COLLECTION*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
   const lines = [];
   for (let i = 0; i < owned.length; i++) {
@@ -371,6 +386,51 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   for (let s = 0; s < lines.length; s += 30) {
     await reply((s === 0 ? msg : '') + lines.slice(s, s + 30).join('\n'));
   }
+}
+
+async function cmdDeck(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  
+  if (args.length > 0) {
+    const slot = parseInt(args[0]);
+    if (!isNaN(slot)) {
+        const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+        if (uc) {
+            const card = CARD_INDEX()[uc.cardId];
+            const stat = await CardStat.findOne({ cardId: uc.cardId });
+            const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot);
+            try {
+                const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+                return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+            } catch (e) { return reply(caption); }
+        }
+    }
+    return reply('❌ Card not found in that deck slot.');
+  }
+
+  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  if (!deck.length) return reply('📭 Main Deck is empty.');
+
+  // GIF generation for deck
+  const imageUrls = deck.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  if (imageUrls.length > 0) {
+    const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR MAIN DECK");
+    if (gifBuffer) {
+        let msg = `▬▬▬▬▬▬▬▬▬▬\n   🎴  *YOUR MAIN DECK*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+        const lines = deck.map(uc => {
+            const card = CARD_INDEX()[uc.cardId];
+            return `  Slot #${uc.mainDeckSlot} ➳ ${card ? card.cardName : 'Unknown'}`;
+        });
+        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg + lines.join('\n') });
+    }
+  }
+
+  let msg = `▬▬▬▬▬▬▬▬▬▬\n   🎴  *YOUR MAIN DECK*\n▬▬▬▬▬▬▬▬▬▬\n\n`;
+  const lines = deck.map(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    return `  Slot #${uc.mainDeckSlot} ➳ ${card ? card.cardName : 'Unknown'}`;
+  });
+  return reply(msg + lines.join('\n'));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -417,6 +477,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (lowerTxt.startsWith(`${p}coll`) || lowerTxt.startsWith(`${p} coll`)) {
     const collArgs = lowerTxt.startsWith(`${p} coll`) ? parts.slice(2) : parts.slice(1);
     await cmdColl(senderJid, reply, chatId, collArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}deck`) || lowerTxt.startsWith(`${p} deck`)) {
+    const deckArgs = lowerTxt.startsWith(`${p} deck`) ? parts.slice(2) : parts.slice(1);
+    await cmdDeck(senderJid, reply, chatId, deckArgs);
     return true;
   }
 

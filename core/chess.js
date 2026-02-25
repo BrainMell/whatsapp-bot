@@ -282,13 +282,14 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             }
 
         } catch (e) {
-            let errorText = botMarker + `❌ Invalid move: *${moveStr}*\n\n` +
-                `💡 *How to move:* Use standard notation:\n` +
+            let errorText = botMarker + `❌ *Invalid move:* \`${moveStr}\`\n\n` +
+                `💡 *How to move:* This bot uses standard notation:\n` +
                 `• *Pawns:* just the square (e.g., \`e4\`, \`d5\`)\n` +
                 `• *Pieces:* Initial + square (e.g., \`Nf3\` for Knight, \`Bb5\` for Bishop)\n` +
                 `• *Captures:* use 'x' (e.g., \`exd5\` or \`Nxf3\`)\n` +
                 `• *Castling:* \`O-O\` (Kingside) or \`O-O-O\` (Queenside)\n\n` +
-                `👉 Type \`${prefix} chess moves\` to see all possible legal moves right now.`;
+                `👉 Type \`${prefix} chess moves\` to see all possible legal moves right now.\n` +
+                `👉 Type \`${prefix} chess guide\` for a full tutorial.`;
             return sock.sendMessage(chatId, { text: errorText });
         }
         return;
@@ -459,9 +460,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
     // 13. GUIDE
     if (cmd === 'guide') {
-        const guideText = botMarker + `♟️ *HOW TO PLAY CHESS* ♟️\n\n` +
+        const guideText = botMarker + `♟️ *THE ULTIMATE CHESS GUIDE* ♟️\n\n` +
             `*1. Making Moves* 📝\n` +
-            `This bot uses *Standard Algebraic Notation*. You don't pick the piece, you pick the square it moves to!\n\n` +
+            `This bot uses *Standard Algebraic Notation*. You don't pick the piece first; you pick the square it moves to!\n\n` +
             `• *Pawns:* Just the square (e.g., \`e4\`, \`d5\`)\n` +
             `• *Knight:* \`N\` + square (e.g., \`Nf3\`)\n` +
             `• *Bishop:* \`B\` + square (e.g., \`Bc4\`)\n` +
@@ -473,10 +474,16 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             `• *Castling:* \`O-O\` (Kingside) or \`O-O-O\` (Queenside)\n` +
             `• *Check:* Add \`+\` (e.g., \`Bb5+\`)\n` +
             `• *Promotion:* Square + \`=\` + Piece (e.g., \`e8=Q\`)\n\n` +
-            `*3. General Rules* ⚖️\n` +
+            `*3. How to Play* 🎮\n` +
+            `1. Challenge someone: \`.g chess @user [bet]\`\n` +
+            `2. The board will be rendered. White moves first.\n` +
+            `3. Type \`.g move e4\` to make your opening move.\n` +
+            `4. The bot will highlight the last move on the board.\n\n` +
+            `*4. Pro Tips* ⚖️\n` +
             `• The goal is to put the opponent's King in *Checkmate*.\n` +
             `• If you're stuck, type \`${prefix} chess moves\` to see all your possible legal moves.\n` +
-            `• Use \`${prefix} chess undo\` if you made a mistake!`;
+            `• Use \`${prefix} chess undo\` if you made a mistake (both players must agree in spirit!)\n` +
+            `• If a game gets stuck, use \`${prefix} chess stop\` to clear it.`;
         
         return sock.sendMessage(chatId, { text: guideText });
     }
