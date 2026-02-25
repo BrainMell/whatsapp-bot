@@ -10,7 +10,16 @@ const botConfig = require('../botConfig');
 const GoImageService = require('./goImageService');
 
 const goService = new GoImageService();
-const activeGames = new Map();
+// activeGames is now a Map of botIds -> Map of chatIds
+const activeGamesMap = new Map();
+
+function getActiveGames() {
+    const botId = botConfig.getBotId();
+    if (!activeGamesMap.has(botId)) {
+        activeGamesMap.set(botId, new Map());
+    }
+    return activeGamesMap.get(botId);
+}
 
 // ============================================
 // GAME STATE MANAGEMENT (PERSISTENT)
@@ -23,6 +32,7 @@ const getChessKey = () => `active_chess_games_${botConfig.getBotId()}`;
 function loadActiveGames() {
     try {
         const key = getChessKey();
+        const activeGames = getActiveGames();
         const loadedGames = system.get(key, {});
         for (const chatId in loadedGames) {
             const state = loadedGames[chatId];
@@ -32,7 +42,7 @@ function loadActiveGames() {
                 activeGames.set(chatId, state);
             }
         }
-        console.log(`[Chess] Loaded ${activeGames.size} active games from DB (${key}).`);
+        console.log(`[Chess][${botConfig.getBotId()}] Loaded ${activeGames.size} active games from DB (${key}).`);
     } catch (err) {
         console.error("[Chess] Failed to load active games:", err.message);
     }
@@ -41,6 +51,7 @@ function loadActiveGames() {
 // Save all active games to the system module
 function saveActiveGames() {
     const key = getChessKey();
+    const activeGames = getActiveGames();
     const gamesToSave = {};
     for (const [chatId, state] of activeGames.entries()) {
         try {
@@ -58,6 +69,7 @@ function saveActiveGames() {
 
 function createGame(playerW, playerB, chatId, bet = 0) {
     const game = new Chess();
+    const activeGames = getActiveGames();
     const state = {
         chess: game,
         playerW: playerW, // White
@@ -76,6 +88,7 @@ function createGame(playerW, playerB, chatId, bet = 0) {
 }
 
 function getGame(chatId) {
+    const activeGames = getActiveGames();
     const state = activeGames.get(chatId);
     if (state && !state.chess && state.fen) {
         try {
@@ -89,6 +102,7 @@ function getGame(chatId) {
 }
 
 function deleteGame(chatId) {
+    const activeGames = getActiveGames();
     activeGames.delete(chatId);
     saveActiveGames(); // Persist deletion
 }
@@ -136,7 +150,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
     // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
     if (!cmd || cmd === 'challenge' || (mentionedJids.length > 0 && !reserved.includes(cmd))) {
-        if (activeGames.has(chatId)) {
+        if (getActiveGames().has(chatId)) {
             console.log(`[Chess] Challenge rejected in ${chatId}: Game already active in Map.`);
             return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or use `" + prefix + " chess stop` to end it." });
         }
