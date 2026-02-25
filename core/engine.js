@@ -2384,30 +2384,38 @@ async function initSocket() {
   if (botStarting) return;
   botStarting = true;
   try {
-    botConfig.storage.run(configInstance, async () => {
-        try {
-            await Promise.all([
-              system.loadSystemData(),
-              economy.loadEconomy(),
-              guilds.loadGuilds(),
-              loans.loadLoans()
-            ]);
-            
-            // Chess must be loaded INSIDE the storage context so it knows its botId
-            chess.loadActiveGames();
-            
-            loadEnabledChats();    loadGroupSettings();
+    // We are already inside a storage.run context from startBot()
+    await Promise.all([
+      system.loadSystemData(),
+      economy.loadEconomy(),
+      guilds.loadGuilds(),
+      loans.loadLoans()
+    ]);
+    
+    // Chess must be loaded after system data is ready
+    chess.loadActiveGames();
+    
+    loadEnabledChats();
+    loadGroupSettings();
     loadSupportUsage();
     loadMutedUsers();
     loadUserWarnings();
+    
     const { state, saveCreds } = await useMultiFileAuthState(configInstance.getAuthPath());
     const { version } = await fetchLatestBaileysVersion();
-    sock = makeWASocket({ version, auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })) }, logger: P({ level: 'silent' }), experimentalStore: true });
+    sock = makeWASocket({ 
+      version, 
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })) }, 
+      logger: P({ level: 'silent' }), 
+      experimentalStore: true 
+    });
+    
     sendQueue.bind(sock);
     sock.sendMessage = (j, m, o = {}) => sendQueue.send(j, m, o);
     sock.ev.on("creds.update", saveCreds);
     botStartTime = Date.now();
-sock.ev.on('connection.update', async (update) => {
+
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && !qrShown) {
@@ -10563,10 +10571,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
         initSocket().catch(e => console.error('Retry failed:', e.message));
       }
     }, delayMs);
-    });
-  } catch (outerErr) {
-    console.error('❌ outer initSocket failed:', outerErr.message);
-    botStarting = false;
   }
 }
 
