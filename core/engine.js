@@ -10563,6 +10563,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
         initSocket().catch(e => console.error('Retry failed:', e.message));
       }
     }, delayMs);
+    });
+  } catch (outerErr) {
+    console.error('❌ outer initSocket failed:', outerErr.message);
+    botStarting = false;
   }
 }
 
