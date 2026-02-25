@@ -10205,8 +10205,15 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`)) {
     return;
 }
 
-  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} chess`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} c `)) {
+  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} chess `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} chess` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} c `)) {
       const args = lowerTxt.split(' ').slice(1);
+      const subCmd = args[0]?.toLowerCase();
+      
+      // Explicitly allow stopping/resetting even if state detection is weird
+      if (['stop', 'end', 'reset', 'force-reset'].includes(subCmd)) {
+          return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
+      }
+      
       return await chess.handleChess(sock, chatId, senderJid, args, m, BOT_MARKER);
   }
 
