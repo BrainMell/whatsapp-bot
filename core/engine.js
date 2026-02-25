@@ -3303,16 +3303,18 @@ Usage: ${newUsage}/5${warningText}`;
         // ============================================
         
 
-// --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` s (reply to convert) - CHECK THIS FIRST ---
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s`) {
+// --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` s (reply to convert) ---
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} s -c`) {
   const quotedMsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
   const isReply = !!quotedMsg;
   const hasImage = m.message.imageMessage || quotedMsg?.imageMessage;
   const hasVideo = m.message.videoMessage || quotedMsg?.videoMessage;
+  const shouldCrop = lowerTxt.endsWith('-c');
 
   if (!hasImage && !hasVideo) {
     const usage = GET_BANNER(`🎨 STICKER`) + `\n\n*Usage:*
 • Reply to image/video: \`${botConfig.getPrefix()} s\`
+• Auto-crop sticker: \`${botConfig.getPrefix()} s -c\`
 • Search & stickerize: \`${botConfig.getPrefix()} s [count] [query]\`
 
 *Examples:*
@@ -3339,7 +3341,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s`) {
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
-      type: StickerTypes.FULL, 
+      type: shouldCrop ? StickerTypes.CROPPED : StickerTypes.FULL, 
       quality: 70
     });
 
@@ -3428,13 +3430,13 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
     
     // ✅ HONEST MESSAGE - no fake "pack creation"
-    if (successCount === images.length) {
+    if (successCount === stickers.length) {
       await sock.sendMessage(chatId, { 
         text: BOT_MARKER + `✅ Sent ${successCount} stickers!` 
       });
     } else {
       await sock.sendMessage(chatId, { 
-        text: BOT_MARKER + `⚠️️ Sent ${successCount}/${images.length} stickers (some failed)` 
+        text: BOT_MARKER + `⚠️️ Sent ${successCount}/${stickers.length} stickers (some failed)` 
       });
     }
 
@@ -10409,6 +10411,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
       'guild create', 'guild delete', 'guild join', 'guild leave', 'guild invite', 'guild accept', 'guild decline', 'guild list', 'guild members', 'guild tag', 'guild motto', 'guild promote', 'guild demote', 'guild kick', 'guild title', 'guild titles', 'guild ranks', 'guild leaderboard', 'guild points', 'guild pointsboard', 'guild upgrade', 'guild challenge', 'guild challenges',
       'news', 'anime news',
       'register', 'balance', 'bal', 'bh', 'history', 'daily', 'deposit', 'withdraw', 'transfer', 'send', 'rob', 'rich', 'money', 'economy', 'invest', 'claim', 'stocks', 'market',
+      'coll', 'deck', 'cards', 'cltr', 'scc', 'maker', 'burn', 'spawn',
       'cf', 'flip', 'dice', 'roll', 'slots', 'hl', 'bj', 'roulette', 'crash', 'mines', 'plinko', 'scratch', 'cups', 'wheel',
       'horse', 'lotto', 'rps', 'penalty', 'guess',
       'summary', 'recap', 'activity', 'active', 'inactive',
