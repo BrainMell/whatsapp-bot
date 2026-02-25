@@ -74,8 +74,9 @@ async function boot() {
         return;
     }
 
-    // 3. Start each instance
-    for (const folder of folders) {
+    // 3. Start each instance with a stagger delay
+    for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i];
         const instancePath = path.join(instancesDir, folder);
         const configPath = path.join(instancePath, 'botConfig.json');
         
@@ -84,6 +85,12 @@ async function boot() {
             const config = new BotConfig(instancePath);
             console.log(`📡 Spawning bot: ${config.getBotName()} [${config.getBotId()}]`);
             startBot(config);
+
+            // Add a stagger delay between bot startups (except the last one)
+            if (i < folders.length - 1) {
+                console.log(`⏳ Waiting 15s before spawning next bot to prevent conflicts...`);
+                await new Promise(resolve => setTimeout(resolve, 15000));
+            }
         } else {
             console.warn(`⚠️ Skipping instance '${folder}': botConfig.json missing.`);
         }
