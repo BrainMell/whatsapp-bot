@@ -261,7 +261,15 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             }
 
         } catch (e) {
-            return sock.sendMessage(chatId, { text: botMarker + `❌ Invalid move: *${moveStr}*\n\n💡 Use standard algebraic notation (e4, Nf3, Bb5+).\n👉 Type \`${prefix} chess moves\` to see all possible moves.` });
+            let errorText = botMarker + `❌ Invalid move: *${moveStr}*\n\n` +
+                `💡 *How to move:* Use standard notation:\n` +
+                `• *Pawns:* just the square (e.g., \`e4\`, \`d5\`)\n` +
+                `• *Pieces:* Initial + square (e.g., \`Nf3\` for Knight, \`Bb5\` for Bishop)\n` +
+                `• *Captures:* use 'x' (e.g., \`exd5\` or \`Nxf3\`)\n` +
+                `• *Castling:* \`O-O\` (Kingside) or \`O-O-O\` (Queenside)\n\n` +
+                `👉 Type \`${prefix} chess moves\` to see all possible legal moves right now.`;
+            
+            return sock.sendMessage(chatId, { text: errorText });
         }
         return;
     }
