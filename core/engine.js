@@ -2384,13 +2384,18 @@ async function initSocket() {
   if (botStarting) return;
   botStarting = true;
   try {
-    await Promise.all([
+    botConfig.storage.run(configInstance, async () => {
+        try {
+            await Promise.all([
               system.loadSystemData(),
               economy.loadEconomy(),
               guilds.loadGuilds(),
               loans.loadLoans()
             ]);
+            
+            // Chess must be loaded INSIDE the storage context so it knows its botId
             chess.loadActiveGames();
+            
             loadEnabledChats();    loadGroupSettings();
     loadSupportUsage();
     loadMutedUsers();
