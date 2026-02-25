@@ -132,7 +132,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         mentionedJids = [quotedParticipant];
     }
 
-    const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'stop', 'end', 'reset', 'force-reset', 'fen', 'undo', 'draw'];
+    const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'guide', 'stop', 'end', 'reset', 'force-reset', 'fen', 'undo', 'draw'];
 
     // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
     if (!cmd || cmd === 'challenge' || (mentionedJids.length > 0 && !reserved.includes(cmd))) {
@@ -141,54 +141,59 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or use `" + prefix + " chess stop` to end it." });
         }
 
-        if (mentionedJids.length === 0) {
+        if (mentionedJids.length === 0 && cmd !== 'guide') {
             return sock.sendMessage(chatId, { text: botMarker + `♟️ *CHESS SYSTEM* ♟️\n\n` +
                 `• \`${prefix} chess @user [bet]\` - Challenge\n` +
                 `• \`${prefix} move <move>\` - Make move (e.g., e4, Nf3)\n` +
                 `• \`${prefix} chess board\` - See board\n` +
-                `• \`${prefix} chess help\` - Full command list` });
+                `• \`${prefix} chess help\` - Commands\n` +
+                `• \`${prefix} chess guide\` - How to play` });
         }
 
-        const opponentJid = mentionedJids[0];
-        if (opponentJid === senderJid) {
-            return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
-        }
-
-        let betStr = cmd === 'challenge' ? args[2] : args[1];
-        if (!betStr && mentionedJids.length > 0 && cmd !== 'challenge') {
-             betStr = args[1];
-        }
-        const bet = parseInt(betStr?.replace(/,/g, '')) || 0;
-
-        if (bet > 0) {
-            if (economy.getBalance(senderJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ You don't have enough Zeni for this bet!" });
-            if (economy.getBalance(opponentJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ Your opponent doesn't have enough Zeni!" });
-        }
-
-        const state = createGame(senderJid, opponentJid, chatId, bet);
-        
-        const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
-            `⚪ *White:* @${normalizeJid(senderJid)}\n` +
-            `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
-            `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
-            `👉 @${normalizeJid(senderJid)} to move!\n` +
-            `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
-
-        const imageBuffer = await renderBoard(state.chess.fen());
-        if (imageBuffer) {
-            await sock.sendMessage(chatId, { 
-                image: imageBuffer, 
-                caption, 
-                contextInfo: { mentionedJid: [senderJid, opponentJid] } 
-            });
+        if (cmd === 'guide') {
+            // Fall through to guide logic
         } else {
-            const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
-            await sock.sendMessage(chatId, { 
-                text: caption + "\n\n" + asciiBoard, 
-                contextInfo: { mentionedJid: [senderJid, opponentJid] } 
-            });
+            const opponentJid = mentionedJids[0];
+            if (opponentJid === senderJid) {
+                return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
+            }
+
+            let betStr = cmd === 'challenge' ? args[2] : args[1];
+            if (!betStr && mentionedJids.length > 0 && cmd !== 'challenge') {
+                 betStr = args[1];
+            }
+            const bet = parseInt(betStr?.replace(/,/g, '')) || 0;
+
+            if (bet > 0) {
+                if (economy.getBalance(senderJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ You don't have enough Zeni for this bet!" });
+                if (economy.getBalance(opponentJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ Your opponent doesn't have enough Zeni!" });
+            }
+
+            const state = createGame(senderJid, opponentJid, chatId, bet);
+            
+            const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
+                `⚪ *White:* @${normalizeJid(senderJid)}\n` +
+                `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
+                `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
+                `👉 @${normalizeJid(senderJid)} to move!\n` +
+                `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
+
+            const imageBuffer = await renderBoard(state.chess.fen());
+            if (imageBuffer) {
+                await sock.sendMessage(chatId, { 
+                    image: imageBuffer, 
+                    caption, 
+                    contextInfo: { mentionedJid: [senderJid, opponentJid] } 
+                });
+            } else {
+                const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+                await sock.sendMessage(chatId, { 
+                    text: caption + "\n\n" + asciiBoard, 
+                    contextInfo: { mentionedJid: [senderJid, opponentJid] } 
+                });
+            }
+            return;
         }
-        return;
     }
 
     // 2. MOVE
@@ -372,6 +377,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             `• \`${prefix} move <notation>\` - Make a move (e4, Nf3, O-O)\n` +
             `• \`${prefix} chess board\` - Show the current board\n` +
             `• \`${prefix} chess moves\` - Show legal moves\n` +
+            `• \`${prefix} chess guide\` - Learn how to play\n` +
             `• \`${prefix} chess undo\` - Revert last move\n` +
             `• \`${prefix} chess draw\` - Offer/Accept a draw\n` +
             `• \`${prefix} chess fen\` - Show FEN notation\n` +
@@ -436,6 +442,30 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
                 contextInfo: { mentionedJid: [senderJid, opponent] }
             });
         }
+    }
+
+    // 13. GUIDE
+    if (cmd === 'guide') {
+        const guideText = botMarker + `♟️ *HOW TO PLAY CHESS* ♟️\n\n` +
+            `*1. Making Moves* 📝\n` +
+            `This bot uses *Standard Algebraic Notation*. You don't pick the piece, you pick the square it moves to!\n\n` +
+            `• *Pawns:* Just the square (e.g., \`e4\`, \`d5\`)\n` +
+            `• *Knight:* \`N\` + square (e.g., \`Nf3\`)\n` +
+            `• *Bishop:* \`B\` + square (e.g., \`Bc4\`)\n` +
+            `• *Rook:* \`R\` + square (e.g., \`Rd1\`)\n` +
+            `• *Queen:* \`Q\` + square (e.g., \`Qh5\`)\n` +
+            `• *King:* \`K\` + square (e.g., \`Ke2\`)\n\n` +
+            `*2. Special Moves* ✨\n` +
+            `• *Capture:* Add \`x\` (e.g., \`exd5\` or \`Nxf3\`)\n` +
+            `• *Castling:* \`O-O\` (Kingside) or \`O-O-O\` (Queenside)\n` +
+            `• *Check:* Add \`+\` (e.g., \`Bb5+\`)\n` +
+            `• *Promotion:* Square + \`=\` + Piece (e.g., \`e8=Q\`)\n\n` +
+            `*3. General Rules* ⚖️\n` +
+            `• The goal is to put the opponent's King in *Checkmate*.\n` +
+            `• If you're stuck, type \`${prefix} chess moves\` to see all your possible legal moves.\n` +
+            `• Use \`${prefix} chess undo\` if you made a mistake!`;
+        
+        return sock.sendMessage(chatId, { text: guideText });
     }
 }
 
