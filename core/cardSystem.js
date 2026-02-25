@@ -72,6 +72,7 @@ function getInst() {
       adminJids:     new Set(),
       modJids:       new Set(),
       activeSpawns:  new Map(),
+      pendingBurns:  new Map(),
       ALL_CARDS:     [],
       CARD_INDEX:    {},
       CARDS_BY_TIER: {}
@@ -590,6 +591,59 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
   return reply(msg);
 }
 
+async function cmdBurn(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  const index = parseInt(args[0]);
+  if (isNaN(index)) return reply('❌ Usage: *.j burn <coll_index>*');
+
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const uc = owned[index - 1];
+  if (!uc) return reply('❌ Card not found in your collection.');
+
+  const card = CARD_INDEX()[uc.cardId];
+  const p = P();
+
+  // Show burning preview
+  const gifBuffer = await goService.generateBurnGif(card.imageUrl);
+  const caption = `🔥 *BURN CONFIRMATION* 🔥\n\n` +
+    `🃏 *Card:* ${card.cardName} (${card.tier})\n` +
+    `🆔 *ID:* \`${uc.cardId}\`\n\n` +
+    `⚠️ *WARNING:* This will delete the card forever!\n` +
+    `Are you sure? Type \`${p} accept\` to confirm or \`${p} decline\` to cancel.`;
+
+  if (gifBuffer) {
+    await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+  } else {
+    await reply(caption);
+  }
+
+  inst.pendingBurns.set(`${chatId}_${senderJid}`, { ucId: uc._id, cardName: card.cardName });
+}
+
+async function cmdAccept(senderJid, reply, chatId) {
+  const inst = getInst();
+  const key = `${chatId}_${senderJid}`;
+  const pending = inst.pendingBurns.get(key);
+  if (!pending) return; // Silent if no pending
+
+  try {
+    await UserCard.findByIdAndDelete(pending.ucId);
+    inst.pendingBurns.delete(key);
+    return reply(`🔥 *ASHES TO ASHES...*\n\n*${pending.cardName}* has been deleted from your collection forever.`);
+  } catch (err) {
+    return reply('❌ Failed to delete card.');
+  }
+}
+
+async function cmdDecline(senderJid, reply, chatId) {
+  const inst = getInst();
+  const key = `${chatId}_${senderJid}`;
+  if (inst.pendingBurns.has(key)) {
+    inst.pendingBurns.delete(key);
+    return reply('✅ *Burn cancelled.* Your card is safe... for now.');
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 5 — ROUTER & INIT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -660,6 +714,22 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (lowerTxt.startsWith(`${p}maker`) || lowerTxt.startsWith(`${p} maker`)) {
     const makerArgs = lowerTxt.startsWith(`${p} maker`) ? parts.slice(2) : parts.slice(1);
     await cmdMaker(senderJid, reply, chatId, makerArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}burn`) || lowerTxt.startsWith(`${p} burn`)) {
+    const burnArgs = lowerTxt.startsWith(`${p} burn`) ? parts.slice(2) : parts.slice(1);
+    await cmdBurn(senderJid, reply, chatId, burnArgs);
+    return true;
+  }
+
+  if (lowerTxt === `${p}accept`) {
+    await cmdAccept(senderJid, reply, chatId);
+    return true;
+  }
+
+  if (lowerTxt === `${p}decline`) {
+    await cmdDecline(senderJid, reply, chatId);
     return true;
   }
 
