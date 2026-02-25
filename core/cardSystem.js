@@ -358,11 +358,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
   const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
   
-  owned.forEach(uc => {
+  owned.forEach((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
     if (card) {
       const t = String(card.tier);
-      if (tiers[t]) tiers[t].push(card.cardName);
+      if (tiers[t]) tiers[t].push({ name: card.cardName, index: i + 1 });
     }
   });
 
@@ -371,8 +371,8 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     if (tiers[t].length > 0) {
       const label = t === 'S' ? 'S' : t;
       finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
-      tiers[t].forEach((name, i) => {
-        finalMsg += `🔹 *#${i + 1} ➳ ${name}*\n`;
+      tiers[t].forEach((item) => {
+        finalMsg += `*#${item.index} ➳ ${item.name}*\n`;
       });
       finalMsg += `\n`;
     }
@@ -428,7 +428,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
-  // Build flat list with Concise Design
+  // Build flat list with simple style
   let msg = `🃏 *Cards | Collection*\n`;
   msg += `━━━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total Cards:* ${owned.length}\n\n`;
@@ -437,27 +437,26 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   for (let i = 0; i < owned.length; i++) {
     const card = CARD_INDEX()[owned[i].cardId];
     if (card) {
-      lines.push(cardLine(i + 1, card, owned[i]));
+      lines.push(`*#${i + 1} ➳ ${card.cardName}*`);
     }
   }
 
-  // GIF generation for collection (Top 6)
+  // GIF generation for collection (Top 6 Highlights)
   const imageUrls = getTopImageUrls(owned);
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
     if (gifBuffer) {
       // Send first page with GIF
-      const firstChunk = msg + lines.slice(0, 20).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      const firstChunk = msg + lines.slice(0, 30).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
       await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
           gifPlayback: true, 
           caption: firstChunk 
       });
       
-      // If more than 20, send others as text chunks
-      if (lines.length > 20) {
-        for (let s = 20; s < lines.length; s += 30) {
-          await reply(lines.slice(s, s + 30).join('\n'));
+      if (lines.length > 30) {
+        for (let s = 30; s < lines.length; s += 50) {
+          await reply(lines.slice(s, s + 50).join('\n'));
         }
       }
       return;
@@ -465,9 +464,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   // Fallback text-only pagination
-  for (let s = 0; s < lines.length; s += 30) {
-    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 30).join('\n');
-    if (s + 30 >= lines.length) {
+  for (let s = 0; s < lines.length; s += 50) {
+    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 50).join('\n');
+    if (s + 50 >= lines.length) {
        chunk += `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
     }
     await reply(chunk);
