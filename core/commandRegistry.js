@@ -211,6 +211,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'cs', desc: 'Search for card availability and stats.', usage: 'cs <name> [tier n]' },
     { cmd: 'cg', desc: 'Give a card from your deck to another user.', usage: 'cg @user Deck <n>' },
     { cmd: 'cltr', desc: 'See top collectors of a specific series.', usage: 'cltr <series>' },
+    { cmd: 'scc', desc: 'Search collection by anime name.', usage: 'scc <anime>' },
+    { cmd: 'maker', desc: 'Search owned cards by maker tag.', usage: 'maker "<name>"' },
     { cmd: 'list decks', desc: 'List all your custom card decks.', usage: 'list decks' },
     { cmd: 'create deck', desc: 'Create a new custom card deck.', usage: 'create deck <name>' },
     { cmd: 'cdeck', desc: 'View contents of a custom deck.', usage: 'cdeck <name> [slot]' },

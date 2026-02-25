@@ -334,6 +334,19 @@ async function cmdClaim(args, senderJid, reply) {
   }
 }
 
+function getTopImageUrls(ownedCards) {
+  const tierOrder = { 'S': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1 };
+  const sorted = [...ownedCards].sort((a, b) => {
+    const cardA = CARD_INDEX()[a.cardId];
+    const cardB = CARD_INDEX()[b.cardId];
+    const tA = tierOrder[cardA?.tier] || 0;
+    const tB = tierOrder[cardB?.tier] || 0;
+    if (tA !== tB) return tB - tA;
+    return (b.copyNumber || 0) - (a.copyNumber || 0); // fallback to copy number (lower is better? no, higher is usually newer/rarer in some systems, but here lower is better for rarity. wait, user said value. Highest tier is most important).
+  });
+  return sorted.slice(0, 6).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+}
+
 async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
@@ -358,13 +371,27 @@ async function cmdCardsTier(senderJid, reply, chatId) {
       const label = t === 'S' ? 'S' : t;
       finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
       tiers[t].forEach((name, i) => {
-        finalMsg += `*#${i + 1} ➳ ${name}*\n`;
+        finalMsg += `🔹 *#${i + 1} ➳ ${name}*\n`;
       });
       finalMsg += `\n`;
     }
   }
 
   finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
+
+  // GIF generation for Tier View (Top 6)
+  const imageUrls = getTopImageUrls(owned);
+  if (imageUrls.length > 0) {
+    const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+    if (gifBuffer) {
+      return await inst.sock_ref.sendMessage(chatId, { 
+          video: gifBuffer, 
+          gifPlayback: true, 
+          caption: finalMsg 
+      });
+    }
+  }
+
   return reply(finalMsg);
 }
 
@@ -400,7 +427,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
-  // Build flat list with "Deck Design"
+  // Build flat list with Bullet Design (Absolute Index)
   let msg = `🃏 *Cards | Collection*\n`;
   msg += `━━━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total Cards:* ${owned.length}\n\n`;
@@ -410,14 +437,14 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     const card = CARD_INDEX()[owned[i].cardId];
     if (card) {
       const tier = String(card.tier);
-      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n   🆔 *ID:* \`${owned[i].cardId}\`\n━━━━━━━━━━━━━━━━━`);
+      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`);
     }
   }
 
-  // GIF generation for collection (first 15)
-  const imageUrls = owned.slice(0, 15).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  // GIF generation for collection (Top 6)
+  const imageUrls = getTopImageUrls(owned);
   if (imageUrls.length > 0) {
-    const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR COLLECTION");
+    const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
     if (gifBuffer) {
       // Send first page with GIF
       const firstChunk = msg + lines.slice(0, 10).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
@@ -486,16 +513,77 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   msg += lines.join('\n');
   msg += `\n\n*[Use ${p} deck <card_index> to see more detail about this card]*`;
 
-  // GIF generation for deck
-  const imageUrls = deck.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  // GIF generation for deck (Top 6)
+  const imageUrls = getTopImageUrls(deck);
   if (imageUrls.length > 0) {
-    const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR MAIN DECK");
+    const gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS");
     if (gifBuffer) {
         return await inst.sock_ref.sendMessage(chatId, { 
             video: gifBuffer, 
             gifPlayback: true, 
             caption: msg 
         });
+    }
+  }
+
+  return reply(msg);
+}
+
+async function cmdScc(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  const animeQuery = args.join(' ').toLowerCase().trim();
+  if (!animeQuery) return reply('❌ Usage: *.j scc <anime_name>*');
+
+  const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const filtered = owned.filter(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    return card?.animeName.toLowerCase().includes(animeQuery);
+  });
+
+  if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
+
+  let msg = `🃏 *Owned Cards | ${filtered[0].cardName.split(' ')[0]}...*\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📺 *Anime:* ${animeQuery.toUpperCase()}\n`;
+  msg += `📦 *Total:* ${filtered.length}\n\n`;
+
+  const lines = filtered.map((uc, i) => {
+    const card = CARD_INDEX()[uc.cardId];
+    return `🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${card.tier}\n━━━━━━━━━━━━━━━━━`;
+  });
+
+  return reply(msg + lines.slice(0, 20).join('\n'));
+}
+
+async function cmdMaker(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  const makerQuery = args.join(' ').replace(/["']/g, '').toLowerCase().trim();
+  if (!makerQuery) return reply('❌ Usage: *.j maker "<maker_name>"*');
+
+  const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const filtered = owned.filter(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    return card?.creator?.toLowerCase().includes(makerQuery);
+  });
+
+  if (!filtered.length) return reply(`📭 No owned cards found by maker: *${makerQuery}*`);
+
+  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+
+  filtered.forEach(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    if (card) tiers[String(card.tier)].push(card.cardName);
+  });
+
+  let msg = `🎨 *Cards | Made by ${makerQuery}*\n\n`;
+  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
+    if (tiers[t].length > 0) {
+      msg += `${tierEmoji[t]} *Tier ${t}*\n`;
+      tiers[t].forEach((name, i) => {
+        msg += `🔹 *#${i + 1} ➳ ${name}*\n`;
+      });
+      msg += `\n`;
     }
   }
 
@@ -560,6 +648,18 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (lowerTxt.startsWith(`${p}deck`) || lowerTxt.startsWith(`${p} deck`)) {
     const deckArgs = lowerTxt.startsWith(`${p} deck`) ? parts.slice(2) : parts.slice(1);
     await cmdDeck(senderJid, reply, chatId, deckArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}scc`) || lowerTxt.startsWith(`${p} scc`)) {
+    const sccArgs = lowerTxt.startsWith(`${p} scc`) ? parts.slice(2) : parts.slice(1);
+    await cmdScc(senderJid, reply, chatId, sccArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}maker`) || lowerTxt.startsWith(`${p} maker`)) {
+    const makerArgs = lowerTxt.startsWith(`${p} maker`) ? parts.slice(2) : parts.slice(1);
+    await cmdMaker(senderJid, reply, chatId, makerArgs);
     return true;
   }
 
