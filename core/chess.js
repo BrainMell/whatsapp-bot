@@ -373,12 +373,15 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
         const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
+        const isForce = cmd === 'reset' || cmd === 'force-reset';
 
-        if (isPlayer || cmd === 'reset' || cmd === 'force-reset' || isAdmin) {
+        if (isPlayer || isForce || isAdmin) {
             console.log(`[Chess] Termination triggered in ${chatId} by ${senderJid} (cmd: ${cmd})`);
             deleteGame(chatId);
             activeGames.delete(chatId); // Double-ensure memory is wiped
-            return sock.sendMessage(chatId, { text: botMarker + "🛑 Chess game has been terminated." });
+            
+            const msg = isForce ? "🛑 Chess game has been FORCE CLEARED." : "🛑 Chess game has been terminated.";
+            return sock.sendMessage(chatId, { text: botMarker + msg });
         } else {
             return sock.sendMessage(chatId, { text: botMarker + "❌ Only players can stop the game. Use `.chess reset` to force clear." });
         }

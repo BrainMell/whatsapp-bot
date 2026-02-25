@@ -336,6 +336,8 @@ async function cmdClaim(args, senderJid, reply) {
 
 async function cmdColl(senderJid, reply, chatId, args = []) {
   const inst = getInst();
+  const p = P();
+
   if (args.length > 0) {
     const input = args[0];
     let uc = null;
@@ -362,53 +364,43 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
+  // Build requested template
+  let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
+
+  const limit = 12;
+  const lines = [];
+  for (let i = 0; i < Math.min(owned.length, limit); i++) {
+    const card = CARD_INDEX()[owned[i].cardId];
+    if (card) {
+      const tier = String(card.tier);
+      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`);
+    }
+  }
+  
+  let finalMsg = msg + lines.join('\n');
+  finalMsg += `\n\n*[Use ${p} coll <card_index> to see more detail about this card]*`;
+
   // GIF generation for collection
   const imageUrls = owned.slice(0, 15).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR COLLECTION");
     if (gifBuffer) {
-      let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
-      msg += `━━━━━━━━━━━━━━━━━\n`;
-      msg += `📦 *Total Cards:* ${owned.length}\n\n`;
-
-      const lines = [];
-      for (let i = 0; i < Math.min(owned.length, 20); i++) {
-        const card = CARD_INDEX()[owned[i].cardId];
-        if (card) {
-          const tier = String(card.tier);
-          lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`);
-        }
-      }
-      
-      msg += lines.join('\n');
-      msg += `\n\n*[Use ${botConfig.getPrefix()} coll <card_index> to see more detail about this card]*`;
-      
-      return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
+      return await inst.sock_ref.sendMessage(chatId, { 
+          video: gifBuffer, 
+          gifPlayback: true, 
+          caption: finalMsg 
+      });
     }
   }
 
-  let msg = `🗂️ *Collection | My Cards* 🗂️\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
-  const lines = [];
-  for (let i = 0; i < owned.length; i++) {
-    const card = CARD_INDEX()[owned[i].cardId];
-    if (card) {
-      const tier = String(card.tier);
-      lines.push(`🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`);
-    }
-  }
-  for (let s = 0; s < lines.length; s += 20) {
-    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 20).join('\n');
-    if (s + 20 >= lines.length) {
-       chunk += `\n\n*[Use ${botConfig.getPrefix()} coll <card_index> to see more detail about this card]*`;
-    }
-    await reply(chunk);
-  }
+  return reply(finalMsg);
 }
 
 async function cmdDeck(senderJid, reply, chatId, args = []) {
   const inst = getInst();
+  const p = P();
   
   if (args.length > 0) {
     const slot = parseInt(args[0]);
@@ -430,40 +422,34 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
   if (!deck.length) return reply('📭 Main Deck is empty.');
 
+  // Build requested template
+  let msg = `🎴 *Deck | Main Deck* 🎴\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Cards:* ${deck.length}\n\n`;
+  
+  const lines = deck.map(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    const name = card ? card.cardName : 'Unknown';
+    const tier = card ? String(card.tier) : '?';
+    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${name}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`;
+  });
+  
+  msg += lines.join('\n');
+  msg += `\n\n*[Use ${p} deck <card_index> to see more detail about this card]*`;
+
   // GIF generation for deck
   const imageUrls = deck.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "YOUR MAIN DECK");
     if (gifBuffer) {
-        let msg = `🎴 *Deck | Main Deck* 🎴\n`;
-        msg += `━━━━━━━━━━━━━━━━━\n`;
-        msg += `📦 *Total Cards:* ${deck.length}\n\n`;
-        
-        const lines = deck.map(uc => {
-            const card = CARD_INDEX()[uc.cardId];
-            if (!card) return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* Unknown\n   ✨ *Tier:* ?\n━━━━━━━━━━━━━━━━━`;
-            const tier = String(card.tier);
-            return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`;
+        return await inst.sock_ref.sendMessage(chatId, { 
+            video: gifBuffer, 
+            gifPlayback: true, 
+            caption: msg 
         });
-        
-        msg += lines.join('\n');
-        msg += `\n\n*[Use ${botConfig.getPrefix()} deck <card_index> to see more detail about this card]*`;
-        
-        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
     }
   }
 
-  let msg = `🎴 *Deck | Main Deck* 🎴\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Cards:* ${deck.length}\n\n`;
-  const lines = deck.map(uc => {
-    const card = CARD_INDEX()[uc.cardId];
-    if (!card) return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* Unknown\n   ✨ *Tier:* ?\n━━━━━━━━━━━━━━━━━`;
-    const tier = String(card.tier);
-    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${tier === 'S' ? 'S' : tier}\n━━━━━━━━━━━━━━━━━`;
-  });
-  msg += lines.join('\n');
-  msg += `\n\n*[Use ${botConfig.getPrefix()} deck <card_index> to see more detail about this card]*`;
   return reply(msg);
 }
 
