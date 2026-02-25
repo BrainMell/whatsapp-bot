@@ -2412,10 +2412,13 @@ async function initSocket() {
     
     sendQueue.bind(sock);
     sock.sendMessage = (j, m, o = {}) => sendQueue.send(j, m, o);
-    sock.ev.on("creds.update", saveCreds);
-    botStartTime = Date.now();
+    
+    // Wrap event registrations in the storage context to ensure isolation
+    await botConfig.storage.run(configInstance, async () => {
+        sock.ev.on("creds.update", saveCreds);
+        botStartTime = Date.now();
 
-    sock.ev.on('connection.update', async (update) => {
+        sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && !qrShown) {
@@ -2498,13 +2501,17 @@ async function initSocket() {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           if (!botStarting) {
-            initSocket().catch(e => {
-              console.error('❌ Reconnect failed:', e.message);
-              botStarting = false;
+            // Re-wrap in storage context for reconnect
+            botConfig.storage.run(configInstance, () => {
+                initSocket().catch(e => {
+                  console.error('❌ Reconnect failed:', e.message);
+                  botStarting = false;
+                });
             });
           }
         }, delayMs);
       }
+    });
     });
 
 /*
