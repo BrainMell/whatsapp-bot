@@ -1030,185 +1030,327 @@ async function cmdCDeck(senderJid, reply, args = []) {
   return reply(msg);
 }
 
+async function cmdRenameDeck(senderJid, reply, args = []) {
+  const p = P();
+  const raw = args.join(' ');
+  const [oldName, newName] = raw.split('|').map(s => s.trim());
+  if (!oldName || !newName) return reply(`❌ Usage: \`${p} rename deck <old_name> | <new_name>\``);
+
+  try {
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${oldName}$`, 'i') } });
+    if (!deck) return reply(`❌ Deck *"${oldName}"* not found.`);
+
+    deck.name = newName;
+    await deck.save();
+    return reply(`✅ Deck renamed to *"${newName}"*.`);
+  } catch (err) {
+    if (err.code === 11000) return reply(`❌ A deck with the name *"${newName}"* already exists.`);
+    return reply('❌ Rename failed.');
+  }
+}
+
+async function cmdDeleteDeck(senderJid, reply, args = []) {
+  const p = P();
+  const name = args.join(' ').trim();
+  if (!name) return reply(`❌ Usage: \`${p} delete deck <name>\``);
+
+  const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
+  if (!deck) return reply(`❌ Deck *"${name}"* not found.`);
+
+  // Delete cards inside the deck too? User said "Cards inside are deleted!" in registry.
+  try {
+    await UserCard.deleteMany({ _id: { $in: deck.cards } });
+    await CardDeck.findByIdAndDelete(deck._id);
+    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* and all cards inside have been removed.`);
+  } catch (err) { return reply('❌ Deletion failed.'); }
+}
+
+async function cmdAuction(senderJid, reply, args = []) {
+  const p = P();
+  const slot = parseInt(args[0]);
+  const minBid = parseInt(args[1]);
+  const hours = parseInt(args[2]);
+
+  if (isNaN(slot) || isNaN(minBid) || isNaN(hours) || hours < 1 || hours > 48) {
+    return reply(`❌ Usage: \`${p} auction <deck_slot> <min_bid> <hours (1-48)>\``);
+  }
+
+  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
+  if (uc.isLocked) return reply('❌ This card is locked!');
+
+  try {
+    uc.inAuction = true;
+    await uc.save();
+
+    const endsAt = new Date();
+    endsAt.setHours(endsAt.getHours() + hours);
+
+    await CardMarket.create({
+      userCardId: uc._id,
+      cardId: uc.cardId,
+      sellerId: senderJid,
+      type: 'auction',
+      price: minBid,
+      currentBid: minBid,
+      status: 'active',
+      auctionEndsAt: endsAt
+    });
+
+    const card = CARD_INDEX()[uc.cardId];
+    return reply(`🔨 *AUCTION STARTED!*\n\n*${card.cardName}* is up for bidding!\n💰 Min Bid: ${ZENI()}${minBid.toLocaleString()}\n⏳ Ends at: ${endsAt.toLocaleString()}`);
+  } catch (err) { return reply('❌ Failed to start auction.'); }
+}
+
+async function cmdBid(senderJid, reply, args = []) {
+  const p = P();
+  // Simplified: auto-bid on the latest auction or support index?
+  // Let's list auctions first if no index
+  const active = await CardMarket.find({ status: 'active', type: 'auction' }).sort({ auctionEndsAt: 1 });
+  if (active.length === 0) return reply('📭 No active auctions.');
+
+  if (args.length < 2) {
+    let msg = `🔨 *LIVE CARD AUCTIONS*\n\n`;
+    active.forEach((a, i) => {
+      const card = CARD_INDEX()[a.cardId];
+      msg += `*${i + 1}.* ${card?.cardName} (${card?.tier})\n`;
+      msg += `   💰 Current: ${ZENI()}${a.currentBid.toLocaleString()}\n`;
+      msg += `   👤 High Bidder: ${a.highBidderId ? '@'+a.highBidderId.split('@')[0] : 'None'}\n`;
+      msg += `   ⏳ Ends: ${a.auctionEndsAt.toLocaleString()}\n\n`;
+    });
+    msg += `💡 Use \`${p} bid <number> <amount>\` to place a bid.`;
+    return reply(msg, { mentions: active.map(a => a.highBidderId).filter(Boolean) });
+  }
+
+  const index = parseInt(args[0]);
+  const amount = parseInt(args[1]);
+  if (isNaN(index) || isNaN(amount)) return reply(`❌ Usage: \`${p} bid <number> <amount>\``);
+
+  const auction = active[index - 1];
+  if (!auction) return reply('❌ Invalid auction number.');
+
+  if (auction.sellerId === senderJid) return reply('❌ You cannot bid on your own auction.');
+  if (amount <= auction.currentBid) return reply(`❌ Bid must be higher than ${ZENI()}${auction.currentBid.toLocaleString()}.`);
+
+  const balance = economy.getBalance(senderJid);
+  if (balance < amount) return reply(`❌ You don't have ${ZENI()}${amount.toLocaleString()}.`);
+
+  try {
+    // Note: In a real system, we might "lock" the bid money.
+    // For now, we'll just record the high bidder.
+    auction.currentBid = amount;
+    auction.highBidderId = senderJid;
+    auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
+    await auction.save();
+
+    return reply(`✅ *BID PLACED!*\n\nYou are now the high bidder for *${CARD_INDEX()[auction.cardId]?.cardName}* at ${ZENI()}${amount.toLocaleString()}.`);
+  } catch (err) { return reply('❌ Failed to place bid.'); }
+}
+
+// Finalize auctions
+async function finalizeAuctions(sock) {
+  const expired = await CardMarket.find({ status: 'active', type: 'auction', auctionEndsAt: { $lte: new Date() } });
+  for (const a of expired) {
+    try {
+      if (a.highBidderId) {
+        // Transfer Zeni
+        economy.removeMoney(a.highBidderId, a.currentBid);
+        economy.addMoney(a.sellerId, a.currentBid);
+
+        // Transfer Card
+        await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null });
+        
+        a.status = 'sold';
+      } else {
+        // No bidders, return card
+        await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
+        a.status = 'expired';
+      }
+      a.completedAt = new Date();
+      await a.save();
+      
+      // Notify (optional, requires chatId storage in market or join logic)
+      // Since we don't have chatId in market, we skip broadcast here or add it.
+    } catch (err) { console.error('Finalize auction failed:', err); }
+  }
+}
+
+// Start sweeper
+setInterval(() => {
+    const inst = Array.from(instances.values())[0]; // get first available sock for system task
+    if (inst?.sock_ref) finalizeAuctions(inst.sock_ref);
+}, 60000);
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 5 — ROUTER & INIT
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
   const inst = getInst();
+  if (!inst.sock_ref) return false;
+
   const reply = (text, options = {}) => inst.sock_ref.sendMessage(chatId, { text, ...options });
-  
   const p = P();
   
-  // STRICT PREFIX CHECK: If it doesn't start with the bot's prefix, IGNORE.
-  // This prevents Goten and Joker from fighting over commands.
+  // STRICT PREFIX CHECK
   if (!lowerTxt.startsWith(p)) {
     return false;
   }
 
   const parts = txt.trim().split(/\s+/);
-  // Re-calculate cmd based on prefix
-  const cmd = parts[0].toLowerCase() === p ? parts[1]?.toLowerCase() : parts[0].toLowerCase().slice(p.length);
-  const args = parts[0].toLowerCase() === p ? parts.slice(2) : parts.slice(1);
+  // cmd is the word immediately after the prefix (or attached to it)
+  // e.g. ".j cards" -> cmd is "cards"
+  // e.g. ".jcards" -> cmd is "cards"
+  const firstWord = parts[0].toLowerCase();
+  const cmd = firstWord === p ? parts[1]?.toLowerCase() : firstWord.slice(p.length);
+  const args = firstWord === p ? parts.slice(2) : parts.slice(1);
 
-  if (lowerTxt === `${p}cards on`) {
-    if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.');
-    inst.activeGroups.add(chatId);
-    await saveActiveGroups();
-    doSpawn(null, null, false, chatId);
-    ensureTimerRunning();
-    return reply('✅ *CARD SYSTEM ONLINE*'), true;
-  }
-  if (lowerTxt === `${p}cards off`) {
-    inst.activeGroups.delete(chatId);
-    await saveActiveGroups();
-    return reply('🔴 *CARD SYSTEM OFF*'), true;
-  }
+  if (!cmd) return false;
 
-  if (lowerTxt.startsWith(`${p}claim`) || lowerTxt.startsWith(`${p} claim`)) {
-    const claimArgs = lowerTxt.startsWith(`${p} claim`) ? parts.slice(2) : parts.slice(1);
-    await cmdClaim(claimArgs, senderJid, reply);
-    return true;
-  }
-
-  if (lowerTxt.startsWith(`${p}cards`) || lowerTxt.startsWith(`${p} cards`)) {
-    const cardsArgs = lowerTxt.startsWith(`${p} cards`) ? parts.slice(2) : parts.slice(1);
-    if (cardsArgs[0] === '--tier') {
+  switch (cmd) {
+    case 'cards':
+      if (args[0] === 'on') {
+        if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.'), true;
+        inst.activeGroups.add(chatId);
+        await saveActiveGroups();
+        doSpawn(null, null, false, chatId);
+        ensureTimerRunning();
+        return reply('✅ *CARD SYSTEM ONLINE*'), true;
+      }
+      if (args[0] === 'off') {
+        inst.activeGroups.delete(chatId);
+        await saveActiveGroups();
+        return reply('🔴 *CARD SYSTEM OFF*'), true;
+      }
+      if (args[0] === '--tier') {
         await cmdCardsTier(senderJid, reply, chatId);
         return true;
-    }
-  }
+      }
+      break;
 
-  if (lowerTxt.startsWith(`${p}coll`) || lowerTxt.startsWith(`${p} coll`)) {
-    const collArgs = lowerTxt.startsWith(`${p} coll`) ? parts.slice(2) : parts.slice(1);
-    await cmdColl(senderJid, reply, chatId, collArgs);
-    return true;
-  }
+    case 'claim':
+      await cmdClaim(args, senderJid, reply);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}deck`) || lowerTxt.startsWith(`${p} deck`)) {
-    const deckArgs = lowerTxt.startsWith(`${p} deck`) ? parts.slice(2) : parts.slice(1);
-    await cmdDeck(senderJid, reply, chatId, deckArgs);
-    return true;
-  }
+    case 'coll':
+      await cmdColl(senderJid, reply, chatId, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}info`) || lowerTxt.startsWith(`${p} info`)) {
-    const infoArgs = lowerTxt.startsWith(`${p} info`) ? parts.slice(2) : parts.slice(1);
-    await cmdInfo(reply, chatId, infoArgs);
-    return true;
-  }
+    case 'deck':
+      await cmdDeck(senderJid, reply, chatId, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}t2deck`) || lowerTxt.startsWith(`${p} t2deck`)) {
-    const t2dArgs = lowerTxt.startsWith(`${p} t2deck`) ? parts.slice(2) : parts.slice(1);
-    await cmdT2Deck(senderJid, reply, t2dArgs);
-    return true;
-  }
+    case 'info':
+      await cmdInfo(reply, chatId, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}t2coll`) || lowerTxt.startsWith(`${p} t2coll`)) {
-    const t2cArgs = lowerTxt.startsWith(`${p} t2coll`) ? parts.slice(2) : parts.slice(1);
-    await cmdT2Coll(senderJid, reply, t2cArgs);
-    return true;
-  }
+    case 't2deck':
+      await cmdT2Deck(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}swap`) || lowerTxt.startsWith(`${p} swap`)) {
-    const swapArgs = lowerTxt.startsWith(`${p} swap`) ? parts.slice(2) : parts.slice(1);
-    await cmdSwapCard(senderJid, reply, swapArgs);
-    return true;
-  }
+    case 't2coll':
+      await cmdT2Coll(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}cg`) || lowerTxt.startsWith(`${p} cg`)) {
-    const cgArgs = lowerTxt.startsWith(`${p} cg`) ? parts.slice(2) : parts.slice(1);
-    await cmdCG(senderJid, reply, cgArgs, m);
-    return true;
-  }
+    case 'swap':
+      await cmdSwapCard(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}cs`) || lowerTxt.startsWith(`${p} cs`)) {
-    const csArgs = lowerTxt.startsWith(`${p} cs`) ? parts.slice(2) : parts.slice(1);
-    await cmdCS(reply, csArgs);
-    return true;
-  }
+    case 'cg':
+      await cmdCG(senderJid, reply, args, m);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}buycard`) || lowerTxt.startsWith(`${p} buycard`)) {
-    const buyArgs = lowerTxt.startsWith(`${p} buycard`) ? parts.slice(2) : parts.slice(1);
-    await cmdBuyCard(senderJid, reply, buyArgs);
-    return true;
-  }
+    case 'cs':
+      await cmdCS(reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}sc`) || lowerTxt.startsWith(`${p} sc`)) {
-    const scArgs = lowerTxt.startsWith(`${p} sc`) ? parts.slice(2) : parts.slice(1);
-    await cmdSC(senderJid, reply, scArgs);
-    return true;
-  }
+    case 'buycard':
+      await cmdBuyCard(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}lock`) || lowerTxt.startsWith(`${p} lock`)) {
-    const lockArgs = lowerTxt.startsWith(`${p} lock`) ? parts.slice(2) : parts.slice(1);
-    await cmdLock(senderJid, reply, lockArgs);
-    return true;
-  }
+    case 'sc':
+      await cmdSC(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}merge`) || lowerTxt.startsWith(`${p} merge`)) {
-    if (lowerTxt === `${p}mergeall`) {
-        await cmdMergeAll(senderJid, reply);
-    } else {
-        const mergeArgs = lowerTxt.startsWith(`${p} merge`) ? parts.slice(2) : parts.slice(1);
-        await cmdMerge(senderJid, reply, mergeArgs);
-    }
-    return true;
-  }
+    case 'auction':
+      await cmdAuction(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt === `${p}list decks`) {
-    await cmdListDecks(senderJid, reply);
-    return true;
-  }
+    case 'bid':
+      await cmdBid(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}create deck`) || lowerTxt.startsWith(`${p} create deck`)) {
-    const createArgs = lowerTxt.startsWith(`${p} create deck`) ? parts.slice(3) : parts.slice(2);
-    await cmdCreateDeck(senderJid, reply, createArgs);
-    return true;
-  }
+    case 'lock':
+      await cmdLock(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}cdeck`) || lowerTxt.startsWith(`${p} cdeck`)) {
-    const cdeckArgs = lowerTxt.startsWith(`${p} cdeck`) ? parts.slice(2) : parts.slice(1);
-    await cmdCDeck(senderJid, reply, cdeckArgs);
-    return true;
-  }
+    case 'merge':
+      await cmdMerge(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}cltr`) || lowerTxt.startsWith(`${p} cltr`)) {
-    const cltrArgs = lowerTxt.startsWith(`${p} cltr`) ? parts.slice(2) : parts.slice(1);
-    await cmdCltr(reply, chatId, cltrArgs);
-    return true;
-  }
+    case 'mergeall':
+      await cmdMergeAll(senderJid, reply);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}scc`) || lowerTxt.startsWith(`${p} scc`)) {
-    const sccArgs = lowerTxt.startsWith(`${p} scc`) ? parts.slice(2) : parts.slice(1);
-    await cmdScc(senderJid, reply, chatId, sccArgs);
-    return true;
-  }
+    case 'list':
+      if (args[0] === 'decks') {
+        await cmdListDecks(senderJid, reply);
+        return true;
+      }
+      break;
 
-  if (lowerTxt.startsWith(`${p}maker`) || lowerTxt.startsWith(`${p} maker`)) {
-    const makerArgs = lowerTxt.startsWith(`${p} maker`) ? parts.slice(2) : parts.slice(1);
-    await cmdMaker(senderJid, reply, chatId, makerArgs);
-    return true;
-  }
+    case 'create':
+      if (args[0] === 'deck') {
+        await cmdCreateDeck(senderJid, reply, args.slice(1));
+        return true;
+      }
+      break;
 
-  if (lowerTxt.startsWith(`${p}burn`) || lowerTxt.startsWith(`${p} burn`)) {
-    const burnArgs = lowerTxt.startsWith(`${p} burn`) ? parts.slice(2) : parts.slice(1);
-    await cmdBurn(senderJid, reply, chatId, burnArgs);
-    return true;
-  }
+    case 'rename':
+      if (args[0] === 'deck') {
+        await cmdRenameDeck(senderJid, reply, args.slice(1));
+        return true;
+      }
+      break;
 
-  if (lowerTxt === `${p}accept`) {
-    return await cmdAccept(senderJid, reply, chatId);
-  }
+    case 'delete':
+      if (args[0] === 'deck') {
+        await cmdDeleteDeck(senderJid, reply, args.slice(1));
+        return true;
+      }
+      break;
 
-  if (lowerTxt === `${p}decline`) {
-    return await cmdDecline(senderJid, reply, chatId);
-  }
+    case 'cdeck':
+      await cmdCDeck(senderJid, reply, args);
+      return true;
 
-  if (lowerTxt.startsWith(`${p}spawn`) || lowerTxt.startsWith(`${p} spawn`)) {
-    if (!isOwner && !inst.modJids.has(senderJid)) return reply('❌ No permission.'), true;
-    const spawnQuery = txt.split('|')[1]?.trim();
-    if (spawnQuery) await doSpawn(spawnQuery, null, true, chatId);
-    return true;
+    case 'cltr':
+      await cmdCltr(reply, chatId, args);
+      return true;
+
+    case 'scc':
+      await cmdScc(senderJid, reply, chatId, args);
+      return true;
+
+    case 'maker':
+      await cmdMaker(senderJid, reply, chatId, args);
+      return true;
+
+    case 'burn':
+      await cmdBurn(senderJid, reply, chatId, args);
+      return true;
+
+    case 'accept':
+      return await cmdAccept(senderJid, reply, chatId);
+
+    case 'decline':
+      return await cmdDecline(senderJid, reply, chatId);
+
+    case 'spawn':
+      if (!isOwner && !inst.modJids.has(senderJid)) return reply('❌ No permission.'), true;
+      const spawnQuery = txt.split('|')[1]?.trim();
+      if (spawnQuery) await doSpawn(spawnQuery, null, true, chatId);
+      return true;
   }
 
   return false;
