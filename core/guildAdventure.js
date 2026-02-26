@@ -2162,7 +2162,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         turnInfo.target = target;
     }
 
-    const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', chatId);
+    const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', sessionKey);
     
     let resultMsg = `${enemy.icon} *${enemy.name}* `;
     if (wasEvaded) {

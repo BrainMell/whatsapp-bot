@@ -27,6 +27,9 @@ class GoImageService {
                 } catch (err) {
                     reject(err);
                 }
+            }).catch(err => {
+                // This catch ensures the NEXT operation in the chain can still run
+                // but we've already rejected the current promise via reject(err)
             });
         });
     }
