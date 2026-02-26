@@ -35,6 +35,9 @@ const UserCardSchema = new mongoose.Schema({
   // Is this card currently in an auction?
   inAuction: { type: Boolean, default: false },
 
+  // Is this card locked (cannot be sold/traded)?
+  isLocked: { type: Boolean, default: false },
+
 }, { collection: 'userCards', timestamps: true });
 
 // Compound index so we can quickly find all cards of a user
