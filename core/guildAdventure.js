@@ -2304,7 +2304,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     
     if (playersDead || enemiesDead) {
         try {
-            await endCombat(sock, enemiesDead, chatId);
+            await endCombat(sock, enemiesDead, sessionKey);
         } catch (endErr) {
             console.error("Critical error in endCombat:", endErr.message);
             // Emergency cleanup if endCombat crashed
@@ -2315,7 +2315,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     }
     
     // 💡 Recurse to Tick System
-    await processCombatTurn(sock, chatId);
+    await processCombatTurn(sock, sessionKey);
 }
 
 
@@ -3549,7 +3549,8 @@ const handleCombatAction = async (sock, chatId, senderJid, actionType, target) =
     state.pendingActions[senderJid] = action;
     
     // Execute action immediately
-    await performAction(sock, player, action, chatId);
+    const sessionKey = state.solo ? `${chatId}_${senderJid}` : chatId;
+    await performAction(sock, player, action, sessionKey);
     
     return null; // Action processed
 };
