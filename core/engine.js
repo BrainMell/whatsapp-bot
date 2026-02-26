@@ -1067,29 +1067,45 @@ async function scrapePornPics(searchTerm, count = 10, options = {}) {
         });
         
         const { document } = parseHTML(response.body);
-        const imgs = document.querySelectorAll('img');
-        console.log(`🔍 [${botConfig.getBotId()}] PornPics found ${imgs.length} image tags`);
+        const thumbBlocks = document.querySelectorAll('li.thumbw-box, .thumb-block, .thumb');
+        console.log(`🔍 [${botConfig.getBotId()}] PornPics found ${thumbBlocks.length} result blocks`);
         const candidates = [];
 
-        for (const img of imgs) {
-            let url = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('src');
-            if (!url) continue;
+        thumbBlocks.forEach(block => {
+            const img = block.querySelector('img');
+            if (!img) return;
+
+            let url = img.getAttribute('data-src') || 
+                      img.getAttribute('data-lazy-src') || 
+                      img.getAttribute('data-lazy') || 
+                      img.getAttribute('data-original') || 
+                      img.getAttribute('src');
+            
+            if (!url) return;
 
             if (!url.startsWith('http')) {
                 if (url.startsWith('//')) url = 'https:' + url;
                 else if (url.startsWith('/')) url = 'https://www.pornpics.com' + url;
-                else continue;
+                else return;
             }
 
-            if (url.includes('logo') || url.includes('icon') || url.includes('avatar')) continue;
+            // Exclude common UI elements
+            if (url.includes('logo') || url.includes('icon') || url.includes('avatar') || url.includes('pixel.gif')) return;
 
-            const w = parseInt(img.getAttribute('width')) || 0;
-            const h = parseInt(img.getAttribute('height')) || 0;
-            const score = w * h;
+            // Simple heuristic: search results usually have 'thumb' or 'tmb' in the URL
+            // We want to prioritize those that look like actual gallery items
+            candidates.push({ url, score: url.includes('thumb') ? 100 : 50 });
+        });
 
-            if (score > 20000 || (!w && !h)) {
-                candidates.push({ url, score });
-            }
+        // Fallback: search all images if no blocks found
+        if (candidates.length === 0) {
+            const imgs = document.querySelectorAll('img');
+            imgs.forEach(img => {
+                let url = img.getAttribute('data-src') || img.getAttribute('src');
+                if (url && url.startsWith('http') && !url.includes('logo')) {
+                    candidates.push({ url, score: 10 });
+                }
+            });
         }
 
         if (candidates.length === 0) {
