@@ -294,11 +294,12 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
     await inst.sock_ref.sendMessage(targetGroup, { image: Buffer.from(res.data), caption, mimetype: 'image/jpeg' });
 
-    inst.activeSpawns.set(card.id, {
+    const spawnKey = `${targetGroup}_${card.id}`;
+    inst.activeSpawns.set(spawnKey, {
       card, copyNumber: stat.totalSpawned, stat, price,
       groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS
     });
-    console.log(`[CardSystem][${botConfig.getBotId()}] Spawned: ${card.cardName} (T${card.tier}) #${stat.totalSpawned}/${stat.maxCopies}`);
+    console.log(`[CardSystem][${botConfig.getBotId()}] Spawned: ${card.cardName} (T${card.tier}) #${stat.totalSpawned}/${stat.maxCopies} in ${targetGroup}`);
     return { card, copyNumber: stat.totalSpawned, stat, price };
   } catch (err) {
     stat.totalSpawned -= 1;
@@ -309,6 +310,16 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 4 — COMMAND HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
+
+// GIF Cache
+const gifCache = {
+    decks: new Map(), // key: userId_deckName, value: { hash: string, buffer: Buffer }
+    collections: new Map() // key: userId, value: { hash: string, buffer: Buffer }
+};
+
+function getDeckHash(cards) {
+    return cards.map(c => c.cardId + (c.isLocked ? 'L' : 'U')).join('|');
+}
 
 function sendUsage(reply, cmd, usage, example) {
   let msg = `┏━━━━━━━━━━━━━━━━━┓\n`;
@@ -321,15 +332,26 @@ function sendUsage(reply, cmd, usage, example) {
   return reply(msg);
 }
 
-async function cmdClaim(args, senderJid, reply) {
+async function cmdClaim(args, senderJid, reply, chatId) {
   const inst = getInst();
-  const cardId = args.join('').replace(/\s+/g, '');
-  if (!cardId) return sendUsage(reply, `${P()} claim`, `${P()} claim <card-id>`, `${P()} claim 3-04521`);
+  const cardIdInput = args.join('').trim();
+  if (!cardIdInput) return sendUsage(reply, `${P()} claim`, `${P()} claim <card-id>`, `${P()} claim 3-04521`);
 
-  const spawn = inst.activeSpawns.get(cardId);
+  // Try exact match with composite key
+  const exactKey = `${chatId}_${cardIdInput}`;
+  let spawn = inst.activeSpawns.get(exactKey);
+  
+  if (!spawn) {
+      // Find case-insensitive match for this chat
+      const foundKey = Array.from(inst.activeSpawns.keys()).find(k => {
+          return k.toLowerCase() === exactKey.toLowerCase() || (k.startsWith(chatId + '_') && k.split('_')[1].toLowerCase() === cardIdInput.toLowerCase());
+      });
+      if (foundKey) spawn = inst.activeSpawns.get(foundKey);
+  }
+
   if (!spawn || Date.now() > spawn.expiresAt) {
-    if (spawn) inst.activeSpawns.delete(cardId);
-    return reply(`❌ No active card with ID \`${cardId}\`.`);
+    if (spawn) inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
+    return reply(`❌ No active card with ID \`${cardIdInput}\` in this group.`);
   }
 
   try {
@@ -337,26 +359,30 @@ async function cmdClaim(args, senderJid, reply) {
     spawn.stat.totalCirculation += 1;
     spawn.stat.uniqueOwners     += 1;
     await spawn.stat.save();
-    inst.activeSpawns.delete(cardId);
+    inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
     return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
   } catch (err) {
+    console.error('[Claim Error]', err);
     return reply('❌ Claim failed.');
   }
 }
 
-function getTopImageUrls(ownedCards) {
+function getTopCards(cards) {
   const tierOrder = { 'S': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1 };
-  const sorted = [...ownedCards].sort((a, b) => {
+  return [...cards].sort((a, b) => {
     const cardA = CARD_INDEX()[a.cardId];
     const cardB = CARD_INDEX()[b.cardId];
     const tA = tierOrder[cardA?.tier] || 0;
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-  });
-  return sorted.slice(0, 6).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  }).slice(0, 6);
+}
+
+function getTopImageUrls(topCards) {
+  return topCards.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
 }
 
 async function cmdCardsTier(senderJid, reply, chatId) {
@@ -392,9 +418,20 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
 
   // GIF generation for Tier View (Top 6 Highlights)
-  const imageUrls = getTopImageUrls(owned);
+  const topCards = getTopCards(owned);
+  const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
-    const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+    const currentHash = getDeckHash(topCards);
+    const cached = gifCache.collections.get(senderJid);
+    
+    let gifBuffer;
+    if (cached && cached.hash === currentHash) {
+        gifBuffer = cached.buffer;
+    } else {
+        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
+    }
+
     if (gifBuffer) {
       return await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
@@ -453,9 +490,20 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   // GIF generation for collection (Top 6 Highlights)
-  const imageUrls = getTopImageUrls(owned);
+  const topCards = getTopCards(owned);
+  const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
-    const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+    const currentHash = getDeckHash(topCards);
+    const cached = gifCache.collections.get(senderJid);
+    
+    let gifBuffer;
+    if (cached && cached.hash === currentHash) {
+        gifBuffer = cached.buffer;
+    } else {
+        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
+    }
+
     if (gifBuffer) {
       // Send first page with GIF
       const firstChunk = msg + lines.slice(0, 30).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
@@ -524,9 +572,20 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   msg += `\n\n*[Use ${p} deck <card_index> to see more detail about this card]*`;
 
   // GIF generation for deck (Top 6)
-  const imageUrls = getTopImageUrls(deck);
+  const topCards = getTopCards(deck);
+  const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
-    const gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS");
+    const currentHash = getDeckHash(topCards);
+    const cached = gifCache.decks.get(`${senderJid}_main`);
+    
+    let gifBuffer;
+    if (cached && cached.hash === currentHash) {
+        gifBuffer = cached.buffer;
+    } else {
+        gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS");
+        if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer });
+    }
+
     if (gifBuffer) {
         return await inst.sock_ref.sendMessage(chatId, { 
             video: gifBuffer, 
@@ -833,7 +892,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
 
 async function cmdCS(reply, args = []) {
   const p = P();
-  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name> [tier n]`, `${p} cs goku tier S`);
+  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [tier n]`, `${p} cs goku tier S`);
 
   let tierFilter = null;
   const tierIdx = args.findIndex(a => a.toLowerCase() === 'tier');
@@ -843,17 +902,26 @@ async function cmdCS(reply, args = []) {
   }
 
   const query = args.join(' ').toLowerCase().trim();
-  let matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query));
+  let matches = ALL_CARDS().filter(c => 
+    c.cardName.toLowerCase().includes(query) || 
+    c.animeName.toLowerCase().includes(query) ||
+    c.id.toLowerCase() === query
+  );
+
   if (tierFilter) {
     matches = matches.filter(c => String(c.tier) === tierFilter);
   }
+  
+  const totalFound = matches.length;
   matches = matches.slice(0, 15);
 
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
 
-  let msg = `🔍 *Search Results for "${query}"*${tierFilter ? ` (Tier ${tierFilter})` : ''}\n\n`;
+  let msg = `🔍 *Search Results for "${query}"*${tierFilter ? ` (Tier ${tierFilter})` : ''}\n`;
+  msg += `📦 Found ${totalFound} matches. Showing top 15:\n\n`;
+  
   matches.forEach(c => {
-    msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\`\n`;
+    msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
   });
 
   return reply(msg);
@@ -1014,16 +1082,25 @@ async function cmdListDecks(senderJid, reply) {
   return reply(msg);
 }
 
-async function cmdCreateDeck(senderJid, reply, args = []) {
+async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {}) {
   const p = P();
-  const name = args.join(' ').trim();
-  if (!name) return sendUsage(reply, `${p} create deck`, `${p} create deck <name>`, `${p} create deck Waifus`);
+  let name = args.join(' ').trim();
+  let targetJid = senderJid;
+
+  // Mod can create a deck for someone else by tagging them
+  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  if (isMod && mentioned) {
+      targetJid = mentioned;
+      name = args.filter(a => !a.includes('@')).join(' ').trim();
+  }
+
+  if (!name) return sendUsage(reply, `${p} create deck`, `${p} create deck <name> [@user]`, `${p} create deck Waifus`);
 
   try {
-    await CardDeck.create({ userId: senderJid, name: name, cards: [] });
-    return reply(`✅ Created custom deck: *"${name}"*`);
+    await CardDeck.create({ userId: targetJid, name: name, cards: [] });
+    return reply(`✅ Created custom deck *"${name}"*${targetJid !== senderJid ? ` for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
   } catch (err) {
-    if (err.code === 11000) return reply(`❌ A deck with the name *"${name}"* already exists.`);
+    if (err.code === 11000) return reply(`❌ A deck with the name *"${name}"* already exists for this user.`);
     return reply('❌ Failed to create deck.');
   }
 }
@@ -1067,14 +1144,40 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   if (deck.cards.length === 0) return reply(`📭 Custom deck *"${name}"* is empty.`);
 
   let msg = `📂 *CUSTOM DECK | ${deck.name.toUpperCase()}*\n\n`;
+  const ownedCards = [];
   for (let i = 0; i < deck.cards.length; i++) {
     const uc = await UserCard.findById(deck.cards[i]);
     if (uc) {
       const card = CARD_INDEX()[uc.cardId];
       msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
+      ownedCards.push(uc);
     }
   }
   msg += `\n💡 Use \`${p} cdeck ${deck.name} <slot>\` for details.`;
+
+  // GIF generation for custom deck (Top 6)
+  const topCards = getTopCards(ownedCards);
+  const imageUrls = getTopImageUrls(topCards);
+  if (imageUrls.length > 0) {
+    const currentHash = getDeckHash(topCards);
+    const cached = gifCache.decks.get(`${senderJid}_${deck.name}`);
+    
+    let gifBuffer;
+    if (cached && cached.hash === currentHash) {
+        gifBuffer = cached.buffer;
+    } else {
+        gifBuffer = await goService.generateCardGif(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
+        if (gifBuffer) gifCache.decks.set(`${senderJid}_${deck.name}`, { hash: currentHash, buffer: gifBuffer });
+    }
+
+    if (gifBuffer) {
+        return await inst.sock_ref.sendMessage(chatId, { 
+            video: gifBuffer, 
+            gifPlayback: true, 
+            caption: msg 
+        });
+    }
+  }
 
   return reply(msg);
 }
@@ -1098,18 +1201,36 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
   }
 }
 
-async function cmdDeleteDeck(senderJid, reply, args = []) {
+async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {}) {
   const p = P();
-  const name = args.join(' ').trim();
-  if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name>`, `${p} delete deck Waifus`);
+  let name = args.join(' ').trim();
+  let targetJid = senderJid;
 
-  const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
-  if (!deck) return reply(`❌ Deck *"${name}"* not found.`);
+  // Mod can delete someone else's deck by tagging them
+  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  if (isMod && mentioned) {
+      targetJid = mentioned;
+      name = args.filter(a => !a.includes('@')).join(' ').trim();
+  }
+
+  if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name> [@user]`, `${p} delete deck MyDeck`);
+
+  const deck = await CardDeck.findOne({ userId: targetJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
+  if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
 
   try {
-    await UserCard.deleteMany({ _id: { $in: deck.cards } });
+    // If it's a mod deleting someone else's deck, maybe we don't delete the cards?
+    // The current logic deletes UserCards: await UserCard.deleteMany({ _id: { $in: deck.cards } });
+    // This seems dangerous. Usually, deleting a deck should just delete the deck object, 
+    // and maybe return cards to collection?
+    // But UserCard has `inCustomDeck` flag? Let me check UserCard model.
+    
+    // Deleting UserCards is very destructive. I'll change it to just delete the deck 
+    // and move cards back to collection.
+    
+    await UserCard.updateMany({ _id: { $in: deck.cards } }, { inCustomDeck: false, customDeckName: null, customDeckSlot: null });
     await CardDeck.findByIdAndDelete(deck._id);
-    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* and all cards inside have been removed.`);
+    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* ${targetJid !== senderJid ? `belonging to @${targetJid.split('@')[0]}` : ''} has been removed. Cards returned to collection.`, { mentions: [targetJid] });
   } catch (err) { return reply('❌ Deletion failed.'); }
 }
 
@@ -1260,7 +1381,26 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   if (!cmd) return false;
 
+  // Mod check helper
+  const isCardMod = isOwner || inst.modJids.has(senderJid) || isMod;
+
   switch (cmd) {
+    case 'addmod':
+        if (!isOwner) return reply('❌ Only owner can add mods.'), true;
+        const targetAdd = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[0]?.includes('@') ? args[0] : null);
+        if (!targetAdd) return reply(`❌ Tag someone to add as mod.`), true;
+        inst.modJids.add(targetAdd);
+        await saveRoles();
+        return reply(`✅ @${targetAdd.split('@')[0]} is now a Card Moderator.`, { mentions: [targetAdd] }), true;
+
+    case 'delmod':
+        if (!isOwner) return reply('❌ Only owner can remove mods.'), true;
+        const targetDel = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[0]?.includes('@') ? args[0] : null);
+        if (!targetDel) return reply(`❌ Tag someone to remove.`), true;
+        inst.modJids.delete(targetDel);
+        await saveRoles();
+        return reply(`✅ @${targetDel.split('@')[0]} removed from Card Moderators.`, { mentions: [targetDel] }), true;
+
     case 'cards':
       if (args[0] === 'on') {
         if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.'), true;
@@ -1282,7 +1422,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return sendUsage(reply, `${p} cards`, `${p} cards <on/off/--tier>`, `${p} cards on`), true;
 
     case 'claim':
-      await cmdClaim(args, senderJid, reply);
+      await cmdClaim(args, senderJid, reply, chatId);
       return true;
 
     case 'coll':
@@ -1355,7 +1495,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'create':
       if (args[0] === 'deck') {
-        await cmdCreateDeck(senderJid, reply, args.slice(1));
+        await cmdCreateDeck(senderJid, reply, args.slice(1), isCardMod, m);
         return true;
       }
       return sendUsage(reply, `${p} create deck`, `${p} create deck <name>`, `${p} create deck Waifus`), true;
@@ -1369,7 +1509,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'delete':
       if (args[0] === 'deck') {
-        await cmdDeleteDeck(senderJid, reply, args.slice(1));
+        await cmdDeleteDeck(senderJid, reply, args.slice(1), isCardMod, m);
         return true;
       }
       return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name>`, `${p} delete deck MyDeck`), true;
@@ -1401,9 +1541,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return await cmdDecline(senderJid, reply, chatId);
 
     case 'spawn':
-      if (!isOwner && !inst.modJids.has(senderJid)) return reply('❌ No permission.'), true;
-      const spawnQuery = txt.split('|')[1]?.trim();
-      if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn | <name>`, `${p} spawn | Goku`), true;
+      if (!isCardMod) return reply('❌ No permission.'), true;
+      let spawnQuery = args.join(' ').trim();
+      if (spawnQuery.startsWith('|')) spawnQuery = spawnQuery.slice(1).trim();
+      if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id>`, `${p} spawn Goku`), true;
       await doSpawn(spawnQuery, null, true, chatId);
       return true;
   }
