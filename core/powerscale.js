@@ -50,7 +50,7 @@ async function scrapeVSBPage(pageUrl) {
 
         return {
             htmlContent: "EXTRACTED_BY_GO", 
-            imageUrl: data.imageURL || "",
+            imageUrl: data.imageUrl || "",
             summary: data.summary || "",
             tierRaw: data.tier || "",
             stats: {
