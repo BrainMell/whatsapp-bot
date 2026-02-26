@@ -10427,7 +10427,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
       'guild create', 'guild delete', 'guild join', 'guild leave', 'guild invite', 'guild accept', 'guild decline', 'guild list', 'guild members', 'guild tag', 'guild motto', 'guild promote', 'guild demote', 'guild kick', 'guild title', 'guild titles', 'guild ranks', 'guild leaderboard', 'guild points', 'guild pointsboard', 'guild upgrade', 'guild challenge', 'guild challenges',
       'news', 'anime news',
       'register', 'balance', 'bal', 'bh', 'history', 'daily', 'deposit', 'withdraw', 'transfer', 'send', 'rob', 'rich', 'money', 'economy', 'invest', 'claim', 'stocks', 'market',
-      'coll', 'deck', 'cards', 'cltr', 'scc', 'maker', 'burn', 'spawn',
+      'coll', 'deck', 'cards', 'cltr', 'scc', 'maker', 'burn', 'spawn', 'info', 't2deck', 't2coll', 'swap', 'buycard', 'sc', 'lock', 'merge', 'mergeall', 'cdeck', 'auction', 'bid', 'list decks', 'create deck', 'rename deck', 'delete deck',
       'cf', 'flip', 'dice', 'roll', 'slots', 'hl', 'bj', 'roulette', 'crash', 'mines', 'plinko', 'scratch', 'cups', 'wheel',
       'horse', 'lotto', 'rps', 'penalty', 'guess',
       'summary', 'recap', 'activity', 'active', 'inactive',

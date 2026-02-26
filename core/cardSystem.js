@@ -19,6 +19,7 @@ const UserCard   = require('./models/UserCard');
 const CardMarket = require('./models/CardMarket');
 const CardDeck   = require('./models/CardDeck');
 const System     = require('./models/System');
+const economy    = require('./economy');
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const botConfig  = require('../botConfig');
