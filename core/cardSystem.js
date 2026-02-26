@@ -700,6 +700,336 @@ async function cmdCltr(reply, chatId, args = []) {
   }
 }
 
+async function cmdInfo(reply, chatId, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return reply(`❌ Usage: \`${p} info <card_name or id>\``);
+
+  const card = ALL_CARDS().find(c => c.id.toLowerCase() === query || c.cardName.toLowerCase().includes(query));
+  if (!card) return reply(`❌ Card not found: *"${query}"*`);
+
+  const stat = await CardStat.findOne({ cardId: card.id });
+  const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
+  
+  try {
+    const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+    return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+  } catch (e) {
+    return reply(caption);
+  }
+}
+
+async function cmdT2Deck(senderJid, reply, args = []) {
+  const p = P();
+  const index = parseInt(args[0]);
+  if (isNaN(index)) return reply(`❌ Usage: \`${p} t2deck <coll_index>\``);
+
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const uc = owned[index - 1];
+  if (!uc) return reply('❌ Card not found in your collection.');
+
+  // Find next available slot
+  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  if (deck.length >= MAIN_DECK_SIZE) return reply(`❌ Your main deck is full (${MAIN_DECK_SIZE}/12)! Move a card to collection first.`);
+
+  const usedSlots = deck.map(d => d.mainDeckSlot);
+  let slot = 1;
+  while (usedSlots.includes(slot)) slot++;
+
+  uc.inMainDeck = true;
+  uc.mainDeckSlot = slot;
+  await uc.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`✅ *${card.cardName}* moved to main deck (Slot #${slot}).`);
+}
+
+async function cmdT2Coll(senderJid, reply, args = []) {
+  const p = P();
+  const slot = parseInt(args[0]);
+  if (isNaN(slot)) return reply(`❌ Usage: \`${p} t2coll <deck_slot>\``);
+
+  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
+
+  uc.inMainDeck = false;
+  uc.mainDeckSlot = null;
+  await uc.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`✅ *${card.cardName}* moved back to collection.`);
+}
+
+async function cmdSwapCard(senderJid, reply, args = []) {
+  const p = P();
+  // Support ".j swap card 1 and 2" or ".j swap 1 2"
+  let a, b;
+  if (args[0] === 'card') {
+    a = parseInt(args[1]);
+    b = parseInt(args[3]);
+  } else {
+    a = parseInt(args[0]);
+    b = parseInt(args[1]);
+  }
+
+  if (isNaN(a) || isNaN(b)) return reply(`❌ Usage: \`${p} swap card <a> and <b>\``);
+
+  const cardA = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: a });
+  const cardB = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: b });
+
+  if (!cardA && !cardB) return reply('❌ Both slots are empty.');
+
+  if (cardA) cardA.mainDeckSlot = b;
+  if (cardB) cardB.mainDeckSlot = a;
+
+  if (cardA) await cardA.save();
+  if (cardB) await cardB.save();
+
+  return reply(`✅ Swapped Slot #${a} and Slot #${b}.`);
+}
+
+async function cmdCG(senderJid, reply, args = [], m) {
+  const p = P();
+  // Usage: .cg @user <coll_index>
+  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  if (mentioned.length === 0) return reply(`❌ Usage: \`${p} cg @user <coll_index>\``);
+
+  const targetJid = mentioned[0];
+  const indexStr = args.find(a => !isNaN(parseInt(a)));
+  const index = parseInt(indexStr);
+
+  if (isNaN(index)) return reply(`❌ Usage: \`${p} cg @user <coll_index>\``);
+
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const uc = owned[index - 1];
+  if (!uc) return reply('❌ Card not found in your collection.');
+
+  uc.userId = targetJid;
+  await uc.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`🎁 *GIFT SENT!*\n\n@${senderJid.split('@')[0]} gave *${card.cardName}* to @${targetJid.split('@')[0]}!`, { mentions: [senderJid, targetJid] });
+}
+
+async function cmdCS(reply, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return reply(`❌ Usage: \`${p} cs <card_name>\``);
+
+  const matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query)).slice(0, 15);
+  if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*`);
+
+  let msg = `🔍 *Search Results for "${query}"*\n\n`;
+  matches.forEach(c => {
+    msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\`\n`;
+  });
+
+  return reply(msg);
+}
+
+async function cmdBuyCard(senderJid, reply, args = []) {
+  const p = P();
+  const inst = getInst();
+  
+  if (args.length > 0) {
+    const index = parseInt(args[0]);
+    if (!isNaN(index)) {
+        // Buy a specific listing
+        const active = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ listedAt: -1 });
+        const listing = active[index - 1];
+        if (!listing) return reply('❌ Invalid listing number.');
+
+        if (listing.sellerId === senderJid) return reply('❌ You cannot buy your own card.');
+
+        const balance = economy.getBalance(senderJid);
+        if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
+
+        try {
+            // Transaction
+            economy.removeMoney(senderJid, listing.price);
+            economy.addMoney(listing.sellerId, listing.price);
+
+            // Transfer Card
+            await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null });
+
+            listing.status = 'sold';
+            listing.completedAt = new Date();
+            await listing.save();
+
+            const card = CARD_INDEX()[listing.cardId];
+            return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card.cardName}* for ${ZENI()}${listing.price.toLocaleString()}.`);
+        } catch (err) { return reply('❌ Purchase failed.'); }
+    }
+  }
+
+  const active = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ listedAt: -1 }).limit(10);
+  if (active.length === 0) return reply('📭 No cards currently listed for sale.');
+
+  let msg = `🛒 *CARD MARKET | SALE LISTINGS*\n\n`;
+  active.forEach((l, i) => {
+    const card = CARD_INDEX()[l.cardId];
+    msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
+    msg += `   💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
+    msg += `   👤 Seller: @${l.sellerId.split('@')[0]}\n\n`;
+  });
+
+  msg += `💡 Use \`${p} buycard <number>\` to purchase.`;
+  return reply(msg, { mentions: active.map(l => l.sellerId) });
+}
+
+async function cmdSC(senderJid, reply, args = []) {
+  const p = P();
+  const slot = parseInt(args[0]);
+  const price = parseInt(args[1]);
+
+  if (isNaN(slot) || isNaN(price) || price < 1) return reply(`❌ Usage: \`${p} sc <deck_slot> <price>\``);
+
+  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
+  if (uc.isLocked) return reply('❌ This card is locked! Unlock it first.');
+
+  try {
+    // Mark card as for sale
+    uc.forSale = true;
+    uc.salePrice = price;
+    await uc.save();
+
+    // Create listing
+    await CardMarket.create({
+        userCardId: uc._id,
+        cardId: uc.cardId,
+        sellerId: senderJid,
+        type: 'sale',
+        price: price,
+        status: 'active'
+    });
+
+    const card = CARD_INDEX()[uc.cardId];
+    return reply(`🛒 *LISTED FOR SALE!*\n\n*${card.cardName}* has been listed for ${ZENI()}${price.toLocaleString()}.`);
+  } catch (err) { return reply('❌ Listing failed.'); }
+}
+
+async function cmdLock(senderJid, reply, args = []) {
+  const p = P();
+  const input = args[0];
+  if (!input) return reply(`❌ Usage: \`${p} lock <deck_slot or id>\``);
+
+  let uc;
+  const slot = parseInt(input);
+  if (!isNaN(slot)) {
+    uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  } else {
+    uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+  }
+
+  if (!uc) return reply('❌ Card not found.');
+
+  uc.isLocked = !uc.isLocked;
+  await uc.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`🔒 *${card.cardName}* is now ${uc.isLocked ? 'LOCKED' : 'UNLOCKED'}.`);
+}
+
+async function cmdMerge(senderJid, reply, args = []) {
+  const p = P();
+  const query = args.join('').trim();
+  if (!query) return reply(`❌ Usage: \`${p} merge <card_id>\``);
+
+  const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, forSale: false, isLocked: false });
+  if (owned.length < 2) return reply(`❌ You need at least 2 unlocked copies of \`${query}\` in your collection to merge.`);
+
+  try {
+    const toDelete = owned[0];
+    await UserCard.findByIdAndDelete(toDelete._id);
+
+    const reward = 500;
+    economy.addMoney(senderJid, reward);
+
+    const card = CARD_INDEX()[query];
+    return reply(`🧬 *MERGE SUCCESSFUL!*\n\nMerged 2 copies of *${card?.cardName || query}*.\n💰 Reward: ${ZENI()}${reward.toLocaleString()} Zeni`);
+  } catch (err) { return reply('❌ Merge failed.'); }
+}
+
+async function cmdMergeAll(senderJid, reply) {
+  try {
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, forSale: false, isLocked: false });
+    const groups = {};
+    owned.forEach(uc => {
+      if (!groups[uc.cardId]) groups[uc.cardId] = [];
+      groups[uc.cardId].push(uc);
+    });
+
+    let totalMerged = 0;
+    let totalReward = 0;
+
+    for (const cardId in groups) {
+      const list = groups[cardId];
+      if (list.length >= 2) {
+        const toDeleteCount = list.length - 1;
+        for (let i = 0; i < toDeleteCount; i++) {
+          await UserCard.findByIdAndDelete(list[i]._id);
+          totalMerged++;
+          totalReward += 500;
+        }
+      }
+    }
+
+    if (totalMerged === 0) return reply('✨ No duplicates found to merge.');
+
+    economy.addMoney(senderJid, totalReward);
+    return reply(`🧬 *MASS MERGE COMPLETE!*\n\nMerged ${totalMerged} duplicate cards.\n💰 Total Reward: ${ZENI()}${totalReward.toLocaleString()} Zeni`);
+  } catch (err) { return reply('❌ Mass merge failed.'); }
+}
+
+async function cmdListDecks(senderJid, reply) {
+  const decks = await CardDeck.find({ userId: senderJid });
+  if (decks.length === 0) return reply('📭 You have no custom decks. Create one with `.create deck <name>`.');
+
+  let msg = `📂 *YOUR CUSTOM DECKS*\n\n`;
+  decks.forEach((d, i) => {
+    msg += `*${i + 1}.* ${d.name} (${d.cards.length} cards)\n`;
+  });
+
+  return reply(msg);
+}
+
+async function cmdCreateDeck(senderJid, reply, args = []) {
+  const p = P();
+  const name = args.join(' ').trim();
+  if (!name) return reply(`❌ Usage: \`${p} create deck <name>\``);
+
+  try {
+    await CardDeck.create({ userId: senderJid, name: name, cards: [] });
+    return reply(`✅ Created custom deck: *"${name}"*`);
+  } catch (err) {
+    if (err.code === 11000) return reply(`❌ A deck with the name *"${name}"* already exists.`);
+    return reply('❌ Failed to create deck.');
+  }
+}
+
+async function cmdCDeck(senderJid, reply, args = []) {
+  const p = P();
+  const name = args.join(' ').trim();
+  if (!name) return reply(`❌ Usage: \`${p} cdeck <name>\``);
+
+  const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
+  if (!deck) return reply(`❌ Custom deck *"${name}"* not found.`);
+
+  if (deck.cards.length === 0) return reply(`📭 Custom deck *"${name}"* is empty.`);
+
+  let msg = `📂 *CUSTOM DECK | ${deck.name.toUpperCase()}*\n\n`;
+  for (let i = 0; i < deck.cards.length; i++) {
+    const uc = await UserCard.findById(deck.cards[i]);
+    if (uc) {
+      const card = CARD_INDEX()[uc.cardId];
+      msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
+    }
+  }
+
+  return reply(msg);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 5 — ROUTER & INIT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -758,6 +1088,87 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (lowerTxt.startsWith(`${p}deck`) || lowerTxt.startsWith(`${p} deck`)) {
     const deckArgs = lowerTxt.startsWith(`${p} deck`) ? parts.slice(2) : parts.slice(1);
     await cmdDeck(senderJid, reply, chatId, deckArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}info`) || lowerTxt.startsWith(`${p} info`)) {
+    const infoArgs = lowerTxt.startsWith(`${p} info`) ? parts.slice(2) : parts.slice(1);
+    await cmdInfo(reply, chatId, infoArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}t2deck`) || lowerTxt.startsWith(`${p} t2deck`)) {
+    const t2dArgs = lowerTxt.startsWith(`${p} t2deck`) ? parts.slice(2) : parts.slice(1);
+    await cmdT2Deck(senderJid, reply, t2dArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}t2coll`) || lowerTxt.startsWith(`${p} t2coll`)) {
+    const t2cArgs = lowerTxt.startsWith(`${p} t2coll`) ? parts.slice(2) : parts.slice(1);
+    await cmdT2Coll(senderJid, reply, t2cArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}swap`) || lowerTxt.startsWith(`${p} swap`)) {
+    const swapArgs = lowerTxt.startsWith(`${p} swap`) ? parts.slice(2) : parts.slice(1);
+    await cmdSwapCard(senderJid, reply, swapArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}cg`) || lowerTxt.startsWith(`${p} cg`)) {
+    const cgArgs = lowerTxt.startsWith(`${p} cg`) ? parts.slice(2) : parts.slice(1);
+    await cmdCG(senderJid, reply, cgArgs, m);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}cs`) || lowerTxt.startsWith(`${p} cs`)) {
+    const csArgs = lowerTxt.startsWith(`${p} cs`) ? parts.slice(2) : parts.slice(1);
+    await cmdCS(reply, csArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}buycard`) || lowerTxt.startsWith(`${p} buycard`)) {
+    const buyArgs = lowerTxt.startsWith(`${p} buycard`) ? parts.slice(2) : parts.slice(1);
+    await cmdBuyCard(senderJid, reply, buyArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}sc`) || lowerTxt.startsWith(`${p} sc`)) {
+    const scArgs = lowerTxt.startsWith(`${p} sc`) ? parts.slice(2) : parts.slice(1);
+    await cmdSC(senderJid, reply, scArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}lock`) || lowerTxt.startsWith(`${p} lock`)) {
+    const lockArgs = lowerTxt.startsWith(`${p} lock`) ? parts.slice(2) : parts.slice(1);
+    await cmdLock(senderJid, reply, lockArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}merge`) || lowerTxt.startsWith(`${p} merge`)) {
+    if (lowerTxt === `${p}mergeall`) {
+        await cmdMergeAll(senderJid, reply);
+    } else {
+        const mergeArgs = lowerTxt.startsWith(`${p} merge`) ? parts.slice(2) : parts.slice(1);
+        await cmdMerge(senderJid, reply, mergeArgs);
+    }
+    return true;
+  }
+
+  if (lowerTxt === `${p}list decks`) {
+    await cmdListDecks(senderJid, reply);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}create deck`) || lowerTxt.startsWith(`${p} create deck`)) {
+    const createArgs = lowerTxt.startsWith(`${p} create deck`) ? parts.slice(3) : parts.slice(2);
+    await cmdCreateDeck(senderJid, reply, createArgs);
+    return true;
+  }
+
+  if (lowerTxt.startsWith(`${p}cdeck`) || lowerTxt.startsWith(`${p} cdeck`)) {
+    const cdeckArgs = lowerTxt.startsWith(`${p} cdeck`) ? parts.slice(2) : parts.slice(1);
+    await cmdCDeck(senderJid, reply, cdeckArgs);
     return true;
   }
 
