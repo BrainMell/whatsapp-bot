@@ -10,6 +10,25 @@ class GoImageService {
             maxBodyLength: Infinity,
             maxContentLength: Infinity
         });
+        
+        // Queue for sequential processing
+        this.heavyOpQueue = Promise.resolve();
+    }
+
+    /*
+     * Helper to queue heavy operations sequentially
+     */
+    async _enqueue(op) {
+        return new Promise((resolve, reject) => {
+            this.heavyOpQueue = this.heavyOpQueue.then(async () => {
+                try {
+                    const result = await op();
+                    resolve(result);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
     }
 
     async healthCheck() {
@@ -25,133 +44,149 @@ class GoImageService {
      * Generate Combat Image
      */
     async generateCombatImage(data) {
-        try {
-            const response = await this.client.post('/api/combat', data, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Combat Error:', error.message);
-            throw error;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/combat', data, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Combat Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Generate Combat End Screen
      */
     async generateCombatEndScreen(text) {
-        try {
-            const response = await this.client.post('/api/combat/endscreen', { text }, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Combat EndScreen Error:', error.message);
-            throw error;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/combat/endscreen', { text }, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Combat EndScreen Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Generate Chess Board
      */
     async generateChessBoard(data) {
-        try {
-            const response = await this.client.post('/api/chess', data, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Chess Error:', error.message);
-            throw error;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/chess', data, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Chess Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Render Ludo Board
      */
     async renderLudoBoard(data, pfpUrls = {}) {
-        try {
-            // Merge pfpUrls into players if provided
-            if (data.players && pfpUrls) {
-                data.players = data.players.map(p => ({
-                    ...p,
-                    pfpUrl: p.pfpUrl || pfpUrls[p.jid] || ''
-                }));
-            }
+        return this._enqueue(async () => {
+            try {
+                // Merge pfpUrls into players if provided
+                if (data.players && pfpUrls) {
+                    data.players = data.players.map(p => ({
+                        ...p,
+                        pfpUrl: p.pfpUrl || pfpUrls[p.jid] || ''
+                    }));
+                }
 
-            const response = await this.client.post('/api/ludo', data, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Ludo Error:', error.message);
-            throw error;
-        }
+                const response = await this.client.post('/api/ludo', data, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Ludo Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Render Tic-Tac-Toe Board
      */
     async renderTicTacToeBoard(data) {
-        try {
-            const response = await this.client.post('/api/ttt', data, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService TTT Error:', error.message);
-            throw error;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/ttt', data, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService TTT Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Render Tic-Tac-Toe Leaderboard
      */
     async renderTicTacToeLeaderboard(scores) {
-        try {
-            const response = await this.client.post('/api/ttt/leaderboard', { scores }, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService TTT Leaderboard Error:', error.message);
-            throw error;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/ttt/leaderboard', { scores }, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService TTT Leaderboard Error:', error.message);
+                throw error;
+            }
+        });
     }
 
     /*
      * Generate Card Collection/Deck GIF
      */
     async generateCardGif(imageUrls, title) {
-        try {
-            const response = await this.client.post('/api/cards/gif', {
-                images: imageUrls,
-                title: title
-            }, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Card GIF Error:', error.message);
-            return null;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/cards/gif', {
+                    images: imageUrls,
+                    title: title
+                }, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Card GIF Error:', error.message);
+                return null;
+            }
+        });
     }
 
     /*
      * Generate Card Burning GIF
      */
     async generateBurnGif(imageUrl) {
-        try {
-            const response = await this.client.post('/api/cards/burn', {
-                imageUrl: imageUrl
-            }, {
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService Card Burn Error:', error.message);
-            return null;
-        }
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/cards/burn', {
+                    imageUrl: imageUrl
+                }, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Card Burn Error:', error.message);
+                return null;
+            }
+        });
     }
 
     /*
