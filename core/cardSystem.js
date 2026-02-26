@@ -81,7 +81,6 @@ function getInst() {
   return instances.get(id);
 }
 
-// Redirect helpers to pull from current instance memory
 const ALL_CARDS     = () => getInst().ALL_CARDS;
 const CARD_INDEX    = () => getInst().CARD_INDEX;
 const CARDS_BY_TIER = () => getInst().CARDS_BY_TIER;
@@ -310,10 +309,21 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 //  SECTION 4 — COMMAND HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
+function sendUsage(reply, cmd, usage, example) {
+  let msg = `┏━━━━━━━━━━━━━━━━━┓\n`;
+  msg += `┃   📖 *USAGE GUIDE* \n`;
+  msg += `┗━━━━━━━━━━━━━━━━━┛\n\n`;
+  msg += `*Command:* \`${cmd}\`\n`;
+  msg += `*Usage:* \`${usage}\`\n`;
+  msg += `*Example:* \`${example}\`\n\n`;
+  msg += `💡 _Make sure you are using the correct indices from your collection or deck._`;
+  return reply(msg);
+}
+
 async function cmdClaim(args, senderJid, reply) {
   const inst = getInst();
   const cardId = args.join('').replace(/\s+/g, '');
-  if (!cardId) return reply(`❌ Usage: *${P()} claim <card-id>*`);
+  if (!cardId) return sendUsage(reply, `${P()} claim`, `${P()} claim <card-id>`, `${P()} claim 3-04521`);
 
   const spawn = inst.activeSpawns.get(cardId);
   if (!spawn || Date.now() > spawn.expiresAt) {
@@ -343,7 +353,7 @@ function getTopImageUrls(ownedCards) {
     const tA = tierOrder[cardA?.tier] || 0;
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
-    return (b.copyNumber || 0) - (a.copyNumber || 0); // fallback to copy number (lower is better? no, higher is usually newer/rarer in some systems, but here lower is better for rarity. wait, user said value. Highest tier is most important).
+    return (b.copyNumber || 0) - (a.copyNumber || 0);
   });
   return sorted.slice(0, 6).map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
 }
@@ -380,7 +390,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
 
   finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
 
-  // GIF generation for Tier View (Top 6)
+  // GIF generation for Tier View (Top 6 Highlights)
   const imageUrls = getTopImageUrls(owned);
   if (imageUrls.length > 0) {
     const gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
@@ -422,7 +432,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
         return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
       } catch (e) { return reply(caption); }
     }
-    return reply('❌ Card not found.');
+    return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]`, `${p} coll 5`);
   }
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
@@ -491,7 +501,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             } catch (e) { return reply(caption); }
         }
     }
-    return reply('❌ Card not found in that deck slot.');
+    return sendUsage(reply, `${p} deck`, `${p} deck [slot_number]`, `${p} deck 1`);
   }
 
   const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
@@ -531,7 +541,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 async function cmdScc(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const animeQuery = args.join(' ').toLowerCase().trim();
-  if (!animeQuery) return reply('❌ Usage: *.j scc <anime_name>*');
+  if (!animeQuery) return sendUsage(reply, `${P()} scc`, `${P()} scc <anime_name>`, `${P()} scc dragon ball`);
 
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const filtered = owned.filter(uc => {
@@ -557,7 +567,7 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 async function cmdMaker(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const makerQuery = args.join(' ').replace(/["']/g, '').toLowerCase().trim();
-  if (!makerQuery) return reply('❌ Usage: *.j maker "<maker_name>"*');
+  if (!makerQuery) return sendUsage(reply, `${P()} maker`, `${P()} maker "<maker_name>"`, `${P()} maker Mah_xee`);
 
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const filtered = owned.filter(uc => {
@@ -592,7 +602,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
 async function cmdBurn(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const index = parseInt(args[0]);
-  if (isNaN(index)) return reply('❌ Usage: *.j burn <coll_index>*');
+  if (isNaN(index)) return sendUsage(reply, `${P()} burn`, `${P()} burn <coll_index>`, `${P()} burn 12`);
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
@@ -631,7 +641,7 @@ async function cmdAccept(senderJid, reply, chatId) {
     return true;
   } catch (err) {
     await reply('❌ Failed to delete card.');
-    return true; // handled but failed
+    return true;
   }
 }
 
@@ -650,7 +660,7 @@ async function cmdCltr(reply, chatId, args = []) {
   const p = P();
   const query = args.join(' ').toLowerCase().trim();
   if (!query) {
-    return reply(`❌ *Usage:* \`${p} cltr <series_name>\`\n\nExample: \`${p} cltr fullmetal\``);
+    return sendUsage(reply, `${p} cltr`, `${p} cltr <series_name>`, `${p} cltr fullmetal`);
   }
 
   try {
@@ -663,7 +673,6 @@ async function cmdCltr(reply, chatId, args = []) {
     const cardIds = seriesCards.map(c => c.id);
 
     // 2. Aggregate owners
-    // We group by userId and count how many documents they have with these cardIds
     const collectors = await UserCard.aggregate([
       { $match: { cardId: { $in: cardIds } } },
       { $group: { _id: "$userId", count: { $sum: 1 } } },
@@ -703,7 +712,7 @@ async function cmdCltr(reply, chatId, args = []) {
 async function cmdInfo(reply, chatId, args = []) {
   const p = P();
   const query = args.join(' ').toLowerCase().trim();
-  if (!query) return reply(`❌ Usage: \`${p} info <card_name or id>\``);
+  if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id>`, `${p} info goku`);
 
   const card = ALL_CARDS().find(c => c.id.toLowerCase() === query || c.cardName.toLowerCase().includes(query));
   if (!card) return reply(`❌ Card not found: *"${query}"*`);
@@ -722,7 +731,7 @@ async function cmdInfo(reply, chatId, args = []) {
 async function cmdT2Deck(senderJid, reply, args = []) {
   const p = P();
   const index = parseInt(args[0]);
-  if (isNaN(index)) return reply(`❌ Usage: \`${p} t2deck <coll_index>\``);
+  if (isNaN(index)) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index>`, `${p} t2deck 1`);
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
@@ -747,7 +756,7 @@ async function cmdT2Deck(senderJid, reply, args = []) {
 async function cmdT2Coll(senderJid, reply, args = []) {
   const p = P();
   const slot = parseInt(args[0]);
-  if (isNaN(slot)) return reply(`❌ Usage: \`${p} t2coll <deck_slot>\``);
+  if (isNaN(slot)) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot>`, `${p} t2coll 1`);
 
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
@@ -772,7 +781,7 @@ async function cmdSwapCard(senderJid, reply, args = []) {
     b = parseInt(args[1]);
   }
 
-  if (isNaN(a) || isNaN(b)) return reply(`❌ Usage: \`${p} swap card <a> and <b>\``);
+  if (isNaN(a) || isNaN(b)) return sendUsage(reply, `${p} swap card`, `${p} swap card <a> and <b>`, `${p} swap card 1 and 2`);
 
   const cardA = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: a });
   const cardB = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: b });
@@ -790,21 +799,31 @@ async function cmdSwapCard(senderJid, reply, args = []) {
 
 async function cmdCG(senderJid, reply, args = [], m) {
   const p = P();
-  // Usage: .cg @user <coll_index>
+  // Usage: .cg @user <index> [Deck]
   const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  if (mentioned.length === 0) return reply(`❌ Usage: \`${p} cg @user <coll_index>\``);
+  if (mentioned.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 5`);
 
   const targetJid = mentioned[0];
+  const isFromDeck = args.some(a => a.toLowerCase() === 'deck');
   const indexStr = args.find(a => !isNaN(parseInt(a)));
   const index = parseInt(indexStr);
 
-  if (isNaN(index)) return reply(`❌ Usage: \`${p} cg @user <coll_index>\``);
+  if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 1`);
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
-  const uc = owned[index - 1];
-  if (!uc) return reply('❌ Card not found in your collection.');
+  let uc;
+  if (isFromDeck) {
+    uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: index });
+  } else {
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+    uc = owned[index - 1];
+  }
+
+  if (!uc) return reply(`❌ Card not found in your ${isFromDeck ? 'deck' : 'collection'}.`);
+  if (uc.isLocked) return reply('❌ This card is locked!');
 
   uc.userId = targetJid;
+  uc.inMainDeck = false;
+  uc.mainDeckSlot = null;
   await uc.save();
 
   const card = CARD_INDEX()[uc.cardId];
@@ -813,13 +832,25 @@ async function cmdCG(senderJid, reply, args = [], m) {
 
 async function cmdCS(reply, args = []) {
   const p = P();
+  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name> [tier n]`, `${p} cs goku tier S`);
+
+  let tierFilter = null;
+  const tierIdx = args.findIndex(a => a.toLowerCase() === 'tier');
+  if (tierIdx !== -1 && args[tierIdx + 1]) {
+    tierFilter = args[tierIdx + 1].toUpperCase();
+    args.splice(tierIdx, 2);
+  }
+
   const query = args.join(' ').toLowerCase().trim();
-  if (!query) return reply(`❌ Usage: \`${p} cs <card_name>\``);
+  let matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query));
+  if (tierFilter) {
+    matches = matches.filter(c => String(c.tier) === tierFilter);
+  }
+  matches = matches.slice(0, 15);
 
-  const matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query)).slice(0, 15);
-  if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*`);
+  if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
 
-  let msg = `🔍 *Search Results for "${query}"*\n\n`;
+  let msg = `🔍 *Search Results for "${query}"*${tierFilter ? ` (Tier ${tierFilter})` : ''}\n\n`;
   matches.forEach(c => {
     msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\`\n`;
   });
@@ -834,7 +865,6 @@ async function cmdBuyCard(senderJid, reply, args = []) {
   if (args.length > 0) {
     const index = parseInt(args[0]);
     if (!isNaN(index)) {
-        // Buy a specific listing
         const active = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ listedAt: -1 });
         const listing = active[index - 1];
         if (!listing) return reply('❌ Invalid listing number.');
@@ -845,17 +875,12 @@ async function cmdBuyCard(senderJid, reply, args = []) {
         if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
 
         try {
-            // Transaction
             economy.removeMoney(senderJid, listing.price);
             economy.addMoney(listing.sellerId, listing.price);
-
-            // Transfer Card
             await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null });
-
             listing.status = 'sold';
             listing.completedAt = new Date();
             await listing.save();
-
             const card = CARD_INDEX()[listing.cardId];
             return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card.cardName}* for ${ZENI()}${listing.price.toLocaleString()}.`);
         } catch (err) { return reply('❌ Purchase failed.'); }
@@ -882,19 +907,16 @@ async function cmdSC(senderJid, reply, args = []) {
   const slot = parseInt(args[0]);
   const price = parseInt(args[1]);
 
-  if (isNaN(slot) || isNaN(price) || price < 1) return reply(`❌ Usage: \`${p} sc <deck_slot> <price>\``);
+  if (isNaN(slot) || isNaN(price) || price < 1) return sendUsage(reply, `${p} sc`, `${p} sc <deck_slot> <price>`, `${p} sc 1 5000`);
 
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
   if (uc.isLocked) return reply('❌ This card is locked! Unlock it first.');
 
   try {
-    // Mark card as for sale
     uc.forSale = true;
     uc.salePrice = price;
     await uc.save();
-
-    // Create listing
     await CardMarket.create({
         userCardId: uc._id,
         cardId: uc.cardId,
@@ -903,7 +925,6 @@ async function cmdSC(senderJid, reply, args = []) {
         price: price,
         status: 'active'
     });
-
     const card = CARD_INDEX()[uc.cardId];
     return reply(`🛒 *LISTED FOR SALE!*\n\n*${card.cardName}* has been listed for ${ZENI()}${price.toLocaleString()}.`);
   } catch (err) { return reply('❌ Listing failed.'); }
@@ -912,7 +933,7 @@ async function cmdSC(senderJid, reply, args = []) {
 async function cmdLock(senderJid, reply, args = []) {
   const p = P();
   const input = args[0];
-  if (!input) return reply(`❌ Usage: \`${p} lock <deck_slot or id>\``);
+  if (!input) return sendUsage(reply, `${p} lock`, `${p} lock <deck_slot or card_id>`, `${p} lock 1`);
 
   let uc;
   const slot = parseInt(input);
@@ -934,7 +955,7 @@ async function cmdLock(senderJid, reply, args = []) {
 async function cmdMerge(senderJid, reply, args = []) {
   const p = P();
   const query = args.join('').trim();
-  if (!query) return reply(`❌ Usage: \`${p} merge <card_id>\``);
+  if (!query) return sendUsage(reply, `${p} merge`, `${p} merge <card_id>`, `${p} merge 3-04521`);
 
   const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, forSale: false, isLocked: false });
   if (owned.length < 2) return reply(`❌ You need at least 2 unlocked copies of \`${query}\` in your collection to merge.`);
@@ -942,10 +963,8 @@ async function cmdMerge(senderJid, reply, args = []) {
   try {
     const toDelete = owned[0];
     await UserCard.findByIdAndDelete(toDelete._id);
-
     const reward = 500;
     economy.addMoney(senderJid, reward);
-
     const card = CARD_INDEX()[query];
     return reply(`🧬 *MERGE SUCCESSFUL!*\n\nMerged 2 copies of *${card?.cardName || query}*.\n💰 Reward: ${ZENI()}${reward.toLocaleString()} Zeni`);
   } catch (err) { return reply('❌ Merge failed.'); }
@@ -997,7 +1016,7 @@ async function cmdListDecks(senderJid, reply) {
 async function cmdCreateDeck(senderJid, reply, args = []) {
   const p = P();
   const name = args.join(' ').trim();
-  if (!name) return reply(`❌ Usage: \`${p} create deck <name>\``);
+  if (!name) return sendUsage(reply, `${p} create deck`, `${p} create deck <name>`, `${p} create deck Waifus`);
 
   try {
     await CardDeck.create({ userId: senderJid, name: name, cards: [] });
@@ -1008,13 +1027,41 @@ async function cmdCreateDeck(senderJid, reply, args = []) {
   }
 }
 
-async function cmdCDeck(senderJid, reply, args = []) {
+async function cmdCDeck(senderJid, reply, chatId, args = []) {
   const p = P();
-  const name = args.join(' ').trim();
-  if (!name) return reply(`❌ Usage: \`${p} cdeck <name>\``);
+  
+  // Try to parse slot if last arg is a number
+  let slot = null;
+  let name = args.join(' ').trim();
+  
+  if (args.length > 1) {
+    const last = parseInt(args[args.length - 1]);
+    if (!isNaN(last)) {
+      slot = last;
+      name = args.slice(0, -1).join(' ').trim();
+    }
+  }
+
+  if (!name) return sendUsage(reply, `${p} cdeck`, `${p} cdeck <name> [slot]`, `${p} cdeck Waifus 1`);
 
   const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
   if (!deck) return reply(`❌ Custom deck *"${name}"* not found.`);
+
+  if (slot !== null) {
+    const ucId = deck.cards[slot - 1];
+    if (!ucId) return reply(`❌ No card in slot #${slot} of deck *"${name}"*.`);
+    
+    const uc = await UserCard.findById(ucId);
+    if (uc) {
+      const card = CARD_INDEX()[uc.cardId];
+      const stat = await CardStat.findOne({ cardId: uc.cardId });
+      const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot);
+      try {
+        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+        return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+      } catch (e) { return reply(caption); }
+    }
+  }
 
   if (deck.cards.length === 0) return reply(`📭 Custom deck *"${name}"* is empty.`);
 
@@ -1026,6 +1073,7 @@ async function cmdCDeck(senderJid, reply, args = []) {
       msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
     }
   }
+  msg += `\n💡 Use \`${p} cdeck ${deck.name} <slot>\` for details.`;
 
   return reply(msg);
 }
@@ -1034,7 +1082,7 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
   const p = P();
   const raw = args.join(' ');
   const [oldName, newName] = raw.split('|').map(s => s.trim());
-  if (!oldName || !newName) return reply(`❌ Usage: \`${p} rename deck <old_name> | <new_name>\``);
+  if (!oldName || !newName) return sendUsage(reply, `${p} rename deck`, `${p} rename deck <old> | <new>`, `${p} rename deck Waifus | Best Waifus`);
 
   try {
     const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${oldName}$`, 'i') } });
@@ -1052,12 +1100,11 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
 async function cmdDeleteDeck(senderJid, reply, args = []) {
   const p = P();
   const name = args.join(' ').trim();
-  if (!name) return reply(`❌ Usage: \`${p} delete deck <name>\``);
+  if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name>`, `${p} delete deck Waifus`);
 
   const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
   if (!deck) return reply(`❌ Deck *"${name}"* not found.`);
 
-  // Delete cards inside the deck too? User said "Cards inside are deleted!" in registry.
   try {
     await UserCard.deleteMany({ _id: { $in: deck.cards } });
     await CardDeck.findByIdAndDelete(deck._id);
@@ -1065,14 +1112,32 @@ async function cmdDeleteDeck(senderJid, reply, args = []) {
   } catch (err) { return reply('❌ Deletion failed.'); }
 }
 
+function parseDuration(str) {
+  if (!str) return null;
+  const match = str.match(/^(\d+)([mhd])$/i);
+  if (!match) {
+    const hours = parseInt(str);
+    return isNaN(hours) ? null : hours * 60 * 60 * 1000;
+  }
+  const val = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  switch (unit) {
+    case 'm': return val * 60 * 1000;
+    case 'h': return val * 60 * 60 * 1000;
+    case 'd': return val * 24 * 60 * 60 * 1000;
+    default: return null;
+  }
+}
+
 async function cmdAuction(senderJid, reply, args = []) {
   const p = P();
   const slot = parseInt(args[0]);
   const minBid = parseInt(args[1]);
-  const hours = parseInt(args[2]);
+  const durationStr = args[2];
+  const ms = parseDuration(durationStr);
 
-  if (isNaN(slot) || isNaN(minBid) || isNaN(hours) || hours < 1 || hours > 48) {
-    return reply(`❌ Usage: \`${p} auction <deck_slot> <min_bid> <hours (1-48)>\``);
+  if (isNaN(slot) || isNaN(minBid) || !ms || ms < 60000 || ms > 7 * 24 * 60 * 60 * 1000) {
+    return sendUsage(reply, `${p} auction`, `${p} auction <deck_slot> <min_bid> <duration>`, `${p} auction 1 1000 1d\n💡 Duration units: m (min), h (hour), d (day)`);
   }
 
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
@@ -1082,10 +1147,7 @@ async function cmdAuction(senderJid, reply, args = []) {
   try {
     uc.inAuction = true;
     await uc.save();
-
-    const endsAt = new Date();
-    endsAt.setHours(endsAt.getHours() + hours);
-
+    const endsAt = new Date(Date.now() + ms);
     await CardMarket.create({
       userCardId: uc._id,
       cardId: uc.cardId,
@@ -1096,7 +1158,6 @@ async function cmdAuction(senderJid, reply, args = []) {
       status: 'active',
       auctionEndsAt: endsAt
     });
-
     const card = CARD_INDEX()[uc.cardId];
     return reply(`🔨 *AUCTION STARTED!*\n\n*${card.cardName}* is up for bidding!\n💰 Min Bid: ${ZENI()}${minBid.toLocaleString()}\n⏳ Ends at: ${endsAt.toLocaleString()}`);
   } catch (err) { return reply('❌ Failed to start auction.'); }
@@ -1104,8 +1165,6 @@ async function cmdAuction(senderJid, reply, args = []) {
 
 async function cmdBid(senderJid, reply, args = []) {
   const p = P();
-  // Simplified: auto-bid on the latest auction or support index?
-  // Let's list auctions first if no index
   const active = await CardMarket.find({ status: 'active', type: 'auction' }).sort({ auctionEndsAt: 1 });
   if (active.length === 0) return reply('📭 No active auctions.');
 
@@ -1124,11 +1183,10 @@ async function cmdBid(senderJid, reply, args = []) {
 
   const index = parseInt(args[0]);
   const amount = parseInt(args[1]);
-  if (isNaN(index) || isNaN(amount)) return reply(`❌ Usage: \`${p} bid <number> <amount>\``);
+  if (isNaN(index) || isNaN(amount)) return sendUsage(reply, `${p} bid`, `${p} bid <number> <amount>`, `${p} bid 1 5000`);
 
   const auction = active[index - 1];
   if (!auction) return reply('❌ Invalid auction number.');
-
   if (auction.sellerId === senderJid) return reply('❌ You cannot bid on your own auction.');
   if (amount <= auction.currentBid) return reply(`❌ Bid must be higher than ${ZENI()}${auction.currentBid.toLocaleString()}.`);
 
@@ -1136,13 +1194,10 @@ async function cmdBid(senderJid, reply, args = []) {
   if (balance < amount) return reply(`❌ You don't have ${ZENI()}${amount.toLocaleString()}.`);
 
   try {
-    // Note: In a real system, we might "lock" the bid money.
-    // For now, we'll just record the high bidder.
     auction.currentBid = amount;
     auction.highBidderId = senderJid;
     auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
     await auction.save();
-
     return reply(`✅ *BID PLACED!*\n\nYou are now the high bidder for *${CARD_INDEX()[auction.cardId]?.cardName}* at ${ZENI()}${amount.toLocaleString()}.`);
   } catch (err) { return reply('❌ Failed to place bid.'); }
 }
@@ -1168,9 +1223,6 @@ async function finalizeAuctions(sock) {
       }
       a.completedAt = new Date();
       await a.save();
-      
-      // Notify (optional, requires chatId storage in market or join logic)
-      // Since we don't have chatId in market, we skip broadcast here or add it.
     } catch (err) { console.error('Finalize auction failed:', err); }
   }
 }
@@ -1226,7 +1278,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         await cmdCardsTier(senderJid, reply, chatId);
         return true;
       }
-      break;
+      return sendUsage(reply, `${p} cards`, `${p} cards <on/off/--tier>`, `${p} cards on`), true;
 
     case 'claim':
       await cmdClaim(args, senderJid, reply);
@@ -1253,6 +1305,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'swap':
+      // swap card <a> and <b>
       await cmdSwapCard(senderJid, reply, args);
       return true;
 
@@ -1297,31 +1350,31 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         await cmdListDecks(senderJid, reply);
         return true;
       }
-      break;
+      return sendUsage(reply, `${p} list decks`, `${p} list decks`, `${p} list decks`), true;
 
     case 'create':
       if (args[0] === 'deck') {
         await cmdCreateDeck(senderJid, reply, args.slice(1));
         return true;
       }
-      break;
+      return sendUsage(reply, `${p} create deck`, `${p} create deck <name>`, `${p} create deck Waifus`), true;
 
     case 'rename':
       if (args[0] === 'deck') {
         await cmdRenameDeck(senderJid, reply, args.slice(1));
         return true;
       }
-      break;
+      return sendUsage(reply, `${p} rename deck`, `${p} rename deck <old> | <new>`, `${p} rename deck MyDeck | BestDeck`), true;
 
     case 'delete':
       if (args[0] === 'deck') {
         await cmdDeleteDeck(senderJid, reply, args.slice(1));
         return true;
       }
-      break;
+      return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name>`, `${p} delete deck MyDeck`), true;
 
     case 'cdeck':
-      await cmdCDeck(senderJid, reply, args);
+      await cmdCDeck(senderJid, reply, chatId, args);
       return true;
 
     case 'cltr':
@@ -1349,7 +1402,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'spawn':
       if (!isOwner && !inst.modJids.has(senderJid)) return reply('❌ No permission.'), true;
       const spawnQuery = txt.split('|')[1]?.trim();
-      if (spawnQuery) await doSpawn(spawnQuery, null, true, chatId);
+      if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn | <name>`, `${p} spawn | Goku`), true;
+      await doSpawn(spawnQuery, null, true, chatId);
       return true;
   }
 
