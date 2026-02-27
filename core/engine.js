@@ -10409,8 +10409,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
   const typed = lowerTxt.substring(botConfig.getPrefix().length).trim(); // What user typed after botConfig.getPrefix()
   if (!typed) return; 
 
-  // Clean JIDs from display to look better
-  const displayTyped = typed.replace(/@\d+(:?\d+)?(@[a-zA-Z0-9.-]+)?/g, '@user');
+  // Clean JIDs and sensitive numbers from display
+  const displayTyped = typed.replace(/(\d+([-:]\d+)?@([a-zA-Z0-9.-]+)+)|(\b\d{10,}\b)/g, '@user');
   
     // List of all valid commands for suggestions
     const allCommands = [

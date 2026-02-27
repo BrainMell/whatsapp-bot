@@ -845,7 +845,9 @@ function getUserGuild(userJid) {
 function addGuildBalance(guildName, amount) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild) return;
-  guild.balance = (guild.balance || 0) + amount;
+  const val = Number(amount);
+  if (isNaN(val) || val <= 0) return;
+  guild.balance = (guild.balance || 0) + val;
   syncGuild(guildName);
 }
 
@@ -861,10 +863,8 @@ function updateBoardProgress(guildName, targetType, amount) {
 
   let boardUpdated = false;
   guild.dailyBoard.targets.forEach(t => {
-    // Match EARN_ZENI for Merchant, CRAFT_ITEMS for Research, or specific monster IDs for Adventurer
-    const isMatch = (t.type === targetType) || (t.type === 'CRAFT_ITEMS' && targetType === 'CRAFT');
-    
-    if (isMatch && t.current < t.count) {
+    // Exact match for targetType (EARN_ZENI, CRAFT_ITEMS, or monster IDs)
+    if (t.type === targetType && t.current < t.count) {
       t.current = Math.min(t.count, t.current + amount);
       boardUpdated = true;
     }
@@ -941,6 +941,9 @@ function addGuildPoints(guildName, points, reason) {
   if (!info.guilds[guildName]) {
     return { success: false, message: "❌ Guild doesn't exist!" };
   }
+
+  const val = Number(points);
+  if (isNaN(val) || val <= 0) return { success: false, message: "❌ Invalid points." };
 
   const guild = info.guilds[guildName];
 
@@ -1030,16 +1033,17 @@ function upgradeGuildBuilding(userJid, buildingId) {
 
   // Deduct points and level up
   guild.points -= cost;
-  if (!guild.buildings[buildingId]) guild.buildings[buildingId] = { level: 0, name: upgrade.name };
-  guild.buildings[buildingId].level++;
+  if (!guild.buildings[buildingId]) {
+      guild.buildings[buildingId] = { level: 0, name: upgrade.name };
+  }
+  
+  guild.buildings[buildingId].level += 1; // Explicitly increment
 
   syncGuild(guildName);
 
   return {
     success: true,
-    message: `┏━━━━━━━━━━━━━━━┓\n┃ ✨ UPGRADED!    ┃\n┗━━━━━━━━━━━━━━━┛\n\n*${upgrade.name}* is now Level ${guild.buildings[buildingId].level}!
-
-✨ Benefit: ${upgrade.benefit}`
+    message: `┏━━━━━━━━━━━━━━━┓\n┃ ✨ UPGRADED!    ┃\n┗━━━━━━━━━━━━━━━┛\n\n*${upgrade.name}* is now Level ${guild.buildings[buildingId].level}!\n\n✨ Benefit: ${upgrade.benefit}`
   };
 }
 //========================================

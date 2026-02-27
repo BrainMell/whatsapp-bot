@@ -254,10 +254,13 @@ function addMoney(userId, amount, description = "Money Added") {
   const user = getUser(userId);
   if (!user) return false;
   
-  user.wallet += amount;
-  user.stats.totalEarned += amount;
+  const val = Number(amount);
+  if (isNaN(val) || val <= 0) return false;
+
+  user.wallet += val;
+  user.stats.totalEarned += val;
   
-  logTransaction(userId, description, amount, user.wallet);
+  logTransaction(userId, description, val, user.wallet);
   
   scheduleSave(userId);
   return user.wallet;
@@ -266,12 +269,15 @@ function addMoney(userId, amount, description = "Money Added") {
 function removeMoney(userId, amount, description = "Money Removed") {
   const user = getUser(userId);
   if (!user) return false;
-  if (user.wallet < amount) return false;
   
-  user.wallet -= amount;
-  user.stats.totalSpent += amount;
+  const val = Number(amount);
+  if (isNaN(val) || val <= 0) return false;
+  if (user.wallet < val) return false;
   
-  logTransaction(userId, description, -amount, user.wallet);
+  user.wallet -= val;
+  user.stats.totalSpent += val;
+  
+  logTransaction(userId, description, -val, user.wallet);
   
   scheduleSave(userId);
   return true;
