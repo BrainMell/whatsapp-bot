@@ -25,15 +25,17 @@ class BossPhaseManager {
     }
     
     checkPhaseTransition() {
-        if (!this.boss.phases) return null;
+        if (!this.boss.phases || this.boss.phases.length <= 1) return null;
         
         const currentHP = this.boss.stats.hp;
-        const maxHP = this.boss.stats.maxHp;
+        const maxHP = this.boss.stats.maxHp || this.boss.stats.hp;
         const hpPercent = (currentHP / maxHP) * 100;
         
-        const nextPhase = this.boss.phases[this.currentPhaseIndex + 1];
-        if (nextPhase && hpPercent <= nextPhase.threshold) {
-            return this.transitionToPhase(this.currentPhaseIndex + 1);
+        // 💡 Check all future phases, starting from the latest
+        for (let i = this.boss.phases.length - 1; i > this.currentPhaseIndex; i--) {
+            if (hpPercent <= this.boss.phases[i].threshold) {
+                return this.transitionToPhase(i);
+            }
         }
         
         return null;
@@ -71,14 +73,14 @@ class BossPhaseManager {
     
     applyPhaseEffect(effect) {
         if (effect.type === 'stat_boost') {
-            this.boss.stats[effect.stat] = Math.floor(
-                this.boss.stats[effect.stat] * (1 + effect.value / 100)
-            );
+            // 💡 BUG FIX: Use additive stacking rather than compounded multiplication
+            const baseStat = this.boss.stats[effect.stat] || 10;
+            const boostAmount = Math.floor(baseStat * (effect.value / 100));
+            this.boss.stats[effect.stat] += boostAmount;
         } else if (effect.type === 'heal') {
-            this.boss.stats.hp = Math.min(
-                this.boss.stats.maxHp,
-                this.boss.stats.hp + effect.value
-            );
+            const maxHp = this.boss.stats.maxHp || this.boss.stats.hp;
+            const healVal = effect.value > 1 ? effect.value : Math.floor(maxHp * effect.value);
+            this.boss.stats.hp = Math.min(maxHp, this.boss.stats.hp + healVal);
         } else if (effect.type === 'summon') {
             this.mechanicsActive.push(effect);
         }
@@ -1168,14 +1170,28 @@ class BossFightManager {
     }
     
     processSummons() {
+        const results = [];
         // AI for summoned units
         this.summons.forEach(summon => {
             if (summon.stats.hp > 0) {
                 // Simple AI: attack random target
-                const target = this.party[Math.floor(Math.random() * this.party.length)];
-                // Attack logic here
+                const aliveParty = this.party.filter(p => !p.isDead && (p.currentHP || p.stats.hp) > 0);
+                if (aliveParty.length === 0) return;
+
+                const target = aliveParty[Math.floor(Math.random() * aliveParty.length)];
+                const damage = Math.floor((summon.stats.atk || 10) * (0.8 + Math.random() * 0.4));
+                
+                // Note: Damage application handled by the main engine to ensure consistent logic
+                results.push({
+                    attacker: summon.name,
+                    target: target.name,
+                    targetJid: target.jid,
+                    damage: damage,
+                    animation: summon.icon || '⚔️'
+                });
             }
         });
+        return results;
     }
     
     selectBossAction() {
