@@ -7851,7 +7851,7 @@ if (isGroupChat && !senderIsAdmin) {
         const senderPush = m.pushName || "Unknown";
         const senderDisplay = `${senderPush} (${senderJid.split('@')[0]})`;
         
-        let contextInfo = `👤 From: ${senderDisplay}`;
+        let logContext = `👤 From: ${senderDisplay}`;
         
         if (isGroupChat) {
             let groupName = "Unknown Group";
@@ -7862,11 +7862,11 @@ if (isGroupChat && !senderIsAdmin) {
             } catch (e) {
                 groupName = chatId.split('@')[0];
             }
-            contextInfo = `👥 Group: ${groupName} (${chatId.split('@')[0]})\n   👤 User: ${senderDisplay}`;
+            logContext = `👥 Group: ${groupName} (${chatId.split('@')[0]})\n   👤 User: ${senderDisplay}`;
         }
 
         const logMsg = txt.substring(0, 100).replace(/\n/g, ' ') + (txt.length > 100 ? "..." : "");
-        const finalLog = `\n[${timestamp}] 📨 [${BOT_NAME}] NEW MESSAGE\n   ${contextInfo}\n   💬 Content: ${mediaIndicator} ${logMsg}`.trim();
+        const finalLog = `\n[${timestamp}] 📨 [${BOT_NAME}] NEW MESSAGE\n   ${logContext}\n   💬 Content: ${mediaIndicator} ${logMsg}`.trim();
         
         console.log(finalLog);
 
