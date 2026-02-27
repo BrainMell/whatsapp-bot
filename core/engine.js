@@ -1851,6 +1851,14 @@ const GET_BANNER = (title) => {
 ┗━━━━━━━━━━━━━━━┛`;
 };
 
+const sendUsage = async (chatId, title, usage, example = null, tip = null) => {
+  let msg = GET_BANNER(title) + `\n\n`;
+  msg += `*Usage:* \`${botConfig.getPrefix()}${usage}\`\n`;
+  if (example) msg += `*Example:* \`${botConfig.getPrefix()}${example}\`\n`;
+  if (tip) msg += `\n💡 *Tip:* _${tip}_`;
+  return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+};
+
 const CATEGORY_EMOJIS = {
 
   SUPPORT: '🛠️',
@@ -3126,10 +3134,7 @@ Usage: ${newUsage}/5${warningText}`;
           const targetUser = getMentionOrReply(m);
           
           if (!targetUser) {
-            await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} block @user\` (or reply to them)` 
-            });
-            return;
+            return await sendUsage(chatId, '🚫 BLOCK', 'block @user', 'block @friend', 'You can also reply to their message.');
           }
 
           // Don`t let them block themselves lol
@@ -3175,10 +3180,7 @@ Usage: ${newUsage}/5${warningText}`;
           const targetUser = getMentionOrReply(m);
           
           if (!targetUser) {
-            await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unblock @user\` (or reply to them)` 
-            });
-            return;
+            return await sendUsage(chatId, '✅ UNBLOCK', 'unblock @user', 'unblock @friend', 'Restores bot access for the user.');
           }
           
           if (!isBlocked(targetUser)) {
@@ -3472,7 +3474,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} toimg`) {
   const quotedMsg = waContextInfo?.quotedMessage;
   
   if (!quotedMsg?.stickerMessage) {
-    return await sock.sendMessage(chatId, { text: `❌ Please reply to a *sticker* to convert it to an image.` });
+    return await sendUsage(chatId, '🖼️ TO IMAGE', 'toimg', 'toimg (reply to sticker)', 'Works for both static and animated stickers.');
   }
 
   try {
@@ -3519,8 +3521,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
   const quotedMsg = waContextInfo?.quotedMessage;
   
   if (!quotedMsg?.stickerMessage) {
-    await sock.sendMessage(chatId, { react: { text: `❌`, key: m.key } });
-    return await sock.sendMessage(chatId, { text: "❌ Please reply to a *sticker* to convert it to a video." });
+    return await sendUsage(chatId, '🎬 TO VIDEO', 'tovid', 'tovid (reply to sticker)', 'Converts animated stickers to playable videos.');
   }
 
   try {
@@ -3658,10 +3659,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             const amount = parseInt(parts[3]) || 1;
             
             if (!stat) {
-                await sock.sendMessage(chatId, {
-                    text: `❌ Specify a stat!\n\nUsage: \`${botConfig.getPrefix()} allocate <stat> [amount]\`\n\nStats: hp, atk, def, mag, spd, luck, crit`
-                });
-                return;
+                return await sendUsage(chatId, '📊 ALLOCATE', 'allocate <stat> [amount]', 'allocate atk 5', 'Stats: hp, atk, def, mag, spd, luck, crit.');
             }
             
             await rpgCommands.allocateStats(sock, chatId, senderJid, stat, amount);
@@ -3690,10 +3688,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             const qty = parseInt(parts[3]) || 1;
             
             if (!itemNum) {
-                await sock.sendMessage(chatId, {
-                    text: `❌ Specify an item number or name!\n\nUsage: \`${botConfig.getPrefix()} sell <number> [quantity]\``
-                });
-                return;
+                return await sendUsage(chatId, '💰 SELL', 'sell <#bag_index> [quantity]', 'sell 1 5', 'Use your inventory index number to sell items.');
             }
             
             await rpgCommands.sellItem(sock, chatId, senderJid, itemNum, qty);
@@ -3753,7 +3748,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
               await sock.sendMessage(chatId, { text: BOT_MARKER + "couldn't remove them." });
             }
           } else {
-             await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} kick @user\` (or reply to them)` });
+             await sendUsage(chatId, '👟 KICK', 'kick @user', 'kick @troublemaker', 'You can also reply to their message.');
           }
           return;
         }
@@ -3872,9 +3867,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin` || lowerTxt.starts
   const contextInfo = m.message.extendedTextMessage?.contextInfo || m.message.imageMessage?.contextInfo || m.message.videoMessage?.contextInfo || m.message.stickerMessage?.contextInfo;
   
   if (!contextInfo || !contextInfo.stanzaId) {
-    return await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} pin <duration>\` (Reply to a message)\n\n• Duration: 24h, 7d, 30d (Default: 30d)\n\nExample: Reply to a message with \`${botConfig.getPrefix()} pin 24h\`` 
-    });
+    return await sendUsage(chatId, '📌 PIN', 'pin <duration>', 'pin 24h', 'Durations: 24h, 7d, 30d. You must reply to a message.');
   }
 
   // Parse duration
@@ -4209,7 +4202,7 @@ Commands:
               await sock.groupParticipantsUpdate(chatId, [targetUser], 'remove');
             }
           } else {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} warn @user [reason]\` (or reply to them)` });
+            await sendUsage(chatId, '⚠️ WARN', 'warn @user [reason]', 'warn @troll spamming', 'Accumulating 5 warnings results in an automatic kick.');
           }
           return;
         }
@@ -4228,7 +4221,7 @@ Commands:
             resetWarnings(targetUser, chatId);
             await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Warnings cleared for this group." });
           } else {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} resetwarn @user\` (or reply to them)` });
+            await sendUsage(chatId, '🔄 RESET WARN', 'resetwarn @user', 'resetwarn @friend', 'Clears all warnings for the user in this group.');
           }
           return;
         }
@@ -4281,8 +4274,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} promote` || lowerTxt.st
   const target = getMentionOrReply(m);
   
   if (!target) {
-    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} promote @user\` (or reply to them)` });
-    return;
+    return await sendUsage(chatId, '⬆️ PROMOTE', 'promote @user', 'promote @friend', 'Grants admin rights to the mentioned user.');
   }
 
   const targets = [target];
@@ -4322,8 +4314,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
   const target = getMentionOrReply(m);
   
   if (!target) {
-    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} demote @user\` (or reply to them)` });
-    return;
+    return await sendUsage(chatId, '⬇️ DEMOTE', 'demote @user', 'demote @admin', 'Removes admin rights from the mentioned user.');
   }
 
   const targets = [target];
@@ -4369,47 +4360,20 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
 
 
                   if (!targetUser) {
-
-                    await sock.sendMessage(chatId, { 
-
-                      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} mute @user <duration>\`\nExamples: 10s, 5m, 2h, 1d`
-
-                    });
-
-                    return;
-
+                    return await sendUsage(chatId, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
                   }
-
-
 
                   // Find duration in args
-
                   let durationStr = null;
-
                   for (const arg of args) {
-
                     if (parseDuration(arg)) {
-
                       durationStr = arg;
-
                       break;
-
                     }
-
                   }
 
-
-
                   if (!durationStr) {
-
-                    await sock.sendMessage(chatId, { 
-
-                      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} mute @user <duration>\`\nExamples: 10s (10 seconds), 5m (5 minutes), 2h (2 hours), 1d (1 day)`
-
-                    });
-
-                    return;
-
+                    return await sendUsage(chatId, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
                   }
 
 
@@ -4776,8 +4740,8 @@ ${memberList}`;
 
           // IF NO CONTENT AT ALL
           if (!customText && !contentToSend) {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} hidetag <text>\` (or reply to media)` });
-            return;
+          if (!textToHide && !m.message.extendedTextMessage?.contextInfo?.quotedMessage) {
+            return await sendUsage(chatId, '👻 HIDETAG', 'hidetag <text>', 'hidetag Hello!', 'Silently tags all members. You can also reply to media.');
           }
           
           // Build message with member count info
@@ -5164,10 +5128,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild create `))
   const guildName = txt.substring(`${botConfig.getPrefix().toLowerCase()} guild create `.length).trim();
   
   if (!guildName) {
-    await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild create <name>\n\nExample: \`${botConfig.getPrefix().toLowerCase()}\` guild create Dragon Warriors` 
-    });
-    return;
+    return await sendUsage(chatId, '🏰 GUILD', 'guild create <name>', 'guild create DragonSlayers', 'Choose a name for your legendary guild!');
   }
   
   if (guildName.length < 3) {
@@ -5228,10 +5189,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild join `)) {
   const guildName = txt.substring(`${botConfig.getPrefix().toLowerCase()} guild join `.length).trim();
   
   if (!guildName) {
-    await sock.sendMessage(chatId, { 
-      text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild join <name>\n\nExample: \`${botConfig.getPrefix().toLowerCase()}\` guild join Dragon Warriors` 
-    });
-    return;
+    return await sendUsage(chatId, '🏰 GUILD', 'guild join <name>', 'guild join DragonSlayers', 'Enter the exact name of the guild you want to join.');
   }
   
   try {
@@ -9084,16 +9042,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
           const choice = args[3];
           
           if (!amount || !choice) {
-            await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix().toLowerCase()} cf <amount> <heads/tails>\`
-
-Examples:
-  \`${botConfig.getPrefix().toLowerCase()} cf 100 heads
-  \`${botConfig.getPrefix().toLowerCase()} cf 500 h
-  \`${botConfig.getPrefix().toLowerCase()} cf 200 tails\``,
-              mentions: [senderJid]
-            });
-            return;
+            return await sendUsage(chatId, '🪙 COINFLIP', 'cf <amount> <choice>', 'cf 500 heads', 'Bet on heads (h) or tails (t) to double your money!');
           }
           
           if (isNaN(amount)) {
@@ -9118,11 +9067,7 @@ Examples:
           const amount = parseInt(args[2]);
 
           if (!amount) {
-            await sock.sendMessage(chatId, {
-              text: BOT_MARKER + `❌ Usage: ${botConfig.getPrefix()} dice <amount>\n\nExample: ${botConfig.getPrefix()} dice 200`,
-              mentions: [senderJid]
-            });
-            return;
+            return await sendUsage(chatId, '🎲 DICE', 'dice <amount>', 'dice 1000', 'Roll higher than the bot to win!');
           }
           
           if (isNaN(amount)) {
@@ -9147,15 +9092,10 @@ Examples:
                   const args = txt.split(` `);
                   const amount = parseInt(args[2]);
         
-                  if (!amount) {
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `❌ Usage: ${botConfig.getPrefix()} slots <amount>\n\nExample: ${botConfig.getPrefix()} slots 300`,
-                      mentions: [senderJid]
-                    });
-                    return;
-                  }
-        
-                  if (isNaN(amount)) {
+                                    if (!amount) {
+                                      return await sendUsage(chatId, '🎰 SLOTS', 'slots <amount>', 'slots 500', 'Match 3 symbols to win big jackpots!');
+                                    }
+                                    if (isNaN(amount)) {
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + "❌ Invalid amount!",
                       mentions: [senderJid]
@@ -9222,13 +9162,10 @@ Examples:
                   const args = txt.split(' ');
                   const amount = parseInt(args[2]);
         
-                  if (!amount) {
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `❌ Usage: ${botConfig.getPrefix()} bj <amount>\n\nExample: ${botConfig.getPrefix()} bj 500\n\nCommands during game:\n  ${botConfig.getPrefix()} bj hit - Get another card\n  ${botConfig.getPrefix()} bj stand - Keep current hand\n  ${botConfig.getPrefix()} bj double - Double bet & hit once`,
-                      mentions: [senderJid]
-                    });
-                    return;
-                  }          
+                                    if (!amount) {
+                                      return await sendUsage(chatId, '♠️ BLACKJACK', 'bj <amount>', 'bj 1000', 'Get closer to 21 than the dealer without going over!');
+                                    }
+                            
           if (isNaN(amount)) {
             await sock.sendMessage(chatId, { 
               text: BOT_MARKER + "❌ Invalid amount!",
@@ -9473,7 +9410,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
           const mineCount = parseInt(args[3]) || 3;
           
           if (isNaN(amount)) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: ${botConfig.getPrefix()} mines <amount> <mine_count>\nExample: ${botConfig.getPrefix()} mines 500 5` });
+            return await sendUsage(chatId, '💣 MINES', 'mines <amount> <mine_count>', 'mines 1000 5', 'Avoid hidden bombs to multiply your bet!');
           }
           
           const result = gambling.startMines(senderJid, amount, mineCount, economy);
@@ -10118,9 +10055,8 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ludo start`)) {
   const totalPlayers = mentionedJids.length + 1; // +1 for sender
   
   if (totalPlayers < 2 || totalPlayers > 4) {
-    await sock.sendMessage(chatId, {
-      text: BOT_MARKER + `❌ Ludo needs 2-4 players total!\nTag 1-3 other players.`
-    });
+    return await sendUsage(chatId, '🎲 LUDO', 'ludo start @u1 @u2 @u3', 'ludo start @friend', 'Ludo requires 2 to 4 players total. Tag your friends to start!');
+  }
     return;
   }
 
