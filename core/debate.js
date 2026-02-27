@@ -56,7 +56,17 @@ module.exports = {
         if (activeDebates[chatId]) {
             return { 
                 success: false, 
-                message: BOT_MARKER + "❌ A debate is already in progress! Use `${botConfig.getPrefix()} judge` to end it." 
+                message: BOT_MARKER + `❌ A debate is already in progress! Use \`${botConfig.getPrefix()} judge\` to end it.` 
+            };
+        }
+
+        // 🛡️ Admin Check: Bot must be admin to lock group and promote
+        const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        const botIsAdmin = groupMetadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'));
+        if (!botIsAdmin) {
+            return {
+                success: false,
+                message: BOT_MARKER + "❌ I need to be an *Admin* to manage the debate (lock group/promote debaters)!"
             };
         }
 
@@ -220,7 +230,14 @@ Respond ONLY in this JSON format:
             });
 
             let judgeResponse = completion.choices[0].message.content.trim();
-            judgeResponse = judgeResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            
+            // Robust JSON extraction
+            const jsonMatch = judgeResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                judgeResponse = jsonMatch[0];
+            } else {
+                judgeResponse = judgeResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            }
             
             const verdict = JSON.parse(judgeResponse);
 
@@ -516,7 +533,15 @@ Respond with a JSON object:
             });
 
             let response = completion.choices[0].message.content.trim();
-            response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            
+            // Robust JSON extraction
+            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                response = jsonMatch[0];
+            } else {
+                response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            }
+            
             return JSON.parse(response);
         } catch (e) {
             console.error("Relevance check error:", e);

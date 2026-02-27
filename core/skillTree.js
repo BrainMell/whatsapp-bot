@@ -4816,6 +4816,16 @@ function getAllAbilitiesForClass(className) {
     return abilities;
 }
 
+function getSkill(classId, skillId) {
+    const tree = SKILL_TREES[classId];
+    if (!tree) return null;
+    
+    for (const subTree of Object.values(tree.trees)) {
+        if (subTree.skills[skillId]) return subTree.skills[skillId];
+    }
+    return null;
+}
+
 function getSkillEffect(skill, level) {
     if (typeof skill.effect === 'function') {
         return skill.effect(level);
