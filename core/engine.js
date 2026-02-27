@@ -1851,14 +1851,6 @@ const GET_BANNER = (title) => {
 ┗━━━━━━━━━━━━━━━┛`;
 };
 
-const sendUsage = async (chatId, title, usage, example = null, tip = null) => {
-  let msg = GET_BANNER(title) + `\n\n`;
-  msg += `*Usage:* \`${botConfig.getPrefix()}${usage}\`\n`;
-  if (example) msg += `*Example:* \`${botConfig.getPrefix()}${example}\`\n`;
-  if (tip) msg += `\n💡 *Tip:* _${tip}_`;
-  return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-};
-
 const CATEGORY_EMOJIS = {
 
   SUPPORT: '🛠️',
@@ -1953,7 +1945,7 @@ async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
 
 // New dynamic menu function
 
-async function sendBotMenu(sock, chatId, args = []) {
+async function sendBotMenu(sock, chatId, botMarker, args = []) {
 
   const categoryInput = args[0]?.toUpperCase();
 
@@ -3134,7 +3126,7 @@ Usage: ${newUsage}/5${warningText}`;
           const targetUser = getMentionOrReply(m);
           
           if (!targetUser) {
-            return await sendUsage(chatId, '🚫 BLOCK', 'block @user', 'block @friend', 'You can also reply to their message.');
+            return await sendUsage(sock, chatId, BOT_MARKER, '🚫 BLOCK', 'block @user', 'block @friend', 'You can also reply to their message.');
           }
 
           // Don`t let them block themselves lol
@@ -3180,7 +3172,7 @@ Usage: ${newUsage}/5${warningText}`;
           const targetUser = getMentionOrReply(m);
           
           if (!targetUser) {
-            return await sendUsage(chatId, '✅ UNBLOCK', 'unblock @user', 'unblock @friend', 'Restores bot access for the user.');
+            return await sendUsage(sock, chatId, BOT_MARKER, '✅ UNBLOCK', 'unblock @user', 'unblock @friend', 'Restores bot access for the user.');
           }
           
           if (!isBlocked(targetUser)) {
@@ -3474,7 +3466,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} toimg`) {
   const quotedMsg = waContextInfo?.quotedMessage;
   
   if (!quotedMsg?.stickerMessage) {
-    return await sendUsage(chatId, '🖼️ TO IMAGE', 'toimg', 'toimg (reply to sticker)', 'Works for both static and animated stickers.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🖼️ TO IMAGE', 'toimg', 'toimg (reply to sticker)', 'Works for both static and animated stickers.');
   }
 
   try {
@@ -3521,7 +3513,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
   const quotedMsg = waContextInfo?.quotedMessage;
   
   if (!quotedMsg?.stickerMessage) {
-    return await sendUsage(chatId, '🎬 TO VIDEO', 'tovid', 'tovid (reply to sticker)', 'Converts animated stickers to playable videos.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🎬 TO VIDEO', 'tovid', 'tovid (reply to sticker)', 'Converts animated stickers to playable videos.');
   }
 
   try {
@@ -3659,7 +3651,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             const amount = parseInt(parts[3]) || 1;
             
             if (!stat) {
-                return await sendUsage(chatId, '📊 ALLOCATE', 'allocate <stat> [amount]', 'allocate atk 5', 'Stats: hp, atk, def, mag, spd, luck, crit.');
+                return await sendUsage(sock, chatId, BOT_MARKER, '📊 ALLOCATE', 'allocate <stat> [amount]', 'allocate atk 5', 'Stats: hp, atk, def, mag, spd, luck, crit.');
             }
             
             await rpgCommands.allocateStats(sock, chatId, senderJid, stat, amount);
@@ -3688,7 +3680,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
             const qty = parseInt(parts[3]) || 1;
             
             if (!itemNum) {
-                return await sendUsage(chatId, '💰 SELL', 'sell <#bag_index> [quantity]', 'sell 1 5', 'Use your inventory index number to sell items.');
+                return await sendUsage(sock, chatId, BOT_MARKER, '💰 SELL', 'sell <#bag_index> [quantity]', 'sell 1 5', 'Use your inventory index number to sell items.');
             }
             
             await rpgCommands.sellItem(sock, chatId, senderJid, itemNum, qty);
@@ -3748,7 +3740,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
               await sock.sendMessage(chatId, { text: BOT_MARKER + "couldn't remove them." });
             }
           } else {
-             await sendUsage(chatId, '👟 KICK', 'kick @user', 'kick @troublemaker', 'You can also reply to their message.');
+             await sendUsage(sock, chatId, BOT_MARKER, '👟 KICK', 'kick @user', 'kick @troublemaker', 'You can also reply to their message.');
           }
           return;
         }
@@ -3867,7 +3859,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pin` || lowerTxt.starts
   const contextInfo = m.message.extendedTextMessage?.contextInfo || m.message.imageMessage?.contextInfo || m.message.videoMessage?.contextInfo || m.message.stickerMessage?.contextInfo;
   
   if (!contextInfo || !contextInfo.stanzaId) {
-    return await sendUsage(chatId, '📌 PIN', 'pin <duration>', 'pin 24h', 'Durations: 24h, 7d, 30d. You must reply to a message.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '📌 PIN', 'pin <duration>', 'pin 24h', 'Durations: 24h, 7d, 30d. You must reply to a message.');
   }
 
   // Parse duration
@@ -4202,7 +4194,7 @@ Commands:
               await sock.groupParticipantsUpdate(chatId, [targetUser], 'remove');
             }
           } else {
-            await sendUsage(chatId, '⚠️ WARN', 'warn @user [reason]', 'warn @troll spamming', 'Accumulating 5 warnings results in an automatic kick.');
+            await sendUsage(sock, chatId, BOT_MARKER, '⚠️ WARN', 'warn @user [reason]', 'warn @troll spamming', 'Accumulating 5 warnings results in an automatic kick.');
           }
           return;
         }
@@ -4221,7 +4213,7 @@ Commands:
             resetWarnings(targetUser, chatId);
             await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Warnings cleared for this group." });
           } else {
-            await sendUsage(chatId, '🔄 RESET WARN', 'resetwarn @user', 'resetwarn @friend', 'Clears all warnings for the user in this group.');
+            await sendUsage(sock, chatId, BOT_MARKER, '🔄 RESET WARN', 'resetwarn @user', 'resetwarn @friend', 'Clears all warnings for the user in this group.');
           }
           return;
         }
@@ -4274,7 +4266,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} promote` || lowerTxt.st
   const target = getMentionOrReply(m);
   
   if (!target) {
-    return await sendUsage(chatId, '⬆️ PROMOTE', 'promote @user', 'promote @friend', 'Grants admin rights to the mentioned user.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '⬆️ PROMOTE', 'promote @user', 'promote @friend', 'Grants admin rights to the mentioned user.');
   }
 
   const targets = [target];
@@ -4314,7 +4306,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
   const target = getMentionOrReply(m);
   
   if (!target) {
-    return await sendUsage(chatId, '⬇️ DEMOTE', 'demote @user', 'demote @admin', 'Removes admin rights from the mentioned user.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '⬇️ DEMOTE', 'demote @user', 'demote @admin', 'Removes admin rights from the mentioned user.');
   }
 
   const targets = [target];
@@ -4360,7 +4352,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
 
 
                   if (!targetUser) {
-                    return await sendUsage(chatId, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
+                    return await sendUsage(sock, chatId, BOT_MARKER, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
                   }
 
                   // Find duration in args
@@ -4373,7 +4365,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} demote` || lowerTxt.sta
                   }
 
                   if (!durationStr) {
-                    return await sendUsage(chatId, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
+                    return await sendUsage(sock, chatId, BOT_MARKER, '🔇 MUTE', 'mute @user <duration>', 'mute @spam 1h', 'Durations: 10s, 5m, 2h, 1d.');
                   }
 
 
@@ -4741,7 +4733,7 @@ ${memberList}`;
           // IF NO CONTENT AT ALL
           if (!customText && !contentToSend) {
           if (!textToHide && !m.message.extendedTextMessage?.contextInfo?.quotedMessage) {
-            return await sendUsage(chatId, '👻 HIDETAG', 'hidetag <text>', 'hidetag Hello!', 'Silently tags all members. You can also reply to media.');
+            return await sendUsage(sock, chatId, BOT_MARKER, '👻 HIDETAG', 'hidetag <text>', 'hidetag Hello!', 'Silently tags all members. You can also reply to media.');
           }
           
           // Build message with member count info
@@ -4856,7 +4848,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mine` || lowerTxt.start
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} source` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} source `)) {
     const itemId = txt.split(' ').slice(2).join('_').trim();
     if (!itemId) {
-        return await sendUsage(chatId, '🔍 SOURCE', 'source <item_id>', 'source iron_ore', 'Find out where to acquire any item in the world.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SOURCE', 'source <item_id>', 'source iron_ore', 'Find out where to acquire any item in the world.');
     }
     await rpgCommands.showItemSource(sock, chatId, itemId);
     return;
@@ -4868,7 +4860,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} craft` || lowerTxt.star
     const recipeId = txt.split(' ').slice(2).join(' ').trim();
     if (!recipeId) {
         const isBrew = lowerTxt.includes('brew');
-        return await sendUsage(chatId, isBrew ? '⚗️ BREW' : '🛠️ CRAFT', isBrew ? 'brew <potion_id>' : 'craft <recipe_id>', isBrew ? 'brew hp_potion' : 'craft iron_sword', `Create ${isBrew ? 'potions' : 'equipment'} from materials.`);
+        return await sendUsage(sock, chatId, BOT_MARKER, isBrew ? '⚗️ BREW' : '🛠️ CRAFT', isBrew ? 'brew <potion_id>' : 'craft <recipe_id>', isBrew ? 'brew hp_potion' : 'craft iron_sword', `Create ${isBrew ? 'potions' : 'equipment'} from materials.`);
     }
     await rpgCommands.craftItem(sock, chatId, senderJid, recipeId);
     return;
@@ -4877,7 +4869,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} craft` || lowerTxt.star
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} dismantle` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} dismantle `)) {
     const input = txt.split(' ').slice(2).join(' ').trim();
     if (!input) {
-        return await sendUsage(chatId, '⚒️ DISMANTLE', 'dismantle <#bag_index>', 'dismantle 5', 'Break down old equipment to recover some materials.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '⚒️ DISMANTLE', 'dismantle <#bag_index>', 'dismantle 5', 'Break down old equipment to recover some materials.');
     }
     await rpgCommands.dismantleItem(sock, chatId, senderJid, input);
     return;
@@ -5126,7 +5118,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild create `))
   const guildName = txt.substring(`${botConfig.getPrefix().toLowerCase()} guild create `.length).trim();
   
   if (!guildName) {
-    return await sendUsage(chatId, '🏰 GUILD', 'guild create <name>', 'guild create DragonSlayers', 'Choose a name for your legendary guild!');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🏰 GUILD', 'guild create <name>', 'guild create DragonSlayers', 'Choose a name for your legendary guild!');
   }
   
   if (guildName.length < 3) {
@@ -5187,7 +5179,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild join `)) {
   const guildName = txt.substring(`${botConfig.getPrefix().toLowerCase()} guild join `.length).trim();
   
   if (!guildName) {
-    return await sendUsage(chatId, '🏰 GUILD', 'guild join <name>', 'guild join DragonSlayers', 'Enter the exact name of the guild you want to join.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🏰 GUILD', 'guild join <name>', 'guild join DragonSlayers', 'Enter the exact name of the guild you want to join.');
   }
   
   try {
@@ -6101,7 +6093,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfw` || lowerTxt.start
     const fullQuery = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} nsfw`, ``).trim();
     
     if (!fullQuery) {
-        return await sendUsage(chatId, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
     }
 
     // Parse count and search term
@@ -6117,7 +6109,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfw` || lowerTxt.start
     }
     
     if (!searchTerm || searchTerm === firstWord && !isNaN(firstWord)) {
-        return await sendUsage(chatId, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
     }
 
     try {
@@ -6189,7 +6181,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
     const fullQuery = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} img`, ``).trim();
     
     if (!fullQuery) {
-        return await sendUsage(chatId, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
     }
 
     // Parse for optional number at the start
@@ -6206,7 +6198,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
     }
     
     if (!searchTerm) {
-        return await sendUsage(chatId, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
     }
 
     // Feedback
@@ -6257,7 +6249,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} audio `)) {
   const query = txt.substring(`${botConfig.getPrefix().toLowerCase()} audio `.length).trim();
   if (!query) {
-    return await sendUsage(chatId, '🎵 AUDIO', 'audio <query>', 'audio starboy', 'Search and download any song from YouTube.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🎵 AUDIO', 'audio <query>', 'audio starboy', 'Search and download any song from YouTube.');
   }
 
   try {
@@ -6660,7 +6652,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime rank`)) {
 
   try {
     const query = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime rank`, ``).trim();
-    if (!query) return await sendUsage(chatId, '📊 RANK', 'anime rank <name>', 'anime rank Naruto', 'Check the global ranking and popularity of any anime.');
+    if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '📊 RANK', 'anime rank <name>', 'anime rank Naruto', 'Check the global ranking and popularity of any anime.');
 
     // 1. Fetch Jikan Data (TV only)
     const jikanRes = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=1`);
@@ -6937,7 +6929,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime studio`)) 
   await sock.sendMessage(chatId, { react: { text: `🎥`, key: m.key } });
   try {
     const studioInput = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime studio`, '').trim();
-    if (!studioInput) return await sendUsage(chatId, '🏢 STUDIO', 'anime studio <name>', 'anime studio MAPPA', 'Find all anime produced by a specific studio.');
+    if (!studioInput) return await sendUsage(sock, chatId, BOT_MARKER, '🏢 STUDIO', 'anime studio <name>', 'anime studio MAPPA', 'Find all anime produced by a specific studio.');
 
     // Use a single, broad search. This is much less likely to trigger `Busy`
     const res = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(studioInput)}&limit=15&order_by=popularity`);
@@ -6978,7 +6970,7 @@ ${(pick.synopsis || 'No description.').slice(0, 300)}...
 // `${botConfig.getPrefix().toLowerCase()}` search <query> - Alias for anime search
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search `)) {
   const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} search `, '').trim();
-  if (!q) return await sendUsage(chatId, '🔍 SEARCH', 'search <title>', 'search Naruto', 'Find details and download links for any anime.');
+  if (!q) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'search <title>', 'search Naruto', 'Find details and download links for any anime.');
   // Redirect to anime search logic (which starts with anime search)
   lowerTxt = `${botConfig.getPrefix().toLowerCase()} anime search ${q}`;
 }
@@ -6988,7 +6980,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime search`)) 
   await sock.sendMessage(chatId, { react: { text: `🔎`, key: m.key } });
   try {
     const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime search`, '').trim();
-    if (!q) return await sendUsage(chatId, '🔍 SEARCH', 'anime search <title>', 'anime search Naruto', 'Find details and download links for any anime.');
+    if (!q) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'anime search <title>', 'anime search Naruto', 'Find details and download links for any anime.');
 
     // Removed the limit to show all primary results from Jikan
     const r = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}`);
@@ -7157,7 +7149,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} roast` || lowerTxt.star
     const targetJid = getMentionOrReply(m);
     
     if (!targetJid && lowerTxt.split(' ').length === 2 && lowerTxt.endsWith('roast')) {
-        return await sendUsage(chatId, '🔥 ROAST', 'roast @user', 'roast @friend', 'Prepares a legendary insult based on user data.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '🔥 ROAST', 'roast @user', 'roast @friend', 'Prepares a legendary insult based on user data.');
     }
 
     const finalTarget = targetJid || senderJid;
@@ -7296,7 +7288,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
     const character = txt.substring(`${botConfig.getPrefix().toLowerCase()} powerscale`.length).trim();
     
     if (!character) {
-        return await sendUsage(chatId, '⚖️ SCALE', 'powerscale <name>', 'powerscale goku', 'Analyze character stats via VS Battles.');
+        return await sendUsage(sock, chatId, BOT_MARKER, '⚖️ SCALE', 'powerscale <name>', 'powerscale goku', 'Analyze character stats via VS Battles.');
     }
 
     await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
@@ -7409,7 +7401,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} 8ball` || lowerTxt.star
   const question = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} 8ball`, '').trim();
   
   if (!question) {
-    return await sendUsage(chatId, '🎱 8-BALL', '8ball <question>', '8ball will i be rich?', 'Ask the magic 8-ball anything!');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🎱 8-BALL', '8ball <question>', '8ball will i be rich?', 'Ask the magic 8-ball anything!');
   }
 
   // react first
@@ -7463,7 +7455,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} ship` || lowerTxt.start
     if (mentions.length === 0) {
         const textInput = txt.substring(`${botConfig.getPrefix().toLowerCase()} ship `.length).trim();
         if (!textInput) {
-            return await sendUsage(chatId, '❤️ SHIP', 'ship @u1 @u2', 'ship @friend1 @friend2', 'Check the compatibility between two people!');
+            return await sendUsage(sock, chatId, BOT_MARKER, '❤️ SHIP', 'ship @u1 @u2', 'ship @friend1 @friend2', 'Check the compatibility between two people!');
         }
     }
     
@@ -7648,7 +7640,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} define` || lowerTxt.sta
   const word = txt.substring(`${botConfig.getPrefix().toLowerCase()} define `.length).trim();
   
   if (!word) {
-    return await sendUsage(chatId, '📖 DEFINE', 'define <word>', 'define logic', 'Get the dictionary definition of any word.');
+    return await sendUsage(sock, chatId, BOT_MARKER, '📖 DEFINE', 'define <word>', 'define logic', 'Get the dictionary definition of any word.');
   }
 
   try {
@@ -7681,7 +7673,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rate` || lowerTxt.start
   const target = getMentionOrReply(m);
 
   if (!thing && !target) {
-    return await sendUsage(chatId, '⭐ RATE', 'rate <something>', 'rate anime', 'Ask the bot to rate anything from 1 to 10!');
+    return await sendUsage(sock, chatId, BOT_MARKER, '⭐ RATE', 'rate <something>', 'rate anime', 'Ask the bot to rate anything from 1 to 10!');
   }
 
   // If it's a person
@@ -7782,7 +7774,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} record`)) {
         if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} menu`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} help`)) {
           const parts = lowerTxt.split(' ');
           const menuArgs = parts.slice(2); 
-          await sendBotMenu(sock, chatId, menuArgs);
+          await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
           return;
         }
         // Welcome message for Group chat marker1
@@ -9022,7 +9014,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
           const choice = args[3];
           
           if (!amount || !choice) {
-            return await sendUsage(chatId, '🪙 COINFLIP', 'cf <amount> <choice>', 'cf 500 heads', 'Bet on heads (h) or tails (t) to double your money!');
+            return await sendUsage(sock, chatId, BOT_MARKER, '🪙 COINFLIP', 'cf <amount> <choice>', 'cf 500 heads', 'Bet on heads (h) or tails (t) to double your money!');
           }
           
           if (isNaN(amount)) {
@@ -9047,7 +9039,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
           const amount = parseInt(args[2]);
 
           if (!amount) {
-            return await sendUsage(chatId, '🎲 DICE', 'dice <amount>', 'dice 1000', 'Roll higher than the bot to win!');
+            return await sendUsage(sock, chatId, BOT_MARKER, '🎲 DICE', 'dice <amount>', 'dice 1000', 'Roll higher than the bot to win!');
           }
           
           if (isNaN(amount)) {
@@ -9073,7 +9065,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
                   const amount = parseInt(args[2]);
         
                                     if (!amount) {
-                                      return await sendUsage(chatId, '🎰 SLOTS', 'slots <amount>', 'slots 500', 'Match 3 symbols to win big jackpots!');
+                                      return await sendUsage(sock, chatId, BOT_MARKER, '🎰 SLOTS', 'slots <amount>', 'slots 500', 'Match 3 symbols to win big jackpots!');
                                     }
                                     if (isNaN(amount)) {
                     await sock.sendMessage(chatId, {
@@ -9143,7 +9135,7 @@ Examples:
                   const amount = parseInt(args[2]);
         
                                     if (!amount) {
-                                      return await sendUsage(chatId, '♠️ BLACKJACK', 'bj <amount>', 'bj 1000', 'Get closer to 21 than the dealer without going over!');
+                                      return await sendUsage(sock, chatId, BOT_MARKER, '♠️ BLACKJACK', 'bj <amount>', 'bj 1000', 'Get closer to 21 than the dealer without going over!');
                                     }
                             
           if (isNaN(amount)) {
@@ -9390,7 +9382,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
           const mineCount = parseInt(args[3]) || 3;
           
           if (isNaN(amount)) {
-            return await sendUsage(chatId, '💣 MINES', 'mines <amount> <mine_count>', 'mines 1000 5', 'Avoid hidden bombs to multiply your bet!');
+            return await sendUsage(sock, chatId, BOT_MARKER, '💣 MINES', 'mines <amount> <mine_count>', 'mines 1000 5', 'Avoid hidden bombs to multiply your bet!');
           }
           
           const result = gambling.startMines(senderJid, amount, mineCount, economy);
@@ -10035,7 +10027,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ludo start`)) {
   const totalPlayers = mentionedJids.length + 1; // +1 for sender
   
   if (totalPlayers < 2 || totalPlayers > 4) {
-    return await sendUsage(chatId, '🎲 LUDO', 'ludo start @u1 @u2 @u3', 'ludo start @friend', 'Ludo requires 2 to 4 players total. Tag your friends to start!');
+    return await sendUsage(sock, chatId, BOT_MARKER, '🎲 LUDO', 'ludo start @u1 @u2 @u3', 'ludo start @friend', 'Ludo requires 2 to 4 players total. Tag your friends to start!');
   }
     return;
   }
