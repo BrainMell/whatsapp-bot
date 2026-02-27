@@ -403,7 +403,12 @@ function performCraft(userId, recipeId) {
     if (!check.canCraft) return { success: false, message: check.reason };
 
     const recipe = check.recipe;
-    const user = economy.getUser(userId);
+    const resultItem = recipe.result;
+
+    // 💡 BUG FIX: Check for space before removing ingredients
+    if (!inventorySystem.hasInventorySpace(userId, 1, resultItem.id)) {
+        return { success: false, message: "❌ Cannot craft: Inventory full!" };
+    }
 
     // 1. Remove ingredients
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
@@ -411,13 +416,20 @@ function performCraft(userId, recipeId) {
     }
 
     // 2. Add result
-    const resultItem = recipe.result;
-    inventorySystem.addItem(userId, resultItem.id, 1, {
+    const addResult = inventorySystem.addItem(userId, resultItem.id, 1, {
         name: recipe.name,
         stats: resultItem.stats || {},
         slot: resultItem.slot,
         type: resultItem.stats ? 'EQUIPMENT' : (resultItem.usable ? 'CONSUMABLE' : 'ITEM')
     });
+
+    if (!addResult.success) {
+        // Restore ingredients if addition failed
+        for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
+            inventorySystem.addItem(userId, ingId, qty);
+        }
+        return addResult;
+    }
 
     // 💡 GUILD BOARD TRACKING
     const guilds = require('./guilds');
@@ -443,15 +455,26 @@ function dismantleItem(userId, itemId) {
     
     if (!recipe) return { success: false, message: "This item cannot be dismantled." };
 
+    // Calculate returned materials
+    const returned = {};
+    let totalItemsToReturn = 0;
+    for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
+        const amount = Math.max(1, Math.floor(qty * 0.4));
+        returned[ingId] = amount;
+        totalItemsToReturn++;
+    }
+
+    // 💡 BUG FIX: Check for enough space for all materials
+    if (!inventorySystem.hasInventorySpace(userId, totalItemsToReturn)) {
+        return { success: false, message: "❌ Not enough inventory space to store recovered materials!" };
+    }
+
     // Remove item
     inventorySystem.removeItem(userId, itemId, 1);
 
-    // Return 40% of materials
-    const returned = {};
-    for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
-        const amount = Math.max(1, Math.floor(qty * 0.4));
-        inventorySystem.addItem(userId, ingId, amount);
-        returned[ingId] = amount;
+    // Return materials
+    for (const [id, qty] of Object.entries(returned)) {
+        inventorySystem.addItem(userId, id, qty);
     }
 
     let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;

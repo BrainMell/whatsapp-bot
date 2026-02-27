@@ -147,7 +147,7 @@ async function buyItem(sock, chatId, senderJid, input) {
     }
     
     if (result.success) {
-        // Deduct money
+        // 💡 BUG FIX: Only deduct money if inventory add was successful
         economy.removeMoney(senderJid, item.cost);
         
         await sock.sendMessage(chatId, {
@@ -220,7 +220,7 @@ This boost is permanent and applies to all your quests!`
 
 async function handleEquipment(senderJid, item) {
     // Add to inventory with its specific stats and slot
-    inventorySystem.addItem(senderJid, item.id, 1, {
+    const result = inventorySystem.addItem(senderJid, item.id, 1, {
         name: item.name,
         type: 'EQUIPMENT',
         rarity: item.rarity || 'COMMON',
@@ -229,10 +229,13 @@ async function handleEquipment(senderJid, item) {
         value: item.cost
     });
     
-    return {
-        success: true,
-        message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use \`${getPrefix()} equip ${item.id} ${item.slot}\` to wear it.`
-    };
+    if (result.success) {
+        return {
+            success: true,
+            message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use \`${getPrefix()} equip ${item.id} ${item.slot}\` to wear it.`
+        };
+    }
+    return result;
 }
 
 async function handleConsumable(senderJid, item) {
@@ -241,17 +244,20 @@ async function handleConsumable(senderJid, item) {
     const itemInfo = lootSystem.getItemInfo(baseId);
     
     // Add to inventory using the unified system
-    inventorySystem.addItem(senderJid, baseId, 1, {
+    const result = inventorySystem.addItem(senderJid, baseId, 1, {
         name: itemInfo.name,
         value: itemInfo.value,
         rarity: itemInfo.rarity || 'COMMON',
         source: 'MAIN_SHOP'
     });
     
-    return {
-        success: true,
-        message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with \`${getPrefix()} combat item <number>\``
-    };
+    if (result.success) {
+        return {
+            success: true,
+            message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with \`${getPrefix()} combat item <number>\``
+        };
+    }
+    return result;
 }
 
 // ==========================================
