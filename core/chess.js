@@ -10,6 +10,155 @@ const botConfig = require('../botConfig');
 const GoImageService = require('./goImageService');
 
 const goService = new GoImageService();
+// ============================================
+// AI LOGIC (BASIC EVALUATION + MINIMAX)
+// ============================================
+
+const PIECE_VALUES = {
+    'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000,
+    'P': 100, 'N': 320, 'B': 330, 'R': 500, 'Q': 900, 'K': 20000
+};
+
+// Simplified Piece-Square Tables
+const PST = {
+    'p': [
+        [0,  0,  0,  0,  0,  0,  0,  0],
+        [50, 50, 50, 50, 50, 50, 50, 50],
+        [10, 10, 20, 30, 30, 20, 10, 10],
+        [5,  5, 10, 25, 25, 10,  5,  5],
+        [0,  0,  0, 20, 20,  0,  0,  0],
+        [5, -5,-10,  0,  0,-10, -5,  5],
+        [5, 10, 10,-20,-20, 10, 10,  5],
+        [0,  0,  0,  0,  0,  0,  0,  0]
+    ],
+    'n': [
+        [-50,-40,-30,-30,-30,-30,-40,-50],
+        [-40,-20,  0,  0,  0,  0,-20,-40],
+        [-30,  0, 10, 15, 15, 10,  0,-30],
+        [-30,  5, 15, 20, 20, 15,  5,-30],
+        [-30,  0, 15, 20, 20, 15,  0,-30],
+        [-30,  5, 10, 15, 15, 10,  5,-30],
+        [-40,-20,  0,  5,  5,  0,-20,-40],
+        [-50,-40,-30,-30,-30,-30,-40,-50]
+    ],
+    'b': [
+        [-20,-10,-10,-10,-10,-10,-10,-20],
+        [-10,  0,  0,  0,  0,  0,  0,-10],
+        [-10,  0,  5, 10, 10,  5,  0,-10],
+        [-10,  5,  5, 10, 10,  5,  5,-10],
+        [-10,  0, 10, 10, 10, 10,  0,-10],
+        [-10, 10, 10, 10, 10, 10, 10,-10],
+        [-10,  5,  0,  0,  0,  0,  5,-10],
+        [-20,-10,-10,-10,-10,-10,-10,-20]
+    ],
+    'r': [
+        [0,  0,  0,  0,  0,  0,  0,  0],
+        [5, 10, 10, 10, 10, 10, 10,  5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [0,  0,  0,  5,  5,  0,  0,  0]
+    ],
+    'q': [
+        [-20,-10,-10, -5, -5,-10,-10,-20],
+        [-10,  0,  0,  0,  0,  0,  0,-10],
+        [-10,  0,  5,  5,  5,  5,  0,-10],
+        [-5,  0,  5,  5,  5,  5,  0, -5],
+        [0,  0,  5,  5,  5,  5,  0, -5],
+        [-10,  5,  5,  5,  5,  5,  0,-10],
+        [-10,  0,  5,  0,  0,  0,  0,-10],
+        [-20,-10,-10, -5, -5,-10,-10,-20]
+    ],
+    'k': [
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-20,-30,-30,-40,-40,-30,-30,-20],
+        [-10,-20,-20,-20,-20,-20,-20,-10],
+        [20, 20,  0,  0,  0,  0, 20, 20],
+        [20, 30, 10,  0,  0, 10, 30, 20]
+    ]
+};
+
+// Mirror PST for White
+const PST_W = {};
+for (const p in PST) {
+    PST_W[p.toUpperCase()] = [...PST[p]].reverse();
+}
+const ALL_PST = { ...PST, ...PST_W };
+
+function evaluateBoard(game) {
+    let totalEvaluation = 0;
+    const board = game.board();
+
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+            const piece = board[i][j];
+            if (piece) {
+                const val = PIECE_VALUES[piece.type] || 0;
+                const pstVal = ALL_PST[piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase()]?.[i][j] || 0;
+                const multiplier = piece.color === 'w' ? 1 : -1;
+                totalEvaluation += (val + pstVal) * multiplier;
+            }
+        }
+    }
+    return totalEvaluation;
+}
+
+function minimax(game, depth, alpha, beta, isMaximisingPlayer) {
+    if (depth === 0) return -evaluateBoard(game);
+
+    const possibleMoves = game.moves();
+
+    if (isMaximisingPlayer) {
+        let bestEval = -99999;
+        for (const move of possibleMoves) {
+            game.move(move);
+            bestEval = Math.max(bestEval, minimax(game, depth - 1, alpha, beta, !isMaximisingPlayer));
+            game.undo();
+            alpha = Math.max(alpha, bestEval);
+            if (beta <= alpha) return bestEval;
+        }
+        return bestEval;
+    } else {
+        let bestEval = 99999;
+        for (const move of possibleMoves) {
+            game.move(move);
+            bestEval = Math.min(bestEval, minimax(game, depth - 1, alpha, beta, !isMaximisingPlayer));
+            game.undo();
+            beta = Math.min(beta, bestEval);
+            if (beta <= alpha) return bestEval;
+        }
+        return bestEval;
+    }
+}
+
+function getBestMove(game) {
+    const possibleMoves = game.moves();
+    if (possibleMoves.length === 0) return null;
+
+    let bestMove = null;
+    let bestValue = -99999;
+
+    // Randomize equal moves a bit
+    possibleMoves.sort(() => Math.random() - 0.5);
+
+    for (const move of possibleMoves) {
+        game.move(move);
+        const boardValue = minimax(game, 2, -100000, 100000, false);
+        game.undo();
+        if (boardValue > bestValue) {
+            bestValue = boardValue;
+            bestMove = move;
+        }
+    }
+
+    return bestMove;
+}
+
 // activeGames is now a Map of botIds -> Map of chatIds
 const activeGamesMap = new Map();
 
@@ -149,6 +298,7 @@ function updateChessScore(playerJid, result) {
 
 async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const prefix = botConfig.getPrefix();
+    const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
     
     // Safety check: if first arg is 'chess', shift it (prevents parsing mismatch)
     if (args[0]?.toLowerCase() === 'chess') {
@@ -159,6 +309,11 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     
     let mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     const quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
+    
+    // Check if replying to the bot or tagging the bot
+    const isReplyingToBot = quotedParticipant === botJid;
+    const isTaggingBot = mentionedJids.includes(botJid);
+
     if (mentionedJids.length === 0 && quotedParticipant && quotedParticipant !== sock.user.id) {
         mentionedJids = [quotedParticipant];
     }
@@ -183,7 +338,14 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         if (cmd === 'guide') {
             // Handled below
         } else {
-            const opponentJid = mentionedJids[0];
+            let opponentJid = mentionedJids[0];
+            
+            // If tagging bot or no one tagged (and not guide), assume AI mode? 
+            // Actually user said "when u tag the bot ofcourse, or mention the bots number or reply to the bot"
+            if (isTaggingBot || isReplyingToBot) {
+                opponentJid = botJid;
+            }
+
             if (cleanJid(opponentJid) === cleanJid(senderJid)) {
                 return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot play against yourself!" });
             }
@@ -195,6 +357,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             const bet = parseInt(betStr?.replace(/,/g, '')) || 0;
 
             if (bet > 0) {
+                if (opponentJid === botJid) {
+                    return sock.sendMessage(chatId, { text: botMarker + "❌ You cannot bet against the AI!" });
+                }
                 if (economy.getBalance(senderJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ You don't have enough Zeni for this bet!" });
                 if (economy.getBalance(opponentJid) < bet) return sock.sendMessage(chatId, { text: botMarker + "❌ Your opponent doesn't have enough Zeni!" });
             }
@@ -203,7 +368,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             
             const caption = botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n` +
                 `⚪ *White:* @${normalizeJid(senderJid)}\n` +
-                `⚫ *Black:* @${normalizeJid(opponentJid)}\n` +
+                `⚫ *Black:* @${normalizeJid(opponentJid)} ${opponentJid === botJid ? '(🤖 AI MODE)' : ''}\n` +
                 `💰 *Bet:* ${bet.toLocaleString()} Zeni\n\n` +
                 `👉 @${normalizeJid(senderJid)} to move!\n` +
                 `Use: \`${prefix} move <notation>\` (e.g., \`e4\`, \`Nf3\`)`;
@@ -231,55 +396,42 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             return sock.sendMessage(chatId, { text: botMarker + `❌ It's not your turn! Wait for @${normalizeJid(currentPlayer)}`, contextInfo: { mentionedJid: [currentPlayer] } });
         }
 
-        const moveStr = args.slice(1).join('').trim();
+        let moveStr = args.slice(1).join('').trim();
         if (!moveStr) return sock.sendMessage(chatId, { text: botMarker + "❌ Specify your move! (e.g., `e4` or `Nf3`)" });
 
+        // Normalize move notation: 
+        // 1. Pawn moves (e.g., e4, E4 -> e4)
+        if (moveStr.length === 2) {
+            moveStr = moveStr.toLowerCase();
+        }
+        // 2. Piece moves (e.g., nf3 -> Nf3, qh5 -> Qh5)
+        else if (moveStr.length >= 3 && /^[rnkbq]/i.test(moveStr[0])) {
+            moveStr = moveStr[0].toUpperCase() + moveStr.slice(1);
+        }
+        // 3. Castling (e.g., o-o -> O-O)
+        else if (moveStr.toLowerCase() === 'o-o' || moveStr.toLowerCase() === 'o-o-o') {
+            moveStr = moveStr.toUpperCase().replace(/0/g, 'O');
+        }
+
         try {
-            const move = state.chess.move(moveStr);
+            // Attempt the move
+            let move = state.chess.move(moveStr);
+            
+            // If failed, check if it's a missing promotion (e.g., e8 or a1 for pawn)
+            if (!move && moveStr.length >= 2) {
+                const targetSquare = moveStr.slice(-2);
+                const isPromotionRank = targetSquare[1] === '8' || targetSquare[1] === '1';
+                if (isPromotionRank) {
+                    // Try with promotion to Queen
+                    const promoMove = moveStr.includes('=') ? moveStr : moveStr + '=Q';
+                    move = state.chess.move(promoMove);
+                    if (move) moveStr = promoMove;
+                }
+            }
+
             if (!move) throw new Error("Invalid move");
 
-            state.fen = state.chess.fen(); 
-            if (!state.history) state.history = [];
-            state.history.push(state.fen);
-            saveActiveGames(); 
-
-            let resultMsg = "";
-            let gameEnded = false;
-
-            if (state.chess.isCheckmate()) {
-                resultMsg = `🏁 *CHECKMATE!* @${normalizeJid(currentPlayer)} wins!`;
-                gameEnded = true;
-                updateChessScore(currentPlayer, 'win');
-                updateChessScore(isWhiteTurn ? state.playerB : state.playerW, 'loss');
-            } else if (state.chess.isDraw()) {
-                resultMsg = `⚖️ *DRAW!* The game ended in a draw.`;
-                gameEnded = true;
-                updateChessScore(state.playerW, 'draw');
-                updateChessScore(state.playerB, 'draw');
-            } else if (state.chess.isCheck()) {
-                resultMsg = `⚠️ *CHECK!* @${normalizeJid(isWhiteTurn ? state.playerB : state.playerW)} is in check!`;
-            }
-
-            const nextPlayer = state.chess.turn() === 'w' ? state.playerW : state.playerB;
-            const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*\n\n` +
-                (gameEnded ? resultMsg : (resultMsg ? resultMsg + "\n" : "") + `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
-                (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} takes the ${(state.bet * 2).toLocaleString()} Zeni pot!` : "");
-
-            if (gameEnded) {
-                if (state.bet > 0 && state.chess.isCheckmate()) {
-                    economy.addMoney(currentPlayer, state.bet);
-                    economy.removeMoney(isWhiteTurn ? state.playerB : state.playerW, state.bet);
-                }
-                deleteGame(chatId);
-            }
-
-            const imageBuffer = await renderBoard(state.chess.fen(), move.from + move.to);
-            if (imageBuffer) {
-                await sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
-            } else {
-                const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
-                await sock.sendMessage(chatId, { text: caption + "\n\n" + asciiBoard, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
-            }
+            await processMove(sock, chatId, state, move, moveStr, botMarker, botJid);
 
         } catch (e) {
             let errorText = botMarker + `❌ *Invalid move:* \`${moveStr}\`\n\n` +
@@ -295,7 +447,68 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return;
     }
 
-    // 3. SHOW BOARD
+    async function processMove(sock, chatId, state, move, moveStr, botMarker, botJid) {
+    const isWhiteTurn = state.chess.turn() === 'w';
+    const currentPlayer = !isWhiteTurn ? state.playerW : state.playerB; // Turn already flipped in chess.js
+
+    state.fen = state.chess.fen(); 
+    if (!state.history) state.history = [];
+    state.history.push(state.fen);
+    saveActiveGames(); 
+
+    let resultMsg = "";
+    let gameEnded = false;
+
+    if (state.chess.isCheckmate()) {
+        resultMsg = `🏁 *CHECKMATE!* @${normalizeJid(currentPlayer)} wins!`;
+        gameEnded = true;
+        updateChessScore(currentPlayer, 'win');
+        updateChessScore(!isWhiteTurn ? state.playerB : state.playerW, 'loss');
+    } else if (state.chess.isDraw()) {
+        resultMsg = `⚖️ *DRAW!* The game ended in a draw.`;
+        gameEnded = true;
+        updateChessScore(state.playerW, 'draw');
+        updateChessScore(state.playerB, 'draw');
+    } else if (state.chess.isCheck()) {
+        resultMsg = `⚠️ *CHECK!* @${normalizeJid(state.chess.turn() === 'w' ? state.playerW : state.playerB)} is in check!`;
+    }
+
+    const nextPlayer = state.chess.turn() === 'w' ? state.playerW : state.playerB;
+    const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*\n\n` +
+        (gameEnded ? resultMsg : (resultMsg ? resultMsg + "\n" : "") + `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
+        (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} takes the ${(state.bet * 2).toLocaleString()} Zeni pot!` : "");
+
+    if (gameEnded) {
+        if (state.bet > 0 && state.chess.isCheckmate()) {
+            economy.addMoney(currentPlayer, state.bet);
+            economy.removeMoney(!isWhiteTurn ? state.playerB : state.playerW, state.bet);
+        }
+        deleteGame(chatId);
+    }
+
+    const imageBuffer = await renderBoard(state.chess.fen(), move.from + move.to);
+    if (imageBuffer) {
+        await sock.sendMessage(chatId, { image: imageBuffer, caption, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
+    } else {
+        const asciiBoard = "```\n" + state.chess.ascii() + "\n```";
+        await sock.sendMessage(chatId, { text: caption + "\n\n" + asciiBoard, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
+    }
+
+    // AI MOVE TRIGGER
+    if (!gameEnded && nextPlayer === botJid) {
+        setTimeout(async () => {
+            const aiMove = getBestMove(state.chess);
+            if (aiMove) {
+                const moveResult = state.chess.move(aiMove);
+                if (moveResult) {
+                    await processMove(sock, chatId, state, moveResult, aiMove, botMarker, botJid);
+                }
+            }
+        }, 1500);
+    }
+}
+
+// 3. SHOW BOARD
     if (cmd === 'board' || cmd === 'show') {
         const state = getGame(chatId);
         if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game." });
