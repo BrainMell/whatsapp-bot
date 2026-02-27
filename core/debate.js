@@ -101,23 +101,22 @@ module.exports = {
             await sock.groupParticipantsUpdate(chatId, [debater1Jid], 'promote');
             await sock.groupParticipantsUpdate(chatId, [debater2Jid], 'promote');
 
-            const message = BOT_MARKER + `━━━━━━━━━━━━━━━━━
+            const message = BOT_MARKER + `━━━━━━━━━━━━━━━
 🎭 *DEBATE STARTED* 🎭
-━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 
 📌 *Topic:* ${topic}
 
 ⚔️ *Debaters:*
 @${debater1Jid.split('@')[0]} vs @${debater2Jid.split('@')[0]}
 
-━━━━━━━━━━━━━━━━━
-🔒 Group locked for debate
-👑 Debaters promoted to admin
-🤖 AI is recording arguments
+━━━━━━━━━━━━━━━
+🔒 Group locked
+👑 Debaters promoted
+🤖 AI recording...
 
-📣 Make your points!
-Type \`${botConfig.getPrefix()} judge\` when ready for verdict!
-━━━━━━━━━━━━━━━━━`;
+Type \`${botConfig.getPrefix()} judge\` for verdict!
+━━━━━━━━━━━━━━━`;
 
             await sock.sendMessage(chatId, {
                 text: message,
@@ -252,39 +251,22 @@ Respond ONLY in this JSON format:
             recordParticipation(loserJid, loserScore);
 
             // Build verdict message
-            const verdictMessage = BOT_MARKER + `━━━━━━━━━━━━━━━━━━━━
+            const verdictMessage = BOT_MARKER + `━━━━━━━━━━━━━━━
 ⚖️ *DEBATE VERDICT* ⚖️
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 
 📌 *Topic:* ${debate.topic}
 
 🏆 *WINNER:* @${winnerJid.split('@')[0]}
 
 📊 *SCORES:*
-@${debater1Name}: ${verdict.debater1_score}/100
-@${debater2Name}: ${verdict.debater2_score}/100
+@${debater1Name}: ${verdict.debater1_score}
+@${debater2Name}: ${verdict.debater2_score}
 
-💭 *ANALYSIS:*
-${verdict.reasoning}
-
-🚫 *LOGICAL FALLACIES:*
-📌 @${debater1Name}: ${verdict.fallacies.d1}
-📌 @${debater2Name}: ${verdict.fallacies.d2}
-
-🔥 *BEST ARGUMENTS:*
-
-📌 @${debater1Name}:
-"${verdict.best_arg_d1.text}"
-*Impact:* ${verdict.best_arg_d1.impact}
-
-📌 @${debater2Name}:
-"${verdict.best_arg_d2.text}"
-*Impact:* ${verdict.best_arg_d2.impact}
-
-━━━━━━━━━━━━━━━━━━━━
-Total Arguments: ${debate.arguments.length}
-Duration: ${Math.round((Date.now() - debate.startTime) / 60000)} minutes
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━
+Total Args: ${debate.arguments.length}
+Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
+━━━━━━━━━━━━━━━`;
 
             // Unlock group and demote debaters if they weren't admins before
             try {

@@ -213,17 +213,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-🎴  A CARD HAS APPEARED!
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+`▬▬▬▬▬▬▬▬▬▬▬▬
+🎴  CARD APPEARED!
+▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${card.animeName}
 ✦  ${label}  ✦
 🎨  Art ›  ${card.creator || 'Unknown'}
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
-⌨️  Type  ${P()} claim ${card.id}  to collect
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+⌨️  Type  ${P()} claim ${card.id}  
+▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -322,9 +322,9 @@ function getDeckHash(cards) {
 }
 
 function sendUsage(reply, cmd, usage, example) {
-  let msg = `┏━━━━━━━━━━━━━━━━━┓\n`;
-  msg += `┃   📖 *USAGE GUIDE* \n`;
-  msg += `┗━━━━━━━━━━━━━━━━━┛\n\n`;
+  let msg = `┏━━━━━━━━━━━━━━━┓\n`;
+  msg += `┃   📖 *USAGE*    ┃\n`;
+  msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
   msg += `*Command:* \`${cmd}\`\n`;
   msg += `*Usage:* \`${usage}\`\n`;
   msg += `*Example:* \`${example}\`\n\n`;
@@ -477,9 +477,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   if (!owned.length) return reply('📭 Collection empty.');
 
   // Build flat list with simple style
-  let msg = `🃏 *Cards | Collection*\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Cards:* ${owned.length}\n\n`;
+  let msg = `🃏 *Collection*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total:* ${owned.length}\n\n`;
 
   const lines = [];
   for (let i = 0; i < owned.length; i++) {
@@ -557,15 +557,15 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   if (!deck.length) return reply('📭 Main Deck is empty.');
 
   // Build requested template
-  let msg = `🎴 *Deck | Main Deck* 🎴\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Cards:* ${deck.length}\n\n`;
+  let msg = `🎴 *Main Deck* 🎴\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total:* ${deck.length}\n\n`;
   
   const lines = deck.map(uc => {
     const card = CARD_INDEX()[uc.cardId];
     const name = card ? card.cardName : 'Unknown';
     const tier = card ? String(card.tier) : '?';
-    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${name}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━━━`;
+    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${name}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━`;
   });
   
   msg += lines.join('\n');
@@ -611,14 +611,13 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
 
-  let msg = `🃏 *Owned Cards | ${filtered[0].cardName.split(' ')[0]}...*\n`;
-  msg += `━━━━━━━━━━━━━━━━━\n`;
-  msg += `📺 *Anime:* ${animeQuery.toUpperCase()}\n`;
+  let msg = `🃏 *Owned | ${animeQuery.toUpperCase()}*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${filtered.length}\n\n`;
 
   const lines = filtered.map((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
-    return `🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${card.tier}\n━━━━━━━━━━━━━━━━━`;
+    return `🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${card.tier}\n━━━━━━━━━━━━━━━`;
   });
 
   return reply(msg + lines.slice(0, 20).join('\n'));
