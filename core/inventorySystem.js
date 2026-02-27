@@ -539,6 +539,56 @@ function sellItem(userId, itemId, quantity = 1) {
 }
 
 // ==========================================
+// 🛠️ ITEM USAGE
+// ==========================================
+
+function useItem(userId, itemId) {
+    const inventory = getInventory(userId);
+    const progression = require('./progression');
+    const sheet = progression.getCharacterSheet(userId);
+    
+    if (!inventory[itemId]) {
+        return { success: false, message: `❌ You don't have this item!` };
+    }
+
+    const itemInfo = lootSystem.getItemInfo(itemId);
+    if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
+        return { success: false, message: `❌ This item cannot be used this way! Use \`${botConfig.getPrefix()} equip\` for gear.` };
+    }
+
+    // Effect handling
+    let effectMsg = "";
+    let consumed = true;
+
+    if (itemId === 'hp_potion' || itemId === 'minor_hp_potion') {
+        const heal = itemId === 'hp_potion' ? 100 : 50;
+        sheet.stats.hp = Math.min(sheet.stats.maxHp || sheet.stats.hp, sheet.stats.hp + heal);
+        effectMsg = `💚 Restored **${heal} HP**!`;
+    } 
+    else if (itemId === 'energy_drink') {
+        const user = economy.getUser(userId);
+        user.energy = Math.min(user.maxEnergy || 100, (user.energy || 0) + 30);
+        effectMsg = `⚡ Restored **30 Energy**!`;
+    }
+    else if (itemId === 'exp_scroll') {
+        progression.addXP(userId, 250, 'Scroll');
+        effectMsg = `📖 Gained **250 XP**!`;
+    }
+    else {
+        return { success: false, message: `❌ Item effect not implemented yet.` };
+    }
+
+    if (consumed) {
+        removeItem(userId, itemId, 1);
+    }
+
+    progression.saveCharacterSheet(userId, sheet);
+    economy.saveUser(userId);
+
+    return { success: true, message: effectMsg };
+}
+
+// ==========================================
 // 📊 INVENTORY DISPLAY
 // ==========================================
 
@@ -614,6 +664,7 @@ module.exports = {
     equipItem,
     unequipItem,
     getEquipmentStats,
+    useItem,
     
     // Selling
     sellItem,

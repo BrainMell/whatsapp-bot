@@ -952,6 +952,48 @@ async function showItemSource(sock, chatId, itemId) {
     await sock.sendMessage(chatId, { text: msg });
 }
 
+async function useItem(sock, chatId, senderJid, target) {
+    if (!target) {
+        // Find consumables in inventory to suggest
+        const inv = inventorySystem.getInventory(senderJid);
+        const consumables = Object.keys(inv).filter(k => {
+            const info = lootSystem.getItemInfo(k);
+            return info.type === 'CONSUMABLE' || info.type === 'POTION';
+        });
+
+        let tip = consumables.length > 0 
+            ? `Items you can use: ${consumables.join(', ')}`
+            : "You don't have any usable consumables.";
+
+        const sendUsageHelper = async (chatId, title, usage, example = null, tipText = null) => {
+            let msg = `┏━━━━━━━━━━━━━━━┓\n┃   ${title}   ┃\n┗━━━━━━━━━━━━━━━┛\n\n`;
+            msg += `*Usage:* \`${getPrefix()}${usage}\`\n`;
+            if (example) msg += `*Example:* \`${getPrefix()}${example}\`\n`;
+            if (tipText) msg += `\n💡 *Tip:* _${tipText}_`;
+            return await sock.sendMessage(chatId, { text: `🃏 *GOTEN*\n\n` + msg });
+        };
+
+        return await sendUsageHelper(chatId, '🧪 USE ITEM', 'use <#bag_index>', 'use 1', tip);
+    }
+
+    // Resolve bag index if number
+    let itemId = target;
+    if (!isNaN(target)) {
+        const invData = inventorySystem.formatInventory(senderJid);
+        const item = invData.items[parseInt(target) - 1];
+        if (item) itemId = item.id;
+    }
+
+    const result = inventorySystem.useItem(senderJid, itemId);
+    if (result.success) {
+        await sock.sendMessage(chatId, { 
+            text: `🃏 *GOTEN*\n\n✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` 
+        });
+    } else {
+        await sock.sendMessage(chatId, { text: `🃏 *GOTEN*\n\n` + result.message });
+    }
+}
+
 // ========================================== 
 // 📤 EXPORTS 
 // ========================================== 
@@ -966,6 +1008,7 @@ module.exports = {
     upgradeInventory,
     equipItem,
     unequipItem,
+    useItem,
     displayRecipes,
     craftItem,
     dismantleItem,

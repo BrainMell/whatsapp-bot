@@ -8323,6 +8323,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unequip `)) {
     return;
 }
 
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} use` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} use `)) {
+    const target = txt.split(' ').slice(2).join(' ').trim();
+    await rpgCommands.useItem(sock, chatId, senderJid, target);
+    return;
+}
+
         // ============================================
         // PROFILE MANAGEMENT COMMANDS
         // ============================================
