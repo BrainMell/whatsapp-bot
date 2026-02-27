@@ -93,11 +93,16 @@ function getInventoryCount(userId) {
     const inventory = getInventory(userId);
     if (!inventory) return 0;
     
-    // 💡 Material Pouch Logic: Don't count materials towards the slot limit
-    return Object.values(inventory).filter(item => {
-        if (typeof item === 'number') return true; 
-        return item.type !== 'MATERIAL';
-    }).length;
+    // 💡 Count unique item stacks, excluding MATERIAL types
+    let count = 0;
+    for (const key in inventory) {
+        const item = inventory[key];
+        const itemInfo = lootSystem.getItemInfo(key);
+        if (itemInfo.type !== 'MATERIAL') {
+            count++;
+        }
+    }
+    return count;
 }
 
 function hasInventorySpace(userId, amount = 1, itemId = null) {
@@ -106,36 +111,43 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
         if (itemInfo.type === 'MATERIAL') return true;
     }
     
+    const inventory = getInventory(userId);
+    const itemInfo = lootSystem.getItemInfo(itemId);
+    
+    // If the item already exists, it stacks and doesn't take a new slot
+    if (itemId && inventory[itemId] && itemInfo.type !== 'MATERIAL') return true;
+
     const current = getInventoryCount(userId);
     const max = getInventorySlots(userId);
     return (current + amount) <= max;
 }
 
 function addItem(userId, itemId, quantity = 1, itemData = {}) {
-    if (!hasInventorySpace(userId, quantity, itemId)) {
+    const inventory = getInventory(userId);
+    const itemInfo = lootSystem.getItemInfo(itemId);
+
+    if (!hasInventorySpace(userId, 1, itemId)) {
         return {
             success: false,
             message: '❌ Inventory full! Sell items or upgrade inventory size.'
         };
     }
     
-    const inventory = getInventory(userId);
-    const itemInfo = lootSystem.getItemInfo(itemId);
-    
-    // Stack if item already exists
+    // Ensure consistent object structure (migration)
     if (inventory[itemId]) {
-        // Handle legacy number format
         if (typeof inventory[itemId] === 'number') {
             inventory[itemId] = {
                 id: itemId,
                 name: itemInfo.name,
-                type: itemInfo.type || 'MATERIAL',
+                type: itemInfo.type || 'ITEM',
                 quantity: inventory[itemId] + quantity,
                 acquiredAt: Date.now(),
                 ...itemData
             };
         } else {
             inventory[itemId].quantity = (inventory[itemId].quantity || 0) + quantity;
+            // Update metadata if provided
+            Object.assign(inventory[itemId], itemData);
         }
     } else {
         inventory[itemId] = {
@@ -169,7 +181,6 @@ function removeItem(userId, itemId, quantity = 1) {
     }
     
     let currentQuantity = 0;
-    // Handle legacy number format
     if (typeof inventory[itemId] === 'number') {
         currentQuantity = inventory[itemId];
     } else {
@@ -183,7 +194,7 @@ function removeItem(userId, itemId, quantity = 1) {
         };
     }
     
-    // Remove quantity
+    // Uniformly update quantity
     if (typeof inventory[itemId] === 'number') {
         inventory[itemId] -= quantity;
         if (inventory[itemId] <= 0) {
@@ -407,6 +418,15 @@ function unequipItem(userId, slot) {
     }
     
     const item = equipment[slotName];
+    
+    // Check if there's space before unequipping
+    if (!hasInventorySpace(userId, 1, item.id)) {
+        return {
+            success: false,
+            message: `❌ Cannot unequip: Inventory full!`
+        };
+    }
+
     const result = addItem(userId, item.id, 1, item);
     
     if (!result.success) {
