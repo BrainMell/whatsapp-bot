@@ -2435,8 +2435,7 @@ async function endCombat(sock, victory, sessionKey) {
         for (const player of alivePlayers) {
             player.xpEarned += xpPerPlayer;
             player.goldEarned += goldPerPlayer;
-            // economy.addMoney(player.jid, goldPerPlayer); // Replaced with item
-            economy.addItem(player.jid, 'gold', goldPerPlayer);
+            // Gold and Items are now handled inside lootSystem.distributeLoot
             
             const levelUpResult = progression.addXP(player.jid, xpPerPlayer, 'Quest');
             
@@ -3921,7 +3920,8 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     // DEBUFF ABILITIES
     if (effect.type.includes('debuff')) {
         if (effect.type === 'debuff_target') {
-            const target = getTargets(effect, targetIndex)[0];
+            const targets = getTargets(player, effect, targetIndex, chatId);
+            const target = targets[0];
             if (target) {
                 applyDebuff(target, effect.debuffType, effect.value, effect.duration);
                 msg += `💀 ${target.name} receives -${effect.value}% ${effect.debuffType}!\n`;
@@ -3950,11 +3950,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
         }
     // MULTI-HIT
     if (effect.type === 'multi_hit') {
-        const target = getTargets(effect, targetIndex, chatId)[0];
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        const target = targets[0];
         if (target) {
             let totalMultiDamage = 0;
             for (let i = 0; i < effect.hits; i++) {
-                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, player.stats.atk * effect.multiplier, 'physical', 'PHYSICAL', chatId);
+                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, (player.stats.atk || 10) * effect.multiplier, 'physical', 'PHYSICAL', chatId);
                 if (!wasEvaded) {
                     target.stats.hp -= damage;
                     totalMultiDamage += damage;
