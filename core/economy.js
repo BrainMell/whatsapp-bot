@@ -473,19 +473,20 @@ function transferMoney(fromUserId, toUserId, amount) {
     return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
   }
   
-  if (amount <= 0) {
-    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be greater than ${getZENI()}0` };
+  const val = Number(amount);
+  if (isNaN(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a valid positive number.` };
   }
   
-  if (sender.wallet < amount) {
-    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${amount.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(amount - sender.wallet).toLocaleString()}` };
+  if (sender.wallet < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
   }
   
-  sender.wallet -= amount;
-  receiver.wallet += amount;
+  sender.wallet -= val;
+  receiver.wallet += val;
   
-  logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -amount, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, amount, receiver.wallet);
+  logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -val, sender.wallet);
+  logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, val, receiver.wallet);
 
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
