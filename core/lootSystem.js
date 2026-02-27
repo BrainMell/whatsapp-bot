@@ -463,13 +463,17 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
     const loot = generateLoot(encounterType, enemyName, difficulty);
     const goldDrop = generateGoldDrop(encounterType, difficulty);
     
+    // Split gold among players
+    const goldPerPlayer = Math.floor(goldDrop / Math.max(1, players.length));
+
     const results = {
         items: [],
         gold: goldDrop,
+        goldPerPlayer: goldPerPlayer,
         announcements: []
     };
     
-    // Distribute items
+    // Distribute items (Assign each item to a random surviving player)
     for (const drop of loot) {
         const itemInfo = getItemInfo(drop.id);
         
@@ -478,33 +482,41 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
             results.announcements.push(drop.announcement);
         }
         
-        // Add to each player's inventory
-        for (const player of players) {
-            const addResult = inventorySystem.addItem(
-                player.jid,
-                drop.id,
-                drop.quantity,
-                {
-                    name: itemInfo.name,
-                    rarity: drop.rarity || itemInfo.rarity,
-                    type: itemInfo.type || 'MATERIAL',
-                    stats: itemInfo.stats,
-                    slot: itemInfo.slot,
-                    source: drop.source || encounterType,
-                    acquiredAt: Date.now()
-                }
-            );
-            
-            if (addResult.success) {
-                results.items.push({
-                    playerId: player.jid,
-                    playerName: player.name,
-                    id: drop.id,
-                    name: itemInfo.name,
-                    quantity: drop.quantity,
-                    rarity: drop.rarity
-                });
+        // Pick a random player to receive the item
+        const luckyPlayer = players[Math.floor(Math.random() * players.length)];
+        
+        const addResult = inventorySystem.addItem(
+            luckyPlayer.jid,
+            drop.id,
+            drop.quantity,
+            {
+                name: itemInfo.name,
+                rarity: drop.rarity || itemInfo.rarity,
+                type: itemInfo.type || 'MATERIAL',
+                stats: itemInfo.stats,
+                slot: itemInfo.slot,
+                source: drop.source || encounterType,
+                acquiredAt: Date.now()
             }
+        );
+        
+        if (addResult.success) {
+            results.items.push({
+                playerId: luckyPlayer.jid,
+                playerName: luckyPlayer.name,
+                id: drop.id,
+                name: itemInfo.name,
+                quantity: drop.quantity,
+                rarity: drop.rarity
+            });
+        }
+    }
+
+    // Add gold to each player
+    if (goldPerPlayer > 0) {
+        for (const player of players) {
+            const economy = require('./economy');
+            economy.addItem(player.jid, 'gold', goldPerPlayer);
         }
     }
     
