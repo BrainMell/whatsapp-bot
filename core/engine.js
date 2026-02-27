@@ -2831,6 +2831,158 @@ We are happy to have you here.
         if (cardHandled) return; // stop further processing if handled by cards
         // ───────────────────────────────────────────
 
+        // ── CORE COMMAND INTERCEPT ──────────────────
+        
+        // .j menu or .j help
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} menu`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} help`)) {
+          const parts = lowerTxt.split(' ');
+          const menuArgs = parts.slice(2); 
+          await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
+          return;
+        }
+
+        // .j shop
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} shop` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} shop `)) {
+          const category = lowerTxt.split(' ')[2] || 'all';
+          await shopCommands.displayShop(sock, chatId, category);
+          return;
+        }
+
+        // .j buy
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} buy `)) {
+          const input = txt.split(' ').slice(2).join(' ').trim();
+          await shopCommands.buyItem(sock, chatId, senderJid, input);
+          return;
+        }
+
+        // .j profile / .j me
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} profile` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} me`) {
+          await shopCommands.displayCharacter(sock, chatId, senderJid, senderName);
+          return;
+        }
+
+        // .j quest / .j adventure
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} quest`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} adventure`)) {
+          const isHardcore = lowerTxt.includes('--hc') || lowerTxt.includes('--hardcore') || lowerTxt.includes('permadeath');
+          const ranks = ['f','e','d','c','b','a','s','ss','sss'];
+          const rank = lowerTxt.split(' ').find(a => ranks.includes(a.toLowerCase())) || null;
+          await guildAdventure.initAdventure(sock, chatId, groq, isHardcore ? 'PERMADEATH' : 'NORMAL', false, rank ? rank.toUpperCase() : null, senderJid, smartGroqCall);
+          return;
+        }
+
+        // .j solo
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
+          const isHardcore = lowerTxt.includes('--hc') || lowerTxt.includes('--hardcore') || lowerTxt.includes('permadeath');
+          const ranks = ['f','e','d','c','b','a','s','ss','sss'];
+          const rank = lowerTxt.split(' ').find(a => ranks.includes(a.toLowerCase())) || null;
+          await guildAdventure.initAdventure(sock, chatId, groq, isHardcore ? 'PERMADEATH' : 'NORMAL', true, rank ? rank.toUpperCase() : null, senderJid, smartGroqCall);
+          return;
+        }
+
+        // .j join
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} join`) {
+          await guildAdventure.joinAdventure(senderJid, chatId);
+          return;
+        }
+
+        // .j stop / .j end (Quest)
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} stop` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} end`) {
+          await guildAdventure.stopAdventure(senderJid, chatId);
+          return;
+        }
+
+        // .j status (Quest)
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} status`) {
+          await guildAdventure.showCombatStatus(sock, chatId);
+          return;
+        }
+
+        // .j skill tree
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill tree` || 
+            lowerTxt === `${botConfig.getPrefix().toLowerCase()} st` ||
+            lowerTxt === `${botConfig.getPrefix().toLowerCase()} skilltree`) {
+            await skillCommands.displaySkillTree(sock, chatId, senderJid, senderName);
+            return;
+        }
+
+        // .j evolve
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve`)) {
+            const parts = txt.trim().split(/\s+/);
+            const args = parts.slice(2);
+            await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, args);
+            return;
+        }
+
+        // .j classes
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} classes`) {
+            await classCommands.displayClasses(sock, chatId);
+            return;
+        }
+
+        // .j skill up
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill up `) ||
+            lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill upgrade `)) {
+            const parts = txt.split(' ');
+            const skillId = parts.slice(3).join(' ');
+            await skillCommands.upgradeSkill(sock, chatId, senderJid, skillId);
+            return;
+        }
+
+        // .j skill learn
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill learn `) ||
+            lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} learn skill `)) {
+            const parts = txt.split(' ');
+            const skillId = parts.slice(3).join(' ');
+            await skillCommands.learnSkill(sock, chatId, senderJid, skillId);
+            return;
+        }
+
+        // .j skill reset
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill reset` ||
+            lowerTxt === `${botConfig.getPrefix().toLowerCase()} reset skills`) {
+            await skillCommands.resetSkills(sock, chatId, senderJid);
+            return;
+        }
+
+        // .j abilities
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} abilities` || 
+            lowerTxt === `${botConfig.getPrefix().toLowerCase()} skills` || 
+            lowerTxt === `${botConfig.getPrefix().toLowerCase()} combat abilities`) {
+            await skillCommands.viewAbilities(sock, chatId, senderJid, senderName);
+            return;
+        }
+
+        // .j combat
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} combat`)) {
+            const action = txt.split(' ').slice(2).join(' ').trim();
+            await guildAdventure.handleCombatAction(sock, chatId, senderJid, action);
+            return;
+        }
+
+        // .j equip
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} equip` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} equip `)) {
+            const parts = txt.split(' ');
+            const itemId = parts[2];
+            const slot = parts[3];
+            await rpgCommands.equipItem(sock, chatId, senderJid, itemId, slot);
+            return;
+        }
+
+        // .j unequip
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unequip `)) {
+            const parts = lowerTxt.split(' ');
+            const slot = parts[2];
+            await rpgCommands.unequipItem(sock, chatId, senderJid, slot);
+            return;
+        }
+
+        // .j use
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} use` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} use `)) {
+            const target = txt.split(' ').slice(2).join(' ').trim();
+            await rpgCommands.useItem(sock, chatId, senderJid, target);
+            return;
+        }
+
         const isSelf = !!m.key.fromMe;
         if (isSelf) return;
 
@@ -7770,17 +7922,6 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} record`)) {
 
 
 
-        // `${botConfig.getPrefix().toLowerCase()}` menu or `${botConfig.getPrefix().toLowerCase()}` help - show command list
-        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} menu`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} help`)) {
-          const parts = lowerTxt.split(' ');
-          const menuArgs = parts.slice(2); 
-          await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
-          return;
-        }
-        // Welcome message for Group chat marker1
-       
-        // Store the list of current participants in a variable
-
 // Main message processing logic
 if (isGroupChat && !senderIsAdmin) {
   const settings = getGroupSettings(chatId);
@@ -7902,193 +8043,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} quest`) || lower
         }
     }
 
-    const result = await guildAdventure.initAdventure(sock, chatId, groq, isHardcore ? 'PERMADEATH' : 'NORMAL', false, rank, senderJid, smartGroqCall);
-    if (result.success && !result.isMenu) {
-      const state = guildAdventure.getGameState(chatId);
-      if (state) state.onHardcoreDeath = addToGraveyard;
-    }
-    await sock.sendMessage(chatId, { text: result.msg });
-    return;
-}
-
-// JOIN ADVENTURE
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} join`) {
-    if (!economy.isRegistered(senderJid)) {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\`` });
-        return;
-    }
-    const result = guildAdventure.joinAdventure(chatId, senderJid, senderName);
-    await sock.sendMessage(chatId, { text: result });
-    return;
-}
-
-// SOLO QUEST
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} solo`)) {
-    if (!economy.isRegistered(senderJid)) {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\`` });
-        return;
-    }
-
-    // Check for stop
-    if (lowerTxt.endsWith(' stop')) {
-        const result = guildAdventure.stopQuest(chatId, senderJid, canUseAdminCommands);
-        await sock.sendMessage(chatId, { text: BOT_MARKER + result });
-        return;
-    }
-
-    // Check for hardcore
-    const isHardcore = lowerTxt.includes('hardcore') || lowerTxt.includes('permadeath');
-    
-    // Parse rank
-    const parts = lowerTxt.split(' ');
-    let rank = null;
-    const ranks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
-    for (const p of parts) {
-        if (ranks.includes(p.toUpperCase())) {
-            rank = p.toUpperCase();
-            break;
-        }
-    }
-
-    const result = await guildAdventure.initAdventure(sock, chatId, groq, isHardcore ? 'PERMADEATH' : 'NORMAL', true, rank, senderJid, smartGroqCall);
-    if (result.success && !result.isMenu) {
-        const state = guildAdventure.getGameState(chatId);
-        if (state) state.onHardcoreDeath = addToGraveyard;
-        
-        // initAdventure already auto-joins for solo, so we don't call joinAdventure again
-        
-        let startMsg = `╔════════════════════╗\n`;
-        startMsg += `   🗡️  *QUEST STARTING* \n`;
-        startMsg += `╚════════════════════╝\n\n`;
-        startMsg += `👤 Hero: *${senderName}*\n`;
-        startMsg += `⭐ Rank: *${rank || 'F'}*\n`;
-        startMsg += `🔥 Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n`;
-        startMsg += `⚔️ Preparing the battlefield...`;
-
-        await sock.sendMessage(chatId, { text: BOT_MARKER + startMsg });
-    } else {
-        await sock.sendMessage(chatId, { text: result.msg });
-    }
-    return;
-}
-
-// ============================================
-// 🛒 SHOP & CLASS COMMANDS
-// ============================================
-
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} shop` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} shop `)) {
-    const category = lowerTxt.split(' ')[2] || 'all';
-    await shopCommands.displayShop(sock, chatId, category);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} buy `)) {
-    // Check if this is adventure shop (during quest)
-    const state = guildAdventure.getGameState(chatId);
-    if (state && state.phase === 'SHOPPING') {
-        const itemNum = lowerTxt.split(' ')[2];
-        const result = guildAdventure.handleBuy(chatId, senderJid, itemNum);
-        await sock.sendMessage(chatId, { text: result });
-        return;
-    }
-    
-    // Otherwise use global shop
-    const parts = txt.split(' ').slice(2);
-    const itemId = parts.join('_').toLowerCase();
-    await shopCommands.buyItem(sock, chatId, senderJid, itemId);
-    return;
-}
-
 // ============================================
 // 🌳 SKILL TREE COMMANDS
 // ============================================
 
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill tree` || 
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} st` ||
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} skilltree`) {
-    await skillCommands.displaySkillTree(sock, chatId, senderJid, senderName);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} evolve`)) {
-    const parts = txt.trim().split(/\s+/);
-    // .j evolve -> parts is [".j", "evolve"], args is []
-    // .j evolve 1 -> parts is [".j", "evolve", "1"], args is ["1"]
-    const args = parts.slice(2);
-    await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, args);
-    return;
-}
-
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} classes`) {
-    await classCommands.displayClasses(sock, chatId);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill up `) ||
-    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill upgrade `)) {
-    const parts = txt.split(' ');
-    const skillId = parts.slice(3).join(' ');
-    
-    if (!skillId) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ Specify a skill!\n\nUsage: \`${botConfig.getPrefix()} skill up <skill_name>\`` 
-        });
-        return;
-    }
-    
-    await skillCommands.upgradeSkill(sock, chatId, senderJid, skillId);
-    return;
-}
-
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} skill reset` ||
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reset skills`) {
-    await skillCommands.resetSkills(sock, chatId, senderJid);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} skill learn`) ||
-    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} learn skill`)) {
-    const parts = txt.split(' ');
-    // Handle both ".j skill learn <id>" and ".j learn skill <id>"
-    // .j(0) skill(1) learn(2) <id>(3+)
-    const skillId = parts.length > 3 ? parts.slice(3).join(' ') : null;
-    
-    await skillCommands.learnSkill(sock, chatId, senderJid, skillId);
-    return;
-}
-
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} abilities` || 
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} skills` || 
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} combat abilities`) {
-    await skillCommands.viewAbilities(sock, chatId, senderJid, senderName);
-    return;
-}
-
-// `${botConfig.getPrefix().toLowerCase()}` duel @user [stake] - Challenge player to PVP
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} duel `) ||
-    lowerTxt === `${botConfig.getPrefix().toLowerCase()} challenge` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} challenge `)) {
-    const target = getMentionOrReply(m);
-    if (!target) {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} duel @user [stake_amount]\`` });
-    }
-    if (target === senderJid) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't fight yourself, edge-lord." });
-
-    const args = lowerTxt.split(' ');
-    const stake = parseInt(args.find(a => !isNaN(a) && a > 0)) || 0;
-
-    const result = pvpSystem.challengePlayer(chatId, senderJid, target, stake);
-    if (result.success) {
-        let msg = `⚔️ *DUEL CHALLENGE* ⚔️\n\n`;
-        msg += `@${senderJid.split('@')[0]} has challenged @${target.split('@')[0]} to a duel!\n`;
-        if (stake > 0) msg += `💰 *Stakes:* ${ZENI}${stake.toLocaleString()}\n`;
-        msg += `\n⏳ *Time:* 120s to accept.\n💡 Type \`${botConfig.getPrefix().toLowerCase()} accept\` to begin!`;
-        
-        await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [senderJid, target] });
-    } else {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-    }
-    return;
-}
 // ACCEPT invitation (Guild, Duel, Loan)
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} accept`) {
     // 1. Check Duel Invites
@@ -8251,79 +8209,9 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} combat`)) {
         return;
     }
 
-    const combatTarget = parts.slice(3).join(' ');
-    try {
-        const result = await guildAdventure.handleCombatAction(sock, chatId, senderJid, action, combatTarget);
-        if (result) {
-            await sock.sendMessage(chatId, { text: result });
-        }
-    } catch (err) {
-        console.error("Combat action failed:", err.message);
-    }
-    return;
-}
-
-// SHORTCUT: .j item <num> [target]
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} item` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} item `)) {
-    const parts = lowerTxt.split(' ');
-    const itemNum = parts[2];
-    if (!itemNum) {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} item <num> [target]\`` });
-    }
-    const target = parts[3];
-    
-    try {
-        const result = await guildAdventure.handleCombatAction(sock, chatId, senderJid, 'item', itemNum + (target ? ` ${target}` : ''));
-        if (result) {
-            await sock.sendMessage(chatId, { text: result });
-        }
-    } catch (err) {
-        console.error("Combat item shortcut failed:", err.message);
-    }
-    return;
-}
-
-// VOTE (for non-combat encounters)
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} vote` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} vote `)) {
-    const choice = lowerTxt.split(' ')[2];
-    if (!choice) {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} vote <number>\`` });
-    }
-    const result = guildAdventure.handleVote(chatId, senderJid, choice);
-    await sock.sendMessage(chatId, { text: result });
-    return;
-}
-
-// EQUIPMENT COMMANDS
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} equip`) {
-    await rpgCommands.equipItem(sock, chatId, senderJid, null, null);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} equip `)) {
-    const parts = txt.split(' ');
-    const itemId = parts[2];
-    const slot = parts[3];
-    await rpgCommands.equipItem(sock, chatId, senderJid, itemId, slot);
-    return;
-}
-
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unequip `)) {
-    const parts = lowerTxt.split(' ');
-    const slot = parts[2];
-    await rpgCommands.unequipItem(sock, chatId, senderJid, slot);
-    return;
-}
-
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} use` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} use `)) {
-    const target = txt.split(' ').slice(2).join(' ').trim();
-    await rpgCommands.useItem(sock, chatId, senderJid, target);
-    return;
-}
-
-        // ============================================
-        // PROFILE MANAGEMENT COMMANDS
-        // ============================================
+// ============================================
+// PROFILE MANAGEMENT COMMANDS
+// ============================================
 
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} economy`) {
     const stats = economy.getGlobalEconomyStats();
