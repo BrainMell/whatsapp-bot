@@ -1000,7 +1000,8 @@ function rollD20() {
 }
 
 function calculateDamage(attacker, target, power, type = 'physical', element = 'PHYSICAL', chatId = null) {
-    let damage = power;
+    // 🛡️ Guard against NaN
+    let damage = Number(power) || 0;
     
     // 💡 DRAGON SEAL RING REQUIREMENT
     if (target.id && (target.id.startsWith('DRAKE') || target.id.includes('DRAGON') || target.id.includes('Ancient Dragon'))) {
@@ -1042,7 +1043,7 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
     }
 
     // Defense mitigation
-    let def = type === 'physical' ? (target.stats.def || 0) : (target.stats.mag || 0) * 0.5;
+    let def = type === 'physical' ? (Number(target.stats.def) || 0) : (Number(target.stats.mag) || 0) * 0.5;
 
     // 💡 STATUS EFFECT MODIFIERS (Defense)
     const targetEffects = target.statusEffects || [];
@@ -1059,7 +1060,7 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
     if (attackerEffects.some(e => e.type === 'curse' || e.type === 'weak')) damage *= 0.8;
 
     // 💡 DAMAGE REDUCTION (Secondary Stat)
-    const dr = target.stats.dmgReduction || 0;
+    const dr = Number(target.stats.dmgReduction) || 0;
     damage = damage * (1 - (dr / 100));
 
     damage -= (def * 0.5);
@@ -1080,13 +1081,15 @@ function calculateDamage(attacker, target, power, type = 'physical', element = '
 
     // Critical hit
     let isCrit = false;
-    if (Math.random() * 100 < (attacker.stats.crit || 0)) {
+    if (Math.random() * 100 < (Number(attacker.stats.crit) || 0)) {
         damage *= 1.5;
         isCrit = true;
     }
 
+    damage = Math.max(0, Math.floor(damage));
+
     // 💡 EVASION CHECK (Secondary Stat)
-    let evasionChance = target.stats.evasion || 0;
+    let evasionChance = Number(target.stats.evasion) || 0;
 
     // 🌍 WEATHER: Foggy (-15% Accuracy = +15% Evasion)
     const hours = new Date().getHours();
@@ -1180,23 +1183,30 @@ function processStatusEffects(entity) {
     
     for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
         const effect = entity.statusEffects[i];
+        const template = STATUS_EFFECTS[effect.type] || {};
         
+        const name = effect.name || template.name || effect.type;
+        const icon = effect.icon || template.icon || '✨';
+        const value = Number(effect.value !== undefined ? effect.value : template.value) || 0;
+
         // Process effect based on type
-        if (effect.effect === 'damage_over_time') {
-            const damage = effect.value;
-            entity.stats.hp -= damage;
-            messages.push(`${effect.icon} ${entity.name} takes ${damage} ${effect.name} damage!`);
-        } else if (effect.effect === 'heal_over_time') {
-            const heal = Math.min(effect.value, entity.stats.maxHp - entity.stats.hp);
+        if (effect.effect === 'damage_over_time' || template.effect === 'damage_over_time') {
+            entity.stats.hp -= value;
+            messages.push(`${icon} ${entity.name} takes ${value} ${name} damage!`);
+        } else if (effect.effect === 'heal_over_time' || template.effect === 'heal_over_time') {
+            const heal = Math.min(value, (entity.stats.maxHp || entity.stats.hp) - entity.stats.hp);
             entity.stats.hp += heal;
-            messages.push(`${effect.icon} ${entity.name} regenerates ${heal} HP!`);
+            messages.push(`${icon} ${entity.name} regenerates ${heal} HP!`);
         }
         
+        // Sync HP for V2 (combat Integration expects currentHP)
+        entity.currentHP = entity.stats.hp;
+
         // Reduce duration
         effect.duration--;
         if (effect.duration <= 0) {
             entity.statusEffects.splice(i, 1);
-            messages.push(`${entity.name}'s ${effect.name} wears off.`);
+            messages.push(`${entity.name}'s ${name} wears off.`);
         }
     }
     
