@@ -450,18 +450,18 @@ function startBlackjack(userId, amount, economyModule) {
     gameStarted: true,
     message: `♠️ *BLACKJACK* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(playerHand)}
-║ Value: ${playerValue}
+╔═════════════════╗
+║ Hand: ${formatHand(playerHand)}
+║ Val: ${playerValue}
 ║ 
-║ Dealer: ${formatHand(dealerHand, true)}
-╚════════════════════╝
+║ Deal: ${formatHand(dealerHand, true)}
+╚═════════════════╝
 
-━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 Type:
-  ${botConfig.getPrefix()} bj hit - Get another card
-  ${botConfig.getPrefix()} bj stand - Keep current hand
-  ${botConfig.getPrefix()} bj double - Double bet & hit once`
+  ${botConfig.getPrefix()} bj hit
+  ${botConfig.getPrefix()} bj stand
+  ${botConfig.getPrefix()} bj double`
   };
 }
 
@@ -489,10 +489,10 @@ function blackjackHit(userId, economyModule) {
       won: false,
       message: `♠️ *BLACKJACK* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(game.playerHand)}
+╔═════════════════╗
+║ Hand: ${formatHand(game.playerHand)}
 ║ Value: ${playerValue}
-╚════════════════════╝
+╚═════════════════╝
 
 💥 *BUST!* 💥
 You went over 21!

@@ -185,11 +185,8 @@ ${starterClass.icon} *Class Assigned:* ${starterClass.name}
 🏆 *Adventurer Rank:* F-Rank
 
 ━━━━━━━━━━━━━━━
-⚔️ *YOUR MISSION:*
-Dive into the dungeons, cleanse the corruption, and prepare to face the *Primordial Evil*.
-
-💡 _Type ${botConfig.getPrefix()} character to view your class_
-💡 _Type ${botConfig.getPrefix()} lore to read the full history_
+⚔️ *MISSION:*
+Cleanse the corruption!
 ━━━━━━━━━━━━━━━`
   };
 }

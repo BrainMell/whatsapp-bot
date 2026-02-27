@@ -28,9 +28,9 @@ async function displayClasses(sock, chatId) {
         if (tiers[tier]) tiers[tier].push(c);
     });
 
-    let msg = `╔══════════════════════════╗\n`;
-    msg += `   🛡️ *ADVENTURER CLASS GUIDE*\n`;
-    msg += `╚══════════════════════════╝\n\n`;
+    let msg = `╔═════════════════╗\n`;
+    msg += `   🛡️ *CLASS GUIDE*\n`;
+    msg += `╚═════════════════╝\n\n`;
     msg += `_Every adventurer starts somewhere._\n`;
     msg += `_Evolve your class to unlock new power._\n\n`;
 
@@ -38,7 +38,7 @@ async function displayClasses(sock, chatId) {
         if (classList.length === 0) continue;
         
         const tierConf = TIER_CONFIG[tierKey];
-        msg += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `━━━━━━━━━━━━━━━━━\n`;
         msg += `${tierConf.icon} *${tierConf.label}*\n`;
         msg += `_${tierConf.desc}_\n\n`;
         
@@ -75,7 +75,7 @@ async function displayClasses(sock, chatId) {
         }
     }
     
-    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `━━━━━━━━━━━━━━━━━\n`;
     msg += `💡 *Commands:*\n`;
     msg += `• \`${getPrefix()} evolve\` — Check your evolution options\n`;
     msg += `• \`${getPrefix()} char\` — View your character sheet\n`;
@@ -95,9 +95,9 @@ async function displayEvolutionTree(sock, chatId, classId) {
         return;
     }
     
-    let msg = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-    msg += `┃ 🌳 *EVOLUTION PATH*\n`;
-    msg += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+    let msg = `┏━━━━━━━━━━━━━━━┓\n`;
+    msg += `┃ 🌳 *EVOLUTION*  ┃\n`;
+    msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
     
     // Walk up the lineage to find the root
     const lineage = classSystem.getLineage(targetClass.id);

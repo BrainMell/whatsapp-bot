@@ -3075,7 +3075,7 @@ Guild leaderboards, money rankings, and game scores all tracked automatically!
 1. Register: \`${botConfig.getPrefix().toLowerCase()} register <nickname>\`
 2. See all commands: \`${botConfig.getPrefix().toLowerCase()} menu\`
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 Built with 💙 by Mellow`;
 
           await sendMenuWithBanner(sock, chatId, aboutText);
@@ -3103,7 +3103,7 @@ Built with 💙 by Mellow`;
 For help or issues, contact:
 @0201487480
 
-━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 Usage: ${newUsage}/5${warningText}`;
 
           await sendMenuWithBanner(sock, chatId, supportMsg, ['0201487480@s.whatsapp.net']);
@@ -4074,7 +4074,7 @@ Change with: ${botConfig.getPrefix().toLowerCase()} antilink action <delete/warn
 Mode: *${args[3].toUpperCase()}*
 ${actionDesc}
 
-━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 🛡️ Protection applies to:
 • Links • Group invites • Status mentions • Channels` 
               });
@@ -6906,7 +6906,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} anime top`) {
 🏅 *Rank:* #${pick.rank || 'N/A'}
 🎬 *${pick.title}*
 ⭐ *Score:* ${pick.score || 'N/A'}
-━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${(pick.synopsis || 'No synopsis.').slice(0, 350)}...
 
 🔗 ${pick.url}
@@ -7016,7 +7016,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime studio`)) 
 🎬 *${pick.title}*
 🏢 *Studio:* ${pick.studios.map(s => s.name).join(', ')}
 ⭐ *Score:* ${pick.score || 'N/A'}
-━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${(pick.synopsis || 'No description.').slice(0, 300)}...
 
 🔗 ${pick.url}
@@ -7068,7 +7068,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime search`)) 
       menu += `*${i + 1}.* ${a.title} ${type}\n`;
     });
     
-    menu += `\n━━━━━━━━━━━━━━━━━━━━\n*Reply with a number (1-${list.length}) for details.*`;
+    menu += `\n━━━━━━━━━━━━━━━\n*Reply with a number (1-${list.length}) for details.*`;
 
     const cacheData = { ts: Date.now(), results: list, downloadFn: getAnikaiLink };
     global[`__${BOT_ID}_anime_search_cache_by_chat`].set(chatId, cacheData);
