@@ -470,7 +470,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
         return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
       } catch (e) { return reply(caption); }
     }
-    return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]`, `${p} coll 5`);
+    return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
   }
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
@@ -1415,11 +1415,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         await saveActiveGroups();
         return reply('🔴 *CARD SYSTEM OFF*'), true;
       }
-      if (args[0] === '--tier') {
-        await cmdCardsTier(senderJid, reply, chatId);
-        return true;
-      }
-      return sendUsage(reply, `${p} cards`, `${p} cards <on/off/--tier>`, `${p} cards on`), true;
+      return sendUsage(reply, `${p} cards`, `${p} cards <on/off>`, `${p} cards on`), true;
 
     case 'claim':
       await cmdClaim(args, senderJid, reply, chatId);
