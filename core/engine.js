@@ -4856,8 +4856,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mine` || lowerTxt.start
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} source` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} source `)) {
     const itemId = txt.split(' ').slice(2).join('_').trim();
     if (!itemId) {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} source <item_id>\`\n💡 Find out where to get any item!` });
-        return;
+        return await sendUsage(chatId, '🔍 SOURCE', 'source <item_id>', 'source iron_ore', 'Find out where to acquire any item in the world.');
     }
     await rpgCommands.showItemSource(sock, chatId, itemId);
     return;
@@ -4868,8 +4867,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} craft` || lowerTxt.star
     lowerTxt === `${botConfig.getPrefix().toLowerCase()} brew` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} brew `)) {
     const recipeId = txt.split(' ').slice(2).join(' ').trim();
     if (!recipeId) {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} craft <recipe_id>\` or \`${botConfig.getPrefix()} brew <potion_id>\`` });
-        return;
+        const isBrew = lowerTxt.includes('brew');
+        return await sendUsage(chatId, isBrew ? '⚗️ BREW' : '🛠️ CRAFT', isBrew ? 'brew <potion_id>' : 'craft <recipe_id>', isBrew ? 'brew hp_potion' : 'craft iron_sword', `Create ${isBrew ? 'potions' : 'equipment'} from materials.`);
     }
     await rpgCommands.craftItem(sock, chatId, senderJid, recipeId);
     return;
@@ -4878,8 +4877,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} craft` || lowerTxt.star
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} dismantle` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} dismantle `)) {
     const input = txt.split(' ').slice(2).join(' ').trim();
     if (!input) {
-        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} dismantle <item_id or bag_#>\`\n💡 Break down items for materials.` });
-        return;
+        return await sendUsage(chatId, '⚒️ DISMANTLE', 'dismantle <#bag_index>', 'dismantle 5', 'Break down old equipment to recover some materials.');
     }
     await rpgCommands.dismantleItem(sock, chatId, senderJid, input);
     return;
@@ -6103,9 +6101,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfw` || lowerTxt.start
     const fullQuery = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} nsfw`, ``).trim();
     
     if (!fullQuery) {
-        const usage = GET_BANNER(`🔞 NSFW`) + `\n\n*Usage:* \`${botConfig.getPrefix()} nsfw [count] <search term>\`\n\n*Examples:*\n- \`${botConfig.getPrefix()} nsfw anime\`\n- \`${botConfig.getPrefix()} nsfw 15 neko\``;
-        await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-        return;
+        return await sendUsage(chatId, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
     }
 
     // Parse count and search term
@@ -6121,9 +6117,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfw` || lowerTxt.start
     }
     
     if (!searchTerm || searchTerm === firstWord && !isNaN(firstWord)) {
-        const usage = GET_BANNER(`🔞 NSFW`) + `\n\n*Usage:* \`${botConfig.getPrefix()} nsfw [count] <search term>\`\n\n*Examples:*\n- \`${botConfig.getPrefix()} nsfw anime\`\n- \`${botConfig.getPrefix()} nsfw 15 neko\``;
-        await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-        return;
+        return await sendUsage(chatId, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
     }
 
     try {
@@ -6195,9 +6189,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
     const fullQuery = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} img`, ``).trim();
     
     if (!fullQuery) {
-        const usage = GET_BANNER(`🔍 IMAGE`) + `\n\n*Usage:* \`${botConfig.getPrefix()} img [count] <query>\`\n\n*Example:* \`${botConfig.getPrefix()} img 5 goku\``;
-        await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-        return;
+        return await sendUsage(chatId, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
     }
 
     // Parse for optional number at the start
@@ -6214,9 +6206,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
     }
     
     if (!searchTerm) {
-        const usage = GET_BANNER(`🔍 IMAGE`) + `\n\n*Usage:* \`${botConfig.getPrefix()} img [count] <query>\`\n\n*Example:* \`${botConfig.getPrefix()} img 5 goku\``;
-        await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-        return;
+        return await sendUsage(chatId, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
     }
 
     // Feedback
@@ -6267,9 +6257,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} img` || lowerTxt.starts
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} audio` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} audio `)) {
   const query = txt.substring(`${botConfig.getPrefix().toLowerCase()} audio `.length).trim();
   if (!query) {
-    const usage = GET_BANNER(`🎵 AUDIO`) + `\n\n*Usage:* \`${botConfig.getPrefix()} audio <song name>\`\n\n*Example:* \`${botConfig.getPrefix()} audio starboy\``;
-    await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-    return;
+    return await sendUsage(chatId, '🎵 AUDIO', 'audio <query>', 'audio starboy', 'Search and download any song from YouTube.');
   }
 
   try {
@@ -6672,7 +6660,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime rank`)) {
 
   try {
     const query = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime rank`, ``).trim();
-    if (!query) return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()}\` anime rank <name>` });
+    if (!query) return await sendUsage(chatId, '📊 RANK', 'anime rank <name>', 'anime rank Naruto', 'Check the global ranking and popularity of any anime.');
 
     // 1. Fetch Jikan Data (TV only)
     const jikanRes = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=1`);
@@ -6949,7 +6937,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime studio`)) 
   await sock.sendMessage(chatId, { react: { text: `🎥`, key: m.key } });
   try {
     const studioInput = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime studio`, '').trim();
-    if (!studioInput) return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()}\` anime studio <name>` });
+    if (!studioInput) return await sendUsage(chatId, '🏢 STUDIO', 'anime studio <name>', 'anime studio MAPPA', 'Find all anime produced by a specific studio.');
 
     // Use a single, broad search. This is much less likely to trigger `Busy`
     const res = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(studioInput)}&limit=15&order_by=popularity`);
@@ -6990,7 +6978,7 @@ ${(pick.synopsis || 'No description.').slice(0, 300)}...
 // `${botConfig.getPrefix().toLowerCase()}` search <query> - Alias for anime search
 if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search `)) {
   const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} search `, '').trim();
-  if (!q) return await sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()}\` search <title>` });
+  if (!q) return await sendUsage(chatId, '🔍 SEARCH', 'search <title>', 'search Naruto', 'Find details and download links for any anime.');
   // Redirect to anime search logic (which starts with anime search)
   lowerTxt = `${botConfig.getPrefix().toLowerCase()} anime search ${q}`;
 }
@@ -7000,7 +6988,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime search`)) 
   await sock.sendMessage(chatId, { react: { text: `🔎`, key: m.key } });
   try {
     const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime search`, '').trim();
-    if (!q) return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()}\` anime search <title>` });
+    if (!q) return await sendUsage(chatId, '🔍 SEARCH', 'anime search <title>', 'anime search Naruto', 'Find details and download links for any anime.');
 
     // Removed the limit to show all primary results from Jikan
     const r = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}`);
@@ -7169,9 +7157,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} roast` || lowerTxt.star
     const targetJid = getMentionOrReply(m);
     
     if (!targetJid && lowerTxt.split(' ').length === 2 && lowerTxt.endsWith('roast')) {
-        const usage = GET_BANNER(`🔥 ROAST`) + `\n\n*Usage:* \`${botConfig.getPrefix()} roast @user\`\n\n*Example:* \`${botConfig.getPrefix()} roast @friend\``;
-        await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-        return;
+        return await sendUsage(chatId, '🔥 ROAST', 'roast @user', 'roast @friend', 'Prepares a legendary insult based on user data.');
     }
 
     const finalTarget = targetJid || senderJid;
@@ -7310,11 +7296,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
     const character = txt.substring(`${botConfig.getPrefix().toLowerCase()} powerscale`.length).trim();
     
     if (!character) {
-        await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` powerscale <character name>\nExample: \`${botConfig.getPrefix().toLowerCase()}\` powerscale goku`
-        });
-        await awardProgression(senderJid, chatId);
-        return;
+        return await sendUsage(chatId, '⚖️ SCALE', 'powerscale <name>', 'powerscale goku', 'Analyze character stats via VS Battles.');
     }
 
     await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
@@ -7427,9 +7409,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} 8ball` || lowerTxt.star
   const question = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} 8ball`, '').trim();
   
   if (!question) {
-    const usage = GET_BANNER(`🎱 8-BALL`) + `\n\n*Usage:* \`${botConfig.getPrefix()} 8ball <question>\`\n\n*Example:* \`${botConfig.getPrefix()} 8ball will i be rich? \``;
-    await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-    return;
+    return await sendUsage(chatId, '🎱 8-BALL', '8ball <question>', '8ball will i be rich?', 'Ask the magic 8-ball anything!');
   }
 
   // react first
@@ -7483,9 +7463,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} ship` || lowerTxt.start
     if (mentions.length === 0) {
         const textInput = txt.substring(`${botConfig.getPrefix().toLowerCase()} ship `.length).trim();
         if (!textInput) {
-            const usage = GET_BANNER(`❤️ SHIP`) + `\n\n*Usage:* \`${botConfig.getPrefix()} ship @u1 @u2\`\n\n*Example:* \`${botConfig.getPrefix()} ship @friend1 @friend2\``;
-            await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-            return;
+            return await sendUsage(chatId, '❤️ SHIP', 'ship @u1 @u2', 'ship @friend1 @friend2', 'Check the compatibility between two people!');
         }
     }
     
@@ -7670,9 +7648,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} define` || lowerTxt.sta
   const word = txt.substring(`${botConfig.getPrefix().toLowerCase()} define `.length).trim();
   
   if (!word) {
-    const usage = GET_BANNER(`📖 DEFINE`) + `\n\n*Usage:* \`${botConfig.getPrefix()} define <word>\`\n\n*Example:* \`${botConfig.getPrefix()} define algorithm\``;
-    await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-    return;
+    return await sendUsage(chatId, '📖 DEFINE', 'define <word>', 'define logic', 'Get the dictionary definition of any word.');
   }
 
   try {
@@ -7705,9 +7681,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} rate` || lowerTxt.start
   const target = getMentionOrReply(m);
 
   if (!thing && !target) {
-    const usage = GET_BANNER(`⭐ RATE`) + `\n\n*Usage:* \`${botConfig.getPrefix()} rate <something/someone>\`\n\n*Example:* \`${botConfig.getPrefix()} rate anime\``;
-    await sock.sendMessage(chatId, { text: usage }, { quoted: m });
-    return;
+    return await sendUsage(chatId, '⭐ RATE', 'rate <something>', 'rate anime', 'Ask the bot to rate anything from 1 to 10!');
   }
 
   // If it's a person
