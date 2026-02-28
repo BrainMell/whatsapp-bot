@@ -264,23 +264,26 @@ async function handleConsumable(senderJid, item) {
 // 📊 CHARACTER INFO
 // ==========================================
 
-async function displayCharacter(sock, chatId, senderJid, senderName) {
+async function displayCharacter(sock, chatId, senderJid, senderName, targetJid = null, targetName = null) {
+    const finalJid = targetJid || senderJid;
+    const finalName = targetName || senderName;
+
     // Initialize class if needed
-    economy.initializeClass(senderJid);
+    economy.initializeClass(finalJid);
     
-    const user = economy.getUser(senderJid);
+    const user = economy.getUser(finalJid);
     if (!user) {
-        await sock.sendMessage(chatId, { text: '❌ Not registered!' });
+        await sock.sendMessage(chatId, { text: '❌ User not registered!' });
         return;
     }
     
-    const classData = economy.getUserClass(senderJid);
-    const stats = economy.getUserStats(senderJid);
-    const level = progression.getLevel(senderJid);
-    const gp = progression.getGP(senderJid);
+    const classData = economy.getUserClass(finalJid);
+    const stats = economy.getUserStats(finalJid);
+    const level = progression.getLevel(finalJid);
+    const gp = progression.getGP(finalJid);
     
     // Update rank
-    economy.updateAdventurerRank(senderJid);
+    economy.updateAdventurerRank(finalJid);
     const rank = user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
@@ -288,7 +291,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName) {
     msg += `┃   👤 CHARACTER  ┃\n`;
     msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
     
-    msg += `*${senderName}*\n\n`;
+    msg += `*${finalName}*\n\n`;
     
     // Class info
     if (classData) {
@@ -355,7 +358,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName) {
     // Handle PFP
     let pfpUrl;
     try {
-        pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
+        pfpUrl = await sock.profilePictureUrl(finalJid, 'image');
     } catch (e) {
         pfpUrl = null;
     }
