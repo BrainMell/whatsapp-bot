@@ -152,10 +152,13 @@ function addItem(userId, itemId, quantity = 1, itemData = {}) {
     } else {
         inventory[itemId] = {
             id: itemId,
-            name: itemInfo.name,
-            type: itemInfo.type || (itemId.includes('shard') || itemId.includes('steel') || itemId.includes('leather') ? 'MATERIAL' : 'ITEM'),
+            name: itemData.name || itemInfo.name,
+            type: itemData.type || itemInfo.type || (itemId.includes('shard') || itemId.includes('steel') || itemId.includes('leather') ? 'MATERIAL' : 'ITEM'),
             quantity: quantity,
             acquiredAt: Date.now(),
+            rarity: itemData.rarity || itemInfo.rarity || 'COMMON',
+            stats: itemData.stats || itemInfo.stats || {},
+            slot: itemData.slot || itemInfo.slot,
             ...itemData
         };
     }
@@ -462,6 +465,50 @@ function getEquipmentStats(userId) {
     return totalStats;
 }
 
+function enhanceItem(userId, itemId, stoneId) {
+    const inventory = getInventory(userId);
+    if (!inventory[itemId]) return { success: false, message: '❌ Item not found in inventory!' };
+    if (!inventory[stoneId]) return { success: false, message: '❌ Enhancement stone not found!' };
+
+    const item = inventory[itemId];
+    const stoneInfo = lootSystem.getItemInfo(stoneId);
+    
+    if (item.type !== 'EQUIPMENT') return { success: false, message: '❌ You can only enhance equipment!' };
+    if (!stoneId.includes('enhancement_stone')) return { success: false, message: '❌ That is not an enhancement stone!' };
+
+    // Enhancement logic
+    const bonusMap = {
+        'minor_enhancement_stone': 0.05,
+        'rare_enhancement_stone': 0.15,
+        'legendary_enhancement_stone': 0.35
+    };
+
+    const multiplier = bonusMap[stoneId] || 0.05;
+    item.enhancementLevel = (item.enhancementLevel || 0) + 1;
+    
+    // Apply bonus to stats
+    if (item.stats) {
+        for (const stat in item.stats) {
+            item.stats[stat] = Math.ceil(item.stats[stat] * (1 + multiplier));
+        }
+    }
+
+    // Add prefix
+    const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
+    const prefix = prefixes[Math.min(item.enhancementLevel - 1, prefixes.length - 1)];
+    if (!item.name.startsWith(prefix)) {
+        item.name = `${prefix} ${item.name.replace(/^(Polished|Strengthened|Reinforced|Masterwork|God-forged) /, '')}`;
+    }
+
+    removeItem(userId, stoneId, 1);
+    economy.saveUser(userId);
+
+    return {
+        success: true,
+        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}!\nStats boosted by ${Math.round(multiplier * 100)}%.`
+    };
+}
+
 // ==========================================
 // 💰 ITEM SELLING
 // ==========================================
@@ -676,6 +723,7 @@ module.exports = {
     equipItem,
     unequipItem,
     getEquipmentStats,
+    enhanceItem,
     useItem,
     
     // Selling

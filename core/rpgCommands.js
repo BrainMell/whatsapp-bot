@@ -601,18 +601,31 @@ function getSlotIcon(slot) {
 // 🛠️ CRAFTING & BREWING COMMANDS 
 // ========================================== 
 
-async function displayRecipes(sock, chatId, page = 1) { 
-    const recipes = Object.values(craftingSystem.getRecipes());
+async function displayRecipes(sock, chatId, page = 1, categoryFilter = null) { 
+    let recipes = Object.values(craftingSystem.getRecipes());
+    
+    if (categoryFilter) {
+        recipes = recipes.filter(r => r.category === categoryFilter);
+    }
+
     const itemsPerPage = 6;
-    const totalPages = Math.ceil(recipes.length / itemsPerPage);
+    const totalPages = Math.ceil(recipes.length / itemsPerPage) || 1;
     const currentPage = Math.max(1, Math.min(page, totalPages));
     
     const startIdx = (currentPage - 1) * itemsPerPage;
     const pageItems = recipes.slice(startIdx, startIdx + itemsPerPage);
 
+    const titleMap = {
+        'WEAPON': '⚒️ BLACKSMITH',
+        'ARMOR': '🛡️ ARMORY',
+        'BREWING': '⚗️ ALCHEMY',
+        'COOKING': '🍳 KITCHEN',
+        'ENGINEERING': '⚙️ WORKSHOP'
+    };
+
     let msg = `━━━━━━━━━━━━━
 `;
-    msg += `┃   ⚒ RECIPES    ┃ 
+    msg += `┃   ${categoryFilter ? titleMap[categoryFilter] || categoryFilter : '⚒ RECIPES'}    ┃ 
 `;
     msg += `┗━━━━━━━━━━━━━
 `;
@@ -620,9 +633,13 @@ async function displayRecipes(sock, chatId, page = 1) {
 
 `;
     
+    if (pageItems.length === 0) {
+        msg += `_No recipes found in this category._\n\n`;
+    }
+
     pageItems.forEach(r => { 
         const itemInfo = lootSystem.getItemInfo(r.id);
-        msg += `• *${r.name}* ${itemInfo.rarityIcon || ''} (\`${r.id}\`)
+        msg += `• *${r.name}* (\`${r.id}\`)
 `;
         msg += `  📝 ${r.desc}
 `;
@@ -635,20 +652,29 @@ async function displayRecipes(sock, chatId, page = 1) {
 `;
     });
 
+    const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : 'craft');
+
     msg += `━━━━━━━━━━━━━
 `;
     msg += `💡 *HOW TO CREATE:*
 `;
-    msg += `Type: \`${getPrefix()} craft <id>\` or \`${getPrefix()} brew <id>\`
+    msg += `Type: \`${getPrefix()} ${cmdName} <id>\`
 `;
-    msg += `📌 Example: \`${getPrefix()} craft steel_sabre\``;
+    msg += `📌 Example: \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'steel_sabre'}\``;
 
     await sock.sendMessage(chatId, { text: msg });
 }
 
-async function craftItem(sock, chatId, senderJid, recipeId) { 
+async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = null) { 
     if (!recipeId) { 
-        return displayRecipes(sock, chatId);
+        return displayRecipes(sock, chatId, 1, categoryFilter);
+    }
+
+    const recipe = craftingSystem.getRecipeById(recipeId.toLowerCase());
+    if (categoryFilter && recipe && recipe.category !== categoryFilter) {
+        const type = categoryFilter === 'COOKING' ? 'cooked' : (categoryFilter === 'BREWING' ? 'brewed' : 'crafted');
+        await sock.sendMessage(chatId, { text: `❌ This item cannot be ${type} here!` });
+        return;
     }
 
     const result = craftingSystem.performCraft(senderJid, recipeId.toLowerCase());
@@ -656,8 +682,21 @@ async function craftItem(sock, chatId, senderJid, recipeId) {
     if (result.success) { 
         await sock.sendMessage(chatId, { text: result.message });
     } else { 
-        await sock.sendMessage(chatId, { text: `❌ *CRAFTING FAILED*\n\n${result.reason || result.message}` });
+        await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
     }
+}
+
+async function cookItem(sock, chatId, senderJid, recipeId) {
+    return craftItem(sock, chatId, senderJid, recipeId, 'COOKING');
+}
+
+async function brewItem(sock, chatId, senderJid, recipeId) {
+    return craftItem(sock, chatId, senderJid, recipeId, 'BREWING');
+}
+
+async function forgeItem(sock, chatId, senderJid, recipeId) {
+    // Forge can be Weapons or Armor
+    return craftItem(sock, chatId, senderJid, recipeId);
 }
 
 async function dismantleItem(sock, chatId, senderJid, input) { 
@@ -773,8 +812,8 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     // Deduct energy
     user.energy = Math.max(0, currentEnergy - energyCost);
     
-    // 💡 Add Mining XP
-    const xpGained = Math.floor(loc.energyCost * 1.2);
+    // 💡 Add Mining XP (Increased to 2.5x)
+    const xpGained = Math.floor(loc.energyCost * 2.5);
     const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
     
     economy.saveUser(senderJid);
@@ -994,6 +1033,37 @@ async function useItem(sock, chatId, senderJid, target) {
     }
 }
 
+async function enhanceItem(sock, chatId, senderJid, input) {
+    if (!input) {
+        return await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} enhance <#bag_index>\`\nExample: \`${getPrefix()} enhance 1\`` });
+    }
+
+    const inventory = inventorySystem.formatInventory(senderJid);
+    const index = parseInt(input) - 1;
+    const targetItem = inventory.items[index];
+
+    if (!targetItem) {
+        return await sock.sendMessage(chatId, { text: `❌ Item not found at index ${input}!` });
+    }
+
+    // Find a stone in inventory
+    const stones = ['legendary_enhancement_stone', 'rare_enhancement_stone', 'minor_enhancement_stone'];
+    let stoneId = null;
+    for (const s of stones) {
+        if (inventory.items.some(item => item.id === s)) {
+            stoneId = s;
+            break;
+        }
+    }
+
+    if (!stoneId) {
+        return await sock.sendMessage(chatId, { text: `❌ You don't have any Enhancement Stones!` });
+    }
+
+    const result = inventorySystem.enhanceItem(senderJid, targetItem.id, stoneId);
+    await sock.sendMessage(chatId, { text: result.message });
+}
+
 // ========================================== 
 // 📤 EXPORTS 
 // ========================================== 
@@ -1013,7 +1083,11 @@ module.exports = {
     craftItem,
     dismantleItem,
     mineOre,
-    showItemSource
+    showItemSource,
+    enhanceItem,
+    cookItem,
+    brewItem,
+    forgeItem
 };
 
 

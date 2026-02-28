@@ -2930,6 +2930,13 @@ We are happy to have you here.
                 return;
             }
 
+            // .j enhance <#bag_index>
+            if (primaryCmd === 'enhance') {
+                const input = cmdArgs[1];
+                await rpgCommands.enhanceItem(sock, chatId, senderJid, input);
+                return;
+            }
+
             // .j skill tree / .j st
             if (primaryCmd === 'skill' && (cmdArgs[1] === 'tree' || cmdArgs[1] === 'st')) {
                 await skillCommands.displaySkillTree(sock, chatId, senderJid, senderName);
@@ -3038,10 +3045,31 @@ We are happy to have you here.
                 return;
             }
 
-            // .j craft / .j brew
-            if (primaryCmd === 'craft' || primaryCmd === 'brew') {
+            // .j craft
+            if (primaryCmd === 'craft') {
                 const item = cmdArgs.slice(1).join(' ');
                 await rpgCommands.craftItem(sock, chatId, senderJid, item);
+                return;
+            }
+
+            // .j brew
+            if (primaryCmd === 'brew') {
+                const item = cmdArgs.slice(1).join(' ');
+                await rpgCommands.brewItem(sock, chatId, senderJid, item);
+                return;
+            }
+
+            // .j forge
+            if (primaryCmd === 'forge') {
+                const item = cmdArgs.slice(1).join(' ');
+                await rpgCommands.forgeItem(sock, chatId, senderJid, item);
+                return;
+            }
+
+            // .j cook
+            if (primaryCmd === 'cook') {
+                const item = cmdArgs.slice(1).join(' ');
+                await rpgCommands.cookItem(sock, chatId, senderJid, item);
                 return;
             }
 
@@ -3055,6 +3083,21 @@ We are happy to have you here.
             // .j lore
             if (primaryCmd === 'lore') {
                 await guildAdventure.showLore(sock, chatId);
+                return;
+            }
+
+            // .j tutorial
+            if (primaryCmd === 'tutorial') {
+                let msg = `🎓 *ADVENTURER'S HANDBOOK* 🎓\n\n`;
+                msg += `Welcome, New Adventurer! Here is how to begin your journey:\n\n`;
+                msg += `1️⃣ *REGISTER:* Type \`${currentPrefix} register <nickname>\` to create your character.\n`;
+                msg += `2️⃣ *STATS:* You gain 5 Attribute Points per level. Use \`${currentPrefix} allocate <stat> <amount>\` (e.g., \`allocate atk 5\`) to get stronger.\n`;
+                msg += `3️⃣ *SKILLS:* You gain Skill Points as you level. Use \`${currentPrefix} skill tree\` to see your path and \`${currentPrefix} skill up <name>\` to unlock abilities.\n`;
+                msg += `4️⃣ *COMBAT:* Use \`${currentPrefix} quest\` or \`${currentPrefix} solo\` to find enemies. In battle, use \`${currentPrefix} combat attack\` or \`${currentPrefix} combat ability <num>\`.\n`;
+                msg += `5️⃣ *GEAR:* Visit the \`${currentPrefix} shop\` to buy equipment, or \`${currentPrefix} craft\` them from materials you find.\n`;
+                msg += `6️⃣ *EVOLVE:* Once you reach Lv.20 and complete 30 quests, use \`${currentPrefix} evolve\` to reach the next tier!\n\n`;
+                msg += `💡 *Pro Tip:* Use \`${currentPrefix} menu rpg\` to see all commands!`;
+                await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                 return;
             }
         }
@@ -3540,17 +3583,25 @@ Usage: ${newUsage}/5${warningText}`;
         
 
 // --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` s (reply to convert) ---
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} s -c`) {
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s -`)) {
   const quotedMsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
   const isReply = !!quotedMsg;
   const hasImage = m.message.imageMessage || quotedMsg?.imageMessage;
   const hasVideo = m.message.videoMessage || quotedMsg?.videoMessage;
-  const shouldCrop = lowerTxt.endsWith('-c');
+  
+  // Flag parsing
+  const isFull = lowerTxt.endsWith('-f');
+  const isCrop1 = lowerTxt.endsWith('-c1');
+  const isCrop2 = lowerTxt.endsWith('-c2');
+  const isCropCenter = lowerTxt.endsWith('-c');
 
   if (!hasImage && !hasVideo) {
     const usage = GET_BANNER(`🎨 STICKER`) + `\n\n*Usage:*
 • Reply to image/video: \`${botConfig.getPrefix()} s\`
 • Auto-crop sticker: \`${botConfig.getPrefix()} s -c\`
+• Top-crop: \`${botConfig.getPrefix()} s -c1\`
+• Bottom-crop: \`${botConfig.getPrefix()} s -c2\`
+• Stretched (Full): \`${botConfig.getPrefix()} s -f\`
 • Search & stickerize: \`${botConfig.getPrefix()} s [count] [query]\`
 
 *Examples:*
@@ -3562,22 +3613,43 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt === `${b
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    const chunks = [];
     const mediaMsg = isReply ? quotedMsg : m.message;
     const type = mediaMsg.imageMessage ? 'image' : 'video';
     const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage;
 
-    // Download using downloadContentFromMessage
+    // Download
     const stream = await downloadContentFromMessage(messageData, type);
-    for await (const chunk of stream) { 
-      chunks.push(chunk); 
+    let chunks = [];
+    for await (const chunk of stream) { chunks.push(chunk); }
+    let buffer = Buffer.concat(chunks);
+
+    // Apply FFmpeg filters for special flags
+    if (isFull || isCrop1 || isCrop2) {
+        const timestamp = Date.now();
+        const inputPath = `./temp/stick_in_${timestamp}`;
+        const outputPath = `./temp/stick_out_${timestamp}.png`;
+        if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+        fs.writeFileSync(inputPath, buffer);
+
+        let filter = '';
+        if (isFull) filter = 'scale=512:512'; // Smashed/Stretched
+        else if (isCrop1) filter = 'scale=512:-1,crop=512:512:0:0'; // Top crop
+        else if (isCrop2) filter = 'scale=512:-1,crop=512:512:0:ih-512'; // Bottom crop
+
+        const ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -y "${outputPath}"`;
+        await execPromise(ffmpegCmd);
+        
+        if (fs.existsSync(outputPath)) {
+            buffer = fs.readFileSync(outputPath);
+            fs.unlinkSync(inputPath);
+            fs.unlinkSync(outputPath);
+        }
     }
-    const buffer = Buffer.concat(chunks);
 
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
-      type: shouldCrop ? StickerTypes.CROPPED : StickerTypes.FULL, 
+      type: (isCropCenter) ? StickerTypes.CROPPED : StickerTypes.FULL, 
       quality: 70
     });
 

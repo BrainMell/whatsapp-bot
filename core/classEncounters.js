@@ -656,6 +656,33 @@ const BOSS_ENCOUNTERS = {
             specialDrop: 'chaos_fragment',
             levelRange: [95, 120]
         }
+    ],
+
+    // --- EVOLUTION TRIAL BOSSES ---
+    TRIALS: [
+        { id: 'ARCANE_SENTINEL', name: 'Arcane Sentinel', icon: '🔮🛡️', stats: { hp: 18000, atk: 15, def: 30, mag: 45, spd: 15 }, levelRange: [1, 100] },
+        { id: 'LICH_KING', name: 'Lich King', icon: '💀👑', stats: { hp: 60000, atk: 35, def: 40, mag: 85, spd: 25 }, levelRange: [1, 100] },
+        { id: 'SHADOW_STALKER', name: 'Shadow Stalker', icon: '👤🗡️', stats: { hp: 15000, atk: 45, def: 15, mag: 10, spd: 40 }, levelRange: [1, 100] },
+        { id: 'VOID_ASSASSIN', name: 'Void Assassin', icon: '🌑🗡️', stats: { hp: 55000, atk: 85, def: 25, mag: 30, spd: 65 }, levelRange: [1, 100] },
+        { id: 'IRON_BODY_GRANDMASTER', name: 'Iron Body Grandmaster', icon: '🥋', stats: { hp: 22000, atk: 40, def: 40, mag: 5, spd: 35 }, levelRange: [1, 100] },
+        { id: 'ANCIENT_WURM', name: 'Ancient Wurm', icon: '🐛', stats: { hp: 25000, atk: 50, def: 35, mag: 5, spd: 20 }, levelRange: [1, 100] },
+        { id: 'SOUL_EATER', name: 'Soul Eater', icon: '👻', stats: { hp: 16000, atk: 25, def: 20, mag: 55, spd: 30 }, levelRange: [1, 100] },
+        { id: 'ABYSSAL_WHISPER', name: 'Abyssal Whisper', icon: '🌑👁️', stats: { hp: 58000, atk: 40, def: 35, mag: 95, spd: 35 }, levelRange: [1, 100] },
+        { id: 'ELEMENTAL_PRIMORDIAL', name: 'Elemental Primordial', icon: '🌈', stats: { hp: 20000, atk: 30, def: 25, mag: 60, spd: 25 }, levelRange: [1, 100] },
+        { id: 'PRIME_ELEMENT', name: 'Prime Element', icon: '🌟🌈', stats: { hp: 65000, atk: 50, def: 45, mag: 110, spd: 40 }, levelRange: [1, 100] },
+        { id: 'VOID_NECROMANCER', name: 'Void Necromancer', icon: '💀🌑', stats: { hp: 62000, atk: 45, def: 40, mag: 100, spd: 30 }, levelRange: [1, 100] },
+        { id: 'CHRONOS_WARDEN', name: 'Chronos Warden', icon: '⏳🛡️', stats: { hp: 17000, atk: 30, def: 25, mag: 50, spd: 100 }, levelRange: [1, 100] },
+        { id: 'TIME_EATER', name: 'Time Eater', icon: '⏳👾', stats: { hp: 54000, atk: 55, def: 45, mag: 90, spd: 150 }, levelRange: [1, 100] },
+        { id: 'HEAVENLY_GUARDIAN', name: 'Heavenly Guardian', icon: '👼', stats: { hp: 22000, atk: 20, def: 50, mag: 40, spd: 20 }, levelRange: [1, 100] },
+        { id: 'SERAPHIM_PRIME', name: 'Seraphim Prime', icon: '👼👑', stats: { hp: 70000, atk: 45, def: 65, mag: 100, spd: 35 }, levelRange: [1, 100] },
+        { id: 'FOREST_ANCESTOR', name: 'Forest Ancestor', icon: '🌳', stats: { hp: 24000, atk: 35, def: 35, mag: 35, spd: 15 }, levelRange: [1, 100] },
+        { id: 'GAIA_SENTINEL', name: 'Gaia Sentinel', icon: '🌍🛡️', stats: { hp: 75000, atk: 55, def: 70, mag: 60, spd: 20 }, levelRange: [1, 100] },
+        { id: 'GOLDEN_GOLEM', name: 'Golden Golem', icon: '💰🗿', stats: { hp: 26000, atk: 40, def: 60, mag: 10, spd: 10 }, levelRange: [1, 100] },
+        { id: 'TREASURE_HOARDER', name: 'Treasure Hoarder', icon: '🐲💰', stats: { hp: 68000, atk: 75, def: 50, mag: 40, spd: 40 }, levelRange: [1, 100] },
+        { id: 'SOUND_REAPER', name: 'Sound Reaper', icon: '🎸💀', stats: { hp: 19000, atk: 40, def: 20, mag: 45, spd: 35 }, levelRange: [1, 100] },
+        { id: 'MAESTRO_OF_VOID', name: 'Maestro of Void', icon: '🎻🌑', stats: { hp: 59000, atk: 60, def: 40, mag: 90, spd: 45 }, levelRange: [1, 100] },
+        { id: 'CLOCKWORK_TITAN', name: 'Clockwork Titan', icon: '⚙️🗿', stats: { hp: 23000, atk: 45, def: 45, mag: 20, spd: 15 }, levelRange: [1, 100] },
+        { id: 'MECH_GOD', name: 'Mech God', icon: '🦾🤖', stats: { hp: 80000, atk: 80, def: 80, mag: 50, spd: 25 }, levelRange: [1, 100] }
     ]
 };
 
@@ -689,7 +716,16 @@ function selectRandomEnemy(avgLevel, difficulty = 'COMMON') {
     return { ...randomEnemy };
 }
 
-function selectBoss(avgLevel) {
+function selectBoss(avgLevel, forceId = null) {
+    // If specific boss requested (for trials etc)
+    if (forceId) {
+        const allPools = Object.values(BOSS_ENCOUNTERS);
+        for (const pool of allPools) {
+            const found = pool.find(b => b.id === forceId);
+            if (found) return { ...found };
+        }
+    }
+
     let pool;
     
     if (avgLevel <= 60) pool = BOSS_ENCOUNTERS.MID_LEVEL;
@@ -734,7 +770,7 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
     
     if (encounterType === 'BOSS') {
         // Single boss
-        const boss = selectBoss(avgLevel);
+        const boss = selectBoss(avgLevel, options.forceBossId);
         enemies.push(scaleBossStats(boss, players.length, difficulty, avgLevel, avgSpeed));
     } else if (encounterType === 'ELITE_COMBAT') {
         // 1-2 elite enemies

@@ -265,54 +265,82 @@ const CRAFTING_RECIPES = {
 
 const BREWING_RECIPES = {
     'mega_potion': {
-        name: 'Mega Health Potion', id: 'mega_potion',
+        name: 'Mega Health Potion', id: 'mega_potion', category: 'BREWING',
         desc: 'A powerful brew that restores 250 HP.',
         ingredients: { 'greater_potion': 2, 'healing_herb': 3, 'mana_dew': 1 },
         result: { id: 'mega_potion', usable: true, effect: 'heal', effectValue: 250 }
     },
     'elixir_of_power': {
-        name: 'Elixir of Power', id: 'elixir_of_power',
+        name: 'Elixir of Power', id: 'elixir_of_power', category: 'BREWING',
         desc: 'Boosts ATK and MAG by 50% for 5 turns.',
         ingredients: { 'strength_brew': 1, 'rare_gem': 1, 'dragon_blood': 1 },
         result: { id: 'elixir_of_power', usable: true, effect: 'buff_all', effectValue: 50, duration: 5 }
     },
     'liquid_courage': {
-        name: 'Liquid Courage', id: 'liquid_courage',
+        name: 'Liquid Courage', id: 'liquid_courage', category: 'BREWING',
         desc: 'Grants a massive temporary shield.',
         ingredients: { 'minor_potion': 5, 'tough_leather': 3, 'boss_essence': 1 },
         result: { id: 'liquid_courage', usable: true, effect: 'shield_max', effectValue: 100 }
     },
     'energy_brew': {
-        name: 'Energy Brew', id: 'energy_brew',
+        name: 'Energy Brew', id: 'energy_brew', category: 'BREWING',
         desc: 'Instantly restores 50 Energy.',
         ingredients: { 'mana_crystal': 1, 'mana_dew': 2, 'healing_herb': 2 },
         result: { id: 'energy_brew', usable: true, effect: 'restore_energy', effectValue: 50 }
     },
     'holy_water': {
-        name: 'Holy Water', id: 'holy_water',
+        name: 'Holy Water', id: 'holy_water', category: 'BREWING',
         desc: 'Cleanses all debuffs and heals 100 HP.',
         ingredients: { 'mana_dew': 3, 'mana_crystal': 1, 'healing_herb': 5 },
         result: { id: 'holy_water', usable: true, effect: 'cleanse_heal', effectValue: 100 }
     },
     'rabbit_foot': {
-        name: 'Rabbit Foot', id: 'rabbit_foot',
+        name: 'Rabbit Foot', id: 'rabbit_foot', category: 'BREWING',
         desc: 'Permanent luck boost. (+10 LUCK)',
         ingredients: { 'tough_leather': 1, 'mystic_thread': 2, 'rare_gem': 1 },
         result: { id: 'rabbit_foot', type: 'STAT_BOOST', boost: { stat: 'luck', value: 10 } }
     },
     'chaos_elixir': {
-        name: 'Chaos Elixir', id: 'chaos_elixir',
+        name: 'Chaos Elixir', id: 'chaos_elixir', category: 'BREWING',
         desc: 'High chance for a massive random buff.',
         ingredients: { 'dark_matter': 1, 'dragon_blood': 1, 'mana_crystal': 5 },
         result: { id: 'chaos_elixir', usable: true, effect: 'random_major_buff' }
     },
     'fortress_potion': {
-        name: 'Fortress Potion', id: 'fortress_potion',
+        name: 'Fortress Potion', id: 'fortress_potion', category: 'BREWING',
         desc: 'Grants an invincible shield for 1 turn.',
         ingredients: { 'obsidian_chunk': 2, 'refined_steel': 5, 'boss_essence': 1 },
         result: { id: 'fortress_potion', usable: true, effect: 'invincibility' }
     }
 };
+
+const COOKING_RECIPES = {
+    'grilled_meat': {
+        name: 'Grilled Meat', id: 'grilled_meat', category: 'COOKING',
+        desc: 'Deliciously charred. (+10 ATK for 3 turns)',
+        ingredients: { 'rabbit_hide': 2, 'healing_herb': 1 }, // Simulating meat with hide for now
+        result: { id: 'grilled_meat', usable: true, effect: 'buff_atk', effectValue: 10, duration: 3 }
+    },
+    'mana_stew': {
+        name: 'Mana Stew', id: 'mana_stew', category: 'COOKING',
+        desc: 'A glowing broth. (+10 MAG for 3 turns)',
+        ingredients: { 'mana_dew': 2, 'healing_herb': 2 },
+        result: { id: 'mana_stew', usable: true, effect: 'buff_mag', effectValue: 10, duration: 3 }
+    },
+    'speed_soup': {
+        name: 'Speed Soup', id: 'speed_soup', category: 'COOKING',
+        desc: 'Light and zesty. (+10 SPD for 3 turns)',
+        ingredients: { 'common_fish': 2, 'healing_herb': 1 },
+        result: { id: 'speed_soup', usable: true, effect: 'buff_spd', effectValue: 10, duration: 3 }
+    },
+    'lucky_salad': {
+        name: 'Lucky Salad', id: 'lucky_salad', category: 'COOKING',
+        desc: 'Full of 4-leaf clovers. (+10 LUCK for 3 turns)',
+        ingredients: { 'healing_herb': 5 },
+        result: { id: 'lucky_salad', usable: true, effect: 'buff_luck', effectValue: 10, duration: 3 }
+    }
+};
+
 // ==========================================
 // ⛏️ MINING LOCATIONS
 // ==========================================
@@ -376,7 +404,7 @@ const MINING_LOCATIONS = {
 // ==========================================
 
 function getRecipes() {
-    return { ...CRAFTING_RECIPES, ...BREWING_RECIPES };
+    return { ...CRAFTING_RECIPES, ...BREWING_RECIPES, ...COOKING_RECIPES };
 }
 
 function getMiningLocations() {
@@ -454,9 +482,10 @@ function performCraft(userId, recipeId) {
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 
+    const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
     return { 
         success: true, 
-        message: `⚒️ *CRAFT SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}` 
+        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}` 
     };
 }
 
@@ -512,5 +541,6 @@ module.exports = {
     dismantleItem,
     CRAFTING_RECIPES,
     BREWING_RECIPES,
+    COOKING_RECIPES,
     MINING_LOCATIONS
 };

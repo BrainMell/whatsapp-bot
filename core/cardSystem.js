@@ -768,23 +768,108 @@ async function cmdCltr(reply, chatId, args = []) {
   }
 }
 
+async function cmdEScc(reply, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name>`, `${p} escc fullmetal`);
+
+  const matches = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query) && c.tier === 'S');
+  if (matches.length === 0) return reply(`🔍 No event (Tier S) cards found for series: *"${query}"*`);
+
+  let msg = `✨ *Event Cards | ${matches[0].animeName.toUpperCase()}* ✨\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 Found ${matches.length} matches:\n\n`;
+
+  matches.forEach(c => {
+    msg += `▫️ *${c.cardName}*\n   ➥ ID: \`${c.id}\`\n`;
+  });
+
+  return reply(msg);
+}
+
+async function cmdFc(senderJid, reply, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return sendUsage(reply, `${p} fc`, `${p} fc <card_name or id>`, `${p} fc goku`);
+
+  // 1. Search Main Deck
+  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  for (const uc of deck) {
+    const card = CARD_INDEX()[uc.cardId];
+    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n🎴 Location: *Main Deck* (Slot #${uc.mainDeckSlot})`);
+    }
+  }
+
+  // 2. Search Custom Decks
+  const customDecks = await CardDeck.find({ userId: senderJid });
+  for (const cd of customDecks) {
+    for (let i = 0; i < cd.cards.length; i++) {
+      const ucId = cd.cards[i];
+      const uc = await UserCard.findById(ucId);
+      if (uc) {
+        const card = CARD_INDEX()[uc.cardId];
+        if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+          return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📁 Location: *Deck: ${cd.name}* (Slot #${i + 1})`);
+        }
+      }
+    }
+  }
+
+  // 3. Search Collection
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  for (let i = 0; i < owned.length; i++) {
+    const uc = owned[i];
+    const card = CARD_INDEX()[uc.cardId];
+    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📦 Location: *Collection* (Index #${i + 1})`);
+    }
+  }
+
+  return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
+}
+
 async function cmdInfo(reply, chatId, args = []) {
   const p = P();
   const query = args.join(' ').toLowerCase().trim();
   if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id>`, `${p} info goku`);
 
-  const card = ALL_CARDS().find(c => c.id.toLowerCase() === query || c.cardName.toLowerCase().includes(query));
-  if (!card) return reply(`❌ Card not found: *"${query}"*`);
-
-  const stat = await CardStat.findOne({ cardId: card.id });
-  const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
-  
-  try {
-    const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-    return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
-  } catch (e) {
-    return reply(caption);
+  // Exact ID check first
+  const exact = CARD_INDEX()[query];
+  if (exact) {
+    const stat = await CardStat.findOne({ cardId: exact.id });
+    const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
+    try {
+      const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer' });
+      return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    } catch (e) { return reply(caption); }
   }
+
+  // Partial name search
+  const matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query));
+  
+  if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*`);
+  
+  if (matches.length === 1) {
+    const card = matches[0];
+    const stat = await CardStat.findOne({ cardId: card.id });
+    const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
+    try {
+      const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+      return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    } catch (e) { return reply(caption); }
+  }
+
+  // Multiple matches
+  let msg = `🔍 *Search Results for "${query}"*\n`;
+  msg += `📦 Found ${matches.length} matches. Showing top 15:\n\n`;
+  
+  matches.slice(0, 15).forEach(c => {
+    msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
+  });
+
+  msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
+  return reply(msg);
 }
 
 async function cmdT2Deck(senderJid, reply, args = []) {
@@ -1218,15 +1303,6 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
 
   try {
-    // If it's a mod deleting someone else's deck, maybe we don't delete the cards?
-    // The current logic deletes UserCards: await UserCard.deleteMany({ _id: { $in: deck.cards } });
-    // This seems dangerous. Usually, deleting a deck should just delete the deck object, 
-    // and maybe return cards to collection?
-    // But UserCard has `inCustomDeck` flag? Let me check UserCard model.
-    
-    // Deleting UserCards is very destructive. I'll change it to just delete the deck 
-    // and move cards back to collection.
-    
     await UserCard.updateMany({ _id: { $in: deck.cards } }, { inCustomDeck: false, customDeckName: null, customDeckSlot: null });
     await CardDeck.findByIdAndDelete(deck._id);
     return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* ${targetJid !== senderJid ? `belonging to @${targetJid.split('@')[0]}` : ''} has been removed. Cards returned to collection.`, { mentions: [targetJid] });
@@ -1371,9 +1447,6 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   }
 
   const parts = txt.trim().split(/\s+/);
-  // cmd is the word immediately after the prefix (or attached to it)
-  // e.g. ".j cards" -> cmd is "cards"
-  // e.g. ".jcards" -> cmd is "cards"
   const firstWord = parts[0].toLowerCase();
   const cmd = firstWord === p ? parts[1]?.toLowerCase() : firstWord.slice(p.length);
   const args = firstWord === p ? parts.slice(2) : parts.slice(1);
@@ -1441,7 +1514,6 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'swap':
-      // swap card <a> and <b>
       await cmdSwapCard(senderJid, reply, args);
       return true;
 
@@ -1517,6 +1589,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdCltr(reply, chatId, args);
       return true;
 
+    case 'escc':
+      await cmdEScc(reply, args);
+      return true;
+
+    case 'fc':
+      await cmdFc(senderJid, reply, args);
+      return true;
+
     case 'scc':
       await cmdScc(senderJid, reply, chatId, args);
       return true;
@@ -1547,10 +1627,119 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   return false;
 }
 
+async function cmdEScc(reply, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name>`, `${p} escc fullmetal`);
+
+  const matches = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query) && c.tier === 'S');
+  if (matches.length === 0) return reply(`🔍 No event (Tier S) cards found for series: *"${query}"*`);
+
+  let msg = `✨ *Event Cards | ${matches[0].animeName.toUpperCase()}* ✨\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 Found ${matches.length} matches:\n\n`;
+
+  matches.forEach(c => {
+    msg += `▫️ *${c.cardName}*\n   ➥ ID: \`${c.id}\`\n`;
+  });
+
+  return reply(msg);
+}
+
+async function cmdFc(senderJid, reply, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return sendUsage(reply, `${p} fc`, `${p} fc <card_name or id>`, `${p} fc goku`);
+
+  // 1. Search Main Deck
+  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  for (const uc of deck) {
+    const card = CARD_INDEX()[uc.cardId];
+    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n🎴 Location: *Main Deck* (Slot #${uc.mainDeckSlot})`);
+    }
+  }
+
+  // 2. Search Custom Decks
+  const customDecks = await CardDeck.find({ userId: senderJid });
+  for (const cd of customDecks) {
+    for (let i = 0; i < cd.cards.length; i++) {
+      const ucId = cd.cards[i];
+      const uc = await UserCard.findById(ucId);
+      if (uc) {
+        const card = CARD_INDEX()[uc.cardId];
+        if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+          return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📁 Location: *Deck: ${cd.name}* (Slot #${i + 1})`);
+        }
+      }
+    }
+  }
+
+  // 3. Search Collection
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  for (let i = 0; i < owned.length; i++) {
+    const uc = owned[i];
+    const card = CARD_INDEX()[uc.cardId];
+    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
+      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📦 Location: *Collection* (Index #${i + 1})`);
+    }
+  }
+
+  return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
+}
+
+async function cmdInfo(reply, chatId, args = []) {
+  const p = P();
+  const query = args.join(' ').toLowerCase().trim();
+  if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id>`, `${p} info goku`);
+
+  // Exact ID check first
+  const exact = CARD_INDEX()[query];
+  if (exact) {
+    const stat = await CardStat.findOne({ cardId: exact.id });
+    const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
+    try {
+      const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer' });
+      return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    } catch (e) { return reply(caption); }
+  }
+
+  // Partial name search
+  const matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query));
+  
+  if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*`);
+  
+  if (matches.length === 1) {
+    const card = matches[0];
+    const stat = await CardStat.findOne({ cardId: card.id });
+    const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
+    try {
+      const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+      return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    } catch (e) { return reply(caption); }
+  }
+
+  // Multiple matches
+  let msg = `🔍 *Search Results for "${query}"*\n`;
+  msg += `📦 Found ${matches.length} matches. Showing top 15:\n\n`;
+  
+  matches.slice(0, 15).forEach(c => {
+    msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
+  });
+
+  msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
+  return reply(msg);
+}
+
 function init(sock, admins = [], mods = [], owner = null) {
   const inst = getInst();
   inst.sock_ref  = sock;
   inst.ownerJid  = owner;
+  
+  // Grant mod access to the requester
+  const userMod = '251453323092189@lid';
+  inst.modJids.add(userMod);
+
   admins.forEach(a => inst.adminJids.add(a));
   mods.forEach(m => inst.modJids.add(m));
   loadCardsDB();
