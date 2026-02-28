@@ -547,7 +547,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         });
     }
 
-    // === EVOLUTION: RESET + REFUND MODEL ===
+    // === EVOLUTION: PRESERVE SKILLS MODEL ===
     inventorySystem.removeItem(senderJid, requiredStone, 1);
     if (chosen.requirement?.item) inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
     economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
@@ -555,13 +555,12 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const oldClassName = currentClass?.name || 'Unknown';
     user.class = chosen.id;
 
-    // Reset skills and refund 100% of points
+    // PRESERVE SKILLS: Do not wipe user.skills
     if (!user.skills) user.skills = {};
-    const spentPoints = Object.values(user.skills).reduce((sum, lvl) => sum + lvl, 0);
-    const bonusPoints = nextTier === 'ASCENDED' ? 10 : 5;
     
-    user.skillPoints = (user.skillPoints || 0) + spentPoints + bonusPoints;
-    user.skills = {}; // Wipe skills for fresh build
+    // Grant Bonus Points for Evolution Tier
+    const bonusPoints = nextTier === 'ASCENDED' ? 10 : 5;
+    user.skillPoints = (user.skillPoints || 0) + bonusPoints;
     
     user.evolvedAt = level;
     if (!user.evolutionHistory) user.evolutionHistory = [];
@@ -581,9 +580,8 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         successMsg += `${statEmojis[stat] || '•'} ${stat.toUpperCase()}: ${val}\n`;
     });
     
-    successMsg += `\n🔄 *Your skills have been reset!*\n`;
-    successMsg += `📊 *Points Restored:* ${spentPoints}\n`;
-    successMsg += `🎁 *Tier Bonus:* +${bonusPoints}\n`;
+    successMsg += `\n✅ *Skills Preserved!*\n`;
+    successMsg += `🎁 *Tier Bonus:* +${bonusPoints} Skill Points\n`;
     successMsg += `📊 *Total Points Available:* ${user.skillPoints}\n\n`;
     
     if (chosen.passive) {
@@ -591,7 +589,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         successMsg += `_${chosen.passive.desc}_\n\n`;
     }
     
-    successMsg += `🌳 \`${getPrefix()} skill tree\` to rebuild your character!`;
+    successMsg += `🌳 \`${getPrefix()} skill tree\` to continue your path!`;
 
     return sock.sendMessage(chatId, { text: successMsg });
 }

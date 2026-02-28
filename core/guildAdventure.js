@@ -127,7 +127,7 @@ const GAME_CONFIG = {
     MAX_PLAYERS: 6,
     REGISTRATION_TIME: 120000, 
     SHOP_TIME: 90000, 
-    VOTE_TIME: 30000, // Reduced from 45s
+    VOTE_TIME: 60000, 
     COMBAT_TURN_TIME: 600000, 
     BREAK_TIME: 10000, // Reduced from 60s for better flow
     ENEMY_TURN_TIME: 5000, 
@@ -1164,11 +1164,11 @@ function applyStatusEffect(target, effectType, duration = 3, value = 0, source =
 
     const effectData = STATUS_EFFECTS[finalType] || { name: finalType, icon: '❓', effect: 'none' };
     target.statusEffects.push({
+        ...effectData,
         type: finalType,
         duration: finalDuration,
         value: finalValue,
-        source: source,
-        ...effectData
+        source: source
     });
 
     return { applied: true, synergyMsg };
@@ -1726,12 +1726,31 @@ async function processCombatTurn(sock, sessionKey) {
 
             if (activeActor.isEnemy) {
                 // AI Turn
-                await performEnemyAction(sock, activeActor, sessionKey);
+                try {
+                    await performEnemyAction(sock, activeActor, sessionKey);
+                } catch (e) {
+                    console.error("Error in performEnemyAction call:", e);
+                    // Force next turn
+                    activeActor.actionGauge -= 50; 
+                    state.combatProcessing = false;
+                    setTimeout(() => processCombatTurn(sock, sessionKey), 1000);
+                }
                 return;
             }
 
             // Player Turn
-            await promptPlayerAction(sock, activeActor, sessionKey);
+            try {
+                await promptPlayerAction(sock, activeActor, sessionKey);
+            } catch (e) {
+                console.error("Error in promptPlayerAction call:", e);
+                // Skip player turn or retry?
+                // For safety, skip turn to avoid deadlock
+                try {
+                     await sock.sendMessage(state.chatId, { text: `⚠️ Error processing turn for ${activeActor.name}. Skipping...` });
+                } catch {}
+                state.combatProcessing = false;
+                setTimeout(() => nextTurn(sock, { actor: activeActor, action: { name: 'Error' } }, sessionKey), 1000);
+            }
             return;
         }
     } catch (err) {
@@ -2088,109 +2107,139 @@ async function performEnemyAction(sock, enemy, sessionKey) {
     const chatId = state.chatId;
     const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
 
-    // 🧠 AI DECISION MAKING
-    const decision = monsterSkills.evaluateAction(enemy, state.players, state.enemies);
-    
-    let turnInfo = {
-        actor: enemy,
-        action: { name: 'Action' },
-        target: null,
-        damage: 0,
-        effects: []
-    };
-
-    // --- SKIP TURN (Stunned/Frozen) ---
-    if (decision.action === 'skip') {
-        await sock.sendMessage(chatId, { text: `💤 *${enemy.name}* ${decision.msg}` });
-        return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-    }
-
-    // --- RELEASE CHARGE (Meteor, etc) ---
-    if (decision.action === 'release_charge') {
-        const skillId = decision.skillId;
-        const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
+    try {
+        // 🧠 AI DECISION MAKING
+        const decision = monsterSkills.evaluateAction(enemy, state.players, state.enemies);
         
-        if (skillData && skillData.nextSkill) {
-            const followUpId = skillData.nextSkill;
-            const followUpSkill = monsterSkills.getSkillById(enemy.archetype, followUpId);
-            const target = enemy.chargeTarget || state.players.find(p => !p.isDead);
+        let turnInfo = {
+            actor: enemy,
+            action: { name: 'Action' },
+            target: null,
+            damage: 0,
+            effects: []
+        };
+
+        // --- SKIP TURN (Stunned/Frozen) ---
+        if (decision.action === 'skip') {
+            try {
+                await sock.sendMessage(chatId, { text: `💤 *${enemy.name}* ${decision.msg}` });
+            } catch (err) {
+                console.error(`[Combat] Failed to send skip message: ${err.message}`);
+            }
+            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+        }
+
+        // --- RELEASE CHARGE (Meteor, etc) ---
+        if (decision.action === 'release_charge') {
+            const skillId = decision.skillId;
+            const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
             
-            await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` });
+            if (skillData && skillData.nextSkill) {
+                const followUpId = skillData.nextSkill;
+                const followUpSkill = monsterSkills.getSkillById(enemy.archetype, followUpId);
+                const target = enemy.chargeTarget || state.players.find(p => !p.isDead);
+                
+                try {
+                    await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` });
+                } catch (err) {
+                    console.error(`[Combat] Failed to send charge release message: ${err.message}`);
+                }
+                
+                // Apply effect (Bosses use Boss Mechanics, standard use MonsterSkills)
+                const effect = followUpSkill.currentEffect || followUpSkill.effect(enemy.level || 1);
+                const result = await applyAbilityEffect(sock, enemy, followUpSkill, effect, state.players.indexOf(target), chatId);
+                
+                turnInfo.action.name = followUpSkill.name;
+                turnInfo.target = target;
+                
+                enemy.isCharging = false;
+                enemy.chargingSkill = null;
+                enemy.chargeTarget = null;
+
+                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+            }
+        }
+
+        // --- USE SKILL ---
+        if (decision.action === 'skill') {
+            const skill = decision.skill;
+            const target = decision.target;
+
+            if (skill.type === 'charge') {
+                enemy.isCharging = true;
+                enemy.chargingSkill = skill.id;
+                enemy.chargeTarget = target;
+                try {
+                    await sock.sendMessage(chatId, { text: `⚠️ *${enemy.name}* ${skill.msg}` });
+                } catch (err) {
+                    console.error(`[Combat] Failed to send charge message: ${err.message}`);
+                }
+                
+                turnInfo.action.name = "Charging";
+                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+            }
+
+            // Execute regular skill
+            try {
+                await sock.sendMessage(chatId, { text: `⚡ *${enemy.name}* uses *${skill.name}*!` });
+            } catch (err) {
+                console.error(`[Combat] Failed to send skill message: ${err.message}`);
+            }
             
-            // Apply effect (Bosses use Boss Mechanics, standard use MonsterSkills)
-            const effect = followUpSkill.currentEffect || followUpSkill.effect(enemy.level || 1);
-            const result = await applyAbilityEffect(sock, enemy, followUpSkill, effect, state.players.indexOf(target), chatId);
+            const effect = skill.currentEffect || (typeof skill.effect === 'function' ? skill.effect(enemy.level || 1) : skill.effect);
+            let targetIdx = (decision.targetType === 'ally' || decision.targetType === 'self') ? state.enemies.indexOf(target) : state.players.indexOf(target);
             
-            turnInfo.action.name = followUpSkill.name;
+            await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+            
+            turnInfo.action.name = skill.name;
             turnInfo.target = target;
-            
-            enemy.isCharging = false;
-            enemy.chargingSkill = null;
-            enemy.chargeTarget = null;
 
             return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
         }
-    }
 
-    // --- USE SKILL ---
-    if (decision.action === 'skill') {
-        const skill = decision.skill;
+        // --- DEFAULT ATTACK ---
         const target = decision.target;
-
-        if (skill.type === 'charge') {
-            enemy.isCharging = true;
-            enemy.chargingSkill = skill.id;
-            enemy.chargeTarget = target;
-            await sock.sendMessage(chatId, { text: `⚠️ *${enemy.name}* ${skill.msg}` });
-            
-            turnInfo.action.name = "Charging";
-            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+        if (!target || target.isDead) {
+            // Find a fallback
+            const alive = state.players.filter(p => !p.isDead);
+            if (alive.length === 0) {
+                // Everyone dead, end combat
+                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+            }
+            turnInfo.target = alive[0];
+        } else {
+            turnInfo.target = target;
         }
 
-        // Execute regular skill
-        await sock.sendMessage(chatId, { text: `⚡ *${enemy.name}* uses *${skill.name}*!` });
+        const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', sessionKey);
         
-        const effect = skill.currentEffect || (typeof skill.effect === 'function' ? skill.effect(enemy.level || 1) : skill.effect);
-        let targetIdx = (decision.targetType === 'ally' || decision.targetType === 'self') ? state.enemies.indexOf(target) : state.players.indexOf(target);
-        
-        await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
-        
-        turnInfo.action.name = skill.name;
-        turnInfo.target = target;
+        let resultMsg = `${enemy.icon} *${enemy.name}* `;
+        if (wasEvaded) {
+            resultMsg += `attacks ${turnInfo.target.name} but 💨 MISSES!`;
+        } else {
+            turnInfo.target.stats.hp -= damage;
+            turnInfo.target.currentHP = Math.max(0, turnInfo.target.stats.hp);
+            resultMsg += `attacks ${turnInfo.target.name} for 💥 ${damage} damage!${isCrit ? ' (CRIT!)' : ''}`;
+            turnInfo.damage = damage;
 
-        return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-    }
-
-    // --- DEFAULT ATTACK ---
-    const target = decision.target;
-    if (!target || target.isDead) {
-        // Find a fallback
-        const alive = state.players.filter(p => !p.isDead);
-        if (alive.length === 0) return;
-        turnInfo.target = alive[0];
-    } else {
-        turnInfo.target = target;
-    }
-
-    const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', sessionKey);
-    
-    let resultMsg = `${enemy.icon} *${enemy.name}* `;
-    if (wasEvaded) {
-        resultMsg += `attacks ${turnInfo.target.name} but 💨 MISSES!`;
-    } else {
-        turnInfo.target.stats.hp -= damage;
-        turnInfo.target.currentHP = Math.max(0, turnInfo.target.stats.hp);
-        resultMsg += `attacks ${turnInfo.target.name} for 💥 ${damage} damage!${isCrit ? ' (CRIT!)' : ''}`;
-        turnInfo.damage = damage;
-
-        if (turnInfo.target.stats.hp <= 0) {
-            await handleDeath(sock, turnInfo.target, sessionKey, enemy.name);
-            resultMsg += `\n💀 ${turnInfo.target.name} has fallen!`;
+            if (turnInfo.target.stats.hp <= 0) {
+                await handleDeath(sock, turnInfo.target, sessionKey, enemy.name);
+                resultMsg += `\n💀 ${turnInfo.target.name} has fallen!`;
+            }
         }
-    }
 
-    await sock.sendMessage(chatId, { text: resultMsg });
-    setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+        try {
+            await sock.sendMessage(chatId, { text: resultMsg });
+        } catch (err) {
+            console.error(`[Combat] Failed to send attack message: ${err.message}`);
+        }
+        setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
+
+    } catch (error) {
+        console.error(`[Combat] Critical error in performEnemyAction for ${enemy.name}:`, error);
+        // Force next turn to prevent deadlock
+        setTimeout(() => nextTurn(sock, { actor: enemy, action: { name: 'Error' } }, sessionKey), 1000);
+    }
 }
 
 async function checkBossPhase(sock, boss, chatId) {
@@ -2223,7 +2272,11 @@ async function checkBossPhase(sock, boss, chatId) {
             });
         }
 
-        await sock.sendMessage(chatId, { text: msg });
+        try {
+            await sock.sendMessage(chatId, { text: msg });
+        } catch (err) {
+            console.error(`[Combat] Failed to send boss phase message: ${err.message}`);
+        }
         return true;
     }
     return false;
@@ -2373,7 +2426,8 @@ async function endCombat(sock, victory, sessionKey) {
             alivePlayers,
             encounterType,
             bossName,
-            state.difficulty
+            state.difficulty,
+            totalGold
         );
     } catch (lootErr) {
         console.error("Loot distribution failed:", lootErr.message);
@@ -3774,11 +3828,11 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     
     // AOE ABILITIES
     if (effect.type === 'aoe') {
-        const enemies = state.enemies.filter(e => e.stats.hp > 0);
-        const numTargets = Math.min(effect.targets || 99, enemies.length);
+        const opponentSide = player.isEnemy ? state.players.filter(p => !p.isDead) : state.enemies.filter(e => e.stats.hp > 0);
+        const numTargets = Math.min(effect.targets || 99, opponentSide.length);
         
         for (let i = 0; i < numTargets; i++) {
-            const target = enemies[i];
+            const target = opponentSide[i];
             if (!target) continue;
             
             // 💡 DRAGON SEAL RING REQUIREMENT
@@ -3964,8 +4018,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
         const target = targets[0];
         if (target) {
             let totalMultiDamage = 0;
+            const baseStat = effect.damageType === 'magic' ? (player.stats.mag || 10) : (player.stats.atk || 10);
+            const dType = effect.damageType === 'magic' ? 'magic' : 'physical';
+            const element = effect.element || 'PHYSICAL';
+            
             for (let i = 0; i < effect.hits; i++) {
-                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, (player.stats.atk || 10) * effect.multiplier, 'physical', 'PHYSICAL', chatId);
+                const { damage, isCrit, wasEvaded } = calculateDamage(player, target, baseStat * effect.multiplier, dType, element, chatId);
                 if (!wasEvaded) {
                     target.stats.hp -= damage;
                     totalMultiDamage += damage;
@@ -3989,7 +4047,7 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.currentHP = 0;
             }
         }
-          }
+    }
     
           // 🧪 NEW FORMAT SUPPORT (effects object)
           if (effect.effects) {
@@ -4002,11 +4060,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                   
                   // Determine targets based on the skill's overall targeting
                   let targets = [];
-                  if (effect.targeting === 'AOE' || effect.targeting === 'ALL_ENEMIES' || effect.targeting === 'CHAIN') {
+                  const targeting = (effect.targeting || '').toUpperCase();
+                  if (targeting.includes('AOE') || targeting === 'ALL_ENEMIES' || targeting === 'CHAIN') {
                       targets = opponentSide;
-                  } else if (effect.targeting === 'TEAM' || effect.targeting === 'ALL_ALLIES') {
+                  } else if (targeting === 'TEAM' || targeting === 'ALL_ALLIES') {
                       targets = friendlySide;
-                  } else if (effect.targeting === 'SELF') {
+                  } else if (targeting === 'SELF') {
                       targets = [player];
                   } else {
                       targets = [getHealTarget(player, targetIndex, chatId)];
@@ -4031,7 +4090,8 @@ function getTargets(attacker, effect, targetIndex, chatId) {
     
     const opponentSide = attacker.isEnemy ? state.players.filter(p => !p.isDead) : state.enemies.filter(e => e.stats.hp > 0);
 
-    if (effect.type === 'aoe' || effect.targeting === 'aoe' || effect.targeting === 'ALL_ENEMIES') {
+    const targeting = (effect.targeting || '').toUpperCase();
+    if (effect.type === 'aoe' || targeting.includes('AOE') || targeting === 'ALL_ENEMIES' || targeting === 'CHAIN') {
         return opponentSide.slice(0, effect.targets || 99);
     }
 

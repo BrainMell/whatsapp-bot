@@ -271,9 +271,9 @@ const GOLD_RANGES = {
 // 🎁 DROP GENERATION
 // ==========================================
 
-function rollDrop(lootTable) {
+function rollDrop(lootTable, rarityBoost = 0) {
     // Check if anything drops
-    if (Math.random() * 100 > lootTable.dropChance) {
+    if (Math.random() * 100 > (lootTable.dropChance + (rarityBoost * 2))) {
         return null;
     }
     
@@ -292,12 +292,23 @@ function rollDrop(lootTable) {
             
             // Fetch default rarity from database if not in loot table
             const dbInfo = ITEM_DATABASE[item.id];
-            const finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
+            let finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
             
             // 🎲 Special Logic: If the item rolled is a generic 'equipment_piece', roll for a real equipment from database
             if (item.id === 'equipment_piece') {
+                // Boost rarity selection based on difficulty
+                const rarityWeights = { 'COMMON': 100, 'UNCOMMON': 50, 'RARE': 20, 'EPIC': 10, 'LEGENDARY': 5, 'MYTHIC': 1 };
+                // Apply boost
+                if (rarityBoost > 0) {
+                    rarityWeights.RARE += rarityBoost * 5;
+                    rarityWeights.EPIC += rarityBoost * 3;
+                    rarityWeights.LEGENDARY += rarityBoost * 2;
+                    rarityWeights.MYTHIC += rarityBoost;
+                }
+
                 const equipmentList = Object.entries(ITEM_DATABASE).filter(([id, data]) => data.type === 'EQUIPMENT');
                 if (equipmentList.length > 0) {
+                    // Filter list by "effective" weights or just pick and then potentially "upgrade" the item
                     const [eqId, eqData] = equipmentList[Math.floor(Math.random() * equipmentList.length)];
                     
                     // 💡 PROCEDURAL AFFIX LOGIC (Diablo Style)
@@ -308,6 +319,13 @@ function rollDrop(lootTable) {
                         name: eqData.name,
                         stats: { ...eqData.stats }
                     };
+
+                    // Difficulty Rarity Upgrade
+                    const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+                    let currentIdx = rarities.indexOf(resultItem.rarity);
+                    if (rarityBoost > 5 && currentIdx < rarities.length - 1) { // High difficulty guarantee
+                        resultItem.rarity = rarities[Math.min(rarities.length - 1, currentIdx + Math.floor(rarityBoost / 10))];
+                    }
 
                     // Only roll affixes for Rare and above, or a 15% chance for others
                     if (ITEM_RARITY_WEIGHTS[resultItem.rarity] >= 2 || Math.random() < 0.15) {
@@ -355,6 +373,7 @@ function rollDrop(lootTable) {
 
 function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     const drops = [];
+    const rarityBoost = Math.floor(difficulty); // 1.0 -> 0, 10.0 -> 10, etc.
     
     // Determine loot table
     let lootTable = LOOT_TABLES.COMMON_ENEMY;
@@ -374,17 +393,27 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
                 const dbInfo = ITEM_DATABASE[guaranteedDrop.id];
                 
+                let finalRarity = guaranteedDrop.rarity || dbInfo?.rarity || 'COMMON';
+                // Upgrade rarity for high difficulty
+                const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+                if (rarityBoost > 15) {
+                    let curIdx = rarities.indexOf(finalRarity);
+                    finalRarity = rarities[Math.min(rarities.length - 1, curIdx + 1)];
+                }
+
                 drops.push({
                     id: guaranteedDrop.id,
                     quantity,
-                    rarity: guaranteedDrop.rarity || dbInfo?.rarity || 'COMMON',
+                    rarity: finalRarity,
                     source: enemyName
                 });
             }
             
             // Special drops (chance-based)
             for (const specialDrop of bossLoot.special) {
-                if (Math.random() * 100 < specialDrop.dropChance) {
+                // Higher difficulty = Higher drop chance
+                const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
+                if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
                     drops.push({
                         id: specialDrop.id,
@@ -407,14 +436,14 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     }
     
     // Roll for standard drops
-    const standardDrop = rollDrop(lootTable);
+    const standardDrop = rollDrop(lootTable, rarityBoost);
     if (standardDrop) {
         drops.push(standardDrop);
     }
     
     // Difficulty multiplier (chance for extra drops)
-    if (difficulty >= 2.0 && Math.random() < 0.3) {
-        const bonusDrop = rollDrop(lootTable);
+    if (difficulty >= 2.0 && Math.random() < (0.3 + (difficulty * 0.02))) {
+        const bonusDrop = rollDrop(lootTable, rarityBoost);
         if (bonusDrop) {
             drops.push(bonusDrop);
         }
@@ -458,10 +487,10 @@ function generateGoldDrop(encounterType, difficulty = 1.0) {
 // 🎁 DISTRIBUTE LOOT TO PLAYERS
 // ==========================================
 
-function distributeLoot(players, encounterType, enemyName = null, difficulty = 1.0) {
+function distributeLoot(players, encounterType, enemyName = null, difficulty = 1.0, overrideGold = null) {
     const inventorySystem = require('./inventorySystem');
     const loot = generateLoot(encounterType, enemyName, difficulty);
-    const goldDrop = generateGoldDrop(encounterType, difficulty);
+    const goldDrop = overrideGold !== null ? overrideGold : generateGoldDrop(encounterType, difficulty);
     
     // Split gold among players
     const goldPerPlayer = Math.floor(goldDrop / Math.max(1, players.length));
@@ -695,7 +724,7 @@ const ITEM_DATABASE = {
         name: 'Ether',
         description: 'Fully restores Energy (100%)',
         rarity: 'RARE',
-        value: 1000,
+        value: 3000,
         usable: true,
         effect: 'restore_energy',
         effectValue: 1.0

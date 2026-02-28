@@ -246,6 +246,20 @@ const CRAFTING_RECIPES = {
         desc: 'Increases party evasion by 50% for 2 turns.',
         ingredients: { 'gunpowder': 1, 'healing_herb': 5, 'spider_silk': 2 },
         result: { id: 'smoke_screen', usable: true, effect: 'evasion_buff' }
+    },
+
+    // --- EVOLUTION ---
+    'evolution_stone': {
+        name: 'Evolution Stone (T2)', category: 'EVOLUTION', id: 'evolution_stone',
+        desc: 'Used to evolve from Starter to Evolved class.',
+        ingredients: { 'mana_crystal': 5, 'boss_essence': 1, 'rare_gem': 2 },
+        result: { id: 'evolution_stone', type: 'EVOLUTION' }
+    },
+    'ascension_stone': {
+        name: 'Ascension Stone (T3)', category: 'EVOLUTION', id: 'ascension_stone',
+        desc: 'Used to ascend from Evolved to Ascended class.',
+        ingredients: { 'legendary_shard': 1, 'void_crystal': 3, 'boss_essence': 5 },
+        result: { id: 'ascension_stone', type: 'ASCENSION' }
     }
 };
 

@@ -4875,19 +4875,19 @@ function getSkillEffect(skill, level) {
                     effect.ccChance = chance || 100;
                     effect.ccDuration = dur || 1;
                 } else if (effId === 'instantKill') {
-                    effect.type = 'execute';
+                    if (effect.type === 'none' || effect.type === 'damage') effect.type = 'execute';
                     effect.threshold = val.threshold || 30;
                 } else if (effId === 'dot' || effId === 'burn' || effId === 'poison' || effId === 'bleed') {
                     effect.dot = effData.element || effId;
                     effect.dotDuration = dur || 3;
                     effect.dotDamage = val || 10;
-                } else if (effId === 'shield' || effId === 'buff_self' || effId === 'buff_team') {
-                    effect.type = effId === 'shield' ? 'buff_self' : effId;
+                } else if (effId === 'shield' || effId === 'buff_self' || effId === 'buff_team' || effId === 'buff_target') {
+                    if (effect.type === 'none') effect.type = effId === 'shield' ? 'buff_self' : effId;
                     effect.buffType = effData.stat || 'defense';
                     effect.value = val;
                     effect.duration = dur || 2;
                 } else if (effId === 'heal' || effId === 'heal_team') {
-                    effect.type = effId;
+                    if (effect.type === 'none') effect.type = effId;
                     effect.value = val;
                 } else if (effId === 'evasion' || effId === 'critBuff') {
                     // Specific handling for Mirror Image etc
