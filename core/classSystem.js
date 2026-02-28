@@ -77,8 +77,8 @@ const EVOLVED_CLASSES = {
         tier: 'EVOLVED',
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
-        stats: { hp: 200, atk: 12, def: 18, mag: 2, spd: 5, luck: 5, crit: 5 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        stats: { hp: 220, atk: 18, def: 22, mag: 2, spd: 5, luck: 5, crit: 5 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Tenacity', desc: `Regenerates 3% of max HP every 2 turns in combat.` },
         evolves_into: ['WARLORD'],
@@ -106,7 +106,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 220, atk: 18, def: 12, mag: 1, spd: 6, luck: 4, crit: 15 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.` },
         evolves_into: ['DOOMSLAYER'],
@@ -134,7 +134,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 180, atk: 10, def: 22, mag: 8, spd: 4, luck: 10, crit: 5 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Divine Shield', desc: `Reduces all damage taken by 10%. Undead enemies deal -50% damage.` },
         evolves_into: ['TEMPLAR'],
@@ -192,7 +192,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 100, atk: 18, def: 5, mag: 3, spd: 20, luck: 15, crit: 25 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Shadow Step', desc: `Evasion increased by 15%. First attack in any combat is guaranteed to hit.` },
         evolves_into: ['NIGHTBLADE'],
@@ -220,7 +220,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 120, atk: 14, def: 8, mag: 6, spd: 18, luck: 10, crit: 15 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Inner Focus', desc: `+10% accuracy and +10% speed. Energy regenerates 5 more per turn.` },
         evolves_into: ['ZENMASTER'],
@@ -248,7 +248,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 130, atk: 17, def: 9, mag: 4, spd: 16, luck: 11, crit: 20 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Bushido', desc: `+20% ATK after standing still for a turn (Focused Stance). +5% CRIT always.` },
         evolves_into: ['SHOGUN'],
@@ -276,7 +276,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 95, atk: 16, def: 4, mag: 5, spd: 22, luck: 16, crit: 28 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Opening Strike', desc: `The very first attack against any enemy is always a critical hit.` },
         evolves_into: ['KAGE'],
@@ -305,8 +305,8 @@ const EVOLVED_CLASSES = {
         tier: 'EVOLVED',
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
-        stats: { hp: 90, atk: 6, def: 5, mag: 30, spd: 9, luck: 12, crit: 14 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        stats: { hp: 110, atk: 8, def: 8, mag: 35, spd: 12, luck: 12, crit: 8 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn. Spell energy costs reduced by 10%.` },
         evolves_into: ['ARCHMAGE'],
@@ -334,7 +334,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 100, atk: 7, def: 6, mag: 26, spd: 8, luck: 10, crit: 12 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Soul Siphon', desc: `Heals for 8% of all magic damage dealt. Cursed enemies deal -10% damage.` },
         evolves_into: ['VOIDWALKER'],
@@ -362,7 +362,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 95, atk: 7, def: 6, mag: 28, spd: 10, luck: 11, crit: 13 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Elemental Harmony', desc: `All elemental damage increased by 15%. Immune to environmental damage.` },
         evolves_into: ['AVATAR'],
@@ -390,7 +390,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 92, atk: 6, def: 5, mag: 27, spd: 8, luck: 9, crit: 11 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: `Death's Apprentice`, desc: `Summons have +30% stats. Gain 5% max HP whenever an enemy is slain near you.` },
         evolves_into: ['LICH'],
@@ -418,7 +418,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 88, atk: 6, def: 6, mag: 28, spd: 14, luck: 13, crit: 12 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Temporal Flow', desc: `All skill cooldowns reduced by 1. Acts first in every round regardless of SPD.` },
         evolves_into: ['TIMELORD'],
@@ -476,7 +476,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 110, atk: 7, def: 9, mag: 20, spd: 9, luck: 13, crit: 7 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Divine Grace', desc: `All healing spells heal 25% more. Allies within the party gain +5% HP regeneration.` },
         evolves_into: ['SAINT'],
@@ -504,7 +504,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 115, atk: 8, def: 10, mag: 18, spd: 11, luck: 12, crit: 8 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Wild Shape', desc: `Can transform each combat (bear: +HP, wolf: +ATK, falcon: +SPD).` },
         evolves_into: ['ARCHDRUID'],
@@ -532,7 +532,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 105, atk: 7, def: 8, mag: 12, spd: 10, luck: 25, crit: 9 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Market Advantage', desc: `Earn 50% more Zeni from all sources. Shop prices reduced by 20%.` },
         evolves_into: ['TYCOON'],
@@ -560,7 +560,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Inspiring Song', desc: `Party members gain +10% to all stats while Bard is alive.` },
         evolves_into: ['VIRTUOSO'],
@@ -588,7 +588,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 108, atk: 9, def: 9, mag: 15, spd: 11, luck: 11, crit: 11 },
-        requirement: { level: 20, questsCompleted: 20, gold: 15000 },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000 },
         evolutionCost: 15000,
         passive: { name: 'Overclocked', desc: `Summons and turrets deal 40% more damage. Can deploy 1 extra turret.` },
         evolves_into: ['GRAND_INVENTOR'],
@@ -828,6 +828,7 @@ const CLASS_SHOP_ITEMS = {
         category: 'QUEST'
     },
     
+    /*
     // Permanent stat boosters
     hp_supplement: {
         id: 'hp_supplement',
@@ -883,83 +884,6 @@ const CLASS_SHOP_ITEMS = {
         category: 'PERMANENT',
         boost: { stat: 'spd', value: 2 }
     },
-    
-    // Weapons
-    rusty_dagger: {
-        id: 'rusty_dagger',
-        name: 'Rusted Dagger',
-        icon: '🗡️',
-        desc: `A simple blade. (+5 ATK)`,
-        cost: 1000,
-        type: 'EQUIPMENT',
-        category: 'EQUIPMENT',
-        rarity: 'COMMON',
-        stats: { atk: 5 },
-        slot: 'weapon'
-    },
-    iron_sword: {
-        id: 'iron_sword',
-        name: 'Iron Sword',
-        icon: '⚔️',
-        desc: `A sturdy iron blade. (+12 ATK)`,
-        cost: 5000,
-        type: 'EQUIPMENT',
-        category: 'EQUIPMENT',
-        rarity: 'UNCOMMON',
-        stats: { atk: 12 },
-        slot: 'weapon'
-    },
-    arcane_wand: {
-        id: 'arcane_wand',
-        name: 'Arcane Wand',
-        icon: '🪄',
-        desc: `Focuses arcane energy into lethal beams. (+18 MAG)`,
-        cost: 6000,
-        type: 'EQUIPMENT',
-        category: 'EQUIPMENT',
-        rarity: 'RARE',
-        stats: { mag: 18 },
-        slot: 'weapon'
-    },
-    
-    // Armor
-    leather_tunic: {
-        id: 'leather_tunic',
-        name: 'Leather Tunic',
-        icon: '🧥',
-        desc: `Basic protection. (+8 DEF)`,
-        cost: 1600,
-        type: 'EQUIPMENT',
-        category: 'EQUIPMENT',
-        rarity: 'COMMON',
-        stats: { def: 8 },
-        slot: 'armor'
-    },
-    plate_armor: {
-        id: 'plate_armor',
-        name: 'Plate Armor',
-        icon: '🛡️',
-        desc: `Heavy iron plating. (+25 DEF, +20 HP)`,
-        cost: 12000,
-        type: 'EQUIPMENT',
-        category: 'EQUIPMENT',
-        rarity: 'RARE',
-        stats: { def: 25, hp: 20 },
-        slot: 'armor'
-    },
-    
-    // Mirror
-    essence_mirror: {
-        id: 'essence_mirror',
-        name: 'Essence Mirror',
-        icon: '🪞',
-        desc: `Mirror the skills of any class outside your lineage (up to 3 skills).`,
-        cost: 100000,
-        type: 'MISC',
-        category: 'MISC',
-        rarity: 'LEGENDARY'
-    },
-    
     fortune_cookie: {
         id: 'fortune_cookie',
         name: 'Fortune Cookie',
@@ -1001,6 +925,7 @@ const CLASS_SHOP_ITEMS = {
         type: 'BOOSTER',
         category: 'MISC'
     }
+    */
 };
 
 // ==========================================

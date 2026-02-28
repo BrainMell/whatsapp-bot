@@ -778,8 +778,8 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     
     // Damage scaling: +12% per rank
     const dmgMult = 1 + (rankIndex * 0.12);
-    // Speed scaling: +6% per rank (base)
-    const spdMult = 1 + (rankIndex * 0.06);
+    // Speed scaling: +10% per rank (base)
+    const spdMult = 1 + (rankIndex * 0.10);
     // Party scaling: +20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
     
@@ -831,16 +831,16 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // unless it's a "Fast" archetype.
     
     let targetSpeed = avgPlayerSpeed;
-    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.2; // Faster mobs
-    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.8; // Slower mobs
+    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.3; // Faster mobs
+    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.9; // Slower mobs
     
     // Apply the "High Level = Slower Mob" logic
     // If Average Level > 50, reduce mob speed multiplier by 10%
-    if (avgLevel > 50) targetSpeed *= 0.9;
-    if (avgLevel < 10) targetSpeed *= 1.1; // Low level -> mobs are scary fast
+    if (avgLevel > 50) targetSpeed *= 0.95;
+    if (avgLevel < 10) targetSpeed *= 1.2; // Low level -> mobs are scary fast
     
-    // Blend with base calculation
-    scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
+    // Blend with base calculation (Favor baseSpeed more now)
+    scaled.stats.spd = Math.floor((baseSpeed * 0.6) + (targetSpeed * 0.4));
 
     // Defense scaling (linear)
     scaled.stats.def = Math.floor(enemy.stats.def * partyFactor * (1 + (rankIndex * 0.08)));

@@ -26,7 +26,7 @@ const INVENTORY_CONFIG = {
 const ITEM_RARITY = {
     COMMON: {
         name: 'Common',
-        icon: '⚪',
+        icon: '⚪', // Grey
         sellMultiplier: 0.3,
         dropChance: 60
     },
@@ -38,7 +38,7 @@ const ITEM_RARITY = {
     },
     RARE: {
         name: 'Rare',
-        icon: '🔵',
+        icon: '🔵', // Blue
         sellMultiplier: 0.5,
         dropChance: 10
     },
@@ -50,13 +50,13 @@ const ITEM_RARITY = {
     },
     LEGENDARY: {
         name: 'Legendary',
-        icon: '🟡',
+        icon: '🟡', // Yellow
         sellMultiplier: 0.75,
         dropChance: 1
     },
     MYTHIC: {
         name: 'Mythic',
-        icon: '🔴',
+        icon: '🔴', // Red
         sellMultiplier: 1.0,
         dropChance: 0.1
     }
@@ -631,9 +631,21 @@ function formatInventory(userId) {
         };
     });
     
-    // Sort by rarity
+    // Sort by Category then Rarity
+    const categoryOrder = ['EQUIPMENT', 'POTION', 'CONSUMABLE', 'MATERIAL', 'ITEM'];
     const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
-    items.sort((a, b) => rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity));
+    
+    items.sort((a, b) => {
+        const itemA = lootSystem.getItemInfo(a.id);
+        const itemB = lootSystem.getItemInfo(b.id);
+        
+        const catA = categoryOrder.indexOf(itemA.type || 'ITEM');
+        const catB = categoryOrder.indexOf(itemB.type || 'ITEM');
+        
+        if (catA !== catB) return catA - catB;
+        
+        return rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
+    });
     
     return {
         isEmpty: false,

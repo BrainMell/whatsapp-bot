@@ -2156,13 +2156,13 @@ ${commandCategory}`;
 ➤ Or:\`${botConfig.getPrefix()} menu all\`
 ➤ Info:\`${botConfig.getPrefix()} menu <command>\``;
 
-    return await sendMenuWithBanner(sock, chatId, mainMsg);
-
-
-
-  }
-
-  // ============================================
+        return await sendMenuWithBanner(sock, chatId, mainMsg);
+    
+      }
+    } // Add this to close sendBotMenu
+    
+      // ============================================
+    
 
 
 
@@ -2833,6 +2833,25 @@ We are happy to have you here.
 
         // ── CORE COMMAND INTERCEPT ──────────────────
         
+        // Command Parsing for Menu/Help
+        const currentPrefix = botConfig.getPrefix().toLowerCase();
+        
+        if (lowerTxt.startsWith(currentPrefix)) {
+            const cmdBody = lowerTxt.substring(currentPrefix.length).trim();
+            const cmdArgs = cmdBody.split(' ');
+            const primaryCmd = cmdArgs[0];
+
+            console.log(`DEBUG: lowerTxt='${lowerTxt}', Prefix='${currentPrefix}', cmd='${primaryCmd}'`);
+
+            // .j menu or .j help
+            if (primaryCmd === 'menu' || primaryCmd === 'help') {
+                const menuArgs = cmdArgs.slice(1); 
+                await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
+                return;
+            }
+        }
+
+        /*
         // .j menu or .j help
         if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} menu`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} help`)) {
           const parts = lowerTxt.split(' ');
@@ -2840,6 +2859,7 @@ We are happy to have you here.
           await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
           return;
         }
+        */
 
         // .j shop
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} shop` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} shop `)) {
@@ -2856,7 +2876,8 @@ We are happy to have you here.
         }
 
         // .j profile / .j me
-        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} profile` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} me`) {
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} profile` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} me` || 
+            (lowerTxt.startsWith(currentPrefix) && (lowerTxt.substring(currentPrefix.length).trim() === 'me' || lowerTxt.substring(currentPrefix.length).trim() === 'profile'))) {
           await shopCommands.displayCharacter(sock, chatId, senderJid, senderName);
           return;
         }
