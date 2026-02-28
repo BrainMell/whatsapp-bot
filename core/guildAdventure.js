@@ -3065,10 +3065,16 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
     const state = getGameState(sessionKey);
     if (!state) return;
     const rankData = DUNGEON_RANKS[state.dungeonRank];
-    let encounter;
+        let encounter;
     
-    if (encounterType === 'REST') {
-        encounter = {
+        if (state.mode === 'TRIAL') {
+            encounter = classEncounters.generateEncounter(
+                state.players,
+                'BOSS',
+                state.difficulty,
+                { forceBossId: state.trialTarget }
+            );
+        } else if (encounterType === 'REST') {        encounter = {
             type: 'REST',
             name: 'Quiet Campfire',
             description: 'The party finds a safe spot to rest and recover. The crackling fire brings comfort.'
