@@ -150,6 +150,7 @@ function registerUser(userId, nickname) {
                 mining: { level: 1, xp: 0 },
                 crafting: { level: 1, xp: 0 }
             },
+            completedTrials: [],
             portfolio: {}, // Stocks
             investments: [], // Fixed Deposits
             membership: {

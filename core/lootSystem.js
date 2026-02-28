@@ -29,6 +29,7 @@ const LOOT_TABLES = {
             { id: 'gunpowder', weight: 10, quantity: [1, 2] },
             { id: 'spider_silk', weight: 10, quantity: [1, 2] },
             { id: 'iron_shard', weight: 15, quantity: [1, 3] },
+            { id: 'minor_enhancement_stone', weight: 5, quantity: [1, 1] },
             { id: 'equipment_piece', weight: 5, quantity: [1, 1] }
         ]
     },
@@ -47,6 +48,7 @@ const LOOT_TABLES = {
             { id: 'demon_hide', weight: 10, quantity: [1, 1] },
             { id: 'ghost_essence', weight: 10, quantity: [1, 1] },
             { id: 'mythril_ore', weight: 10, quantity: [1, 2] },
+            { id: 'rare_enhancement_stone', weight: 8, quantity: [1, 1] },
             { id: 'equipment_piece', weight: 15, quantity: [1, 1] }
         ]
     },
@@ -63,6 +65,7 @@ const LOOT_TABLES = {
             { id: 'ancient_wood', weight: 15, quantity: [1, 2] },
             { id: 'mystic_thread', weight: 15, quantity: [2, 4] },
             { id: 'boss_essence', weight: 15, quantity: [1, 2] },
+            { id: 'legendary_enhancement_stone', weight: 10, quantity: [1, 1] },
             { id: 'legendary_shard', weight: 5, quantity: [1, 1] }
         ]
     },
@@ -571,6 +574,12 @@ const ITEM_DATABASE = {
     'dragon_blood': { name: 'Dragon Blood', description: 'Smells like cinnamon and regret.', rarity: 'LEGENDARY', value: 5000 },
     'iron_shard': { name: 'Iron Shard', description: 'Metal fragments. Collect enough to build a personality.', rarity: 'COMMON', value: 100 },
     'gold_pile': { name: 'Pile of Gold', description: 'A small pile of glinting coins.', rarity: 'COMMON', value: 1 },
+    
+    // --- ENHANCEMENT STONES ---
+    'minor_enhancement_stone': { name: 'Minor Enhancement Stone', description: 'A dull stone used to boost gear stats by 5%.', rarity: 'COMMON', value: 1000 },
+    'rare_enhancement_stone': { name: 'Rare Enhancement Stone', description: 'A glowing stone used to boost gear stats by 15%.', rarity: 'RARE', value: 5000 },
+    'legendary_enhancement_stone': { name: 'Legendary Enhancement Stone', description: 'A radiant stone used to boost gear stats by 35%.', rarity: 'LEGENDARY', value: 20000 },
+
     'evolution_stone': { name: 'Evolution Stone (T2)', description: 'A pulsing gem that triggers evolution. Required for T2 class advancement.', rarity: 'RARE', value: 8000 },
     'ascension_stone': { name: 'Ascension Stone (T3)', description: 'A celestial gem containing divine energy. Required for T3 class advancement.', rarity: 'EPIC', value: 50000 },
     'dragon_key': { name: 'Dragon Hunter Key', description: 'A glowing key etched with draconic runes. Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000 },
@@ -597,8 +606,14 @@ const ITEM_DATABASE = {
         'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies magical resonance. (+40 MAG, +10 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { mag: 40, hp: 10 }, slot: 'main_hand', reqLevel: 20, element: 'MAGICAL', isTwoHanded: true },
         'reinforced_plate': { name: 'Reinforced Plate', description: 'Impenetrable steel plating. (+45 DEF, +50 HP)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { def: 45, hp: 50 }, slot: 'armor', reqLevel: 15 },
     
-        // --- NEW GEAR: WEAPONS ---
-        'shadow_dagger': { name: 'Shadow Dagger', description: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 12, element: 'DARK' },
+            // --- NEW GEAR: WEAPONS ---
+            'rusty_dagger': { name: 'Rusted Dagger', description: 'A simple blade. (+5 ATK)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { atk: 5 }, slot: 'main_hand' },
+            'iron_sword': { name: 'Iron Sword', description: 'A sturdy iron blade. (+12 ATK)', rarity: 'UNCOMMON', value: 5000, type: 'EQUIPMENT', stats: { atk: 12 }, slot: 'main_hand' },
+            'arcane_wand': { name: 'Arcane Wand', description: 'Focuses arcane energy. (+18 MAG)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { mag: 18 }, slot: 'main_hand' },
+            'leather_tunic': { name: 'Leather Tunic', description: 'Basic protection. (+8 DEF)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { def: 8 }, slot: 'armor' },
+            'plate_armor': { name: 'Plate Armor', description: 'Heavy iron plating. (+25 DEF, +20 HP)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { def: 25, hp: 20 }, slot: 'armor' },
+        
+            'shadow_dagger': { name: 'Shadow Dagger', description: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 12, element: 'DARK' },
         'warhammer': { name: 'Paladin Warhammer', description: 'Heavy and blessed. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 17000, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, element: 'HOLY', isTwoHanded: true },
         'death_scythe': { name: 'Reaper Scythe', description: 'Harvests the souls of the living. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 28000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, element: 'DEATH', isTwoHanded: true },
         'chrono_blade': { name: 'Chrono Blade', description: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 32000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 25, element: 'TIME' },
