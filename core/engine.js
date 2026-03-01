@@ -2682,22 +2682,18 @@ We are happy to have you here.
     // MESSAGE HANDLER - processes every incoming message
     // ============================================
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      // allow 'notify' (standard) and 'append' (sometimes used for new messages)
       if (type !== 'notify' && type !== 'append') return;
-      
-      // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
       if (isRekeying) return;
 
-      console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
+      // Process batch in parallel so one slow group doesn't block the bot
+      await Promise.all(messages.map(async (m) => {
+        if (!m.message) return;
 
-      for (const m of messages) {
-        if (!m.message) continue;
-
-        // Wrap the message processing in the instance context
         await botConfig.storage.run(configInstance, async () => {
           try {
-            const chatId = m.key.remoteJid;
-            const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
+            const rawChatId = m.key.remoteJid;
+            const chatId = jidNormalizedUser(rawChatId);
+            const senderJid = jidNormalizedUser(m.key.participant || rawChatId);
           
           // 💡 GLOBAL CONTEXT HELPERS
           const user = economy.getUser(senderJid);
