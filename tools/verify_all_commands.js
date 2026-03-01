@@ -66,7 +66,7 @@ const setupUser = () => {
         nickname: 'Tester',
         class: 'FIGHTER',
         wallet: 100000,
-        inventory: { 'iron_sword': { id: 'iron_sword', quantity: 1, type: 'EQUIPMENT' } },
+        inventory: { "iron_sword": { id: "iron_sword", name: "Iron Sword", quantity: 1, type: "EQUIPMENT" } },
         professions: { mining: { level: 5, xp: 0 }, crafting: { level: 5, xp: 0 } },
         questsCompleted: 35,
         completedTrials: ['INFECTED_COLOSSUS']
