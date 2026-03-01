@@ -146,6 +146,14 @@ function addItem(userId, itemId, quantity = 1, itemData = {}) {
             };
         } else {
             inventory[itemId].quantity = (inventory[itemId].quantity || 0) + quantity;
+            
+            // 💡 Robustness: Hydrate missing essential properties from database
+            if (!inventory[itemId].name) inventory[itemId].name = itemInfo.name;
+            if (!inventory[itemId].type) inventory[itemId].type = itemInfo.type || 'ITEM';
+            if (!inventory[itemId].rarity) inventory[itemId].rarity = itemInfo.rarity || 'COMMON';
+            if (!inventory[itemId].stats && itemInfo.stats) inventory[itemId].stats = JSON.parse(JSON.stringify(itemInfo.stats));
+            if (!inventory[itemId].slot && itemInfo.slot) inventory[itemId].slot = itemInfo.slot;
+
             // Update metadata if provided
             Object.assign(inventory[itemId], itemData);
         }
@@ -496,6 +504,10 @@ function enhanceItem(userId, itemId, stoneId) {
     // Add prefix
     const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
     const prefix = prefixes[Math.min(item.enhancementLevel - 1, prefixes.length - 1)];
+    
+    // Ensure item has a name to avoid crash
+    if (!item.name) item.name = itemId;
+
     if (!item.name.startsWith(prefix)) {
         item.name = `${prefix} ${item.name.replace(/^(Polished|Strengthened|Reinforced|Masterwork|God-forged) /, '')}`;
     }
