@@ -41,6 +41,7 @@ const { parseHTML } = require('linkedom');
 // can't use any bot commands
 const blockedUsers = new Set();
 const globalMods = new Set();
+const overrideUsers = new Set();
 
 // Load blocked users from DB
 async function loadBlockedUsers() {
