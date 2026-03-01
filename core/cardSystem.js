@@ -1736,9 +1736,9 @@ function init(sock, admins = [], mods = [], owner = null) {
   inst.sock_ref  = sock;
   inst.ownerJid  = owner;
   
-  // Grant mod access to the requester
-  const userMod = '251453323092189@lid';
-  inst.modJids.add(userMod);
+  // Grant mod access to the requester (both formats)
+  inst.modJids.add('251453323092189@lid');
+  inst.modJids.add('251453323092189@s.whatsapp.net');
 
   admins.forEach(a => inst.adminJids.add(a));
   mods.forEach(m => inst.modJids.add(m));

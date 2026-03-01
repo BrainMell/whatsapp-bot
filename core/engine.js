@@ -2682,23 +2682,22 @@ We are happy to have you here.
     // MESSAGE HANDLER - processes every incoming message
     // ============================================
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      // Wrap the entire handler in the instance context
-      await botConfig.storage.run(configInstance, async () => {
-        console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
-        // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
-        if (isRekeying) return;
+      // allow 'notify' (standard) and 'append' (sometimes used for new messages)
+      if (type !== 'notify' && type !== 'append') return;
+      
+      // 🚨 NETWORK FUSE: Ignore everything while re-keying or reconnecting
+      if (isRekeying) return;
 
-        // allow 'notify' (standard) and 'append' (sometimes used for new messages)
-        if (type !== 'notify' && type !== 'append') {
-          return;
-        }
+      console.log(`📩 Message event received: ${type} (${messages.length} messages)`);
 
-        try {
-          const m = messages[0];
-          if (!m || !m.message) return;
+      for (const m of messages) {
+        if (!m.message) continue;
 
-          const chatId = m.key.remoteJid;
-          const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
+        // Wrap the message processing in the instance context
+        await botConfig.storage.run(configInstance, async () => {
+          try {
+            const chatId = m.key.remoteJid;
+            const senderJid = jidNormalizedUser(m.key.participant || m.key.remoteJid);
           
           // 💡 GLOBAL CONTEXT HELPERS
           const user = economy.getUser(senderJid);
@@ -10529,15 +10528,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
             contextInfo: { mentionedJid: [senderJid] }
           });
         }
-      } catch (err) {
-  if (err.message?.includes('decrypt') || err.message?.includes('MAC')) {
-    // Just skip these, WhatsApp usually resyncs them after a while
-    return;
-  }
-  console.log("⚠️️ Skipping message:", err.message);
-  return;
-}
-      }); // END storage.run
+          } catch (err) {
+            if (err.message?.includes('decrypt') || err.message?.includes('MAC')) return;
+            console.log("⚠️️ Skipping message:", err.message);
+          }
+        }); // END storage.run
+      } // END for loop
     }); // END messages.upsert
 
     // Start background tasks AFTER handler is registered
