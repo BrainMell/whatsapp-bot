@@ -98,7 +98,6 @@ async function runFullVerification() {
 
             try {
                 if (cat === 'CARDS') {
-                    // Logic check via handler
                     const handled = await cardSystem.handleCommand({
                         lowerTxt: '.j ' + cmd,
                         txt: '.j ' + cmd,
@@ -108,13 +107,10 @@ async function runFullVerification() {
                         economy,
                         isOwner: true
                     });
-                    
-                    // Accept/Decline return false if no pending burn, but are still 'handled' in terms of routing
                     if (handled || cmd === 'accept' || cmd === 'decline') status = 'PASSED';
                     else { status = 'FAILED'; reason = 'Logic branch not hit'; }
                 } 
                 else {
-                    // Route check via engine search
                     const inEngine = engineContent.includes(cmd);
                     if (inEngine) status = 'PASSED';
                     else status = 'VERIFIED (Module Level)';
@@ -134,24 +130,65 @@ async function runFullVerification() {
         }
     }
 
-    console.log('\n--- Stability: Logic Checks ---');
-    const stabilityTests = [
-        { name: 'RPG: Enhancement Logic', fn: () => inventorySystem.enhanceItem(testUser, 'iron_sword', 'minor_enhancement_stone') },
-        { name: 'RPG: Trial Logic', fn: () => classSystem.canEvolve('FIGHTER', 20, 35, 0, ['INFECTED_COLOSSUS']) },
-        { name: 'RPG: Mining Balance', fn: () => craftingSystem.getMiningLocations()['shimmering_caves'].energyCost > 0 },
-        { name: 'Sticker: Flags (-f, -c1, -c2)', fn: () => engineContent.includes('-f') && engineContent.includes('-c1') && engineContent.includes('-c2') }
+    console.log('\n--- Deep Logic Assertions (Functional Validation) ---');
+    
+    const assertions = [
+        { 
+            name: 'Economy: Deposit Logic', 
+            fn: () => {
+                setupUser();
+                const before = economy.getUser(testUser).bank;
+                economy.deposit(testUser, 100);
+                const after = economy.getUser(testUser).bank;
+                return after === (before + 100);
+            }
+        },
+        {
+            name: 'RPG: Enhancement Growth',
+            fn: () => {
+                setupUser();
+                inventorySystem.addItem(testUser, 'iron_sword', 1);
+                inventorySystem.addItem(testUser, 'rare_enhancement_stone', 1);
+                const inv = inventorySystem.getInventory(testUser);
+                const sword = Object.values(inv).find(i => i.id === 'iron_sword');
+                const baseAtk = sword.stats?.atk || 0;
+                inventorySystem.enhanceItem(testUser, sword.id, 'rare_enhancement_stone');
+                return sword.stats?.atk > baseAtk;
+            }
+        },
+        {
+            name: 'Crafting: Material Consumption',
+            fn: () => {
+                setupUser();
+                inventorySystem.addItem(testUser, 'healing_herb', 5);
+                craftingSystem.performCraft(testUser, 'lucky_salad');
+                const inv = inventorySystem.getInventory(testUser);
+                return !inv['healing_herb'] || inv['healing_herb'].quantity === 0;
+            }
+        },
+        {
+            name: 'Progression: Trial Gating',
+            fn: () => {
+                setupUser();
+                const res = classSystem.canEvolve('FIGHTER', 20, 30, 0, []);
+                const warrior = res.evolutions.find(e => e.id === 'WARRIOR');
+                return warrior.meetsRequirements === false; // Should fail without trial
+            }
+        }
     ];
 
-    for (const test of stabilityTests) {
+    for (const test of assertions) {
         total++;
         try {
             if (test.fn()) {
                 console.log('  [OK] ' + test.name.padEnd(25) + ' | PASSED');
                 passed++;
-            } else throw new Error('Assertion failed');
+            } else {
+                throw new Error('State change failed');
+            }
         } catch (e) {
-            console.log('  [ERR] ' + test.name.padEnd(25) + ' | FAILED');
-            failures.push(test.name);
+            console.log('  [ERR] ' + test.name.padEnd(25) + ' | FAILED - ' + e.message);
+            failures.push('Logic Assertion: ' + test.name);
         }
     }
 
@@ -164,11 +201,8 @@ async function runFullVerification() {
     console.log('================================================');
 
     if (failures.length > 0) {
-        console.log('\nLIST OF ISSUES:');
-        failures.forEach((f, i) => console.log((i + 1) + '. ' + f));
         process.exit(1);
     } else {
-        console.log('\nSYSTEM STATUS: STABLE');
         process.exit(0);
     }
 }
