@@ -33,6 +33,13 @@ const progression = require('../core/progression');
 
 const testUser = 'tester@s.whatsapp.net';
 const otherUser = 'other@s.whatsapp.net';
+const testChat = '67890@g.us';
+
+const mockSock = {
+    sendMessage: async (chatId, content, options) => { return { key: { id: 'test' } }; },
+    profilePictureUrl: async () => 'https://mock.url/pfp.png',
+    user: { id: 'bot@s.whatsapp.net' }
+};
 
 function setupEnvironment() {
     economy.economyData.clear();
@@ -151,6 +158,31 @@ async function validateAll() {
     
     assert('Stat Allocation', endHp > startHp, 'HP didnt increase. Start: ' + startHp + ', End: ' + endHp);
     assert('Points Deducted', economy.getUser(testUser).progression.statPoints === 5, 'Points not removed');
+
+    // --- 6. MODERATOR SYSTEM ---
+    console.log('\nCategory: MODERATOR SYSTEM');
+    const engine = require('../core/engine');
+    const cardSystem = require('../core/cardSystem');
+    
+    // Initialize card system for test
+    cardSystem.init(mockSock, [], [], testUser);
+    
+    // Test Global Mod
+    engine.addGlobalMod(otherUser);
+    assert('Global Mod Addition', engine.isGlobalMod(otherUser), 'User not recognized as global mod');
+    
+    // Test Inheritance (Global Mod should have Card Mod perms)
+    const cardHandled = await cardSystem.handleCommand({
+        lowerTxt: '.j spawn goku',
+        txt: '.j spawn goku',
+        senderJid: otherUser,
+        chatId: testChat,
+        m: { key: { remoteJid: testChat }, message: { conversation: '.j spawn goku' } },
+        economy,
+        isOwner: false,
+        isMod: true // This is passed by engine.js to cardSystem
+    });
+    assert('Privilege Inheritance', cardHandled === true, 'Global mod could not trigger card spawn');
 
     // --- SUMMARY ---
     const total = results.length;

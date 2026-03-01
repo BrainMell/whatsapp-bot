@@ -1,6 +1,12 @@
 require("dotenv").config();
 const botConfig = require('../botConfig');
 const { storage } = botConfig;
+const system = require('./system');
+const economy = require('./economy');
+const loans = require('./loans');
+const ChatMessage = require('./models/ChatMessage');
+const ErrorLog = require('./models/ErrorLog');
+const Metric = require('./models/Metric');
 const makeWASocket = require("@whiskeysockets/baileys").default;
 const { 
   useMultiFileAuthState, 
@@ -32,6 +38,84 @@ const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 const { parseHTML } = require('linkedom');
 
+// can't use any bot commands
+const blockedUsers = new Set();
+const globalMods = new Set();
+
+// Load blocked users from DB
+async function loadBlockedUsers() {
+  const system = require('./system');
+  const botConfig = require('../botConfig');
+  try {
+    const data = system.get(botConfig.getBotId() + "_blocked_users", []);
+    data.forEach(userId => blockedUsers.add(userId));
+    console.log(`📛 [${botConfig.getBotId()}] Loaded ${blockedUsers.size} blocked users from MongoDB`);
+  } catch (err) {
+    console.error("Error loading blocked users:", err.message);
+  }
+}
+
+function saveBlockedUsers() {
+  const system = require('./system');
+  const botConfig = require('../botConfig');
+  system.set(botConfig.getBotId() + "_blocked_users", Array.from(blockedUsers));
+}
+
+function blockUser(userId) {
+  blockedUsers.add(userId);
+  saveBlockedUsers();
+}
+
+function unblockUser(userId) {
+  blockedUsers.delete(userId);
+  saveBlockedUsers();
+}
+
+function isBlocked(userId) {
+  if (blockedUsers.has(userId)) return true;
+  const loans = require('./loans');
+  if (loans.isLoanBlocked(userId)) return true;
+  return false;
+}
+
+// Load global mods from DB
+async function loadGlobalMods() {
+  const system = require('./system');
+  const botConfig = require('../botConfig');
+  try {
+    const data = system.get(botConfig.getBotId() + "_global_mods", []);
+    data.forEach(userId => globalMods.add(userId));
+    console.log(`🛡️ [${botConfig.getBotId()}] Loaded ${globalMods.size} global moderators from MongoDB`);
+  } catch (err) {
+    console.error("Error loading global mods:", err.message);
+  }
+}
+
+function saveGlobalMods() {
+  const system = require('./system');
+  const botConfig = require('../botConfig');
+  system.set(botConfig.getBotId() + "_global_mods", Array.from(globalMods));
+}
+
+function addGlobalMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  globalMods.add(normalized);
+  saveGlobalMods();
+}
+
+function delGlobalMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  globalMods.delete(normalized);
+  saveGlobalMods();
+}
+
+function isGlobalMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  return globalMods.has(jidNormalizedUser(userId));
+}
+
 // Helper for dynamic ESM import of got-scraping
 async function getGot() {
     const { gotScraping } = await import('got-scraping');
@@ -47,13 +131,7 @@ const chess = require('./chess');
 const debate = require('./debate');
 const ludo = require('./ludo');
 const wordle = require('./wordle');
-const economy = require('./economy');
-const system = require('./system'); // NEW: MongoDB System Module
-const ChatMessage = require('./models/ChatMessage');
-const ErrorLog = require('./models/ErrorLog');
-const Metric = require('./models/Metric');
 const news = require('./news'); // ✅ Added news module
-const loans = require('./loans'); // ✅ Added loans module
 const stockMarket = require('./stockMarket'); // ✅ Added stock market module
 const P = require('pino');
 const gambling = require('./gambling');
@@ -893,6 +971,7 @@ const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
 
 // can't use any bot commands
 const blockedUsers = new Set();
+const globalMods = new Set();
 
 // --- Auth check ---
 
@@ -1183,40 +1262,6 @@ async function stickerToImage(inputPath, outputPath) {
     console.error("Error converting sticker to image:", err);
     return false;
   }
-}
-
-// Override users set
-const overrideUsers = new Set();
-
-// Load blocked users from DB
-async function loadBlockedUsers() {
-  try {
-    const data = system.get(BOT_ID + "_blocked_users", []);
-    data.forEach(userId => blockedUsers.add(userId));
-    console.log(`📛 [${BOT_ID}] Loaded ${blockedUsers.size} blocked users from MongoDB`);
-  } catch (err) {
-    console.error("Error loading blocked users:", err.message);
-  }
-}
-
-function saveBlockedUsers() {
-  system.set(BOT_ID + "_blocked_users", Array.from(blockedUsers));
-}
-
-function blockUser(userId) {
-  blockedUsers.add(userId);
-  saveBlockedUsers();
-}
-
-function unblockUser(userId) {
-  blockedUsers.delete(userId);
-  saveBlockedUsers();
-}
-
-function isBlocked(userId) {
-  if (blockedUsers.has(userId)) return true;
-  if (loans.isLoanBlocked(userId)) return true;
-  return false;
 }
 
 // Helper to get target user from mention or reply
@@ -2400,6 +2445,10 @@ async function initSocket() {
   if (botStarting) return;
   botStarting = true;
   try {
+    // Load mods and blocked users at startup
+    await loadGlobalMods();
+    await loadBlockedUsers();
+
     // We are already inside a storage.run context from startBot()
     await Promise.all([
       system.loadSystemData(),
@@ -2694,6 +2743,8 @@ We are happy to have you here.
             const rawChatId = m.key.remoteJid;
             const chatId = jidNormalizedUser(rawChatId);
             const senderJid = jidNormalizedUser(m.key.participant || rawChatId);
+            const isGroupChat = chatId.endsWith('@g.us');
+            const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
           
         // 1. Get Bot Identity (Dynamic for accurate mentions/replies)
         const botJid = jidNormalizedUser(sock.user.id);
@@ -2791,11 +2842,7 @@ We are happy to have you here.
         // 🧠 BRAIN: Context-Aware Extraction System
         contextEngine.onMessage(m, txt);
 
-        const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid);
-
-        // Define bot identity early
-        const botJid = jidNormalizedUser(sock.user.id);
-        const botLid = sock.authState.creds?.me?.lid || null;
+        const canUseAdminCommands = senderIsAdmin || isOwner || overrideUsers.has(senderJid) || isGlobalMod(senderJid);
 
         // 📢 DEBUG: Get Newsletter JID
         const newsletterJid = m.message?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid;
@@ -2817,7 +2864,7 @@ We are happy to have you here.
             economy,        // economy module
             isOwner,        // boolean
             senderIsAdmin,  // boolean
-            isMod: overrideUsers.has(senderJid) // added mod flag
+            isMod: overrideUsers.has(senderJid) || isGlobalMod(senderJid) // added mod flag
         });
         if (cardHandled) return; // stop further processing if handled by cards
         // ───────────────────────────────────────────
@@ -4031,6 +4078,55 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} tovid`) {
           } else {
              await sendUsage(sock, chatId, BOT_MARKER, '👟 KICK', 'kick @user', 'kick @troublemaker', 'You can also reply to their message.');
           }
+          return;
+        }
+
+        // .j mods - List global moderators
+        if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mods`) {
+          if (!canUseAdminCommands) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No permission." });
+          }
+          if (globalMods.size === 0) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "🛡️ No global moderators currently assigned." });
+          }
+          let modMsg = `🛡️ *GLOBAL MODERATORS* 🛡️\n\n`;
+          const modArray = Array.from(globalMods);
+          modArray.forEach((mod, i) => {
+            modMsg += `${i + 1}. @${mod.split('@')[0]}\n`;
+          });
+          modMsg += `\n━━━━━━━━━━━━━━━\n👑 Owners always have full access.`;
+          return await sock.sendMessage(chatId, { text: BOT_MARKER + modMsg, mentions: modArray });
+        }
+
+        // .j addmod - Add a global moderator (Owner Only)
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addmod`)) {
+          if (!isOwner) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the owner can add global moderators." });
+          }
+          const target = getMentionOrReply(m) || (txt.split(' ')[2]?.includes('@') ? txt.split(' ')[2] : null);
+          if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to add as a moderator." });
+          
+          addGlobalMod(target);
+          await sock.sendMessage(chatId, { 
+            text: BOT_MARKER + `✅ @${target.split('@')[0]} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
+            mentions: [target]
+          });
+          return;
+        }
+
+        // .j delmod - Remove a global moderator (Owner Only)
+        if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} delmod`)) {
+          if (!isOwner) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the owner can remove global moderators." });
+          }
+          const target = getMentionOrReply(m) || (txt.split(' ')[2]?.includes('@') ? txt.split(' ')[2] : null);
+          if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to remove from moderators." });
+          
+          delGlobalMod(target);
+          await sock.sendMessage(chatId, { 
+            text: BOT_MARKER + `✅ @${target.split('@')[0]} has been removed from Global Moderators.`,
+            mentions: [target]
+          });
           return;
         }
 
@@ -10525,7 +10621,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
             console.log("⚠️️ Skipping message:", err.message);
           }
         }); // END storage.run
-      } // END for loop
+      })); // END Promise.all map
     }); // END messages.upsert
 
     // Start background tasks AFTER handler is registered
@@ -10566,4 +10662,11 @@ function getSock() {
   return sock;
 }
 
-module.exports = { startBot, getSock };
+module.exports = { 
+  startBot, 
+  getSock,
+  addGlobalMod,
+  delGlobalMod,
+  isGlobalMod,
+  loadGlobalMods
+};

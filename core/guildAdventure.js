@@ -3274,10 +3274,15 @@ async function processVotes(sock, encounter, chatId) {
       if (!sock) sock = state.sock;
       clearTimeout(state.timers.vote);
 
-      // 🛡️ ENCOUNTER SAFETY GUARD: Prevent processing if state is lost
+      // 🛡️ ENCOUNTER SAFETY GUARD: Recover if state is lost or invalid
       if (!encounter || !encounter.choices) {
-          console.log(`⚠️️ [Quest][${chatId}] Skipping vote: Encounter or choices missing.`);
+          console.warn(`⚠️️ [Quest][${chatId}] Recovering from null encounter or missing choices. (Phase: ${state.phase}, Type: ${state.currentEncounterType})`);
           state.votes = {};
+          state.voteProcessing = false;
+          // Force next stage after a brief delay
+          setTimeout(() => {
+              nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
+          }, 1000);
           return;
       }
 
@@ -3294,6 +3299,7 @@ async function processVotes(sock, encounter, chatId) {
         }
     }
     
+    // Note: The second check below is now mostly redundant but kept for extra safety
     if (!encounter || !encounter.choices) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
         setTimeout(() => {
@@ -4209,6 +4215,15 @@ module.exports = {
             return "❌ Not in party.";
         }
         state.votes[jid] = vote;
+        
+        // 🗳️ CHECK: Does the encounter support voting?
+        const isStandardVote = state.currentEncounter && state.currentEncounter.choices;
+        const isBranchingVote = state.isBranching;
+        
+        if (!isStandardVote && !isBranchingVote) {
+            delete state.votes[jid];
+            return "❌ No active voting choices at the moment.";
+        }
         
         // Set flag for next timer adjustment (group only)
         if (!state.solo) {
