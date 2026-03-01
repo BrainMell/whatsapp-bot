@@ -19,16 +19,35 @@ const getPrefix = () => botConfig.getPrefix();
 // ==========================================
 
 async function displayShop(sock, chatId, category = 'all') {
-    const items = classSystem.CLASS_SHOP_ITEMS;
-    
+    // 1. Combine specialized class items with the broad item database
+    const classItems = classSystem.CLASS_SHOP_ITEMS;
+    const allDbItems = lootSystem.ITEM_DATABASE;
+
+    // 2. Identify buyable items from the database (Equipment, Consumables, and Stones)
+    const buyableDbItems = {};
+    Object.entries(allDbItems).forEach(([id, item]) => {
+        // Items with an explicit value > 1 that are Equipment, Stones, or specifically categorized
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || id.includes('stone') || id.includes('potion') || id.includes('key'))) {
+            buyableDbItems[id] = {
+                id,
+                name: item.name,
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : '🧪'),
+                desc: item.description,
+                cost: item.value,
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'
+            };
+        }
+    });
+
+    const items = { ...classItems, ...buyableDbItems };
+
     // Categories
     const categoryInfo = {
-        all: { name: 'All Items', icon: '🏪' },
+        all: { name: 'All Items', icon: '🛍️' },
         class: { name: 'Class Items', icon: '🎭' },
-        quest: { name: 'Quest Consumables', icon: '🧪' },
+        quest: { name: 'Quest Items', icon: '🧪' },
         equipment: { name: 'Equipment', icon: '⚔️' },
-        permanent: { name: 'Permanent Boosts', icon: '📈' },
-        misc: { name: 'Miscellaneous', icon: '📦' }
+        permanent: { name: 'Special', icon: '📈' }
     };
     
     const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;

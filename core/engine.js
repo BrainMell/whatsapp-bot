@@ -2695,26 +2695,22 @@ We are happy to have you here.
             const chatId = jidNormalizedUser(rawChatId);
             const senderJid = jidNormalizedUser(m.key.participant || rawChatId);
           
-          // 💡 GLOBAL CONTEXT HELPERS
-          const user = economy.getUser(senderJid);
-          const userProfile = getUserProfile(senderJid) || initializeUserProfile(senderJid);
-          const senderName = user?.nickname || userProfile?.nickname || m.pushName || senderJid.split('@')[0];
+        // 1. Get Bot Identity (Dynamic for accurate mentions/replies)
+        const botJid = jidNormalizedUser(sock.user.id);
+        const botLid = sock.authState.creds?.me?.lid ? jidNormalizedUser(sock.authState.creds.me.lid) : null;
 
-          // --- DIAGNOSTIC LOG ---
-          const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media";
-          console.log(`📩 [${botConfig.getBotId()}] Processing msg from ${senderJid} in ${chatId}: "${msgText.substring(0, 20)}..."`);
+        // 2. Resolve Sender Identity
+        const user = economy.getUser(senderJid);
+        const userProfile = getUserProfile(senderJid) || initializeUserProfile(senderJid);
+        const senderName = user?.nickname || userProfile?.nickname || m.pushName || senderJid.split('@')[0];
 
-          const isGroupChat = chatId.endsWith('@g.us');
-          const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
+        // 3. Relaxed Stub Filter: ONLY skip if there is NO actual message content
+        const hasRealContent = m.message.conversation || m.message.extendedTextMessage || m.message.imageMessage || m.message.videoMessage || m.message.stickerMessage || m.message.audioMessage;
+        if (!hasRealContent && m.messageStubType) return;
 
-          // Skip protocol messages
-          if (m.messageStubType || m.message.protocolMessage || m.message.senderKeyDistributionMessage || m.message.reactionMessage) {
-            return;
-          }
-          
-          // Skip if no readable content
-          const hasContent = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage || m.message.videoMessage || m.message.audioMessage || m.message.stickerMessage;
-          if (!hasContent) return;
+        // 4. Diagnostic Log
+        const msgText = m.message?.conversation || m.message?.extendedTextMessage?.text || "Media/System";
+        console.log(`📩 [${botConfig.getBotId()}] Msg from ${senderJid}: "${msgText.substring(0, 20)}..." (Mentions: ${m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length || 0})`);
 
           // Persist message to MongoDB (1-hour TTL)
           const messageBody = m.message.conversation || m.message.extendedTextMessage?.text || (m.message.imageMessage?.caption || m.message.videoMessage?.caption) || null;

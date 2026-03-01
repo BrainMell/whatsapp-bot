@@ -3269,16 +3269,22 @@ async function handleNonCombatEncounter(sock, encounter, chatId) {
 }
 
 async function processVotes(sock, encounter, chatId) {
-    const state = getGameState(chatId);
-    if (!state) return;
-    if (!sock) sock = state.sock;
-    clearTimeout(state.timers.vote);
-    
-    const voteCounts = {};
-    for (const vote of Object.values(state.votes)) {
-        voteCounts[vote] = (voteCounts[vote] || 0) + 1;
-    }
-    
+      const state = getGameState(chatId);
+      if (!state) return;
+      if (!sock) sock = state.sock;
+      clearTimeout(state.timers.vote);
+
+      // 🛡️ ENCOUNTER SAFETY GUARD: Prevent processing if state is lost
+      if (!encounter || !encounter.choices) {
+          console.log(`⚠️️ [Quest][${chatId}] Skipping vote: Encounter or choices missing.`);
+          state.votes = {};
+          return;
+      }
+
+      const voteCounts = {};
+      for (const vote of Object.values(state.votes)) {
+          voteCounts[vote] = (voteCounts[vote] || 0) + 1;
+      }    
     let winningChoiceIdx = '1';
     let maxVotes = 0;
     for (const [choice, count] of Object.entries(voteCounts)) {
