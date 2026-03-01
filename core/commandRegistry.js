@@ -25,8 +25,7 @@ const COMMAND_REGISTRY = {
   ],
   'PHANTOM THIEF': [
     { cmd: 'reveal', desc: 'Download and reveal a view-once image or video by replying to it.', usage: 'reveal' },
-    { cmd: 'unmask', desc: 'Alias for reveal. Unmask a view-once message.', usage: 'unmask' },
-    { cmd: 'steal', desc: 'Alias for reveal. Reveal a hidden view-once message.', usage: 'steal' }
+    { cmd: 'unmask', desc: 'Alias for reveal. Unmask a view-once message.', usage: 'unmask' }
   ],
   'USER INFO': [
     { cmd: 'profile', desc: 'View your or another user\'s profile, stats, and achievements.', usage: 'profile [@user]' },
@@ -61,8 +60,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'unmute', desc: 'Unmute a user immediately.', usage: 'unmute @user' },
     { cmd: 'tagall', desc: 'Mention every single person in the group.', usage: 'tagall' },
     { cmd: 'hidetag', desc: 'Send a message that tags everyone invisibly.', usage: 'hidetag <msg>' },
-    { cmd: 'lock', desc: 'Only admins can send messages in the group.', usage: 'lock' },
-    { cmd: 'unlock', desc: 'Everyone can send messages in the group.', usage: 'unlock' },
+    { cmd: 'glock', desc: 'Only admins can send messages in the group.', usage: 'glock' },
+    { cmd: 'gunlock', desc: 'Everyone can send messages in the group.', usage: 'gunlock' },
     { cmd: 'pin', desc: 'Pin a message in the group (Reply to msg).', usage: 'pin [24h/7d/30d]' },
     { cmd: 'news', desc: 'Toggle automatic anime news broadcasts.', usage: 'news on/off' }
   ],
