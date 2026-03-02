@@ -1699,8 +1699,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdColl(senderJid, reply, chatId, args);
       return true;
 
-    case 't2cdeck':
-      await cmdT2CDeck(senderJid, reply, args);
+    case 'deck':
+      await cmdDeck(senderJid, reply, chatId, args);
+      return true;
+
+    case 't2cdeck':      await cmdT2CDeck(senderJid, reply, args);
       return true;
 
     case 'eshop':
