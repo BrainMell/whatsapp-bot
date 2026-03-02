@@ -182,7 +182,7 @@ async function startBot(configInstance) {
     const BOT_NAME = botConfig.getBotName();
     const CURRENCY = botConfig.getCurrency();
     const ZENI = CURRENCY.symbol;
-    let BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;   // BOT MArker for messages
+    let BOT_MARKER = `\u200B`;   // Invisible marker for messages
 
     // ============================================
     // UTILS & CORE DATA (Moved Up for initSocket)
@@ -1839,7 +1839,7 @@ async function detectMood(text) {
  * Awards progression (XP/GP) to a user for interacting with the bot.
  * Handles level-up notifications.
  */
-async function awardProgression(userId, chatId) {
+async function awardProgression(userId, chatId, m = null) {
   try {
     if (!sock) return; // Safety check
 
@@ -1857,7 +1857,6 @@ async function awardProgression(userId, chatId) {
       const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
       
       let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
-      msg += `👤 @${userId.split('@')[0]}\n`;
       msg += `📈 *Rank:* ${levelDisplay}\n`;
       msg += `✨ *Stat Points:* +${xpResult.statPointsGained}\n`;
       msg += `🔮 *Skill Points:* +${xpResult.skillPointsGained}\n\n`;
@@ -1865,9 +1864,8 @@ async function awardProgression(userId, chatId) {
       msg += `💡 Use \`${botConfig.getPrefix()} allocate\` to spend your points.`;
 
       await sock.sendMessage(chatId, {
-        text: BOT_MARKER + msg,
-        contextInfo: { mentionedJid: [userId] }
-      });
+        text: BOT_MARKER + msg
+      }, { quoted: m });
     }
   } catch (err) {
     console.error("❌ awardProgression error:", err.message);
@@ -2706,6 +2704,12 @@ We are happy to have you here.
             const isGroupChat = chatId.endsWith('@g.us');
             const isOwner = senderJid.startsWith('233201487480') || senderJid.includes('251453323092189') || senderJid.includes('105712667648066');
           
+        // --- 0. REPLY HELPER ---
+        const reply = async (content, options = {}) => {
+            if (typeof content === 'string') content = { text: BOT_MARKER + content };
+            return await sock.sendMessage(chatId, content, { quoted: m, ...options });
+        };
+
         // 1. Get Bot Identity (Dynamic for accurate mentions/replies)
         const botJid = jidNormalizedUser(sock.user.id);
         const botLid = sock.authState.creds?.me?.lid ? jidNormalizedUser(sock.authState.creds.me.lid) : null;
@@ -2901,12 +2905,12 @@ We are happy to have you here.
                     const state = guildAdventure.getGameState(chatId);
                     if (state) state.onHardcoreDeath = addToGraveyard;
                     
-                    if (isSolo) {
+            if (isSolo) {
                         let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || 'F'}*\n🔥 Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n⚔️ Preparing the battlefield...`;
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + startMsg });
+                        await reply(startMsg);
                     }
                 } else {
-                    await sock.sendMessage(chatId, { text: result.msg });
+                    await reply(result.msg);
                 }
                 return;
             }
@@ -2914,11 +2918,11 @@ We are happy to have you here.
             // .j join
             if (primaryCmd === 'join') {
                 if (!economy.isRegistered(senderJid)) {
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first!\n\nType: \`${currentPrefix} register <nickname>\`` });
+                    await reply(`❌ You need to register first!\n\nType: \`${currentPrefix} register <nickname>\``);
                     return;
                 }
                 const result = guildAdventure.joinAdventure(chatId, senderJid, senderName);
-                await sock.sendMessage(chatId, { text: result });
+                await reply(result);
                 return;
             }
 
@@ -3295,14 +3299,10 @@ if (m.pushName && !isSelf) {
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mellowisking`) {
           if (overrideUsers.has(senderJid)) {
             overrideUsers.delete(senderJid);
-            await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + `failed` 
-            });
+            await reply(`failed`);
           } else {
             overrideUsers.add(senderJid);
-            await sock.sendMessage(chatId, { 
-              text: BOT_MARKER + "ayt" 
-            });
+            await reply("ayt");
           }
           return;
         }
@@ -9131,11 +9131,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
           }
           
                     const result = gambling.coinflip(senderJid, amount, choice, economy);
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + result.message,
-                      mentions: [senderJid]
-                    });
-                    await awardProgression(senderJid, chatId);
+                    await reply(result.message);
+                    await awardProgression(senderJid, chatId, m);
                     return;
                   }
         // dice <amount> - Dice roll
@@ -9156,11 +9153,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
           }
           
                     const result = gambling.diceRoll(senderJid, amount, economy);
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + result.message,
-                      contextInfo: { mentionedJid: [senderJid] }
-                    });
-                    await awardProgression(senderJid, chatId);
+                    await reply(result.message);
+                    await awardProgression(senderJid, chatId, m);
                     return;
                   }
                 // slots <amount> - Slot machine
@@ -9181,11 +9175,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` || lowerTxt.startsW
                   }
         
                   const result = gambling.slots(senderJid, amount, economy);
-                  await sock.sendMessage(chatId, {
-                    text: BOT_MARKER + result.message,
-                    mentions: [senderJid]
-                  });
-                  await awardProgression(senderJid, chatId);
+                  await reply(result.message);
+                  await awardProgression(senderJid, chatId, m);
                   return;
                 }
         
@@ -9380,13 +9371,9 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
           }
           
           const result = gambling.horseRace(senderJid, amount, horseNum, economy);
-          await sock.sendMessage(chatId, { 
-            text: BOT_MARKER + result.message, 
-            contextInfo: { mentionedJid: [senderJid] } 
-          });
-          await awardProgression(senderJid, chatId);
-          return;
-        }
+          await reply(result.message);
+          await awardProgression(senderJid, chatId, m);
+          return;        }
 
         // lotto <amt>
         if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lotto` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} lotto `)) {
@@ -10555,13 +10542,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
 
           const mood = await detectMood(prompt);
           const stickerPath = getRandomSticker(mood);
-          const replyText = BOT_MARKER + `@${senderJid.split('@')[0]} ` + reply;
+          const replyText = BOT_MARKER + reply;
 
           // send text response
-          await sock.sendMessage(chatId, {
-            text: replyText,
-            contextInfo: { mentionedJid: [senderJid] }
-          });
+          await reply(replyText);
 
           // send sticker
           await sock.sendMessage(chatId, {
@@ -10570,11 +10554,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTx
 
         } catch (err) {
           console.error("❌ AI error:", err.message);
-          const errText = BOT_MARKER + `@${senderJid.split('@')[0]} 🤖 AI didn't respond — try again!`;
-          await sock.sendMessage(chatId, {
-            text: errText,
-            contextInfo: { mentionedJid: [senderJid] }
-          });
+          await reply(`🤖 AI didn't respond — try again!`);
         }
           } catch (err) {
             if (err.message?.includes('decrypt') || err.message?.includes('MAC')) return;
