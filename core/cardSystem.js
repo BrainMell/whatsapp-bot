@@ -53,7 +53,7 @@ const SPAWN_WEIGHTS = [
 
 const T5_PER_INTERVAL = 1 / 144;
 const T6_PER_INTERVAL = 1 / 672;
-const CLAIM_WINDOW_MS = 10 * 60 * 1000; 
+const CLAIM_WINDOW_MS = 30 * 60 * 1000; 
 const MAIN_DECK_SIZE = 12;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -897,6 +897,198 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   return reply(`✅ *${card.cardName}* moved to main deck (Slot #${slot}).`);
 }
 
+async function cmdT2CDeck(senderJid, reply, args = []) {
+  const p = P();
+  const index = parseInt(args[0]);
+  const deckNameQuery = args.slice(1).join(' ').trim();
+
+  if (isNaN(index) || !deckNameQuery) {
+    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
+  }
+
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const uc = owned[index - 1];
+  if (!uc) return reply('❌ Card not found in your collection.');
+
+  // Fuzzy match deck name
+  const decks = await CardDeck.find({ userId: senderJid });
+  if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
+
+  let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
+  if (!targetDeck) {
+    // Try includes
+    targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
+  }
+
+  if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
+
+  uc.inCustomDeck = true;
+  uc.customDeckName = targetDeck.name;
+  uc.customDeckSlot = targetDeck.cards.length + 1;
+  await uc.save();
+
+  targetDeck.cards.push(uc._id);
+  await targetDeck.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`✅ *${card.cardName}* moved to custom deck *"${targetDeck.name}"* (Slot #${uc.customDeckSlot}).`);
+}
+
+async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
+  const p = P();
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'sell') {
+    const deckName = args[1];
+    const price = parseInt(args[2]);
+    if (!deckName || isNaN(price) || price < 1) {
+      return sendUsage(reply, `${p} eshop sell`, `${p} eshop sell <deck_name> <price>`, `${p} eshop sell Waifus 50000`);
+    }
+
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${deckName}$`, 'i') } });
+    if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
+    if (deck.cards.length === 0) return reply('❌ You cannot sell an empty deck!');
+
+    try {
+      await CardMarket.create({
+        deckId: deck._id,
+        deckName: deck.name,
+        sellerId: senderJid,
+        type: 'sale',
+        price: price,
+        isDeck: true,
+        status: 'pending_approval',
+        approvalStatus: 'pending'
+      });
+      return reply(`📦 *LISTING SUBMITTED!*\n\nYour deck *"${deck.name}"* has been submitted for approval.\n💰 Requested Price: ${ZENI()}${price.toLocaleString()}\n💡 A Card Moderator will review it soon.`);
+    } catch (err) { return reply('❌ Failed to submit listing.'); }
+  }
+
+  if (sub === 'approve' || sub === 'reject') {
+    if (!isMod) return reply('❌ Mod only.');
+    const id = args[1];
+    if (!id) return reply(`❌ Usage: \`${p} eshop ${sub} <listing_id>\``);
+
+    try {
+      const listing = await CardMarket.findById(id);
+      if (!listing || !listing.isDeck) return reply('❌ Listing not found.');
+      
+      if (sub === 'approve') {
+        listing.status = 'active';
+        listing.approvalStatus = 'approved';
+        await listing.save();
+        return reply(`✅ Approved deck listing *#${id}*. It is now live in the E-Shop!`);
+      } else {
+        listing.status = 'cancelled';
+        listing.approvalStatus = 'rejected';
+        await listing.save();
+        return reply(`❌ Rejected deck listing *#${id}*.`);
+      }
+    } catch (err) { return reply('❌ Operation failed.'); }
+  }
+
+  if (sub === 'pending') {
+    if (!isMod) return reply('❌ Mod only.');
+    const pending = await CardMarket.find({ status: 'pending_approval', isDeck: true });
+    if (pending.length === 0) return reply('📭 No pending deck approvals.');
+
+    let msg = `📋 *PENDING DECK APPROVALS*\n\n`;
+    pending.forEach(l => {
+      msg += `🆔 ID: \`${l._id}\`\n`;
+      msg += `📂 Deck: *${l.deckName}*\n`;
+      msg += `👤 Seller: @${l.sellerId.split('@')[0]}\n`;
+      msg += `💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
+      msg += `━━━━━━━━━━━━━━━\n`;
+    });
+    msg += `💡 Use \`${p} eshop approve/reject <id>\``;
+    return reply(msg, { mentions: pending.map(l => l.sellerId) });
+  }
+
+  if (sub === 'buy') {
+    const index = parseInt(args[1]);
+    if (isNaN(index)) return sendUsage(reply, `${p} eshop buy`, `${p} eshop buy <number>`, `${p} eshop buy 1`);
+
+    const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
+    const listing = active[index - 1];
+    if (!listing) return reply('❌ Invalid listing number.');
+
+    if (listing.sellerId === senderJid) return reply('❌ You cannot buy your own deck.');
+
+    const balance = economy.getBalance(senderJid);
+    if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
+
+    try {
+      // Transfer Funds
+      economy.removeMoney(senderJid, listing.price);
+      economy.addMoney(listing.sellerId, listing.price);
+
+      // Transfer Deck & Cards
+      const deck = await CardDeck.findById(listing.deckId);
+      if (deck) {
+        deck.userId = senderJid;
+        await deck.save();
+        await UserCard.updateMany({ _id: { $in: deck.cards } }, { userId: senderJid });
+      }
+
+      listing.status = 'sold';
+      listing.completedAt = new Date();
+      await listing.save();
+
+      return reply(`🎉 *CONGRATULATIONS!*\n\nYou bought the deck *"${listing.deckName}"* for ${ZENI()}${listing.price.toLocaleString()}!`);
+    } catch (err) { return reply('❌ Purchase failed.'); }
+  }
+
+  // Default: List Shop
+  const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
+  if (active.length === 0) return reply('📭 The E-Shop is currently empty. Sell your decks with `.eshop sell <name> <price>`.');
+
+  let msg = `🏬 *CARD DECK E-SHOP* 🏬\n\n`;
+  active.forEach((l, i) => {
+    msg += `*${i + 1}.* 📂 *${l.deckName}*\n`;
+    msg += `   💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
+    msg += `   👤 Seller: @${l.sellerId.split('@')[0]}\n\n`;
+  });
+  msg += `💡 Use \`${p} eshop buy <number>\` to purchase.`;
+  return reply(msg, { mentions: active.map(l => l.sellerId) });
+}
+
+async function cmdT2CDeck(senderJid, reply, args = []) {
+  const p = P();
+  const index = parseInt(args[0]);
+  const deckNameQuery = args.slice(1).join(' ').trim();
+
+  if (isNaN(index) || !deckNameQuery) {
+    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
+  }
+
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const uc = owned[index - 1];
+  if (!uc) return reply('❌ Card not found in your collection.');
+
+  // Fuzzy match deck name
+  const decks = await CardDeck.find({ userId: senderJid });
+  if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
+
+  let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
+  if (!targetDeck) {
+    // Try includes
+    targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
+  }
+
+  if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
+
+  uc.inCustomDeck = true;
+  uc.customDeckName = targetDeck.name;
+  uc.customDeckSlot = targetDeck.cards.length + 1;
+  await uc.save();
+
+  targetDeck.cards.push(uc._id);
+  await targetDeck.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  return reply(`✅ *${card.cardName}* moved to custom deck *"${targetDeck.name}"* (Slot #${uc.customDeckSlot}).`);
+}
+
 async function cmdT2Coll(senderJid, reply, args = []) {
   const p = P();
   const slot = parseInt(args[0]);
@@ -1507,8 +1699,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdColl(senderJid, reply, chatId, args);
       return true;
 
-    case 'deck':
-      await cmdDeck(senderJid, reply, chatId, args);
+    case 't2cdeck':
+      await cmdT2CDeck(senderJid, reply, args);
+      return true;
+
+    case 'eshop':
+      await cmdEShop(senderJid, reply, chatId, args, isCardMod);
       return true;
 
     case 'info':

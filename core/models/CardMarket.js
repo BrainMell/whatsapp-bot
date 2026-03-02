@@ -10,12 +10,16 @@ const BidSchema = new mongoose.Schema({
 }, { _id: false });
 
 const CardMarketSchema = new mongoose.Schema({
-  // The specific UserCard document being listed
-  userCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserCard', required: true },
+  // The specific UserCard or CardDeck document being listed
+  userCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserCard', required: false },
+  deckId:     { type: mongoose.Schema.Types.ObjectId, ref: 'CardDeck', required: false },
 
   // Convenience copies so we don't always need a join
-  cardId:   { type: String, required: true },
+  cardId:   { type: String, required: false },
+  deckName: { type: String, required: false },
   sellerId: { type: String, required: true },
+
+  isDeck: { type: Boolean, default: false },
 
   // 'sale' = fixed price | 'auction' = bidding
   type: { type: String, enum: ['sale', 'auction'], required: true },
@@ -32,8 +36,14 @@ const CardMarketSchema = new mongoose.Schema({
   // Status lifecycle
   status: {
     type: String,
-    enum: ['active', 'sold', 'cancelled', 'expired'],
+    enum: ['active', 'sold', 'cancelled', 'expired', 'pending_approval'],
     default: 'active'
+  },
+
+  approvalStatus: {
+    type: String,
+    enum: ['approved', 'rejected', 'pending'],
+    default: 'approved' // Default to approved for individual cards
   },
 
   listedAt:    { type: Date, default: Date.now },

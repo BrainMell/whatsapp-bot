@@ -1992,17 +1992,13 @@ async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
 // New dynamic menu function
 
 async function sendBotMenu(sock, chatId, botMarker, args = []) {
-
-  const categoryInput = args[0]?.toUpperCase();
-
+  const categoryInput = args[0]?.toLowerCase();
   const botName = botConfig.getBotName();
-
   const prefix = botConfig.getPrefix();
-
-  
+  const showHidden = args.includes('-h');
 
   // 1. COMMAND EXPLAIN MODE (.j menu <command>)
-  if (categoryInput) {
+  if (categoryInput && !showHidden) {
     let foundCommand = null;
     let commandCategory = "";
 
@@ -2145,58 +2141,21 @@ ${commandCategory}`;
 
 
     // Display categories with emojis
+    const visibleCategories = categories.filter(cat => cat !== 'MODERATOR' || showHidden);
 
-
-
-    for (let i = 0; i < categories.length; i += 2) {
-
-
-
-      const cat1Name = categories[i];
-
-
-
+    for (let i = 0; i < visibleCategories.length; i += 2) {
+      const cat1Name = visibleCategories[i];
       const emoji1 = CATEGORY_EMOJIS[cat1Name] || '📂';
-
-
-
       const cat1 = `\`${emoji1} ${cat1Name}\``.padEnd(18);
 
-
-
-      
-
-
-
       let cat2 = "";
-
-
-
-      if (categories[i+1]) {
-
-
-
-        const cat2Name = categories[i+1];
-
-
-
+      if (visibleCategories[i+1]) {
+        const cat2Name = visibleCategories[i+1];
         const emoji2 = CATEGORY_EMOJIS[cat2Name] || '📂';
-
-
-
         cat2 = `\`${emoji2} ${cat2Name}\``;
-
-
-
       }
-
-
       mainMsg += `${cat1} ${cat2}\n`;
-
-
-
     }
-
 
     mainMsg += `\n➤ Type:\`${botConfig.getPrefix()} menu <CATEGORY>\`
 ➤ Or:\`${botConfig.getPrefix()} menu all\`

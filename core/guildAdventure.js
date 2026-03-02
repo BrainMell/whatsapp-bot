@@ -2674,6 +2674,7 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
             active: true,
             phase: 'REGISTRATION',
             chatId,
+            sessionKey, // 🔑 Store the session key for callbacks
             mode,
             solo,
             sock,
@@ -3053,11 +3054,11 @@ async function nextStage(sock, groq, sessionKey) {
     }
 }
 
-async function processBranchChoice(sock, type, chatId) {
-    const state = getGameState(chatId);
+async function processBranchChoice(sock, type, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
     state.isProcessing = true;
-    await executeEncounter(sock, state.groq, type, chatId);
+    await executeEncounter(sock, state.groq, type, sessionKey);
     state.isProcessing = false;
 }
 
@@ -3118,8 +3119,8 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
     }
 }
 
-async function handleRestEncounter(sock, encounter, chatId) {
-    const state = getGameState(chatId);
+async function handleRestEncounter(sock, encounter, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
     let msg = `🔥 *${encounter.name}* 🔥\n\n`;
     msg += `${encounter.description}\n\n`;
@@ -3148,7 +3149,7 @@ async function handleRestEncounter(sock, encounter, chatId) {
     }
     
     setTimeout(() => {
-        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
@@ -3184,13 +3185,13 @@ function selectRandomEncounter(chatId) {
     }
 }
 
-async function handleMerchantEncounter(sock, encounter, chatId) {
-    const state = getGameState(chatId);
+async function handleMerchantEncounter(sock, encounter, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
-    
+
     let msg = `💰 *${encounter.description}* 💰\n\n`;
     msg += `The merchant offers the following items for your journey:\n\n`;
-    
+
     encounter.shopItems.forEach((itemKey, i) => {
         const item = CONSUMABLES[itemKey];
         if (item) {
@@ -3198,58 +3199,57 @@ async function handleMerchantEncounter(sock, encounter, chatId) {
             msg += `   _${item.desc}_\n\n`;
         }
     });
-    
+
     msg += `💬 Type \`.j buy <#>\` to purchase an item.\n`;
     msg += `⏰ The merchant will leave in ${GAME_CONFIG.VOTE_TIME / 1000}s...`;
-    
+
     try {
         await sock.sendMessage(state.chatId, { text: msg });
     } catch (err) {
         console.error("Failed to send merchant encounter message:", err.message);
     }
-    
+
     state.currentEncounter = encounter;
     state.phase = 'PLAYING'; // Ensure they can buy
-    state.isMerchantActive = true; 
-    
+    state.isMerchantActive = true;
+
     const merchantTime = state.solo ? 30000 : (GAME_CONFIG.VOTE_TIME || 30000);
     state.timers.merchant = setTimeout(() => {
         if (state.active) {
             state.isMerchantActive = false;
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }
     }, merchantTime);
 }
-
-async function handleNonCombatEncounter(sock, encounter, chatId) {
-    const state = getGameState(chatId);
+async function handleNonCombatEncounter(sock, encounter, sessionKey) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
 
     if (encounter.type === 'MERCHANT') {
-        return handleMerchantEncounter(sock, encounter, chatId);
+        return handleMerchantEncounter(sock, encounter, sessionKey);
     }
 
     let msg = `${encounter.icon} *${encounter.name}*\n\n`;
     msg += `${encounter.description}\n\n`;
-    
+
     msg += `The party must decide what to do:\n\n`;
-    
+
     encounter.choices.forEach((choice, i) => {
         msg += `${i + 1}. ${choice.text} (${choice.stat} Check)\n`;
     });
-    
+
     msg += `\n💬 Type: \`.j vote <#>\` to choose!`;
-    
+
     try {
         await sock.sendMessage(state.chatId, { text: msg });
     } catch (err) {
         console.error("Failed to send non-combat choice message:", err.message);
     }
-    
+
     state.currentEncounter = encounter;
     state.votes = {};
     state.voteProcessing = false;
-    
+
     // Auto-timeout if no one votes
     let timer;
     if (state.solo) {
@@ -3260,28 +3260,29 @@ async function handleNonCombatEncounter(sock, encounter, chatId) {
     } else {
         timer = GAME_CONFIG.VOTE_TIME || 30000;
     }
-    
+
     state.timers.vote = setTimeout(() => {
         if (state.active && !state.voteProcessing) {
-            processVotes(sock, encounter, chatId).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
+            processVotes(sock, encounter, sessionKey).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
         }
     }, timer);
 }
-
-async function processVotes(sock, encounter, chatId) {
-      const state = getGameState(chatId);
+async function processVotes(sock, encounter, sessionKey) {
+      const state = gameStates.get(sessionKey);
       if (!state) return;
       if (!sock) sock = state.sock;
       clearTimeout(state.timers.vote);
 
+      const chatId = state.chatId;
+
       // 🛡️ ENCOUNTER SAFETY GUARD: Recover if state is lost or invalid
       if (!encounter || !encounter.choices) {
-          console.warn(`⚠️️ [Quest][${chatId}] Recovering from null encounter or missing choices. (Phase: ${state.phase}, Type: ${state.currentEncounterType})`);
+          console.warn(`⚠️️ [Quest][${sessionKey}] Recovering from null encounter or missing choices. (Phase: ${state.phase}, Type: ${state.currentEncounterType})`);
           state.votes = {};
           state.voteProcessing = false;
           // Force next stage after a brief delay
           setTimeout(() => {
-              nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
+              nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage recovery error:", e?.message || e));
           }, 1000);
           return;
       }
@@ -3303,7 +3304,7 @@ async function processVotes(sock, encounter, chatId) {
     if (!encounter || !encounter.choices) {
         console.error("❌ processVotes: encounter or encounter.choices is missing!");
         setTimeout(() => {
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3316,7 +3317,7 @@ async function processVotes(sock, encounter, chatId) {
             console.error("Failed to send invalid choice message in processVotes:", err.message);
         }
         setTimeout(() => {
-            nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+            nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
         }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
         return;
     }
@@ -3378,19 +3379,21 @@ async function processVotes(sock, encounter, chatId) {
         } catch (err) {
             console.error("Failed to send death message in processVotes:", err.message);
         }
-        if (state.players.every(p => p.isDead)) return endAdventure(sock, chatId, false);
+        if (state.players.every(p => p.isDead)) return endAdventure(sock, sessionKey, false);
     }
     
     state.votes = {};
     state.voteProcessing = false;
     setTimeout(() => {
-        nextStage(sock, state.groq, chatId).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
+        nextStage(sock, state.groq, sessionKey).catch(e => console.error("[Quest] nextStage error:", e?.message || e));
     }, state.solo ? 0 : GAME_CONFIG.BREAK_TIME);
 }
 
-async function endAdventure(sock, chatId, victory = true) {
-    const state = getGameState(chatId);
+async function endAdventure(sock, sessionKey, victory = true) {
+    const state = gameStates.get(sessionKey);
     if (!state) return;
+    
+    const chatId = state.chatId;
     // AI Narration of the journey's end
     const prompt = `
     Context: Fantasy RPG. The party has successfully completed all 5 acts of their epic quest and returned as legends.
@@ -3470,7 +3473,7 @@ async function endAdventure(sock, chatId, victory = true) {
     }
     
     state.active = false;
-    deleteGameState(chatId); // Full cleanup
+    deleteGameState(sessionKey); // Full cleanup
 }
 
 // ==========================================
@@ -4236,13 +4239,14 @@ module.exports = {
         if (allVoted && state.isBranching) {
             clearTimeout(state.timers.vote);
             const sock = state.sock;
+            const sessionKey = state.sessionKey;
             setTimeout(() => {
                 const v1 = Object.values(state.votes).filter(v => v === '1').length;
                 const v2 = Object.values(state.votes).filter(v => v === '2').length;
                 const winner = v2 > v1 ? 'REST' : 'ELITE_COMBAT';
                 state.isProcessing = false;
                 state.isBranching = false;
-                processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
+                processBranchChoice(sock, winner, sessionKey).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
             }, state.solo ? 0 : 1000);
             return `🗳️ All votes in! Branching to *${Object.values(state.votes).filter(v => v === '2').length > Object.values(state.votes).filter(v => v === '1').length ? 'Safe Path' : 'Danger Path'}*...`;
         }
@@ -4250,13 +4254,14 @@ module.exports = {
         if (allVoted && state.currentEncounter && !state.isBranching) {
             // All players voted - process immediately
             const currentEnc = state.currentEncounter; // Capture to prevent race conditions
+            const sessionKey = state.sessionKey;
             state.voteProcessing = true;
             clearTimeout(state.timers.vote);
             
             // Use setTimeout to avoid blocking
             const sock = state.sock;
             setTimeout(() => {
-                processVotes(sock, currentEnc, chatId).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
+                processVotes(sock, currentEnc, sessionKey).catch(e => console.error("[Quest] processVotes error:", e?.message || e));
             }, state.solo ? 0 : 2000); // 0s for solo, 2s for group
             
             return `🗳️ Vote cast! ${state.solo ? 'Processing...' : 'All votes in! Processing...'}`;
