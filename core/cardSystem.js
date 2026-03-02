@@ -506,16 +506,16 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       // Send first page with GIF
-      const firstChunk = msg + lines.slice(0, 30).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      const firstChunk = msg + lines.slice(0, 100).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
       await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
           gifPlayback: true, 
           caption: firstChunk 
       });
       
-      if (lines.length > 30) {
-        for (let s = 30; s < lines.length; s += 50) {
-          await reply(lines.slice(s, s + 50).join('\n'));
+      if (lines.length > 100) {
+        for (let s = 100; s < lines.length; s += 100) {
+          await reply(lines.slice(s, s + 100).join('\n'));
         }
       }
       return;
@@ -523,9 +523,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   // Fallback text-only pagination
-  for (let s = 0; s < lines.length; s += 50) {
-    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 50).join('\n');
-    if (s + 50 >= lines.length) {
+  for (let s = 0; s < lines.length; s += 100) {
+    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 100).join('\n');
+    if (s + 100 >= lines.length) {
        chunk += `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
     }
     await reply(chunk);
@@ -620,7 +620,7 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
     return `🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${card.tier}\n━━━━━━━━━━━━━━━`;
   });
 
-  return reply(msg + lines.slice(0, 20).join('\n'));
+  return reply(msg + lines.slice(0, 100).join('\n'));
 }
 
 async function cmdMaker(senderJid, reply, chatId, args = []) {
