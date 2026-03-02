@@ -198,9 +198,11 @@ const COMMAND_REGISTRY = {
     { cmd: 'info', desc: 'Look up any card in the global database.', usage: 'info <name/id>' },
     { cmd: 'deck', desc: 'View deck. Use .deck <slot> for details.', usage: 'deck [slot]' },
     { cmd: 't2deck', desc: 'Move a card from collection to main deck.', usage: 't2deck <coll#>' },
+    { cmd: 't2cdeck', desc: 'Move a card from collection to a custom deck.', usage: 't2cdeck <coll#> <deck_name>' },
     { cmd: 't2coll', desc: 'Move a card from main deck back to collection.', usage: 't2coll <deck#>' },
     { cmd: 'swap card', desc: 'Rearrange cards in your main deck.', usage: 'swap card <a> and <b>' },
     { cmd: 'buycard', desc: 'Browse the card market or buy a listing.', usage: 'buycard [n]' },
+    { cmd: 'eshop', desc: 'Browse and buy custom card decks.', usage: 'eshop [buy/sell/list]' },
     { cmd: 'sc', desc: 'List a card from your deck for sale.', usage: 'sc <slot> <price>' },
     { cmd: 'auction', desc: 'Start a bidding war for a card in your deck.', usage: 'auction <slot> <min> <hrs>' },
     { cmd: 'bid', desc: 'Place a bid on an active card auction.', usage: 'bid <amount>' },
@@ -279,6 +281,15 @@ const COMMAND_REGISTRY = {
     { cmd: 'reset', desc: 'Reset the bot connection/session.', usage: 'reset' },
     { cmd: 'on', desc: 'Turn the bot ON for this chat.', usage: 'on' },
     { cmd: 'off', desc: 'Turn the bot OFF for this chat.', usage: 'off' }
+  ],
+  MODERATOR: [
+    { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },
+    { cmd: 'cardmod', desc: 'Manage Card Moderators (Owner only).', usage: 'cardmod <add/del/list> @user' },
+    { cmd: 'eshop approve', desc: 'Approve a pending deck listing.', usage: 'eshop approve <id>' },
+    { cmd: 'eshop reject', desc: 'Reject a pending deck listing.', usage: 'eshop reject <id>' },
+    { cmd: 'eshop pending', desc: 'View all decks awaiting approval.', usage: 'eshop pending' },
+    { cmd: 'addmod', desc: 'Add a global bot moderator.', usage: 'addmod @user' },
+    { cmd: 'delmod', desc: 'Remove a global bot moderator.', usage: 'delmod @user' }
   ]
 };
 
