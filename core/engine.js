@@ -217,7 +217,16 @@ async function startBot(configInstance) {
             });
             menu += `\n━━━━━━━━━━━━━━━\n*Reply with a number (1-${Math.min(15, list.length)}) for details.*`;
 
-            const cacheData = { ts: Date.now(), results: list, downloadFn: (title) => `https://anikai.to/browser?keyword=${encodeURIComponent(title)}` };
+            // Complex slug generation for Anikai
+            const getAnikaiLink = (title) => {
+                const slug = title.toLowerCase()
+                    .replace(/[^a-z0-9\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-');
+                return `https://anikai.to/watch/${slug}-episode-1`;
+            };
+
+            const cacheData = { ts: Date.now(), results: list, downloadFn: getAnikaiLink };
             global[`__${BOT_ID}_anime_search_cache_by_chat`].set(chatId, cacheData);
 
             const sentMenu = await sock.sendMessage(chatId, { text: BOT_MARKER + menu }, { quoted: m });
@@ -3124,7 +3133,15 @@ We are happy to have you here.
 
             if (cached && idx >= 1 && idx <= cached.results.length) {
                 const a = cached.results[idx - 1];
-                const downloadLink = cached.downloadFn ? cached.downloadFn(a.title) : `https://anikai.to/watch/${a.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-episode-1`;
+                
+                // RESTORED: Use the complex resolver to get a REAL link instead of a guessed slug
+                let downloadLink = "";
+                try {
+                    downloadLink = await getAnikaiBestMatch(a.title);
+                } catch (resErr) {
+                    // Fallback to the cached slug generator if the scraper fails
+                    downloadLink = cached.downloadFn ? cached.downloadFn(a.title) : `https://anikai.to/watch/${a.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-episode-1`;
+                }
 
                 const caption = `
 ╔══════════════════════╗
@@ -3140,7 +3157,7 @@ We are happy to have you here.
 ━━━━━━━━━━━━━━━━━━
 _💡 Reply with another number from your search list!_`.trim();
 
-                const imageUrl = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url;
+                const imageUrl = resolveImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url, a.url);
                 await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
                 return;
             }
