@@ -185,6 +185,308 @@ async function startBot(configInstance) {
     let BOT_MARKER = `\u200B`;   // Invisible marker for messages
 
     // ============================================
+    // COMMAND HANDLERS (Encapsulated)
+    // ============================================
+
+    async function handleAnimeSearch(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: `🔎`, key: m.key } });
+        try {
+            // Respect Jikan rate limit (3 req/sec)
+            await new Promise(r => setTimeout(r, 1000));
+
+            let list = [];
+            try {
+                const got = await getGot();
+                const r = await got.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}`).json();
+                list = r.data || [];
+            } catch (gotErr) {
+                console.error('GotScraping Anime Search Error:', gotErr.message);
+                const r = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}`, { timeout: 15000 });
+                list = r.data.data || [];
+            }
+
+            if (!list.length) {
+                await sock.sendMessage(chatId, { react: { text: `❌`, key: m.key } });
+                return sock.sendMessage(chatId, { text: BOT_MARKER + 'No results found on Jikan/MAL.' });
+            }
+
+            let menu = `🔎 *Search results for:* ${query}\n━━━━━━━━━━━━━━━━━━━\n`;
+            list.slice(0, 15).forEach((a, i) => {
+                const type = a.type ? `[${a.type}]` : '';
+                menu += `*${i + 1}.* ${a.title} ${type}\n`;
+            });
+            menu += `\n━━━━━━━━━━━━━━━\n*Reply with a number (1-${Math.min(15, list.length)}) for details.*`;
+
+            const cacheData = { ts: Date.now(), results: list, downloadFn: (title) => `https://anikai.to/browser?keyword=${encodeURIComponent(title)}` };
+            global[`__${BOT_ID}_anime_search_cache_by_chat`].set(chatId, cacheData);
+
+            const sentMenu = await sock.sendMessage(chatId, { text: BOT_MARKER + menu }, { quoted: m });
+            const msgId = sentMenu?.key?.id;
+            if (msgId) global[`__${BOT_ID}_anime_search_cache_by_msgid`].set(msgId, cacheData);
+
+            setTimeout(() => {
+                global[`__${BOT_ID}_anime_search_cache_by_chat`].delete(chatId);
+                if (msgId) global[`__${BOT_ID}_anime_search_cache_by_msgid`].delete(msgId);
+            }, 300000);
+
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            console.error('Anime Search Error:', err);
+            await sock.sendMessage(chatId, { text: BOT_MARKER + 'Search failed. Jikan API might be overloaded.' });
+        }
+    }
+
+    async function handleAnimeTrending(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔥", key: m.key } });
+        try {
+            const r = await axios.get(`https://api.jikan.moe/v4/top/anime?filter=bypopularity&limit=20`);
+            const list = r.data.data || [];
+            if (!list.length) throw new Error('No data');
+
+            const pick = list[Math.floor(Math.random() * Math.min(10, list.length))];
+            const caption = `🔥 *ANIME TRENDING* 🔥\n\n*${pick.title}*\n⭐ ${pick.score || 'N/A'}\n\n📋 Quick:\n${(pick.synopsis || '').slice(0, 280)}...\n\n🔗 ${pick.url}`;
+            const imageUrl = pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url;
+            await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch trending anime.' });
+        }
+    }
+
+    async function handleAnimeAiring(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: `📡`, key: m.key } });
+        try {
+            const r = await axios.get('https://api.jikan.moe/v4/seasons/now?limit=12');
+            const list = r.data.data || [];
+            if (!list.length) throw new Error('No data');
+
+            const highlight = list[Math.floor(Math.random() * list.length)];
+            const top3 = list.slice(0, 3).map(a => `• ${a.title}`).join('\n');
+            const caption = `📡 *CURRENTLY AIRING* 📡\n\nTop this week:\n${top3}\n\n🔍 Highlight:\n${highlight.title}\n⭐ ${highlight.score || 'N/A'}\n\n🔗 ${highlight.url}`;
+            const imageUrl = highlight.images?.jpg?.large_image_url || highlight.images?.jpg?.image_url;
+            await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch airing anime.' });
+        }
+    }
+
+    async function handleAnimeUpcoming(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: `⏳`, key: m.key } });
+        try {
+            const r = await axios.get('https://api.jikan.moe/v4/seasons/upcoming', { timeout: 10000 });
+            const list = r.data.data || [];
+            const pick = list[Math.floor(Math.random() * Math.min(15, list.length))];
+            const caption = `⏳ *UPCOMING ANIME* ⏳\n\n🔥 *${pick.title}*\n📅 Expected: ${pick.year || 'TBA'}\n\n🔗 ${pick.url}`;
+            const imageUrl = pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url;
+            await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ API is busy. Try again shortly." });
+        }
+    }
+
+    async function handleAnimeTop(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: `🏆`, key: m.key } });
+        try {
+            const r = await axios.get('https://api.jikan.moe/v4/top/anime?limit=25');
+            const pick = r.data.data[Math.floor(Math.random() * r.data.data.length)];
+            const caption = `🏆 *TOP ANIME* 🏆\n\n🏅 Rank: #${pick.rank || 'N/A'}\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n\n🔗 ${pick.url}`;
+            await sendImageSafe(sock, chatId, pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Anime service is busy.' });
+        }
+    }
+
+    async function handleAnimeRandom(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: `🎲`, key: m.key } });
+        try {
+            const r = await axios.get('https://api.jikan.moe/v4/random/anime');
+            const a = r.data.data;
+            const caption = `🎲 *RANDOM ANIME* 🎲\n\n🎬 *Title:* ${a.title}\n⭐ ${a.score || 'N/A'} | ${a.episodes || 'Unknown'} eps\n\n🔗 ${a.url}`;
+            const imageUrl = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url;
+            await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + 'Could not fetch a random anime.' });
+        }
+    }
+
+    async function handleAnimeNews(sock, chatId, m) {
+        await sock.sendMessage(chatId, { react: { text: "📰", key: m.key } });
+        try {
+            const articles = await news.getLatestNews();
+            if (!articles || articles.length === 0) return await sock.sendMessage(chatId, { text: BOT_MARKER + "No recent anime news found." });
+            
+            let message = GET_BANNER(`📰 ANIME NEWS`) + `\n\n`;
+            articles.slice(0, 5).forEach((a, i) => {
+                message += `${i + 1}. *${a.title}*\n🔗 ${a.link}\n\n`;
+            });
+            message += `_Use ${botConfig.getPrefix().toLowerCase()} news off to disable automated updates._`;
+            
+            await sock.sendMessage(chatId, { text: BOT_MARKER + message }, { quoted: m });
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch news." });
+        }
+    }
+
+    async function handleAnimeRank(sock, chatId, m, query) {
+        const SERPER_KEY = "02e605431054e2ee9fb761663e642e1886495861"; 
+        await sock.sendMessage(chatId, { react: { text: "🏅", key: m.key } });
+
+        try {
+            if (!query) return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()}\` anime rank <name>` });
+
+            // 1. Fetch Jikan Data
+            const jikanRes = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=1`);
+            const a = jikanRes.data.data?.[0];
+            if (!a) return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Series not found." });
+
+            // 2. Market Search (Serper)
+            const search = await axios.post(
+                "https://google.serper.dev/search",
+                { q: `${a.title} anime franchise revenue market value 2026 stats`, num: 3 },
+                { headers: { "X-API-KEY": SERPER_KEY } }
+            );
+
+            const marketInfo = search.data.organic.map(s => s.snippet).join(" ");
+            const isDB = a.title.toLowerCase().includes('dragon ball');
+
+            // 3. AI Calculation
+            const aiPrompt = `Analyze "${a.title}" market data: "${marketInfo}". OUTPUT ONLY JSON: {"status": "...", "score": 0, "market": "...", "market_val": 0.0}`;
+            const aiRes = await groq.chat.completions.create({
+                model: "llama-3.1-8b-instant",
+                messages: [{ role: "user", content: aiPrompt }],
+                response_format: { type: "json_object" }
+            });
+
+            const data = JSON.parse(aiRes.choices[0].message.content);
+            const members = (a.members / 1000000).toFixed(2);
+            const favs = a.favorites?.toLocaleString() || '0';
+            const fanPower = ((a.members * (a.score || 1)) / 1000000).toFixed(2);
+            const progress = "█".repeat(Math.min(10, Math.floor(data.score / 10))) + "░".repeat(10 - Math.min(10, Math.floor(data.score / 10)));
+
+            const caption = `🏅 *ANIME RANKING* 🏅\n🎬 *${a.title}*\n━━━━━━━━━━━━━━━━━━\n👑 *STATUS:* ${data.status.toUpperCase()}\n🎖️ *ANIME SCORE:* ${data.score}/100\n━━━━━━━━━━━━━━━━━━\n📊 *FANBASE POWER:*\n👥 *Community:* ${members}M members\n❤️ *Fans:* ${favs}\n💪 *Value:* ${fanPower}M\n━━━━━━━━━━━━━━━━━━\n💰 *MARKET POWER:*\n[${progress}] ${data.market}\n━━━━━━━━━━━━━━━━━━\n🔗 ${isDB ? "https://dragonball.fandom.com/wiki/Dragon_Ball" : a.url}`;
+
+            await sendImageSafe(sock, chatId, a.images.jpg.large_image_url, BOT_MARKER + caption, m);
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            console.error(err);
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Ranking Engine Error." });
+        }
+    }
+
+    async function handleAnimeStudio(sock, chatId, m, studio) {
+        await sock.sendMessage(chatId, { react: { text: `🎥`, key: m.key } });
+        try {
+            const res = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(studio)}&limit=15&order_by=popularity`);
+            const pool = res.data.data || [];
+            if (!pool.length) return sock.sendMessage(chatId, { text: BOT_MARKER + `No anime found for studio: ${studio}` });
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            const caption = `🎥 *STUDIO SEARCH* 🎥\n\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n\n🔗 ${pick.url}`;
+            await sendImageSafe(sock, chatId, pick.images?.jpg?.large_image_url, BOT_MARKER + caption, m);
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ API overloaded." });
+        }
+    }
+
+    async function handleAudioCommand(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
+        try {
+            const videos = await goService.searchYoutube(query);
+            const video = videos[0];
+            if (!video) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            
+            await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
+            const audioBuffer = await goService.downloadYoutubeAudio(video.url);
+            if (!audioBuffer) throw new Error('Download failed');
+
+            await sock.sendMessage(chatId, { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${video.title}.mp3` }, { quoted: m });
+            await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Audio download failed." });
+        }
+    }
+
+    async function handleImgCommand(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
+        try {
+            const images = await searchPinterest(query, 5);
+            if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            for (const img of images.slice(0, 5)) {
+                await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
+            }
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ Search service busy." });
+        }
+    }
+
+    async function handleNsfwCommand(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
+        try {
+            const images = await scrapeFromDefaultSite(query, 5);
+            if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            for (const img of images.slice(0, 3)) {
+                const res = await axios.get(img, { responseType: 'arraybuffer' });
+                await sock.sendMessage(chatId, { image: Buffer.from(res.data) }, { quoted: m });
+            }
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Scrape failed." });
+        }
+    }
+
+    async function handleAdultCommand(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
+        try {
+            const images = await scrapePornPics(query, 5);
+            if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            for (const img of images.slice(0, 3)) {
+                await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
+            }
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch images." });
+        }
+    }
+
+    // --------------------------
+    // Helpers
+    // --------------------------
+    function resolveImageUrl(img, base) {
+      if (!img) return null;
+      img = String(img).trim();
+      if (img.startsWith('//')) img = 'https:' + img;
+      try {
+        new URL(img);
+        return img;
+      } catch {
+        try {
+          return new URL(img, base).href;
+        } catch {
+          return null;
+        }
+      }
+    }
+
+    // helper to extract quoted message id from incoming message `m`
+    function getQuotedMessageId(m) {
+      try {
+        const ctx = m.message?.extendedTextMessage?.contextInfo || m.message?.conversation?.contextInfo || m.message?.imageMessage?.contextInfo;
+        if (!ctx) return null;
+        if (ctx.stanzaId) return ctx.stanzaId;
+        if (ctx.quotedMessage && ctx.quotedMessage.key && ctx.quotedMessage.key.id) return ctx.quotedMessage.key.id;
+        if (ctx.quotedMessageId) return ctx.quotedMessageId;
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // ============================================
     // UTILS & CORE DATA (Moved Up for initSocket)
     // ============================================
 
@@ -2807,6 +3109,43 @@ We are happy to have you here.
         const isSelf = !!m.key.fromMe;
         if (isSelf) return;
 
+        // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
+        const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
+        if (numOnly) {
+            const idx = parseInt(numOnly[1], 10);
+            let cached = null;
+            const quotedId = getQuotedMessageId(m);
+
+            if (quotedId && global[`__${BOT_ID}_anime_search_cache_by_msgid`].has(quotedId)) {
+                cached = global[`__${BOT_ID}_anime_search_cache_by_msgid`].get(quotedId);
+            } else if (global[`__${BOT_ID}_anime_search_cache_by_chat`].has(chatId)) {
+                cached = global[`__${BOT_ID}_anime_search_cache_by_chat`].get(chatId);
+            }
+
+            if (cached && idx >= 1 && idx <= cached.results.length) {
+                const a = cached.results[idx - 1];
+                const downloadLink = cached.downloadFn ? cached.downloadFn(a.title) : `https://anikai.to/watch/${a.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-episode-1`;
+
+                const caption = `
+╔══════════════════════╗
+    🃏 *ANIME DETAILS* 🃏
+╚══════════════════════╝
+🎬 *Title:* ${a.title}
+⭐ *Score:* ${a.score || 'N/A'}
+🏅 *Global Rank:* #${a.rank || 'N/A'}
+━━━━━━━━━━━━━━━━━━
+📖 *Synopsis:* ${(a.synopsis || 'No description available.').slice(0, 400)}...
+━━━━━━━━━━━━━━━━━━
+📥 *WATCH/DOWNLOAD:* ${downloadLink}
+━━━━━━━━━━━━━━━━━━
+_💡 Reply with another number from your search list!_`.trim();
+
+                const imageUrl = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url;
+                await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
+                return;
+            }
+        }
+
         // ── CORE COMMAND INTERCEPT ──────────────────
         // This block handles high-priority commands with robust parsing
         const currentPrefix = botConfig.getPrefix().toLowerCase();
@@ -3056,6 +3395,95 @@ We are happy to have you here.
             // .j lore
             if (primaryCmd === 'lore') {
                 await guildAdventure.showLore(sock, chatId);
+                return;
+            }
+
+            // .j search <query> -> alias for .j anime search
+            if (primaryCmd === 'search') {
+                const q = cmdArgs.slice(1).join(' ');
+                if (!q) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'search <title>', 'search Naruto', 'Find details and download links for any anime.');
+                // Handle as anime search
+                lowerTxt = `${currentPrefix} anime search ${q}`;
+                // Fall through to anime handler below
+            }
+
+            // .j anime <subcmd>
+            if (primaryCmd === 'anime' || lowerTxt.startsWith(`${currentPrefix} anime `)) {
+                const animeArgs = cmdArgs.slice(1);
+                const subCmd = animeArgs[0]?.toLowerCase();
+                const q = animeArgs.slice(1).join(' ');
+
+                // Handle sub-commands
+                if (subCmd === 'trending') {
+                    // Logic from line 6914
+                    await handleAnimeTrending(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'airing') {
+                    await handleAnimeAiring(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'upcoming') {
+                    await handleAnimeUpcoming(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'top') {
+                    await handleAnimeTop(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'random') {
+                    await handleAnimeRandom(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'news') {
+                    await handleAnimeNews(sock, chatId, m);
+                    return;
+                }
+                if (subCmd === 'rank') {
+                    await handleAnimeRank(sock, chatId, m, q);
+                    return;
+                }
+                if (subCmd === 'studio') {
+                    await handleAnimeStudio(sock, chatId, m, q);
+                    return;
+                }
+                if (subCmd === 'search' || !subCmd) {
+                    const query = subCmd === 'search' ? q : animeArgs.join(' ');
+                    if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'anime search <title>', 'anime search Naruto', 'Find details and download links for any anime.');
+                    await handleAnimeSearch(sock, chatId, query, m);
+                    return;
+                }
+            }
+
+            // .j audio <query>
+            if (primaryCmd === 'audio') {
+                const query = cmdArgs.slice(1).join(' ');
+                if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '🎵 AUDIO', 'audio <query>', 'audio starboy', 'Search and download any song from YouTube.');
+                await handleAudioCommand(sock, chatId, query, m);
+                return;
+            }
+
+            // .j img [count] <query>
+            if (primaryCmd === 'img') {
+                const query = cmdArgs.slice(1).join(' ');
+                if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 IMAGE', 'img [count] <query>', 'img 5 goku', 'Search and download images from the web.');
+                await handleImgCommand(sock, chatId, query, m);
+                return;
+            }
+
+            // .j nsfw [count] <query>
+            if (primaryCmd === 'nsfw') {
+                const query = cmdArgs.slice(1).join(' ');
+                if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '🔞 NSFW', 'nsfw [count] <query>', 'nsfw 5 anime', 'Search for age-restricted content.');
+                await handleNsfwCommand(sock, chatId, query, m);
+                return;
+            }
+
+            // .j 18+ <query>
+            if (primaryCmd === '18+') {
+                const query = cmdArgs.slice(1).join(' ');
+                if (!query) return await sendUsage(sock, chatId, BOT_MARKER, '🔞 18+', '18+ <search term>', '18+ anime', 'Search for adult content via PornPics.');
+                await handleAdultCommand(sock, chatId, query, m);
                 return;
             }
 
@@ -7300,13 +7728,24 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime search`)) 
     const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} anime search`, '').trim();
     if (!q) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'anime search <title>', 'anime search Naruto', 'Find details and download links for any anime.');
 
-    // Removed the limit to show all primary results from Jikan
-    const r = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}`);
-    const list = r.data.data || [];
+    // 1s delay to respect Jikan's basic rate limit and prevent "Busy" errors
+    await new Promise(r => setTimeout(r, 1000));
+
+    let list = [];
+    try {
+        const got = await getGot();
+        const r = await got.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}`).json();
+        list = r.data || [];
+    } catch (gotErr) {
+        console.error('GotScraping Anime Search Error:', gotErr.message);
+        // Fallback to axios if got fails
+        const r = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}`, { timeout: 15000 });
+        list = r.data.data || [];
+    }
 
     if (!list.length) {
       await sock.sendMessage(chatId, { react: { text: `❌`, key: m.key } });
-      return sock.sendMessage(chatId, { text: BOT_MARKER + 'No results found.' });
+      return sock.sendMessage(chatId, { text: BOT_MARKER + 'No results found on Jikan/MAL.' });
     }
 
     // Helper for Anikai first-episode download links
@@ -10369,7 +10808,18 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`)) {
   
 
 // Ignore valid sub-commands
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tttt`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttttt`) || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} move`)) {
+if (
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttt`) || 
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tttt`) || 
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ttttt`) || 
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} move`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} anime`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} img`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} audio`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} nsfw`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} 18+`)
+) {
     return;
 }
 
