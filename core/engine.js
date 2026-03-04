@@ -268,6 +268,25 @@ async function startBot(configInstance) {
       system.set(BOT_ID + "_support_usage", Object.fromEntries(supportUsage));
     }
 
+    function checkSupportUsage(userId) {
+      return supportUsage.get(userId) || 0;
+    }
+
+    function incrementSupportUsage(userId) {
+      const count = (supportUsage.get(userId) || 0) + 1;
+      supportUsage.set(userId, count);
+      saveSupportUsage();
+      return count;
+    }
+
+    async function sendUsage(sock, chatId, botMarker, title, usage, example, description) {
+      let msg = GET_BANNER(title) + `\n\n`;
+      msg += `📖 *Description:* ${description}\n\n`;
+      msg += `▫️ *Usage:* \`${botConfig.getPrefix()} ${usage}\`\n`;
+      msg += `▫️ *Example:* \`${botConfig.getPrefix()} ${example}\``;
+      return await sock.sendMessage(chatId, { text: botMarker + msg });
+    }
+
     function loadUserWarnings() {
       try {
         const data = system.get(BOT_ID + "_user_warnings", {});
@@ -1990,122 +2009,74 @@ async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
 // New dynamic menu function
 
 async function sendBotMenu(sock, chatId, botMarker, args = []) {
-  const categoryInput = args[0]?.toLowerCase();
   const botName = botConfig.getBotName();
   const prefix = botConfig.getPrefix();
   const showHidden = args.includes('-h');
+  
+  // Filter out flags for input parsing
+  const cleanArgs = args.filter(a => !a.startsWith('-'));
+  const categoryInput = cleanArgs[0]?.toLowerCase();
+  const fullInput = cleanArgs.join(' ').toLowerCase();
 
   // 1. COMMAND EXPLAIN MODE (.j menu <command>)
   if (categoryInput && !showHidden) {
     let foundCommand = null;
     let commandCategory = "";
 
-    
-
     for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-
-      const match = cmds.find(c => c.cmd.toLowerCase() === categoryInput.toLowerCase());
-
+      const match = cmds.find(c => c.cmd.toLowerCase() === categoryInput);
       if (match) {
-
         foundCommand = match;
-
         commandCategory = cat;
-
         break;
-
       }
-
     }
-
-    
 
     if (foundCommand) {
-
       const emoji = CATEGORY_EMOJIS[commandCategory] || '✨';
-
       let explainMsg = GET_BANNER(`${emoji} ${botName.toUpperCase()}`) + `\n\n`;
-
       explainMsg += `*Command:* \`${botConfig.getPrefix()} ${foundCommand.cmd}\`
 
-
-
 *Description:*
-
 ${foundCommand.desc}
 
-
-
 *Usage:*
-
 \`${botConfig.getPrefix()} ${foundCommand.usage}\`
 
-
-
 *Category:*
-
 ${commandCategory}`;
-
       return await sendMenuWithBanner(sock, chatId, explainMsg);
-
     }
-
   }
-
-
 
   // 2. CATEGORY MENU (.j menu <CATEGORY>)
-
-  if (categoryInput && COMMAND_REGISTRY[categoryInput]) {
-
-    const cmds = COMMAND_REGISTRY[categoryInput];
-
-    const emoji = CATEGORY_EMOJIS[categoryInput] || '📂';
-
-    let catMsg = GET_BANNER(`${emoji} ${categoryInput.toUpperCase()}`) + `\n\n`;
-
+  const matchedCat = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase() === fullInput || k.toLowerCase() === categoryInput);
+  
+  if (matchedCat) {
+    const cmds = COMMAND_REGISTRY[matchedCat];
+    const emoji = CATEGORY_EMOJIS[matchedCat] || '📂';
+    let catMsg = GET_BANNER(`${emoji} ${matchedCat.toUpperCase()}`) + `\n\n`;
     
-
     cmds.forEach(c => {
-
       catMsg += `➤ \`${botConfig.getPrefix()} ${c.cmd}\` – ${c.desc.split('.')[0]}\n`;
-
     });
-
     
-
     return await sendMenuWithBanner(sock, chatId, catMsg);
-
   }
 
-
-
   // 3. SHOW ALL COMMANDS (.j menu all)
-
-  if (categoryInput === 'ALL') {
-
+  if (categoryInput === 'all') {
     let allMsg = GET_BANNER(`✨ ${botName.toUpperCase()}`) + `\n`;
-
     allMsg += `*Prefix* ${botConfig.getPrefix()}\n\n`;
-
     for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-
       const emoji = CATEGORY_EMOJIS[cat] || '◈';
-
       allMsg += `${emoji}─── ＊ ${cat} ＊ ───${emoji}\n`;
-
       cmds.forEach(c => {
-
         allMsg += `• \`${botConfig.getPrefix()} ${c.cmd}\`\n`;
-
       });
-
       allMsg += "\n";
-
     }
-
     return await sendMenuWithBanner(sock, chatId, allMsg);
-
   }
 
 
@@ -7315,8 +7286,8 @@ ${(pick.synopsis || 'No description.').slice(0, 300)}...
   return;
 }
 // `${botConfig.getPrefix().toLowerCase()}` search <query> - Alias for anime search
-if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search `)) {
-  const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} search `, '').trim();
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} search` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} search `)) {
+  const q = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} search`, '').trim();
   if (!q) return await sendUsage(sock, chatId, BOT_MARKER, '🔍 SEARCH', 'search <title>', 'search Naruto', 'Find details and download links for any anime.');
   // Redirect to anime search logic (which starts with anime search)
   lowerTxt = `${botConfig.getPrefix().toLowerCase()} anime search ${q}`;
