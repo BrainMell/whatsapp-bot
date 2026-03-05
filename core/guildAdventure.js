@@ -1625,6 +1625,22 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     }, startDelay);
 }
 
+async function checkCombatEnd(sock, state, sessionKey) {
+    const playersDead = state.players.every(p => p.isDead || p.stats.hp <= 0);
+    const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
+    
+    if (playersDead || enemiesDead) {
+        // Clear any pending turn timers to prevent infinite loops
+        if (state.timers.turn) {
+            clearTimeout(state.timers.turn);
+            state.timers.turn = null;
+        }
+        await endCombat(sock, enemiesDead, sessionKey);
+        return true;
+    }
+    return false;
+}
+
 async function processCombatTurn(sock, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
@@ -1722,13 +1738,7 @@ async function processCombatTurn(sock, sessionKey) {
                 await handleDeath(sock, activeActor, sessionKey);
                 
                 // 💡 CRITICAL FIX: Check if combat should end immediately
-                const playersDead = state.players.every(p => p.isDead);
-                const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
-                
-                if (playersDead || enemiesDead) {
-                    await endCombat(sock, enemiesDead, sessionKey);
-                    return;
-                }
+                if (await checkCombatEnd(sock, state, sessionKey)) return;
                 
                 continue;
             }
@@ -1927,6 +1937,9 @@ async function performAction(sock, player, action, sessionKey) {
                     resultMsg += `\n💀 ${target.name} defeated!`;
                     player.combatStats.kills = (player.combatStats.kills || 0) + 1;
                     state.stats.monstersKilled++;
+
+                    // 💡 CRITICAL FIX: Check if combat should end immediately
+                    if (await checkCombatEnd(sock, state, sessionKey)) return;
                 }
             }
         }
@@ -2387,20 +2400,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     }
 
     // Check for end of combat (all players dead or all enemies dead)
-    const playersDead = state.players.every(p => p.isDead);
-    const enemiesDead = state.enemies.every(e => e.stats.hp <= 0);
-    
-    if (playersDead || enemiesDead) {
-        try {
-            await endCombat(sock, enemiesDead, sessionKey);
-        } catch (endErr) {
-            console.error("Critical error in endCombat:", endErr.message);
-            // Emergency cleanup if endCombat crashed
-            state.inCombat = false;
-            state.isProcessing = false;
-        }
-        return;
-    }
+    if (await checkCombatEnd(sock, state, sessionKey)) return;
     
     // 💡 Recurse to Tick System
     await processCombatTurn(sock, sessionKey);
@@ -3855,6 +3855,9 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.isDead = true;
                 target.currentHP = 0; // Sync
                 player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+
+                // 💡 CRITICAL FIX: Check if combat should end immediately
+                if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
             }
             
                           // Apply DoT (Damage over Time)
@@ -3959,6 +3962,9 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.isDead = true;
                 target.currentHP = 0; // Sync
                 player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+
+                // 💡 CRITICAL FIX: Check if combat should end immediately
+                if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
             }
         }
         player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
@@ -4091,6 +4097,9 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 msg += `💀 ${target.name} defeated!\n`;
                 target.isDead = true;
                 target.currentHP = 0;
+
+                // 💡 CRITICAL FIX: Check if combat should end immediately
+                if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
             }
         }
     }
