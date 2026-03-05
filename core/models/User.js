@@ -86,6 +86,7 @@ const UserSchema = new mongoose.Schema({
   investments: { type: Array, default: [] }, // Fixed Deposits
   
   // Skills & History
+  skillPoints: { type: Number, default: 0 },
   skills: { type: Map, of: Number, default: {} }, // Skill levels
   borrowedSkills: { type: Array, default: [] },
   history: { type: Array, default: [] }, // Transaction logs
@@ -94,6 +95,7 @@ const UserSchema = new mongoose.Schema({
   progression: {
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
+    statPoints: { type: Number, default: 0 },
     totalXPEarned: { type: Number, default: 0 },
     commandsUsed: { type: Number, default: 0 },
     achievements: { type: Array, default: [] }

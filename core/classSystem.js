@@ -131,6 +131,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 180, atk: 10, def: 22, mag: 8, spd: 4, luck: 10, crit: 5 },
         requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CORRUPTED_GUARDIAN' },
         evolutionCost: 15000,
+
         passive: { name: 'Divine Shield', desc: `Reduces all damage taken by 10%. Undead enemies deal -50% damage.` },
         evolves_into: ['TEMPLAR'],
     },
@@ -443,8 +444,9 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 110, atk: 7, def: 9, mag: 20, spd: 9, luck: 13, crit: 7 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'HEAVENLY_GUARDIAN' },
+        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CORRUPTED_GUARDIAN' },
         evolutionCost: 15000,
+
         passive: { name: 'Divine Grace', desc: `Healing spells heal 25% more.` },
         evolves_into: ['SAINT'],
     },

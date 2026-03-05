@@ -867,16 +867,16 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // unless it's a "Fast" archetype.
     
     let targetSpeed = avgPlayerSpeed;
-    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.3; // Faster mobs
-    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.9; // Slower mobs
+    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.5; // Faster mobs
+    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.95; // Slower mobs
     
     // Apply the "High Level = Slower Mob" logic
     // If Average Level > 50, reduce mob speed multiplier by 10%
-    if (avgLevel > 50) targetSpeed *= 0.95;
-    if (avgLevel < 10) targetSpeed *= 1.2; // Low level -> mobs are scary fast
+    if (avgLevel > 50) targetSpeed *= 0.98;
+    if (avgLevel < 15) targetSpeed *= 1.3; // Low level -> mobs are scary fast
     
-    // Blend with base calculation (Favor baseSpeed more now)
-    scaled.stats.spd = Math.floor((baseSpeed * 0.6) + (targetSpeed * 0.4));
+    // Blend with base calculation (Favor player matching more)
+    scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
 
     // Defense scaling (linear)
     scaled.stats.def = Math.floor(enemy.stats.def * partyFactor * (1 + (rankIndex * 0.08)));

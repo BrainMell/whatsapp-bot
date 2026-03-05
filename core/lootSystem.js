@@ -303,10 +303,21 @@ function rollDrop(lootTable, rarityBoost = 0) {
                 const rarityWeights = { 'COMMON': 100, 'UNCOMMON': 50, 'RARE': 20, 'EPIC': 10, 'LEGENDARY': 5, 'MYTHIC': 1 };
                 // Apply boost
                 if (rarityBoost > 0) {
-                    rarityWeights.RARE += rarityBoost * 5;
-                    rarityWeights.EPIC += rarityBoost * 3;
-                    rarityWeights.LEGENDARY += rarityBoost * 2;
-                    rarityWeights.MYTHIC += rarityBoost;
+                    rarityWeights.COMMON = Math.max(0, rarityWeights.COMMON - (rarityBoost * 10));
+                    rarityWeights.UNCOMMON = Math.max(0, rarityWeights.UNCOMMON - (rarityBoost * 5));
+                    rarityWeights.RARE += rarityBoost * 15;
+                    rarityWeights.EPIC += rarityBoost * 10;
+                    rarityWeights.LEGENDARY += rarityBoost * 8;
+                    rarityWeights.MYTHIC += rarityBoost * 4;
+                }
+
+                // If SSS rank (high boost), eliminate low ranks
+                if (rarityBoost >= 8) {
+                    rarityWeights.COMMON = 0;
+                    rarityWeights.UNCOMMON = 0;
+                }
+                if (rarityBoost >= 12) {
+                    rarityWeights.RARE = 0;
                 }
 
                 const equipmentList = Object.entries(ITEM_DATABASE).filter(([id, data]) => data.type === 'EQUIPMENT');
@@ -739,7 +750,7 @@ const ITEM_DATABASE = {
         name: 'Ether',
         description: 'Fully restores Energy (100%)',
         rarity: 'RARE',
-        value: 3000,
+        value: 15000,
         usable: true,
         effect: 'restore_energy',
         effectValue: 1.0
