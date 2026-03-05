@@ -1047,10 +1047,10 @@ const SKILL_TREES = {
                         maxLevel: 5,
                         energyCost: [20, 19, 18, 17, 15],
                         cooldown: 2,
-                        damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
+                        damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { burn: { chance: [60, 65, 70, 75, 80], duration: 3, value: [18, 21, 24, 27, 30] } },
+                        effects: { burn: { chance: [65, 70, 75, 80, 90], duration: 3, value: [25, 30, 35, 40, 50] } },
                         description: 'Launch blazing fireball',
                         animation: '🔥💥',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1063,10 +1063,10 @@ const SKILL_TREES = {
                         maxLevel: 5,
                         energyCost: [18, 17, 16, 15, 13],
                         cooldown: 2,
-                        damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
+                        damageMultiplier: [2.5, 2.7, 2.9, 3.1, 3.4],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { freeze: { chance: [40, 45, 50, 55, 60], duration: 1 } },
+                        effects: { freeze: { chance: [45, 50, 55, 60, 70], duration: 1 } },
                         description: 'Freeze enemy in their tracks',
                         animation: '❄️💎',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1080,7 +1080,7 @@ const SKILL_TREES = {
                         prerequisite: ['fireball'],
                         energyCost: [25, 23, 21, 19, 17],
                         cooldown: 3,
-                        damageMultiplier: [2.3, 2.5, 2.7, 2.9, 3.1],
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8],
                         damageType: 'MAGICAL',
                         targeting: 'CHAIN',
                         chainTargets: 3,
@@ -4710,7 +4710,7 @@ const EVOLUTION_SYSTEM = {
         if (!currentClass) return { canEvolve: false };
 
         // Tier Check
-        if (currentClass.tier === 'STARTER' && level >= 10) {
+        if (currentClass.tier === 'STARTER' && level >= 20) {
             return { canEvolve: true, type: 'EVOLVED', requirements: currentClass.requirement };
         }
         if (currentClass.tier === 'EVOLVED' && level >= 30) {
@@ -4850,9 +4850,9 @@ function getSkillEffect(skill, level) {
         }
 
         const effect = {
-            type: type,
-            damageType: skill.damageType === 'MAGICAL' ? 'magic' : 'physical',
-            targets: targets,
+            type: (skill.targeting === 'AOE' || skill.targeting === 'AOE_LARGE' || skill.targeting === 'CHAIN') ? 'aoe' : type,
+            damageType: (skill.damageType === 'MAGICAL' || skill.damageType === 'magic') ? 'magic' : 'physical',
+            targets: (skill.targeting === 'CHAIN') ? (skill.chainTargets || 3) : targets,
             multiplier: getVal(skill.damageMultiplier) || 0,
             cost: getVal(skill.energyCost) || 0,
             goldCost: getVal(skill.goldCost) || 0,

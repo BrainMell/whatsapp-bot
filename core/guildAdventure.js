@@ -789,6 +789,26 @@ const STATUS_EFFECTS = {
         value: 30
     },
     blessing: {
+
+        name: 'Shock',
+        icon: '⚡',
+        effect: 'damage_over_time',
+        value: 15,
+        tickRate: 'per_turn'
+    },
+    weak: {
+        name: 'Weakened',
+        icon: '😵',
+        effect: 'reduce_stats',
+        value: 20
+    },
+    vulnerability: {
+        name: 'Vulnerable',
+        icon: '💔',
+        effect: 'reduce_defense',
+        value: 30
+    },
+    blessing: {
         name: 'Blessing',
         icon: '✨',
         effect: 'increase_stats',
@@ -1162,13 +1182,18 @@ function applyStatusEffect(target, effectType, duration = 3, value = 0, source =
         return { applied: true, synergyMsg };
     }
 
-    const effectData = STATUS_EFFECTS[finalType] || { name: finalType, icon: '❓', effect: 'none' };
+    // Default if unknown to prevent crashes
+    const def = STATUS_EFFECTS[finalType] || { name: finalType, icon: '❓', effect: 'unknown', value: 0 };
+
     target.statusEffects.push({
-        ...effectData,
         type: finalType,
+        name: def.name,
         duration: finalDuration,
-        value: finalValue,
-        source: source
+        value: finalValue || def.value || 0,
+        icon: def.icon,
+        source: source,
+        effect: def.effect, 
+        tickRate: def.tickRate
     });
 
     return { applied: true, synergyMsg };

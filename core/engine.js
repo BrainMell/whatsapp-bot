@@ -3392,8 +3392,40 @@ _💡 Reply with another number from your search list!_`.trim();
 
             // .j mine
             if (primaryCmd === 'mine') {
-                await rpgCommands.mineOre(sock, chatId, senderJid);
+                const locationId = cmdArgs[1];
+                await rpgCommands.mineOre(sock, chatId, senderJid, locationId);
                 return;
+            }
+
+            // .j handbook / .j guide
+            if (primaryCmd === 'handbook' || primaryCmd === 'guide') {
+                const topic = cmdArgs.slice(1).join(' ').toLowerCase();
+                if (topic) {
+                    // Redirect to the internal guide handler if there is a topic
+                    lowerTxt = `${currentPrefix} guide ${topic}`;
+                } else {
+                    lowerTxt = `${currentPrefix} guide`;
+                }
+                // The guide handler logic is lower in the file, we should move it or ensure it's hit.
+                // For now, let's trigger the message manually if no topic
+                if (!topic) {
+                    let msg = `╭───────────────────╮\n`;
+                    msg += `  📔 *RPG HANDBOOK* \n`;
+                    msg += `╰───────────────────╯\n\n`;
+                    msg += `Welcome, traveler! Use the commands below to explore every corner of the world:\n\n`;
+                    msg += `⚔️ \`${currentPrefix} guide combat\` - Mechanics & Strategy\n`;
+                    msg += `📊 \`${currentPrefix} guide stats\` - Stats & Attributes\n`;
+                    msg += `🎭 \`${currentPrefix} guide classes\` - Evolution Tiers\n`;
+                    msg += `👹 \`${currentPrefix} guide monsters\` - Monster Archetypes\n`;
+                    msg += `📜 \`${currentPrefix} guide lore\` - World History & Background\n`;
+                    msg += `🎒 \`${currentPrefix} guide items\` - Loot, Gear & Rarity\n`;
+                    msg += `⚒️ \`${currentPrefix} guide work\` - Mining & Crafting\n`;
+                    msg += `🏰 \`${currentPrefix} guide guilds\` - Guilds & Archetypes\n`;
+                    msg += `⭐ \`${currentPrefix} guide ranks\` - Ranks & Progression\n\n`;
+                    msg += `💡 *Quick Tip:* Start your legend with \`${currentPrefix} register\`!`;
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    return;
+                }
             }
 
             // .j source
