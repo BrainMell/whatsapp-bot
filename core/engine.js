@@ -4066,20 +4066,22 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     for await (const chunk of stream) { chunks.push(chunk); }
     let buffer = Buffer.concat(chunks);
 
-    // Apply FFmpeg filters for special flags
-    if (isFull || isCrop1 || isCrop2) {
+    // Optimized Conversion for Video Stickers (under 2MB)
+    if (type === 'video' || isFull || isCrop1 || isCrop2 || isCropCenter) {
         const timestamp = Date.now();
         const inputPath = `./temp/stick_in_${timestamp}`;
-        const outputPath = `./temp/stick_out_${timestamp}.png`;
+        const outputPath = `./temp/stick_out_${timestamp}.webp`;
         if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
         fs.writeFileSync(inputPath, buffer);
 
-        let filter = '';
-        if (isFull) filter = 'scale=512:512'; // Smashed/Stretched
-        else if (isCrop1) filter = 'scale=512:-1,crop=512:512:0:0'; // Top crop
-        else if (isCrop2) filter = 'scale=512:-1,crop=512:512:0:ih-512'; // Bottom crop
+        let filter = 'scale=512:512:force_original_aspect_ratio=decrease,fps=10,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000';
+        if (isFull) filter = 'scale=512:512,fps=10';
+        else if (isCrop1) filter = 'scale=512:-1,fps=10,crop=512:512:0:0';
+        else if (isCrop2) filter = 'scale=512:-1,fps=10,crop=512:512:0:ih-512';
+        else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,fps=10,crop=512:512';
 
-        const ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -y "${outputPath}"`;
+        // Direct WebP optimized for WhatsApp
+        const ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 5 -vf "${filter}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
         await execPromise(ffmpegCmd);
         
         if (fs.existsSync(outputPath)) {
@@ -4092,8 +4094,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
-      type: (isCropCenter) ? StickerTypes.CROPPED : StickerTypes.FULL, 
-      quality: 70
+      type: StickerTypes.DEFAULT, // We handled cropping in FFmpeg
+      quality: 50
     });
 
     await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
