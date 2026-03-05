@@ -202,6 +202,7 @@ function generateEndCaption(players, enemies, victory, rewards) {
         if (fallen.length > 0) {
             caption += `🕯️ *Fallen:* ${fallen.join(', ')}\n`;
         }
+        return caption;
     } else {
         let caption = `╔══════════════════════════╗\n`;
         caption += `   💀 *PARTY WIPED*\n`;
@@ -210,8 +211,6 @@ function generateEndCaption(players, enemies, victory, rewards) {
         caption += `💀 ${players.map(p => p.name).join(', ')} have been defeated.\n`;
         return caption;
     }
-    
-    return `━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
 // ==========================================
