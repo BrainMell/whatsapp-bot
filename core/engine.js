@@ -184,6 +184,24 @@ async function startBot(configInstance) {
     const ZENI = CURRENCY.symbol;
     let BOT_MARKER = `\u200B`;   // Invisible marker for messages
 
+    // Complex slug generation for Anikai (Fallback)
+    const getAnikaiLink = (title) => {
+        const slug = title.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+        return `https://anikai.to/watch/${slug}-episode-1`;
+    };
+
+    // Helper to get Best Match Link
+    const getBestWatchLink = async (title) => {
+        try {
+            return await getAnikaiBestMatch(title);
+        } catch {
+            return getAnikaiLink(title);
+        }
+    };
+
     // ============================================
     // COMMAND HANDLERS (Encapsulated)
     // ============================================
@@ -217,15 +235,6 @@ async function startBot(configInstance) {
             });
             menu += `\n━━━━━━━━━━━━━━━\n*Reply with a number (1-${Math.min(15, list.length)}) for details.*`;
 
-            // Complex slug generation for Anikai
-            const getAnikaiLink = (title) => {
-                const slug = title.toLowerCase()
-                    .replace(/[^a-z0-9\s-]/g, '')
-                    .replace(/\s+/g, '-')
-                    .replace(/-+/g, '-');
-                return `https://anikai.to/watch/${slug}-episode-1`;
-            };
-
             const cacheData = { ts: Date.now(), results: list, downloadFn: getAnikaiLink };
             global[`__${BOT_ID}_anime_search_cache_by_chat`].set(chatId, cacheData);
 
@@ -253,8 +262,11 @@ async function startBot(configInstance) {
             if (!list.length) throw new Error('No data');
 
             const pick = list[Math.floor(Math.random() * Math.min(10, list.length))];
-            const caption = `🔥 *ANIME TRENDING* 🔥\n\n*${pick.title}*\n⭐ ${pick.score || 'N/A'}\n\n📋 Quick:\n${(pick.synopsis || '').slice(0, 280)}...\n\n🔗 ${pick.url}`;
-            const imageUrl = pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url;
+            const watchLink = await getBestWatchLink(pick.title);
+            
+            const caption = `🔥 *ANIME TRENDING* 🔥\n\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n\n📖 *Synopsis:* ${(pick.synopsis || '').slice(0, 280)}...\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+            
+            const imageUrl = resolveImageUrl(pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, pick.url);
             await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
@@ -269,10 +281,13 @@ async function startBot(configInstance) {
             const list = r.data.data || [];
             if (!list.length) throw new Error('No data');
 
-            const highlight = list[Math.floor(Math.random() * list.length)];
+            const pick = list[Math.floor(Math.random() * list.length)];
             const top3 = list.slice(0, 3).map(a => `• ${a.title}`).join('\n');
-            const caption = `📡 *CURRENTLY AIRING* 📡\n\nTop this week:\n${top3}\n\n🔍 Highlight:\n${highlight.title}\n⭐ ${highlight.score || 'N/A'}\n\n🔗 ${highlight.url}`;
-            const imageUrl = highlight.images?.jpg?.large_image_url || highlight.images?.jpg?.image_url;
+            const watchLink = await getBestWatchLink(pick.title);
+
+            const caption = `📡 *CURRENTLY AIRING* 📡\n\nTop this week:\n${top3}\n\n🔍 *Highlight:*\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+            
+            const imageUrl = resolveImageUrl(pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, pick.url);
             await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
@@ -286,8 +301,11 @@ async function startBot(configInstance) {
             const r = await axios.get('https://api.jikan.moe/v4/seasons/upcoming', { timeout: 10000 });
             const list = r.data.data || [];
             const pick = list[Math.floor(Math.random() * Math.min(15, list.length))];
-            const caption = `⏳ *UPCOMING ANIME* ⏳\n\n🔥 *${pick.title}*\n📅 Expected: ${pick.year || 'TBA'}\n\n🔗 ${pick.url}`;
-            const imageUrl = pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url;
+            const watchLink = await getBestWatchLink(pick.title);
+
+            const caption = `⏳ *UPCOMING ANIME* ⏳\n\n🎬 *${pick.title}*\n📅 Expected: ${pick.year || 'TBA'}\n━━━━━━━━━━━━━━━━━━\n📥 *PREVIEW:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+            
+            const imageUrl = resolveImageUrl(pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, pick.url);
             await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
@@ -300,8 +318,12 @@ async function startBot(configInstance) {
         try {
             const r = await axios.get('https://api.jikan.moe/v4/top/anime?limit=25');
             const pick = r.data.data[Math.floor(Math.random() * r.data.data.length)];
-            const caption = `🏆 *TOP ANIME* 🏆\n\n🏅 Rank: #${pick.rank || 'N/A'}\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n\n🔗 ${pick.url}`;
-            await sendImageSafe(sock, chatId, pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, BOT_MARKER + caption, m);
+            const watchLink = await getBestWatchLink(pick.title);
+
+            const caption = `🏆 *TOP ANIME* 🏆\n\n🏅 Rank: #${pick.rank || 'N/A'}\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || 'N/A'}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+            
+            const imageUrl = resolveImageUrl(pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url, pick.url);
+            await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
             await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Anime service is busy.' });
@@ -313,8 +335,11 @@ async function startBot(configInstance) {
         try {
             const r = await axios.get('https://api.jikan.moe/v4/random/anime');
             const a = r.data.data;
-            const caption = `🎲 *RANDOM ANIME* 🎲\n\n🎬 *Title:* ${a.title}\n⭐ ${a.score || 'N/A'} | ${a.episodes || 'Unknown'} eps\n\n🔗 ${a.url}`;
-            const imageUrl = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url;
+            const watchLink = await getBestWatchLink(a.title);
+
+            const caption = `🎲 *RANDOM ANIME* 🎲\n\n🎬 *Title:* ${a.title}\n⭐ Score: ${a.score || 'N/A'}\n📼 Episodes: ${a.episodes || 'Unknown'}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${a.url}`;
+            
+            const imageUrl = resolveImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url, a.url);
             await sendImageSafe(sock, chatId, imageUrl, BOT_MARKER + caption, m);
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
