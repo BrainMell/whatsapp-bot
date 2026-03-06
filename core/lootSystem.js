@@ -21,7 +21,7 @@ const LOOT_TABLES = {
     COMMON_ENEMY: {
         dropChance: 45,
         items: [
-            { id: 'minor_potion', weight: 30, quantity: [1, 2] },
+            { id: 'minor_hp_potion', weight: 30, quantity: [1, 2] },
             { id: 'bandage', weight: 20, quantity: [1, 2] },
             { id: 'healing_herb', weight: 25, quantity: [1, 3] },
             { id: 'refined_steel', weight: 10, quantity: [1, 1] },
@@ -38,7 +38,7 @@ const LOOT_TABLES = {
     ELITE_ENEMY: {
         dropChance: 75,
         items: [
-            { id: 'health_potion', weight: 20, quantity: [1, 2] },
+            { id: 'hp_potion', weight: 20, quantity: [1, 2] },
             { id: 'refined_steel', weight: 15, quantity: [2, 4] },
             { id: 'mana_crystal', weight: 15, quantity: [1, 1] },
             { id: 'sharp_whetstone', weight: 10, quantity: [1, 1] },
@@ -57,7 +57,7 @@ const LOOT_TABLES = {
     BOSS: {
         dropChance: 100,
         items: [
-            { id: 'greater_potion', weight: 20, quantity: [2, 3] },
+            { id: 'mega_potion', weight: 20, quantity: [2, 3] },
             { id: 'mythril_ore', weight: 15, quantity: [3, 6] },
             { id: 'mana_dew', weight: 12, quantity: [1, 2] },
             { id: 'dark_matter', weight: 10, quantity: [1, 1] },
@@ -75,7 +75,7 @@ const LOOT_TABLES = {
         dropChance: 100,
         items: [
             { id: 'gold_pile', weight: 40, quantity: [50, 200] },
-            { id: 'health_potion', weight: 25, quantity: [2, 4] },
+            { id: 'hp_potion', weight: 25, quantity: [2, 4] },
             { id: 'rare_gem', weight: 15, quantity: [1, 2] },
             { id: 'equipment_piece', weight: 20, quantity: [1, 1] }
         ]
@@ -86,7 +86,7 @@ const LOOT_TABLES = {
         dropChance: 60,
         items: [
             { id: 'bandage', weight: 50, quantity: [1, 2] },
-            { id: 'minor_potion', weight: 30, quantity: [1, 1] },
+            { id: 'minor_hp_potion', weight: 30, quantity: [1, 1] },
             { id: 'gold_pile', weight: 20, quantity: [20, 50] }
         ]
     },
@@ -104,12 +104,12 @@ const LOOT_TABLES = {
     
     // Merchant special
     MERCHANT_GIFT: {
-        dropChance: 30, // Rare gift from merchant
+        dropChance: 30, 
         items: [
-            { id: 'discount_coupon', weight: 40, quantity: [1, 1] },
+            { id: 'gold_pile', weight: 10, quantity: [500, 1000] },
             { id: 'merchant_token', weight: 30, quantity: [1, 1] },
             { id: 'rare_item_ticket', weight: 20, quantity: [1, 1] },
-            { id: 'gold_pile', weight: 10, quantity: [500, 1000] }
+            { id: 'discount_coupon', weight: 40, quantity: [1, 1] }
         ]
     }
 };
@@ -124,33 +124,28 @@ const BOSS_DROPS = {
         special: [{ id: 'leather_tunic', dropChance: 30, quantity: 1, rarity: 'COMMON' }]
     },
     'CORRUPTED_GUARDIAN': {
-        guaranteed: [{ id: 'health_potion', quantity: [1, 2], rarity: 'COMMON' }],
+        guaranteed: [{ id: 'hp_potion', quantity: [1, 2], rarity: 'UNCOMMON' }],
         special: [{ id: 'iron_sword', dropChance: 25, quantity: 1, rarity: 'UNCOMMON' }]
     },
     'ELEMENTAL_ARCHON': {
-        guaranteed: [{ id: 'greater_potion', quantity: 1, rarity: 'UNCOMMON' }],
+        guaranteed: [{ id: 'mega_potion', quantity: 1, rarity: 'RARE' }],
         special: [{ id: 'arcane_wand', dropChance: 20, quantity: 1, rarity: 'RARE' }]
-    },
-    'MUTATION_PRIME': {
-        guaranteed: [{ id: 'rare_gem', quantity: 1, rarity: 'RARE' }],
-        special: [{ id: 'essence_mirror', dropChance: 40, quantity: 1, rarity: 'LEGENDARY', announcement: '🪞 *LEGENDARY DROP!* The Mutation Prime drops a shimmering Essence Mirror!' }]
     },
     'VOID_CORRUPTED': {
         guaranteed: [{ id: 'legendary_shard', quantity: 1, rarity: 'EPIC' }],
-        special: [{ id: 'plate_armor', dropChance: 30, quantity: 1, rarity: 'RARE' }]
+        special: [{ id: 'reinforced_plate', dropChance: 30, quantity: 1, rarity: 'EPIC' }]
     },
     'PRIMORDIAL_CHAOS': {
         guaranteed: [{ id: 'void_essence', quantity: 1, rarity: 'MYTHIC' }],
-        special: [{ id: 'essence_mirror', dropChance: 10, quantity: 1, rarity: 'LEGENDARY' }]
+        special: [{ id: 'essence_mirror', dropChance: 15, quantity: 1, rarity: 'LEGENDARY' }]
     },
     
-    // LICH - Mirror Essence (30% drop chance)
     LICH: {
         guaranteed: [],
         special: [
             { 
                 id: 'mirror_essence', 
-                dropChance: 30,  // 30% chance
+                dropChance: 30, 
                 quantity: 1,
                 rarity: 'LEGENDARY',
                 announcement: '🌟 *LEGENDARY DROP!* A Mirror Essence materializes from the Lich\'s remains!'
@@ -179,7 +174,7 @@ const BOSS_DROPS = {
             }
         ]
     },
-    
+
     DEMON_LORD: {
         guaranteed: [
             { id: 'demon_horn', quantity: [1, 2], rarity: 'EPIC' }
@@ -212,7 +207,7 @@ const BOSS_DROPS = {
     
     VOID_HORROR: {
         guaranteed: [
-            { id: 'void_crystal', quantity: [1, 3], rarity: 'EPIC' }
+            { id: 'void_essence', quantity: 1, rarity: 'MYTHIC' }
         ],
         special: [
             {
@@ -238,21 +233,6 @@ const BOSS_DROPS = {
                 announcement: '🩸 *LEGENDARY DROP!* Elder Blood pools with ancient magic!'
             }
         ]
-    },
-    
-    MUTATION_PRIME: {
-        guaranteed: [
-            { id: 'rare_gem', quantity: 1, rarity: 'RARE' }
-        ],
-        special: [
-            {
-                id: 'essence_mirror',
-                dropChance: 40,
-                quantity: 1,
-                rarity: 'LEGENDARY',
-                announcement: '🪞 *LEGENDARY DROP!* The Mutation Prime drops a shimmering Essence Mirror!'
-            }
-        ]
     }
 };
 
@@ -275,33 +255,24 @@ const GOLD_RANGES = {
 // ==========================================
 
 function rollDrop(lootTable, rarityBoost = 0) {
-    // Check if anything drops
     if (Math.random() * 100 > (lootTable.dropChance + (rarityBoost * 2))) {
         return null;
     }
     
-    // Calculate total weight
     const totalWeight = lootTable.items.reduce((sum, item) => sum + item.weight, 0);
-    
-    // Roll for item
     let roll = Math.random() * totalWeight;
     
     for (const item of lootTable.items) {
         roll -= item.weight;
         if (roll <= 0) {
-            // Determine quantity
             const [min, max] = item.quantity;
             const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
             
-            // Fetch default rarity from database if not in loot table
             const dbInfo = ITEM_DATABASE[item.id];
             let finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
             
-            // 🎲 Special Logic: If the item rolled is a generic 'equipment_piece', roll for a real equipment from database
             if (item.id === 'equipment_piece') {
-                // Boost rarity selection based on difficulty
                 const rarityWeights = { 'COMMON': 100, 'UNCOMMON': 50, 'RARE': 20, 'EPIC': 10, 'LEGENDARY': 5, 'MYTHIC': 1 };
-                // Apply boost
                 if (rarityBoost > 0) {
                     rarityWeights.COMMON = Math.max(0, rarityWeights.COMMON - (rarityBoost * 10));
                     rarityWeights.UNCOMMON = Math.max(0, rarityWeights.UNCOMMON - (rarityBoost * 5));
@@ -311,7 +282,6 @@ function rollDrop(lootTable, rarityBoost = 0) {
                     rarityWeights.MYTHIC += rarityBoost * 4;
                 }
 
-                // If SSS rank (high boost), eliminate low ranks
                 if (rarityBoost >= 8) {
                     rarityWeights.COMMON = 0;
                     rarityWeights.UNCOMMON = 0;
@@ -322,10 +292,8 @@ function rollDrop(lootTable, rarityBoost = 0) {
 
                 const equipmentList = Object.entries(ITEM_DATABASE).filter(([id, data]) => data.type === 'EQUIPMENT');
                 if (equipmentList.length > 0) {
-                    // Filter list by "effective" weights or just pick and then potentially "upgrade" the item
                     const [eqId, eqData] = equipmentList[Math.floor(Math.random() * equipmentList.length)];
                     
-                    // 💡 PROCEDURAL AFFIX LOGIC (Diablo Style)
                     let resultItem = { 
                         id: eqId, 
                         quantity: 1, 
@@ -334,14 +302,12 @@ function rollDrop(lootTable, rarityBoost = 0) {
                         stats: { ...eqData.stats }
                     };
 
-                    // Difficulty Rarity Upgrade
                     const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
                     let currentIdx = rarities.indexOf(resultItem.rarity);
-                    if (rarityBoost > 5 && currentIdx < rarities.length - 1) { // High difficulty guarantee
+                    if (rarityBoost > 5 && currentIdx < rarities.length - 1) {
                         resultItem.rarity = rarities[Math.min(rarities.length - 1, currentIdx + Math.floor(rarityBoost / 10))];
                     }
 
-                    // Only roll affixes for Rare and above, or a 15% chance for others
                     if (ITEM_RARITY_WEIGHTS[resultItem.rarity] >= 2 || Math.random() < 0.15) {
                         const prefixes = [
                             { name: 'Sturdy', stats: { def: 5, hp: 15 } },
@@ -387,9 +353,8 @@ function rollDrop(lootTable, rarityBoost = 0) {
 
 function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     const drops = [];
-    const rarityBoost = Math.floor(difficulty); // 1.0 -> 0, 10.0 -> 10, etc.
+    const rarityBoost = Math.floor(difficulty);
     
-    // Determine loot table
     let lootTable = LOOT_TABLES.COMMON_ENEMY;
     
     if (encounterType === 'ELITE_COMBAT') {
@@ -397,18 +362,15 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     } else if (encounterType === 'BOSS') {
         lootTable = LOOT_TABLES.BOSS;
         
-        // Check for boss-specific drops
         if (enemyName && BOSS_DROPS[enemyName]) {
             const bossLoot = BOSS_DROPS[enemyName];
             
-            // Guaranteed drops
             for (const guaranteedDrop of bossLoot.guaranteed) {
                 const [min, max] = guaranteedDrop.quantity;
                 const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
                 const dbInfo = ITEM_DATABASE[guaranteedDrop.id];
                 
                 let finalRarity = guaranteedDrop.rarity || dbInfo?.rarity || 'COMMON';
-                // Upgrade rarity for high difficulty
                 const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
                 if (rarityBoost > 15) {
                     let curIdx = rarities.indexOf(finalRarity);
@@ -423,9 +385,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 });
             }
             
-            // Special drops (chance-based)
             for (const specialDrop of bossLoot.special) {
-                // Higher difficulty = Higher drop chance
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
@@ -449,13 +409,11 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         lootTable = LOOT_TABLES.MERCHANT_GIFT;
     }
     
-    // Roll for standard drops
     const standardDrop = rollDrop(lootTable, rarityBoost);
     if (standardDrop) {
         drops.push(standardDrop);
     }
     
-    // Difficulty multiplier (chance for extra drops)
     if (difficulty >= 2.0 && Math.random() < (0.3 + (difficulty * 0.02))) {
         const bonusDrop = rollDrop(lootTable, rarityBoost);
         if (bonusDrop) {
@@ -493,20 +451,14 @@ function generateGoldDrop(encounterType, difficulty = 1.0) {
     const [min, max] = range;
     const baseGold = Math.floor(Math.random() * (max - min + 1)) + min;
     
-    // Apply difficulty multiplier
     return Math.floor(baseGold * difficulty);
 }
-
-// ==========================================
-// 🎁 DISTRIBUTE LOOT TO PLAYERS
-// ==========================================
 
 function distributeLoot(players, encounterType, enemyName = null, difficulty = 1.0, overrideGold = null) {
     const inventorySystem = require('./inventorySystem');
     const loot = generateLoot(encounterType, enemyName, difficulty);
     const goldDrop = overrideGold !== null ? overrideGold : generateGoldDrop(encounterType, difficulty);
     
-    // Split gold among players
     const goldPerPlayer = Math.floor(goldDrop / Math.max(1, players.length));
 
     const results = {
@@ -516,16 +468,13 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
         announcements: []
     };
     
-    // Distribute items (Assign each item to a random surviving player)
     for (const drop of loot) {
         const itemInfo = getItemInfo(drop.id);
         
-        // Check for announcements (legendary/mythic drops)
         if (drop.announcement) {
             results.announcements.push(drop.announcement);
         }
         
-        // Pick a random player to receive the item
         const luckyPlayer = players[Math.floor(Math.random() * players.length)];
         
         const addResult = inventorySystem.addItem(
@@ -535,7 +484,8 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
             {
                 name: itemInfo.name,
                 rarity: drop.rarity || itemInfo.rarity,
-                type: itemInfo.type || 'MATERIAL',
+                type: itemInfo.type || (drop.id.includes('fish') || drop.id.includes('hide') ? 'MATERIAL' : 'ITEM'),
+                value: itemInfo.value || drop.value || 100,
                 stats: itemInfo.stats,
                 slot: itemInfo.slot,
                 source: drop.source || encounterType,
@@ -555,11 +505,10 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
         }
     }
 
-    // Add gold to each player
     if (goldPerPlayer > 0) {
         for (const player of players) {
             const economy = require('./economy');
-            economy.addItem(player.jid, 'gold', goldPerPlayer);
+            economy.addMoney(player.jid, goldPerPlayer);
         }
     }
     
@@ -572,351 +521,101 @@ function distributeLoot(players, encounterType, enemyName = null, difficulty = 1
 
 const ITEM_DATABASE = {
     // --- CRAFTING MATERIALS ---
-    'refined_steel': { name: 'Refined Steel', description: 'High-quality steel. Tastes like pennies.', rarity: 'UNCOMMON', value: 500 },
-    'sharp_whetstone': { name: 'Sharp Whetstone', description: 'Used to sharpen high-end blades. Not a snack.', rarity: 'UNCOMMON', value: 300 },
-    'mythril_ore': { name: 'Mythril Ore', description: 'A rare blue ore. Surprisingly heavy for a bunch of pixels.', rarity: 'RARE', value: 1200 },
-    'mana_crystal': { name: 'Mana Crystal', description: 'Concentrated magic. Smells like static electricity.', rarity: 'RARE', value: 1500 },
-    'tough_leather': { name: 'Tough Leather', description: 'Thick hide. Smells like wet dog.', rarity: 'UNCOMMON', value: 400 },
-    'gunpowder': { name: 'Volatile Gunpowder', description: 'Handle with care. Or dont, I am a bot, not your mom.', rarity: 'COMMON', value: 200 },
-    'fire_essence': { name: 'Fire Essence', description: 'A flickering flame. Bad for pockets.', rarity: 'RARE', value: 1000 },
-    'dark_matter': { name: 'Dark Matter', description: 'Heavier than your student loans.', rarity: 'EPIC', value: 2500 },
-    'healing_herb': { name: 'Sun-kissed Herb', description: 'Natural medicine. Legal in most kingdoms.', rarity: 'COMMON', value: 150 },
-    'mana_dew': { name: 'Mana Dew', description: 'Rare condensation. Basically magic Gatorade.', rarity: 'RARE', value: 800 },
-    'dragon_blood': { name: 'Dragon Blood', description: 'Smells like cinnamon and regret.', rarity: 'LEGENDARY', value: 5000 },
-    'iron_shard': { name: 'Iron Shard', description: 'Metal fragments. Collect enough to build a personality.', rarity: 'COMMON', value: 100 },
-    'gold_pile': { name: 'Pile of Gold', description: 'A small pile of glinting coins.', rarity: 'COMMON', value: 1 },
+    'refined_steel': { name: 'Refined Steel', description: 'High-quality steel. Tastes like pennies.', rarity: 'UNCOMMON', value: 500, type: 'MATERIAL' },
+    'sharp_whetstone': { name: 'Sharp Whetstone', description: 'Used to sharpen high-end blades.', rarity: 'UNCOMMON', value: 300, type: 'MATERIAL' },
+    'mythril_ore': { name: 'Mythril Ore', description: 'A rare blue ore. Surprisingly heavy.', rarity: 'RARE', value: 1200, type: 'MATERIAL' },
+    'mana_crystal': { name: 'Mana Crystal', description: 'Concentrated magic. Smells like static.', rarity: 'RARE', value: 1500, type: 'MATERIAL' },
+    'tough_leather': { name: 'Tough Leather', description: 'Thick hide. Smells like wet dog.', rarity: 'UNCOMMON', value: 400, type: 'MATERIAL' },
+    'gunpowder': { name: 'Volatile Gunpowder', description: 'Handle with care.', rarity: 'COMMON', value: 200, type: 'MATERIAL' },
+    'fire_essence': { name: 'Fire Essence', description: 'A flickering flame.', rarity: 'RARE', value: 1000, type: 'MATERIAL' },
+    'dark_matter': { name: 'Dark Matter', description: 'Heavier than your student loans.', rarity: 'EPIC', value: 2500, type: 'MATERIAL' },
+    'healing_herb': { name: 'Sun-kissed Herb', description: 'Natural medicine.', rarity: 'COMMON', value: 150, type: 'MATERIAL' },
+    'mana_dew': { name: 'Mana Dew', description: 'Basically magic Gatorade.', rarity: 'RARE', value: 800, type: 'MATERIAL' },
+    'dragon_blood': { name: 'Dragon Blood', description: 'Ancient power in liquid form.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' },
+    'iron_shard': { name: 'Iron Shard', description: 'Metal fragments.', rarity: 'COMMON', value: 100, type: 'MATERIAL' },
+    'void_crystal': { name: 'Void Crystal', description: 'Absorbs all surrounding light.', rarity: 'RARE', value: 1200, type: 'MATERIAL' },
+    'boss_essence': { name: 'Boss Essence', description: 'A concentrated core of a defeated lord.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
+    'legendary_shard': { name: 'Legendary Shard', description: 'A fragment of an ancient artifact.', rarity: 'LEGENDARY', value: 8000, type: 'MATERIAL' },
+    'gold_pile': { name: 'Pile of Gold', description: 'Glinting Zeni coins.', rarity: 'COMMON', value: 1, type: 'MATERIAL' },
+    'spider_silk': { name: 'Spider Silk', description: 'Strong, sticky silk from giant spiders.', rarity: 'COMMON', value: 80, type: 'MATERIAL' },
+    'fire_shard': { name: 'Fire Shard', description: 'A small piece of elemental fire.', rarity: 'UNCOMMON', value: 300, type: 'MATERIAL' },
+    'ice_shard': { name: 'Ice Shard', description: 'A small piece of elemental ice.', rarity: 'UNCOMMON', value: 300, type: 'MATERIAL' },
+    'lightning_shard': { name: 'Lightning Shard', description: 'A small piece of elemental lightning.', rarity: 'UNCOMMON', value: 300, type: 'MATERIAL' },
+    'demon_hide': { name: 'Demon Hide', description: 'Tough, resilient skin from a demon.', rarity: 'RARE', value: 1200, type: 'MATERIAL' },
+    'ghost_essence': { name: 'Ghost Essence', description: 'Ethereal residue from a restless spirit.', rarity: 'RARE', value: 1500, type: 'MATERIAL' },
+    'ancient_wood': { name: 'Ancient Wood', description: 'Petrified wood from a forgotten forest.', rarity: 'EPIC', value: 2500, type: 'MATERIAL' },
+    'mystic_thread': { name: 'Mystic Thread', description: 'Glows with its own internal light.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     
-    // --- ENHANCEMENT STONES ---
-    'minor_enhancement_stone': { name: 'Minor Enhancement Stone', description: 'A dull stone used to boost gear stats by 5%.', rarity: 'COMMON', value: 1000 },
-    'rare_enhancement_stone': { name: 'Rare Enhancement Stone', description: 'A glowing stone used to boost gear stats by 15%.', rarity: 'RARE', value: 5000 },
-    'legendary_enhancement_stone': { name: 'Legendary Enhancement Stone', description: 'A radiant stone used to boost gear stats by 35%.', rarity: 'LEGENDARY', value: 20000 },
+    // --- STONES ---
+    'minor_enhancement_stone': { name: 'Minor Enhancement Stone', description: 'Boosts gear stats by 5%.', rarity: 'COMMON', value: 1000, type: 'MATERIAL' },
+    'rare_enhancement_stone': { name: 'Rare Enhancement Stone', description: 'Boosts gear stats by 15%.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
+    'legendary_enhancement_stone': { name: 'Legendary Enhancement Stone', description: 'Boosts gear stats by 35%.', rarity: 'LEGENDARY', value: 20000, type: 'MATERIAL' },
+    'evolution_stone': { name: 'Evolution Stone (T2)', description: 'Triggers evolution to T2 class.', rarity: 'RARE', value: 8000, type: 'MATERIAL' },
+    'ascension_stone': { name: 'Ascension Stone (T3)', description: 'Triggers ascension to T3 class.', rarity: 'EPIC', value: 50000, type: 'MATERIAL' },
 
-    'evolution_stone': { name: 'Evolution Stone (T2)', description: 'A pulsing gem that triggers evolution. Required for T2 class advancement.', rarity: 'RARE', value: 8000 },
-    'ascension_stone': { name: 'Ascension Stone (T3)', description: 'A celestial gem containing divine energy. Required for T3 class advancement.', rarity: 'EPIC', value: 50000 },
-    'dragon_key': { name: 'Dragon Hunter Key', description: 'A glowing key etched with draconic runes. Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000 },
-    'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'A ring that grants the wearer the ability to pierce draconic hide. Required to deal damage to dragons.', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', slot: 'ring', stats: { atk: 5 } },
-    'dragon_heart': { name: 'Dragon Heart', description: 'A massive, still-beating heart of an ancient dragon. Radiates immense power.', rarity: 'LEGENDARY', value: 25000 },
-    'dragon_scale_armor': { name: 'Dragon-Scale Plate', description: 'Armor forged from impenetrable dragon scales. (+80 DEF, +150 HP)', rarity: 'LEGENDARY', value: 45000, type: 'EQUIPMENT', stats: { def: 80, hp: 150 }, slot: 'armor', reqLevel: 30 },
-    'dragon_fang_dagger': { name: 'Dragon-Fang Dagger', description: 'A blade carved from a wyvern’s tooth. (+50 ATK, +15% Crit)', rarity: 'EPIC', value: 22000, type: 'EQUIPMENT', stats: { atk: 50, crit: 15 }, slot: 'main_hand', reqLevel: 25, element: 'FIRE' },
-    'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated essence of the Hive. DO NOT TOUCH.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
+    // --- KEY ITEMS ---
+    'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000, type: 'ITEM' },
+    'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated Hive essence.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
+    'rare_gem': { name: 'Rare Gem', description: 'A sparkling gemstone of immense value.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
+    'wisdom_tome': { name: 'Wisdom Tome', description: 'Ancient knowledge bound in leather.', rarity: 'EPIC', value: 10000, type: 'ITEM' },
+    'skill_scroll': { name: 'Skill Scroll', description: 'Teaches a random skill when read.', rarity: 'EPIC', value: 15000, type: 'ITEM' },
+    'merchant_token': { name: 'Merchant Token', description: 'A proof of high-value trade.', rarity: 'RARE', value: 5000, type: 'ITEM' },
+    'rare_item_ticket': { name: 'Rare Item Ticket', description: 'Exchangeable for a rare item.', rarity: 'RARE', value: 10000, type: 'ITEM' },
+    'discount_coupon': { name: 'Discount Coupon', description: 'Reduces shop prices for one purchase.', rarity: 'UNCOMMON', value: 2000, type: 'ITEM' },
+    'void_essence': { name: 'Void Essence', description: 'A swirling mass of nothingness.', rarity: 'MYTHIC', value: 25000, type: 'MATERIAL' },
+    'lich_phylactery': { name: 'Lich Phylactery', description: 'Contains the soul of a powerful necromancer.', rarity: 'EPIC', value: 15000, type: 'MATERIAL' },
+    'dragon_scale': { name: 'Dragon Scale', description: 'Nearly indestructible plate from a dragon.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
+    'demon_horn': { name: 'Demon Horn', description: 'Razor sharp and warm to the touch.', rarity: 'EPIC', value: 8000, type: 'MATERIAL' },
+    'infernal_crown': { name: 'Infernal Crown', description: 'A crown forged in the deepest pits of hell.', rarity: 'MYTHIC', value: 50000, type: 'MATERIAL' },
+    'golem_core': { name: 'Golem Core', description: 'A pulsating heart of stone and magic.', rarity: 'RARE', value: 6000, type: 'MATERIAL' },
+    'titan_heart': { name: 'Titan Heart', description: 'The power source of a colossal golem.', rarity: 'LEGENDARY', value: 20000, type: 'MATERIAL' },
+    'wyrm_fang': { name: 'Wyrm Fang', description: 'A lethal tooth from an elder dragon.', rarity: 'RARE', value: 4000, type: 'MATERIAL' },
+    'elder_blood': { name: 'Elder Blood', description: 'Pure magic coursing through ancient veins.', rarity: 'LEGENDARY', value: 15000, type: 'MATERIAL' },
 
-    // --- WILDERNESS: FISH ---
-    'common_fish': { name: 'Small Bass', description: 'A common fish found in many ponds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
-    'rare_fish': { name: 'Rainbow Trout', description: 'A beautifully colored, rare fish.', rarity: 'RARE', value: 350, type: 'MATERIAL' },
-    'mythic_fish': { name: 'Void Kraken Tentacle', description: 'A legendary find from the deep abyss.', rarity: 'MYTHIC', value: 5000, type: 'MATERIAL' },
-    'infected_fish': { name: '☣️ Corrupted Eel', description: 'Twisting with bio-hazard energy.', rarity: 'EPIC', value: 1500, type: 'MATERIAL' },
+    // --- FISHING ---
+    'common_fish': { name: 'Small Bass', description: 'A common pond fish.', rarity: 'COMMON', value: 150, type: 'MATERIAL' },
+    'rare_fish': { name: 'Rainbow Trout', description: 'A beautifully colored fish.', rarity: 'RARE', value: 800, type: 'MATERIAL' },
+    'mythic_fish': { name: 'Void Kraken Tentacle', description: 'A legendary find from the abyss.', rarity: 'MYTHIC', value: 15000, type: 'MATERIAL' },
+    'infected_fish': { name: '☣️ Corrupted Eel', description: 'Twisting with hazard energy.', rarity: 'EPIC', value: 4500, type: 'MATERIAL' },
 
-    // --- WILDERNESS: HUNTING ---
-    'rabbit_hide': { name: 'Rabbit Hide', description: 'Soft and common fur.', rarity: 'COMMON', value: 40, type: 'MATERIAL' },
-    'deer_antler': { name: 'Deer Antlers', description: 'Majestic and useful for crafting.', rarity: 'UNCOMMON', value: 200, type: 'MATERIAL' },
-    'bear_claw': { name: 'Bear Claws', description: 'Sharp and dangerous.', rarity: 'RARE', value: 800, type: 'MATERIAL' },
+    // --- HUNTING ---
+    'rabbit_hide': { name: 'Rabbit Hide', description: 'Soft and common fur.', rarity: 'COMMON', value: 120, type: 'MATERIAL' },
+    'deer_antler': { name: 'Deer Antlers', description: 'Useful for crafting.', rarity: 'UNCOMMON', value: 600, type: 'MATERIAL' },
+    'bear_claw': { name: 'Bear Claws', description: 'Sharp and dangerous.', rarity: 'RARE', value: 2500, type: 'MATERIAL' },
 
-        // --- CRAFTED GEAR ---
-        'steel_sabre': { name: 'Steel Sabre', description: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 25, spd: 5 }, slot: 'main_hand', reqLevel: 10, element: 'PHYSICAL' },
-        'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies magical resonance. (+40 MAG, +10 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { mag: 40, hp: 10 }, slot: 'main_hand', reqLevel: 20, element: 'MAGICAL', isTwoHanded: true },
-        'reinforced_plate': { name: 'Reinforced Plate', description: 'Impenetrable steel plating. (+45 DEF, +50 HP)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { def: 45, hp: 50 }, slot: 'armor', reqLevel: 15 },
+    // --- EQUIPMENT: WEAPONS ---
+    'rusty_dagger': { name: 'Rusted Dagger', description: 'A simple blade. (+5 ATK)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { atk: 5 }, slot: 'main_hand', reqLevel: 1 },
+    'iron_sword': { name: 'Iron Sword', description: 'A sturdy iron blade. (+12 ATK)', rarity: 'UNCOMMON', value: 5000, type: 'EQUIPMENT', stats: { atk: 12 }, slot: 'main_hand', reqLevel: 5 },
+    'arcane_wand': { name: 'Arcane Wand', description: 'Focuses arcane energy. (+18 MAG)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { mag: 18 }, slot: 'main_hand', reqLevel: 5 },
+    'steel_sabre': { name: 'Steel Sabre', description: 'Sharp and finely forged. (+25 ATK, +5 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 25, spd: 5 }, slot: 'main_hand', reqLevel: 10 },
+    'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies resonance. (+45 MAG, +15 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { mag: 45, hp: 15 }, slot: 'main_hand', reqLevel: 20, isTwoHanded: true },
+    'dragon_fang_dagger': { name: 'Dragon-Fang Dagger', description: 'Blade carved from a wyvern’s tooth. (+55 ATK, +15% Crit)', rarity: 'EPIC', value: 22000, type: 'EQUIPMENT', stats: { atk: 55, crit: 15 }, slot: 'main_hand', reqLevel: 25 },
     
-            // --- NEW GEAR: WEAPONS ---
-            'rusty_dagger': { name: 'Rusted Dagger', description: 'A simple blade. (+5 ATK)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { atk: 5 }, slot: 'main_hand' },
-            'iron_sword': { name: 'Iron Sword', description: 'A sturdy iron blade. (+12 ATK)', rarity: 'UNCOMMON', value: 5000, type: 'EQUIPMENT', stats: { atk: 12 }, slot: 'main_hand' },
-            'arcane_wand': { name: 'Arcane Wand', description: 'Focuses arcane energy. (+18 MAG)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { mag: 18 }, slot: 'main_hand' },
-            'leather_tunic': { name: 'Leather Tunic', description: 'Basic protection. (+8 DEF)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { def: 8 }, slot: 'armor' },
-            'plate_armor': { name: 'Plate Armor', description: 'Heavy iron plating. (+25 DEF, +20 HP)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { def: 25, hp: 20 }, slot: 'armor' },
-        
-            'shadow_dagger': { name: 'Shadow Dagger', description: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 12, element: 'DARK' },
-        'warhammer': { name: 'Paladin Warhammer', description: 'Heavy and blessed. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 17000, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, element: 'HOLY', isTwoHanded: true },
-        'death_scythe': { name: 'Reaper Scythe', description: 'Harvests the souls of the living. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 28000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, element: 'DEATH', isTwoHanded: true },
-        'chrono_blade': { name: 'Chrono Blade', description: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 32000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 25, element: 'TIME' },
-        'golden_cane': { name: 'Merchant Cane', description: 'Wealth is power. (+20 ATK, +50 LUCK)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 20, luck: 50 }, slot: 'main_hand', reqLevel: 10 },
-        'multi_tool': { name: 'Artificer Tool', description: 'A gadget for every situation. (+25 ATK, +25 MAG, +10 DEF)', rarity: 'RARE', value: 19000, type: 'EQUIPMENT', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand', reqLevel: 10 },
-        'greataxe': { name: 'Berserker Axe', description: 'Pure, unadulterated rage. (+55 ATK, -10 DEF)', rarity: 'EPIC', value: 26000, type: 'EQUIPMENT', stats: { atk: 55, def: -10 }, slot: 'main_hand', reqLevel: 20, element: 'PHYSICAL', isTwoHanded: true },
-        'elemental_wand': { name: 'Prism Wand', description: 'Channels the four elements. (+50 MAG)', rarity: 'EPIC', value: 29000, type: 'EQUIPMENT', stats: { mag: 50 }, slot: 'main_hand', reqLevel: 20, element: 'ELEMENTAL' },
-        'storm_bow': { name: 'Storm Bow', description: 'Shoots arrows of pure lightning. (+40 ATK, +20 SPD)', rarity: 'EPIC', value: 31000, type: 'EQUIPMENT', stats: { atk: 40, spd: 20 }, slot: 'main_hand', reqLevel: 20, element: 'LIGHTNING', isTwoHanded: true },
-        'excalibur_fake': { name: 'Excaliburn', description: 'A very convincing replica. (+60 ATK)', rarity: 'LEGENDARY', value: 50000, type: 'EQUIPMENT', stats: { atk: 60 }, slot: 'main_hand', reqLevel: 30, element: 'PHYSICAL' },
-    
-        // --- NEW GEAR: ARMOR ---
-        'stealth_garb': { name: 'Stealth Garb', description: 'Quiet and lightweight. (+15 DEF, +30 SPD)', rarity: 'RARE', value: 13000, type: 'EQUIPMENT', stats: { def: 15, spd: 30 }, slot: 'armor', reqLevel: 12 },
-        'holy_raiment': { name: 'Holy Raiment', description: 'Blessed by the divine. (+25 DEF, +40 MAG)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 25, mag: 40 }, slot: 'armor', reqLevel: 15 },
-        'dragon_plate': { name: 'Dragon Armor', description: 'Forged from dragon scales. (+60 DEF, +100 HP)', rarity: 'LEGENDARY', value: 60000, type: 'EQUIPMENT', stats: { def: 60, hp: 100 }, slot: 'armor', reqLevel: 35 },
-        'void_cloak': { name: 'Void Cloak', description: 'Absorbs light and damage. (+40 DEF, +20% Evasion)', rarity: 'EPIC', value: 36000, type: 'EQUIPMENT', stats: { def: 40, spd: 25 }, slot: 'armor', reqLevel: 25, element: 'VOID' },
-        'archmage_robes': { name: 'Archmage Robes', description: 'The pinnacle of wizardry. (+20 DEF, +80 MAG)', rarity: 'LEGENDARY', value: 70000, type: 'EQUIPMENT', stats: { def: 20, mag: 80 }, slot: 'armor', reqLevel: 40, element: 'MAGICAL' },
-        'knight_shield': { name: 'Knight Shield', description: 'A sturdy heater shield. (+35 DEF)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { def: 35 }, slot: 'off_hand', reqLevel: 5, isShield: true },
-    
-        // --- NEW GEAR: HELMETS ---
-        'iron_helm': { name: 'Iron Helmet', description: 'Basic protection. (+10 DEF)', rarity: 'COMMON', value: 2000, type: 'EQUIPMENT', stats: { def: 10 }, slot: 'helmet', reqLevel: 1 },
-        'wizard_hat': { name: 'Wizard Hat', description: 'Classic pointy hat. (+15 MAG)', rarity: 'UNCOMMON', value: 5000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'helmet', reqLevel: 5 },
-        'assassin_hood': { name: 'Shadow Hood', description: 'Hides your face. (+5 DEF, +10 SPD, +5% Crit)', rarity: 'RARE', value: 10000, type: 'EQUIPMENT', stats: { def: 5, spd: 10, crit: 5 }, slot: 'helmet', reqLevel: 10 },
-        'dragon_horn_crown': { name: 'Dragon Crown', description: 'Crown of a dragon slayer. (+20 DEF, +30 ATK)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { def: 20, atk: 30 }, slot: 'helmet', reqLevel: 30 },
-    
-        // --- NEW GEAR: BOOTS ---
-        'leather_boots': { name: 'Leather Boots', description: 'Simple walking boots. (+5 SPD)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { spd: 5 }, slot: 'boots', reqLevel: 1 },
-        'heavy_greaves': { name: 'Heavy Greaves', description: 'Protected but slow. (+20 DEF, -5 SPD)', rarity: 'UNCOMMON', value: 7000, type: 'EQUIPMENT', stats: { def: 20, spd: -5 }, slot: 'boots', reqLevel: 10 },
-        'winged_sandals': { name: 'Winged Sandals', description: 'Feel as light as a feather. (+40 SPD)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { spd: 40 }, slot: 'boots', reqLevel: 25 },        
-    
-        // --- NEW GEAR: ACCESSORIES ---
-        'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'UNCOMMON', value: 8000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 1 },
-        'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 10 },
-        'intellect_ring': { name: 'Sage Ring', description: 'Increases magical power. (+20 MAG)', rarity: 'RARE', value: 12000, type: 'EQUIPMENT', stats: { mag: 20 }, slot: 'ring', reqLevel: 10 },
-                  'thief_gloves': { name: 'Thief Gloves', description: 'Sticky fingers. (+15 LUCK, +10 SPD)', rarity: 'UNCOMMON', value: 6000, type: 'EQUIPMENT', stats: { luck: 15, spd: 10 }, slot: 'gloves',
-        reqLevel: 5 },
-                  // --- CRAFTED CONSUMABLES ---
-              'abyssal_detonator': { name: 'Abyssal Detonator', description: 'Tactical nuke that deals 25% Max HP True Damage.', rarity: 'LEGENDARY', value: 50000, usable: true, effect: 'percent_hp_damage', effectValue: 0.25 },
-              'mega_potion': { name: 'Mega Health Potion', description: 'Restores 80% HP.', rarity: 'RARE', value: 2800, usable: true, effect: 'heal', effectValue: 0.8 },
-    'elixir_of_power': { name: 'Elixir of Power', description: 'Boosts ATK and MAG by 50% for 5 turns.', rarity: 'EPIC', value: 5000, usable: true, effect: 'buff_all', effectValue: 50, duration: 5 },
-    'liquid_courage': { name: 'Liquid Courage', description: 'Grants a massive temporary shield.', rarity: 'RARE', value: 3500, usable: true, effect: 'shield_max', effectValue: 100 },
-    'fire_bomb': { name: 'Fire Bomb', description: 'Deals 150 fire damage to all enemies.', rarity: 'UNCOMMON', value: 1500, usable: true, effect: 'aoe_damage', effectValue: 150 },
-    'void_grenade': { name: 'Void Grenade', description: 'Deals 300 damage and reduces enemy DEF.', rarity: 'RARE', value: 5000, usable: true, effect: 'aoe_debuff_damage', effectValue: 300 },
+    // --- EQUIPMENT: ARMOR ---
+    'leather_tunic': { name: 'Leather Tunic', description: 'Basic protection. (+8 DEF)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { def: 8 }, slot: 'armor', reqLevel: 1 },
+    'iron_plate': { name: 'Iron Plate', description: 'Sturdy iron protection. (+15 DEF)', rarity: 'UNCOMMON', value: 4500, type: 'EQUIPMENT', stats: { def: 15 }, slot: 'armor', reqLevel: 5 },
+    'mage_robe': { name: 'Novice Robe', description: 'Enhances magic flow. (+10 MAG, +5 DEF)', rarity: 'UNCOMMON', value: 4800, type: 'EQUIPMENT', stats: { mag: 10, def: 5 }, slot: 'armor', reqLevel: 5 },
+    'reinforced_plate': { name: 'Reinforced Plate', description: 'Impenetrable steel plating. (+45 DEF, +50 HP)', rarity: 'EPIC', value: 24000, type: 'EQUIPMENT', stats: { def: 45, hp: 50 }, slot: 'armor', reqLevel: 15 },
+    'dragon_scale_armor': { name: 'Dragon-Scale Plate', description: 'Forged from dragon scales. (+85 DEF, +150 HP)', rarity: 'LEGENDARY', value: 45000, type: 'EQUIPMENT', stats: { def: 85, hp: 150 }, slot: 'armor', reqLevel: 30 },
 
-    // --- POTIONS & STANDARD ITEMS ---
-    'minor_potion': {
-        name: 'Minor Health Potion',
-        description: 'Restores 15% Max HP',
-        rarity: 'COMMON',
-        value: 70,
-        usable: true,
-        effect: 'heal',
-        effectValue: 0.15
-    },
-    'health_potion': {
-        name: 'Health Potion',
-        description: 'Restores 35% Max HP',
-        rarity: 'COMMON',
-        value: 140,
-        usable: true,
-        effect: 'heal',
-        effectValue: 0.35
-    },
+    // --- ACCESSORIES ---
+    'wooden_ring': { name: 'Wooden Ring', description: 'A simple band. (+2 HP)', rarity: 'COMMON', value: 500, type: 'EQUIPMENT', stats: { hp: 2 }, slot: 'ring', reqLevel: 1 },
+    'iron_ring': { name: 'Iron Ring', description: 'A sturdy band. (+10 HP)', rarity: 'UNCOMMON', value: 2000, type: 'EQUIPMENT', stats: { hp: 10 }, slot: 'ring', reqLevel: 5 },
+    'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'Pierce draconic hide. (+10 ATK)', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', stats: { atk: 10 }, slot: 'ring', reqLevel: 20 },
 
-    // --- WILDERNESS: FISH ---
-    'common_fish': { name: 'Small Bass', description: 'A common fish found in many ponds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
-    'rare_fish': { name: 'Rainbow Trout', description: 'A beautifully colored, rare fish.', rarity: 'RARE', value: 350, type: 'MATERIAL' },
-    'mythic_fish': { name: 'Void Kraken Tentacle', description: 'A legendary find from the deep abyss.', rarity: 'MYTHIC', value: 5000, type: 'MATERIAL' },
-    'infected_fish': { name: '☣️ Corrupted Eel', description: 'Twisting with bio-hazard energy.', rarity: 'EPIC', value: 1500, type: 'MATERIAL' },
-
-    // --- WILDERNESS: HUNTING ---
-    'rabbit_hide': { name: 'Rabbit Hide', description: 'Soft and common fur.', rarity: 'COMMON', value: 40, type: 'MATERIAL' },
-    'deer_antler': { name: 'Deer Antlers', description: 'Majestic and useful for crafting.', rarity: 'UNCOMMON', value: 200, type: 'MATERIAL' },
-    'bear_claw': { name: 'Bear Claws', description: 'Sharp and dangerous.', rarity: 'RARE', value: 800, type: 'MATERIAL' },
-    'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
-    'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated essence of the Hive.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
-    'mana_potion': {
-        name: 'Mana Potion',
-        description: 'Restores 40% Energy',
-        rarity: 'COMMON',
-        value: 400,
-        usable: true,
-        effect: 'restore_energy',
-        effectValue: 0.4
-    },
-    'greater_potion': {
-        name: 'Greater Health Potion',
-        description: 'Restores 45% Max HP',
-        rarity: 'UNCOMMON',
-        value: 350,
-        usable: true,
-        effect: 'heal',
-        effectValue: 0.45
-    },
-    'major_potion': {
-        name: 'Major Health Potion',
-        description: 'Restores 60% Max HP',
-        rarity: 'RARE',
-        value: 1680,
-        usable: true,
-        effect: 'heal',
-        effectValue: 0.6
-    },
-    'elixir': {
-        name: 'Full Restore Elixir',
-        description: 'Fully restores HP (100%)',
-        rarity: 'EPIC',
-        value: 4200,
-        usable: true,
-        effect: 'heal',
-        effectValue: 1.0
-    },
-    'regen_salve': {
-        name: 'Regeneration Salve',
-        description: 'Heals 10% Max HP per turn for 3 turns',
-        rarity: 'COMMON',
-        value: 1120,
-        usable: true,
-        effect: 'regen',
-        effectValue: 0.1,
-        duration: 3
-    },
-    'ether': {
-        name: 'Ether',
-        description: 'Fully restores Energy (100%)',
-        rarity: 'RARE',
-        value: 15000,
-        usable: true,
-        effect: 'restore_energy',
-        effectValue: 1.0
-    },
-    'defense_tonic': {
-        name: 'Defense Tonic',
-        description: 'Increases DEF by 25% for 3 turns',
-        rarity: 'UNCOMMON',
-        value: 600,
-        usable: true,
-        effect: 'buff_def',
-        effectValue: 25
-    },
-    'speed_elixir': {
-        name: 'Speed Elixir',
-        description: 'Increases SPD by 30% for 3 turns',
-        rarity: 'UNCOMMON',
-        value: 600,
-        usable: true,
-        effect: 'buff_spd',
-        effectValue: 30
-    },
-    'lucky_charm': {
-        name: 'Lucky Charm',
-        description: 'Increases LUCK by 40% for 3 turns',
-        rarity: 'RARE',
-        value: 800,
-        usable: true,
-        effect: 'buff_luck',
-        effectValue: 40
-    },
-    'berserker_pill': {
-        name: 'Berserker Pill',
-        description: 'Increases all damage by 50% but reduces defense.',
-        rarity: 'EPIC',
-        value: 1500,
-        usable: true,
-        effect: 'buff_all_damage',
-        effectValue: 50
-    },
-    'phoenix_down': {
-        name: 'Phoenix Down',
-        description: 'Revives a fallen ally with 50% HP',
-        rarity: 'RARE',
-        value: 2500,
-        usable: true,
-        effect: 'revive',
-        effectValue: 0.5
-    },
-    'bomb': {
-        name: 'Bomb',
-        description: 'Deals 80 area damage to all enemies',
-        rarity: 'UNCOMMON',
-        value: 1000,
-        usable: true,
-        effect: 'damage_aoe',
-        effectValue: 80
-    },
-    'smoke_bomb': {
-        name: 'Smoke Bomb',
-        description: 'Allows the party to escape combat',
-        rarity: 'COMMON',
-        value: 500,
-        usable: true,
-        effect: 'flee',
-        effectValue: 80
-    },
-    'bomb': {
-        name: 'Bomb',
-        description: 'Deals 80 area damage to all enemies',
-        rarity: 'UNCOMMON',
-        value: 1000,
-        usable: true,
-        effect: 'damage_aoe',
-        effectValue: 80
-    },
-    'regen_salve': {
-        name: 'Regeneration Salve',
-        description: 'Heals 15 HP per turn for 3 turns',
-        rarity: 'COMMON',
-        value: 800,
-        usable: true,
-        effect: 'regen',
-        effectValue: 15,
-        duration: 3
-    },
+    // --- POTIONS & CONSUMABLES ---
+    'minor_hp_potion': { name: 'Minor HP Potion', description: 'Restores 50 HP.', rarity: 'COMMON', value: 200, type: 'POTION', usable: true, effect: 'heal', effectValue: 50 },
+    'hp_potion': { name: 'Health Potion', description: 'Restores 150 HP.', rarity: 'UNCOMMON', value: 600, type: 'POTION', usable: true, effect: 'heal', effectValue: 150 },
+    'mega_potion': { name: 'Mega Potion', description: 'Restores 500 HP.', rarity: 'RARE', value: 2500, type: 'POTION', usable: true, effect: 'heal', effectValue: 500 },
+    'energy_drink': { name: 'Energy Drink', description: 'Restores 30 Energy.', rarity: 'UNCOMMON', value: 1200, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 30 },
+    'ether': { name: 'Ether', description: 'Fully restores Energy (100%).', rarity: 'RARE', value: 15000, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 1.0 },
+    'phoenix_feather': { name: 'Phoenix Feather', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 5000, type: 'POTION', usable: true, effect: 'revive', effectValue: 50 },
+    'bandage': { name: 'Bandage', description: 'Simple cloth used to wrap wounds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
     
-    // Utility
-    'bandage': {
-        name: 'Bandage',
-        description: 'Stop bleeding and heal 15 HP',
-        rarity: 'COMMON',
-        value: 20,
-        usable: true,
-        effect: 'heal',
-        effectValue: 15
-    },
-    'strength_brew': {
-        name: 'Strength Brew',
-        description: 'Boost ATK for a short duration',
-        rarity: 'UNCOMMON',
-        value: 800,
-        usable: true,
-        effect: 'buff_atk',
-        effectValue: 25
-    },
-    
-    // Special drops
-    'mirror_essence': {
-        name: 'Mirror Essence',
-        description: 'A crystallized fragment of dark power.',
-        rarity: 'LEGENDARY',
-        value: 5000,
-        usable: false
-    },
-    'boss_essence': {
-        name: 'Boss Essence',
-        description: 'Concentrated power from a mighty boss.',
-        rarity: 'RARE',
-        value: 500,
-        usable: false
-    },
-    'dragon_scale': {
-        name: 'Dragon Scale',
-        description: 'A shimmering dragon scale.',
-        rarity: 'RARE',
-        value: 800,
-        usable: false
-    },
-    'dragon_heart': {
-        name: 'Dragon Heart',
-        description: 'The still-beating heart of a dragon.',
-        rarity: 'LEGENDARY',
-        value: 10000,
-        usable: false
-    },
-    'rare_gem': {
-        name: 'Rare Gem',
-        description: 'A precious gemstone with magical properties.',
-        rarity: 'RARE',
-        value: 300,
-        usable: false
-    },
-    'legendary_shard': {
-        name: 'Legendary Shard',
-        description: 'Fragment of a legendary artifact.',
-        rarity: 'EPIC',
-        value: 1000,
-        usable: false
-    },
-    'essence_mirror': {
-        name: 'Essence Mirror',
-        description: 'Allows you to mirror skills from other classes.',
-        rarity: 'LEGENDARY',
-        value: 50000,
-        usable: false
-    },
-    'phoenix_feather': {
-        name: 'Phoenix Feather',
-        description: 'Revives a fallen ally with 50% HP.',
-        rarity: 'RARE',
-        value: 500,
-        usable: true,
-        effect: 'revive',
-        effectValue: 50
-    }
+    // --- SPECIALS ---
+    'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },
+    'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' }
 };
 
 function getItemInfo(itemId) {
@@ -924,7 +623,8 @@ function getItemInfo(itemId) {
         name: itemId,
         description: 'Unknown item',
         rarity: 'COMMON',
-        value: 10
+        value: 10,
+        type: 'ITEM'
     };
 }
 

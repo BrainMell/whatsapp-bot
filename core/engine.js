@@ -1707,6 +1707,25 @@ function checkSpam(userId, chatId) {
 
   return false;
 }
+
+const gamblingSpamTracker = new Map();
+function checkGamblingSpam(userId) {
+  const now = Date.now();
+  if (!gamblingSpamTracker.has(userId)) {
+    gamblingSpamTracker.set(userId, { attempts: [], lastWarning: 0 });
+  }
+
+  const data = gamblingSpamTracker.get(userId);
+  // Window: 15 seconds
+  data.attempts = data.attempts.filter(t => now - t < 15000);
+  data.attempts.push(now);
+
+  // If more than 5 attempts in 15 seconds = BLOCKED
+  if (data.attempts.length > 5) {
+    return true;
+  }
+  return false;
+}
 // ✅ FIXED: Parse time duration (e.g., "10s", "5m", "2h", "1d")
 // so u can say .mute @user 10s for 10 seconds, 5m for 5 minutes, etc
 function parseDuration(duration) {
@@ -2358,7 +2377,37 @@ async function sendBotMenu(sock, chatId, botMarker, args = []) {
   const categoryInput = cleanArgs[0]?.toLowerCase();
   const fullInput = cleanArgs.join(' ').toLowerCase();
 
-  // 1. COMMAND EXPLAIN MODE (.j menu <command>)
+  // 1. SHOW ALL COMMANDS (.j menu all)
+  if (categoryInput === 'all') {
+    let allMsg = GET_BANNER(`✨ ${botName.toUpperCase()}`) + `\n`;
+    allMsg += `*Prefix* ${botConfig.getPrefix()}\n\n`;
+    for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
+      const emoji = CATEGORY_EMOJIS[cat] || '◈';
+      allMsg += `${emoji}─── ＊ ${cat} ＊ ───${emoji}\n`;
+      cmds.forEach(c => {
+        allMsg += `• \`${botConfig.getPrefix()} ${c.cmd}\`\n`;
+      });
+      allMsg += "\n";
+    }
+    return await sendMenuWithBanner(sock, chatId, allMsg);
+  }
+
+  // 2. CATEGORY MENU (.j menu <CATEGORY>)
+  const matchedCat = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase() === fullInput || k.toLowerCase() === categoryInput || k.toLowerCase() === cleanArgs.join(' ').toLowerCase());
+  
+  if (matchedCat) {
+    const cmds = COMMAND_REGISTRY[matchedCat];
+    const emoji = CATEGORY_EMOJIS[matchedCat] || '📂';
+    let catMsg = GET_BANNER(`${emoji} ${matchedCat.toUpperCase()}`) + `\n\n`;
+    
+    cmds.forEach(c => {
+      catMsg += `➤ \`${botConfig.getPrefix()} ${c.cmd}\` – ${c.desc.split('.')[0]}\n`;
+    });
+    
+    return await sendMenuWithBanner(sock, chatId, catMsg);
+  }
+
+  // 3. COMMAND EXPLAIN MODE (.j menu <command>)
   if (categoryInput && !showHidden) {
     let foundCommand = null;
     let commandCategory = "";
@@ -2387,36 +2436,6 @@ ${foundCommand.desc}
 ${commandCategory}`;
       return await sendMenuWithBanner(sock, chatId, explainMsg);
     }
-  }
-
-  // 2. CATEGORY MENU (.j menu <CATEGORY>)
-  const matchedCat = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase() === fullInput || k.toLowerCase() === categoryInput);
-  
-  if (matchedCat) {
-    const cmds = COMMAND_REGISTRY[matchedCat];
-    const emoji = CATEGORY_EMOJIS[matchedCat] || '📂';
-    let catMsg = GET_BANNER(`${emoji} ${matchedCat.toUpperCase()}`) + `\n\n`;
-    
-    cmds.forEach(c => {
-      catMsg += `➤ \`${botConfig.getPrefix()} ${c.cmd}\` – ${c.desc.split('.')[0]}\n`;
-    });
-    
-    return await sendMenuWithBanner(sock, chatId, catMsg);
-  }
-
-  // 3. SHOW ALL COMMANDS (.j menu all)
-  if (categoryInput === 'all') {
-    let allMsg = GET_BANNER(`✨ ${botName.toUpperCase()}`) + `\n`;
-    allMsg += `*Prefix* ${botConfig.getPrefix()}\n\n`;
-    for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-      const emoji = CATEGORY_EMOJIS[cat] || '◈';
-      allMsg += `${emoji}─── ＊ ${cat} ＊ ───${emoji}\n`;
-      cmds.forEach(c => {
-        allMsg += `• \`${botConfig.getPrefix()} ${c.cmd}\`\n`;
-      });
-      allMsg += "\n";
-    }
-    return await sendMenuWithBanner(sock, chatId, allMsg);
   }
 
 
@@ -3567,15 +3586,15 @@ _💡 Reply with another number from your search list!_`.trim();
 
             // .j tutorial
             if (primaryCmd === 'tutorial') {
-                let msg = `🎓 *ADVENTURER'S HANDBOOK* 🎓\n\n`;
-                msg += `Welcome, New Adventurer! Here is how to begin your journey:\n\n`;
-                msg += `1️⃣ *REGISTER:* Type \`${currentPrefix} register <nickname>\` to create your character.\n`;
-                msg += `2️⃣ *STATS:* You gain 5 Attribute Points per level. Use \`${currentPrefix} allocate <stat> <amount>\` (e.g., \`allocate atk 5\`) to get stronger.\n`;
-                msg += `3️⃣ *SKILLS:* You gain Skill Points as you level. Use \`${currentPrefix} skill tree\` to see your path and \`${currentPrefix} skill up <name>\` to unlock abilities.\n`;
-                msg += `4️⃣ *COMBAT:* Use \`${currentPrefix} quest\` or \`${currentPrefix} solo\` to find enemies. In battle, use \`${currentPrefix} combat attack\` or \`${currentPrefix} combat ability <num>\`.\n`;
-                msg += `5️⃣ *GEAR:* Visit the \`${currentPrefix} shop\` to buy equipment, or \`${currentPrefix} craft\` them from materials you find.\n`;
-                msg += `6️⃣ *EVOLVE:* Once you reach Lv.20 and complete 30 quests, use \`${currentPrefix} evolve\` to reach the next tier!\n\n`;
-                msg += `💡 *Pro Tip:* Use \`${currentPrefix} menu rpg\` to see all commands!`;
+                let msg = `🎓 *RPG ADVENTURE GUIDE* 🎓\n\n`;
+                msg += `Welcome to the legend! Here is how to navigate your new life:\n\n`;
+                msg += `1️⃣ *REGISTER:* \`${currentPrefix} register <nickname>\` to start.\n\n`;
+                msg += `2️⃣ *LEVEL UP:* Do \`${currentPrefix} quest\` or \`${currentPrefix} solo\`. As you level, you gain points!\n\n`;
+                msg += `3️⃣ *STATS:* Use \`${currentPrefix} allocate <stat> <n>\` (e.g. \`allocate atk 5\`). Points in MAG increase magic damage!\n\n`;
+                msg += `4️⃣ *SKILLS:* ⚠️ *IMPORTANT:* You must **UNLOCK** skills before you can use them! Check \`${currentPrefix} skill tree\` and use \`${currentPrefix} skill up <name>\` to learn them.\n\n`;
+                msg += `5️⃣ *COMBAT:* In battle, type \`${currentPrefix} combat ability 1\` to use your first skill. Use \`rest\` to recover Energy.\n\n`;
+                msg += `6️⃣ *EVOLVE:* Reach Lv.20 and 30 Quests, then use \`${currentPrefix} evolve\` to unlock advanced classes and Trials!\n\n`;
+                msg += `💡 *Pro Tip:* Use \`${currentPrefix} menu rpg\` to see every command available!`;
                 await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                 return;
             }
@@ -3674,11 +3693,25 @@ _💡 Reply with another number from your search list!_`.trim();
         // SPAM PREVENTION: Intelligent Cooldowns
         if (isBotCommand && !isOwner) {
           const now = Date.now();
-          const gamblingCommands = ['cf', 'dice', 'slots', 'hl', 'bj', 'roulette', 'roul', 'crash', 'mines', 'plinko', 'scratch', 'cups', 'wheel', 'horse', 'lotto', 'rps', 'penalty', 'guess'];
+          const gamblingCommands = ['cf', 'dice', 'slots', 'hl', 'bj', 'roulette', 'roul', 'crash', 'mines', 'plinko', 'scratch', 'cups', 'wheel', 'horse', 'lotto', 'rps', 'penalty', 'guess', 'fish', 'hunt'];
           const cmd = lowerTxt.substring(botConfig.getPrefix().length).trim().split(' ')[0];
-          const isGambling = gamblingCommands.includes(cmd);
+          const isSpamSensitive = gamblingCommands.includes(cmd);
           
-          // 1. GLOBAL COOLDOWN (5s for any command)
+          // 1. HARD SPAM LOCK (Automatic Block)
+          if (isSpamSensitive) {
+            const isHardSpamming = checkGamblingSpam(senderJid);
+            if (isHardSpamming) {
+              console.log(`🚨 HARD SPAM detected from ${senderJid}. Blocking...`);
+              blockUser(senderJid);
+              await sock.sendMessage(chatId, { 
+                text: BOT_MARKER + `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${senderJid.split('@')[0]} has been **BLOCKED** for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
+                mentions: [senderJid]
+              });
+              return;
+            }
+          }
+
+          // 2. GLOBAL COOLDOWN (5s for any command)
           if (commandCooldowns.has(senderJid)) {
             const lastTime = commandCooldowns.get(senderJid);
             const globalExpiration = lastTime + 5000;
@@ -7435,12 +7468,38 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`) {
     return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first to start scavenging!" });
   }
 
+  const user = economy.getUser(senderJid);
+  const now = Date.now();
+  const COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+  const MAX_FISH = 20;
+
+  // Check if 5-hour cooldown is active
+  if (user.fishCount >= MAX_FISH) {
+    const timePassed = now - (user.lastFishReset || 0);
+    if (timePassed < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - timePassed;
+      const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+      const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+      return await sock.sendMessage(chatId, { 
+        text: BOT_MARKER + `🪣 *FISHING FATIGUE*\n\nYou've fished 20 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.` 
+      }, { quoted: m });
+    } else {
+      // Cooldown expired, reset count
+      user.fishCount = 0;
+      user.lastFishReset = now;
+    }
+  }
+
   await sock.sendMessage(chatId, { react: { text: "🎣", key: m.key } });
   await sock.sendMessage(chatId, { text: BOT_MARKER + "⏳ Casting your line... please wait 5s." });
 
   setTimeout(async () => {
-    const user = economy.getUser(senderJid);
-    const luck = user.stats?.luck || 5;
+    const freshUser = economy.getUser(senderJid); // Re-get to ensure latest data
+    freshUser.fishCount = (freshUser.fishCount || 0) + 1;
+    if (freshUser.fishCount === 1) freshUser.lastFishReset = Date.now();
+    economy.saveUser(senderJid);
+
+    const luck = freshUser.stats?.luck || 5;
     
     // Rarity Logic
     let itemKey = 'common_fish';
@@ -10450,7 +10509,11 @@ if (
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} img`) ||
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} audio`) ||
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} nsfw`) ||
-    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} 18+`)
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} 18+`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guide`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} handbook`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tutorial`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} mine`)
 ) {
     return;
 }

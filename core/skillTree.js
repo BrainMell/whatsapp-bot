@@ -1047,10 +1047,10 @@ const SKILL_TREES = {
                         maxLevel: 5,
                         energyCost: [20, 19, 18, 17, 15],
                         cooldown: 2,
-                        damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8], // Buffed from 3.0-4.2
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { burn: { chance: [65, 70, 75, 80, 90], duration: 3, value: [25, 30, 35, 40, 50] } },
+                        effects: { burn: { chance: [75, 80, 85, 90, 100], duration: 3, value: [30, 35, 40, 45, 60] } },
                         description: 'Launch blazing fireball',
                         animation: '🔥💥',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1063,10 +1063,10 @@ const SKILL_TREES = {
                         maxLevel: 5,
                         energyCost: [18, 17, 16, 15, 13],
                         cooldown: 2,
-                        damageMultiplier: [2.5, 2.7, 2.9, 3.1, 3.4],
+                        damageMultiplier: [2.8, 3.1, 3.4, 3.7, 4.1], // Buffed from 2.5-3.4
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { freeze: { chance: [45, 50, 55, 60, 70], duration: 1 } },
+                        effects: { freeze: { chance: [55, 60, 65, 70, 85], duration: 1 } },
                         description: 'Freeze enemy in their tracks',
                         animation: '❄️💎',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1080,11 +1080,11 @@ const SKILL_TREES = {
                         prerequisite: ['fireball'],
                         energyCost: [25, 23, 21, 19, 17],
                         cooldown: 3,
-                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8],
+                        damageMultiplier: [4.2, 4.6, 5.0, 5.4, 6.0], // Buffed from 3.5-4.8
                         damageType: 'MAGICAL',
                         targeting: 'CHAIN',
                         chainTargets: 3,
-                        effects: { shock: { duration: 2, value: [15, 18, 21, 24, 28] } },
+                        effects: { shock: { duration: 2, value: [20, 25, 30, 35, 45] } },
                         description: 'Chain lightning between enemies',
                         animation: '⚡🔗',
                         skillPointCost: [2, 3, 4, 5, 6]
@@ -1098,7 +1098,7 @@ const SKILL_TREES = {
                         prerequisite: ['frost_bolt'],
                         energyCost: [30, 28, 26, 24, 22],
                         cooldown: 3,
-                        damageMultiplier: [1.2, 1.35, 1.5, 1.65, 1.8],
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.4], // 5 hits total
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
                         multiHit: 5,
@@ -1115,10 +1115,10 @@ const SKILL_TREES = {
                         prerequisite: ['frost_bolt'],
                         energyCost: [40, 38, 35, 32, 30],
                         cooldown: 5,
-                        damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
+                        damageMultiplier: [2.0, 2.2, 2.4, 2.6, 3.0], // Buffed from 1.4-2.0
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        effects: { freeze: { chance: [50, 55, 60, 65, 70], duration: 1 } },
+                        effects: { freeze: { chance: [60, 65, 70, 75, 90], duration: 1 } },
                         description: 'Freeze all enemies',
                         animation: '❄️🌨️',
                         skillPointCost: [3, 4, 5, 6, 7]
@@ -1132,12 +1132,12 @@ const SKILL_TREES = {
                         prerequisite: ['blizzard'],
                         energyCost: [70, 65, 60],
                         cooldown: 6,
-                        damageMultiplier: [3.8, 4.2, 4.6],
+                        damageMultiplier: [5.5, 6.5, 8.0], // Massive Ultimate Buff
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
-                            burn: { chance: [80, 85, 90], duration: 4, value: [25, 30, 35] },
-                            stun: { chance: [40, 45, 50], duration: 1 }
+                            burn: { chance: [90, 95, 100], duration: 4, value: [40, 50, 75] },
+                            stun: { chance: [50, 60, 75], duration: 1 }
                         },
                         description: 'Rain destruction from the sky',
                         animation: '☄️💥💥',

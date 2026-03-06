@@ -13,6 +13,8 @@ const UserSchema = new mongoose.Schema({
   lastDaily: { type: Number, default: 0 },
   lastRob: { type: Number, default: 0 },
   lastClassChange: { type: Number, default: 0 },
+  lastFishReset: { type: Number, default: 0 },
+  fishCount: { type: Number, default: 0 },
 
   // RPG Stats
   class: { type: String, default: null },
@@ -95,9 +97,21 @@ const UserSchema = new mongoose.Schema({
   progression: {
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
+    gp: { type: Number, default: 0 },
+    totalGP: { type: Number, default: 0 },
     statPoints: { type: Number, default: 0 },
     totalXPEarned: { type: Number, default: 0 },
+    totalLevelsGained: { type: Number, default: 0 },
     commandsUsed: { type: Number, default: 0 },
+    allocatedStats: {
+        hp: { type: Number, default: 0 },
+        atk: { type: Number, default: 0 },
+        def: { type: Number, default: 0 },
+        mag: { type: Number, default: 0 },
+        spd: { type: Number, default: 0 },
+        luck: { type: Number, default: 0 },
+        crit: { type: Number, default: 0 }
+    },
     achievements: { type: Array, default: [] }
   },
 

@@ -1201,29 +1201,33 @@ function applyStatusEffect(target, effectType, duration = 3, value = 0, source =
 
 function processStatusEffects(entity) {
     let messages = [];
-    
+
     if (!entity.statusEffects) {
         entity.statusEffects = [];
     }
-    
+
     for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
         const effect = entity.statusEffects[i];
         const template = STATUS_EFFECTS[effect.type] || {};
-        
+
         const name = effect.name || template.name || effect.type;
         const icon = effect.icon || template.icon || '✨';
         const value = Number(effect.value !== undefined ? effect.value : template.value) || 0;
 
         // Process effect based on type
         if (effect.effect === 'damage_over_time' || template.effect === 'damage_over_time') {
-            entity.stats.hp -= value;
-            messages.push(`${icon} ${entity.name} takes ${value} ${name} damage!`);
+            const damage = Math.floor(value);
+            entity.stats.hp -= damage;
+            messages.push(`🩸 *${name.toUpperCase()} TICK:* ${icon} ${entity.name} takes **${damage}** damage!`);
         } else if (effect.effect === 'heal_over_time' || template.effect === 'heal_over_time') {
             const heal = Math.min(value, (entity.stats.maxHp || entity.stats.hp) - entity.stats.hp);
             entity.stats.hp += heal;
-            messages.push(`${icon} ${entity.name} regenerates ${heal} HP!`);
+            messages.push(`💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`);
+        } else if (effect.effect === 'reduce_stats' || template.effect === 'reduce_stats' || effect.effect === 'reduce_defense' || template.effect === 'reduce_defense') {
+            // Stat reduction doesn't tick damage, but we show it's active
+            // messages.push(`${icon} ${entity.name} is struggling under ${name}...`);
         }
-        
+
         // Sync HP for V2 (combat Integration expects currentHP)
         entity.currentHP = entity.stats.hp;
 
@@ -1231,13 +1235,12 @@ function processStatusEffects(entity) {
         effect.duration--;
         if (effect.duration <= 0) {
             entity.statusEffects.splice(i, 1);
-            messages.push(`${entity.name}'s ${name} wears off.`);
+            messages.push(`✨ *EXPIRED:* ${entity.name}'s **${name}** has worn off.`);
         }
     }
-    
+
     return messages;
 }
-
 function getAvailableEnemies(poolId) {
     // poolId is 1-indexed, convert to avgLevel for classEncounters
     const levelMap = { 1: 5, 2: 25, 3: 45, 4: 65, 5: 85 };
@@ -2621,7 +2624,7 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
     return msg;
 };
 
-const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, rankInput = null, senderJid = null, smartGroqCall = null) => {
+const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, rankInput = null, senderJid = null, smartGroqCall = null, trialData = null) => {
     // Check limits
     const limitCheck = checkChatLimits(chatId, solo, senderJid);
     if (!limitCheck.allowed) return { success: false, msg: limitCheck.msg };
@@ -2631,16 +2634,20 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
         return { success: false, msg: solo ? "❌ You already have an active Solo raid!" : "❌ A Group raid is already active in this chat!" };
     }
 
-    if (!rankInput) {
+    if (!rankInput && mode !== 'TRIAL') {
         return { success: true, isMenu: true, msg: getDungeonMenu(solo, senderJid) };
     }
 
-    const upperRank = rankInput.toUpperCase();
-    if (!DUNGEON_RANKS[upperRank]) {
+    let upperRank = rankInput ? rankInput.toUpperCase() : 'F';
+    let rankData = DUNGEON_RANKS[upperRank];
+
+    if (mode === 'TRIAL' && trialData) {
+        // Special rank for trials
+        upperRank = 'TRIAL';
+        rankData = { name: 'Class Trial', difficulty: 1.5, encounters: 1 };
+    } else if (!rankData) {
         return { success: false, msg: `❌ Invalid Dungeon Rank: ${rankInput}.\n\n` + getDungeonMenu(solo) };
     }
-
-    const rankData = DUNGEON_RANKS[upperRank];
 
     // Special Dungeon Key & Lineage Check
     if (rankData.isSpecial && senderJid) {
@@ -2713,7 +2720,8 @@ const initAdventure = async (sock, chatId, groq, mode = 'NORMAL', solo = false, 
             maxEncounters: rankData.encounters,
             players: [],
             votes: {},
-            timers: {}
+            timers: {},
+            trialData // ⚔️ Special trial payload
         });    
     gameStates.set(sessionKey, state);
     
@@ -3460,10 +3468,52 @@ async function endAdventure(sock, sessionKey, victory = true) {
     msg += `💥 Total Damage Dealt: ${totalDamage.toLocaleString()}\n`;
     msg += `💖 Total Healing Done: ${totalHealed.toLocaleString()}\n\n`;
 
-    msg += `🏆 *INDIVIDUAL REWARDS:*\n\n`;
-    
+    // === SPECIAL MODE HANDLING: TRIAL ===
+    if (state.mode === 'TRIAL' && victory) {
+        const player = state.players[0]; // Trials are always solo
+        const trialData = state.trialData;
+        const user = economy.getUser(player.jid);
+        const classSystem = require('./classSystem');
+        const nextClass = classSystem.getClassById(trialData.targetClass);
+
+        if (user && nextClass) {
+            const oldClassName = classSystem.getClassById(user.class)?.name || 'Unknown';
+            user.class = trialData.targetClass;
+            
+            // Deduct cost and stone here if not already handled
+            const inventorySystem = require('./inventorySystem');
+            inventorySystem.removeItem(player.jid, trialData.stoneId, 1);
+            economy.removeMoney(player.jid, trialData.cost, `Evolved to ${nextClass.name}`);
+
+            // Grant Bonus Points
+            const bonusPoints = nextClass.tier === 'ASCENDED' ? 10 : 5;
+            user.skillPoints = (user.skillPoints || 0) + bonusPoints;
+            
+            economy.saveUser(player.jid);
+
+            let trialSuccessMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+            trialSuccessMsg += `┃   ✨ *TRIAL CONQUERED!* ✨\n`;
+            trialSuccessMsg += `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+            trialSuccessMsg += `You have proven your worth by defeating the **${trialData.trialBoss.replace('_', ' ')}**!\n\n`;
+            trialSuccessMsg += `*${oldClassName}* ──▶ *${nextClass.name}* ${nextClass.icon}\n\n`;
+            trialSuccessMsg += `📊 *New Base Stats:*\n`;
+            Object.entries(nextClass.stats).forEach(([stat, val]) => {
+                trialSuccessMsg += `• ${stat.toUpperCase()}: ${val}\n`;
+            });
+            trialSuccessMsg += `\n✅ *Skills Preserved!*\n`;
+            trialSuccessMsg += `🎁 *Tier Bonus:* +${bonusPoints} Skill Points\n\n`;
+            trialSuccessMsg += `🌳 \`${botConfig.getPrefix()} skill tree\` to continue your path!`;
+
+            await sock.sendMessage(chatId, { text: trialSuccessMsg });
+            
+            state.active = false;
+            deleteGameState(sessionKey);
+            return;
+        }
+    }
+
+    // Default individual rewards
     const multiplier = state.mode === 'PERMADEATH' ? GAME_CONFIG.PERMADEATH_MULTIPLIER : 1;
-    
     for (const player of state.players) {
         const finalXP = Math.floor(player.xpEarned * multiplier);
         const finalGold = Math.floor(player.goldEarned * multiplier);

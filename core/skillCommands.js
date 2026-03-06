@@ -547,7 +547,41 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         });
     }
 
-    // === EVOLUTION: PRESERVE SKILLS MODEL ===
+    // === TRIALS SYSTEM: Trigger Boss Fight if required ===
+    if (chosen.requirement?.trialBoss) {
+        const guildAdventure = require('./guildAdventure');
+        const sessionKey = `${chatId}_${senderJid}`;
+        
+        if (guildAdventure.isUserInAdventure(sessionKey)) {
+            return sock.sendMessage(chatId, { text: `❌ Finish your current adventure before starting your Class Trial!` });
+        }
+
+        const trialMsg = `⚔️ *CLASS TRIAL INITIATED* ⚔️\n\nTo evolve into a *${chosen.name}*, you must first defeat the **${chosen.requirement.trialBoss.replace('_', ' ')}**!\n\nPrepare yourself... the battle begins in 5 seconds.`;
+        await sock.sendMessage(chatId, { text: trialMsg });
+
+        setTimeout(async () => {
+            await guildAdventure.initAdventure(
+                sock, 
+                chatId, 
+                null, // No Groq required for trials
+                'TRIAL', 
+                true, // Always solo
+                null, // No rank needed
+                senderJid, 
+                null, // No smartGroqCall
+                {
+                    trialBoss: chosen.requirement.trialBoss,
+                    targetClass: chosen.id,
+                    stoneId: requiredStone,
+                    cost: chosen.evolutionCost
+                }
+            );
+        }, 5000);
+        
+        return;
+    }
+
+    // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
     inventorySystem.removeItem(senderJid, requiredStone, 1);
     if (chosen.requirement?.item) inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
     economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
