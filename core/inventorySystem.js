@@ -27,37 +27,37 @@ const ITEM_RARITY = {
     COMMON: {
         name: 'Common',
         icon: '⚪', // Grey
-        sellMultiplier: 0.3,
+        sellMultiplier: 0.6,
         dropChance: 60
     },
     UNCOMMON: {
         name: 'Uncommon',
         icon: '🟢',
-        sellMultiplier: 0.4,
+        sellMultiplier: 0.7,
         dropChance: 25
     },
     RARE: {
         name: 'Rare',
         icon: '🔵', // Blue
-        sellMultiplier: 0.5,
+        sellMultiplier: 0.8,
         dropChance: 10
     },
     EPIC: {
         name: 'Epic',
         icon: '🟣',
-        sellMultiplier: 0.6,
+        sellMultiplier: 0.9,
         dropChance: 4
     },
     LEGENDARY: {
         name: 'Legendary',
         icon: '🟡', // Yellow
-        sellMultiplier: 0.75,
+        sellMultiplier: 1.0,
         dropChance: 1
     },
     MYTHIC: {
         name: 'Mythic',
         icon: '🔴', // Red
-        sellMultiplier: 1.0,
+        sellMultiplier: 1.2,
         dropChance: 0.1
     }
 };
