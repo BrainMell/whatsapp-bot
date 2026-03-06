@@ -588,44 +588,49 @@ const ADVENTURER_RANKS = {
         benefits: { questRewardBonus: 0 }
     },
     E: {
-        name: 'E-Rank', icon: '🥉', color: '🟤',
+        name: 'E-Rank', icon: '🥉', color: '⚪',
         requirement: { level: 10, questsCompleted: 10 },
         benefits: { questRewardBonus: 5 }
     },
     D: {
-        name: 'D-Rank', icon: '🥈', color: '⚪',
+        name: 'D-Rank', icon: '🥈', color: '🔵',
         requirement: { level: 20, questsCompleted: 25 },
         benefits: { questRewardBonus: 10 }
     },
     C: {
-        name: 'C-Rank', icon: '🥇', color: '🟡',
+        name: 'C-Rank', icon: '🥇', color: '🔵',
         requirement: { level: 30, questsCompleted: 50 },
         benefits: { questRewardBonus: 15 }
     },
     B: {
-        name: 'B-Rank', icon: '💎', color: '🔵',
+        name: 'B-Rank', icon: '💎', color: '🔴',
         requirement: { level: 40, questsCompleted: 80 },
         benefits: { questRewardBonus: 20 }
     },
     A: {
-        name: 'A-Rank', icon: '💠', color: '🟢',
+        name: 'A-Rank', icon: '💠', color: '🔴',
         requirement: { level: 50, questsCompleted: 120 },
         benefits: { questRewardBonus: 30 }
     },
     S: {
-        name: 'S-Rank', icon: '⭐', color: '🟣',
+        name: 'S-Rank', icon: '⭐', color: '🟡',
         requirement: { level: 60, questsCompleted: 180 },
         benefits: { questRewardBonus: 40 }
     },
     SS: {
-        name: 'SS-Rank', icon: '🌟', color: '🔴',
+        name: 'SS-Rank', icon: '🌟', color: '🟡',
         requirement: { level: 75, questsCompleted: 250 },
         benefits: { questRewardBonus: 60 }
     },
     SSS: {
-        name: 'SSS-Rank', icon: '✨', color: '🌈',
+        name: 'SSS-Rank', icon: '✨', color: '⚪',
         requirement: { level: 90, questsCompleted: 500 },
         benefits: { questRewardBonus: 100 }
+    },
+    GOD: {
+        name: 'GOD-Rank', icon: '♾️', color: '⚪',
+        requirement: { level: 100, questsCompleted: 1000 },
+        benefits: { questRewardBonus: 200 }
     }
 };
 

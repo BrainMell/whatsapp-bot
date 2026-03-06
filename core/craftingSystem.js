@@ -260,6 +260,38 @@ const CRAFTING_RECIPES = {
         desc: 'Used to ascend from Evolved to Ascended class.',
         ingredients: { 'legendary_shard': 1, 'void_crystal': 3, 'boss_essence': 5 },
         result: { id: 'ascension_stone', type: 'ASCENSION' }
+    },
+
+    // --- MATERIAL CONVERSION ---
+    'refined_steel_conv': {
+        name: 'Refined Steel', category: 'CRAFT', id: 'refined_steel',
+        desc: 'Refine 3 iron shards into a steel bar.',
+        ingredients: { 'iron_shard': 3 },
+        result: { id: 'refined_steel' }
+    },
+    'mythril_ore_conv': {
+        name: 'Mythril Ore', category: 'CRAFT', id: 'mythril_ore',
+        desc: 'Compress 3 refined steel with fire essence.',
+        ingredients: { 'refined_steel': 3, 'fire_essence': 1 },
+        result: { id: 'mythril_ore' }
+    },
+    'mana_crystal_conv': {
+        name: 'Mana Crystal', category: 'CRAFT', id: 'mana_crystal',
+        desc: 'Crystallize 3 mana dews.',
+        ingredients: { 'mana_dew': 3 },
+        result: { id: 'mana_crystal' }
+    },
+    'dark_matter_conv': {
+        name: 'Dark Matter', category: 'CRAFT', id: 'dark_matter',
+        desc: 'Condense 3 void crystals.',
+        ingredients: { 'void_crystal': 3 },
+        result: { id: 'dark_matter' }
+    },
+    'legendary_shard_conv': {
+        name: 'Legendary Shard', category: 'CRAFT', id: 'legendary_shard',
+        desc: 'Fuse 3 dark matters with boss essence.',
+        ingredients: { 'dark_matter': 3, 'boss_essence': 1 },
+        result: { id: 'legendary_shard' }
     }
 };
 
@@ -440,12 +472,22 @@ function canCraft(userId, recipeId) {
     return { canCraft: true, recipe };
 }
 
-function performCraft(userId, recipeId) {
+function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const check = canCraft(userId, recipeId);
     if (!check.canCraft) return { success: false, message: check.reason };
 
     const recipe = check.recipe;
     const resultItem = recipe.result;
+
+    // Enforce Station Type
+    if (recipe.category !== requiredStation) {
+        let stationName = "General Crafting Table";
+        if (recipe.category === 'BREWING') stationName = "Laboratory";
+        if (recipe.category === 'COOKING') stationName = "Kitchen";
+        if (recipe.category === 'FORGE') stationName = "Blacksmith Forge";
+        
+        return { success: false, message: `❌ This recipe requires a **${stationName}**!` };
+    }
 
     // 💡 BUG FIX: Check for space before removing ingredients
     if (!inventorySystem.hasInventorySpace(userId, 1, resultItem.id)) {

@@ -692,7 +692,10 @@ function roulette(userId, amount, bet, economyModule) {
   
   const betLower = bet.toLowerCase();
   
-  const result = Math.floor(Math.random() * 37);
+  // Deduct bet IMMEDIATELY
+  user.wallet -= amount;
+  
+  const result = Math.floor(Math.random() * 37); // 0-36
   
   const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
   const isRed = redNumbers.includes(result);
@@ -704,31 +707,33 @@ function roulette(userId, amount, bet, economyModule) {
   
   if (betLower === 'red' || betLower === 'r') {
     won = color === 'red';
-    multiplier = 3;
-    betType = 'RED';
+    multiplier = 2;
+    betType = '🔴 RED';
   } else if (betLower === 'black' || betLower === 'b') {
     won = color === 'black';
-    multiplier = 3;
-    betType = 'BLACK';
+    multiplier = 2;
+    betType = '⚫ BLACK';
   } else if (betLower === 'green' || betLower === 'g' || betLower === '0') {
     won = result === 0;
-    multiplier = 50;
-    betType = 'GREEN (0)';
+    multiplier = 36;
+    betType = '🟢 GREEN (0)';
   } else if (betLower === 'even' || betLower === 'e') {
     won = result !== 0 && result % 2 === 0;
-    multiplier = 3;
-    betType = 'EVEN';
+    multiplier = 2;
+    betType = '🔢 EVEN';
   } else if (betLower === 'odd' || betLower === 'o') {
     won = result !== 0 && result % 2 !== 0;
-    multiplier = 3;
-    betType = 'ODD';
+    multiplier = 2;
+    betType = '🔢 ODD';
   } else {
     const num = parseInt(betLower);
     if (!isNaN(num) && num >= 0 && num <= 36) {
       won = result === num;
-      multiplier = 50;
-      betType = `NUMBER ${num}`;
+      multiplier = 36;
+      betType = `🎯 NUMBER ${num}`;
     } else {
+      // Refund if invalid
+      user.wallet += amount;
       return { success: false, message: "❌ Invalid bet! Use: red/black/green/even/odd or a number (0-36)" };
     }
   }
@@ -739,7 +744,7 @@ function roulette(userId, amount, bet, economyModule) {
     user.wallet += winnings;
     user.stats.totalEarned += profit;
     updateGamblingStats(userId, amount, true, economyModule);
-    economyModule.logTransaction(userId, `Roulette Won (${betType})`, winnings - amount, user.wallet);
+    economyModule.logTransaction(userId, `Roulette Won (${betType})`, profit, user.wallet);
     
     return {
       success: true,
@@ -760,7 +765,6 @@ ${multiplier}x payout!
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
-    user.wallet -= amount;
     user.stats.totalSpent += amount;
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Roulette Lost (${betType})`, -amount, user.wallet);

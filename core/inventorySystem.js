@@ -32,7 +32,7 @@ const ITEM_RARITY = {
     },
     UNCOMMON: {
         name: 'Uncommon',
-        icon: '🟢',
+        icon: '🟢', // Green
         sellMultiplier: 0.7,
         dropChance: 25
     },
@@ -44,7 +44,7 @@ const ITEM_RARITY = {
     },
     EPIC: {
         name: 'Epic',
-        icon: '🟣',
+        icon: '🔴', // Red
         sellMultiplier: 0.9,
         dropChance: 4
     },
@@ -56,7 +56,7 @@ const ITEM_RARITY = {
     },
     MYTHIC: {
         name: 'Mythic',
-        icon: '🔴', // Red
+        icon: '⚪', // White/Bright
         sellMultiplier: 1.2,
         dropChance: 0.1
     }
@@ -151,6 +151,7 @@ function addItem(userId, itemId, quantity = 1, itemData = {}) {
             if (!inventory[itemId].name) inventory[itemId].name = itemInfo.name;
             if (!inventory[itemId].type) inventory[itemId].type = itemInfo.type || 'ITEM';
             if (!inventory[itemId].rarity) inventory[itemId].rarity = itemInfo.rarity || 'COMMON';
+            if (!inventory[itemId].value) inventory[itemId].value = itemInfo.value || 100;
             if (!inventory[itemId].stats && itemInfo.stats) inventory[itemId].stats = JSON.parse(JSON.stringify(itemInfo.stats));
             if (!inventory[itemId].slot && itemInfo.slot) inventory[itemId].slot = itemInfo.slot;
 
@@ -158,13 +159,17 @@ function addItem(userId, itemId, quantity = 1, itemData = {}) {
             Object.assign(inventory[itemId], itemData);
         }
     } else {
+        const itemType = itemData.type || itemInfo.type || (itemId.includes('shard') || itemId.includes('steel') || itemId.includes('leather') || itemId.includes('stone') ? 'MATERIAL' : 'ITEM');
+        const itemRarity = itemData.rarity || itemInfo.rarity || 'COMMON';
+        
         inventory[itemId] = {
             id: itemId,
             name: itemData.name || itemInfo.name,
-            type: itemData.type || itemInfo.type || (itemId.includes('shard') || itemId.includes('steel') || itemId.includes('leather') ? 'MATERIAL' : 'ITEM'),
+            type: itemType,
             quantity: quantity,
             acquiredAt: Date.now(),
-            rarity: itemData.rarity || itemInfo.rarity || 'COMMON',
+            rarity: itemRarity,
+            value: itemData.value || itemInfo.value || 100,
             stats: itemData.stats || itemInfo.stats || {},
             slot: itemData.slot || itemInfo.slot,
             ...itemData
@@ -546,9 +551,10 @@ function sellItem(userId, itemId, quantity = 1) {
     }
     
     // Calculate sell value
-    const baseValue = item.value || 100;
-    const rarity = item.rarity || 'COMMON';
-    let sellMultiplier = ITEM_RARITY[rarity]?.sellMultiplier || 0.3;
+    const itemInfo = lootSystem.getItemInfo(itemId);
+    const baseValue = item.value || itemInfo.value || 100;
+    const rarity = item.rarity || itemInfo.rarity || 'COMMON';
+    let sellMultiplier = ITEM_RARITY[rarity]?.sellMultiplier || 0.6;
     
     // Special case for gold currency item: 1:15 exchange rate (100% of base value)
     if (itemId === 'gold') sellMultiplier = 1.0;
@@ -695,17 +701,13 @@ function formatInventory(userId) {
     const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     
     items.sort((a, b) => {
-        const itemA = lootSystem.getItemInfo(a.id);
-        const itemB = lootSystem.getItemInfo(b.id);
-        
-        const catA = categoryOrder.indexOf(itemA.type || 'ITEM');
-        const catB = categoryOrder.indexOf(itemB.type || 'ITEM');
-        
+        const catA = categoryOrder.indexOf(a.type || 'ITEM');
+        const catB = categoryOrder.indexOf(b.type || 'ITEM');
+
         if (catA !== catB) return catA - catB;
-        
+
         return rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
     });
-    
     return {
         isEmpty: false,
         items,
