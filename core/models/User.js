@@ -117,6 +117,14 @@ const UserSchema = new mongoose.Schema({
     achievements: { type: Array, default: [] }
   },
 
+  // Gambling Limits
+  gamblingLimits: {
+    roulette: {
+      count: { type: Number, default: 0 },
+      startTime: { type: Number, default: 0 }
+    }
+  },
+
   // AI Memory & Profile Data
   profile: {
     whatsappName: { type: String, default: null },
