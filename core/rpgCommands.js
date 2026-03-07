@@ -603,7 +603,10 @@ async function showItemSource(sock, chatId, itemId) {
 async function useItem(sock, chatId, senderJid, target) {
     if (!target) {
         const inv = inventorySystem.getInventory(senderJid);
-        const consumables = inv.filter(i => i.type === 'POTION' || i.type === 'CONSUMABLE').map(i => i.id);
+        const consumables = Object.keys(inv).filter(k => {
+            const info = lootSystem.getItemInfo(k);
+            return info.type === 'POTION' || info.type === 'CONSUMABLE';
+        });
         let tip = consumables.length > 0 ? `Items you can use: ${consumables.join(', ')}` : "You don't have any usable consumables.";
         let msg = `┏━━━━━━━━━━━━━━━┓\n┃   🧪 USE ITEM   ┃\n┗━━━━━━━━━━━━━━━┛\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
         return await sock.sendMessage(chatId, { text: msg });

@@ -635,9 +635,39 @@ function useItem(userId, itemId) {
         user.energy = Math.min(user.maxEnergy || 100, (user.energy || 0) + 30);
         effectMsg = `⚡ Restored **30 Energy**!`;
     }
-    else if (itemId === 'exp_scroll') {
-        progression.addXP(userId, 250, 'Scroll');
-        effectMsg = `📖 Gained **250 XP**!`;
+    else if (itemId === 'class_change_ticket' || itemId === 'reroll_ticket') {
+        const user = economy.getUser(userId);
+        const currentClass = classSystem.getClassById(user.class);
+        
+        // 1. Requirement: Must be a STARTER class
+        if (currentClass.tier !== 'STARTER') {
+            return { success: false, message: '❌ This item only works for *Starter* classes! Evolved or Ascended heroes must use a Skill Reset Scroll.' };
+        }
+
+        // 2. Cooldown Check: 5 hours after 5 uses
+        const now = Date.now();
+        const FIVE_HOURS = 5 * 60 * 60 * 1000;
+        
+        if (user.lastClassChangeReset && (now - user.lastClassChangeReset < FIVE_HOURS)) {
+            const remaining = Math.ceil((FIVE_HOURS - (now - user.lastClassChangeReset)) / (60 * 1000));
+            return { success: false, message: `❌ Exhausted! Your spirit needs to rest. You can reroll again in **${remaining} minutes**.` };
+        }
+
+        // 3. Usage Increment
+        user.classChangeCount = (user.classChangeCount || 0) + 1;
+        
+        if (user.classChangeCount >= 5) {
+            user.classChangeCount = 0;
+            user.lastClassChangeReset = now;
+            effectMsg = `🎫 *CLASS REROLL USED!* (Usage 5/5)\n\n✨ Your class has been changed! Your spirit is now exhausted. **5-hour cooldown applied.**`;
+        } else {
+            effectMsg = `🎫 *CLASS REROLL USED!* (Usage ${user.classChangeCount}/5)\n\n✨ Your class has been changed!`;
+        }
+
+        const result = economy.changeClass(userId);
+        if (!result.success) return result;
+        
+        effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
     else {
         return { success: false, message: `❌ Item effect not implemented yet.` };
