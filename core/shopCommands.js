@@ -239,7 +239,7 @@ This boost is permanent and applies to all your quests!`
 
 async function handleEquipment(senderJid, item) {
     // Add to inventory with its specific stats and slot
-    const result = inventorySystem.addItem(senderJid, item.id, 1, {
+    const result = await inventorySystem.addItem(senderJid, item.id, 1, {
         name: item.name,
         type: 'EQUIPMENT',
         rarity: item.rarity || 'COMMON',

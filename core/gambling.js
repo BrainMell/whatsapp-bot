@@ -689,6 +689,38 @@ function roulette(userId, amount, bet, economyModule) {
   if (user.wallet < amount) {
     return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
   }
+
+  // --- LIMIT CHECK (20 spins / 10 hours) ---
+  if (!user.gamblingLimits) user.gamblingLimits = {};
+  if (!user.gamblingLimits.roulette) user.gamblingLimits.roulette = { count: 0, startTime: 0 };
+  
+  const now = Date.now();
+  const LIMIT_WINDOW = 10 * 60 * 60 * 1000; // 10 hours
+  const MAX_SPINS = 20;
+  
+  // Initialize start time if new cycle
+  if (user.gamblingLimits.roulette.startTime === 0) {
+      user.gamblingLimits.roulette.startTime = now;
+  }
+
+  // Reset if window passed
+  if (now - user.gamblingLimits.roulette.startTime > LIMIT_WINDOW) {
+    user.gamblingLimits.roulette.count = 0;
+    user.gamblingLimits.roulette.startTime = now;
+  }
+  
+  // Check count
+  if (user.gamblingLimits.roulette.count >= MAX_SPINS) {
+    const remainingTime = LIMIT_WINDOW - (now - user.gamblingLimits.roulette.startTime);
+    const hours = Math.floor(remainingTime / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return { success: false, message: `⏳ *ROULETTE LIMIT REACHED* ⏳\n\nYou've used your ${MAX_SPINS} spins for this cycle.\nCooldown: ${hours}h ${minutes}m.` };
+  }
+
+  // Increment usage immediately
+  user.gamblingLimits.roulette.count++;
+  economyModule.saveUser(userId);
   
   const betLower = bet.toLowerCase();
   

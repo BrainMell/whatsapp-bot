@@ -3481,7 +3481,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
 // 🛒 SHOP SYSTEM
 // ==========================================
 
-const handleBuy = (chatId, senderJid, itemIndex) => {
+const handleBuy = async (chatId, senderJid, itemIndex) => {
     const state = getGameState(chatId, senderJid);
     if (!state) return "❌ No active adventure!";
     

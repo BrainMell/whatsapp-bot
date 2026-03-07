@@ -3258,7 +3258,7 @@ _💡 Reply with another number from your search list!_`.trim();
                 const state = guildAdventure.getGameState(chatId, senderJid);
                 if (state && (state.phase === 'SHOPPING' || (state.isMerchantActive && state.currentEncounter?.type === 'MERCHANT'))) {
                     const itemIndex = cmdArgs[1];
-                    const result = guildAdventure.handleBuy(chatId, senderJid, itemIndex);
+                    const result = await guildAdventure.handleBuy(chatId, senderJid, itemIndex);
                     await sock.sendMessage(chatId, { text: BOT_MARKER + result });
                     return;
                 }
