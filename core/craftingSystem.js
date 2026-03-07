@@ -472,7 +472,7 @@ function canCraft(userId, recipeId) {
     return { canCraft: true, recipe };
 }
 
-function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
+async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const check = canCraft(userId, recipeId);
     if (!check.canCraft) return { success: false, message: check.reason };
 
@@ -531,7 +531,7 @@ function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     };
 }
 
-function dismantleItem(userId, itemId) {
+async function dismantleItem(userId, itemId) {
     const inventory = inventorySystem.getInventory(userId);
     if (!inventory[itemId]) return { success: false, message: "Item not found in inventory." };
 

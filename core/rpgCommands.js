@@ -451,29 +451,27 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') 
     await sock.sendMessage(chatId, { text: msg });
 }
 
-async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') { 
+async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') {
     if (!recipeId) return displayRecipes(sock, chatId, 1, categoryFilter);
-    const result = craftingSystem.performCraft(senderJid, recipeId.toLowerCase(), categoryFilter);
+    const result = await craftingSystem.performCraft(senderJid, recipeId.toLowerCase(), categoryFilter);
     if (result.success) await sock.sendMessage(chatId, { text: result.message });
     else await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
 }
-
 async function cookItem(sock, chatId, senderJid, recipeId) { return craftItem(sock, chatId, senderJid, recipeId, 'COOKING'); }
 async function brewItem(sock, chatId, senderJid, recipeId) { return craftItem(sock, chatId, senderJid, recipeId, 'BREWING'); }
 async function forgeItem(sock, chatId, senderJid, recipeId) { return craftItem(sock, chatId, senderJid, recipeId, 'FORGE'); }
 
-async function dismantleItem(sock, chatId, senderJid, input) { 
+async function dismantleItem(sock, chatId, senderJid, input) {
     let targetItemId = input;
-    if (!isNaN(parseInt(input))) { 
+    if (!isNaN(parseInt(input))) {
         const inventory = inventorySystem.formatInventory(senderJid);
         const index = parseInt(input) - 1;
         if (!inventory.isEmpty && inventory.items[index]) targetItemId = inventory.items[index].id;
     }
     if (!targetItemId) return await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} dismantle <id or bag_#>\`` });
-    const result = craftingSystem.dismantleItem(senderJid, targetItemId);
+    const result = await craftingSystem.dismantleItem(senderJid, targetItemId);
     await sock.sendMessage(chatId, { text: result.message });
 }
-
 // ========================================== 
 // ⛏️ MINING SYSTEM 
 // ========================================== 
