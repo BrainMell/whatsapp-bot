@@ -15,6 +15,8 @@ const UserSchema = new mongoose.Schema({
   lastClassChange: { type: Number, default: 0 },
   lastFishReset: { type: Number, default: 0 },
   fishCount: { type: Number, default: 0 },
+  classChangeCount: { type: Number, default: 0 },
+  lastClassChangeReset: { type: Number, default: 0 },
 
   // RPG Stats
   class: { type: String, default: null },

@@ -3839,14 +3839,17 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             }
 
             let baseDamage;
+            const lvl = player.level || 1;
+            
             if (effect.damageType === 'magic') {
-                baseDamage = player.stats.mag || player.stats.atk;
+                baseDamage = player.stats.mag || player.stats.atk || (lvl * 10);
             } else {
-                baseDamage = player.stats.atk;
+                baseDamage = player.stats.atk || (lvl * 8);
             }
             
-            // Apply multiplier
-            let damage = Math.floor(baseDamage * effect.multiplier);
+            // Apply multiplier (fallback to 1.0)
+            const mult = Number(effect.multiplier) || 1.0;
+            let damage = Math.floor(baseDamage * mult);
             
             // Ignore defense
             if (effect.ignoreDefense) {
