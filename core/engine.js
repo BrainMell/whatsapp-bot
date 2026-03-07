@@ -3267,8 +3267,8 @@ _💡 Reply with another number from your search list!_`.trim();
                 return;
             }
 
-            // .j quest / .j solo / .j adventure
-            if (primaryCmd === 'quest' || primaryCmd === 'solo' || primaryCmd === 'adventure') {
+            // .j quest / .j solo / .j adventure / .j q / .j s
+            if (primaryCmd === 'quest' || primaryCmd === 'solo' || primaryCmd === 'adventure' || primaryCmd === 'q' || primaryCmd === 's') {
                 if (!economy.isRegistered(senderJid)) {
                     await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first!\n\nType: \`${currentPrefix} register <nickname>\`` });
                     return;
@@ -3280,8 +3280,8 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                 }
 
-                const isSolo = primaryCmd === 'solo';
-                const isHardcore = lowerTxt.includes('--hc') || lowerTxt.includes('--hardcore') || lowerTxt.includes('permadeath');
+                const isSolo = primaryCmd === 'solo' || primaryCmd === 's';
+                const isHardcore = lowerTxt.includes('--hc') || lowerTxt.includes('--hardcore') || lowerTxt.includes('permadeath') || lowerTxt.includes('-f') || lowerTxt.includes('--f');
                 const ranks = ['f','e','d','c','b','a','s','ss','sss'];
                 const rank = cmdArgs.find(a => ranks.includes(a.toLowerCase())) || null;
                 
@@ -3290,7 +3290,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     const state = guildAdventure.getGameState(chatId);
                     if (state) state.onHardcoreDeath = addToGraveyard;
                     
-            if (isSolo) {
+                    if (isSolo) {
                         let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || 'F'}*\n🔥 Mode: *${isHardcore ? 'HARDCORE' : 'NORMAL'}*\n\n⚔️ Preparing the battlefield...`;
                         await reply(startMsg);
                     }
