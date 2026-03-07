@@ -4141,8 +4141,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     for await (const chunk of stream) { chunks.push(chunk); }
     let buffer = Buffer.concat(chunks);
 
-    // Optimized Conversion for Video Stickers (under 2MB)
-    if (type === 'video' || isFull || isCrop1 || isCrop2 || isCropCenter) {
+    // Optimized Conversion for ALL Stickers (Prevents Stretching)
+    if (true) {
         const timestamp = Date.now();
         const inputPath = `./temp/stick_in_${timestamp}`;
         const outputPath = `./temp/stick_out_${timestamp}.webp`;
