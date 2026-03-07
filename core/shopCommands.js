@@ -263,7 +263,7 @@ async function handleConsumable(senderJid, item) {
     const itemInfo = lootSystem.getItemInfo(baseId);
     
     // Add to inventory using the unified system
-    const result = inventorySystem.addItem(senderJid, baseId, 1, {
+    const result = await inventorySystem.addItem(senderJid, baseId, 1, {
         name: itemInfo.name,
         value: itemInfo.value,
         rarity: itemInfo.rarity || 'COMMON',

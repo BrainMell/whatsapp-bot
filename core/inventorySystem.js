@@ -122,7 +122,7 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
     return (current + amount) <= max;
 }
 
-function addItem(userId, itemId, quantity = 1, itemData = {}) {
+async function addItem(userId, itemId, quantity = 1, itemData = {}) {
     const inventory = getInventory(userId);
     const itemInfo = lootSystem.getItemInfo(itemId);
 
@@ -176,7 +176,7 @@ function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
-    economy.saveUser(userId);
+    await economy.saveUser(userId);
     
     return {
         success: true,
@@ -330,7 +330,7 @@ function getEquipment(userId) {
     return user.equipment;
 }
 
-function equipItem(userId, itemId, slot) {
+async function equipItem(userId, itemId, slot) {
     const inventory = getInventory(userId);
     const equipment = getEquipment(userId);
     const progression = require('./progression');
@@ -383,7 +383,7 @@ function equipItem(userId, itemId, slot) {
         equipment.off_hand = null;
         // Material pouch already handles infinite space for materials, but equipment needs space
         // We just freed one slot by removing the itemToEquip, so adding one back is safe
-        addItem(userId, offHand.id, 1, offHand);
+        await addItem(userId, offHand.id, 1, offHand);
     }
 
     // 3. Ensure Main-Hand isn't a 2-Hander if equipping to Off-Hand
@@ -392,20 +392,20 @@ function equipItem(userId, itemId, slot) {
         if (mainHandInfo.isTwoHanded) {
             const mainHand = equipment.main_hand;
             equipment.main_hand = null;
-            addItem(userId, mainHand.id, 1, mainHand);
+            await addItem(userId, mainHand.id, 1, mainHand);
         }
     }
     
     const oldItem = equipment[slotName];
     if (oldItem) {
         // Safe to add back because we removed the new item first
-        addItem(userId, oldItem.id, 1, oldItem);
+        await addItem(userId, oldItem.id, 1, oldItem);
     }
     
     equipment[slotName] = { ...itemToEquip };
     delete equipment[slotName].quantity;
     
-    economy.saveUser(userId);
+    await economy.saveUser(userId);
     
     return {
         success: true,
@@ -414,7 +414,7 @@ function equipItem(userId, itemId, slot) {
     };
 }
 
-function unequipItem(userId, slot) {
+async function unequipItem(userId, slot) {
     const equipment = getEquipment(userId);
     
     if (!EQUIPMENT_SLOTS[slot.toUpperCase()]) {
@@ -443,14 +443,14 @@ function unequipItem(userId, slot) {
         };
     }
 
-    const result = addItem(userId, item.id, 1, item);
+    const result = await addItem(userId, item.id, 1, item);
     
     if (!result.success) {
         return result;
     }
     
     equipment[slotName] = null;
-    economy.saveUser(userId);
+    await economy.saveUser(userId);
     
     return {
         success: true,

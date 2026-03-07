@@ -500,7 +500,7 @@ function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     }
 
     // 2. Add result
-    const addResult = inventorySystem.addItem(userId, resultItem.id, 1, {
+    const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
         name: recipe.name,
         stats: resultItem.stats || {},
         slot: resultItem.slot,
@@ -510,7 +510,7 @@ function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     if (!addResult.success) {
         // Restore ingredients if addition failed
         for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
-            inventorySystem.addItem(userId, ingId, qty);
+            await inventorySystem.addItem(userId, ingId, qty);
         }
         return addResult;
     }
@@ -559,7 +559,7 @@ function dismantleItem(userId, itemId) {
 
     // Return materials
     for (const [id, qty] of Object.entries(returned)) {
-        inventorySystem.addItem(userId, id, qty);
+        await inventorySystem.addItem(userId, id, qty);
     }
 
     let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;

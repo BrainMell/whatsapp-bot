@@ -1648,151 +1648,97 @@ async function processCombatTurn(sock, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
 
-    const chatId = state.chatId;
-    // Prevent overlapping turn processing (timers + user actions can collide).
+    // Prevent overlapping turn processing
     if (state.combatProcessing) return;
     state.combatProcessing = true;
     
     try {
         while (state.inCombat) {
-            // Reset justDied flags for all combatants at the start of a new turn process
+            // Reset justDied flags
             state.players.forEach(p => p.justDied = false);
             state.enemies.forEach(e => e.justDied = false);
 
-            // 💡 TICK SYSTEM: Find next combatant to reach 100 AP
             let activeActor = null;
             let ticks = 0;
             const maxTicks = 1000;
 
-            // Prevent infinite loop if everyone is dead or insanely slow
             while (!activeActor && ticks < maxTicks) {
                 ticks++;
-                                  for (const c of state.turnOrder) {
-                                      // Skip dead
-                                      if (c.stats.hp <= 0) continue;
-                
-                                      // ICE CAVE: Frostbite penalty for players
-                                      let speed = c.stats.spd || 10;
-                                      if (state.environment?.id === 'ICE_CAVE' && !c.isEnemy) {
-                                          speed = Math.floor(speed * 0.9);
-                                      }
-                
-                                      // 💡 SPEED STATUS EFFECTS
-                                      const cEffects = c.statusEffects || [];
-                                      if (cEffects.some(e => e.type === 'haste')) speed *= 1.3;
-                                      if (cEffects.some(e => e.type === 'slow')) speed *= 0.5;
-                                      if (cEffects.some(e => e.type === 'curse' || e.type === 'weak')) speed *= 0.8;
+                for (const c of state.turnOrder) {
+                    if (c.stats.hp <= 0) continue;
 
-                                      c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
-                
-                                      if (c.actionGauge >= 100) {
-                                          activeActor = c;
-                                          break; // Found someone!
-                                      }
-                                  }            }
+                    let speed = c.stats.spd || 10;
+                    if (state.environment?.id === 'ICE_CAVE' && !c.isEnemy) speed = Math.floor(speed * 0.9);
+                    
+                    const cEffects = c.statusEffects || [];
+                    if (cEffects.some(e => e.type === 'haste')) speed *= 1.3;
+                    if (cEffects.some(e => e.type === 'slow')) speed *= 0.5;
+                    if (cEffects.some(e => e.type === 'curse' || e.type === 'weak')) speed *= 0.8;
 
-            if (!activeActor) return;
-
-                          // Reset actor gauge
-                          activeActor.actionGauge -= 100;
-                          state.activeCombatant = activeActor;
-                          state.totalCombatTurns = (state.turnCount || 0) + 1;
-                          state.turnCount = state.totalCombatTurns;
-            
-                          // 👑 BOSS ENRAGE CHECK
-                          if (activeActor.isBoss) {
-                              const boss = activeActor;
-                              // Soft Enrage (Increase stats every turn)
-                              if (state.turnCount > 15) {
-                                  boss.stats.atk = Math.floor(boss.stats.atk * 1.05);
-                                  await sock.sendMessage(state.chatId, { text: `⚠️ *${boss.name}* is growing more violent! (ATK Increased)` });
-                              }
-                              // Hard Enrage (Instant death after 30 turns)
-                              if (state.turnCount > 30) {
-                                  await sock.sendMessage(state.chatId, { text: `💀 *${boss.name}* has reached their absolute limit! UNLEASHING TOTAL ANNIHILATION!` });
-                                  state.players.forEach(p => {
-                                      p.stats.hp = 0;
-                                      p.isDead = true;
-                                  });
-                                  await endCombat(sock, false, sessionKey);
-                                  return;
-                              }
-                          }
-            
-                                                      // Process status effects at start of turn
-                                                      const statusMessages = processStatusEffects(activeActor);            
-                          // FIRE CAVE: Heat Exhaustion
-                          if (state.environment?.id === 'FIRE_CAVE') {
-                              const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
-                              activeActor.stats.hp -= heatDmg;
-                              activeActor.currentHP = Math.max(0, activeActor.stats.hp);
-                              statusMessages.push(`🌋 *Heat Exhaustion:* ${activeActor.name} takes ${heatDmg} fire damage!`);
-                          }
-            
-                          if (statusMessages.length > 0) {                try {
-                    await sock.sendMessage(state.chatId, { text: statusMessages.join('\n') });
-                } catch (err) {
-                    console.error("Failed to send status messages in processCombatTurn:", err.message);
+                    c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
+                    if (c.actionGauge >= 100) {
+                        activeActor = c;
+                        break;
+                    }
                 }
             }
 
-            // Check if dead from status effects
+            if (!activeActor) break;
+
+            activeActor.actionGauge -= 100;
+            state.activeCombatant = activeActor;
+            state.turnCount = (state.turnCount || 0) + 1;
+
+            if (activeActor.isBoss) {
+                if (state.turnCount > 15) {
+                    activeActor.stats.atk = Math.floor(activeActor.stats.atk * 1.05);
+                    await sock.sendMessage(state.chatId, { text: `⚠️ *${activeActor.name}* is growing more violent!` });
+                }
+                if (state.turnCount > 30) {
+                    await sock.sendMessage(state.chatId, { text: `💀 *${activeActor.name}* UNLEASHING TOTAL ANNIHILATION!` });
+                    state.players.forEach(p => { p.stats.hp = 0; p.isDead = true; });
+                    await endCombat(sock, false, sessionKey);
+                    return;
+                }
+            }
+
+            const statusMessages = processStatusEffects(activeActor);
+            if (state.environment?.id === 'FIRE_CAVE') {
+                const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
+                activeActor.stats.hp -= heatDmg;
+                activeActor.currentHP = Math.max(0, activeActor.stats.hp);
+                statusMessages.push(`🌋 *Heat Exhaustion:* ${activeActor.name} takes ${heatDmg} fire damage!`);
+            }
+
+            if (statusMessages.length > 0) {
+                try { await sock.sendMessage(state.chatId, { text: statusMessages.join('\n') }); } catch (err) {}
+            }
+
             if (activeActor.stats.hp <= 0) {
                 await handleDeath(sock, activeActor, sessionKey);
-                
-                // 💡 CRITICAL FIX: Check if combat should end immediately
                 if (await checkCombatEnd(sock, state, sessionKey)) return;
-                
                 continue;
             }
 
-            // Check for skip turn effects
             const skipEffects = ['freeze', 'stun', 'sleep'];
-            const effects = activeActor.statusEffects || [];
-            const hasSkipEffect = effects.some(e => skipEffects.includes(e.type));
-
-            if (hasSkipEffect) {
-                try {
-                    await sock.sendMessage(state.chatId, {
-                        text: `${activeActor.icon} ${activeActor.name} is unable to act!`
-                    });
-                } catch (err) {
-                    console.error("Failed to send skip effect message in processCombatTurn:", err.message);
-                }
+            if ((activeActor.statusEffects || []).some(e => skipEffects.includes(e.type))) {
+                await sock.sendMessage(state.chatId, { text: `${activeActor.icon} ${activeActor.name} is unable to act!` });
+                await nextTurn(sock, { actor: activeActor, action: { name: 'Unable to Act' } }, sessionKey);
                 continue;
             }
 
             if (activeActor.isEnemy) {
                 // AI Turn
-                try {
-                    await performEnemyAction(sock, activeActor, sessionKey);
-                } catch (e) {
-                    console.error("Error in performEnemyAction call:", e);
-                    // Force next turn
-                    activeActor.actionGauge -= 50; 
-                    state.combatProcessing = false;
-                    setTimeout(() => processCombatTurn(sock, sessionKey), 1000);
-                }
-                return;
-            }
-
-            // Player Turn
-            try {
+                await performEnemyAction(sock, activeActor, sessionKey);
+                // The loop continues because performEnemyAction resolved
+            } else {
+                // Player Turn - Wait for action
                 await promptPlayerAction(sock, activeActor, sessionKey);
-            } catch (e) {
-                console.error("Error in promptPlayerAction call:", e);
-                // Skip player turn or retry?
-                // For safety, skip turn to avoid deadlock
-                try {
-                     await sock.sendMessage(state.chatId, { text: `⚠️ Error processing turn for ${activeActor.name}. Skipping...` });
-                } catch {}
-                state.combatProcessing = false;
-                setTimeout(() => nextTurn(sock, { actor: activeActor, action: { name: 'Error' } }, sessionKey), 1000);
+                // The loop continues because promptPlayerAction resolved (via performAction)
             }
-            return;
         }
     } catch (err) {
-        console.error("[Quest] processCombatTurn error:", err?.message || err);
+        console.error("[Combat] Turn loop error:", err);
     } finally {
         state.combatProcessing = false;
     }
@@ -1812,21 +1758,21 @@ async function promptPlayerAction(sock, player, sessionKey) {
     let msg = `╔═══════════════╗\n`;
     msg += `   🎯 *YOUR TURN* \n`;
     msg += `╚═══════════════╝\n\n`;
-    
+
     msg += `${icon} *${player.name}*\n`;
     msg += `❤️ HP: ${player.stats.hp}/${player.stats.maxHp}\n`;
     msg += `⚡ EN: ${player.stats.energy}/${player.stats.maxEnergy}\n`;
-    
+
     if (player.statusEffects && player.statusEffects.length > 0) {
         msg += `📋 Status: ${player.statusEffects.map(e => e.icon).join(' ')}\n`;
     }
-    
+
     msg += `\n*COMMANDS:*\n`;
     msg += `⚔️ \`${botConfig.getPrefix()} combat attack <#>\`\n`;
     msg += `✨ \`${botConfig.getPrefix()} combat ability <#> [target]\`\n`;
     msg += `🎒 \`${botConfig.getPrefix()} combat item <#> [target]\`\n`;
     msg += `🛡️ \`${botConfig.getPrefix()} combat defend\`\n\n`;
-    
+
     if (usableItems.length > 0) {
         msg += `*USABLE ITEMS:*\n`;
         usableItems.forEach((item, i) => {
@@ -1837,45 +1783,51 @@ async function promptPlayerAction(sock, player, sessionKey) {
     } else {
         msg += `_No usable items in bag_\n\n`;
     }
-    
+
     msg += `🎒 Use \`${botConfig.getPrefix()} bag\` to see all items.`;
+
     try {
         await sock.sendMessage(state.chatId, { text: msg });
     } catch (err) {
         console.error("Failed to send player prompt in promptPlayerAction:", err.message);
     }
-    
-    // Timer logic: 10 min first time, 2 min after action taken
-    let turnTime;
-    if (state.solo) {
-        turnTime = 120000; // Solo: 2 mins
-    } else if (state.actionJustTaken) {
-        turnTime = 120000; // 2 min after action
-        state.actionJustTaken = false; // Reset flag
-    } else {
-        turnTime = GAME_CONFIG.COMBAT_TURN_TIME; // 10 min initially
-    }
-    
-    state.timers.combat = setTimeout(async () => {
-        try {
-            if (state.inCombat && !state.pendingActions[player.jid]) {
-                await performAction(sock, player, { type: 'defend' }, sessionKey);
+
+    // 💡 NEW TURN WAITING LOGIC
+    // Create a promise that resolves when the player takes an action
+    return new Promise((resolve) => {
+        const turnTime = state.solo ? 120000 : (state.actionJustTaken ? 120000 : GAME_CONFIG.COMBAT_TURN_TIME);
+        state.actionJustTaken = false;
+
+        // Save resolve function to the state so handleCombatAction can call it
+        state.resolveTurn = resolve;
+
+        state.timers.combat = setTimeout(async () => {
+            if (state.inCombat && state.activeCombatant?.jid === player.jid && !state.pendingActions[player.jid]) {
+                try {
+                    await performAction(sock, player, { type: 'defend' }, sessionKey);
+                } catch (err) {
+                    console.error("Error in combat timeout defend:", err.message);
+                }
+                resolve(); // Resolve promise after auto-defend
             }
-        } catch (err) {
-            console.error("Error in combat timer performAction:", err.message);
-        }
-    }, turnTime);
+        }, turnTime);
+    });
 }
 
 async function performAction(sock, player, action, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state) return;
+
     const chatId = state.chatId;
-    clearTimeout(state.timers.combat);
-    
+
+    // Clear the turn timer
+    if (state.timers.combat) {
+        clearTimeout(state.timers.combat);
+        state.timers.combat = null;
+    }
+
     const icon = player.class?.icon || '👤';
     let resultMsg = `${icon} ${player.name}: `;
-    
     let turnInfo = {
         turnNumber: state.combatRound + 1,
         actor: player,
@@ -2131,16 +2083,22 @@ async function performAction(sock, player, action, sessionKey) {
     
     // Clear action after it is executed
     delete state.pendingActions[player.jid];
-    
+
     // Set flag for next turn timer adjustment
     if (!state.solo) {
         state.actionJustTaken = true;
     }
-    
-    // Process the turn image update in nextTurn/processCombatTurn
-    await nextTurn(sock, turnInfo, sessionKey);
-}
 
+    // 💡 Resolve the turn promise so the while loop in processCombatTurn can continue
+    if (state.resolveTurn) {
+        const resolve = state.resolveTurn;
+        state.resolveTurn = null;
+        resolve();
+    }
+
+    // Process the turn image update
+    await nextTurn(sock, turnInfo, sessionKey);
+    }
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
@@ -2148,141 +2106,114 @@ async function performEnemyAction(sock, enemy, sessionKey) {
     const chatId = state.chatId;
     const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
 
-    try {
-        // 🧠 AI DECISION MAKING
-        const decision = monsterSkills.evaluateAction(enemy, state.players, state.enemies);
-        
-        let turnInfo = {
-            actor: enemy,
-            action: { name: 'Action' },
-            target: null,
-            damage: 0,
-            effects: []
-        };
-
-        // --- SKIP TURN (Stunned/Frozen) ---
-        if (decision.action === 'skip') {
-            try {
-                await sock.sendMessage(chatId, { text: `💤 *${enemy.name}* ${decision.msg}` });
-            } catch (err) {
-                console.error(`[Combat] Failed to send skip message: ${err.message}`);
-            }
-            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-        }
-
-        // --- RELEASE CHARGE (Meteor, etc) ---
-        if (decision.action === 'release_charge') {
-            const skillId = decision.skillId;
-            const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
-            
-            if (skillData && skillData.nextSkill) {
-                const followUpId = skillData.nextSkill;
-                const followUpSkill = monsterSkills.getSkillById(enemy.archetype, followUpId);
-                const target = enemy.chargeTarget || state.players.find(p => !p.isDead);
-                
-                try {
-                    await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` });
-                } catch (err) {
-                    console.error(`[Combat] Failed to send charge release message: ${err.message}`);
-                }
-                
-                // Apply effect (Bosses use Boss Mechanics, standard use MonsterSkills)
-                const effect = followUpSkill.currentEffect || followUpSkill.effect(enemy.level || 1);
-                const result = await applyAbilityEffect(sock, enemy, followUpSkill, effect, state.players.indexOf(target), chatId);
-                
-                turnInfo.action.name = followUpSkill.name;
-                turnInfo.target = target;
-                
-                enemy.isCharging = false;
-                enemy.chargingSkill = null;
-                enemy.chargeTarget = null;
-
-                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-            }
-        }
-
-        // --- USE SKILL ---
-        if (decision.action === 'skill') {
-            const skill = decision.skill;
-            const target = decision.target;
-
-            if (skill.type === 'charge') {
-                enemy.isCharging = true;
-                enemy.chargingSkill = skill.id;
-                enemy.chargeTarget = target;
-                try {
-                    await sock.sendMessage(chatId, { text: `⚠️ *${enemy.name}* ${skill.msg}` });
-                } catch (err) {
-                    console.error(`[Combat] Failed to send charge message: ${err.message}`);
-                }
-                
-                turnInfo.action.name = "Charging";
-                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-            }
-
-            // Execute regular skill
-            try {
-                await sock.sendMessage(chatId, { text: `⚡ *${enemy.name}* uses *${skill.name}*!` });
-            } catch (err) {
-                console.error(`[Combat] Failed to send skill message: ${err.message}`);
-            }
-            
-            const effect = skill.currentEffect || (typeof skill.effect === 'function' ? skill.effect(enemy.level || 1) : skill.effect);
-            let targetIdx = (decision.targetType === 'ally' || decision.targetType === 'self') ? state.enemies.indexOf(target) : state.players.indexOf(target);
-            
-            await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
-            
-            turnInfo.action.name = skill.name;
-            turnInfo.target = target;
-
-            return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-        }
-
-        // --- DEFAULT ATTACK ---
-        const target = decision.target;
-        if (!target || target.isDead) {
-            // Find a fallback
-            const alive = state.players.filter(p => !p.isDead);
-            if (alive.length === 0) {
-                // Everyone dead, end combat
-                return setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-            }
-            turnInfo.target = alive[0];
-        } else {
-            turnInfo.target = target;
-        }
-
-        const { damage, isCrit, wasEvaded } = calculateDamage(enemy, turnInfo.target, enemy.stats.atk, 'physical', 'PHYSICAL', sessionKey);
-        
-        let resultMsg = `${enemy.icon} *${enemy.name}* `;
-        if (wasEvaded) {
-            resultMsg += `attacks ${turnInfo.target.name} but 💨 MISSES!`;
-        } else {
-            turnInfo.target.stats.hp -= damage;
-            turnInfo.target.currentHP = Math.max(0, turnInfo.target.stats.hp);
-            resultMsg += `attacks ${turnInfo.target.name} for 💥 ${damage} damage!${isCrit ? ' (CRIT!)' : ''}`;
-            turnInfo.damage = damage;
-
-            if (turnInfo.target.stats.hp <= 0) {
-                await handleDeath(sock, turnInfo.target, sessionKey, enemy.name);
-                resultMsg += `\n💀 ${turnInfo.target.name} has fallen!`;
-            }
-        }
-
+    return new Promise(async (resolve) => {
         try {
-            await sock.sendMessage(chatId, { text: resultMsg });
-        } catch (err) {
-            console.error(`[Combat] Failed to send attack message: ${err.message}`);
+            // 🧠 AI DECISION MAKING
+            const decision = monsterSkills.evaluateAction(enemy, state.players, state.enemies);
+
+            let turnInfo = {
+                actor: enemy,
+                action: { name: 'Action' },
+                target: null,
+                damage: 0,
+                effects: []
+            };
+
+            // --- RELEASE CHARGE ---
+            if (decision.action === 'release_charge') {
+                const skillId = decision.skillId;
+                const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
+
+                if (skillData && skillData.nextSkill) {
+                    const followUpId = skillData.nextSkill;
+                    const followUpSkill = monsterSkills.getSkillById(enemy.archetype, followUpId);
+                    const target = enemy.chargeTarget || state.players.find(p => !p.isDead);
+
+                    try { await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` }); } catch (err) {}
+
+                    const effect = followUpSkill.currentEffect || followUpSkill.effect(enemy.level || 1);
+                    await applyAbilityEffect(sock, enemy, followUpSkill, effect, state.players.indexOf(target), chatId);
+
+                    turnInfo.action.name = followUpSkill.name;
+                    turnInfo.target = target;
+                    enemy.isCharging = false;
+                    enemy.chargingSkill = null;
+                    enemy.chargeTarget = null;
+
+                    setTimeout(async () => { await nextTurn(sock, turnInfo, sessionKey); resolve(); }, turnDelay);
+                    return;
+                }
+            }
+
+            // --- USE SKILL ---
+            if (decision.action === 'skill') {
+                const skill = decision.skill;
+                const target = decision.target;
+
+                if (skill.type === 'charge') {
+                    enemy.isCharging = true;
+                    enemy.chargingSkill = skill.id;
+                    enemy.chargeTarget = target;
+                    try { await sock.sendMessage(chatId, { text: `⚠️ *${enemy.name}* ${skill.msg}` }); } catch (err) {}
+
+                    turnInfo.action.name = "Charging";
+                    setTimeout(async () => { await nextTurn(sock, turnInfo, sessionKey); resolve(); }, turnDelay);
+                    return;
+                }
+
+                try { await sock.sendMessage(chatId, { text: `⚡ *${enemy.name}* uses *${skill.name}*!` }); } catch (err) {}
+
+                const effect = skill.currentEffect || (typeof skill.effect === 'function' ? skill.effect(enemy.level || 1) : skill.effect);
+                let targetIdx = (decision.targetType === 'ally' || decision.targetType === 'self') ? state.enemies.indexOf(target) : state.players.indexOf(target);
+
+                await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+
+                turnInfo.action.name = skill.name;
+                turnInfo.target = target;
+
+                setTimeout(async () => { await nextTurn(sock, turnInfo, sessionKey); resolve(); }, turnDelay);
+                return;
+            }
+
+            // --- DEFAULT ATTACK ---
+            let target = decision.target;
+            if (!target || target.isDead) {
+                const alive = state.players.filter(p => !p.isDead);
+                if (alive.length === 0) {
+                    setTimeout(async () => { await nextTurn(sock, turnInfo, sessionKey); resolve(); }, turnDelay);
+                    return;
+                }
+                target = alive[0];
+            }
+
+            const { damage, isCrit, wasEvaded } = calculateDamage(enemy, target, enemy.stats.atk, 'physical', 'PHYSICAL', sessionKey);
+
+            let resultMsg = `${enemy.icon} *${enemy.name}* `;
+            if (wasEvaded) {
+                resultMsg += `attacks ${target.name} but 💨 MISSES!`;
+            } else {
+                target.stats.hp -= damage;
+                target.currentHP = Math.max(0, target.stats.hp);
+                resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? ' (CRIT!)' : ''}`;
+                turnInfo.damage = damage;
+                turnInfo.target = target;
+
+                if (target.stats.hp <= 0) {
+                    await handleDeath(sock, target, sessionKey, enemy.name);
+                    resultMsg += `\n💀 ${target.name} has fallen!`;
+                }
+            }
+
+            try { await sock.sendMessage(chatId, { text: resultMsg }); } catch (err) {}
+
+            setTimeout(async () => { await nextTurn(sock, turnInfo, sessionKey); resolve(); }, turnDelay);
+
+        } catch (error) {
+            console.error(`[Combat] Critical error in performEnemyAction for ${enemy.name}:`, error);
+            setTimeout(async () => { await nextTurn(sock, { actor: enemy, action: { name: 'Error' } }, sessionKey); resolve(); }, 1000);
         }
-        setTimeout(() => nextTurn(sock, turnInfo, sessionKey), turnDelay);
-
-    } catch (error) {
-        console.error(`[Combat] Critical error in performEnemyAction for ${enemy.name}:`, error);
-        // Force next turn to prevent deadlock
-        setTimeout(() => nextTurn(sock, { actor: enemy, action: { name: 'Error' } }, sessionKey), 1000);
-    }
+    });
 }
-
 async function checkBossPhase(sock, boss, chatId) {
     if (!boss.isBoss || !boss.phases) return null;
 
@@ -2367,8 +2298,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
 
-    const chatId = state.chatId;
-    // 💡 Generate incremental combat image if action just happened
+    // Generate incremental combat image if action just happened
     if (lastTurnInfo) {
         try {
             const scene = await combatIntegration.generateCombatScene(
@@ -2393,7 +2323,6 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
                     }
                 } catch (msgErr) {
                     console.error("Failed to send turn image message in nextTurn:", msgErr.message);
-                    // Try text fallback once, if it fails, we still continue to check for combat end
                     try { await sock.sendMessage(state.chatId, { text: scene.caption }); } catch {}
                 }
             }
@@ -2403,10 +2332,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
     }
 
     // Check for end of combat (all players dead or all enemies dead)
-    if (await checkCombatEnd(sock, state, sessionKey)) return;
-    
-    // 💡 Recurse to Tick System
-    await processCombatTurn(sock, sessionKey);
+    await checkCombatEnd(sock, state, sessionKey);
 }
 
 
@@ -2450,7 +2376,7 @@ async function endCombat(sock, victory, sessionKey) {
     
     let lootResults = { items: [], gold: totalGold, announcements: [] };
     try {
-        lootResults = lootSystem.distributeLoot(
+        lootResults = await lootSystem.distributeLoot(
             alivePlayers,
             encounterType,
             bossName,
@@ -3593,22 +3519,22 @@ const handleBuy = (chatId, senderJid, itemIndex) => {
     economy.removeMoney(senderJid, item.cost);
     
     if (item.effect === 'bundle' && item.items) {
-        item.items.forEach(subKey => {
+        for (const subKey of item.items) {
             const subInfo = lootSystem.getItemInfo(subKey);
-            inventorySystem.addItem(senderJid, subKey, 1, {
+            await inventorySystem.addItem(senderJid, subKey, 1, {
                 name: subInfo.name,
                 value: subInfo.value,
                 rarity: subInfo.rarity || 'COMMON',
                 source: 'QUEST_SHOP_BUNDLE'
             });
-        });
+        }
         return `✅ Purchased bundle ${item.icon} *${item.name}*! Items added to bag.`;
     }
     
     // Get item info from loot database for persistence
     const itemInfo = lootSystem.getItemInfo(itemKey);
     
-    inventorySystem.addItem(senderJid, itemKey, 1, { 
+    await inventorySystem.addItem(senderJid, itemKey, 1, { 
         name: itemInfo.name,
         value: itemInfo.value,
         rarity: itemInfo.rarity || 'COMMON', 

@@ -83,7 +83,7 @@ async function saveUser(userId) {
         await User.findOneAndUpdate(
             { userId: userId },
             { $set: data },
-            { upsert: true, returnDocument: 'after', returnOriginal: false }
+            { upsert: true, returnDocument: 'after' }
         );
     } catch (err) {
         console.error(`❌ Failed to save user ${userId}:`, err.message);
