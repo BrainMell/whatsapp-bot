@@ -114,7 +114,7 @@ async function saveActiveGroups() {
   await System.findOneAndUpdate(
     { key: `card_active_groups_${id}` },
     { value: Array.from(inst.activeGroups) },
-    { upsert: true }
+    { upsert: true, returnDocument: 'after' }
   );
 }
 
@@ -124,7 +124,7 @@ async function saveRoles() {
   await System.findOneAndUpdate(
     { key: `card_roles_${id}` },
     { value: { admins: Array.from(inst.adminJids), mods: Array.from(inst.modJids) } },
-    { upsert: true }
+    { upsert: true, returnDocument: 'after' }
   );
 }
 

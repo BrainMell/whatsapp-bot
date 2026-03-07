@@ -372,7 +372,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
         }
     }
 
-    const result = inventorySystem.equipItem(senderJid, targetItemId, slot);
+    const result = await inventorySystem.equipItem(senderJid, targetItemId, slot);
     if (!result.success) { 
         await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
         return;
@@ -388,7 +388,7 @@ async function unequipItem(sock, chatId, senderJid, slot) {
         return;
     }
 
-    const result = inventorySystem.unequipItem(senderJid, slot);
+    const result = await inventorySystem.unequipItem(senderJid, slot);
     if (!result.success) { 
         await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
         return;
@@ -552,7 +552,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
             roll -= ore.weight;
             if (roll <= 0) { 
                 const qty = ore.quantity || (Math.floor(Math.random() * (ore.max - ore.min + 1)) + ore.min);
-                inventorySystem.addItem(senderJid, ore.id, qty);
+                await inventorySystem.addItem(senderJid, ore.id, qty);
                 found[ore.id] = (found[ore.id] || 0) + qty;
                 break;
             }

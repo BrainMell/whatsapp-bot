@@ -3680,7 +3680,7 @@ _💡 Reply with another number from your search list!_`.trim();
           else if (roll > 85) { itemKey = 'rare_fish'; emoji = "🐠"; }
           if (Math.random() < 0.05) { itemKey = 'infected_fish'; emoji = "☣️"; }
           const item = lootSystem.getItemInfo(itemKey);
-          inventorySystem.addItem(senderJid, itemKey, 1);
+          await inventorySystem.addItem(senderJid, itemKey, 1);
           let msg = GET_BANNER(`🎣 FISHING`) + `\n\nReeled in: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Value: ${ZENI}${item.value.toLocaleString()}`;
           return await sock.sendMessage(chatId, { text: msg }, { quoted: m });
         }
@@ -3695,7 +3695,7 @@ _💡 Reply with another number from your search list!_`.trim();
           let itemKey = selected.id; let emoji = selected.emoji;
           if (Math.random() < 0.05) { itemKey = 'infected_shard'; emoji = "☣️"; }
           const item = lootSystem.getItemInfo(itemKey);
-          inventorySystem.addItem(senderJid, itemKey, 1);
+          await inventorySystem.addItem(senderJid, itemKey, 1);
           let msg = GET_BANNER(`🏹 HUNTING`) + `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Value: ${ZENI}${item.value.toLocaleString()}`;
           return await sock.sendMessage(chatId, { text: msg }, { quoted: m });
         }
@@ -7526,10 +7526,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`) {
     }
 
     const item = lootSystem.getItemInfo(itemKey);
-    inventorySystem.addItem(senderJid, itemKey, 1);
-    
-    let msg = GET_BANNER(`🎣 FISHING`) + `\n\n`;
-    msg += `You reeled something in!\n\n`;
+    await inventorySystem.addItem(senderJid, itemKey, 1);
+
+    let msg = GET_BANNER(`🎣 FISHING`) + `\n\n`;    msg += `You reeled something in!\n\n`;
     msg += `${emoji} *${item.name}*\n`;
     msg += `▫️ Rarity: ${item.rarity}\n`;
     msg += `▫️ Value: ${ZENI}${item.value.toLocaleString()}\n\n`;
@@ -7584,10 +7583,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`) {
     }
 
     const item = lootSystem.getItemInfo(itemKey);
-    inventorySystem.addItem(senderJid, itemKey, 1);
-    
-    let msg = GET_BANNER(`🏹 HUNTING`) + `\n\n`;
-    if (isInfected) msg += `⚠️️ *ANOMALY DETECTED!*\n`;
+    await inventorySystem.addItem(senderJid, itemKey, 1);
+
+    let msg = GET_BANNER(`🏹 HUNTING`) + `\n\n`;    if (isInfected) msg += `⚠️️ *ANOMALY DETECTED!*\n`;
     msg += `You tracked and took down a target!\n\n`;
     msg += `${emoji} *${item.name}*\n`;
     msg += `▫️ Rarity: ${item.rarity}\n`;
