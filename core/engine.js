@@ -3736,7 +3736,7 @@ _💡 Reply with another number from your search list!_`.trim();
           }
 
           // 2. SPECIFIC GAME COOLDOWN (20s for the SAME game)
-          if (isGambling) {
+          if (isSpamSensitive) {
             const gameKey = `${senderJid}_${cmd}`;
             if (commandCooldowns.has(gameKey)) {
               const lastGameTime = commandCooldowns.get(gameKey);
