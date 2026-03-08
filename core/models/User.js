@@ -12,6 +12,9 @@ const UserSchema = new mongoose.Schema({
   // Timers
   lastDaily: { type: Number, default: 0 },
   lastRob: { type: Number, default: 0 },
+  jailUntil: { type: Number, default: 0 },
+  prisonUntil: { type: Number, default: 0 },
+  robberyStrikes: { type: Number, default: 0 },
   lastClassChange: { type: Number, default: 0 },
   lastFishReset: { type: Number, default: 0 },
   fishCount: { type: Number, default: 0 },
