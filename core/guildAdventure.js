@@ -789,6 +789,26 @@ const STATUS_EFFECTS = {
         value: 30
     },
     blessing: {
+
+        name: 'Shock',
+        icon: '⚡',
+        effect: 'damage_over_time',
+        value: 15,
+        tickRate: 'per_turn'
+    },
+    weak: {
+        name: 'Weakened',
+        icon: '😵',
+        effect: 'reduce_stats',
+        value: 20
+    },
+    vulnerability: {
+        name: 'Vulnerable',
+        icon: '💔',
+        effect: 'reduce_defense',
+        value: 30
+    },
+    blessing: {
         name: 'Blessing',
         icon: '✨',
         effect: 'increase_stats',
@@ -1193,52 +1213,23 @@ function processStatusEffects(entity) {
         const name = effect.name || template.name || effect.type;
         const icon = effect.icon || template.icon || '✨';
         const value = Number(effect.value !== undefined ? effect.value : template.value) || 0;
-        const effectType = effect.effect || template.effect || 'unknown';
 
         // Process effect based on type
-        if (effectType === 'damage_over_time') {
-            const damage = Math.max(1, Math.floor(value));
+        if (effect.effect === 'damage_over_time' || template.effect === 'damage_over_time') {
+            const damage = Math.floor(value);
             entity.stats.hp -= damage;
             messages.push(`🩸 *${name.toUpperCase()} TICK:* ${icon} ${entity.name} takes **${damage}** damage!`);
-
-        } else if (effectType === 'heal_over_time') {
+        } else if (effect.effect === 'heal_over_time' || template.effect === 'heal_over_time') {
             const heal = Math.min(value, (entity.stats.maxHp || entity.stats.hp) - entity.stats.hp);
-            entity.stats.hp += Math.max(0, heal);
-            messages.push(`💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(Math.max(0, heal))}** HP!`);
-
-        } else if (effectType === 'reduce_stats') {
-            // Stat reduction is applied live in calculateDamage — show reminder tick
-            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name}'s ATK & MAG reduced by ${value}%!`);
-
-        } else if (effectType === 'reduce_defense') {
-            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name}'s DEF reduced by ${value}%!`);
-
-        } else if (effectType === 'reduce_speed') {
-            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} is moving at half speed!`);
-
-        } else if (effectType === 'increase_stats') {
-            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} is empowered! (+${value}% damage)`);
-
-        } else if (effectType === 'increase_damage') {
-            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} rages with +${value}% damage!`);
-
-        } else if (effectType === 'absorb_damage') {
-            // Shield is consumed by incoming hits in calculateDamage; just show it's active
-            if (value > 0) messages.push(`${icon} *SHIELD:* ${entity.name} is protected by a ${value} HP barrier!`);
-
-        } else if (effectType === 'skip_turn') {
-            // Handled in the combat loop; no tick message needed here
-
-        } else if (effectType === 'synergy_primer') {
-            // Passive — no message
-
-        } else if (effectType !== 'unknown') {
-            // Catch-all for any unlisted positive effects
-            messages.push(`${icon} *${name.toUpperCase()}* is active on ${entity.name}.`);
+            entity.stats.hp += heal;
+            messages.push(`💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`);
+        } else if (effect.effect === 'reduce_stats' || template.effect === 'reduce_stats' || effect.effect === 'reduce_defense' || template.effect === 'reduce_defense') {
+            // Stat reduction doesn't tick damage, but we show it's active
+            // messages.push(`${icon} ${entity.name} is struggling under ${name}...`);
         }
 
         // Sync HP for V2 (combat Integration expects currentHP)
-        entity.currentHP = Math.max(0, entity.stats.hp);
+        entity.currentHP = entity.stats.hp;
 
         // Reduce duration
         effect.duration--;
@@ -1690,6 +1681,7 @@ async function processCombatTurn(sock, sessionKey) {
                         break;
                     }
                 }
+                if (activeActor) break; // 💡 Optimization: Break tick loop immediately
             }
 
             if (!activeActor) break;
@@ -1848,62 +1840,83 @@ async function performAction(sock, player, action, sessionKey) {
     };
     
     if (action.type === 'attack') {
+        // Default to first alive enemy if no explicit target given
+        if (action.targetIndex === undefined || action.targetIndex === null || action.targetIndex < 0) {
+            action.targetIndex = state.enemies.findIndex(e => e.stats.hp > 0);
+        }
         const target = state.enemies[action.targetIndex];
         if (!target || target.stats.hp <= 0) {
-            resultMsg += `❌ Invalid target!`;
+            // Auto-redirect to first alive enemy
+            const aliveIdx = state.enemies.findIndex(e => e.stats.hp > 0);
+            if (aliveIdx >= 0) action.targetIndex = aliveIdx;
+        }
+        const resolvedTarget = state.enemies[action.targetIndex];
+        if (!resolvedTarget || resolvedTarget.stats.hp <= 0) {
+            resultMsg += `❌ No valid targets!`;
         } else {
             // 💡 Get weapon element
             const mainHand = player.equipment?.main_hand;
-            const element = mainHand ? (lootSystem.getItemInfo(mainHand.id).element || 'PHYSICAL') : 'PHYSICAL';
+            const element = mainHand ? (lootSystem.getItemInfo(mainHand.id)?.element || 'PHYSICAL') : 'PHYSICAL';
             
-            const { damage, isCrit, wasEvaded, noDamageReason } = calculateDamage(player, target, player.stats.atk, 'physical', element, sessionKey);
+            const { damage, isCrit, wasEvaded, noDamageReason } = calculateDamage(player, resolvedTarget, player.stats.atk, 'physical', element, sessionKey);
             
             if (noDamageReason) {
                 resultMsg += noDamageReason;
                 turnInfo.action = { name: 'Failed Attack' };
             } else if (wasEvaded) {
-                resultMsg += `💨 *MISS!* ${target.icon} ${target.name} evaded the attack.`;
+                resultMsg += `💨 *MISS!* ${resolvedTarget.icon} ${resolvedTarget.name} evaded the attack.`;
                 turnInfo.action = { name: 'Missed Attack' };
             } else {
-                                target.stats.hp -= damage;
-                                target.currentHP = target.stats.hp;
-                
-                                if (target.stats.hp > 0 && target.isBoss) {
-                                    await checkBossPhase(sock, target, state.chatId);
-                                }
-                
-                                if (target.stats.hp <= 0) {
-                                    target.justDied = true;
-                                }                
+                resolvedTarget.stats.hp -= damage;
+                resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
+
+                if (resolvedTarget.stats.hp > 0 && resolvedTarget.isBoss) {
+                    await checkBossPhase(sock, resolvedTarget, state.chatId);
+                }
+
+                if (resolvedTarget.stats.hp <= 0) resolvedTarget.justDied = true;
+
                 player.combatStats.damageDealt += damage;
-                target.combatStats = target.combatStats || { damageTaken: 0 };
-                target.combatStats.damageTaken += damage;
-                
-                resultMsg += `${isCrit ? '💥 CRITICAL! ' : ''}Strikes ${target.icon} ${target.name} for ${damage} damage!`;
-                
+                resolvedTarget.combatStats = resolvedTarget.combatStats || { damageTaken: 0 };
+                resolvedTarget.combatStats.damageTaken += damage;
+
+                resultMsg += `${isCrit ? '💥 CRITICAL! ' : ''}Strikes ${resolvedTarget.icon} ${resolvedTarget.name} for *${damage}* damage!`;
+
                 turnInfo.action = { name: 'Basic Attack' };
-                turnInfo.target = target;
+                turnInfo.target = resolvedTarget;
                 turnInfo.damage = damage;
                 if (isCrit) turnInfo.effects.push('CRITICAL');
 
-                if (target.stats.hp <= 0) {
+                if (resolvedTarget.stats.hp <= 0) {
                     // 💡 OVERKILL EXECUTION BONUS
-                    const overkillThreshold = target.stats.hp + damage; // HP before this hit
+                    const overkillThreshold = resolvedTarget.stats.hp + damage;
                     if (damage > overkillThreshold * 2.0) {
-                        const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
+                        const bonusGold = Math.floor(resolvedTarget.goldReward * 0.1) || 50;
                         player.goldEarned = (player.goldEarned || 0) + bonusGold;
-                        resultMsg += `\n⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!`;
+                        resultMsg += `\n⚡ *OVERKILL!* +${bonusGold} Zeni bonus!`;
                     }
 
-                    target.isDead = true;
-                    target.stats.hp = 0;
-                    target.currentHP = 0;
-                    resultMsg += `\n💀 ${target.name} defeated!`;
+                    resolvedTarget.isDead = true;
+                    resolvedTarget.stats.hp = 0;
+                    resolvedTarget.currentHP = 0;
+                    resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
                     player.combatStats.kills = (player.combatStats.kills || 0) + 1;
                     state.stats.monstersKilled++;
 
-                    // 💡 CRITICAL FIX: Check if combat should end immediately
-                    if (await checkCombatEnd(sock, state, sessionKey)) return;
+                    // 💡 Send message BEFORE combat-end check so player always sees result
+                    try { await sock.sendMessage(state.chatId, { text: resultMsg }); } catch(e) {}
+                    state.combatHistory.push(resultMsg);
+                    delete state.pendingActions[player.jid];
+
+                    if (await checkCombatEnd(sock, state, sessionKey)) {
+                        // Combat ended - resolve the turn promise so the loop can clean up
+                        if (state.resolveTurn) {
+                            const r = state.resolveTurn;
+                            state.resolveTurn = null;
+                            r();
+                        }
+                        return;
+                    }
                 }
             }
         }
@@ -2088,8 +2101,10 @@ async function performAction(sock, player, action, sessionKey) {
         }
     }
     
+    // Send player action result as text so it's always visible
+    try { await sock.sendMessage(state.chatId, { text: resultMsg }); } catch(e) {}
     state.combatHistory.push(resultMsg);
-    
+
     // Clear action after it is executed
     delete state.pendingActions[player.jid];
 
@@ -2098,16 +2113,20 @@ async function performAction(sock, player, action, sessionKey) {
         state.actionJustTaken = true;
     }
 
-    // 💡 Resolve the turn promise so the while loop in processCombatTurn can continue
+    // Process the turn image update BEFORE resolving so state is consistent
+    try {
+        await nextTurn(sock, turnInfo, sessionKey);
+    } catch (err) {
+        console.error("[Combat] nextTurn failed in performAction:", err.message);
+    }
+
+    // NOW resolve - safe to advance the loop since current turn is fully processed
     if (state.resolveTurn) {
         const resolve = state.resolveTurn;
         state.resolveTurn = null;
         resolve();
     }
-
-    // Process the turn image update
-    await nextTurn(sock, turnInfo, sessionKey);
-    }
+}
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
     if (!state || !state.inCombat) return;
@@ -2339,9 +2358,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
             console.error("Critical error in nextTurn image generation:", err.message);
         }
     }
-
-    // Check for end of combat (all players dead or all enemies dead)
-    await checkCombatEnd(sock, state, sessionKey);
+    // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
 }
 
 
@@ -3423,6 +3440,14 @@ async function endAdventure(sock, sessionKey, victory = true) {
             // Grant Bonus Points
             const bonusPoints = nextClass.tier === 'ASCENDED' ? 10 : 5;
             user.skillPoints = (user.skillPoints || 0) + bonusPoints;
+
+            // 💡 BUG FIX: Update actual User base stats in the database
+            // Ensure the user stats object exists
+            if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+            
+            // Re-initialize base stats to the new class's defaults
+            // (Progression.getBaseStats will combine these with level scaling)
+            Object.assign(user.stats, nextClass.stats);
             
             economy.saveUser(player.jid);
 
@@ -3453,20 +3478,25 @@ async function endAdventure(sock, sessionKey, victory = true) {
         const finalXP = Math.floor(player.xpEarned * multiplier);
         const finalGold = Math.floor(player.goldEarned * multiplier);
         const bonusGold = player.isDead ? 0 : 2000;
-        
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  ${player.isDead ? '💀 Fallen' : '✅ Survived'}\n\n`;
-        
+        const totalGold = finalGold + bonusGold;
+
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${totalGold}\n  ${player.isDead ? '💀 Fallen' : '✅ Survived'}\n\n`;
+
         // Update stats and rank
         if (!player.isDead) {
-            economy.addMoney(player.jid, bonusGold);
+            // Credits the total accumulated gold (earned during combat + bonus)
+            economy.addMoney(player.jid, totalGold);
             economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
         } else {
             economy.addQuestProgress(player.jid, 0, false); // No progress on death
         }
-        
-        progression.awardXP(player.jid, finalXP);
-        
+
+        // 💡 BUG FIX: Removed awardXP(player.jid, finalXP) here.
+        // XP is already awarded via progression.addXP inside endCombat for every encounter.
+        // Adding it here again causes double (or triple) XP.
+
         const rankUpdate = economy.updateAdventurerRank(player.jid);
+
         if (rankUpdate && rankUpdate.ranked_up) {
             msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
         }
@@ -3580,12 +3610,17 @@ const handleCombatAction = async (sock, chatId, senderJid, actionType, target) =
     
     let action = { type: actionType };
     
-    if (actionType === 'attack' && target !== undefined) {
-        const targetIndex = parseInt(target) - 1;
-        if (isNaN(targetIndex) || targetIndex < 0 || targetIndex >= state.enemies.length) {
-            return "❌ Invalid target!";
+    if (actionType === 'attack') {
+        if (target !== undefined && target !== '') {
+            const targetIndex = parseInt(target) - 1;
+            if (!isNaN(targetIndex) && targetIndex >= 0 && targetIndex < state.enemies.length) {
+                action.targetIndex = targetIndex;
+            }
         }
-        action.targetIndex = targetIndex;
+        // Default to first alive enemy if not specified or invalid
+        if (action.targetIndex === undefined) {
+            action.targetIndex = state.enemies.findIndex(e => e.stats.hp > 0);
+        }
     }
 
     if (actionType === 'ability') {
@@ -3750,16 +3785,20 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
 // ==========================================
 
 async function applyAbilityEffect(sock, player, ability, effect, targetIndex, chatId) {
-    const state = getGameState(chatId);
+    // Use player.jid to find solo state correctly
+    const state = player?.jid ? getGameState(chatId, player.jid) : getGameState(chatId);
     if (!state) return;
+    // Derive sessionKey from state for use in checkCombatEnd
+    const sessionKey = state.sessionKey || (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
     const icon = player.class?.icon || '👤';
     let msg = `${icon} ${player.name} uses ${ability.animation} *${ability.name}*!\n\n`;
     let totalDamage = 0;
     let totalHealing = 0;
     
     // DAMAGE ABILITIES
-          if (effect.type === 'damage' || effect.type.includes('damage')) {
-              const targets = getTargets(player, effect, targetIndex, chatId);        
+    const damageTypes = ['damage', 'attack', 'aoe', 'damage_cc', 'dot', 'execute'];
+    if (damageTypes.includes(effect.type) || (effect.type && effect.type.includes('damage'))) {
+        const targets = getTargets(player, effect, targetIndex, chatId);        
         for (const target of targets) {
             if (target.stats.hp <= 0) continue;
             
@@ -3776,7 +3815,7 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             let baseDamage;
             const lvl = player.level || 1;
             
-            if (effect.damageType === 'magic') {
+            if (effect.damageType === 'magic' || effect.type === 'magic_damage') {
                 baseDamage = player.stats.mag || player.stats.atk || (lvl * 10);
             } else {
                 baseDamage = player.stats.atk || (lvl * 8);
@@ -3795,12 +3834,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             // Crit chance
             let isCrit = false;
             let critChance = player.stats.crit || 5;
-            if (effect.critBonus) critChance += effect.critBonus;
+            if (effect.critBonus || effect.critChance) critChance += (effect.critBonus || effect.critChance);
             if (effect.guaranteedCrit) critChance = 100;
             
             if (Math.random() * 100 < critChance) {
                 isCrit = true;
-                damage = Math.floor(damage * 2.0);
+                damage = Math.floor(damage * 1.5);
             }
             
             // Execute mechanics
@@ -3812,28 +3851,32 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 }
             }
             
-                          // Apply damage
-                          target.stats.hp -= damage;
-                          target.currentHP = target.stats.hp; // Sync V2
-                          totalDamage += damage;
+            // Final damage calculation
+            const result = calculateDamage(player, target, damage, effect.damageType === 'magic' ? 'magic' : 'physical', 'ABILITY', sessionKey);
+            const finalDamage = result.damage;
             
-                          if (target.stats.hp > 0 && target.isBoss) {
-                              await checkBossPhase(sock, target, chatId);
-                          }
+            target.stats.hp -= finalDamage;
+            target.currentHP = Math.max(0, target.stats.hp);
+            totalDamage += finalDamage;
+
+            if (target.stats.hp > 0 && target.isBoss) {
+                await checkBossPhase(sock, target, chatId);
+            }
+
+            if (target.stats.hp <= 0) {
+                target.justDied = true;
+            }            
             
-                          if (target.stats.hp <= 0) {
-                              target.justDied = true;
-                          }            
             const targetIcon = target.isEnemy ? target.icon : (target.class?.icon || '👤');
-            msg += `💥 ${targetIcon} ${target.name} takes ${damage} damage!`;
+            msg += `💥 ${targetIcon} ${target.name} takes ${finalDamage} damage!`;
             if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
             msg += `\n`;
             
             // Death check
             if (target.stats.hp <= 0) {
                 // 💡 OVERKILL EXECUTION BONUS
-                const overkillThreshold = target.stats.hp + damage; // HP before this hit
-                if (damage > overkillThreshold * 2.0) {
+                const overkillThreshold = target.stats.hp + finalDamage; // HP before this hit
+                if (finalDamage > overkillThreshold * 2.0) {
                     const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
                     player.goldEarned = (player.goldEarned || 0) + bonusGold;
                     msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
@@ -3842,25 +3885,40 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 msg += `💀 ${target.name} has been defeated!\n`;
                 target.isDead = true;
                 target.currentHP = 0; // Sync
-                player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+                if (!player.isEnemy) player.combatStats.kills = (player.combatStats.kills || 0) + 1;
 
                 // 💡 CRITICAL FIX: Check if combat should end immediately
                 if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
             }
             
-                          // Apply DoT (Damage over Time)
-                          if (effect.dot) {
-                              const sRes = applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage, player.name);
-                              msg += `🔥 Applied ${effect.dot}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
-                          }
-            
-                          // Apply CC (Crowd Control)
-                          if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
-                              const sRes = applyStatusEffect(target, effect.cc, effect.ccDuration, 0, player.name);
-                              msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
-                          }        }
+            // Apply secondary status effects from monsterSkills
+            if (effect.cc) {
+                const sRes = applyStatusEffect(target, effect.cc, effect.duration || 2, 0, player.name);
+                msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+            }
+            if (effect.dot && effect.type !== 'dot') { // If it's a damage skill with DoT
+                const sRes = applyStatusEffect(target, effect.element || 'poison', effect.duration || 3, effect.value || 10, player.name);
+                msg += `🔥 Applied ${effect.element || 'poison'}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+            }
+        }
         
-        player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
+        if (!player.isEnemy) player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
+    }
+
+    // Support for monsterSkills direct effect types (cc, dot, buff, debuff)
+    if (['cc', 'dot', 'buff', 'debuff'].includes(effect.type)) {
+        const isBeneficial = ['buff'].includes(effect.type);
+        const targets = isBeneficial ? [player] : getTargets(player, effect, targetIndex, chatId);
+        
+        for (const target of targets) {
+            const dur = effect.duration || 3;
+            const val = effect.value || 0;
+            const type = effect.cc || effect.stat || effect.type;
+            
+            const sRes = applyStatusEffect(target, type, dur, val, player.name);
+            const targetIcon = target.isEnemy ? target.icon : (target.class?.icon || '👤');
+            msg += `✨ ${targetIcon} ${target.name} affected by ${type}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+        }
     }
     
     // AOE ABILITIES

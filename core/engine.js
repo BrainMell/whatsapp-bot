@@ -4102,10 +4102,13 @@ Usage: ${newUsage}/5${warningText}`;
 
 // --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` s (reply to convert) ---
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s -`)) {
-  const quotedMsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+  const quotedMsgRaw = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+  const quotedMsg = quotedMsgRaw?.ephemeralMessage?.message || quotedMsgRaw?.viewOnceMessage?.message || quotedMsgRaw?.viewOnceMessageV2?.message || quotedMsgRaw;
+  const message = m.message?.ephemeralMessage?.message || m.message?.viewOnceMessage?.message || m.message?.viewOnceMessageV2?.message || m.message;
+
   const isReply = !!quotedMsg;
-  const hasImage = m.message.imageMessage || quotedMsg?.imageMessage;
-  const hasVideo = m.message.videoMessage || quotedMsg?.videoMessage;
+  const hasImage = message.imageMessage || quotedMsg?.imageMessage;
+  const hasVideo = message.videoMessage || quotedMsg?.videoMessage;
   
   // Flag parsing
   const isFull = lowerTxt.endsWith('-f');
@@ -4131,7 +4134,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    const mediaMsg = isReply ? quotedMsg : m.message;
+    const mediaMsg = isReply ? quotedMsg : message;
     const type = mediaMsg.imageMessage ? 'image' : 'video';
     const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage;
 
@@ -4142,35 +4145,49 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     let buffer = Buffer.concat(chunks);
 
     // Optimized Conversion for ALL Stickers (Prevents Stretching)
-    if (true) {
-        const timestamp = Date.now();
-        const inputPath = `./temp/stick_in_${timestamp}`;
-        const outputPath = `./temp/stick_out_${timestamp}.webp`;
-        if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
-        fs.writeFileSync(inputPath, buffer);
+    const timestamp = Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const ext = type === 'image' ? '.jpg' : '.mp4';
+    const inputPath = `./temp/stick_in_${timestamp}${ext}`;
+    const outputPath = `./temp/stick_out_${timestamp}.webp`;
+    
+    if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+    fs.writeFileSync(inputPath, buffer);
 
-        let filter = 'scale=512:512:force_original_aspect_ratio=decrease,fps=10,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000';
-        if (isFull) filter = 'scale=512:512,fps=10';
-        else if (isCrop1) filter = 'scale=512:-1,fps=10,crop=512:512:0:0';
-        else if (isCrop2) filter = 'scale=512:-1,fps=10,crop=512:512:0:ih-512';
-        else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,fps=10,crop=512:512';
+    // Base filter for both
+    let filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
+    
+    // Handle flags
+    if (isFull) filter = 'scale=512:512';
+    else if (isCrop1) filter = 'scale=512:-1,crop=512:512:0:0';
+    else if (isCrop2) filter = 'scale=512:-1,crop=512:512:0:ih-512';
+    else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
 
-        // Direct WebP optimized for WhatsApp
-        const ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 5 -vf "${filter}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+    let ffmpegCmd;
+    if (type === 'video') {
+        // For videos: keep animation flags
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+    } else {
+        // For images: NO animation flags, NO fps filter
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 70 -y "${outputPath}"`;
+    }
+    
+    try {
         await execPromise(ffmpegCmd);
-        
         if (fs.existsSync(outputPath)) {
             buffer = fs.readFileSync(outputPath);
-            fs.unlinkSync(inputPath);
-            fs.unlinkSync(outputPath);
+            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
         }
+    } catch (fErr) {
+        console.error("FFmpeg Sticker Error:", fErr.message);
+        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     }
 
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
       type: StickerTypes.DEFAULT, // We handled cropping in FFmpeg
-      quality: 50
+      quality: 65
     });
 
     await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
