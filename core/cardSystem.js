@@ -184,16 +184,30 @@ function calcPrice(tier, totalSpawned, maxCopies) {
   return Math.max(Math.round(base * ratio), base);
 }
 
-function buildCardDetailCaption(card, uc, stat, location = 'Collection', index = null) {
+// Fetch user name helper
+async function getUserName(jid) {
+    try {
+        const u = await User.findOne({ userId: jid });
+        return u?.nickname || u?.profile?.whatsappName || 'Adventurer';
+    } catch (e) { return 'Adventurer'; }
+}
+
+function buildCardDetailCaption(card, uc, stat, location = 'Collection', index = null, ownerName = 'Player') {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   const stars  = TIER_STARS[tier]  || '✦';
-  let locStr = `📦 *${location}*`;
+  
+  let locStr = `📦 *${ownerName}'s Coll*`;
   if (index !== null) locStr += ` (#${index})`;
+  
   if (uc) {
-    if (uc.inMainDeck) locStr = `🎴 *Main Deck* (Slot #${uc.mainDeckSlot})`;
+    if (uc.inMainDeck) locStr = `🎴 *${ownerName}'s Main Deck* (Slot #${uc.mainDeckSlot})`;
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
   }
+
+  const copyInfo = uc ? `\n📋  *Copy:* #${uc.copyNumber} / ${stat?.maxCopies || '?'}` : '';
+  const ownerTag = uc ? `\n👤  *Owner:* @${uc.userId.split('@')[0]}` : '';
+
   return (
 `╔═════════════════╗
       🎴  *CARD DETAIL*
@@ -202,7 +216,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 🏷️  *Name:* ${card.cardName}
 📺  *Series:* ${card.animeName}
 ${stars}  *${label}*  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}
+🎨  *Artist:* ${card.creator || 'Unknown'}${copyInfo}${ownerTag}
 
 📍  *Location:* ${locStr}
 
@@ -465,18 +479,21 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     if (input === '--tier') return cmdCardsTier(senderJid, reply, chatId);
     
     let uc = null;
+    let collIndex = null;
     if (input.includes('-')) uc = await UserCard.findOne({ userId: senderJid, cardId: input });
     else {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
         const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
         uc = owned[idx - 1];
+        collIndex = idx;
       }
     }
     if (uc) {
       const card = CARD_INDEX()[uc.cardId];
       const stat = await CardStat.findOne({ cardId: uc.cardId });
-      const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
+      const ownerName = await getUserName(uc.userId);
+      const caption = buildCardDetailCaption(card, uc, stat, 'Collection', collIndex, ownerName);
       try {
         if (String(card.tier) === '6' || String(card.tier) === 'S') {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
@@ -561,7 +578,8 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
         if (uc) {
             const card = CARD_INDEX()[uc.cardId];
             const stat = await CardStat.findOne({ cardId: uc.cardId });
-            const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot);
+            const ownerName = await getUserName(uc.userId);
+            const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot, ownerName);
             try {
                 if (String(card.tier) === '6' || String(card.tier) === 'S') {
                     const gifBuffer = await goService.convertCardImage(card.imageUrl);
@@ -628,9 +646,13 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   if (!animeQuery) return sendUsage(reply, `${P()} scc`, `${P()} scc <anime_name>`, `${P()} scc dragon ball`);
 
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
-  const filtered = owned.filter(uc => {
+  const filtered = [];
+  
+  owned.forEach((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
-    return card?.animeName.toLowerCase().includes(animeQuery);
+    if (card?.animeName.toLowerCase().includes(animeQuery)) {
+        filtered.push({ uc, card, collIndex: i + 1 });
+    }
   });
 
   if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
@@ -639,9 +661,8 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${filtered.length}\n\n`;
 
-  const lines = filtered.map((uc, i) => {
-    const card = CARD_INDEX()[uc.cardId];
-    return `🔹 *#${i + 1}*\n   🃏 *Name:* ${card.cardName}\n   ✨ *Tier:* ${card.tier}\n━━━━━━━━━━━━━━━`;
+  const lines = filtered.map((item) => {
+    return `🔹 *#${item.collIndex}*\n   🃏 *Name:* ${item.card.cardName}\n   ✨ *Tier:* ${item.card.tier}\n━━━━━━━━━━━━━━━`;
   });
 
   return reply(msg + lines.slice(0, 100).join('\n'));
@@ -1474,7 +1495,8 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     if (uc) {
       const card = CARD_INDEX()[uc.cardId];
       const stat = await CardStat.findOne({ cardId: uc.cardId });
-      const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot);
+      const ownerName = await getUserName(uc.userId);
+      const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot, ownerName);
       try {
         if (String(card.tier) === '6' || String(card.tier) === 'S') {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
