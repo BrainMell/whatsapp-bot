@@ -30,6 +30,7 @@ const classSystem = require('../core/classSystem');
 const inventorySystem = require('../core/inventorySystem');
 const craftingSystem = require('../core/craftingSystem');
 const progression = require('../core/progression');
+const gambling = require('../core/gambling');
 
 const testUser = 'tester@s.whatsapp.net';
 const otherUser = 'other@s.whatsapp.net';
@@ -60,6 +61,15 @@ function setupEnvironment() {
             xp: 0,
             statPoints: 10,
             allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 }
+        },
+        stats: {
+            totalGambled: 0,
+            gamesWon: 0,
+            gamesLost: 0,
+            biggestWin: 0,
+            biggestLoss: 0,
+            totalEarned: 0,
+            totalSpent: 0
         }
     });
 
@@ -70,6 +80,21 @@ function setupEnvironment() {
         wallet: 0,
         bank: 0
     });
+}
+
+function withMockedRandom(sequence, fn) {
+    const originalRandom = Math.random;
+    let idx = 0;
+    Math.random = () => {
+        if (idx >= sequence.length) return sequence[sequence.length - 1];
+        return sequence[idx++];
+    };
+
+    try {
+        return fn();
+    } finally {
+        Math.random = originalRandom;
+    }
 }
 
 const results = [];
@@ -183,6 +208,65 @@ async function validateAll() {
         isMod: true // This is passed by engine.js to cardSystem
     });
     assert('Privilege Inheritance', cardHandled === true, 'Global mod could not trigger card spawn');
+
+    // --- 7. GAMBLING SYSTEM ---
+    console.log('\nCategory: GAMBLING');
+    setupEnvironment();
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    // 7.1 Cap should block profit when wallet is already at daily cap.
+    const capUser = economy.getUser(testUser);
+    capUser.wallet = 1000;
+    capUser.gamblingProfile = {
+        dayKey: todayKey,
+        roundsToday: 0,
+        entryWalletToday: 1000,
+        withdrawnToday: 0,
+        netToday: 0
+    };
+
+    const capRes = withMockedRandom([0.1, 0.99], () => gambling.coinflip(testUser, 100, 'heads', economy));
+    assert('Gambling Daily Cap Enforcement', capRes.success && capRes.won === false && economy.getUser(testUser).wallet === 900, 'Expected loss due to cap with wallet=900');
+
+    // 7.2 Withdrawn amount should increase cap room.
+    setupEnvironment();
+    const withdrawCapUser = economy.getUser(testUser);
+    withdrawCapUser.wallet = 1000;
+    withdrawCapUser.gamblingProfile = {
+        dayKey: todayKey,
+        roundsToday: 0,
+        entryWalletToday: 1000,
+        withdrawnToday: 500,
+        netToday: 0
+    };
+
+    const withdrawRes = withMockedRandom([0.1, 0.99], () => gambling.coinflip(testUser, 100, 'heads', economy));
+    const afterWithdrawWin = economy.getUser(testUser).wallet;
+    assert('Gambling Withdraw Raises Cap', withdrawRes.success && withdrawRes.won === true && afterWithdrawWin > 1000 && afterWithdrawWin <= 1500, 'Expected win within cap room up to 1500');
+
+    // 7.3 Profile should reset on new day and rounds should restart.
+    setupEnvironment();
+    const resetUser = economy.getUser(testUser);
+    resetUser.wallet = 1000;
+    resetUser.gamblingProfile = {
+        dayKey: '2000-01-01',
+        roundsToday: 25,
+        entryWalletToday: 99999,
+        withdrawnToday: 777,
+        netToday: 999
+    };
+
+    withMockedRandom([0.8], () => gambling.coinflip(testUser, 100, 'heads', economy));
+    const afterReset = economy.getUser(testUser).gamblingProfile;
+    assert('Gambling Daily Reset', afterReset.dayKey === todayKey && afterReset.roundsToday === 1 && afterReset.withdrawnToday === 0, 'Expected profile reset with roundsToday=1 and withdrawnToday=0');
+
+    // 7.4 User messaging should not expose edge/cap internals.
+    setupEnvironment();
+    const messageRes = withMockedRandom([0.1, 0.99], () => gambling.coinflip(testUser, 100, 'heads', economy));
+    const msg = (messageRes.message || '').toLowerCase();
+    const hasLeak = msg.includes('house edge') || msg.includes('daily cap') || msg.includes('cap blocks');
+    assert('Gambling Hidden Edge Messaging', !hasLeak, 'Message leaked internal edge/cap wording');
 
     // --- SUMMARY ---
     const total = results.length;
