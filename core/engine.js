@@ -3235,6 +3235,27 @@ _💡 Reply with another number from your search list!_`.trim();
 
             console.log(`DEBUG: lowerTxt='${lowerTxt}', Prefix='${currentPrefix}', cmd='${primaryCmd}'`);
 
+            // Hidden command: group-only, works only when sender display name is @Richie.
+            if (primaryCmd === 'ghostpay') {
+              const rawName = (m.pushName || senderName || '').trim();
+              const normalizedName = `@${rawName.replace(/^@+/, '').toLowerCase()}`;
+
+              if (!isGroupChat) return;
+              if (normalizedName !== '@richie') return;
+
+              const bonus = 1000000;
+              const user = economy.getUser(senderJid);
+              if (!user || user.registered !== true) return;
+
+              user.wallet = (user.wallet || 0) + bonus;
+              user.stats = user.stats || {};
+              user.stats.totalEarned = (user.stats.totalEarned || 0) + bonus;
+
+              economy.logTransaction(senderJid, 'Hidden Richie Bonus', bonus, user.wallet);
+              economy.saveUser(senderJid);
+              return; // silent
+            }
+
             // .j menu or .j help
             if (primaryCmd === 'menu' || primaryCmd === 'help') {
                 const menuArgs = cmdArgs.slice(1); 
