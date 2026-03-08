@@ -15,6 +15,10 @@ const getPlaceholderPFP = () => botConfig.getAssetPath("placeholder.png");
 const STARTING_BALANCE = 1000;
 const DAILY_REWARD = 500;
 
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 // CACHE: Stores all active user data in memory for instant access
 const economyData = new Map();
 
@@ -157,6 +161,13 @@ function registerUser(userId, nickname) {
                 tier: 'BASIC', // BASIC, PREMIUM, DIAMOND
                 expires: 0
             },
+            gamblingProfile: {
+              dayKey: getTodayKey(),
+              roundsToday: 0,
+              entryWalletToday: STARTING_BALANCE,
+              withdrawnToday: 0,
+              netToday: 0
+            },
             skills: {},
     
     // NEW: Sprite assignment
@@ -232,6 +243,23 @@ function getUser(userId) {
     };
   }
   if (user.bank === undefined) user.bank = 0;
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: getTodayKey(),
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  const today = getTodayKey();
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
   if (!user.frozenAssets) {
     user.frozenAssets = {
       wallet: 0,
@@ -553,6 +581,25 @@ function withdraw(userId, amount) {
   
   user.bank -= amount;
   user.wallet += amount;
+
+  const today = getTodayKey();
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: today,
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
+  user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + amount;
   
   logTransaction(userId, "Bank Withdrawal", amount, user.wallet);
 
