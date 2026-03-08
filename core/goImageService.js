@@ -193,6 +193,25 @@ class GoImageService {
     }
 
     /*
+     * Convert Card Image (Animated WebM/WebP/GIF to MP4)
+     */
+    async convertCardImage(imageUrl) {
+        return this._enqueue(async () => {
+            try {
+                const response = await this.client.post('/api/cards/convert', {
+                    imageUrl: imageUrl
+                }, {
+                    responseType: 'arraybuffer'
+                });
+                return Buffer.from(response.data);
+            } catch (error) {
+                console.error('GoService Card Convert Error:', error.message);
+                return null;
+            }
+        });
+    }
+
+    /*
      * Search YouTube (Go Service)
      */
     async searchYoutube(query) {
