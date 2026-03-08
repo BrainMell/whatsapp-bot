@@ -4117,8 +4117,36 @@ Usage: ${newUsage}/5${warningText}`;
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s -`)) {
   const quotedMsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
   const isReply = !!quotedMsg;
-  const hasImage = m.message.imageMessage || quotedMsg?.imageMessage;
-  const hasVideo = m.message.videoMessage || quotedMsg?.videoMessage;
+  // Sticker-only unwrap so replies with ephemeral/view-once wrappers are still convertible.
+  // This is local to sticker creation and does not change the view-once command flow.
+  function unwrapStickerMedia(msg) {
+    let cur = msg;
+    for (let i = 0; i < 5 && cur; i++) {
+      if (cur.imageMessage || cur.videoMessage) return cur;
+      if (cur.ephemeralMessage?.message) {
+        cur = cur.ephemeralMessage.message;
+        continue;
+      }
+      if (cur.viewOnceMessageV2?.message) {
+        cur = cur.viewOnceMessageV2.message;
+        continue;
+      }
+      if (cur.viewOnceMessageV2Extension?.message) {
+        cur = cur.viewOnceMessageV2Extension.message;
+        continue;
+      }
+      if (cur.viewOnceMessage?.message) {
+        cur = cur.viewOnceMessage.message;
+        continue;
+      }
+      break;
+    }
+    return cur || msg;
+  }
+
+  const resolvedQuoted = quotedMsg ? unwrapStickerMedia(quotedMsg) : null;
+  const hasImage = !!(m.message.imageMessage || resolvedQuoted?.imageMessage);
+  const hasVideo = !!(m.message.videoMessage || resolvedQuoted?.videoMessage);
   
   // Flag parsing
   const isFull = lowerTxt.endsWith('-f');
@@ -4144,7 +4172,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    const mediaMsg = isReply ? quotedMsg : m.message;
+    const mediaMsg = isReply ? resolvedQuoted : m.message;
     const type = mediaMsg.imageMessage ? 'image' : 'video';
     const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage;
 
