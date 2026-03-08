@@ -270,6 +270,15 @@ function rollDrop(lootTable, rarityBoost = 0) {
             
             const dbInfo = ITEM_DATABASE[item.id];
             let finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
+
+            // Scale rarity of any item upward with difficulty — higher dungeons give better loot
+            const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+            let currentIdx = rarities.indexOf(finalRarity);
+            if (rarityBoost > 0 && currentIdx < rarities.length - 1) {
+                // Each 8 points of rarityBoost pushes up 1 rarity tier
+                const tierBoost = Math.floor(rarityBoost / 8);
+                finalRarity = rarities[Math.min(rarities.length - 1, currentIdx + tierBoost)];
+            }
             
             if (item.id === 'equipment_piece') {
                 const rarityWeights = { 'COMMON': 100, 'UNCOMMON': 50, 'RARE': 20, 'EPIC': 10, 'LEGENDARY': 5, 'MYTHIC': 1 };
@@ -289,8 +298,25 @@ function rollDrop(lootTable, rarityBoost = 0) {
                 if (rarityBoost >= 12) {
                     rarityWeights.RARE = 0;
                 }
+                if (rarityBoost >= 25) {
+                    rarityWeights.EPIC = 0; // Only LEGENDARY/MYTHIC at SSS
+                }
 
-                const equipmentList = Object.entries(ITEM_DATABASE).filter(([id, data]) => data.type === 'EQUIPMENT');
+                // Pick equipment, preferring items whose rarity matches the target tier
+                const targetTier = rarityBoost >= 35 ? 'MYTHIC' : rarityBoost >= 18 ? 'LEGENDARY' : rarityBoost >= 8 ? 'EPIC' : rarityBoost >= 4 ? 'RARE' : 'UNCOMMON';
+                const tierRarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+                const targetIdx = tierRarities.indexOf(targetTier);
+                
+                // Try to pick equipment at or near target rarity
+                const preferredEquipment = Object.entries(ITEM_DATABASE).filter(([id, data]) => {
+                    if (data.type !== 'EQUIPMENT') return false;
+                    const eqIdx = tierRarities.indexOf(data.rarity || 'COMMON');
+                    return eqIdx >= Math.max(0, targetIdx - 1);
+                });
+                const equipmentList = preferredEquipment.length > 0 
+                    ? preferredEquipment 
+                    : Object.entries(ITEM_DATABASE).filter(([id, data]) => data.type === 'EQUIPMENT');
+                    
                 if (equipmentList.length > 0) {
                     const [eqId, eqData] = equipmentList[Math.floor(Math.random() * equipmentList.length)];
                     
@@ -302,10 +328,10 @@ function rollDrop(lootTable, rarityBoost = 0) {
                         stats: { ...eqData.stats }
                     };
 
-                    const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
-                    let currentIdx = rarities.indexOf(resultItem.rarity);
-                    if (rarityBoost > 5 && currentIdx < rarities.length - 1) {
-                        resultItem.rarity = rarities[Math.min(rarities.length - 1, currentIdx + Math.floor(rarityBoost / 10))];
+                    // Boost rarity further based on difficulty
+                    let currentEqIdx = tierRarities.indexOf(resultItem.rarity);
+                    if (rarityBoost > 5) {
+                        resultItem.rarity = tierRarities[Math.min(tierRarities.length - 1, currentEqIdx + Math.floor(rarityBoost / 8))];
                     }
 
                     if (ITEM_RARITY_WEIGHTS[resultItem.rarity] >= 2 || Math.random() < 0.15) {

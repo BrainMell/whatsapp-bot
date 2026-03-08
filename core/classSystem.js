@@ -73,8 +73,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 220, atk: 18, def: 22, mag: 2, spd: 5, luck: 5, crit: 5 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'INFECTED_COLOSSUS' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'INFECTED_COLOSSUS' },
+        evolutionCost: 0,
         passive: { name: 'Tenacity', desc: `Regenerates 3% of max HP every 2 turns in combat.` },
         evolves_into: ['WARLORD'],
     },
@@ -101,8 +101,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 220, atk: 18, def: 12, mag: 1, spd: 6, luck: 4, crit: 15 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'MUTATION_PRIME' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'MUTATION_PRIME' },
+        evolutionCost: 0,
         passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.` },
         evolves_into: ['DOOMSLAYER'],
     },
@@ -129,8 +129,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'FIGHTER',
         role: 'TANK',
         stats: { hp: 180, atk: 10, def: 22, mag: 8, spd: 4, luck: 10, crit: 5 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CORRUPTED_GUARDIAN' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'CORRUPTED_GUARDIAN' },
+        evolutionCost: 0,
 
         passive: { name: 'Divine Shield', desc: `Reduces all damage taken by 10%. Undead enemies deal -50% damage.` },
         evolves_into: ['TEMPLAR'],
@@ -188,8 +188,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 100, atk: 18, def: 5, mag: 3, spd: 20, luck: 15, crit: 25 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'SHADOW_STALKER' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'SHADOW_STALKER' },
+        evolutionCost: 0,
         passive: { name: 'Shadow Step', desc: `Evasion increased by 15%.` },
         evolves_into: ['NIGHTBLADE'],
     },
@@ -216,8 +216,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 120, atk: 14, def: 8, mag: 6, spd: 18, luck: 10, crit: 15 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'IRON_BODY_GRANDMASTER' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'IRON_BODY_GRANDMASTER' },
+        evolutionCost: 0,
         passive: { name: 'Inner Focus', desc: `+10% accuracy and +10% speed.` },
         evolves_into: ['ZENMASTER'],
     },
@@ -244,8 +244,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 130, atk: 17, def: 9, mag: 4, spd: 16, luck: 11, crit: 20 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'ANCIENT_WURM' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'ANCIENT_WURM' },
+        evolutionCost: 0,
         passive: { name: 'Bushido', desc: `+20% ATK after standing still for a turn.` },
         evolves_into: ['SHOGUN'],
     },
@@ -272,8 +272,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'SCOUT',
         role: 'DPS',
         stats: { hp: 95, atk: 16, def: 4, mag: 5, spd: 22, luck: 16, crit: 28 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'SHADOW_LORD' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'SHADOW_LORD' },
+        evolutionCost: 0,
         passive: { name: 'Opening Strike', desc: `The first attack is always a critical hit.` },
         evolves_into: ['KAGE'],
     },
@@ -302,8 +302,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 110, atk: 8, def: 8, mag: 35, spd: 12, luck: 12, crit: 8 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'ARCANE_SENTINEL' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'ARCANE_SENTINEL' },
+        evolutionCost: 0,
         passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn.` },
         evolves_into: ['ARCHMAGE'],
     },
@@ -330,8 +330,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 100, atk: 7, def: 6, mag: 26, spd: 8, luck: 10, crit: 12 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'SOUL_EATER' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUL_EATER' },
+        evolutionCost: 0,
         passive: { name: 'Soul Siphon', desc: `Heals for 8% of magic damage dealt.` },
         evolves_into: ['VOIDWALKER'],
     },
@@ -358,8 +358,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 95, atk: 7, def: 6, mag: 28, spd: 10, luck: 11, crit: 13 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'ELEMENTAL_PRIMORDIAL' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'ELEMENTAL_PRIMORDIAL' },
+        evolutionCost: 0,
         passive: { name: 'Elemental Harmony', desc: `Elemental damage increased by 15%.` },
         evolves_into: ['AVATAR'],
     },
@@ -386,8 +386,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 92, atk: 6, def: 5, mag: 27, spd: 8, luck: 9, crit: 11 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'GRAVEYARD_LORD' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'GRAVEYARD_LORD' },
+        evolutionCost: 0,
         passive: { name: `Death's Apprentice`, desc: `Summons have +30% stats.` },
         evolves_into: ['LICH'],
     },
@@ -414,8 +414,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'APPRENTICE',
         role: 'MAGIC_DPS',
         stats: { hp: 88, atk: 6, def: 6, mag: 28, spd: 14, luck: 13, crit: 12 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CHRONOS_WARDEN' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'CHRONOS_WARDEN' },
+        evolutionCost: 0,
         passive: { name: 'Temporal Flow', desc: `Cooldowns reduced by 1.` },
         evolves_into: ['TIMELORD'],
     },
@@ -444,8 +444,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 110, atk: 7, def: 9, mag: 20, spd: 9, luck: 13, crit: 7 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CORRUPTED_GUARDIAN' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'CORRUPTED_GUARDIAN' },
+        evolutionCost: 0,
 
         passive: { name: 'Divine Grace', desc: `Healing spells heal 25% more.` },
         evolves_into: ['SAINT'],
@@ -473,8 +473,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 115, atk: 8, def: 10, mag: 18, spd: 11, luck: 12, crit: 8 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'FOREST_ANCESTOR' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'FOREST_ANCESTOR' },
+        evolutionCost: 0,
         passive: { name: 'Wild Shape', desc: `Can transform each combat.` },
         evolves_into: ['ARCHDRUID'],
     },
@@ -501,8 +501,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 105, atk: 7, def: 8, mag: 12, spd: 10, luck: 25, crit: 9 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'GOLDEN_GOLEM' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'GOLDEN_GOLEM' },
+        evolutionCost: 0,
         passive: { name: 'Market Advantage', desc: `Earn 50% more Zeni.` },
         evolves_into: ['TYCOON'],
     },
@@ -529,8 +529,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'SOUND_REAPER' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUND_REAPER' },
+        evolutionCost: 0,
         passive: { name: 'Inspiring Song', desc: `Party gain +10% to all stats.` },
         evolves_into: ['VIRTUOSO'],
     },
@@ -557,8 +557,8 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'ACOLYTE',
         role: 'SUPPORT',
         stats: { hp: 108, atk: 9, def: 9, mag: 15, spd: 11, luck: 11, crit: 11 },
-        requirement: { level: 20, questsCompleted: 30, gold: 15000, trialBoss: 'CLOCKWORK_TITAN' },
-        evolutionCost: 15000,
+        requirement: { level: 15, questsCompleted: 15, trialBoss: 'CLOCKWORK_TITAN' },
+        evolutionCost: 0,
         passive: { name: 'Overclocked', desc: `Summons deal 40% more damage.` },
         evolves_into: ['GRAND_INVENTOR'],
     },
@@ -704,6 +704,10 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
             if (userLevel < (req.level || 0)) missing.push(`Level ${req.level}`);
             if (questsCompleted < (req.questsCompleted || 0)) missing.push(`${req.questsCompleted} Quests`);
             
+            // Check gold requirement
+            const userGold = arguments[5] || 0; // optional 6th param: userGold
+            if (req.gold && userGold < req.gold) missing.push(`${req.gold.toLocaleString()} Gold`);
+            
             // Check Trial
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
                 missing.push(`Defeat ${req.trialBoss} (.j trial)`);
@@ -720,7 +724,7 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
 }
 
 function calculateAdventurerRank(level, questsCompleted, gp) {
-    const ranks = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
+    const ranks = ['GOD', 'SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
     for (const rank of ranks) {
         const req = ADVENTURER_RANKS[rank].requirement;
         if (level >= req.level && questsCompleted >= req.questsCompleted) return rank;
@@ -729,7 +733,7 @@ function calculateAdventurerRank(level, questsCompleted, gp) {
 }
 
 function getNextRankRequirements(currentRank) {
-    const ranks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+    const ranks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
     const currentIndex = ranks.indexOf(currentRank);
     if (currentIndex === -1 || currentIndex === ranks.length - 1) return null;
     const nextRank = ranks[currentIndex + 1];

@@ -291,14 +291,18 @@ function allocateStatPoint(userId, stat, amount = 1) {
     // NEW: Tier-based scaling for point values
     const mainUser = economy.getUser(userId);
     const classSystem = require('./classSystem');
-    const classData = classSystem.getClassById(mainUser.class);
+    const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
     
     let tierMultiplier = 1.0;
-    if (classData.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
-    if (classData.tier === 'ASCENDED') tierMultiplier = 4.0; // Massive leap
+    if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
+    if (classData?.tier === 'ASCENDED') tierMultiplier = 4.0; // Massive leap
     
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
     const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
+    
+    // Track points spent per stat so resetStats can refund correctly
+    if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
+    user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
     
     user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
     user.statPoints -= amount;
@@ -309,8 +313,12 @@ function allocateStatPoint(userId, stat, amount = 1) {
 function resetStats(userId) {
     const user = getUser(userId);
     if (!user) return { success: false, message: "User not found" };
-    const totalPointsSpent = Object.values(user.allocatedStats).reduce((sum, val) => sum + Math.floor(val / 3), 0);
+    // Use tracked points spent if available; fall back to legacy approximation
+    const totalPointsSpent = user.allocatedStatPoints
+        ? Object.values(user.allocatedStatPoints).reduce((sum, v) => sum + v, 0)
+        : Object.values(user.allocatedStats).reduce((sum, val) => sum + Math.floor(val / 3), 0);
     user.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+    user.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
     user.statPoints += totalPointsSpent;
     saveProgression(userId);
     return { success: true, pointsRefunded: totalPointsSpent, totalPoints: user.statPoints };

@@ -520,11 +520,11 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}.` });
 
     user.energy = Math.max(0, currentEnergy - energyCost);
-    const xpGained = Math.floor(loc.energyCost * 5);
+    const xpGained = Math.floor(loc.energyCost * 20 + miningLevel * 5);
     const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
     
-    if (Math.random() < 0.15) {
-        const energyRecovered = Math.floor(Math.random() * 10) + 5;
+    if (Math.random() < 0.25) {
+        const energyRecovered = Math.floor(Math.random() * 15) + 8;
         user.energy = Math.min(user.maxEnergy || 100, user.energy + energyRecovered);
     }
 

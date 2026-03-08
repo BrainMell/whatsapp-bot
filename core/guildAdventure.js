@@ -789,26 +789,6 @@ const STATUS_EFFECTS = {
         value: 30
     },
     blessing: {
-
-        name: 'Shock',
-        icon: '⚡',
-        effect: 'damage_over_time',
-        value: 15,
-        tickRate: 'per_turn'
-    },
-    weak: {
-        name: 'Weakened',
-        icon: '😵',
-        effect: 'reduce_stats',
-        value: 20
-    },
-    vulnerability: {
-        name: 'Vulnerable',
-        icon: '💔',
-        effect: 'reduce_defense',
-        value: 30
-    },
-    blessing: {
         name: 'Blessing',
         icon: '✨',
         effect: 'increase_stats',
@@ -1213,23 +1193,52 @@ function processStatusEffects(entity) {
         const name = effect.name || template.name || effect.type;
         const icon = effect.icon || template.icon || '✨';
         const value = Number(effect.value !== undefined ? effect.value : template.value) || 0;
+        const effectType = effect.effect || template.effect || 'unknown';
 
         // Process effect based on type
-        if (effect.effect === 'damage_over_time' || template.effect === 'damage_over_time') {
-            const damage = Math.floor(value);
+        if (effectType === 'damage_over_time') {
+            const damage = Math.max(1, Math.floor(value));
             entity.stats.hp -= damage;
             messages.push(`🩸 *${name.toUpperCase()} TICK:* ${icon} ${entity.name} takes **${damage}** damage!`);
-        } else if (effect.effect === 'heal_over_time' || template.effect === 'heal_over_time') {
+
+        } else if (effectType === 'heal_over_time') {
             const heal = Math.min(value, (entity.stats.maxHp || entity.stats.hp) - entity.stats.hp);
-            entity.stats.hp += heal;
-            messages.push(`💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`);
-        } else if (effect.effect === 'reduce_stats' || template.effect === 'reduce_stats' || effect.effect === 'reduce_defense' || template.effect === 'reduce_defense') {
-            // Stat reduction doesn't tick damage, but we show it's active
-            // messages.push(`${icon} ${entity.name} is struggling under ${name}...`);
+            entity.stats.hp += Math.max(0, heal);
+            messages.push(`💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(Math.max(0, heal))}** HP!`);
+
+        } else if (effectType === 'reduce_stats') {
+            // Stat reduction is applied live in calculateDamage — show reminder tick
+            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name}'s ATK & MAG reduced by ${value}%!`);
+
+        } else if (effectType === 'reduce_defense') {
+            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name}'s DEF reduced by ${value}%!`);
+
+        } else if (effectType === 'reduce_speed') {
+            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} is moving at half speed!`);
+
+        } else if (effectType === 'increase_stats') {
+            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} is empowered! (+${value}% damage)`);
+
+        } else if (effectType === 'increase_damage') {
+            messages.push(`${icon} *${name.toUpperCase()}:* ${entity.name} rages with +${value}% damage!`);
+
+        } else if (effectType === 'absorb_damage') {
+            // Shield is consumed by incoming hits in calculateDamage; just show it's active
+            if (value > 0) messages.push(`${icon} *SHIELD:* ${entity.name} is protected by a ${value} HP barrier!`);
+
+        } else if (effectType === 'skip_turn') {
+            // Handled in the combat loop; no tick message needed here
+
+        } else if (effectType === 'synergy_primer') {
+            // Passive — no message
+
+        } else if (effectType !== 'unknown') {
+            // Catch-all for any unlisted positive effects
+            messages.push(`${icon} *${name.toUpperCase()}* is active on ${entity.name}.`);
         }
 
         // Sync HP for V2 (combat Integration expects currentHP)
-        entity.currentHP = entity.stats.hp;
+        entity.currentHP = Math.max(0, entity.stats.hp);
 
         // Reduce duration
         effect.duration--;
