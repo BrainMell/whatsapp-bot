@@ -178,13 +178,14 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
+    const finalQuantity = inventory[itemId].quantity;
     await economy.saveUser(userId);
     
     return {
         success: true,
         itemId,
         quantity,
-        totalQuantity: inventory[itemId].quantity
+        totalQuantity: finalQuantity
     };
 }
 
@@ -351,12 +352,13 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    const itemToEquip = inventory[itemId];
+    // Create a copy because removeItem might delete the object if quantity reaches 0
+    const itemToEquipCopy = JSON.parse(JSON.stringify(inventory[itemId]));
     const itemInfo = lootSystem.getItemInfo(itemId);
     const playerLevel = progression.getLevel(userId);
 
     // 💡 LEVEL REQUIREMENT CHECK
-    const reqLevel = itemToEquip.reqLevel || itemInfo.reqLevel || 1;
+    const reqLevel = itemToEquipCopy.reqLevel || itemInfo.reqLevel || 1;
     if (playerLevel < reqLevel) {
         return {
             success: false,
@@ -367,7 +369,7 @@ async function equipItem(userId, itemId, slot) {
     // Auto-detect slot if not provided
     let targetSlot = slot;
     if (!targetSlot) {
-        targetSlot = itemToEquip.slot || itemInfo.slot;
+        targetSlot = itemToEquipCopy.slot || itemInfo.slot;
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
     }
 
@@ -381,7 +383,7 @@ async function equipItem(userId, itemId, slot) {
     const slotName = EQUIPMENT_SLOTS[targetSlot.toUpperCase()];
     
     // 💡 TWO-HANDED / SHIELD LOGIC
-    const isTwoHanded = itemToEquip.isTwoHanded || itemInfo.isTwoHanded;
+    const isTwoHanded = itemToEquipCopy.isTwoHanded || itemInfo.isTwoHanded;
 
     // 1. Remove new item from inventory first
     removeItem(userId, itemId, 1);
@@ -411,7 +413,7 @@ async function equipItem(userId, itemId, slot) {
         await addItem(userId, oldItem.id, 1, oldItem);
     }
     
-    equipment[slotName] = { ...itemToEquip };
+    equipment[slotName] = itemToEquipCopy;
     delete equipment[slotName].quantity;
     
     await economy.saveUser(userId);

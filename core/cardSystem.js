@@ -1664,6 +1664,8 @@ async function cmdBid(senderJid, reply, args = []) {
 // Finalize auctions
 async function finalizeAuctions(sock) {
   const expired = await CardMarket.find({ status: 'active', type: 'auction', auctionEndsAt: { $lte: new Date() } });
+  if (!Array.isArray(expired)) return;
+  
   for (const a of expired) {
     try {
       if (a.highBidderId) {
