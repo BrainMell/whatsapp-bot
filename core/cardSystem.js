@@ -194,18 +194,18 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
   }
   return (
-`┏━━━━━━━━━━┓
- 🎴 *CARD DETAIL*
-┗━━━━━━━━━━┛
+`╔═════════════════╗
+      🎴  *CARD DETAIL*
+╚═════════════════╝
 
-🏷️ *Name:* ${card.cardName}
-📺 *Series:* ${card.animeName}
-${stars} *${label}* ${stars}
-🎨 *Art:* ${card.creator || 'Unknown'}
+🏷️  *Name:* ${card.cardName}
+📺  *Series:* ${card.animeName}
+${stars}  *${label}*  ${stars}
+🎨  *Artist:* ${card.creator || 'Unknown'}
 
-📍 *Loc:* ${locStr}
+📍  *Location:* ${locStr}
 
-────────────`
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -213,17 +213,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   return (
-`────────────
-🎴 *CARD SPAWN*
-────────────
-🏷️ *Name:* ${card.cardName}
-📺 *Series:* ${card.animeName}
-✦ *${label}* ✦
-🎨 *Art:* ${card.creator || 'Unknown'}
-────────────
-🆔 ${card.id}
-⌨️ Type ${P()} claim ${card.id}  
-────────────`
+`▬▬▬▬▬▬▬▬▬▬▬▬
+🎴  CARD APPEARED!
+▬▬▬▬▬▬▬▬▬▬▬▬
+🏷️  Name ›  ${card.cardName}
+📺  Series ›  ${card.animeName}
+✦  ${label}  ✦
+🎨  Art ›  ${card.creator || 'Unknown'}
+▬▬▬▬▬▬▬▬▬▬▬▬
+🆔  ${card.id}
+⌨️  Type  ${P()} claim ${card.id}  
+▬▬▬▬▬▬▬▬▬▬▬▬`
   );
 }
 
@@ -292,14 +292,9 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 
   try {
     if (String(card.tier) === '6' || String(card.tier) === 'S') {
-      const res = await goService.convertCardImage(card.imageUrl);
-      if (res && res.video) {
-        await inst.sock_ref.sendMessage(targetGroup, { 
-            video: res.video, 
-            gifPlayback: true, 
-            caption,
-            jpegThumbnail: res.thumbnail
-        });
+      const gifBuffer = await goService.convertCardImage(card.imageUrl);
+      if (gifBuffer) {
+        await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
       } else {
         // Fallback to static image if conversion fails
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -448,12 +443,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
-    if (res && res.video) {
+    if (gifBuffer) {
       return await inst.sock_ref.sendMessage(chatId, { 
-          video: res.video, 
+          video: gifBuffer, 
           gifPlayback: true, 
-          caption: finalMsg,
-          jpegThumbnail: res.thumbnail
+          caption: finalMsg 
       });
     }
   }
@@ -484,15 +478,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
       try {
         if (String(card.tier) === '6' || String(card.tier) === 'S') {
-          const res = await goService.convertCardImage(card.imageUrl);
-          if (res && res.video) {
-            return await inst.sock_ref.sendMessage(chatId, { 
-                video: res.video, 
-                gifPlayback: true, 
-                caption, 
-                mentions: [uc.userId],
-                jpegThumbnail: res.thumbnail
-            });
+          const gifBuffer = await goService.convertCardImage(card.imageUrl);
+          if (gifBuffer) {
+            return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
           }
         }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
@@ -875,7 +863,7 @@ async function cmdInfo(reply, chatId, args = []) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
-      if (String(exact.tier) === '6') {
+      if (String(exact.tier) === '6' || String(exact.tier) === 'S') {
         const gifBuffer = await goService.convertCardImage(exact.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });

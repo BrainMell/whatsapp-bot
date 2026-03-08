@@ -162,15 +162,10 @@ class GoImageService {
                 const response = await this.client.post('/api/cards/gif', {
                     images: imageUrls,
                     title: title
+                }, {
+                    responseType: 'arraybuffer'
                 });
-                
-                if (response.data && response.data.video) {
-                    return {
-                        video: Buffer.from(response.data.video, 'base64'),
-                        thumbnail: response.data.thumbnail ? Buffer.from(response.data.thumbnail, 'base64') : null
-                    };
-                }
-                return null;
+                return Buffer.from(response.data);
             } catch (error) {
                 console.error('GoService Card GIF Error:', error.message);
                 return null;
@@ -205,15 +200,10 @@ class GoImageService {
             try {
                 const response = await this.client.post('/api/cards/convert', {
                     imageUrl: imageUrl
+                }, {
+                    responseType: 'arraybuffer'
                 });
-                
-                if (response.data && response.data.video) {
-                    return {
-                        video: Buffer.from(response.data.video, 'base64'),
-                        thumbnail: response.data.thumbnail ? Buffer.from(response.data.thumbnail, 'base64') : null
-                    };
-                }
-                return null;
+                return Buffer.from(response.data);
             } catch (error) {
                 console.error('GoService Card Convert Error:', error.message);
                 return null;
