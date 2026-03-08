@@ -194,18 +194,18 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
   }
   return (
-`╔═════════════════╗
-      🎴  *CARD DETAIL*
-╚═════════════════╝
+`┏━━━━━━━━━━┓
+ 🎴 *CARD DETAIL*
+┗━━━━━━━━━━┛
 
-🏷️  *Name:* ${card.cardName}
-📺  *Series:* ${card.animeName}
-${stars}  *${label}*  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}
+🏷️ *Name:* ${card.cardName}
+📺 *Series:* ${card.animeName}
+${stars} *${label}* ${stars}
+🎨 *Art:* ${card.creator || 'Unknown'}
 
-📍  *Location:* ${locStr}
+📍 *Loc:* ${locStr}
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+────────────`
   );
 }
 
@@ -213,17 +213,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬
-🎴  CARD APPEARED!
-▬▬▬▬▬▬▬▬▬▬▬▬
-🏷️  Name ›  ${card.cardName}
-📺  Series ›  ${card.animeName}
-✦  ${label}  ✦
-🎨  Art ›  ${card.creator || 'Unknown'}
-▬▬▬▬▬▬▬▬▬▬▬▬
-🆔  ${card.id}
-⌨️  Type  ${P()} claim ${card.id}  
-▬▬▬▬▬▬▬▬▬▬▬▬`
+`────────────
+🎴 *CARD SPAWN*
+────────────
+🏷️ *Name:* ${card.cardName}
+📺 *Series:* ${card.animeName}
+✦ *${label}* ✦
+🎨 *Art:* ${card.creator || 'Unknown'}
+────────────
+🆔 ${card.id}
+⌨️ Type ${P()} claim ${card.id}  
+────────────`
   );
 }
 
@@ -291,8 +291,24 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   const caption = buildSpawnCaption(card, stat.totalSpawned, stat.maxCopies, price);
 
   try {
-    const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    await inst.sock_ref.sendMessage(targetGroup, { image: Buffer.from(res.data), caption, mimetype: 'image/jpeg' });
+    if (String(card.tier) === '6' || String(card.tier) === 'S') {
+      const res = await goService.convertCardImage(card.imageUrl);
+      if (res && res.video) {
+        await inst.sock_ref.sendMessage(targetGroup, { 
+            video: res.video, 
+            gifPlayback: true, 
+            caption,
+            jpegThumbnail: res.thumbnail
+        });
+      } else {
+        // Fallback to static image if conversion fails
+        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        await inst.sock_ref.sendMessage(targetGroup, { image: Buffer.from(res.data), caption, mimetype: 'image/jpeg' });
+      }
+    } else {
+      const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      await inst.sock_ref.sendMessage(targetGroup, { image: Buffer.from(res.data), caption, mimetype: 'image/jpeg' });
+    }
 
     const spawnKey = `${targetGroup}_${card.id}`;
     inst.activeSpawns.set(spawnKey, {
@@ -388,7 +404,7 @@ function getTopImageUrls(topCards) {
 async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
   // Group by Tier
@@ -432,11 +448,12 @@ async function cmdCardsTier(senderJid, reply, chatId) {
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
-    if (gifBuffer) {
+    if (res && res.video) {
       return await inst.sock_ref.sendMessage(chatId, { 
-          video: gifBuffer, 
+          video: res.video, 
           gifPlayback: true, 
-          caption: finalMsg 
+          caption: finalMsg,
+          jpegThumbnail: res.thumbnail
       });
     }
   }
@@ -457,7 +474,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     else {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
-        const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+        const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
         uc = owned[idx - 1];
       }
     }
@@ -466,6 +483,18 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const stat = await CardStat.findOne({ cardId: uc.cardId });
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
       try {
+        if (String(card.tier) === '6' || String(card.tier) === 'S') {
+          const res = await goService.convertCardImage(card.imageUrl);
+          if (res && res.video) {
+            return await inst.sock_ref.sendMessage(chatId, { 
+                video: res.video, 
+                gifPlayback: true, 
+                caption, 
+                mentions: [uc.userId],
+                jpegThumbnail: res.thumbnail
+            });
+          }
+        }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
         return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
       } catch (e) { return reply(caption); }
@@ -473,7 +502,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
   }
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply('📭 Collection empty.');
 
   // Build flat list with simple style
@@ -545,6 +574,12 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             const stat = await CardStat.findOne({ cardId: uc.cardId });
             const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot);
             try {
+                if (String(card.tier) === '6' || String(card.tier) === 'S') {
+                    const gifBuffer = await goService.convertCardImage(card.imageUrl);
+                    if (gifBuffer) {
+                        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
+                    }
+                }
                 const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
                 return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
             } catch (e) { return reply(caption); }
@@ -663,7 +698,7 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   const index = parseInt(args[0]);
   if (isNaN(index)) return sendUsage(reply, `${P()} burn`, `${P()} burn <coll_index>`, `${P()} burn 12`);
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply('❌ Card not found in your collection.');
 
@@ -817,7 +852,7 @@ async function cmdFc(senderJid, reply, args = []) {
   }
 
   // 3. Search Collection
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   for (let i = 0; i < owned.length; i++) {
     const uc = owned[i];
     const card = CARD_INDEX()[uc.cardId];
@@ -840,6 +875,12 @@ async function cmdInfo(reply, chatId, args = []) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
+      if (String(exact.tier) === '6') {
+        const gifBuffer = await goService.convertCardImage(exact.imageUrl);
+        if (gifBuffer) {
+          return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+        }
+      }
       const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer' });
       return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
     } catch (e) { return reply(caption); }
@@ -855,6 +896,12 @@ async function cmdInfo(reply, chatId, args = []) {
     const stat = await CardStat.findOne({ cardId: card.id });
     const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
     try {
+      if (String(card.tier) === '6' || String(card.tier) === 'S') {
+        const gifBuffer = await goService.convertCardImage(card.imageUrl);
+        if (gifBuffer) {
+          return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+        }
+      }
       const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
       return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
     } catch (e) { return reply(caption); }
@@ -877,7 +924,7 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   const index = parseInt(args[0]);
   if (isNaN(index)) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index>`, `${p} t2deck 1`);
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply('❌ Card not found in your collection.');
 
@@ -906,7 +953,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
   }
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply('❌ Card not found in your collection.');
 
@@ -1061,7 +1108,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
   }
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply('❌ Card not found in your collection.');
 
@@ -1150,7 +1197,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   if (isFromDeck) {
     uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: index });
   } else {
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false }).sort({ createdAt: 1 });
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
     uc = owned[index - 1];
   }
 
@@ -1384,6 +1431,37 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
 async function cmdCDeck(senderJid, reply, chatId, args = []) {
   const p = P();
   
+  if (!args[0]) return sendUsage(reply, `${p} cdeck`, `${p} cdeck <name> [slot]`, `${p} cdeck <name> remove <slot>`);
+
+  // Check for 'remove' subcommand
+  // .j cdeck <name> remove <slot>
+  const removeIndex = args.findIndex(a => a.toLowerCase() === 'remove');
+  if (removeIndex !== -1 && args.length > removeIndex + 1) {
+    const deckName = args.slice(0, removeIndex).join(' ').trim();
+    const slot = parseInt(args[removeIndex + 1]);
+    
+    if (!deckName || isNaN(slot)) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot>\``);
+    
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${deckName}$`, 'i') } });
+    if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
+    
+    const ucId = deck.cards[slot - 1];
+    if (!ucId) return reply(`❌ No card in slot #${slot} of deck *"${deck.name}"*.`);
+    
+    const uc = await UserCard.findById(ucId);
+    if (uc) {
+      uc.inCustomDeck = false;
+      uc.customDeckName = null;
+      uc.customDeckSlot = null;
+      await uc.save();
+    }
+    
+    deck.cards.splice(slot - 1, 1);
+    await deck.save();
+    
+    return reply(`✅ Removed card from slot #${slot} of deck *"${deck.name}"*. It has been returned to your collection.`);
+  }
+
   // Try to parse slot if last arg is a number
   let slot = null;
   let name = args.join(' ').trim();
@@ -1395,8 +1473,6 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
       name = args.slice(0, -1).join(' ').trim();
     }
   }
-
-  if (!name) return sendUsage(reply, `${p} cdeck`, `${p} cdeck <name> [slot]`, `${p} cdeck Waifus 1`);
 
   const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
   if (!deck) return reply(`❌ Custom deck *"${name}"* not found.`);
@@ -1411,6 +1487,12 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
       const stat = await CardStat.findOne({ cardId: uc.cardId });
       const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot);
       try {
+        if (String(card.tier) === '6' || String(card.tier) === 'S') {
+          const gifBuffer = await goService.convertCardImage(card.imageUrl);
+          if (gifBuffer) {
+            return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+          }
+        }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
         return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
       } catch (e) { return reply(caption); }
@@ -1594,6 +1676,8 @@ async function cmdBid(senderJid, reply, args = []) {
 // Finalize auctions
 async function finalizeAuctions(sock) {
   const expired = await CardMarket.find({ status: 'active', type: 'auction', auctionEndsAt: { $lte: new Date() } });
+  if (!Array.isArray(expired)) return;
+  
   for (const a of expired) {
     try {
       if (a.highBidderId) {

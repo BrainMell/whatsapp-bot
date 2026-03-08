@@ -64,6 +64,12 @@ const STAT_GROWTH = {
         NECROMANCER: { hp: 0.9, atk: 0.8, def: 0.9, mag: 1.5, spd: 0.9, luck: 1.0, crit: 1.3 },
         MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
         CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 },
+        PALADIN: { hp: 1.6, atk: 1.2, def: 1.7, mag: 1.1, spd: 0.7, luck: 1.1, crit: 0.7 },
+        DRAGONSLAYER: { hp: 1.7, atk: 1.8, def: 1.4, mag: 0.6, spd: 1.0, luck: 1.2, crit: 1.5 },
+        SAMURAI: { hp: 1.2, atk: 1.7, def: 1.0, mag: 0.4, spd: 1.4, luck: 1.2, crit: 1.8 },
+        NINJA: { hp: 0.9, atk: 1.6, def: 0.7, mag: 1.0, spd: 2.2, luck: 1.4, crit: 2.0 },
+        BARD: { hp: 1.1, atk: 0.8, def: 0.9, mag: 1.2, spd: 1.3, luck: 1.8, crit: 1.0 },
+        ARTIFICER: { hp: 1.2, atk: 1.1, def: 1.3, mag: 1.1, spd: 0.9, luck: 1.4, crit: 0.8 },
         // --- ASCENDED CLASSES ---
         ARCHMAGE: { hp: 1.0, atk: 0.8, def: 1.2, mag: 2.2, spd: 1.2, luck: 1.5, crit: 1.5 },
         WARLORD: { hp: 2.0, atk: 1.6, def: 2.0, mag: 0.5, spd: 0.9, luck: 1.2, crit: 1.2 },
@@ -80,7 +86,9 @@ const STAT_GROWTH = {
         TYCOON: { hp: 1.5, atk: 1.5, def: 1.5, mag: 1.5, spd: 1.5, luck: 3.5, crit: 1.5 },
         DRAGON_GOD: { hp: 2.5, atk: 2.2, def: 2.2, mag: 1.5, spd: 1.5, luck: 1.8, crit: 1.8 },
         SHOGUN: { hp: 1.8, atk: 2.0, def: 1.5, mag: 0.8, spd: 1.8, luck: 1.5, crit: 2.2 },
-        KAGE: { hp: 1.4, atk: 2.2, def: 1.0, mag: 1.2, spd: 2.8, luck: 2.0, crit: 3.0 }
+        KAGE: { hp: 1.4, atk: 2.2, def: 1.0, mag: 1.2, spd: 2.8, luck: 2.0, crit: 3.0 },
+        VIRTUOSO: { hp: 1.4, atk: 1.2, def: 1.2, mag: 1.8, spd: 1.6, luck: 2.5, crit: 1.5 },
+        GRAND_INVENTOR: { hp: 1.6, atk: 1.4, def: 1.8, mag: 1.5, spd: 1.2, luck: 1.8, crit: 1.2 }
     },
     STAT_POINTS_PER_LEVEL: 5, // Restored from 3
     MILESTONE_BONUSES: { 10: 10, 25: 20, 50: 40, 75: 60, 100: 100 } // Restored bonuses

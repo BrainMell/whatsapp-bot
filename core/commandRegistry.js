@@ -219,9 +219,9 @@ const COMMAND_REGISTRY = {
     { cmd: 'decline', desc: 'Cancel a pending action.', usage: 'decline' },
     { cmd: 'list decks', desc: 'List all your custom card decks.', usage: 'list decks' },
     { cmd: 'create deck', desc: 'Create a new custom card deck.', usage: 'create deck <name>' },
-    { cmd: 'cdeck', desc: 'View contents of a custom deck.', usage: 'cdeck <name> [slot]' },
+    { cmd: 'cdeck', desc: 'View or remove cards from a custom deck.', usage: 'cdeck <name> [slot] or cdeck <name> remove <slot>' },
     { cmd: 'rename deck', desc: 'Rename one of your custom decks.', usage: 'rename deck <old> | <new>' },
-    { cmd: 'delete deck', desc: 'Delete a custom deck (Cards inside are deleted!).', usage: 'delete deck <name>' }
+    { cmd: 'delete deck', desc: 'Delete a custom deck (Cards are returned to collection).', usage: 'delete deck <name>' }
   ],
   FUN: [
     { cmd: 'joke', desc: 'Get a random funny joke.', usage: 'joke' },

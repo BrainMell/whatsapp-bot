@@ -589,6 +589,14 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const oldClassName = currentClass?.name || 'Unknown';
     user.class = chosen.id;
 
+    // 💡 BUG FIX: Update actual User base stats in the database
+    // Ensure the user stats object exists
+    if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+    
+    // Re-initialize base stats to the new class's defaults
+    // (Progression.getBaseStats will combine these with level scaling)
+    Object.assign(user.stats, chosen.stats);
+
     // PRESERVE SKILLS: Do not wipe user.skills
     if (!user.skills) user.skills = {};
     
