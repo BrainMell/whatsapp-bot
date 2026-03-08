@@ -3148,6 +3148,19 @@ We are happy to have you here.
         const cleanTxt = txt.replace(/[*_~]/g, '');
         let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, ' ');
 
+        const isCommand = lowerTxt.startsWith(botConfig.getPrefix().toLowerCase());
+        if (isCommand && !isOwner) {
+          const punishment = economy.getPunishmentStatus(senderJid);
+          if (punishment.blocked) {
+            const mins = Math.ceil(punishment.msLeft / 60000);
+            const label = punishment.type === 'prison' ? '⛓️ *PRISON BAN*' : '🚔 *JAIL BAN*';
+            await sock.sendMessage(chatId, {
+              text: BOT_MARKER + `${label}\n\nYou are temporarily banned from bot commands.\nTime left: ${mins} minute(s).`
+            });
+            return;
+          }
+        }
+
         // ── CARD SYSTEM INTERCEPT ──────────────────
         const cardHandled = await cardSystem.handleCommand({
             lowerTxt,       // cleaned, lowercased text
