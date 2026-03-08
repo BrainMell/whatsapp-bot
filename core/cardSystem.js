@@ -448,11 +448,12 @@ async function cmdCardsTier(senderJid, reply, chatId) {
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
-    if (gifBuffer) {
+    if (res && res.video) {
       return await inst.sock_ref.sendMessage(chatId, { 
-          video: gifBuffer, 
+          video: res.video, 
           gifPlayback: true, 
-          caption: finalMsg 
+          caption: finalMsg,
+          jpegThumbnail: res.thumbnail
       });
     }
   }
