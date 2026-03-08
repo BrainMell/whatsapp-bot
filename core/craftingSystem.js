@@ -299,7 +299,7 @@ const BREWING_RECIPES = {
     'mega_potion': {
         name: 'Mega Health Potion', id: 'mega_potion', category: 'BREWING',
         desc: 'A powerful brew that restores 250 HP.',
-        ingredients: { 'greater_potion': 2, 'healing_herb': 3, 'mana_dew': 1 },
+        ingredients: { 'major_potion': 2, 'healing_herb': 3, 'mana_dew': 1 },
         result: { id: 'mega_potion', usable: true, effect: 'heal', effectValue: 250 }
     },
     'elixir_of_power': {
