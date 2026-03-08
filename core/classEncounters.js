@@ -4,7 +4,6 @@
 // Enemies are now "The Infected" - creatures corrupted by elemental forces
 // Enemy types determined by player level ranges
 
-const combatImageGen = require('./combatImageGenerator');
 const monsterSkills = require('./monsterSkills');
 
 // ==========================================
@@ -148,6 +147,7 @@ const INFECTED_POOLS = {
                 icon: '💧✨',
                 desc: 'Massive aquatic infected with crushing power',
                 stats: { hp: 650, atk: 18, def: 15, mag: 10, spd: 14, luck: 12, crit: 12 },
+                archetype: 'BRUTE',
                 skills: ['Tidal Wave', 'Deep Pressure', 'Whirlpool'],
                 xpReward: 400,
                 goldReward: [100, 180],
@@ -344,7 +344,7 @@ const INFECTED_POOLS = {
             },
             {
                 id: 'TSUNAMI_WALKER',
-                name: 'TSUNAMI_WALKER',
+                name: 'Tsunami Walker',
                 icon: '🌊',
                 desc: 'Infected that commands tidal waves',
                 stats: { hp: 1700, atk: 40, def: 20, mag: 22, spd: 24, luck: 20, crit: 24 },
@@ -953,7 +953,12 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.isEnemy = true;
     scaled.isBoss = true;
     scaled.currentPhase = 0;
-    scaled.abilities = boss.skills || [];
+    // Use BOSS archetype skill objects so AI can evaluate them properly
+    const bossArchetype = boss.archetype || 'BOSS';
+    scaled.archetype = bossArchetype;
+    scaled.abilities = monsterSkills.getSkillsForMonster(bossArchetype, avgLevel).map(s => s.id);
+    // Keep raw skill list for phase transitions in guildAdventure
+    scaled.skills = boss.skills || [];
     
     return scaled;
 }

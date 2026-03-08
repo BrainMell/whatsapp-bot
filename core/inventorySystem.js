@@ -6,6 +6,8 @@
 const economy = require('./economy');
 const lootSystem = require('./lootSystem');
 const guilds = require('./guilds');
+const classSystem = require('./classSystem');
+const botConfig = require('../botConfig');
 
 // ==========================================
 // 📦 INVENTORY CONFIGURATION
@@ -245,6 +247,13 @@ function hasItem(userId, itemId, quantity = 1) {
     }
     
     return currentQuantity >= quantity;
+}
+
+function getItemCount(userId, itemId) {
+    const inventory = getInventory(userId);
+    if (!inventory[itemId]) return 0;
+    if (typeof inventory[itemId] === 'number') return inventory[itemId];
+    return inventory[itemId].quantity || 0;
 }
 
 function upgradeInventory(userId) {
@@ -677,7 +686,7 @@ function useItem(userId, itemId) {
         removeItem(userId, itemId, 1);
     }
 
-    progression.saveCharacterSheet(userId, sheet);
+    progression.saveProgression(userId);
     economy.saveUser(userId);
 
     return { success: true, message: effectMsg };
@@ -759,6 +768,7 @@ module.exports = {
     addItem,
     removeItem,
     hasItem,
+    getItemCount,
     upgradeInventory,
     formatInventory,
     

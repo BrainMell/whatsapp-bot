@@ -355,15 +355,19 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: phaseShift, target: enemy, targetType: 'self' };
         }
         
-        // Ultimate charge when at 25% HP
-        const ultimateSkill = available.find(s => s.id === 'ultimate');
+        // Charge ultimate at low HP — id is 'ultimate' in BOSS archetype
+        const ultimateSkill = available.find(s => s.id === 'ultimate' || s.chargeTime);
         if (ultimateSkill && hpPct < 0.3 && Math.random() > 0.4) {
             return { action: 'skill', skill: ultimateSkill, target: livePlayers[0] };
         }
         
-        // AoE slam often
-        const slamSkill = available.find(s => s.id === 'slam');
+        // AoE slam — id is 'slam' in BOSS archetype
+        const slamSkill = available.find(s => s.id === 'slam' || s.type === 'aoe');
         if (slamSkill && Math.random() > 0.4) return { action: 'skill', skill: slamSkill, target: livePlayers[0] };
+        
+        // Fallback: use any available offensive skill
+        const offSkill = available.find(s => ['attack', 'magic', 'aoe', 'damage_cc'].includes(s.type));
+        if (offSkill) return { action: 'skill', skill: offSkill, target: defaultTarget };
     }
 
     // ── AGGRESSIVE FALLBACK ────────────────────────
