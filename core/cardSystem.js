@@ -18,6 +18,7 @@ const CardStat   = require('./models/CardStat');
 const UserCard   = require('./models/UserCard');
 const CardMarket = require('./models/CardMarket');
 const CardDeck   = require('./models/CardDeck');
+const User       = require('./models/User');
 const System     = require('./models/System');
 const economy    = require('./economy');
 
