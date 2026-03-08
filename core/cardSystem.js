@@ -194,18 +194,18 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
   }
   return (
-`╔═════════════════╗
-      🎴  *CARD DETAIL*
-╚═════════════════╝
+`┏━━━━━━━━━━┓
+ 🎴 *CARD DETAIL*
+┗━━━━━━━━━━┛
 
-🏷️  *Name:* ${card.cardName}
-📺  *Series:* ${card.animeName}
-${stars}  *${label}*  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}
+🏷️ *Name:* ${card.cardName}
+📺 *Series:* ${card.animeName}
+${stars} *${label}* ${stars}
+🎨 *Art:* ${card.creator || 'Unknown'}
 
-📍  *Location:* ${locStr}
+📍 *Loc:* ${locStr}
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+────────────`
   );
 }
 
@@ -213,17 +213,17 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬
-🎴  CARD APPEARED!
-▬▬▬▬▬▬▬▬▬▬▬▬
-🏷️  Name ›  ${card.cardName}
-📺  Series ›  ${card.animeName}
-✦  ${label}  ✦
-🎨  Art ›  ${card.creator || 'Unknown'}
-▬▬▬▬▬▬▬▬▬▬▬▬
-🆔  ${card.id}
-⌨️  Type  ${P()} claim ${card.id}  
-▬▬▬▬▬▬▬▬▬▬▬▬`
+`────────────
+🎴 *CARD SPAWN*
+────────────
+🏷️ *Name:* ${card.cardName}
+📺 *Series:* ${card.animeName}
+✦ *${label}* ✦
+🎨 *Art:* ${card.creator || 'Unknown'}
+────────────
+🆔 ${card.id}
+⌨️ Type ${P()} claim ${card.id}  
+────────────`
   );
 }
 
@@ -292,9 +292,14 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 
   try {
     if (String(card.tier) === '6' || String(card.tier) === 'S') {
-      const gifBuffer = await goService.convertCardImage(card.imageUrl);
-      if (gifBuffer) {
-        await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
+      const res = await goService.convertCardImage(card.imageUrl);
+      if (res && res.video) {
+        await inst.sock_ref.sendMessage(targetGroup, { 
+            video: res.video, 
+            gifPlayback: true, 
+            caption,
+            jpegThumbnail: res.thumbnail
+        });
       } else {
         // Fallback to static image if conversion fails
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -478,9 +483,15 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection');
       try {
         if (String(card.tier) === '6' || String(card.tier) === 'S') {
-          const gifBuffer = await goService.convertCardImage(card.imageUrl);
-          if (gifBuffer) {
-            return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
+          const res = await goService.convertCardImage(card.imageUrl);
+          if (res && res.video) {
+            return await inst.sock_ref.sendMessage(chatId, { 
+                video: res.video, 
+                gifPlayback: true, 
+                caption, 
+                mentions: [uc.userId],
+                jpegThumbnail: res.thumbnail
+            });
           }
         }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
