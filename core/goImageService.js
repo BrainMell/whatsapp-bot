@@ -162,10 +162,15 @@ class GoImageService {
                 const response = await this.client.post('/api/cards/gif', {
                     images: imageUrls,
                     title: title
-                }, {
-                    responseType: 'arraybuffer'
                 });
-                return Buffer.from(response.data);
+                
+                if (response.data && response.data.video) {
+                    return {
+                        video: Buffer.from(response.data.video, 'base64'),
+                        thumbnail: response.data.thumbnail ? Buffer.from(response.data.thumbnail, 'base64') : null
+                    };
+                }
+                return null;
             } catch (error) {
                 console.error('GoService Card GIF Error:', error.message);
                 return null;
