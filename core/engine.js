@@ -4213,12 +4213,12 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
   }
 
   try {
-    // Search Stickers
+    // Search Pinterest (Restored parity with legacy for image-based stickers)
     await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
     
-    const stickers = await searchStickers(searchTerm, count);
+    const images = await searchPinterest(searchTerm, count);
 
-    if (stickers.length === 0) {
+    if (images.length === 0) {
       await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
     }
@@ -4230,10 +4230,10 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
 
     let successCount = 0;
     
-    for (let i = 0; i < stickers.length; i++) {
+    for (let i = 0; i < images.length; i++) {
       try {
-        // Download sticker
-        const response = await axios.get(stickers[i], { responseType: 'arraybuffer' });
+        // Download image
+        const response = await axios.get(images[i], { responseType: 'arraybuffer' });
         const buffer = Buffer.from(response.data);
 
         // Convert to sticker with CROPPED type
@@ -4258,13 +4258,13 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s `)) {
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
     
     // ✅ HONEST MESSAGE - no fake "pack creation"
-    if (successCount === stickers.length) {
+    if (successCount === images.length) {
       await sock.sendMessage(chatId, { 
         text: BOT_MARKER + `✅ Sent ${successCount} stickers!` 
       });
     } else {
       await sock.sendMessage(chatId, { 
-        text: BOT_MARKER + `⚠️️ Sent ${successCount}/${stickers.length} stickers (some failed)` 
+        text: BOT_MARKER + `⚠️️ Sent ${successCount}/${images.length} stickers (some failed)` 
       });
     }
 
