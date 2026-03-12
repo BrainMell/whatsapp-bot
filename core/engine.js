@@ -4107,9 +4107,11 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   const message = m.message?.ephemeralMessage?.message || m.message?.viewOnceMessage?.message || m.message?.viewOnceMessageV2?.message || m.message;
 
   const isReply = !!quotedMsg;
-  const hasImage = message.imageMessage || quotedMsg?.imageMessage;
-  const hasVideo = message.videoMessage || quotedMsg?.videoMessage;
+  const mediaMsg = isReply ? quotedMsg : message;
   
+  const hasImage = mediaMsg?.imageMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('image/'));
+  const hasVideo = mediaMsg?.videoMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('video/'));
+
   // Flag parsing
   const isFull = lowerTxt.endsWith('-f');
   const isCrop1 = lowerTxt.endsWith('-c1');
@@ -4134,18 +4136,35 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    const mediaMsg = isReply ? quotedMsg : message;
-    const type = mediaMsg.imageMessage ? 'image' : 'video';
-    const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage;
+    // Improved Download Logic
+    let buffer;
+    try {
+        const downloadMsg = isReply ? { message: quotedMsg } : m;
+        buffer = await downloadMediaMessage(
+            downloadMsg,
+            'buffer',
+            {},
+            { 
+              logger: console,
+              reuploadRequest: sock.updateMediaMessage
+            }
+        );
+    } catch (downloadErr) {
+        console.error("Sticker Download Error:", downloadErr.message);
+        // Fallback to manual stream if downloadMediaMessage fails
+        const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage || mediaMsg.documentMessage;
+        const type = hasImage ? 'image' : 'video';
+        const stream = await downloadContentFromMessage(messageData, type);
+        let chunks = [];
+        for await (const chunk of stream) { chunks.push(chunk); }
+        buffer = Buffer.concat(chunks);
+    }
 
-    // Download
-    const stream = await downloadContentFromMessage(messageData, type);
-    let chunks = [];
-    for await (const chunk of stream) { chunks.push(chunk); }
-    let buffer = Buffer.concat(chunks);
+    if (!buffer || buffer.length === 0) throw new Error("Empty media buffer");
 
     // Optimized Conversion for ALL Stickers (Prevents Stretching)
     const timestamp = Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const type = hasImage ? 'image' : 'video';
     const ext = type === 'image' ? '.jpg' : '.mp4';
     const inputPath = `./temp/stick_in_${timestamp}${ext}`;
     const outputPath = `./temp/stick_out_${timestamp}.webp`;
@@ -4164,11 +4183,10 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
 
     let ffmpegCmd;
     if (type === 'video') {
-        // For videos: keep animation flags
         ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
     } else {
-        // For images: NO animation flags, NO fps filter
-        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 70 -y "${outputPath}"`;
+        // Added pix_fmt yuva420p to ensure alpha channel for transparent padding
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
     }
     
     try {
@@ -4186,8 +4204,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
-      type: StickerTypes.DEFAULT, // We handled cropping in FFmpeg
-      quality: 65
+      type: StickerTypes.DEFAULT, // We handled cropping/resizing in FFmpeg
+      quality: 70
     });
 
     await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
