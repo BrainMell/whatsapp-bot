@@ -34,68 +34,48 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const equipment = inventorySystem.getEquipment(senderJid);
     const equipStats = inventorySystem.getEquipmentStats(senderJid);
     
-    let msg = `┏━━━━━━━━━━━━━━━┓\n┃   👤 CHAR SHEET ┃\n┗━━━━━━━━━━━━━━━┛\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃ 👤 PROFILE  ┃\n┗━━━━━━━━━━━━┛\n\n`;
     
     // Basic info
-    msg += `🎭 *Name:* ${senderName}\n`;
-    msg += `${classData.icon} *Class:* ${classData.name}\n`;
-    msg += `🏆 *Rank:* ${sheet.adventurerRank}-Rank\n`;
-    msg += `⭐ *Level:* ${sheet.level}\n\n`;
+    msg += `🎭 *${senderName}*\n`;
+    msg += `${classData.icon} ${classData.name} | 🏆 ${sheet.adventurerRank}-Rank\n`;
+    msg += `⭐ Level ${sheet.level} | 💰 ${getCurrency().symbol}${economyUser.wallet.toLocaleString()}\n\n`;
     
     // XP Progress
     const progressBar = createProgressBar(sheet.progressPercent);
-    msg += `📈 *Experience:*\n`;
-    msg += `${progressBar} ${sheet.progressPercent}%\n`;
-    msg += `${sheet.xpProgress.toLocaleString()}/${sheet.xpForThisLevel.toLocaleString()} XP\n`;
-    msg += `(${sheet.xpNeeded.toLocaleString()} needed for Lv.${sheet.level + 1})\n\n`;
+    msg += `📈 ${progressBar} ${sheet.progressPercent}%\n`;
+    msg += `${sheet.xpProgress.toLocaleString()}/${sheet.xpForThisLevel.toLocaleString()} XP\n\n`;
     
-    // Stats
-    msg += `━━━━━━━━━━━━━\n💪 *STATS:*\n`;
-    msg += `❤️ HP: ${stats.hp}${equipStats.hp ? ` (+${equipStats.hp})` : ''}\n`;
-    msg += `⚡ EN: ${stats.maxEnergy}\n`;
-    msg += `⚔️ ATK: ${stats.atk}${equipStats.atk ? ` (+${equipStats.atk})` : ''}\n`;
-    msg += `🛡️ DEF: ${stats.def}${equipStats.def ? ` (+${equipStats.def})` : ''}\n`;
-    msg += `🔮 MAG: ${stats.mag}${equipStats.mag ? ` (+${equipStats.mag})` : ''}\n`;
-    msg += `💨 SPD: ${stats.spd}${equipStats.spd ? ` (+${equipStats.spd})` : ''}\n`;
-    msg += `🍀 LUCK: ${stats.luck}${equipStats.luck ? ` (+${equipStats.luck})` : ''}\n`;
-    msg += `💥 CRIT: ${stats.crit}%${equipStats.crit ? ` (+${equipStats.crit}%)` : ''}\n\n`;
-    
-    // 💡 SECONDARY STATS
-    msg += `✨ *Secondary Stats:*\n`;
-    msg += `🕊️ Evasion: ${stats.evasion.toFixed(1)}%\n`;
-    msg += `🛡️ Dmg Reduction: ${stats.dmgReduction.toFixed(1)}%\n`;
-    msg += `🎁 Drop Rate: +${stats.rareDropRate.toFixed(1)}%\n\n`;
+    // Stats (compact 2-column)
+    msg += `*STATS:*\n`;
+    msg += `❤️ HP:${stats.hp}${equipStats.hp ? `+${equipStats.hp}` : ''} ⚔️ ATK:${stats.atk}${equipStats.atk ? `+${equipStats.atk}` : ''}\n`;
+    msg += `🛡️ DEF:${stats.def}${equipStats.def ? `+${equipStats.def}` : ''} 🔮 MAG:${stats.mag}${equipStats.mag ? `+${equipStats.mag}` : ''}\n`;
+    msg += `💨 SPD:${stats.spd}${equipStats.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats.luck}${equipStats.luck ? `+${equipStats.luck}` : ''}\n`;
+    msg += `💥 CRIT:${stats.crit}% | 🕊️ EVA:${stats.evasion.toFixed(1)}%\n`;
     
     // Stat points
     if (sheet.statPoints > 0) { 
-        msg += `✨ *Points:* ${sheet.statPoints}\n`;
-        msg += `💡 Use: \`${getPrefix()} allocate <stat> [n]\`\n\n`;
+        msg += `\n✨ *${sheet.statPoints} stat pts!*\n`;
+        msg += `\`.j allocate hp 5\`\n`;
     }
     
-    // Equipment
-    msg += `━━━━━━━━━━━━━\n⚔️ *EQUIPMENT:*\n`;
-    
+    // Equipment summary
+    msg += `\n*GEAR:*\n`;
     const equipped = [];
     for (const [slot, item] of Object.entries(equipment)) { 
         if (item) { 
             const itemInfo = lootSystem.getItemInfo(item.id);
-            equipped.push(`${getSlotIcon(slot)} ${itemInfo.rarity ? inventorySystem.ITEM_RARITY[itemInfo.rarity].icon : '⚪'} ${itemInfo.name}`);
+            equipped.push(`${getSlotIcon(slot)} ${itemInfo.name}`);
         }
     }
-    
     if (equipped.length > 0) { 
-        msg += equipped.join('\n') + '\n';
+        msg += equipped.join(' | ') + '\n';
     } else { 
-        msg += `_No equipment equipped_\n`;
+        msg += `_None equipped_\n`;
     }
     
-    msg += `\n━━━━━━━━━━━━━\n`;
-    msg += `📜 *QUESTS:* ${economyUser.questsCompleted || 0}\n`;
-    msg += `💰 *Wealth:* ${getCurrency().symbol}${economyUser.wallet.toLocaleString()}\n\n`;
-    
-    msg += `💡 *Commands:*\n`;
-    msg += `• \`${getPrefix()} inventory\` - View items\n`;
-    msg += `• \`${getPrefix()} allocate hp 5\` - Spend points`;
+    msg += `\n📜 Quests: ${economyUser.questsCompleted || 0}\n`;
+    msg += `\`.j inventory\` · \`.j equip\``;
     
     // Handle PFP
     let pfpUrl;
@@ -134,68 +114,63 @@ async function displayInventory(sock, chatId, senderJid) {
     const equipment = inventorySystem.getEquipment(senderJid);
     const equippedIds = Object.values(equipment).filter(item => item !== null).map(item => item.id);
     
-    let msg = `┏━━━━━━━━━━━━━━━┓\n┃      🎒 BAG     ┃ \n┗━━━━━━━━━━━━━━━┛\n\n`;
-    msg += `📦 Slots: ${formatted.count}/${formatted.slots}\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃  🎒 BAG     ┃\n┗━━━━━━━━━━━━┛\n\n`;
+    msg += `📦 ${formatted.count}/${formatted.slots} slots\n\n`;
     
     if (formatted.isEmpty) { 
-        msg += `_Your inventory is empty!_\n\n💡 Get items from quests and combat!`;
+        msg += `_Your inventory is empty!_\n\n💡 Earn items from quests!`;
     } else { 
         let itemCounter = 1;
-        // Group by rarity
+        // Display in the same rarity-first order as formatInventory (so numbers match sell/equip)
+        const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
         const rarityGroups = {};
         for (const item of formatted.items) { 
-            if (!rarityGroups[item.rarity]) { 
-                rarityGroups[item.rarity] = [];
-            }
+            if (!rarityGroups[item.rarity]) rarityGroups[item.rarity] = [];
             rarityGroups[item.rarity].push(item);
         }
         
-        const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
-        
         for (const rarity of rarityOrder) { 
-            if (rarityGroups[rarity] && rarityGroups[rarity].length > 0) { 
-                const rarityInfo = inventorySystem.ITEM_RARITY[rarity];
-                msg += `━━━ ${rarityInfo.icon} ${rarityInfo.name} ━━━\n`;
+            if (!rarityGroups[rarity] || rarityGroups[rarity].length === 0) continue;
+            const rarityInfo = inventorySystem.ITEM_RARITY[rarity];
+            msg += `━━ ${rarityInfo.icon} ${rarityInfo.name} ━━\n`;
+            
+            for (const item of rarityGroups[rarity]) { 
+                const isEquipped = equippedIds.includes(item.id);
+                const itemName = item.name || item.id;
                 
-                for (const item of rarityGroups[rarity]) { 
-                    const isEquipped = equippedIds.includes(item.id);
-                    const itemName = item.name || item.id;
-                    const itemValue = item.value || 0;
-                    
-                    msg += `${itemCounter}. ${rarityInfo.icon} *${itemName}*`;
-                    if (item.quantity > 1) msg += ` x${item.quantity}`;
-                    if (isEquipped) msg += ` 🛡 *[EQUIPPED]*`;
-                    msg += `\n`;
+                msg += `*${itemCounter}.* ${rarityInfo.icon} ${itemName}`;
+                if (item.quantity > 1) msg += ` ×${item.quantity}`;
+                if (isEquipped) msg += ` ✅`;
+                msg += `\n`;
 
-                    // 💡 STAT COMPARISON
-                    if (item.type === 'EQUIPMENT' && !isEquipped) { 
-                        const slot = item.slot;
-                        const equippedInSlot = equipment[slot];
-                        if (equippedInSlot) { 
-                            const currentInfo = lootSystem.getItemInfo(equippedInSlot.id);
-                            let compMsg = '   📊 '; 
-                            for (const stat of ['atk', 'def', 'mag', 'hp', 'spd']) { 
-                                const delta = (item.stats?.[stat] || 0) - (currentInfo.stats?.[stat] || 0);
-                                if (delta !== 0) compMsg += `${stat.toUpperCase()} ${delta > 0 ? '🟢+' : '🔴'}${delta} `;
-                            }
-                            msg += compMsg + '\n';
-                        } else if (item.stats) { 
-                            let statsMsg = '   ✨ '; 
-                            for (const [s, v] of Object.entries(item.stats)) { 
-                                statsMsg += `${s.toUpperCase()}+${v} `; 
-                            }
-                            msg += statsMsg + '\n';
+                // Compact stat comparison
+                if (item.type === 'EQUIPMENT' && !isEquipped && item.stats) { 
+                    const slot = item.slot;
+                    const equippedInSlot = equipment[slot];
+                    if (equippedInSlot?.stats) { 
+                        let compParts = [];
+                        for (const stat of ['atk', 'def', 'mag', 'hp', 'spd']) { 
+                            const delta = (item.stats?.[stat] || 0) - (equippedInSlot.stats?.[stat] || 0);
+                            if (delta !== 0) compParts.push(`${stat.toUpperCase()}${delta > 0 ? '🟢+' : '🔴'}${delta}`);
                         }
+                        if (compParts.length > 0) msg += `  📊 ${compParts.join(' ')}\n`;
+                    } else { 
+                        let statParts = [];
+                        for (const [s, v] of Object.entries(item.stats)) { 
+                            if (v) statParts.push(`${s.toUpperCase()}+${v}`);
+                        }
+                        if (statParts.length > 0) msg += `  ✨ ${statParts.join(' ')}\n`;
                     }
-
-                    msg += `   💰 Value: ${getCurrency().symbol}${itemValue}\n`;
-                    msg += `   🆔 ID: \`${item.id}\`\n\n`;
-                    itemCounter++;
                 }
+
+                msg += `  💰${getCurrency().symbol}${item.value || 0} | \`${item.id}\`\n`;
+                itemCounter++;
             }
+            msg += `\n`;
         }
         
-        msg += `━━━━━━━━━━━━━\n💡 *Commands:*\n• \`${getPrefix()} sell <n> [qty]\` - Sell item\n• \`${getPrefix()} upgrade inv\` - Expand slots`;
+        msg += `━━━━━━━━━━━━\n`;
+        msg += `\`.j sell <#>\` \`.j equip <#>\``;
     }
     
     await sock.sendMessage(chatId, { text: msg });
@@ -215,7 +190,7 @@ async function allocateStats(sock, chatId, senderJid, stat, amount = 1) {
     
     const sheet = progression.getCharacterSheet(senderJid);
     
-    let msg = `━━━━━━━━━━━━━\n┃ ✨ STAT GAINED! ┃\n┗━━━━━━━━━━━━━\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃ ✨ STAT UP! ┃\n┗━━━━━━━━━━━━┛\n\n`;
     msg += `${getStatIcon(result.stat)} *${result.stat}:* +${result.valueGained}\n\n`;
     msg += `📊 Points Spent: ${result.pointsSpent}\n`;
     msg += `💎 Remaining: ${result.remainingPoints}\n\n`;
@@ -260,7 +235,7 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
         return;
     }
     
-    let msg = `━━━━━━━━━━━━━━━\n┃   🏆 TOP 10     ┃ \n┗━━━━━━━━━━━━━━━━\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃ 🏆 TOP 10   ┃\n┗━━━━━━━━━━━━┛\n\n`;
     msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
     
     for (let i = 0; i < leaderboard.length; i++) { 
@@ -326,7 +301,7 @@ async function upgradeInventory(sock, chatId, senderJid) {
         return;
     }
     
-    let msg = `━━━━━━━━━━━━━\n┃ ✨ BAG UPGRADE  ┃ \n┗━━━━━━━━━━━━━\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃ ✨ BAG+ ✨  ┃\n┗━━━━━━━━━━━━┛\n\n`;
     msg += `💰 Cost: ${getCurrency().symbol}${result.cost.toLocaleString()}\n`;
     msg += `📦 Slots: ${result.oldSlots} → ${result.newSlots}\n`;
     msg += `🎁 Gained: +${result.slotsGained} slots`;
@@ -415,7 +390,7 @@ function getStatIcon(stat) {
 }
 
 function getSlotIcon(slot) { 
-    const icons = { weapon: '⚔️', armor: '🛡️', helmet: '⛑️', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧥', gloves: '🧤' };
+    const icons = { main_hand: '⚔️', off_hand: '🗡️', weapon: '⚔️', armor: '🛡️', helmet: '⛑️', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧥', gloves: '🧤' };
     return icons[slot] || '📦';
 }
 
@@ -434,7 +409,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') 
     const pageItems = recipes.slice(startIdx, startIdx + itemsPerPage);
 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
-    let msg = `━━━━━━━━━━━━━\n┃   ${titleMap[categoryFilter] || categoryFilter}    ┃ \n┗━━━━━━━━━━━━━\n(Page ${currentPage} of ${totalPages})\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n┃ ${(titleMap[categoryFilter] || categoryFilter).slice(0,10).padEnd(10)} ┃\n┗━━━━━━━━━━━━┛\n(Page ${currentPage}/${totalPages})\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found in this category._\n\n`;
 
     pageItems.forEach(r => { 
@@ -484,7 +459,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const miningLevel = economy.getProfessionLevel(senderJid, 'mining');
     
     if (!locationId) { 
-        let msg = `━━━━━━━━━━━━━\n┃   ⛏️ MINING     ┃ \n┗━━━━━━━━━━━━━\n(Mining Level: ${miningLevel})\n\n`;
+        let msg = `┏━━━━━━━━━━━━┓\n┃ ⛏️ MINING   ┃\n┗━━━━━━━━━━━━┛\n(Mining Lv.${miningLevel})\n\n`;
         const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
         const userRankIdx = rankOrder.indexOf(sheet.adventurerRank);
 

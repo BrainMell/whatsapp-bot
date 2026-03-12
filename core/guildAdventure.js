@@ -1681,7 +1681,6 @@ async function processCombatTurn(sock, sessionKey) {
                         break;
                     }
                 }
-                if (activeActor) break; // 💡 Optimization: Break tick loop immediately
             }
 
             if (!activeActor) break;
@@ -1756,36 +1755,34 @@ async function promptPlayerAction(sock, player, sessionKey) {
         return info && info.usable;
     }) : [];
 
-    let msg = `╔═══════════════╗\n`;
-    msg += `   🎯 *YOUR TURN* \n`;
-    msg += `╚═══════════════╝\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n`;
+    msg += `┃ 🎯 YOUR TURN ┃\n`;
+    msg += `┗━━━━━━━━━━━━┛\n\n`;
 
     msg += `${icon} *${player.name}*\n`;
-    msg += `❤️ HP: ${player.stats.hp}/${player.stats.maxHp}\n`;
-    msg += `⚡ EN: ${player.stats.energy}/${player.stats.maxEnergy}\n`;
+    msg += `❤️ ${player.stats.hp}/${player.stats.maxHp} HP\n`;
+    msg += `⚡ ${player.stats.energy}/${player.stats.maxEnergy} EN\n`;
 
     if (player.statusEffects && player.statusEffects.length > 0) {
-        msg += `📋 Status: ${player.statusEffects.map(e => e.icon).join(' ')}\n`;
+        msg += `📋 ${player.statusEffects.map(e => e.icon).join(' ')}\n`;
     }
 
-    msg += `\n*COMMANDS:*\n`;
-    msg += `⚔️ \`${botConfig.getPrefix()} combat attack <#>\`\n`;
-    msg += `✨ \`${botConfig.getPrefix()} combat ability <#> [target]\`\n`;
-    msg += `🎒 \`${botConfig.getPrefix()} combat item <#> [target]\`\n`;
-    msg += `🛡️ \`${botConfig.getPrefix()} combat defend\`\n\n`;
+    msg += `\n*ACTIONS:*\n`;
+    msg += `⚔️ \`.j combat atk <#>\`\n`;
+    msg += `✨ \`.j combat skill <#>\`\n`;
+    msg += `🎒 \`.j combat item <#>\`\n`;
+    msg += `🛡️ \`.j combat def\`\n`;
 
     if (usableItems.length > 0) {
-        msg += `*USABLE ITEMS:*\n`;
-        usableItems.forEach((item, i) => {
+        msg += `\n*BAG:*\n`;
+        usableItems.slice(0, 3).forEach((item, i) => {
             const info = lootSystem.getItemInfo(item.id);
-            msg += `${i + 1}. ${info.name} (x${item.quantity})\n`;
+            msg += `${i + 1}. ${info.name} x${item.quantity}\n`;
         });
-        msg += `\n`;
+        if (usableItems.length > 3) msg += `...+${usableItems.length - 3} more (.j bag)\n`;
     } else {
-        msg += `_No usable items in bag_\n\n`;
+        msg += `_No usable items_\n`;
     }
-
-    msg += `🎒 Use \`${botConfig.getPrefix()} bag\` to see all items.`;
 
     try {
         await sock.sendMessage(state.chatId, { text: msg });
@@ -2081,7 +2078,8 @@ async function performAction(sock, player, action, sessionKey) {
                         break;
                     case 'flee':
                         resultMsg += `\n💨 The smoke bomb creates a diversion! The party escapes!`;
-                        return endAdventure(sock, chatId, false); // End without victory but alive
+                        try { await sock.sendMessage(state.chatId, { text: resultMsg }); } catch(e) {}
+                        return endAdventure(sock, sessionKey, false); // End without victory but alive
                     case 'revive':
                         if (target.isDead) {
                             target.isDead = false;
@@ -2522,11 +2520,11 @@ async function endCombat(sock, victory, sessionKey) {
 // ==========================================
 
 const getDungeonMenu = (isSolo, senderJid = null) => {
-    let msg = `╔═══════════════╗\n`;
-    msg += `   🏰 *DUNGEONS* \n`;
-    msg += `╚═══════════════╝\n\n`;
-    
-    msg += `Choose your difficulty:\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n`;
+    msg += `┃ 🏰 DUNGEONS ┃\n`;
+    msg += `┗━━━━━━━━━━━━┛\n\n`;
+
+    msg += `Pick your rank:\n\n`;
     
     const ranks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
     let userRankIndex = 0;
@@ -2542,36 +2540,28 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
         'CORRUPTED_GUARDIAN': 'Corrupted Guardian',
         'ELEMENTAL_ARCHON': 'Elemental Archon',
         'MUTATION_PRIME': 'Mutation Prime',
-        'VOID_CORRUPTED': 'Void-Corrupted Entity',
+        'VOID_CORRUPTED': 'Void-Corrupted',
         'PRIMORDIAL_CHAOS': 'Primordial Chaos'
     };
     
     for (const [key, data] of Object.entries(DUNGEON_RANKS)) {
         if (data.isSpecial) continue;
         const dungeonIndex = ranks.indexOf(key);
-        // Solo cap check: can only play 3 ranks above current
         const isLocked = isSolo && dungeonIndex > userRankIndex + 3;
         
         if (isLocked) {
-            msg += `🔒 *${key}-Rank* (Locked - Reach higher rank to unlock)\n\n`;
+            msg += `🔒 *${key}-Rank* (Locked)\n`;
             continue;
         }
         
-        msg += `*${key}-Rank* (${data.encounters} Stages)\n`;
-        msg += `⚡ Diff: ${data.difficulty}x | 👾 Mobs: ${data.minMobs}-${data.maxMobs}\n`;
-        
-        if (data.boss) {
-            const bName = bossNames[data.boss] || 'The Infected';
-            msg += `👹 Boss: ${bName}\n`;
-        } else {
-            msg += `👹 Boss: None\n`;
-        }
-        msg += `\n`;
+        const bName = data.boss ? (bossNames[data.boss] || 'Boss') : 'None';
+        msg += `*${key}-Rank* | Diff:${data.difficulty}x | ${data.encounters}stg\n`;
+        msg += `  👹 ${bName} | Mobs:${data.minMobs}-${data.maxMobs}\n\n`;
     }
     
-    msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `👉 Use: \`${botConfig.getPrefix()} ${isSolo ? 'solo' : 'quest'} <Rank>\`\n`;
-    msg += `Example: \`${botConfig.getPrefix()} ${isSolo ? 'solo' : 'quest'} D\``;
+    msg += `━━━━━━━━━━━━\n`;
+    msg += `👉 \`.j ${isSolo ? 'solo' : 'quest'} <Rank>\`\n`;
+    msg += `Ex: \`.j ${isSolo ? 'solo' : 'quest'} D\``;
     
     return msg;
 };
@@ -2922,22 +2912,20 @@ async function openShop(sock, sessionKey) {
     if (!state) return;
 
     const chatId = state.chatId;
-    let msg = `╔═══════════════════╗\n`;
-    msg += `   🏪 *PRE-RAID SHOP* \n`;
-    msg += `╚═══════════════════╝\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n`;
+    msg += `┃ 🏪 PRE-RAID  ┃\n`;
+    msg += `┗━━━━━━━━━━━━┛\n\n`;
     
-    msg += `Prepare yourselves, heroes! Shop closes in 90s.\n\n`;
+    msg += `Shop closes in 90s!\n\n`;
     
     SHOP_LIST.forEach((key, i) => {
         const item = CONSUMABLES[key];
-        msg += `${i + 1}. ${item.icon} *${item.name}* - ${botConfig.getCurrency().symbol}${item.cost}\n`;
-        msg += `   📝 ${item.desc}\n`;
-        msg += `   ⚡ _${item.effect}_\n\n`;
+        msg += `${i + 1}. ${item.icon} *${item.name}*\n`;
+        msg += `   💰 ${botConfig.getCurrency().symbol}${item.cost} | ${item.effect}\n\n`;
     });
     
-    msg += `━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `💬 Type: \`${botConfig.getPrefix()} buy <#>\` to purchase\n`;
-    msg += `📌 Example: \`${botConfig.getPrefix()} buy 1\``;
+    msg += `━━━━━━━━━━━━\n`;
+    msg += `💬 \`.j buy <#>\` to purchase`;
     
     try {
         await sock.sendMessage(state.chatId, { text: msg });
@@ -2980,18 +2968,19 @@ async function nextStage(sock, groq, sessionKey) {
         // Check if dungeon is complete
         if (state.encounter > state.maxEncounters) {
             state.isProcessing = false;
-            return endAdventure(sock, chatId);
+            return endAdventure(sock, sessionKey);
         }
 
         // 💡 BRANCHING PATHS SYSTEM
         // Every 3 stages (except boss), let the party vote
         if (state.encounter > 1 && state.encounter % 3 === 0 && state.encounter < state.maxEncounters) {
-            let msg = `📂 *THE PATH SPLITS* 📂\n\n`;
-            msg += `The party reaches a fork in the dungeon. Choose your next destination:\n\n`;
-            msg += `🔴 *Door 1: Danger & Riches*\n   (Elite Combat - 2x Loot & XP)\n\n`;
-            msg += `🔵 *Door 2: The Safe Path*\n   (Rest Area - Heal 30% HP/Energy)\n\n`;
-            msg += `💬 Type: \`.j vote 1\` or \`.j vote 2\`\n`;
-            msg += `⏱️ Voting ends in 30 seconds!`;
+            let msg = `┏━━━━━━━━━━━━┓\n`;
+            msg += `┃ 📂 CROSSROAD ┃\n`;
+            msg += `┗━━━━━━━━━━━━┛\n\n`;
+            msg += `🔴 *Door 1: Riches*\n   Elite Combat — 2x Loot\n\n`;
+            msg += `🔵 *Door 2: Safety*\n   Rest — Heal 30% HP/EN\n\n`;
+            msg += `Vote: \`.j vote 1\` or \`.j vote 2\`\n`;
+            msg += `⏱️ 30 seconds!`;
 
             state.votes = {};
             state.currentEncounter = null; // Clear stale encounter
@@ -3440,20 +3429,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
             // Grant Bonus Points
             const bonusPoints = nextClass.tier === 'ASCENDED' ? 10 : 5;
             user.skillPoints = (user.skillPoints || 0) + bonusPoints;
-
-            // 💡 BUG FIX: Update actual User base stats in the database
-            // Ensure the user stats object exists
-            if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
-            
-            // Re-initialize base stats to the new class's defaults
-            // (Progression.getBaseStats will combine these with level scaling)
-            Object.assign(user.stats, nextClass.stats);
             
             economy.saveUser(player.jid);
 
-            let trialSuccessMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-            trialSuccessMsg += `┃   ✨ *TRIAL CONQUERED!* ✨\n`;
-            trialSuccessMsg += `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+            let trialSuccessMsg = `┏━━━━━━━━━━━━┓\n`;
+            trialSuccessMsg += `┃ ✨ EVOLVED! ✨ ┃\n`;
+            trialSuccessMsg += `┗━━━━━━━━━━━━┛\n\n`;
             trialSuccessMsg += `You have proven your worth by defeating the **${trialData.trialBoss.replace('_', ' ')}**!\n\n`;
             trialSuccessMsg += `*${oldClassName}* ──▶ *${nextClass.name}* ${nextClass.icon}\n\n`;
             trialSuccessMsg += `📊 *New Base Stats:*\n`;
@@ -3478,25 +3459,20 @@ async function endAdventure(sock, sessionKey, victory = true) {
         const finalXP = Math.floor(player.xpEarned * multiplier);
         const finalGold = Math.floor(player.goldEarned * multiplier);
         const bonusGold = player.isDead ? 0 : 2000;
-        const totalGold = finalGold + bonusGold;
-
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${totalGold}\n  ${player.isDead ? '💀 Fallen' : '✅ Survived'}\n\n`;
-
+        
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  ${player.isDead ? '💀 Fallen' : '✅ Survived'}\n\n`;
+        
         // Update stats and rank
         if (!player.isDead) {
-            // Credits the total accumulated gold (earned during combat + bonus)
-            economy.addMoney(player.jid, totalGold);
+            economy.addMoney(player.jid, bonusGold);
             economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
         } else {
             economy.addQuestProgress(player.jid, 0, false); // No progress on death
         }
-
-        // 💡 BUG FIX: Removed awardXP(player.jid, finalXP) here.
-        // XP is already awarded via progression.addXP inside endCombat for every encounter.
-        // Adding it here again causes double (or triple) XP.
-
+        
+        progression.awardXP(player.jid, finalXP);
+        
         const rankUpdate = economy.updateAdventurerRank(player.jid);
-
         if (rankUpdate && rankUpdate.ranked_up) {
             msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
         }
@@ -3796,9 +3772,8 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
     let totalHealing = 0;
     
     // DAMAGE ABILITIES
-    const damageTypes = ['damage', 'attack', 'aoe', 'damage_cc', 'dot', 'execute'];
-    if (damageTypes.includes(effect.type) || (effect.type && effect.type.includes('damage'))) {
-        const targets = getTargets(player, effect, targetIndex, chatId);        
+          if (effect.type === 'damage' || effect.type.includes('damage')) {
+              const targets = getTargets(player, effect, targetIndex, chatId);        
         for (const target of targets) {
             if (target.stats.hp <= 0) continue;
             
@@ -3815,7 +3790,7 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             let baseDamage;
             const lvl = player.level || 1;
             
-            if (effect.damageType === 'magic' || effect.type === 'magic_damage') {
+            if (effect.damageType === 'magic') {
                 baseDamage = player.stats.mag || player.stats.atk || (lvl * 10);
             } else {
                 baseDamage = player.stats.atk || (lvl * 8);
@@ -3834,12 +3809,12 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
             // Crit chance
             let isCrit = false;
             let critChance = player.stats.crit || 5;
-            if (effect.critBonus || effect.critChance) critChance += (effect.critBonus || effect.critChance);
+            if (effect.critBonus) critChance += effect.critBonus;
             if (effect.guaranteedCrit) critChance = 100;
             
             if (Math.random() * 100 < critChance) {
                 isCrit = true;
-                damage = Math.floor(damage * 1.5);
+                damage = Math.floor(damage * 2.0);
             }
             
             // Execute mechanics
@@ -3851,32 +3826,28 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 }
             }
             
-            // Final damage calculation
-            const result = calculateDamage(player, target, damage, effect.damageType === 'magic' ? 'magic' : 'physical', 'ABILITY', sessionKey);
-            const finalDamage = result.damage;
+                          // Apply damage
+                          target.stats.hp -= damage;
+                          target.currentHP = target.stats.hp; // Sync V2
+                          totalDamage += damage;
             
-            target.stats.hp -= finalDamage;
-            target.currentHP = Math.max(0, target.stats.hp);
-            totalDamage += finalDamage;
-
-            if (target.stats.hp > 0 && target.isBoss) {
-                await checkBossPhase(sock, target, chatId);
-            }
-
-            if (target.stats.hp <= 0) {
-                target.justDied = true;
-            }            
+                          if (target.stats.hp > 0 && target.isBoss) {
+                              await checkBossPhase(sock, target, chatId);
+                          }
             
+                          if (target.stats.hp <= 0) {
+                              target.justDied = true;
+                          }            
             const targetIcon = target.isEnemy ? target.icon : (target.class?.icon || '👤');
-            msg += `💥 ${targetIcon} ${target.name} takes ${finalDamage} damage!`;
+            msg += `💥 ${targetIcon} ${target.name} takes ${damage} damage!`;
             if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
             msg += `\n`;
             
             // Death check
             if (target.stats.hp <= 0) {
                 // 💡 OVERKILL EXECUTION BONUS
-                const overkillThreshold = target.stats.hp + finalDamage; // HP before this hit
-                if (finalDamage > overkillThreshold * 2.0) {
+                const overkillThreshold = target.stats.hp + damage; // HP before this hit
+                if (damage > overkillThreshold * 2.0) {
                     const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
                     player.goldEarned = (player.goldEarned || 0) + bonusGold;
                     msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
@@ -3885,40 +3856,25 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 msg += `💀 ${target.name} has been defeated!\n`;
                 target.isDead = true;
                 target.currentHP = 0; // Sync
-                if (!player.isEnemy) player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+                player.combatStats.kills = (player.combatStats.kills || 0) + 1;
 
                 // 💡 CRITICAL FIX: Check if combat should end immediately
                 if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
             }
             
-            // Apply secondary status effects from monsterSkills
-            if (effect.cc) {
-                const sRes = applyStatusEffect(target, effect.cc, effect.duration || 2, 0, player.name);
-                msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
-            }
-            if (effect.dot && effect.type !== 'dot') { // If it's a damage skill with DoT
-                const sRes = applyStatusEffect(target, effect.element || 'poison', effect.duration || 3, effect.value || 10, player.name);
-                msg += `🔥 Applied ${effect.element || 'poison'}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
-            }
-        }
-        
-        if (!player.isEnemy) player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
-    }
-
-    // Support for monsterSkills direct effect types (cc, dot, buff, debuff)
-    if (['cc', 'dot', 'buff', 'debuff'].includes(effect.type)) {
-        const isBeneficial = ['buff'].includes(effect.type);
-        const targets = isBeneficial ? [player] : getTargets(player, effect, targetIndex, chatId);
-        
-        for (const target of targets) {
-            const dur = effect.duration || 3;
-            const val = effect.value || 0;
-            const type = effect.cc || effect.stat || effect.type;
+                          // Apply DoT (Damage over Time)
+                          if (effect.dot) {
+                              const sRes = applyStatusEffect(target, effect.dot, effect.dotDuration, effect.dotDamage, player.name);
+                              msg += `🔥 Applied ${effect.dot}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }
             
-            const sRes = applyStatusEffect(target, type, dur, val, player.name);
-            const targetIcon = target.isEnemy ? target.icon : (target.class?.icon || '👤');
-            msg += `✨ ${targetIcon} ${target.name} affected by ${type}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
-        }
+                          // Apply CC (Crowd Control)
+                          if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
+                              const sRes = applyStatusEffect(target, effect.cc, effect.ccDuration, 0, player.name);
+                              msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ''}\n`;
+                          }        }
+        
+        player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
     }
     
     // AOE ABILITIES
