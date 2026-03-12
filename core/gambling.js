@@ -970,6 +970,32 @@ function roulette(userId, amount, bet, economyModule) {
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
     const payout = capPayoutByDailyLimit(user, adjustedPayout);
     const profit = payout - amount;
+
+    if (profit <= 0) {
+      user.stats.totalSpent += amount;
+      trackDailyNet(user, -amount);
+      updateGamblingStats(userId, amount, false, economyModule);
+      economyModule.logTransaction(userId, `Roulette Lost (${betType}, Capped)`, -amount, user.wallet);
+
+      return {
+        success: true,
+        won: false,
+        message: `🎡 *ROULETTE* 🎡
+
+╔════════════════════╗
+║ Your bet: ${betType}
+║ 
+║ 🎰 Result: ${result} (${color.toUpperCase()}) 🎰
+╚════════════════════╝
+
+😢 *YOU LOST!* 😢
+
+-${getZENI()}${amount.toLocaleString()}
+
+💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      };
+    }
+
     user.wallet += payout;
     user.stats.totalEarned += profit;
     trackDailyNet(user, profit);
@@ -1237,16 +1263,34 @@ You tried to cash out at ${currentMultiplier}x
   const winnings = capPayoutByDailyLimit(user, adjustedPayout);
   const profit = winnings - game.bet;
 
-  user.wallet += winnings;
-  if (profit > 0) {
-    user.stats.totalEarned += profit;
-    trackDailyNet(user, profit);
-  } else {
+  if (profit <= 0) {
     user.stats.totalSpent += game.bet;
     trackDailyNet(user, -game.bet);
+    economyModule.saveUser(userId);
+
+    return {
+      success: true,
+      won: false,
+      message: `🚀 *CASH OUT FAILED* 🚀
+
+╔════════════════════╗
+║ ⚠️ ${currentMultiplier}x MULTIPLIER
+╚════════════════════╝
+
+Payout was capped below your bet.
+
+😢 *YOU LOST!*
+-${getZENI()}${game.bet.toLocaleString()}
+
+💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+    };
   }
+
+  user.wallet += winnings;
+  user.stats.totalEarned += profit;
+  trackDailyNet(user, profit);
   economyModule.saveUser(userId);
-  
+
   return {
     success: true,
     won: true,
@@ -1417,8 +1461,8 @@ function minesCashOut(userId, economyModule) {
   const winnings = capPayoutByDailyLimit(user, adjustedPayout);
   const profit = winnings - game.bet;
 
-  user.wallet += winnings;
   if (profit > 0) {
+    user.wallet += winnings;
     user.stats.totalEarned += profit;
     trackDailyNet(user, profit);
     updateGamblingStats(userId, game.bet, true, economyModule);
@@ -1433,9 +1477,18 @@ function minesCashOut(userId, economyModule) {
   activeMinesGames.delete(userId);
   economyModule.saveUser(userId);
 
+  if (profit > 0) {
+    return {
+      success: true,
+      won: true,
+      message: `💰 *CASHED OUT!* 💰\n\n🎉 *YOU WON!*\n📈 Multiplier: ${game.multiplier}x\n💵 Won: ${getZENI()}${winnings.toLocaleString()}\n🏆 Profit: +${getZENI()}${profit.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+    };
+  }
+
   return {
     success: true,
-    message: `💰 *CASHED OUT!* 💰\n\n🎉 *YOU WON!*\n📈 Multiplier: ${game.multiplier}x\n💵 Won: ${getZENI()}${winnings.toLocaleString()}\n🏆 Profit: +${getZENI()}${profit.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+    won: false,
+    message: `💰 *CASHED OUT!* 💰\n\n😢 *YOU LOST!*\n📈 Multiplier: ${game.multiplier}x\n💵 Payout: ${getZENI()}${winnings.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
 
@@ -2155,14 +2208,18 @@ function cupGame(userId, amount, choice, economyModule) {
 
   const ctx = beginGamblingRound(user);
   const ball = Math.floor(Math.random() * 3) + 1;
-  const won = cup === ball && !maybeForceLoss(ctx);
+  const matchedBall = cup === ball && !maybeForceLoss(ctx);
+  let won = false;
+  let payoutShown = 0;
 
-  if (won) {
+  if (matchedBall) {
     const rawPayout = amount * 4; // 4x payout
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
     const payout = capPayoutByDailyLimit(user, adjustedPayout);
     const profit = payout - amount;
     if (profit > 0) {
+      won = true;
+      payoutShown = payout;
       user.wallet += payout;
       user.stats.totalEarned += profit;
       trackDailyNet(user, profit);
@@ -2189,6 +2246,7 @@ function cupGame(userId, amount, choice, economyModule) {
 
   return {
     success: true,
+    won,
     message: `🥤 *CUP GAME* 🥤
 
 Shuffle shuffle...
@@ -2197,7 +2255,7 @@ ${won ? '✅ *YOU FOUND IT!*' : '❌ *WRONG CUP!*'}
 The ball was under cup ${ball}:
 ${cups}
 
-💰 Payout: ${getZENI()}${won ? (amount * 2.8).toLocaleString() : '0'}
+💰 Payout: ${getZENI()}${payoutShown.toLocaleString()}
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }

@@ -3688,6 +3688,21 @@ _💡 Reply with another number from your search list!_`.trim();
         const isBotCommand = lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`);
         if (isBotCommand) console.log(`🤖 Command detected: ${lowerTxt.split(' ')[0]}`);
 
+        if (isBotCommand) {
+          const punishment = economy.getPunishmentStatus(senderJid);
+          if (punishment?.blocked) {
+            const totalMinutes = Math.max(0, Math.ceil((punishment.msLeft || 0) / 60000));
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            const timeLeft = hours > 0 ? `${hours}h ${minutes}m` : `${totalMinutes}m`;
+            const title = punishment.type === 'prison' ? '⛓️ *PRISON BAN*' : '🚔 *JAIL BAN*';
+            await sock.sendMessage(chatId, {
+              text: BOT_MARKER + `${title}\n\nYou are banned from bot commands for ${timeLeft}.`
+            });
+            return;
+          }
+        }
+
 
         // ============================================
         // 🌍 GLOBAL WEATHER SYSTEM
