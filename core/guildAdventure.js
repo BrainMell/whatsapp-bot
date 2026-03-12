@@ -1752,7 +1752,8 @@ async function promptPlayerAction(sock, player, sessionKey) {
     const inventory = inventorySystem.formatInventory(player.jid);
     const usableItems = !inventory.isEmpty ? inventory.items.filter(item => {
         const info = lootSystem.getItemInfo(item.id);
-        return info && info.usable;
+        // Accept items that are usable in lootSystem OR are in the pre-quest shop CONSUMABLES
+        return (info && info.usable) || !!CONSUMABLES[item.id];
     }) : [];
 
     let msg = `┏━━━━━━━━━━━━┓\n`;
@@ -1899,11 +1900,15 @@ async function performAction(sock, player, action, sessionKey) {
                     resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
                     player.combatStats.kills = (player.combatStats.kills || 0) + 1;
                     state.stats.monstersKilled++;
+                    if (resolvedTarget.isBoss) state.stats.bossesDefeated++;
 
                     // 💡 Send message BEFORE combat-end check so player always sees result
                     try { await sock.sendMessage(state.chatId, { text: resultMsg }); } catch(e) {}
                     state.combatHistory.push(resultMsg);
                     delete state.pendingActions[player.jid];
+
+                    // 💡 Always show the turn image, even on a one-shot kill, before the victory screen
+                    try { await nextTurn(sock, turnInfo, sessionKey); } catch(e) {}
 
                     if (await checkCombatEnd(sock, state, sessionKey)) {
                         // Combat ended - resolve the turn promise so the loop can clean up
@@ -2118,6 +2123,20 @@ async function performAction(sock, player, action, sessionKey) {
         console.error("[Combat] nextTurn failed in performAction:", err.message);
     }
 
+    // 💡 BUG FIX: For ability kills, checkCombatEnd was previously called INSIDE
+    // applyAbilityEffect which caused the victory screen to appear BEFORE the
+    // damage/defeat messages. Now we check here, after the full turn output is sent.
+    if (action.type === 'ability') {
+        if (await checkCombatEnd(sock, state, sessionKey)) {
+            if (state.resolveTurn) {
+                const r = state.resolveTurn;
+                state.resolveTurn = null;
+                r();
+            }
+            return;
+        }
+    }
+
     // NOW resolve - safe to advance the loop since current turn is fully processed
     if (state.resolveTurn) {
         const resolve = state.resolveTurn;
@@ -2291,6 +2310,7 @@ async function handleDeath(sock, entity, sessionKey, lastKiller = "The Infection
     
         if (entity.isEnemy) {
             state.stats.monstersKilled++;
+            if (entity.isBoss) state.stats.bossesDefeated++;
             
             // Dragon Tracking
             if (entity.id.startsWith('DRAKE') || entity.id.includes('DRAGON')) {
@@ -2991,7 +3011,7 @@ async function nextStage(sock, groq, sessionKey) {
                 console.error("Failed to send split path message in nextStage:", err.message);
             }
 
-            const voteTime = state.solo ? 10000 : 30000;
+            const voteTime = 30000; // 30s for both solo and group (matches message)
             state.timers.vote = setTimeout(() => {
                 const v1 = Object.values(state.votes).filter(v => v === '1').length;
                 const v2 = Object.values(state.votes).filter(v => v === '2').length;
@@ -2999,7 +3019,7 @@ async function nextStage(sock, groq, sessionKey) {
                 const winner = v2 > v1 ? 'REST' : 'ELITE_COMBAT';
                 state.isProcessing = false;
                 state.isBranching = false; // Clear flag
-                processBranchChoice(sock, winner, chatId).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
+                processBranchChoice(sock, winner, sessionKey).catch(e => console.error("[Quest] processBranchChoice error:", e?.message || e));
             }, voteTime);
             return;
         }
@@ -3315,6 +3335,9 @@ async function processVotes(sock, encounter, sessionKey) {
     
     if (finalOutcome) {
         msg += finalOutcome.description || "";
+        
+        // Track treasure finds
+        if (encounter.type === 'TREASURE') state.stats.treasuresFound++;
         
         // Apply rewards/penalties to all players
         for (const player of state.players) {
@@ -3857,9 +3880,11 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.isDead = true;
                 target.currentHP = 0; // Sync
                 player.combatStats.kills = (player.combatStats.kills || 0) + 1;
-
-                // 💡 CRITICAL FIX: Check if combat should end immediately
-                if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
+                // 💡 Track quest stats (moved out of checkCombatEnd so abilities are counted)
+                state.stats.monstersKilled++;
+                if (target.isBoss) state.stats.bossesDefeated++;
+                // Note: checkCombatEnd is called by performAction AFTER the full ability message
+                // is sent, so the damage text always shows before the victory screen.
             }
             
                           // Apply DoT (Damage over Time)
@@ -3964,9 +3989,10 @@ async function applyAbilityEffect(sock, player, ability, effect, targetIndex, ch
                 target.isDead = true;
                 target.currentHP = 0; // Sync
                 player.combatStats.kills = (player.combatStats.kills || 0) + 1;
-
-                // 💡 CRITICAL FIX: Check if combat should end immediately
-                if (await checkCombatEnd(sock, state, sessionKey)) return { applied: true, msg };
+                // 💡 Track quest stats for every kill in the AOE sweep
+                state.stats.monstersKilled++;
+                if (target.isBoss) state.stats.bossesDefeated++;
+                // Note: checkCombatEnd called by performAction after full message is sent.
             }
         }
         player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalDamage;
@@ -4247,22 +4273,24 @@ module.exports = {
     handleVote: (chatId, jid, vote) => {
         const state = getGameState(chatId, jid);
         if (!state) return "❌ No active adventure!";
-        if (state.phase !== 'PLAYING' || state.inCombat || state.voteProcessing) {
-            return "❌ Not voting time or already processing.";
+
+        // 🗳️ CHECK VOTE AVAILABILITY FIRST (before phase/combat checks so crossroads always works)
+        const isStandardVote = !!(state.currentEncounter && state.currentEncounter.choices);
+        const isBranchingVote = !!(state.isBranching || state.timers?.vote); // timers.vote = crossroads/vote window is open
+
+        if (!isStandardVote && !isBranchingVote) {
+            return "❌ No active voting choices at the moment.";
+        }
+
+        // Now check if player is eligible to vote
+        if (state.voteProcessing) {
+            return "❌ Votes are already being processed.";
         }
         if (!state.players.find(p => p.jid === jid)) {
             return "❌ Not in party.";
         }
+
         state.votes[jid] = vote;
-        
-        // 🗳️ CHECK: Does the encounter support voting?
-        const isStandardVote = state.currentEncounter && state.currentEncounter.choices;
-        const isBranchingVote = state.isBranching;
-        
-        if (!isStandardVote && !isBranchingVote) {
-            delete state.votes[jid];
-            return "❌ No active voting choices at the moment.";
-        }
         
         // Set flag for next timer adjustment (group only)
         if (!state.solo) {
