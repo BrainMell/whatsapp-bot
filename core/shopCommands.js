@@ -52,9 +52,9 @@ async function displayShop(sock, chatId, category = 'all') {
     
     const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;
     
-    let msg = `┏━━━━━━━━━━━━━━━┓\n`;
-    msg += `┃   ${activeCat.icon} ${activeCat.name.toUpperCase()} \n`;
-    msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n`;
+    msg += `┃ ${activeCat.icon} SHOP     ┃\n`;
+    msg += `┗━━━━━━━━━━━━┛\n\n`;
     
     msg += `📂 *Categories:* \n`;
     Object.entries(categoryInfo).forEach(([key, info]) => {
@@ -95,15 +95,32 @@ async function displayShop(sock, chatId, category = 'all') {
 // ==========================================
 
 async function buyItem(sock, chatId, senderJid, input) {
-    const items = classSystem.CLASS_SHOP_ITEMS;
+    // Build the full combined item list (same as displayShop 'all')
+    const classItems = classSystem.CLASS_SHOP_ITEMS;
+    const allDbItems = lootSystem.ITEM_DATABASE;
+    const buyableDbItems = {};
+    Object.entries(allDbItems).forEach(([id, item]) => {
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || id.includes('stone') || id.includes('potion') || id.includes('key'))) {
+            buyableDbItems[id] = {
+                id,
+                name: item.name,
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : '🧪'),
+                desc: item.description,
+                cost: item.value,
+                type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'
+            };
+        }
+    });
+    const allItems = { ...classItems, ...buyableDbItems };
+    const allItemsList = Object.values(allItems);
+
     const sanitizedInput = input.toLowerCase().trim().replace(/ /g, '_');
-    let item = items[sanitizedInput];
+    let item = allItems[sanitizedInput];
     
-    // If not found by ID, check if it's a number
+    // If not found by ID, check if it's a number (index from displayed shop)
     if (!item && !isNaN(parseInt(input))) {
         const index = parseInt(input) - 1;
-        // Get the list of all items (matching the default displayShop order)
-        const allItemsList = Object.values(items);
         if (index >= 0 && index < allItemsList.length) {
             item = allItemsList[index];
         }
@@ -111,7 +128,7 @@ async function buyItem(sock, chatId, senderJid, input) {
     
     if (!item) {
         await sock.sendMessage(chatId, { 
-            text: `❌ Item not found!\n\nType \`${getPrefix()} shop\` to see available items.\n💡 You can use the item name or its number.`
+            text: `❌ Item not found!\n\nType \`${getPrefix()} shop\` to see available items.\n💡 Use the item ID or its shop number.`
         });
         return;
     }
@@ -306,9 +323,9 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const rank = user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
-    let msg = `┏━━━━━━━━━━━━━━━┓\n`;
-    msg += `┃   👤 CHARACTER  ┃\n`;
-    msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
+    let msg = `┏━━━━━━━━━━━━┓\n`;
+    msg += `┃ 👤 CHARACTER ┃\n`;
+    msg += `┗━━━━━━━━━━━━┛\n\n`;
     
     msg += `*${finalName}*\n\n`;
     

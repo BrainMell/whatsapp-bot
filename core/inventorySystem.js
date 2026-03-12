@@ -178,14 +178,13 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
-    const finalQuantity = inventory[itemId].quantity;
     await economy.saveUser(userId);
     
     return {
         success: true,
         itemId,
         quantity,
-        totalQuantity: finalQuantity
+        totalQuantity: inventory[itemId].quantity
     };
 }
 
@@ -352,13 +351,12 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    // Create a copy because removeItem might delete the object if quantity reaches 0
-    const itemToEquipCopy = JSON.parse(JSON.stringify(inventory[itemId]));
+    const itemToEquip = inventory[itemId];
     const itemInfo = lootSystem.getItemInfo(itemId);
     const playerLevel = progression.getLevel(userId);
 
     // 💡 LEVEL REQUIREMENT CHECK
-    const reqLevel = itemToEquipCopy.reqLevel || itemInfo.reqLevel || 1;
+    const reqLevel = itemToEquip.reqLevel || itemInfo.reqLevel || 1;
     if (playerLevel < reqLevel) {
         return {
             success: false,
@@ -369,7 +367,7 @@ async function equipItem(userId, itemId, slot) {
     // Auto-detect slot if not provided
     let targetSlot = slot;
     if (!targetSlot) {
-        targetSlot = itemToEquipCopy.slot || itemInfo.slot;
+        targetSlot = itemToEquip.slot || itemInfo.slot;
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
     }
 
@@ -383,7 +381,7 @@ async function equipItem(userId, itemId, slot) {
     const slotName = EQUIPMENT_SLOTS[targetSlot.toUpperCase()];
     
     // 💡 TWO-HANDED / SHIELD LOGIC
-    const isTwoHanded = itemToEquipCopy.isTwoHanded || itemInfo.isTwoHanded;
+    const isTwoHanded = itemToEquip.isTwoHanded || itemInfo.isTwoHanded;
 
     // 1. Remove new item from inventory first
     removeItem(userId, itemId, 1);
@@ -413,7 +411,7 @@ async function equipItem(userId, itemId, slot) {
         await addItem(userId, oldItem.id, 1, oldItem);
     }
     
-    equipment[slotName] = itemToEquipCopy;
+    equipment[slotName] = { ...itemToEquip };
     delete equipment[slotName].quantity;
     
     await economy.saveUser(userId);
@@ -636,10 +634,12 @@ function useItem(userId, itemId) {
     let effectMsg = "";
     let consumed = true;
 
-    if (itemId === 'hp_potion' || itemId === 'minor_hp_potion') {
-        const heal = itemId === 'hp_potion' ? 100 : 50;
-        sheet.stats.hp = Math.min(sheet.stats.maxHp || sheet.stats.hp, sheet.stats.hp + heal);
-        effectMsg = `💚 Restored **${heal} HP**!`;
+    if (itemId === 'hp_potion' || itemId === 'minor_hp_potion' || itemId === 'mega_potion') {
+        const maxHp = sheet.stats.maxHp || sheet.stats.hp;
+        const healPct = itemInfo.effectValue || 0.15;
+        const heal = Math.floor(maxHp * healPct);
+        sheet.stats.hp = Math.min(maxHp, (sheet.stats.hp || maxHp) + heal);
+        effectMsg = `💚 Restored *${heal} HP*! (${Math.round(healPct * 100)}%)`;
     } 
     else if (itemId === 'energy_drink') {
         const user = economy.getUser(userId);
@@ -737,17 +737,20 @@ function formatInventory(userId) {
         };
     });
     
-    // Sort by Category then Rarity
-    const categoryOrder = ['EQUIPMENT', 'POTION', 'CONSUMABLE', 'MATERIAL', 'ITEM'];
+    // Sort by Rarity first (MYTHIC → COMMON) to match the inventory display numbering
+    // This ensures item #3 in the display is the same as items[2] when selling/equipping by number
     const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
-    
+    const categoryOrder = ['EQUIPMENT', 'POTION', 'CONSUMABLE', 'MATERIAL', 'ITEM'];
+
     items.sort((a, b) => {
+        const rarA = rarityOrder.indexOf(a.rarity || 'COMMON');
+        const rarB = rarityOrder.indexOf(b.rarity || 'COMMON');
+        if (rarA !== rarB) return rarA - rarB;
+        // Within same rarity, sort by category
         const catA = categoryOrder.indexOf(a.type || 'ITEM');
         const catB = categoryOrder.indexOf(b.type || 'ITEM');
-
         if (catA !== catB) return catA - catB;
-
-        return rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
+        return (a.name || '').localeCompare(b.name || '');
     });
     return {
         isEmpty: false,
