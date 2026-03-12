@@ -4112,31 +4112,45 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   const hasImage = mediaMsg?.imageMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('image/'));
   const hasVideo = mediaMsg?.videoMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('video/'));
 
-  // Flag parsing
-  const isFull = lowerTxt.endsWith('-f');
-  const isCrop1 = lowerTxt.endsWith('-c1');
-  const isCrop2 = lowerTxt.endsWith('-c2');
-  const isCropCenter = lowerTxt.endsWith('-c');
+  // ── Flag parsing ──────────────────────────────────────────────────────────
+  // Each flag is a distinct mode; only the first match wins.
+  const flagPart = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} s`, '').trim();
+  const isFull        = flagPart === '-f';          // stretch to fill 512×512
+  const isCropCenter  = flagPart === '-c';          // zoom-crop centered
+  const isCrop1       = flagPart === '-c1';         // crop from top
+  const isCrop2       = flagPart === '-c2';         // crop from bottom
+  const isGrayscale   = flagPart === '-g';          // black & white effect
+  const isCircle      = flagPart === '-r';          // round/circle mask
+  const isBlurBg      = flagPart === '-bb';         // blurred background fill
+  const isNeon        = flagPart === '-n';          // neon edge-glow effect
+  // default (no flag): letterbox — whole image preserved, transparent padding
 
   if (!hasImage && !hasVideo) {
-    const usage = GET_BANNER(`🎨 STICKER`) + `\n\n*Usage:*
-• Reply to image/video: \`${botConfig.getPrefix()} s\`
-• Auto-crop sticker: \`${botConfig.getPrefix()} s -c\`
-• Top-crop: \`${botConfig.getPrefix()} s -c1\`
-• Bottom-crop: \`${botConfig.getPrefix()} s -c2\`
-• Stretched (Full): \`${botConfig.getPrefix()} s -f\`
-• Search & stickerize: \`${botConfig.getPrefix()} s [count] [query]\`
-
-*Examples:*
-- Reply to image + \`${botConfig.getPrefix()} s\`
-- \`${botConfig.getPrefix()} s 5 goku\``;
+    const p = botConfig.getPrefix();
+    const usage = GET_BANNER(`🎨 STICKER`) + `\n\n` +
+      `*Convert an image or video to a WhatsApp sticker.*\n` +
+      `Reply to any image/video and use one of the modes below:\n\n` +
+      `*── Resize Modes ──*\n` +
+      `▸ \`${p} s\`       — Whole image, transparent padding _(default)_\n` +
+      `▸ \`${p} s -f\`    — Stretch to fill (no padding)\n` +
+      `▸ \`${p} s -c\`    — Zoom-crop centered\n` +
+      `▸ \`${p} s -c1\`   — Crop from top\n` +
+      `▸ \`${p} s -c2\`   — Crop from bottom\n\n` +
+      `*── Effect Modes ──*\n` +
+      `▸ \`${p} s -g\`    — 🩶 Grayscale (black & white)\n` +
+      `▸ \`${p} s -r\`    — ⭕ Round / circle mask\n` +
+      `▸ \`${p} s -bb\`   — 🌫️ Blurred background fill\n` +
+      `▸ \`${p} s -n\`    — ✨ Neon edge-glow\n\n` +
+      `*── Search ──*\n` +
+      `▸ \`${p} s [count] <query>\` — Search & stickerize from Pinterest\n` +
+      `   _Example:_ \`${p} s 5 goku\``;
     return await sock.sendMessage(chatId, { text: usage });
   }
 
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
     
-    // Improved Download Logic
+    // ── Download ──────────────────────────────────────────────────────────
     let buffer;
     try {
         const downloadMsg = isReply ? { message: quotedMsg } : m;
@@ -4151,7 +4165,6 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
         );
     } catch (downloadErr) {
         console.error("Sticker Download Error:", downloadErr.message);
-        // Fallback to manual stream if downloadMediaMessage fails
         const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage || mediaMsg.documentMessage;
         const type = hasImage ? 'image' : 'video';
         const stream = await downloadContentFromMessage(messageData, type);
@@ -4162,49 +4175,143 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
 
     if (!buffer || buffer.length === 0) throw new Error("Empty media buffer");
 
-    // Optimized Conversion for ALL Stickers (Prevents Stretching)
     const timestamp = Date.now() + "_" + Math.floor(Math.random() * 1000);
     const type = hasImage ? 'image' : 'video';
     const ext = type === 'image' ? '.jpg' : '.mp4';
-    const inputPath = `./temp/stick_in_${timestamp}${ext}`;
+    const inputPath  = `./temp/stick_in_${timestamp}${ext}`;
     const outputPath = `./temp/stick_out_${timestamp}.webp`;
-    
+    const midPath    = `./temp/stick_mid_${timestamp}.png`; // intermediate for effect modes
+
     if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
     fs.writeFileSync(inputPath, buffer);
 
-    // Base filter for both
-    let filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
-    
-    // Handle flags
-    if (isFull) filter = 'scale=512:512';
-    else if (isCrop1) filter = 'scale=512:-1,crop=512:512:0:0';
-    else if (isCrop2) filter = 'scale=512:-1,crop=512:512:0:ih-512';
-    else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
+    // ── Build FFmpeg filter chain ─────────────────────────────────────────
+    //
+    // DEFAULT: scale down to fit inside 512×512, pad the rest with
+    //          transparency so the image is NEVER stretched or cropped.
+    //          -pix_fmt yuva420p keeps the alpha channel in the WebP.
+    let filter;
+    let needsMidStep = false; // some effects need a 2-pass approach
 
-    let ffmpegCmd;
-    if (type === 'video') {
-        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+    if (isFull) {
+        // Stretch to fill — intentional distortion
+        filter = 'scale=512:512';
+
+    } else if (isCropCenter) {
+        // Zoom in and center-crop to fill the square
+        filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
+
+    } else if (isCrop1) {
+        // Crop from the top (portrait images: keep the face/head)
+        filter = 'scale=512:-1,crop=512:512:0:0';
+
+    } else if (isCrop2) {
+        // Crop from the bottom
+        filter = 'scale=512:-1,crop=512:512:0:ih-512';
+
+    } else if (isGrayscale) {
+        // ── -g: Grayscale letterbox ─────────────────────────────────────
+        // Desaturate then letterbox with transparent padding
+        filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none,hue=s=0';
+
+    } else if (isCircle) {
+        // ── -r: Round/circle mask ───────────────────────────────────────
+        // Scale to fit, then use the geq filter to zero out pixels outside
+        // a circle centred at (256,256) with radius 256.
+        filter = [
+            'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none',
+            // geq: alpha = 255 if distance from centre <= 256, else 0
+            `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(sqrt(pow(X-256\\,2)+pow(Y-256\\,2)),256),255,0)'`
+        ].join(',');
+
+    } else if (isBlurBg) {
+        // ── -bb: Blurred background fill ────────────────────────────────
+        // Two layers via filtergraph:
+        //   [0:v] blurred+cropped background (fills 512×512 fully)
+        //   [0:v] sharp foreground scaled to fit, centred on top
+        // We use a complex filtergraph string for ffmpeg.
+        needsMidStep = 'blurbg';
+
+    } else if (isNeon) {
+        // ── -n: Neon edge-glow ──────────────────────────────────────────
+        // edge-detect (laplacian) → colourize cyan → blend with original
+        needsMidStep = 'neon';
+
     } else {
-        // Added pix_fmt yuva420p to ensure alpha channel for transparent padding
-        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+        // ── DEFAULT: whole image, transparent letterbox ─────────────────
+        // force_original_aspect_ratio=decrease → fits entirely within 512×512
+        // pad → fills leftover space with transparent pixels
+        filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
     }
-    
+
+    // ── Execute FFmpeg ────────────────────────────────────────────────────
+    let ffmpegCmd;
+
+    if (needsMidStep === 'blurbg') {
+        // Blurred background fill — complex filtergraph
+        // bg:  blur the whole input, scale to fill 512×512 (slight zoom-crop OK)
+        // fg:  scale the input to fit inside 512×512 (no crop)
+        // overlay fg centred on bg
+        const bgFilter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=20:20';
+        const fgFilter = 'scale=512:512:force_original_aspect_ratio=decrease';
+        const complexFilter =
+            `[0:v]${bgFilter}[bg];` +
+            `[0:v]${fgFilter}[fg];` +
+            `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`;
+
+        if (type === 'video') {
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${complexFilter}" -map "[out]" -fps=12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+        } else {
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${complexFilter}" -map "[out]" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+        }
+
+    } else if (needsMidStep === 'neon') {
+        // Neon edge-glow — two passes:
+        // Pass 1: extract luma edges (laplacian), threshold, colourise cyan
+        // Pass 2: screen-blend with original
+        const edgeFilter =
+            'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
+        const complexFilter =
+            `[0:v]${edgeFilter}[base];` +
+            // Edge layer: lumakey then colorize to cyan-blue
+            `[base]edgedetect=low=0.04:high=0.09,lutrgb=r='if(val,0,0)':g='if(val,val*3,0)':b='if(val,255,0)'[edges];` +
+            // Blend with screen mode (max of each channel — brightens with edges)
+            `[base][edges]blend=all_mode=screen[out]`;
+
+        if (type === 'video') {
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${complexFilter}" -map "[out]" -fps=12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+        } else {
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${complexFilter}" -map "[out]" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+        }
+
+    } else {
+        // All single-filter-chain modes
+        if (type === 'video') {
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+        } else {
+            // yuva420p preserves the alpha channel for transparent-pad modes
+            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+        }
+    }
+
     try {
         await execPromise(ffmpegCmd);
         if (fs.existsSync(outputPath)) {
             buffer = fs.readFileSync(outputPath);
-            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+            if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
             if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
         }
     } catch (fErr) {
         console.error("FFmpeg Sticker Error:", fErr.message);
-        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+        if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
+        if (fs.existsSync(midPath))    fs.unlinkSync(midPath);
+        throw fErr;
     }
 
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
       author: m.pushName || `${botConfig.getBotName()} User`,
-      type: StickerTypes.DEFAULT, // We handled cropping/resizing in FFmpeg
+      type: StickerTypes.DEFAULT, // FFmpeg already handled all geometry
       quality: 70
     });
 
@@ -10769,3 +10876,5 @@ module.exports = {
   isGlobalMod,
   loadGlobalMods
 };
+
+//end point, DUDES DO NOT TOUCH ANYTHING, PLACE NEW COMMANDS IN MESSAGE UPSERT
