@@ -1066,16 +1066,24 @@ function robUser(thiefId, victimId) {
   const now = Date.now();
   const cooldown = 30 * 60 * 1000;
   const jailDuration = 30 * 60 * 1000;
-  const prisonDuration = 24 * 60 * 60 * 1000;
+  const prisonDuration = 6 * 60 * 60 * 1000;
+
+  function formatBanTime(msLeft) {
+    const totalMinutes = Math.max(0, Math.ceil(msLeft / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${totalMinutes}m`;
+  }
 
   if (thief.prisonUntil && thief.prisonUntil > now) {
-    const mins = Math.ceil((thief.prisonUntil - now) / 60000);
-    return { success: false, message: `⛓️ *PRISON BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+    const timeLeft = formatBanTime(thief.prisonUntil - now);
+    return { success: false, message: `⛓️ *PRISON BAN*\n\nYou are banned from bot commands for ${timeLeft}.` };
   }
 
   if (thief.jailUntil && thief.jailUntil > now) {
-    const mins = Math.ceil((thief.jailUntil - now) / 60000);
-    return { success: false, message: `🚔 *JAIL BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+    const timeLeft = formatBanTime(thief.jailUntil - now);
+    return { success: false, message: `🚔 *JAIL BAN*\n\nYou are banned from bot commands for ${timeLeft}.` };
   }
 
   if (thief.lastRob && (now - thief.lastRob < cooldown)) {
@@ -1108,31 +1116,36 @@ function robUser(thiefId, victimId) {
       message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${victimId.split('@')[0]}!` 
     };
   } else {
-    const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
-    thief.wallet = Math.max(0, thief.wallet - fine);
-
     thief.robberyStrikes = (thief.robberyStrikes || 0) + 1;
 
-    let penaltyLine = `💸 Fine paid: ${getZENI()}${fine.toLocaleString()}.`;
     if (thief.robberyStrikes === 1) {
-      penaltyLine += `\n⚠️ First offense: fine only.`;
+      const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
+      thief.wallet = Math.max(0, thief.wallet - fine);
+      logTransaction(thiefId, "Robbery Fine (Police)", -fine, thief.wallet);
+      scheduleSave(thiefId);
+      return {
+        success: false,
+        message: `🚔 *BUSTED*\n\nThe police caught you! You paid a fine of ${getZENI()}${fine.toLocaleString()}`
+      };
+
     } else if (thief.robberyStrikes === 2) {
       thief.jailUntil = now + jailDuration;
-      penaltyLine += `\n🚔 Second offense: 30-minute jail ban.`;
+      scheduleSave(thiefId);
+      return {
+        success: false,
+        message: `🚓 *BUSTED*\n\nThe police caught you!\n🚔 Second offense: 30-minute command ban.\n💸 No fine this time.`
+      };
+      
     } else {
       thief.prisonUntil = now + prisonDuration;
       thief.jailUntil = 0;
       thief.robberyStrikes = 0;
-      penaltyLine += `\n⛓️ Third offense: 1-day prison ban.`;
+      scheduleSave(thiefId);
+      return {
+        success: false,
+        message: `🚓 *BUSTED*\n\nThe police caught you!\n⛓️ Third offense: 6-hour command ban (6h 0m).\n💸 No fine this time.`
+      };
     }
-    
-    logTransaction(thiefId, "Robbery Fine (Police)", -fine, thief.wallet);
-
-    scheduleSave(thiefId);
-    return { 
-      success: false, 
-      message: `🚓 *BUSTED*\n\nThe police caught you!\n${penaltyLine}` 
-    };
   }
 }
 
