@@ -2,7 +2,7 @@ const axios = require('axios');
 
 class GoImageService {
     constructor(overrideUrl = null) {
-        this.baseUrl = overrideUrl || process.env.GO_IMAGE_SERVICE_URL || 'http://localhost:8080';
+        this.baseUrl = overrideUrl || process.env.GO_IMAGE_SERVICE_URL || 'https://mellow2006-mellowbotbackend.hf.space';
         console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
         this.client = axios.create({
             baseURL: this.baseUrl,
