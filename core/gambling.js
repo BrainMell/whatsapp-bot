@@ -78,8 +78,9 @@ function beginGamblingRound(user) {
   user.gamblingProfile.roundsToday = (user.gamblingProfile.roundsToday || 0) + 1;
 
   const rounds = user.gamblingProfile.roundsToday;
-  const edge = Math.min(0.03 + rounds * 0.004, 0.35);
-  const forcedLossChance = Math.min(Math.max((rounds - 12) * 0.01, 0), 0.22);
+  // Keep anti-farming protection, but avoid extreme scaling that feels broken.
+  const edge = Math.min(0.01 + rounds * 0.0015, 0.08);
+  const forcedLossChance = Math.min(Math.max((rounds - 25) * 0.005, 0), 0.05);
 
   return { rounds, edge, forcedLossChance };
 }
@@ -970,6 +971,32 @@ function roulette(userId, amount, bet, economyModule) {
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
     const payout = capPayoutByDailyLimit(user, adjustedPayout);
     const profit = payout - amount;
+
+    if (profit <= 0) {
+      user.stats.totalSpent += amount;
+      trackDailyNet(user, -amount);
+      updateGamblingStats(userId, amount, false, economyModule);
+      economyModule.logTransaction(userId, `Roulette Lost (${betType}, Capped)`, -amount, user.wallet);
+
+      return {
+        success: true,
+        won: false,
+        message: `🎡 *ROULETTE* 🎡
+
+╔════════════════════╗
+║ Your bet: ${betType}
+║ 
+║ 🎰 Result: ${result} (${color.toUpperCase()}) 🎰
+╚════════════════════╝
+
+😢 *YOU LOST!* 😢
+
+-${getZENI()}${amount.toLocaleString()}
+
+💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      };
+    }
+
     user.wallet += payout;
     user.stats.totalEarned += profit;
     trackDailyNet(user, profit);
@@ -990,7 +1017,7 @@ function roulette(userId, amount, bet, economyModule) {
 🎉 *YOU WON!* 🎉
 ${multiplier}x payout!
 
-+${getZENI()}${profit.toLocaleString()}
++${getZENI()}${Math.max(0, profit).toLocaleString()}
 
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
     };
