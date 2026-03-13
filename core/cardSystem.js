@@ -404,7 +404,7 @@ function getTopCards(cards) {
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-  }).slice(0, 6);
+  }).slice(0, 15);
 }
 
 function getTopImageUrls(topCards) {
@@ -524,7 +524,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     }
   }
 
-  // GIF generation for collection (Top 6 Highlights)
+  // GIF generation for collection (Top 15 Highlights)
   const topCards = getTopCards(owned);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -535,36 +535,22 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS (TOP 15)");
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
-      // Send first page with GIF
-      const firstChunk = msg + lines.slice(0, 100).join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-      await inst.sock_ref.sendMessage(chatId, { 
+      const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      return await inst.sock_ref.sendMessage(chatId, { 
           video: gifBuffer, 
           gifPlayback: true, 
-          caption: firstChunk 
+          caption: fullText 
       });
-      
-      if (lines.length > 100) {
-        for (let s = 100; s < lines.length; s += 100) {
-          await reply(lines.slice(s, s + 100).join('\n'));
-        }
-      }
-      return;
     }
   }
 
-  // Fallback text-only pagination
-  for (let s = 0; s < lines.length; s += 100) {
-    let chunk = (s === 0 ? msg : '') + lines.slice(s, s + 100).join('\n');
-    if (s + 100 >= lines.length) {
-       chunk += `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-    }
-    await reply(chunk);
-  }
+  // Fallback text-only (Send as one message)
+  return reply(msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`);
 }
 
 async function cmdDeck(senderJid, reply, chatId, args = []) {
@@ -613,7 +599,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   msg += lines.join('\n');
   msg += `\n\n*[Use ${p} deck <card_index> to see more detail about this card]*`;
 
-  // GIF generation for deck (Top 6)
+  // GIF generation for deck (Top 15)
   const topCards = getTopCards(deck);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -624,7 +610,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS");
+        gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS (TOP 15)");
         if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer });
     }
 
@@ -642,8 +628,17 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 
 async function cmdScc(senderJid, reply, chatId, args = []) {
   const inst = getInst();
+  const p = P();
+  
+  let page = 1;
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx+1]) {
+    page = parseInt(args[pageIdx+1]) || 1;
+    args.splice(pageIdx, 2);
+  }
+
   const animeQuery = args.join(' ').toLowerCase().trim();
-  if (!animeQuery) return sendUsage(reply, `${P()} scc`, `${P()} scc <anime_name>`, `${P()} scc dragon ball`);
+  if (!animeQuery) return sendUsage(reply, `${p} scc`, `${p} scc <anime_name> [--page n]`, `${p} scc dragon ball`);
 
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const filtered = [];
@@ -657,15 +652,27 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
 
+  const pageSize = 15;
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * pageSize;
+  const chunk = filtered.slice(start, start + pageSize);
+
   let msg = `🃏 *Owned | ${animeQuery.toUpperCase()}*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total:* ${filtered.length}\n\n`;
+  msg += `📦 *Total Found:* ${filtered.length}\n`;
+  msg += `📖 *Page:* ${page} / ${totalPages}\n\n`;
 
-  const lines = filtered.map((item) => {
+  const lines = chunk.map((item) => {
     return `🔹 *#${item.collIndex}*\n   🃏 *Name:* ${item.card.cardName}\n   ✨ *Tier:* ${item.card.tier}\n━━━━━━━━━━━━━━━`;
   });
 
-  return reply(msg + lines.slice(0, 100).join('\n'));
+  msg += lines.join('\n');
+  if (totalPages > 1) {
+    msg += `\n\n💡 Use \`${p} scc ${animeQuery} --page ${page + 1 <= totalPages ? page + 1 : 1}\` for more.`;
+  }
+
+  return reply(msg);
 }
 
 async function cmdMaker(senderJid, reply, chatId, args = []) {
@@ -815,19 +822,37 @@ async function cmdCltr(reply, chatId, args = []) {
 
 async function cmdEScc(reply, args = []) {
   const p = P();
+  let page = 1;
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx+1]) {
+    page = parseInt(args[pageIdx+1]) || 1;
+    args.splice(pageIdx, 2);
+  }
+
   const query = args.join(' ').toLowerCase().trim();
-  if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name>`, `${p} escc fullmetal`);
+  if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name> [--page n]`, `${p} escc fullmetal`);
 
   const matches = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query) && c.tier === 'S');
   if (matches.length === 0) return reply(`🔍 No event (Tier S) cards found for series: *"${query}"*`);
 
+  const pageSize = 15;
+  const totalPages = Math.ceil(matches.length / pageSize);
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * pageSize;
+  const chunk = matches.slice(start, start + pageSize);
+
   let msg = `✨ *Event Cards | ${matches[0].animeName.toUpperCase()}* ✨\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📦 Found ${matches.length} matches:\n\n`;
+  msg += `📦 Total Matches: ${matches.length}\n`;
+  msg += `📖 Page: ${page} / ${totalPages}\n\n`;
 
-  matches.forEach(c => {
+  chunk.forEach(c => {
     msg += `▫️ *${c.cardName}*\n   ➥ ID: \`${c.id}\`\n`;
   });
+
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} escc ${query} --page ${page + 1 <= totalPages ? page + 1 : 1}\` for more.`;
+  }
 
   return reply(msg);
 }
@@ -1225,7 +1250,14 @@ async function cmdCG(senderJid, reply, args = [], m) {
 
 async function cmdCS(reply, args = []) {
   const p = P();
-  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [tier n]`, `${p} cs goku tier S`);
+  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [tier n] [--page n]`, `${p} cs goku tier S`);
+
+  let page = 1;
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx+1]) {
+    page = parseInt(args[pageIdx+1]) || 1;
+    args.splice(pageIdx, 2);
+  }
 
   let tierFilter = null;
   const tierIdx = args.findIndex(a => a.toLowerCase() === 'tier');
@@ -1245,17 +1277,27 @@ async function cmdCS(reply, args = []) {
     matches = matches.filter(c => String(c.tier) === tierFilter);
   }
   
-  const totalFound = matches.length;
-  matches = matches.slice(0, 15);
-
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
 
+  const pageSize = 15;
+  const totalFound = matches.length;
+  const totalPages = Math.ceil(totalFound / pageSize);
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * pageSize;
+  const chunk = matches.slice(start, start + pageSize);
+
   let msg = `🔍 *Search Results for "${query}"*${tierFilter ? ` (Tier ${tierFilter})` : ''}\n`;
-  msg += `📦 Found ${totalFound} matches. Showing top 15:\n\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 Found ${totalFound} matches\n`;
+  msg += `📖 Page: ${page} / ${totalPages}\n\n`;
   
-  matches.forEach(c => {
+  chunk.forEach(c => {
     msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
   });
+
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} cs ${query} ${tierFilter ? 'tier '+tierFilter : ''} --page ${page + 1 <= totalPages ? page + 1 : 1}\` for more.`;
+  }
 
   return reply(msg);
 }
