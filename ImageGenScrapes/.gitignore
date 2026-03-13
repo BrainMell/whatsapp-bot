@@ -1,0 +1,12 @@
+# Binaries
+image-service
+image-service.exe
+test-build
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go stuff
+go.sum
+vendor/

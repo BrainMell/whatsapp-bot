@@ -1,7 +1,5 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
-const fs = require('fs');
-const path = require('path');
+const GoImageService = require('./goImageService');
+const goService = new GoImageService();
 const system = require('./system'); // NEW: Database System Module
 
 let sentUrls = new Set();
@@ -22,76 +20,14 @@ function saveLog() {
     system.set('news_log', [...sentUrls]);
 }
 
-// Scrape Anime Corner for latest news
+// Scrape Anime Corner for latest news (Via Go Service)
 async function getLatestNews() {
     try {
-        const BASE_URL = 'https://animecorner.me/category/anime-news/';
-        const { data } = await axios.get(BASE_URL, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-        
-        const $ = cheerio.load(data);
-        const articles = [];
-
-        const articleElements = $('article').toArray();
-        for (let i = 0; i < Math.min(articleElements.length, 5); i++) {
-            const el = articleElements[i];
-            const title = $(el).find('h1,h2,h3').first().text().trim();
-            const link = $(el).find('a').first().attr('href');
-            
-            if (!title || !link) continue;
-
-            // Get initial image
-            const imgElement = $(el).find('img');
-            const holderElement = $(el).find('.penci-image-holder');
-            const bgContainer = $(el).find('.acwp-image-placeholder-container');
-
-            let img = imgElement.attr('data-src') || 
-                      imgElement.attr('data-lazy-src') || 
-                      imgElement.attr('data-original') || 
-                      imgElement.attr('src') ||
-                      holderElement.attr('data-bgset') ||
-                      holderElement.attr('data-src');
-            
-            // Fallback to background-image in style
-            if (!img && bgContainer.length > 0) {
-                const style = bgContainer.attr('style') || "";
-                const bgMatch = style.match(/url\((.*?)\)/);
-                if (bgMatch) img = bgMatch[1].replace(/['"]/g, "");
-            }
-
-            if (img && img.startsWith('//')) img = 'https:' + img;
-            // Handle comma-separated srcset in data-bgset
-            if (img && img.includes(',')) img = img.split(',')[0].trim().split(' ')[0];
-
-            let summary = "";
-            
-            // Fetch article page for BEST image and summary
-            try {
-                const pageRes = await axios.get(link, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 });
-                const $$ = cheerio.load(pageRes.data);
-                
-                // Better summary
-                const para = $$('article p').first().text().trim();
-                if (para.length > 50) summary = para.slice(0, 300) + "...";
-
-                // Better image fallback
-                if (!img || img.includes('placeholder')) {
-                    const ogImg = $$('meta[property="og:image"]').attr('content') || $$('meta[name="twitter:image"]').attr('content');
-                    if (ogImg) img = ogImg;
-                }
-            } catch (e) {
-                console.log(`⚠️ Page fetch failed for ${link}: ${e.message}`);
-            }
-
-            console.log(`DEBUG: Scraped: "${title.substring(0, 30)}..." | Image: ${img ? "YES" : "NONE"}`);
-            articles.push({ title, link, img, summary });
-        }
-
+        const articles = await goService.getAnimeNews();
+        console.log(`DEBUG: Scraped ${articles.length} news items from Go Service.`);
         return articles;
     } catch (err) {
-        console.error("❌ Failed to scrape anime news:", err.message);
+        console.error("❌ Failed to fetch anime news from Go Service:", err.message);
         return [];
     }
 }
@@ -137,3 +73,4 @@ module.exports = {
     isUpdateDue,
     markUpdateComplete
 };
+

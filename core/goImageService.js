@@ -6,7 +6,7 @@ class GoImageService {
         console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
         this.client = axios.create({
             baseURL: this.baseUrl,
-            timeout: 60000, // 60s timeout for heavy ops
+            timeout: 120000, // 120s timeout for browser ops
             maxBodyLength: Infinity,
             maxContentLength: Infinity
         });
@@ -29,7 +29,6 @@ class GoImageService {
                 }
             }).catch(err => {
                 // This catch ensures the NEXT operation in the chain can still run
-                // but we've already rejected the current promise via reject(err)
             });
         });
     }
@@ -100,14 +99,12 @@ class GoImageService {
     async renderLudoBoard(data, pfpUrls = {}) {
         return this._enqueue(async () => {
             try {
-                // Merge pfpUrls into players if provided
                 if (data.players && pfpUrls) {
                     data.players = data.players.map(p => ({
                         ...p,
                         pfpUrl: p.pfpUrl || pfpUrls[p.jid] || ''
                     }));
                 }
-
                 const response = await this.client.post('/api/ludo', data, {
                     responseType: 'arraybuffer'
                 });
@@ -193,7 +190,7 @@ class GoImageService {
     }
 
     /*
-     * Convert Card Image (Animated WebM/WebP/GIF to MP4)
+     * Convert Card Image
      */
     async convertCardImage(imageUrl) {
         return this._enqueue(async () => {
@@ -212,43 +209,12 @@ class GoImageService {
     }
 
     /*
-     * Search YouTube (Go Service)
+     * Browser-Based Pinterest Search (Go Service)
      */
-    async searchYoutube(query) {
-        try {
-            const response = await this.client.get('/api/scrape/youtube/search', {
-                params: { query }
-            });
-            return response.data.videos || [];
-        } catch (error) {
-            console.error('GoService YouTube Search Error:', error.message);
-            return [];
-        }
-    }
-
-    /*
-     * Download YouTube Audio (Go Service)
-     */
-    async downloadYoutubeAudio(url) {
-        try {
-            const response = await this.client.get('/api/scrape/youtube/audio', {
-                params: { url },
-                responseType: 'arraybuffer'
-            });
-            return Buffer.from(response.data);
-        } catch (error) {
-            console.error('GoService YouTube Audio Error:', error.message);
-            return null;
-        }
-    }
-
-    /*
-     * Search Pinterest
-     */
-    async searchPinterest(query, maxResults = 10) {
+    async searchPinterest(query, count = 10) {
         try {
             const response = await this.client.get('/api/scrape/pinterest', {
-                params: { query, maxResults }
+                params: { query, count }
             });
             return response.data;
         } catch (error) {
@@ -258,64 +224,105 @@ class GoImageService {
     }
 
     /*
-     * Search Stickers (Klipy GIF API)
+     * Deep Rule34 Scrape (Go Service)
      */
-    async searchStickers(query, maxResults = 10) {
+    async searchRule34(query, count = 10) {
+        try {
+            const response = await this.client.get('/api/scrape/rule34', {
+                params: { query, count }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('GoService Rule34 Error:', error.message);
+            return { images: [], count: 0 };
+        }
+    }
+
+    /*
+     * Powerscale Search (Go Service - Browser Based)
+     */
+    async getPowerscale(query) {
+        try {
+            const response = await this.client.get('/api/scrape/powerscale', {
+                params: { query }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('GoService Powerscale Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
+     * PornPics Scrape (Go Service - Browser Based)
+     */
+    async searchPornPics(query, count = 10) {
+        try {
+            const response = await this.client.get('/api/scrape/pornpics', {
+                params: { query, count }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('GoService PornPics Error:', error.message);
+            return { images: [], count: 0 };
+        }
+    }
+
+    /*
+     * YouTube Audio Info & direct URL (Go Service)
+     */
+    async getAudioInfo(query) {
+        try {
+            const response = await this.client.get('/api/scrape/audio', {
+                params: { query }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('GoService Audio Info Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
+     * Anikai Best Match Watch Link (Go Service)
+     */
+    async getAnikaiLink(title) {
+        try {
+            const response = await this.client.get('/api/scrape/anikai', {
+                params: { title }
+            });
+            return response.data.watchLink;
+        } catch (error) {
+            console.error('GoService Anikai Error:', error.message);
+            return null;
+        }
+    }
+
+    /*
+     * Anime Corner News (Go Service)
+     */
+    async getAnimeNews() {
+        try {
+            const response = await this.client.get('/api/scrape/news');
+            return response.data.articles || [];
+        } catch (error) {
+            console.error('GoService AnimeNews Error:', error.message);
+            return [];
+        }
+    }
+
+    /*
+     * Search Stickers (Klipy)
+     */
+    async searchStickers(query, count = 10) {
         try {
             const response = await this.client.get('/api/scrape/stickers', {
-                params: { query, maxResults }
+                params: { query, count }
             });
             return response.data;
         } catch (error) {
             console.error('GoService Sticker Error:', error.message);
             return { stickers: [], count: 0 };
-        }
-    }
-
-    /*
-     * Search Rule34 (NSFW)
-     * @param {string} query
-     * @param {number} maxResults
-     */
-    async searchRule34(query, maxResults = 10) {
-        try {
-            const response = await this.client.get('/api/scrape/rule34', {
-                params: { query, maxResults }
-            });
-            return response.data;
-        } catch (error) {
-            console.error('GoService Rule34 Error:', error.message);
-            return { images: [] };
-        }
-    }
-
-    /*
-     * VS Battles Search
-     */
-    async searchVSBattles(characterName) {
-        try {
-            const response = await this.client.get('/api/scrape/vsbattles/search', {
-                params: { query: characterName }
-            });
-            return response.data;
-        } catch (error) {
-            console.error('GoService VSB Search Error:', error.message);
-            return { characters: [] };
-        }
-    }
-
-    /*
-     * VS Battles Detail
-     */
-    async getVSBattlesDetail(url) {
-        try {
-            const response = await this.client.get('/api/scrape/vsbattles/detail', {
-                params: { url }
-            });
-            return response.data;
-        } catch (error) {
-            console.error('GoService VSB Detail Error:', error.message);
-            throw error;
         }
     }
 }

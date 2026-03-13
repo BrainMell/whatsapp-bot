@@ -17,7 +17,7 @@ const {
   makeCacheableSignalKeyStore,
   jidNormalizedUser
 } = require("@whiskeysockets/baileys");
-const { searchVSB, scrapeVSBPage, extractStatsWithGroq, formatPowerScale } = require("./powerscale");
+const { getPowerScale } = require("./powerscale");
 const classSystem = require('./classSystem');
 const guilds = require('./guilds');
 const guildAdventure = require('./guildAdventure');
@@ -32,6 +32,8 @@ const { promisify } = require("util");
 const execPromise = promisify(exec);
 const axios = require("axios");
 const cheerio = require("cheerio");
+const GoImageService = require('./goImageService');
+const goService = new GoImageService();
 const play = require('play-dl');
 const yts = require('yt-search');
 const ytdl = require("@distube/ytdl-core");
@@ -188,13 +190,17 @@ async function startBot(configInstance) {
     global[`__${BOT_ID}_anime_search_cache_by_chat`] = global[`__${BOT_ID}_anime_search_cache_by_chat`] || new Map();
     global[`__${BOT_ID}_anime_search_cache_by_msgid`] = global[`__${BOT_ID}_anime_search_cache_by_msgid`] || new Map();
 
-    // Complex slug generation for Anikai (Fallback)
-    const getAnikaiLink = (title) => {
-        const slug = title.toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-');
-        return `https://anikai.to/watch/${slug}-episode-1`;
+    // Accurate watch link resolution via Go Service
+    const getAnikaiLink = async (title) => {
+        try {
+            return await goService.getAnikaiLink(title);
+        } catch {
+            const slug = title.toLowerCase()
+                .replace(/[^a-z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-');
+            return `https://anikai.to/watch/${slug}-episode-1`;
+        }
     };
 
     // Helper to get Best Match Link
@@ -433,60 +439,94 @@ async function startBot(configInstance) {
     async function handleAudioCommand(sock, chatId, query, m) {
         await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
         try {
-            const videos = await goService.searchYoutube(query);
-            const video = videos[0];
-            if (!video) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            const data = await goService.getAudioInfo(query);
+            if (!data || !data.metadata || !data.audioURL) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found or service unavailable." });
+            }
             
+            const { metadata, audioURL } = data;
             await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
-            const audioBuffer = await goService.downloadYoutubeAudio(video.url);
-            if (!audioBuffer) throw new Error('Download failed');
 
-            await sock.sendMessage(chatId, { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${video.title}.mp3` }, { quoted: m });
+            // Download audio buffer from the direct URL
+            const response = await axios.get(audioURL, { 
+                responseType: 'arraybuffer',
+                timeout: 60000 
+            });
+            const audioBuffer = Buffer.from(response.data);
+
+            // Fetch thumbnail buffer
+            let thumbnailBuffer = null;
+            try {
+                const thumbRes = await axios.get(metadata.thumbnail, { responseType: 'arraybuffer' });
+                thumbnailBuffer = Buffer.from(thumbRes.data);
+            } catch (e) {}
+
+            await sock.sendMessage(chatId, {
+                audio: audioBuffer,
+                mimetype: 'audio/mpeg',
+                fileName: `${metadata.title}.mp3`,
+                contextInfo: {
+                    externalAdReply: {
+                        title: metadata.title,
+                        body: `${metadata.author} | ${metadata.duration}`,
+                        thumbnail: thumbnailBuffer,
+                        mediaType: 2,
+                        mediaUrl: metadata.url,
+                        sourceUrl: metadata.url
+                    }
+                }
+            }, { quoted: m });
             await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
         } catch (err) {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Audio download failed." });
+            console.error("Audio Command Error:", err.message);
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Audio processing failed." });
         }
     }
 
     async function handleImgCommand(sock, chatId, query, m) {
         await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
         try {
-            const images = await searchPinterest(query, 5);
+            const data = await goService.searchPinterest(query, 5);
+            const images = data.images || [];
             if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
             for (const img of images.slice(0, 5)) {
                 await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
             }
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
+            console.error("Pinterest Command Error:", err.message);
             await sock.sendMessage(chatId, { text: BOT_MARKER + "⚠️ Search service busy." });
         }
     }
 
     async function handleNsfwCommand(sock, chatId, query, m) {
-        await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
+        await sock.sendMessage(chatId, { react: { text: "🔞", key: m.key } });
         try {
-            const images = await scrapeFromDefaultSite(query, 5);
-            if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
-            for (const img of images.slice(0, 3)) {
-                const res = await axios.get(img, { responseType: 'arraybuffer' });
-                await sock.sendMessage(chatId, { image: Buffer.from(res.data) }, { quoted: m });
-            }
-            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
-        } catch (err) {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Scrape failed." });
-        }
-    }
-
-    async function handleAdultCommand(sock, chatId, query, m) {
-        await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
-        try {
-            const images = await scrapePornPics(query, 5);
+            const data = await goService.searchRule34(query, 5);
+            const images = data.images || [];
             if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
             for (const img of images.slice(0, 3)) {
                 await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
             }
             await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
         } catch (err) {
+            console.error("Rule34 Command Error:", err.message);
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Scrape failed." });
+        }
+    }
+
+    async function handleAdultCommand(sock, chatId, query, m) {
+        await sock.sendMessage(chatId, { react: { text: "🔞", key: m.key } });
+        try {
+            const data = await goService.searchPornPics(query, 5);
+            const images = data.images || [];
+            if (!images.length) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No results found." });
+            for (const img of images.slice(0, 3)) {
+                await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
+            }
+            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+        } catch (err) {
+            console.error("PornPics Command Error:", err.message);
             await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to fetch images." });
         }
     }
@@ -7881,89 +7921,32 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
     });
 
     try {
-        // Step 1: Search for character links
-        const searchResults = await searchVSB(character);
+        const result = await getPowerScale(character);
 
-        if (!searchResults || searchResults.length === 0) {
+        if (!result.success) {
             await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-            return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ No results found for "${character}" on VS Battles Wiki.`
-            });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${result.error}` });
         }
-
-        // Step 2: Try results until one provides valid stats
-        let foundData = null;
-        let finalUrl = "";
-
-        for (const res of searchResults) {
-            try {
-                console.log(`🔍 [${BOT_ID}] Fetching API data for: ${res.name}`);
-                const pageData = await scrapeVSBPage(res.url);
-                
-                // If Go service handled it, pageData already has stats.
-                // We only call Groq if it's legacy HTML content.
-                let stats = pageData.stats;
-                if (pageData.htmlContent !== 'EXTRACTED_BY_GO') {
-                    stats = await extractStatsWithGroq(pageData.htmlContent);
-                }
-                
-                // If we have a summary, it's a valid character page even if stats are Unknown
-                if (pageData.summary.length > 50 || (stats && stats.tier !== "Unknown")) {
-                    foundData = { ...pageData, stats };
-                    finalUrl = res.url;
-                    break;
-                }
-            } catch (e) {
-                console.log(`⚠️️ [${BOT_ID}] Skipping ${res.name}: ${e.message}`);
-            }
-        }
-
-        if (!foundData) {
-            await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-            return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ No valid power scaling data found for "${character}".`
-            });
-        }
-
-        // Build the formatted message
-        let message = `🔥 *POWER SCALING: ${character.toUpperCase()}*\n\n`;
-
-        if (foundData.summary && foundData.summary.length > 0) {
-            const shortSummary = foundData.summary.substring(0, 350);
-            message += `📖 *Summary:*\n${shortSummary}${foundData.summary.length > 350 ? '...' : ''}\n\n`;
-        }
-
-        message += `⚡ *POWER STATS:*\n`;
-        message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `🏆 *TIER:* ${foundData.stats.tier}\n`;
-        message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `💥 *Attack Potency:* ${foundData.stats.ap}\n`;
-        message += `🛡️ *Durability:* ${foundData.stats.durability}\n`;
-        message += `⚡ *Speed:* ${foundData.stats.speed}\n`;
-        message += `💪 *Stamina:* ${foundData.stats.stamina}\n`;
-        message += `📏 *Range:* ${foundData.stats.range}\n`;
-        message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `📚 Source: VS Battles Wiki`;
 
         // Send with image if available
-        if (foundData.imageUrl) {
+        if (result.imageUrl) {
             try {
-                const imageResponse = await axios.get(foundData.imageUrl, { 
+                const imageResponse = await axios.get(result.imageUrl, { 
                     responseType: 'arraybuffer',
-                    timeout: 10000,
+                    timeout: 15000,
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 
                 await sock.sendMessage(chatId, {
                     image: Buffer.from(imageResponse.data),
-                    caption: BOT_MARKER + message
+                    caption: BOT_MARKER + result.message
                 });
             } catch (imgErr) {
                 console.log("📸 Image load failed, sending text only");
-                await sock.sendMessage(chatId, { text: BOT_MARKER + message });
+                await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
             }
         } else {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + message });
+            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
         }
 
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
@@ -7973,7 +7956,7 @@ if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)) {
         console.error("❌ Powerscale Error:", err);
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `❌ Failed to fetch power scaling data.\nError: ${err.message}`
+            text: BOT_MARKER + `❌ Failed to fetch power scaling data.`
         });
         await awardProgression(senderJid, chatId);
     }
