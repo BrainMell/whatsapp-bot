@@ -4101,7 +4101,7 @@ Usage: ${newUsage}/5${warningText}`;
         
 
 // --- COMMAND: `.j s` (reply to image/video → sticker) ---
-// Flags: -f -c -c1 -c2 -g -r -bb -n -r1 -r2 -r3 -r4
+// Flags: (default) -f -c -c1 -c2 -g -r -bb -n -r1 -r2 -r3 -r4 -spin
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s -`)) {
   const quotedMsgRaw = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
   const quotedMsg = quotedMsgRaw?.ephemeralMessage?.message || quotedMsgRaw?.viewOnceMessage?.message || quotedMsgRaw?.viewOnceMessageV2?.message || quotedMsgRaw;
@@ -4113,37 +4113,40 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   const hasImage = mediaMsg?.imageMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('image/'));
   const hasVideo = mediaMsg?.videoMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('video/'));
 
-  // Flag parsing — strip prefix+command, trim, compare exactly
+  // Flag: strip prefix+command, trim, compare exactly so ".j s -r1" never
+  // accidentally matches "-r" etc.
   const flagPart     = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} s`, '').trim();
-  const isFull       = flagPart === '-f';   // stretch (intentional)
-  const isCropCenter = flagPart === '-c';   // zoom-crop centred
-  const isCrop1      = flagPart === '-c1';  // crop from top
-  const isCrop2      = flagPart === '-c2';  // crop from bottom
-  const isGrayscale  = flagPart === '-g';   // black & white
-  const isCircle     = flagPart === '-r';   // circle/round mask
-  const isBlurBg     = flagPart === '-bb';  // blurred background fill
-  const isNeon       = flagPart === '-n';   // neon punch (unsharp+sat)
-  const isRot90      = flagPart === '-r1';  // rotate 90° clockwise
-  const isRot180     = flagPart === '-r2';  // rotate 180°
-  const isRot270     = flagPart === '-r3';  // rotate 90° counter-clockwise
-  const isFlip       = flagPart === '-r4';  // flip horizontal (mirror)
+  const isFull       = flagPart === '-f';     // stretch to fill 512×512
+  const isCropCenter = flagPart === '-c';     // zoom-crop centred
+  const isCrop1      = flagPart === '-c1';    // crop top-centre
+  const isCrop2      = flagPart === '-c2';    // crop bottom-centre
+  const isGrayscale  = flagPart === '-g';     // black & white
+  const isCircle     = flagPart === '-r';     // circle mask
+  const isBlurBg     = flagPart === '-bb';    // blurred background fill
+  const isNeon       = flagPart === '-n';     // neon / hyper-sharp
+  const isRot90      = flagPart === '-r1';    // rotate 90° CW
+  const isRot180     = flagPart === '-r2';    // rotate 180°
+  const isRot270     = flagPart === '-r3';    // rotate 90° CCW
+  const isFlip       = flagPart === '-r4';    // flip horizontal
+  const isSpin       = flagPart === '-spin';  // animated slow spin 🌀
 
-  // ── Usage message (no media attached) ──────────────────────────────────
+  // ── Usage (no media attached) ─────────────────────────────────────────
   if (!hasImage && !hasVideo) {
     const p = botConfig.getPrefix();
     const usage = GET_BANNER(`🎨 STICKER`) + `\n\n` +
-      `*Reply to any image or video, then use a flag:*\n\n` +
+      `*Reply to any image or video, then send a flag:*\n\n` +
       `*── Resize ──*\n` +
-      `▸ \`${p} s\`    Whole image + black padding _(default)_\n` +
+      `▸ \`${p} s\`      Original dimensions _(default)_\n` +
       `▸ \`${p} s -f\`   Stretch to fill\n` +
       `▸ \`${p} s -c\`   Zoom-crop centred\n` +
-      `▸ \`${p} s -c1\`  Crop from top\n` +
-      `▸ \`${p} s -c2\`  Crop from bottom\n\n` +
+      `▸ \`${p} s -c1\`  Crop top\n` +
+      `▸ \`${p} s -c2\`  Crop bottom\n\n` +
       `*── Effects ──*\n` +
-      `▸ \`${p} s -g\`   🩶 Grayscale\n` +
-      `▸ \`${p} s -r\`   ⭕ Circle mask\n` +
-      `▸ \`${p} s -bb\`  🌫️ Blurred background\n` +
-      `▸ \`${p} s -n\`   ✨ Neon / hyper-sharp\n\n` +
+      `▸ \`${p} s -g\`    🩶 Grayscale\n` +
+      `▸ \`${p} s -r\`    ⭕ Circle mask\n` +
+      `▸ \`${p} s -bb\`   🌫️ Blurred background\n` +
+      `▸ \`${p} s -n\`    ✨ Neon / hyper-sharp\n` +
+      `▸ \`${p} s -spin\` 🌀 Slow spin _(animated)_\n\n` +
       `*── Rotate / Flip ──*\n` +
       `▸ \`${p} s -r1\`  🔄 Rotate 90° clockwise\n` +
       `▸ \`${p} s -r2\`  🔄 Rotate 180°\n` +
@@ -4158,7 +4161,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
 
-    // ── Download ────────────────────────────────────────────────────────
+    // ── Download ─────────────────────────────────────────────────────────
     let buffer;
     try {
       const downloadMsg = isReply ? { message: quotedMsg } : m;
@@ -4184,21 +4187,27 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
     fs.writeFileSync(inputPath, buffer);
 
-    // ── Build FFmpeg command ─────────────────────────────────────────────
+    // ── Build FFmpeg command ──────────────────────────────────────────────
     //
-    // Root cause of old "stretching" bug: color=none in the pad filter
-    // caused FFmpeg to fail on JPEG inputs (no alpha plane). The catch block
-    // swallowed the error and wa-sticker-formatter stretched the raw buffer.
-    // Fix: use color=black for all simple modes (always works, zero alpha
-    // complexity). Only -r (circle) needs an alpha plane via format=rgba.
+    // BASE: letterbox — fits whole image inside 512×512, black bars on the
+    // short sides. Used by effects/rotation that need a fixed-size canvas.
+    // color=black is safe for all pixel formats (color=none requires alpha).
     //
-    // BASE = letterbox that preserves all content, black bars on short sides.
+    // -c1 / -c2 BUG FIX: old code used `scale=512:-1` which gives height
+    // < 512 for landscape images, making the subsequent crop impossible.
+    // Correct approach: `force_original_aspect_ratio=increase` ensures the
+    // shortest side is AT LEAST 512 before cropping.
+    //
+    // -spin: uses `rotate=2*PI*t/3` (one revolution per 3 s). The image is
+    // pre-scaled to 362px (= 512 × sin45° ≈ inscribed circle) so no corner
+    // is ever clipped. Static images need `-loop 1` on the INPUT to generate
+    // multiple frames; `-loop 0` on the OUTPUT makes the WebP loop forever.
     const BASE = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black';
 
     let ffmpegCmd;
 
+    // ── -bb: needs a complex filtergraph (two input streams from same src) ──
     if (isBlurBg) {
-      // Complex filtergraph: blurred+cropped fill behind sharp centred subject
       const cf =
         `[0:v]scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=20:20[bg];` +
         `[0:v]scale=512:512:force_original_aspect_ratio=decrease[fg];` +
@@ -4209,36 +4218,64 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
         ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${cf}" -map "[out]" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
       }
 
+    // ── -spin: animated sticker — image spins slowly forever ─────────────
+    } else if (isSpin) {
+      // Scale to inscribed-circle size (362px) so content stays in frame at
+      // all rotation angles, centre on 512×512 black canvas, then rotate.
+      // PI is a built-in constant in FFmpeg's expression evaluator.
+      const spinVf = [
+        'scale=362:362:force_original_aspect_ratio=decrease',
+        'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black',
+        "rotate='2*PI*t/3':ow=512:oh=512:fillcolor=black",
+        'fps=12'
+      ].join(',');
+      if (type === 'image') {
+        // -loop 1 on input: loop the single image as a stream so -t 3 works.
+        // -loop 0 on output: WebP loops the animation forever.
+        ffmpegCmd = `"${FFMPEG_PATH}" -loop 1 -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+      } else {
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+      }
+
+    // ── All other flags: single -vf chain (or no vf for default) ─────────
     } else {
-      // Single -vf filter chain
       let filter;
       if      (isFull)       filter = 'scale=512:512';
       else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
-      else if (isCrop1)      filter = 'scale=512:-1,crop=512:512:0:0';
-      else if (isCrop2)      filter = 'scale=512:-1,crop=512:512:0:ih-512';
+      // FIXED: use `increase` so shortest side ≥ 512 before cropping.
+      // Then crop 512×512 from (x-centre, top) or (x-centre, bottom).
+      else if (isCrop1)      filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512:(iw-512)/2:0';
+      else if (isCrop2)      filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512:(iw-512)/2:ih-512';
       else if (isGrayscale)  filter = `${BASE},hue=s=0`;
-      else if (isNeon)       filter = `${BASE},unsharp=13:13:8:13:13:0,eq=saturation=3:contrast=1.3`;
+      // unsharp + hue: both core filters, present in every FFmpeg build.
+      else if (isNeon)       filter = `${BASE},unsharp=5:5:2.5:5:5:0,hue=s=3`;
       else if (isRot90)      filter = `${BASE},transpose=1`;
       else if (isRot180)     filter = `${BASE},transpose=1,transpose=1`;
       else if (isRot270)     filter = `${BASE},transpose=2`;
       else if (isFlip)       filter = `${BASE},hflip`;
       else if (isCircle) {
-        // format=rgba gives the pipeline an alpha plane so geq can write a=0
-        // outside the circle. Squared distance avoids sqrt (faster + no
-        // parser issues with escaped commas). 256^2 = 65536.
+        // format=rgba must come FIRST to give FFmpeg an alpha plane.
+        // 0x00000000 (hex RGBA) = fully transparent; more portable than black@0.
+        // geq rewrites alpha: 255 inside the circle, 0 outside.
+        // Squared-distance avoids sqrt: (X-256)^2+(Y-256)^2 <= 256^2 (65536).
         filter = [
           'format=rgba',
-          'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+          'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
           "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*lte((X-256)*(X-256)+(Y-256)*(Y-256),65536)'"
         ].join(',');
       }
-      else filter = BASE; // default — whole image, black letterbox
+      // DEFAULT: null = no -vf at all → pure JPEG/PNG→WebP format conversion,
+      // original dimensions preserved exactly, zero geometry changes.
+      else filter = null;
 
       if (type === 'video') {
-        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+        const vf = filter ? `-vf "${filter},fps=12"` : '-r 12';
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 ${vf} -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
       } else {
-        // pix_fmt yuva420p keeps alpha for circle; harmless for opaque modes
-        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+        const vf = filter ? `-vf "${filter}"` : '';
+        // pix_fmt yuva420p carries the alpha plane for -r (circle).
+        // For all opaque modes it's harmless — WebP supports it fine.
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" ${vf} -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
       }
     }
 
