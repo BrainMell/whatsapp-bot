@@ -10632,7 +10632,8 @@ if (
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guide`) ||
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} handbook`) ||
     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tutorial`) ||
-    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} mine`)
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} mine`) ||
+    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} powerscale`)
 ) {
     return;
 }
