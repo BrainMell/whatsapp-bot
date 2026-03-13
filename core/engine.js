@@ -4100,213 +4100,162 @@ Usage: ${newUsage}/5${warningText}`;
         // ============================================
         
 
-// --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` s (reply to convert) ---
+// --- COMMAND: `.j s` (reply to image/video → sticker) ---
+// Flags: -f -c -c1 -c2 -g -r -bb -n -r1 -r2 -r3 -r4
 if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} s -`)) {
   const quotedMsgRaw = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
   const quotedMsg = quotedMsgRaw?.ephemeralMessage?.message || quotedMsgRaw?.viewOnceMessage?.message || quotedMsgRaw?.viewOnceMessageV2?.message || quotedMsgRaw;
   const message = m.message?.ephemeralMessage?.message || m.message?.viewOnceMessage?.message || m.message?.viewOnceMessageV2?.message || m.message;
 
-  const isReply = !!quotedMsg;
+  const isReply  = !!quotedMsg;
   const mediaMsg = isReply ? quotedMsg : message;
-  
+
   const hasImage = mediaMsg?.imageMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('image/'));
   const hasVideo = mediaMsg?.videoMessage || (mediaMsg?.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('video/'));
 
-  // ── Flag parsing ──────────────────────────────────────────────────────────
-  // Each flag is a distinct mode; only the first match wins.
-  const flagPart = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} s`, '').trim();
-  const isFull        = flagPart === '-f';          // stretch to fill 512×512
-  const isCropCenter  = flagPart === '-c';          // zoom-crop centered
-  const isCrop1       = flagPart === '-c1';         // crop from top
-  const isCrop2       = flagPart === '-c2';         // crop from bottom
-  const isGrayscale   = flagPart === '-g';          // black & white effect
-  const isCircle      = flagPart === '-r';          // round/circle mask
-  const isBlurBg      = flagPart === '-bb';         // blurred background fill
-  const isNeon        = flagPart === '-n';          // neon edge-glow effect
-  // default (no flag): letterbox — whole image preserved, transparent padding
+  // Flag parsing — strip prefix+command, trim, compare exactly
+  const flagPart     = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} s`, '').trim();
+  const isFull       = flagPart === '-f';   // stretch (intentional)
+  const isCropCenter = flagPart === '-c';   // zoom-crop centred
+  const isCrop1      = flagPart === '-c1';  // crop from top
+  const isCrop2      = flagPart === '-c2';  // crop from bottom
+  const isGrayscale  = flagPart === '-g';   // black & white
+  const isCircle     = flagPart === '-r';   // circle/round mask
+  const isBlurBg     = flagPart === '-bb';  // blurred background fill
+  const isNeon       = flagPart === '-n';   // neon punch (unsharp+sat)
+  const isRot90      = flagPart === '-r1';  // rotate 90° clockwise
+  const isRot180     = flagPart === '-r2';  // rotate 180°
+  const isRot270     = flagPart === '-r3';  // rotate 90° counter-clockwise
+  const isFlip       = flagPart === '-r4';  // flip horizontal (mirror)
 
+  // ── Usage message (no media attached) ──────────────────────────────────
   if (!hasImage && !hasVideo) {
     const p = botConfig.getPrefix();
     const usage = GET_BANNER(`🎨 STICKER`) + `\n\n` +
-      `*Convert an image or video to a WhatsApp sticker.*\n` +
-      `Reply to any image/video and use one of the modes below:\n\n` +
-      `*── Resize Modes ──*\n` +
-      `▸ \`${p} s\`       — Whole image, transparent padding _(default)_\n` +
-      `▸ \`${p} s -f\`    — Stretch to fill (no padding)\n` +
-      `▸ \`${p} s -c\`    — Zoom-crop centered\n` +
-      `▸ \`${p} s -c1\`   — Crop from top\n` +
-      `▸ \`${p} s -c2\`   — Crop from bottom\n\n` +
-      `*── Effect Modes ──*\n` +
-      `▸ \`${p} s -g\`    — 🩶 Grayscale (black & white)\n` +
-      `▸ \`${p} s -r\`    — ⭕ Round / circle mask\n` +
-      `▸ \`${p} s -bb\`   — 🌫️ Blurred background fill\n` +
-      `▸ \`${p} s -n\`    — ✨ Neon edge-glow\n\n` +
+      `*Reply to any image or video, then use a flag:*\n\n` +
+      `*── Resize ──*\n` +
+      `▸ \`${p} s\`    Whole image + black padding _(default)_\n` +
+      `▸ \`${p} s -f\`   Stretch to fill\n` +
+      `▸ \`${p} s -c\`   Zoom-crop centred\n` +
+      `▸ \`${p} s -c1\`  Crop from top\n` +
+      `▸ \`${p} s -c2\`  Crop from bottom\n\n` +
+      `*── Effects ──*\n` +
+      `▸ \`${p} s -g\`   🩶 Grayscale\n` +
+      `▸ \`${p} s -r\`   ⭕ Circle mask\n` +
+      `▸ \`${p} s -bb\`  🌫️ Blurred background\n` +
+      `▸ \`${p} s -n\`   ✨ Neon / hyper-sharp\n\n` +
+      `*── Rotate / Flip ──*\n` +
+      `▸ \`${p} s -r1\`  🔄 Rotate 90° clockwise\n` +
+      `▸ \`${p} s -r2\`  🔄 Rotate 180°\n` +
+      `▸ \`${p} s -r3\`  🔄 Rotate 90° counter-clockwise\n` +
+      `▸ \`${p} s -r4\`  🪞 Flip horizontal\n\n` +
       `*── Search ──*\n` +
-      `▸ \`${p} s [count] <query>\` — Search & stickerize from Pinterest\n` +
-      `   _Example:_ \`${p} s 5 goku\``;
+      `▸ \`${p} s [count] <query>\`  Search Pinterest\n` +
+      `   _e.g._ \`${p} s 5 goku\``;
     return await sock.sendMessage(chatId, { text: usage });
   }
 
   try {
     await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
-    
-    // ── Download ──────────────────────────────────────────────────────────
+
+    // ── Download ────────────────────────────────────────────────────────
     let buffer;
     try {
-        const downloadMsg = isReply ? { message: quotedMsg } : m;
-        buffer = await downloadMediaMessage(
-            downloadMsg,
-            'buffer',
-            {},
-            { 
-              logger: console,
-              reuploadRequest: sock.updateMediaMessage
-            }
-        );
-    } catch (downloadErr) {
-        console.error("Sticker Download Error:", downloadErr.message);
-        const messageData = mediaMsg.imageMessage || mediaMsg.videoMessage || mediaMsg.documentMessage;
-        const type = hasImage ? 'image' : 'video';
-        const stream = await downloadContentFromMessage(messageData, type);
-        let chunks = [];
-        for await (const chunk of stream) { chunks.push(chunk); }
-        buffer = Buffer.concat(chunks);
+      const downloadMsg = isReply ? { message: quotedMsg } : m;
+      buffer = await downloadMediaMessage(downloadMsg, 'buffer', {}, {
+        logger: console,
+        reuploadRequest: sock.updateMediaMessage
+      });
+    } catch (dlErr) {
+      console.error("Sticker download error:", dlErr.message);
+      const msgData = mediaMsg.imageMessage || mediaMsg.videoMessage || mediaMsg.documentMessage;
+      const dlType  = hasImage ? 'image' : 'video';
+      const stream  = await downloadContentFromMessage(msgData, dlType);
+      const chunks  = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      buffer = Buffer.concat(chunks);
     }
-
     if (!buffer || buffer.length === 0) throw new Error("Empty media buffer");
 
-    const timestamp = Date.now() + "_" + Math.floor(Math.random() * 1000);
-    const type = hasImage ? 'image' : 'video';
-    const ext = type === 'image' ? '.jpg' : '.mp4';
-    const inputPath  = `./temp/stick_in_${timestamp}${ext}`;
-    const outputPath = `./temp/stick_out_${timestamp}.webp`;
-    const midPath    = `./temp/stick_mid_${timestamp}.png`; // intermediate for effect modes
-
+    const ts         = Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const type       = hasImage ? 'image' : 'video';
+    const inputPath  = `./temp/stick_in_${ts}${type === 'image' ? '.jpg' : '.mp4'}`;
+    const outputPath = `./temp/stick_out_${ts}.webp`;
     if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
     fs.writeFileSync(inputPath, buffer);
 
-    // ── Build FFmpeg filter chain ─────────────────────────────────────────
+    // ── Build FFmpeg command ─────────────────────────────────────────────
     //
-    // DEFAULT: scale down to fit inside 512×512, pad the rest with
-    //          transparency so the image is NEVER stretched or cropped.
-    //          -pix_fmt yuva420p keeps the alpha channel in the WebP.
-    let filter;
-    let needsMidStep = false; // some effects need a 2-pass approach
+    // Root cause of old "stretching" bug: color=none in the pad filter
+    // caused FFmpeg to fail on JPEG inputs (no alpha plane). The catch block
+    // swallowed the error and wa-sticker-formatter stretched the raw buffer.
+    // Fix: use color=black for all simple modes (always works, zero alpha
+    // complexity). Only -r (circle) needs an alpha plane via format=rgba.
+    //
+    // BASE = letterbox that preserves all content, black bars on short sides.
+    const BASE = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black';
 
-    if (isFull) {
-        // Stretch to fill — intentional distortion
-        filter = 'scale=512:512';
-
-    } else if (isCropCenter) {
-        // Zoom in and center-crop to fill the square
-        filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
-
-    } else if (isCrop1) {
-        // Crop from the top (portrait images: keep the face/head)
-        filter = 'scale=512:-1,crop=512:512:0:0';
-
-    } else if (isCrop2) {
-        // Crop from the bottom
-        filter = 'scale=512:-1,crop=512:512:0:ih-512';
-
-    } else if (isGrayscale) {
-        // ── -g: Grayscale letterbox ─────────────────────────────────────
-        // Desaturate then letterbox with transparent padding
-        filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none,hue=s=0';
-
-    } else if (isCircle) {
-        // ── -r: Round/circle mask ───────────────────────────────────────
-        // Scale to fit, then use the geq filter to zero out pixels outside
-        // a circle centred at (256,256) with radius 256.
-        filter = [
-            'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none',
-            // geq: alpha = 255 if distance from centre <= 256, else 0
-            `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(sqrt(pow(X-256\\,2)+pow(Y-256\\,2)),256),255,0)'`
-        ].join(',');
-
-    } else if (isBlurBg) {
-        // ── -bb: Blurred background fill ────────────────────────────────
-        // Two layers via filtergraph:
-        //   [0:v] blurred+cropped background (fills 512×512 fully)
-        //   [0:v] sharp foreground scaled to fit, centred on top
-        // We use a complex filtergraph string for ffmpeg.
-        needsMidStep = 'blurbg';
-
-    } else if (isNeon) {
-        // ── -n: Neon edge-glow ──────────────────────────────────────────
-        // edge-detect (laplacian) → colourize cyan → blend with original
-        needsMidStep = 'neon';
-
-    } else {
-        // ── DEFAULT: whole image, transparent letterbox ─────────────────
-        // force_original_aspect_ratio=decrease → fits entirely within 512×512
-        // pad → fills leftover space with transparent pixels
-        filter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
-    }
-
-    // ── Execute FFmpeg ────────────────────────────────────────────────────
     let ffmpegCmd;
 
-    if (needsMidStep === 'blurbg') {
-        // Blurred background fill — complex filtergraph
-        // bg:  blur the whole input, scale to fill 512×512 (slight zoom-crop OK)
-        // fg:  scale the input to fit inside 512×512 (no crop)
-        // overlay fg centred on bg
-        const bgFilter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=20:20';
-        const fgFilter = 'scale=512:512:force_original_aspect_ratio=decrease';
-        const complexFilter =
-            `[0:v]${bgFilter}[bg];` +
-            `[0:v]${fgFilter}[fg];` +
-            `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`;
-
-        if (type === 'video') {
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${complexFilter}" -map "[out]" -fps=12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
-        } else {
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${complexFilter}" -map "[out]" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
-        }
-
-    } else if (needsMidStep === 'neon') {
-        // Neon edge-glow — two passes:
-        // Pass 1: extract luma edges (laplacian), threshold, colourise cyan
-        // Pass 2: screen-blend with original
-        const edgeFilter =
-            'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=none';
-        const complexFilter =
-            `[0:v]${edgeFilter}[base];` +
-            // Edge layer: lumakey then colorize to cyan-blue
-            `[base]edgedetect=low=0.04:high=0.09,lutrgb=r='if(val,0,0)':g='if(val,val*3,0)':b='if(val,255,0)'[edges];` +
-            // Blend with screen mode (max of each channel — brightens with edges)
-            `[base][edges]blend=all_mode=screen[out]`;
-
-        if (type === 'video') {
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${complexFilter}" -map "[out]" -fps=12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
-        } else {
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${complexFilter}" -map "[out]" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
-        }
+    if (isBlurBg) {
+      // Complex filtergraph: blurred+cropped fill behind sharp centred subject
+      const cf =
+        `[0:v]scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=20:20[bg];` +
+        `[0:v]scale=512:512:force_original_aspect_ratio=decrease[fg];` +
+        `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`;
+      if (type === 'video') {
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${cf}" -map "[out]" -r 12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+      } else {
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${cf}" -map "[out]" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+      }
 
     } else {
-        // All single-filter-chain modes
-        if (type === 'video') {
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
-        } else {
-            // yuva420p preserves the alpha channel for transparent-pad modes
-            ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
-        }
+      // Single -vf filter chain
+      let filter;
+      if      (isFull)       filter = 'scale=512:512';
+      else if (isCropCenter) filter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
+      else if (isCrop1)      filter = 'scale=512:-1,crop=512:512:0:0';
+      else if (isCrop2)      filter = 'scale=512:-1,crop=512:512:0:ih-512';
+      else if (isGrayscale)  filter = `${BASE},hue=s=0`;
+      else if (isNeon)       filter = `${BASE},unsharp=13:13:8:13:13:0,eq=saturation=3:contrast=1.3`;
+      else if (isRot90)      filter = `${BASE},transpose=1`;
+      else if (isRot180)     filter = `${BASE},transpose=1,transpose=1`;
+      else if (isRot270)     filter = `${BASE},transpose=2`;
+      else if (isFlip)       filter = `${BASE},hflip`;
+      else if (isCircle) {
+        // format=rgba gives the pipeline an alpha plane so geq can write a=0
+        // outside the circle. Squared distance avoids sqrt (faster + no
+        // parser issues with escaped commas). 256^2 = 65536.
+        filter = [
+          'format=rgba',
+          'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+          "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*lte((X-256)*(X-256)+(Y-256)*(Y-256),65536)'"
+        ].join(',');
+      }
+      else filter = BASE; // default — whole image, black letterbox
+
+      if (type === 'video') {
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -vf "${filter},fps=12" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+      } else {
+        // pix_fmt yuva420p keeps alpha for circle; harmless for opaque modes
+        ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -vf "${filter}" -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
+      }
     }
 
+    // ── Run FFmpeg ────────────────────────────────────────────────────────
     try {
-        await execPromise(ffmpegCmd);
-        if (fs.existsSync(outputPath)) {
-            buffer = fs.readFileSync(outputPath);
-            if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
-            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        }
+      await execPromise(ffmpegCmd);
     } catch (fErr) {
-        console.error("FFmpeg Sticker Error:", fErr.message);
-        if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
-        if (fs.existsSync(midPath))    fs.unlinkSync(midPath);
-        throw fErr;
+      // Throw so the outer catch sends ❌ instead of silently using the raw
+      // buffer (which wa-sticker-formatter would stretch to 512×512).
+      if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
+      throw new Error(`FFmpeg failed: ${fErr.message}`);
     }
+
+    if (!fs.existsSync(outputPath)) throw new Error("FFmpeg produced no output file");
+    buffer = fs.readFileSync(outputPath);
+    if (fs.existsSync(inputPath))  fs.unlinkSync(inputPath);
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
     const sticker = new Sticker(buffer, {
       pack: `${botConfig.getBotName()} Pack 🃏`,
@@ -4319,7 +4268,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} s` || lowerTxt.startsWi
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
 
   } catch (err) {
-    console.error("Sticker Error:", err);
+    console.error("Sticker Error:", err.message);
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
   }
   return;
@@ -10876,5 +10825,3 @@ module.exports = {
   isGlobalMod,
   loadGlobalMods
 };
-
-//end point, DUDES DO NOT TOUCH ANYTHING, PLACE NEW COMMANDS IN MESSAGE UPSERT
