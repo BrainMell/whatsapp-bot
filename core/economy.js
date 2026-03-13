@@ -1125,7 +1125,7 @@ function robUser(thiefId, victimId) {
       scheduleSave(thiefId);
       return {
         success: false,
-        message: `🚔 *BUSTED*\n\nThe police caught you! You paid a fine of ${getZENI()}${fine.toLocaleString()}`
+        message: `🚔 *BUSTED*\n\nThe police caught you!\n⚖️ First offense: Fine of ${getZENI()}${fine.toLocaleString()}\n🚫 No command ban yet.`
       };
 
     } else if (thief.robberyStrikes === 2) {

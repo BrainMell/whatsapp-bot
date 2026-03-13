@@ -3187,6 +3187,28 @@ We are happy to have you here.
         // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, _, ~) for command parsing
         const cleanTxt = txt.replace(/[*_~]/g, '');
         let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, ' ');
+        const currentPrefix = botConfig.getPrefix().toLowerCase();
+        const isBotCommand = lowerTxt.startsWith(currentPrefix);
+
+        if (isBotCommand) {
+          const punishment = economy.getPunishmentStatus(senderJid);
+          if (punishment?.blocked) {
+            const totalMinutes = Math.max(0, Math.ceil((punishment.msLeft || 0) / 60000));
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            const timeLeft = hours > 0 ? `${hours}h ${minutes}m` : `${totalMinutes}m`;
+            const title = punishment.type === 'prison' ? '⛓️ *PRISON BAN*' : '🚔 *JAIL BAN*';
+            await sock.sendMessage(chatId, {
+              text: BOT_MARKER + `${title}\n\nYou are banned from bot commands for ${timeLeft}.`
+            });
+            return;
+          }
+
+          if (isBlocked(senderJid)) {
+            console.log(`🚫 Blocked user tried to use bot: ${senderJid}`);
+            return;
+          }
+        }
 
         // ── CARD SYSTEM INTERCEPT ──────────────────
         const cardHandled = await cardSystem.handleCommand({
@@ -3253,8 +3275,6 @@ _💡 Reply with another number from your search list!_`.trim();
 
         // ── CORE COMMAND INTERCEPT ──────────────────
         // This block handles high-priority commands with robust parsing
-        const currentPrefix = botConfig.getPrefix().toLowerCase();
-        
         if (lowerTxt.startsWith(currentPrefix)) {
             const cmdBody = lowerTxt.substring(currentPrefix.length).trim();
             const cmdArgs = cmdBody.split(' ');
@@ -3685,24 +3705,7 @@ _💡 Reply with another number from your search list!_`.trim();
           }
         }
 
-        const isBotCommand = lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}`);
         if (isBotCommand) console.log(`🤖 Command detected: ${lowerTxt.split(' ')[0]}`);
-
-        if (isBotCommand) {
-          const punishment = economy.getPunishmentStatus(senderJid);
-          if (punishment?.blocked) {
-            const totalMinutes = Math.max(0, Math.ceil((punishment.msLeft || 0) / 60000));
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            const timeLeft = hours > 0 ? `${hours}h ${minutes}m` : `${totalMinutes}m`;
-            const title = punishment.type === 'prison' ? '⛓️ *PRISON BAN*' : '🚔 *JAIL BAN*';
-            await sock.sendMessage(chatId, {
-              text: BOT_MARKER + `${title}\n\nYou are banned from bot commands for ${timeLeft}.`
-            });
-            return;
-          }
-        }
-
 
         // ============================================
         // 🌍 GLOBAL WEATHER SYSTEM
