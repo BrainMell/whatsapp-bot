@@ -16,3 +16,17 @@ DEVELOPER_GUIDE.md
 maintenance/
 bot.log
 Scrape_logic
+
+# Auth and sessions
+instances/*/auth/
+instances/*/assets/auth/
+auth/
+session.json
+*.json.gz
+
+# Assets and Generated
+instances/*/stickers/*.webp
+instances/*/assets/stickers/*.webp
+temp/
+*.exe
+*.log
