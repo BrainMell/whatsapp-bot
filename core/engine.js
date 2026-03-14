@@ -3634,6 +3634,48 @@ _💡 Reply with another number from your search list!_`.trim();
                 return;
             }
 
+            // .j powerscale <character>
+            if (primaryCmd === 'powerscale') {
+                const character = cmdArgs.slice(1).join(' ').trim();
+                if (!character) {
+                    return await sendUsage(sock, chatId, BOT_MARKER, '⚖️ SCALE', 'powerscale <n>', 'powerscale goku', 'Analyze character stats via VS Battles.');
+                }
+                await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
+                await sock.sendMessage(chatId, { text: BOT_MARKER + `🔍 Searching VS Battles Wiki for "${character}"...` });
+                try {
+                    const result = await getPowerScale(character);
+                    console.log('[engine] Powerscale result:', JSON.stringify(result));
+                    if (!result.success) {
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${result.error}` });
+                    }
+                    if (result.imageUrl) {
+                        try {
+                            const imageResponse = await axios.get(result.imageUrl, {
+                                responseType: 'arraybuffer',
+                                timeout: 15000,
+                                headers: { 'User-Agent': 'Mozilla/5.0' }
+                            });
+                            await sock.sendMessage(chatId, {
+                                image: Buffer.from(imageResponse.data),
+                                caption: BOT_MARKER + result.message
+                            });
+                        } catch {
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                    } else {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                    }
+                    await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                    await awardProgression(senderJid, chatId);
+                } catch (err) {
+                    console.error("❌ Powerscale Error:", err.message);
+                    await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to fetch power scaling data.` });
+                }
+                return;
+            }
+
             // .j tutorial
             if (primaryCmd === 'tutorial') {
                 let msg = `🎓 *RPG ADVENTURE GUIDE* 🎓\n\n`;
@@ -10845,4 +10887,4 @@ module.exports = {
   delGlobalMod,
   isGlobalMod,
   loadGlobalMods
-};
+};s
