@@ -10,6 +10,11 @@ class GoImageService {
             maxBodyLength: Infinity,
             maxContentLength: Infinity
         });
+
+        // Startup health check — confirms Go service is reachable on boot
+        this.healthCheck()
+            .then(h => console.log('[GoService] Health:', JSON.stringify(h)))
+            .catch(e => console.error('[GoService] Health FAIL:', e.message));
         
         // Queue for sequential processing
         this.heavyOpQueue = Promise.resolve();
@@ -28,7 +33,8 @@ class GoImageService {
                     reject(err);
                 }
             }).catch(err => {
-                // This catch ensures the NEXT operation in the chain can still run
+                // Propagate rejection AND keep the chain alive for next ops
+                reject(err);
             });
         });
     }
@@ -239,16 +245,22 @@ class GoImageService {
     }
 
     /*
-     * Powerscale Search (Go Service - Browser Based)
+     * Powerscale Search (Go Service - Jina Proxy)
      */
     async getPowerscale(query) {
         try {
+            console.log(`[GoService] Powerscale request for: ${query}`);
             const response = await this.client.get('/api/scrape/powerscale', {
                 params: { query }
             });
+            console.log(`[GoService] Powerscale raw response:`, JSON.stringify(response.data));
             return response.data;
         } catch (error) {
             console.error('GoService Powerscale Error:', error.message);
+            if (error.response) {
+                console.error('GoService Powerscale HTTP Status:', error.response.status);
+                console.error('GoService Powerscale Response Body:', JSON.stringify(error.response.data));
+            }
             return null;
         }
     }

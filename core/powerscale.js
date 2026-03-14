@@ -1,5 +1,5 @@
 // ===============================================
-// POWERSCALE.JS - Now uses Go Service (Rod Browser Backend)
+// POWERSCALE.JS - Now uses Go Service (Jina Proxy Backend)
 // Replaces local Puppeteer with fast Go backend
 // ===============================================
 
@@ -13,8 +13,12 @@ const goService = new GoImageService();
  */
 async function getPowerScale(characterName) {
     try {
+        console.log(`[Powerscale] Fetching data for: ${characterName}`);
+
         const data = await goService.getPowerscale(characterName);
-        
+
+        console.log(`[Powerscale] Raw response:`, JSON.stringify(data));
+
         if (!data || data.error || !data.name) {
             throw new Error(data?.error || "Character not found or insufficient data");
         }
@@ -29,6 +33,8 @@ async function getPowerScale(characterName) {
         message += `*Tier:* ${stats["Tier"] || stats.tier || "Unknown"}\n\n`;
         message += `Full details: ${data.pageUrl}`;
 
+        console.log(`[Powerscale] Success for: ${data.name}`);
+
         return {
             success: true,
             message: message,
@@ -37,7 +43,7 @@ async function getPowerScale(characterName) {
             pageUrl: data.pageUrl
         };
     } catch (error) {
-        console.error('Powerscale workflow failed:', error.message);
+        console.error('[Powerscale] Workflow failed:', error.message);
         return { success: false, error: error.message };
     }
 }
@@ -53,4 +59,3 @@ module.exports = {
     formatPowerScale,
     getPowerScale
 };
-
