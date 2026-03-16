@@ -445,13 +445,20 @@ async function startBot(configInstance) {
             }
             
             const { metadata, audioURL } = data;
+            console.log(`[Audio] Fetching from: ${audioURL}`);
             await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
             // Download audio buffer from the direct URL
             const response = await axios.get(audioURL, { 
                 responseType: 'arraybuffer',
                 timeout: 60000 
+            }).catch(err => {
+                if (err.response && err.response.status === 404) {
+                    throw new Error(`Audio file not found on server (404). This usually means the download failed on the backend.`);
+                }
+                throw err;
             });
+
             const audioBuffer = Buffer.from(response.data);
 
             // Fetch thumbnail buffer
@@ -479,7 +486,10 @@ async function startBot(configInstance) {
             await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
         } catch (err) {
             console.error("Audio Command Error:", err.message);
-            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Audio processing failed." });
+            const errorMsg = err.message.includes("404") 
+                ? "❌ Audio file missing on server. Try a different query." 
+                : "❌ Audio processing failed. Service might be overloaded.";
+            await sock.sendMessage(chatId, { text: BOT_MARKER + errorMsg });
         }
     }
 
