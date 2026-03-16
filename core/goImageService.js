@@ -244,23 +244,38 @@ class GoImageService {
         }
     }
 
+
     /*
-     * Powerscale Search (Go Service - Jina Proxy)
+     * Powerscale Search — returns list of matching characters
      */
-    async getPowerscale(query) {
+    async searchPowerscale(query) {
         try {
-            console.log(`[GoService] Powerscale request for: ${query}`);
-            const response = await this.client.get('/api/scrape/powerscale', {
-                params: { query }
-            });
-            console.log(`[GoService] Powerscale raw response:`, JSON.stringify(response.data));
+            console.log(`[GoService] Powerscale search for: ${query}`);
+            const response = await this.client.get(`/api/scrape/powerscale`, { params: { query } });
+            console.log(`[GoService] Powerscale search:`, JSON.stringify(response.data));
             return response.data;
         } catch (error) {
-            console.error('GoService Powerscale Error:', error.message);
-            if (error.response) {
-                console.error('GoService Powerscale HTTP Status:', error.response.status);
-                console.error('GoService Powerscale Response Body:', JSON.stringify(error.response.data));
-            }
+            console.error('GoService Powerscale Search Error:', error.message);
+            if (error.response) console.error('Body:', JSON.stringify(error.response.data));
+            return null;
+        }
+    }
+
+    /*
+     * Powerscale Fetch — scrapes specific character page after user selects
+     */
+    async fetchPowerscalePage(pageUrl) {
+        try {
+            console.log(`[GoService] Powerscale fetch: ${pageUrl}`);
+            const response = await this.client.get(`/api/scrape/powerscale/fetch`, {
+                params: { url: pageUrl },
+                timeout: 60000
+            });
+            console.log(`[GoService] Powerscale fetch:`, JSON.stringify(response.data));
+            return response.data;
+        } catch (error) {
+            console.error('GoService Powerscale Fetch Error:', error.message);
+            if (error.response) console.error('Body:', JSON.stringify(error.response.data));
             return null;
         }
     }

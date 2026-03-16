@@ -17,7 +17,7 @@ const {
   makeCacheableSignalKeyStore,
   jidNormalizedUser
 } = require("@whiskeysockets/baileys");
-const { getPowerScale } = require("./powerscale");
+const { getPowerScale, handlePowerscaleSelection, hasPendingSelection } = require("./powerscale");
 const classSystem = require('./classSystem');
 const guilds = require('./guilds');
 const guildAdventure = require('./guildAdventure');
@@ -445,20 +445,13 @@ async function startBot(configInstance) {
             }
             
             const { metadata, audioURL } = data;
-            console.log(`[Audio] Fetching from: ${audioURL}`);
             await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
             // Download audio buffer from the direct URL
             const response = await axios.get(audioURL, { 
                 responseType: 'arraybuffer',
                 timeout: 60000 
-            }).catch(err => {
-                if (err.response && err.response.status === 404) {
-                    throw new Error(`Audio file not found on server (404). This usually means the download failed on the backend.`);
-                }
-                throw err;
             });
-
             const audioBuffer = Buffer.from(response.data);
 
             // Fetch thumbnail buffer
@@ -486,10 +479,7 @@ async function startBot(configInstance) {
             await sock.sendMessage(chatId, { react: { text: '▶️', key: m.key } });
         } catch (err) {
             console.error("Audio Command Error:", err.message);
-            const errorMsg = err.message.includes("404") 
-                ? "❌ Audio file missing on server. Try a different query." 
-                : "❌ Audio processing failed. Service might be overloaded.";
-            await sock.sendMessage(chatId, { text: BOT_MARKER + errorMsg });
+            await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Audio processing failed." });
         }
     }
 
@@ -3653,8 +3643,29 @@ _💡 Reply with another number from your search list!_`.trim();
                 await sock.sendMessage(chatId, { react: { text: `🔍`, key: m.key } });
                 await sock.sendMessage(chatId, { text: BOT_MARKER + `🔍 Searching VS Battles Wiki for "${character}"...` });
                 try {
-                    const result = await getPowerScale(character);
+                    const result = await getPowerScale(character, chatId);
                     console.log('[engine] Powerscale result:', JSON.stringify(result));
+                    if (!result.success) {
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${result.error}` });
+                    }
+                    // isPending = true means we sent the character list, waiting for user to pick
+                    await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                } catch (err) {
+                    console.error("❌ Powerscale Error:", err.message);
+                    await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to search VS Battles Wiki.` });
+                }
+                return;
+            }
+
+            // Powerscale selection — user replies with a number after seeing character list
+            if (hasPendingSelection(chatId) && /^\d+$/.test(primaryCmd) && cmdArgs.length === 1) {
+                await sock.sendMessage(chatId, { react: { text: `⏳`, key: m.key } });
+                try {
+                    const result = await handlePowerscaleSelection(chatId, primaryCmd);
+                    if (!result) return; // no pending — fall through normally
                     if (!result.success) {
                         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
                         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${result.error}` });
@@ -3679,9 +3690,9 @@ _💡 Reply with another number from your search list!_`.trim();
                     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
                     await awardProgression(senderJid, chatId);
                 } catch (err) {
-                    console.error("❌ Powerscale Error:", err.message);
+                    console.error("❌ Powerscale Selection Error:", err.message);
                     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to fetch power scaling data.` });
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to fetch character data.` });
                 }
                 return;
             }
