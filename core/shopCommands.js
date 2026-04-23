@@ -374,7 +374,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `Need:\n`;
         msg += `  Level ${req.level}\n`;
         msg += `  ${req.questsCompleted} Quests\n`;
-        msg += `  ${req.gp.toLocaleString()} GP\n`;
+        msg += `  ${(req.gp || 0).toLocaleString()} GP\n`;
     } else {
         msg += `━━━━━━━━━━━━━━━\n`;
         msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;

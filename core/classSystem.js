@@ -584,52 +584,52 @@ const EVOLVED_CLASSES = {
 const ADVENTURER_RANKS = {
     F: {
         name: 'F-Rank', icon: '🔰', color: '⚪',
-        requirement: { level: 1, questsCompleted: 0 },
+        requirement: { level: 1, questsCompleted: 0, gp: 0 },
         benefits: { questRewardBonus: 0 }
     },
     E: {
         name: 'E-Rank', icon: '🥉', color: '⚪',
-        requirement: { level: 10, questsCompleted: 10 },
+        requirement: { level: 10, questsCompleted: 10, gp: 50 },
         benefits: { questRewardBonus: 5 }
     },
     D: {
         name: 'D-Rank', icon: '🥈', color: '🔵',
-        requirement: { level: 20, questsCompleted: 25 },
+        requirement: { level: 20, questsCompleted: 25, gp: 150 },
         benefits: { questRewardBonus: 10 }
     },
     C: {
         name: 'C-Rank', icon: '🥇', color: '🔵',
-        requirement: { level: 30, questsCompleted: 50 },
+        requirement: { level: 30, questsCompleted: 50, gp: 400 },
         benefits: { questRewardBonus: 15 }
     },
     B: {
         name: 'B-Rank', icon: '💎', color: '🔴',
-        requirement: { level: 40, questsCompleted: 80 },
+        requirement: { level: 40, questsCompleted: 80, gp: 800 },
         benefits: { questRewardBonus: 20 }
     },
     A: {
         name: 'A-Rank', icon: '💠', color: '🔴',
-        requirement: { level: 50, questsCompleted: 120 },
+        requirement: { level: 50, questsCompleted: 120, gp: 1500 },
         benefits: { questRewardBonus: 30 }
     },
     S: {
         name: 'S-Rank', icon: '⭐', color: '🟡',
-        requirement: { level: 60, questsCompleted: 180 },
+        requirement: { level: 60, questsCompleted: 180, gp: 3000 },
         benefits: { questRewardBonus: 40 }
     },
     SS: {
         name: 'SS-Rank', icon: '🌟', color: '🟡',
-        requirement: { level: 75, questsCompleted: 250 },
+        requirement: { level: 75, questsCompleted: 250, gp: 6000 },
         benefits: { questRewardBonus: 60 }
     },
     SSS: {
         name: 'SSS-Rank', icon: '✨', color: '⚪',
-        requirement: { level: 90, questsCompleted: 500 },
+        requirement: { level: 90, questsCompleted: 500, gp: 12000 },
         benefits: { questRewardBonus: 100 }
     },
     GOD: {
         name: 'GOD-Rank', icon: '♾️', color: '⚪',
-        requirement: { level: 100, questsCompleted: 1000 },
+        requirement: { level: 100, questsCompleted: 1000, gp: 25000 },
         benefits: { questRewardBonus: 200 }
     }
 };
