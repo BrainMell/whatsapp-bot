@@ -394,16 +394,16 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     }
     
     // Adventurer Rank
-    msg += `${rankData.icon} *Rank:* ${rankData.name}\n`;
+    msg += `${rankData?.icon || '🔰'} *Rank:* ${rankData?.name || rank}\n`;
     msg += `📊 Level: ${level}\n`;
     msg += `⭐ GP: ${gp.toLocaleString()}\n`;
     msg += `🗡️ Quests: ${user.questsCompleted || 0} (Won: ${user.questsWon || 0})\n`;
-    
+
     if (user.stats?.dragonsKilled) {
         msg += `🐲 Dragon Kills: ${user.stats.dragonsKilled}\n`;
     }
     msg += `\n`;
-    
+
     // Stats
     if (stats) {
         msg += `📊 *STATS:*\n`;
@@ -412,7 +412,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `🔮 MAG: ${stats.mag} | 💨 SPD: ${stats.spd}\n`;
         msg += `🍀 LUCK: ${stats.luck} | 💥 CRIT: ${stats.crit}%\n\n`;
     }
-    
+
     // Next rank
     const nextRank = classSystem.getNextRankRequirements(rank);
     if (nextRank) {
@@ -427,7 +427,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `━━━━━━━━━━━━━━━\n`;
         msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;
     }
-    
+
     // Evolution info
     if (classData && classData.tier === 'STARTER') {
         msg += `\n━━━━━━━━━━━━━━━\n`;
@@ -439,26 +439,37 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `Use \`${getPrefix()} evolve\` to see paths.`;
     }
 
-    if (pfpUrl) {
-        await sock.sendMessage(chatId, { 
-            image: { url: pfpUrl },
-            caption: msg,
-            mentions: [finalJid]
-        });
-    } else {
-        // Use placeholder from botConfig
-        const placeholderPath = botConfig.getAssetPath('placeholder.png');
-        if (fs.existsSync(placeholderPath)) {
+    try {
+        if (pfpUrl) {
             await sock.sendMessage(chatId, { 
-                image: fs.readFileSync(placeholderPath),
+                image: { url: pfpUrl },
                 caption: msg,
                 mentions: [finalJid]
             });
         } else {
-            await sock.sendMessage(chatId, { text: msg, mentions: [finalJid] });
+            // Use placeholder from botConfig
+            const placeholderPath = botConfig.getAssetPath('placeholder.png');
+            if (fs.existsSync(placeholderPath)) {
+                await sock.sendMessage(chatId, { 
+                    image: fs.readFileSync(placeholderPath),
+                    caption: msg,
+                    mentions: [finalJid]
+                });
+            } else {
+                await sock.sendMessage(chatId, { 
+                    text: msg,
+                    mentions: [finalJid]
+                });
+            }
         }
+    } catch (sendErr) {
+        console.error("Failed to send character sheet:", sendErr.message);
+        // Last resort: simple text without mentions or attachments
+        try {
+            await sock.sendMessage(chatId, { text: "⚠️ Error displaying profile card, but you are registered!" });
+        } catch (fatal) {}
     }
-}
+    }
 
 // ==========================================
 // 📤 EXPORTS

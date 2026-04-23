@@ -397,7 +397,10 @@ class GoImageService {
         responseType: "arraybuffer",
         timeout: 45000,
       });
-      return Buffer.from(response.data);
+      const buf = Buffer.from(response.data);
+      // Validate buffer (PNG header check + minimum size)
+      if (buf.length < 100) return null;
+      return buf;
     } catch (error) {
       console.error("GoService Economy Card Error:", error.message);
       return null;
@@ -413,7 +416,9 @@ class GoImageService {
         responseType: "arraybuffer",
         timeout: 45000,
       });
-      return Buffer.from(response.data);
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
     } catch (error) {
       console.error("GoService Profile Card Error:", error.message);
       return null;

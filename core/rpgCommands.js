@@ -84,23 +84,23 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     
     // Basic info
     msg += `🎭 *${senderName}*\n`;
-    msg += `${classData.icon} ${classData.name} | 🏆 ${sheet.adventurerRank}-Rank\n`;
-    msg += `⭐ Level ${sheet.level} | 💰 ${getCurrency().symbol}${economyUser.wallet.toLocaleString()}\n\n`;
+    msg += `${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank\n`;
+    msg += `⭐ Level ${sheet?.level || 1} | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
     
     // XP Progress
-    const progressBar = createProgressBar(sheet.progressPercent);
-    msg += `📈 ${progressBar} ${sheet.progressPercent}%\n`;
-    msg += `${sheet.xpProgress.toLocaleString()}/${sheet.xpForThisLevel.toLocaleString()} XP\n\n`;
+    const progressBar = createProgressBar(sheet?.progressPercent || 0);
+    msg += `📈 ${progressBar} ${sheet?.progressPercent || 0}%\n`;
+    msg += `${(sheet?.xpProgress || 0).toLocaleString()}/${(sheet?.xpForThisLevel || 100).toLocaleString()} XP\n\n`;
     
     // Stats (compact 2-column)
     msg += `*STATS:*\n`;
-    msg += `❤️ HP:${stats.hp}${equipStats.hp ? `+${equipStats.hp}` : ''} ⚔️ ATK:${stats.atk}${equipStats.atk ? `+${equipStats.atk}` : ''}\n`;
-    msg += `🛡️ DEF:${stats.def}${equipStats.def ? `+${equipStats.def}` : ''} 🔮 MAG:${stats.mag}${equipStats.mag ? `+${equipStats.mag}` : ''}\n`;
-    msg += `💨 SPD:${stats.spd}${equipStats.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats.luck}${equipStats.luck ? `+${equipStats.luck}` : ''}\n`;
-    msg += `💥 CRIT:${stats.crit}% | 🕊️ EVA:${stats.evasion.toFixed(1)}%\n`;
+    msg += `❤️ HP:${stats?.hp || 100}${equipStats?.hp ? `+${equipStats.hp}` : ''} ⚔️ ATK:${stats?.atk || 10}${equipStats?.atk ? `+${equipStats.atk}` : ''}\n`;
+    msg += `🛡️ DEF:${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''} 🔮 MAG:${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
+    msg += `💨 SPD:${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
+    msg += `💥 CRIT:${stats?.crit || 0}% | 🕊️ EVA:${(stats?.evasion || 0).toFixed(1)}%\n`;
     
     // Stat points
-    if (sheet.statPoints > 0) { 
+    if (sheet?.statPoints > 0) { 
         msg += `\n✨ *${sheet.statPoints} stat pts!*\n`;
         msg += `\`.j allocate hp 5\`\n`;
     }
@@ -108,10 +108,12 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     // Equipment summary
     msg += `\n*GEAR:*\n`;
     const equipped = [];
-    for (const [slot, item] of Object.entries(equipment)) { 
-        if (item) { 
-            const itemInfo = lootSystem.getItemInfo(item.id);
-            equipped.push(`${getSlotIcon(slot)} ${itemInfo.name}`);
+    if (equipment) {
+        for (const [slot, item] of Object.entries(equipment)) { 
+            if (item) { 
+                const itemInfo = lootSystem.getItemInfo(item.id);
+                if (itemInfo) equipped.push(`${getSlotIcon(slot)} ${itemInfo.name}`);
+            }
         }
     }
     if (equipped.length > 0) { 
@@ -120,26 +122,33 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         msg += `_None equipped_\n`;
     }
     
-    msg += `\n📜 Quests: ${economyUser.questsCompleted || 0}\n`;
+    msg += `\n📜 Quests: ${economyUser?.questsCompleted || 0}\n`;
     msg += `\`.j inventory\` · \`.j equip\``;
 
-    if (pfpUrl) { 
-        await sock.sendMessage(chatId, { 
-            image: { url: pfpUrl },
-            caption: msg,
-            mentions: [senderJid]
-        });
-    } else { 
-        const placeholderPath = botConfig.getAssetPath('placeholder.png');
-        if (fs.existsSync(placeholderPath)) { 
+    try {
+        if (pfpUrl) { 
             await sock.sendMessage(chatId, { 
-                image: fs.readFileSync(placeholderPath),
+                image: { url: pfpUrl },
                 caption: msg,
                 mentions: [senderJid]
             });
         } else { 
-            await sock.sendMessage(chatId, { text: msg, mentions: [senderJid] });
+            const placeholderPath = botConfig.getAssetPath('placeholder.png');
+            if (fs.existsSync(placeholderPath)) { 
+                await sock.sendMessage(chatId, { 
+                    image: fs.readFileSync(placeholderPath),
+                    caption: msg,
+                    mentions: [senderJid]
+                });
+            } else { 
+                await sock.sendMessage(chatId, { text: msg, mentions: [senderJid] });
+            }
         }
+    } catch (sendErr) {
+        console.error("Failed to send character sheet:", sendErr.message);
+        try {
+            await sock.sendMessage(chatId, { text: "⚠️ Error displaying character sheet, but you are active!" });
+        } catch (fatal) {}
     }
 }
 
@@ -415,13 +424,14 @@ async function unequipItem(sock, chatId, senderJid, slot) {
 // 🛠️ HELPER FUNCTIONS 
 // ========================================== 
 
-function createProgressBar(percent, length = 10) { 
-    const safePercent = Math.max(0, Math.min(100, percent));
+function createProgressBar(percent, length = 10) {
+    // Safeguard against NaN or non-finite values
+    const validPercent = isFinite(percent) ? percent : 0;
+    const safePercent = Math.max(0, Math.min(100, validPercent));
     const filled = Math.floor((safePercent / 100) * length);
     const empty = Math.max(0, length - filled);
     return `[${'█'.repeat(filled)}${'░'.repeat(empty)}]`;
 }
-
 function getStatIcon(stat) { 
     const icons = { HP: '❤️', ATK: '⚔️', DEF: '🛡️', MAG: '🔮', SPD: '💨', LUCK: '🍀', CRIT: '💥' };
     return icons[stat] || '📊';
