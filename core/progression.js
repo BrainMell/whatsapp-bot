@@ -364,7 +364,8 @@ function getCharacterSheet(userId) {
         level: user.level, xp: user.xp, xpNeeded: getXPForLevel(user.level + 1) - user.xp,
         xpProgress, xpForThisLevel, progressPercent: Math.floor((xpProgress / xpForThisLevel) * 100),
         stats, statPoints: user.statPoints, totalXPEarned: user.totalXPEarned,
-        totalLevelsGained: user.totalLevelsGained, class: mainUser.class, adventurerRank: mainUser.adventurerRank || 'F'
+        totalLevelsGained: user.totalLevelsGained, class: mainUser.class, adventurerRank: mainUser.adventurerRank || 'F',
+        gp: user.gp || 0, totalGP: user.totalGP || 0
     };
 }
 

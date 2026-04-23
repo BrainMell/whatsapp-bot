@@ -12506,7 +12506,7 @@ ${senderName} said y'all should know:
                           (user.frozenAssets?.bank || 0),
                         zeniSymbol: economy.getZENI(),
                         rank: user.adventurerRank || "F",
-                        level: user.level || 1,
+                        level: progression.getLevel(senderJid),
                       });
                       if (cardBuffer) {
                         await sock.sendMessage(chatId, {

@@ -10,6 +10,8 @@ const lootSystem = require('./lootSystem');
 const classSystem = require('./classSystem');
 const progression = require('./progression');
 const botConfig = require('../botConfig');
+const GoImageService = require('./goImageService');
+const goService = new GoImageService();
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -315,14 +317,60 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     
     const classData = economy.getUserClass(finalJid);
     const stats = economy.getUserStats(finalJid);
-    const level = progression.getLevel(finalJid);
-    const gp = progression.getGP(finalJid);
+    const charSheet = progression.getCharacterSheet(finalJid);
+    const level = charSheet?.level || 1;
+    const gp = charSheet?.gp || 0;
     
     // Update rank
     economy.updateAdventurerRank(finalJid);
     const rank = user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
+    // Handle PFP
+    let pfpUrl;
+    try {
+        pfpUrl = await sock.profilePictureUrl(finalJid, 'image');
+    } catch (e) {
+        pfpUrl = null;
+    }
+
+    // Try Go Image Service first
+    try {
+        const cardData = {
+            nickname: user.nickname || finalName,
+            whatsappName: user.profile?.whatsappName || finalName,
+            level: level,
+            xp: charSheet?.xpProgress || 0,
+            xpNeeded: charSheet?.xpForThisLevel || 100,
+            gp: gp,
+            rank: rank,
+            class: classData?.name || "Adventurer",
+            classIcon: classData?.icon || "🛡️",
+            guildName: require('./guilds').getUserGuild(finalJid) || "",
+            wallet: user.wallet || 0,
+            bank: user.bank || 0,
+            zeniSymbol: getZENI(),
+            questsWon: user.questsWon || 0,
+            gamesWon: user.stats?.gamesWon || 0,
+            messageCount: user.profile?.stats?.messageCount || 0,
+            pfpUrl: pfpUrl || "",
+            title: user.title || ""
+        };
+
+        const cardBuffer = await goService.generateProfileCard(cardData);
+        if (cardBuffer) {
+            await sock.sendMessage(chatId, { 
+                image: cardBuffer,
+                caption: `👤 *Profile:* ${cardData.nickname}\n🏆 *Rank:* ${rank}`,
+                mentions: [finalJid]
+            });
+            return;
+        }
+    } catch (err) {
+        console.error("Failed to generate Go profile card:", err.message);
+    }
+
+    // Fallback to text message
     let msg = `┏━━━━━━━━━━━━┓\n`;
     msg += `┃ 👤 CHARACTER ┃\n`;
     msg += `┗━━━━━━━━━━━━┛\n\n`;
@@ -390,30 +438,24 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `💡 *Can ascend at Level 30 with 15 quests!*\n`;
         msg += `Use \`${getPrefix()} evolve\` to see paths.`;
     }
-    
-    // Handle PFP
-    let pfpUrl;
-    try {
-        pfpUrl = await sock.profilePictureUrl(finalJid, 'image');
-    } catch (e) {
-        pfpUrl = null;
-    }
 
     if (pfpUrl) {
         await sock.sendMessage(chatId, { 
             image: { url: pfpUrl },
-            caption: msg
+            caption: msg,
+            mentions: [finalJid]
         });
     } else {
-        // Use placeholder from assets
-        const placeholderPath = path.join(__dirname, 'assets', 'placeholder.png');
+        // Use placeholder from botConfig
+        const placeholderPath = botConfig.getAssetPath('placeholder.png');
         if (fs.existsSync(placeholderPath)) {
             await sock.sendMessage(chatId, { 
                 image: fs.readFileSync(placeholderPath),
-                caption: msg
+                caption: msg,
+                mentions: [finalJid]
             });
         } else {
-            await sock.sendMessage(chatId, { text: msg });
+            await sock.sendMessage(chatId, { text: msg, mentions: [finalJid] });
         }
     }
 }

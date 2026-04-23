@@ -9,6 +9,8 @@ const craftingSystem = require('./craftingSystem');
 const economy = require('./economy');
 const classSystem = require('./classSystem');
 const botConfig = require('../botConfig');
+const GoImageService = require('./goImageService');
+const goService = new GoImageService();
 const fs = require('fs');
 
 const getPrefix = () => botConfig.getPrefix();
@@ -18,7 +20,7 @@ const getCurrency = () => botConfig.getCurrency();
 // 📊 CHARACTER SHEET 
 // ========================================== 
 
-async function displayCharacterSheet(sock, chatId, senderJid, senderName) { 
+async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const sheet = progression.getCharacterSheet(senderJid);
     const economyUser = economy.getUser(senderJid);
     
@@ -34,6 +36,50 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const equipment = inventorySystem.getEquipment(senderJid);
     const equipStats = inventorySystem.getEquipmentStats(senderJid);
     
+    // Handle PFP
+    let pfpUrl;
+    try { 
+        pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
+    } catch (e) { 
+        pfpUrl = null;
+    }
+
+    // Try Go Image Service first
+    try {
+        const cardData = {
+            nickname: economyUser.nickname || senderName,
+            whatsappName: economyUser.profile?.whatsappName || senderName,
+            level: sheet.level,
+            xp: sheet.xpProgress,
+            xpNeeded: sheet.xpForThisLevel,
+            gp: sheet.gp || 0,
+            rank: sheet.adventurerRank || 'F',
+            class: classData?.name || "Adventurer",
+            classIcon: classData?.icon || "🛡️",
+            guildName: require('./guilds').getUserGuild(senderJid) || "",
+            wallet: economyUser.wallet || 0,
+            bank: economyUser.bank || 0,
+            zeniSymbol: getCurrency().symbol,
+            questsWon: economyUser.questsWon || 0,
+            gamesWon: economyUser.stats?.gamesWon || 0,
+            messageCount: economyUser.profile?.stats?.messageCount || 0,
+            pfpUrl: pfpUrl || "",
+            title: economyUser.title || ""
+        };
+
+        const cardBuffer = await goService.generateProfileCard(cardData);
+        if (cardBuffer) {
+            await sock.sendMessage(chatId, { 
+                image: cardBuffer,
+                caption: `👤 *Character:* ${cardData.nickname}\n🏆 *Rank:* ${cardData.rank}`,
+                mentions: [senderJid]
+            });
+            return;
+        }
+    } catch (err) {
+        console.error("Failed to generate Go character card:", err.message);
+    }
+
     let msg = `┏━━━━━━━━━━━━┓\n┃ 👤 PROFILE  ┃\n┗━━━━━━━━━━━━┛\n\n`;
     
     // Basic info
@@ -76,14 +122,6 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     
     msg += `\n📜 Quests: ${economyUser.questsCompleted || 0}\n`;
     msg += `\`.j inventory\` · \`.j equip\``;
-    
-    // Handle PFP
-    let pfpUrl;
-    try { 
-        pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
-    } catch (e) { 
-        pfpUrl = null;
-    }
 
     if (pfpUrl) { 
         await sock.sendMessage(chatId, { 
