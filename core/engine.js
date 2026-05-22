@@ -12496,6 +12496,11 @@ ${senderName} said y'all should know:
 
                     // Try to use the Go image service for a beautiful economy card
                     try {
+                      let pfpUrl = "";
+                      try {
+                        pfpUrl = await sock.profilePictureUrl(senderJid, "image");
+                      } catch (e) {}
+
                       const cardBuffer = await goService.generateEconomyCard({
                         nickname: user.nickname || senderJid.split("@")[0],
                         wallet: balance.wallet || 0,
@@ -12507,6 +12512,7 @@ ${senderName} said y'all should know:
                         zeniSymbol: economy.getZENI(),
                         rank: user.adventurerRank || "F",
                         level: progression.getLevel(senderJid),
+                        pfpUrl: pfpUrl,
                       });
                       if (cardBuffer) {
                         await sock.sendMessage(chatId, {
