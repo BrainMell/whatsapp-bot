@@ -1925,7 +1925,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         await cmdDeleteDeck(senderJid, reply, args.slice(1), isCardMod, m);
         return true;
       }
-      return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name>`, `${p} delete deck MyDeck`), true;
+      return false;
 
     case 'cdeck':
       await cmdCDeck(senderJid, reply, chatId, args);

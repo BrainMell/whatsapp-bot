@@ -5493,7 +5493,7 @@ Usage: ${newUsage}/5${warningText}`;
                           `[0:v]scale=512:512:force_original_aspect_ratio=decrease[fg];` +
                           `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`;
                         if (type === "video") {
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${cf}" -map "[out]" -r 12 -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 -filter_complex "${cf}" -map "[out]" -r 12 -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 4 -q:v 15 -an -vsync 0 -y "${outputPath}"`;
                         } else {
                           ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${cf}" -map "[out]" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
                         }
@@ -5512,9 +5512,9 @@ Usage: ${newUsage}/5${warningText}`;
                         if (type === "image") {
                           // -loop 1 on input: loop the single image as a stream so -t 3 works.
                           // -loop 0 on output: WebP loops the animation forever.
-                          ffmpegCmd = `"${FFMPEG_PATH}" -loop 1 -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -loop 1 -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 4 -q:v 15 -an -vsync 0 -y "${outputPath}"`;
                         } else {
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 3 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 4 -q:v 15 -an -vsync 0 -y "${outputPath}"`;
                         }
 
                         // ── All other flags: single -vf chain (or no vf for default) ─────────
@@ -5560,7 +5560,7 @@ Usage: ${newUsage}/5${warningText}`;
                           const vf = filter
                             ? `-vf "${filter},fps=12"`
                             : "-r 12";
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 ${vf} -loop 0 -c:v libwebp -lossless 0 -compression_level 6 -q:v 50 -an -vsync 0 -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 7 ${vf} -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 4 -q:v 15 -an -vsync 0 -y "${outputPath}"`;
                         } else {
                           const vf = filter ? `-vf "${filter}"` : "";
                           // pix_fmt yuva420p carries the alpha plane for -r (circle).
