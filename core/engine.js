@@ -557,6 +557,8 @@ async function startBot(configInstance) {
 
     async function handleAudioCommand(sock, chatId, query, m) {
       await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
+      // Audio download takes ~30-60s — tell the user immediately so they don't think it's broken
+      await sock.sendMessage(chatId, { text: BOT_MARKER + `⏳ Searching and downloading *${query}*... this takes about 30-60 seconds.` }, { quoted: m });
       try {
         const data = await goService.getAudioInfo(query);
         if (!data || !data.metadata || !data.audioURL) {
@@ -3721,6 +3723,10 @@ We are happy to have you here.
                   // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
                   const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
                   if (numOnly) {
+                    // If powerscale is waiting for a pick, skip anime cache lookup entirely
+                    if (hasPendingSelection(chatId)) {
+                      // fall through to the powerscale handler below
+                    } else {
                     const idx = parseInt(numOnly[1], 10);
                     let cached = null;
                     const quotedId = getQuotedMessageId(m);
@@ -3788,6 +3794,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       );
                       return;
                     }
+                    } // end else (no pending powerscale)
                   }
 
                   // ── CORE COMMAND INTERCEPT ──────────────────
