@@ -3723,9 +3723,68 @@ We are happy to have you here.
                   // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
                   const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
                   if (numOnly) {
-                    // If powerscale is waiting for a pick, skip anime cache lookup entirely
+                    // If powerscale is waiting for a pick, handle it here
                     if (hasPendingSelection(chatId)) {
-                      // fall through to the powerscale handler below
+                      const selectedNumber = numOnly[1];
+                      await sock.sendMessage(chatId, {
+                        react: { text: `⏳`, key: m.key },
+                      });
+                      try {
+                        const result = await handlePowerscaleSelection(
+                          chatId,
+                          selectedNumber,
+                        );
+                        if (!result) return;
+                        if (!result.success) {
+                          await sock.sendMessage(chatId, {
+                            react: { text: "❌", key: m.key },
+                          });
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `❌ ${result.error}`,
+                          });
+                        }
+                        if (result.imageUrl) {
+                          try {
+                            const imageResponse = await axios.get(
+                              result.imageUrl,
+                              {
+                                responseType: "arraybuffer",
+                                timeout: 15000,
+                                headers: { "User-Agent": "Mozilla/5.0" },
+                              },
+                            );
+                            await sock.sendMessage(chatId, {
+                              image: Buffer.from(imageResponse.data),
+                              caption: BOT_MARKER + result.message,
+                            });
+                          } catch {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + result.message,
+                            });
+                          }
+                        } else {
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + result.message,
+                          });
+                        }
+                        await sock.sendMessage(chatId, {
+                          react: { text: "✅", key: m.key },
+                        });
+                        await awardProgression(senderJid, chatId);
+                      } catch (err) {
+                        console.error(
+                          "❌ Powerscale Selection Error:",
+                          err.message,
+                        );
+                        await sock.sendMessage(chatId, {
+                          react: { text: "❌", key: m.key },
+                        });
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER + `❌ Failed to fetch character data.`,
+                        });
+                      }
+                      return;
                     } else {
                     const idx = parseInt(numOnly[1], 10);
                     let cached = null;
@@ -4490,72 +4549,6 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // Powerscale selection — user replies with a number after seeing character list
-                    if (
-                      hasPendingSelection(chatId) &&
-                      /^\d+$/.test(primaryCmd) &&
-                      cmdArgs.length === 1
-                    ) {
-                      await sock.sendMessage(chatId, {
-                        react: { text: `⏳`, key: m.key },
-                      });
-                      try {
-                        const result = await handlePowerscaleSelection(
-                          chatId,
-                          primaryCmd,
-                        );
-                        if (!result) return; // no pending — fall through normally
-                        if (!result.success) {
-                          await sock.sendMessage(chatId, {
-                            react: { text: "❌", key: m.key },
-                          });
-                          return await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ ${result.error}`,
-                          });
-                        }
-                        if (result.imageUrl) {
-                          try {
-                            const imageResponse = await axios.get(
-                              result.imageUrl,
-                              {
-                                responseType: "arraybuffer",
-                                timeout: 15000,
-                                headers: { "User-Agent": "Mozilla/5.0" },
-                              },
-                            );
-                            await sock.sendMessage(chatId, {
-                              image: Buffer.from(imageResponse.data),
-                              caption: BOT_MARKER + result.message,
-                            });
-                          } catch {
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + result.message,
-                            });
-                          }
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + result.message,
-                          });
-                        }
-                        await sock.sendMessage(chatId, {
-                          react: { text: "✅", key: m.key },
-                        });
-                        await awardProgression(senderJid, chatId);
-                      } catch (err) {
-                        console.error(
-                          "❌ Powerscale Selection Error:",
-                          err.message,
-                        );
-                        await sock.sendMessage(chatId, {
-                          react: { text: "❌", key: m.key },
-                        });
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER + `❌ Failed to fetch character data.`,
-                        });
-                      }
-                      return;
-                    }
 
                     // .j tutorial
                     if (primaryCmd === "tutorial") {
