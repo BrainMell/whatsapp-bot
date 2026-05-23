@@ -5553,8 +5553,8 @@ Usage: ${newUsage}/5${warningText}`;
                             "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*lte((X-256)*(X-256)+(Y-256)*(Y-256),65536)'",
                           ].join(",");
                         }
-                        // DEFAULT: use BASE to ensure 512x512 transparent canvas, avoids fragmented large videos
-                        else filter = BASE;
+                        // DEFAULT: crop to fill 512x512 to avoid black borders and match image behavior
+                        else filter = "scale=512:512:force_original_aspect_ratio=increase,crop=512:512";
 
                         if (type === "video") {
                           const vf = `-vf "${filter},fps=15"`;
