@@ -408,6 +408,24 @@ class GoImageService {
   }
 
   /*
+   * Generate Transaction Card Image
+   */
+  async generateTransactionCard(data) {
+    try {
+      const response = await this.client.post("/api/cards/transaction", data, {
+        responseType: "arraybuffer",
+        timeout: 45000,
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Transaction Card Error:", error.message);
+      return null;
+    }
+  }
+
+  /*
    * Generate Profile Card Image
    */
   async generateProfileCard(data) {

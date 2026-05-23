@@ -12773,10 +12773,32 @@ Examples:
                     );
 
                     if (result.success) {
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + result.message,
-                        contextInfo: { mentionedJid: [result.receiver] },
-                      });
+                      try {
+                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        const imgBuf = await goService.generateTransactionCard({
+                          nickname: result.nickname,
+                          type: "TRANSFER",
+                          amount: result.amount,
+                          newWallet: result.wallet,
+                          newBank: result.bank,
+                          zeniSymbol: economy.getZENI(),
+                          pfpUrl: pfpUrl
+                        });
+                        if (imgBuf) {
+                          await sock.sendMessage(chatId, {
+                            image: imgBuf,
+                            caption: BOT_MARKER + result.message,
+                            contextInfo: { mentionedJid: [result.receiver] },
+                          });
+                        } else {
+                          throw new Error("No image buffer");
+                        }
+                      } catch (e) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.message,
+                          contextInfo: { mentionedJid: [result.receiver] },
+                        });
+                      }
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -12892,9 +12914,36 @@ Examples:
                     }
 
                     const result = economy.deposit(senderJid, amount);
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + result.message,
-                    });
+                    if (result.success) {
+                      try {
+                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        const imgBuf = await goService.generateTransactionCard({
+                          nickname: result.nickname,
+                          type: "DEPOSIT",
+                          amount: result.amount,
+                          newWallet: result.wallet,
+                          newBank: result.bank,
+                          zeniSymbol: economy.getZENI(),
+                          pfpUrl: pfpUrl
+                        });
+                        if (imgBuf) {
+                          await sock.sendMessage(chatId, {
+                            image: imgBuf,
+                            caption: BOT_MARKER + result.message,
+                          });
+                        } else {
+                          throw new Error("No image buffer");
+                        }
+                      } catch (e) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.message,
+                        });
+                      }
+                    } else {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + result.message,
+                      });
+                    }
                     return;
                   }
 
@@ -12939,9 +12988,36 @@ Examples:
                     }
 
                     const result = economy.withdraw(senderJid, amount);
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + result.message,
-                    });
+                    if (result.success) {
+                      try {
+                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        const imgBuf = await goService.generateTransactionCard({
+                          nickname: result.nickname,
+                          type: "WITHDRAW",
+                          amount: result.amount,
+                          newWallet: result.wallet,
+                          newBank: result.bank,
+                          zeniSymbol: economy.getZENI(),
+                          pfpUrl: pfpUrl
+                        });
+                        if (imgBuf) {
+                          await sock.sendMessage(chatId, {
+                            image: imgBuf,
+                            caption: BOT_MARKER + result.message,
+                          });
+                        } else {
+                          throw new Error("No image buffer");
+                        }
+                      } catch (e) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.message,
+                        });
+                      }
+                    } else {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + result.message,
+                      });
+                    }
                     return;
                   }
 

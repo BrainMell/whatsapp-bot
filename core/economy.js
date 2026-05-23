@@ -536,7 +536,11 @@ function transferMoney(fromUserId, toUserId, amount) {
 ━━━━━━━━━━━━━━━━
 
 💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
-    receiver: toUserId
+    receiver: toUserId,
+    amount: val,
+    wallet: sender.wallet,
+    bank: sender.bank,
+    nickname: sender.nickname || sender.userId.split('@')[0]
   };
 }
 
@@ -569,7 +573,11 @@ function deposit(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    amount: amount,
+    wallet: user.wallet,
+    bank: user.bank,
+    nickname: user.nickname || user.userId.split('@')[0]
   };
 }
 
@@ -621,7 +629,11 @@ function withdraw(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    amount: amount,
+    wallet: user.wallet,
+    bank: user.bank,
+    nickname: user.nickname || user.userId.split('@')[0]
   };
 }
 
