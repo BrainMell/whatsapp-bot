@@ -5482,7 +5482,7 @@ Usage: ${newUsage}/5${warningText}`;
                       // is ever clipped. Static images need `-loop 1` on the INPUT to generate
                       // multiple frames; `-loop 0` on the OUTPUT makes the WebP loop forever.
                       const BASE =
-                        "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black";
+                        "format=rgba,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
 
                       let ffmpegCmd;
 
@@ -5491,9 +5491,9 @@ Usage: ${newUsage}/5${warningText}`;
                         const cf =
                           `[0:v]scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=20:20[bg];` +
                           `[0:v]scale=512:512:force_original_aspect_ratio=decrease[fg];` +
-                          `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`;
+                          `[bg][fg]overlay=(W-w)/2:(H-h)/2,fps=6[out]`;
                         if (type === "video") {
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 -filter_complex "${cf}" -map "[out]" -r 8 -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 10 -map_metadata -1 -an -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 -filter_complex "${cf}" -map "[out]" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 15 -map_metadata -1 -an -y "${outputPath}"`;
                         } else {
                           ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${cf}" -map "[out]" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
                         }
@@ -5504,17 +5504,18 @@ Usage: ${newUsage}/5${warningText}`;
                         // all rotation angles, centre on 512×512 black canvas, then rotate.
                         // PI is a built-in constant in FFmpeg's expression evaluator.
                         const spinVf = [
+                          "format=rgba",
                           "scale=362:362:force_original_aspect_ratio=decrease",
-                          "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black",
-                          "rotate='2*PI*t/3':ow=512:oh=512:fillcolor=black",
-                          "fps=8",
+                          "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+                          "rotate='2*PI*t/3':ow=512:oh=512:fillcolor=0x00000000",
+                          "fps=6",
                         ].join(",");
                         if (type === "image") {
                           // -loop 1 on input: loop the single image as a stream so -t 10 works.
                           // -loop 0 on output: WebP loops the animation forever.
-                          ffmpegCmd = `"${FFMPEG_PATH}" -loop 1 -i "${inputPath}" -t 10 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 10 -map_metadata -1 -an -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -loop 1 -i "${inputPath}" -t 10 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 15 -map_metadata -1 -an -y "${outputPath}"`;
                         } else {
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 10 -map_metadata -1 -an -y "${outputPath}"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 -vf "${spinVf}" -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 15 -map_metadata -1 -an -y "${outputPath}"`;
                         }
 
                         // ── All other flags: single -vf chain (or no vf for default) ─────────
@@ -5552,15 +5553,12 @@ Usage: ${newUsage}/5${warningText}`;
                             "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*lte((X-256)*(X-256)+(Y-256)*(Y-256),65536)'",
                           ].join(",");
                         }
-                        // DEFAULT: null = no -vf at all → pure JPEG/PNG→WebP format conversion,
-                        // original dimensions preserved exactly, zero geometry changes.
-                        else filter = null;
+                        // DEFAULT: use BASE to ensure 512x512 transparent canvas, avoids fragmented large videos
+                        else filter = BASE;
 
                         if (type === "video") {
-                          const vf = filter
-                            ? `-vf "${filter},fps=8"`
-                            : "-r 8";
-                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 ${vf} -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 10 -map_metadata -1 -an -y "${outputPath}"`;
+                          const vf = `-vf "${filter},fps=6"`;
+                          ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -t 10 ${vf} -loop 0 -c:v libwebp -lossless 0 -preset default -compression_level 6 -q:v 15 -map_metadata -1 -an -y "${outputPath}"`;
                         } else {
                           const vf = filter ? `-vf "${filter}"` : "";
                           // pix_fmt yuva420p carries the alpha plane for -r (circle).
