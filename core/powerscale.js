@@ -94,31 +94,31 @@ async function handlePowerscaleSelection(chatId, selection) {
         }
 
         const stats = data.stats || {};
-        let message = `🔥 *POWER SCALING: ${data.name.toUpperCase()}*\n\n`;
+        let message = `[ POWER SCALING: ${data.name.toUpperCase()} ]\n\n`;
 
         if (data.summary && data.summary.length > 0) {
-            message += `📖 *Summary:*\n${data.summary}\n\n`;
+            message += `[ Summary ]\n${data.summary}\n\n`;
         }
 
-        message += `⚡ *POWER STATS:*\n`;
+        message += `[ POWER STATS ]\n`;
         message += `━━━━━━━━━━━━━━━━━━\n`;
 
         if (stats['Tier']) {
-            message += `🏆 *TIER:* ${stats['Tier']}\n`;
+            message += `TIER: ${stats['Tier']}\n`;
             message += `━━━━━━━━━━━━━━━━━━\n`;
         }
-        if (stats['Attack Potency']) message += `💥 *Attack Potency:* ${stats['Attack Potency']}\n\n`;
-        if (stats['Speed'])          message += `⚡ *Speed:* ${stats['Speed']}\n\n`;
-        if (stats['Durability'])     message += `🛡️ *Durability:* ${stats['Durability']}\n\n`;
-        if (stats['Stamina'])        message += `💪 *Stamina:* ${stats['Stamina']}\n\n`;
-        if (stats['Range'])          message += `🎯 *Range:* ${stats['Range']}\n\n`;
-        if (stats['Striking Strength']) message += `👊 *Striking Strength:* ${stats['Striking Strength']}\n\n`;
-        if (stats['Lifting Strength'])  message += `🏋️ *Lifting Strength:* ${stats['Lifting Strength']}\n\n`;
-        if (stats['Intelligence'])   message += `🧠 *Intelligence:* ${stats['Intelligence']}\n\n`;
-        if (stats['Standard Equipment']) message += `🔧 *Equipment:* ${stats['Standard Equipment']}\n\n`;
+        if (stats['Attack Potency']) message += `Attack Potency: ${stats['Attack Potency']}\n\n`;
+        if (stats['Speed'])          message += `Speed: ${stats['Speed']}\n\n`;
+        if (stats['Durability'])     message += `Durability: ${stats['Durability']}\n\n`;
+        if (stats['Stamina'])        message += `Stamina: ${stats['Stamina']}\n\n`;
+        if (stats['Range'])          message += `Range: ${stats['Range']}\n\n`;
+        if (stats['Striking Strength']) message += `Striking Strength: ${stats['Striking Strength']}\n\n`;
+        if (stats['Lifting Strength'])  message += `Lifting Strength: ${stats['Lifting Strength']}\n\n`;
+        if (stats['Intelligence'])   message += `Intelligence: ${stats['Intelligence']}\n\n`;
+        if (stats['Standard Equipment']) message += `Equipment: ${stats['Standard Equipment']}\n\n`;
 
         message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `📚 *Source:* ${data.pageUrl}`;
+        message += `Source: ${data.pageUrl}`;
 
         return {
             success: true,
