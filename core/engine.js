@@ -4746,8 +4746,6 @@ _💡 Reply with another number from your search list!_`.trim();
                       "rps",
                       "penalty",
                       "guess",
-                      "fish",
-                      "hunt",
                     ];
                     const cmd = lowerTxt
                       .substring(botConfig.getPrefix().length)
@@ -10296,6 +10294,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       busyUsers.add(senderJid);
                       try {
                       if (!economy.isRegistered(senderJid)) {
+                        busyUsers.delete(senderJid);
                         return await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
@@ -10319,6 +10318,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           const minutes = Math.floor(
                             (remainingMs % (60 * 60 * 1000)) / (60 * 1000),
                           );
+                          busyUsers.delete(senderJid);
                           return await sock.sendMessage(
                             chatId,
                             {
