@@ -117,13 +117,13 @@ const MONSTER_ARCHETYPES = {
             firebolt: {
                 id: 'firebolt', name: 'Chaos Bolt', levelReq: 1, cost: 22,
                 type: 'attack',
-                effect: (lvl) => ({ type: 'magic', multiplier: 1.6 + (lvl * 0.06), element: 'fire' }),
+                effect: (lvl) => ({ type: 'damage', damageType: 'magic', multiplier: 1.6 + (lvl * 0.06), element: 'fire' }),
                 msg: 'hurls a writhing bolt of raw chaos energy!'
             },
             frostwave: {
                 id: 'frostwave', name: 'Glacial Wave', levelReq: 5, cost: 28,
                 type: 'aoe',
-                effect: (lvl) => ({ type: 'magic', multiplier: 0.9 + (lvl * 0.05), element: 'ice', cc: 'slow', ccChance: 60 }),
+                effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 0.9 + (lvl * 0.05), element: 'ice', cc: 'slow', ccChance: 60 }),
                 msg: 'exhales a wave of freezing air across all targets!'
             },
             curse: {
@@ -143,7 +143,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'meteor_impact', name: 'Cataclysm', levelReq: 18, cost: 0,
                 type: 'aoe',
                 isFollowUp: true,
-                effect: (lvl) => ({ type: 'magic', multiplier: 4.5 + (lvl * 0.2), element: 'fire' }),
+                effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 4.5 + (lvl * 0.2), element: 'fire' }),
                 msg: 'completes the incantation — fire rains from above!'
             },
         },
@@ -207,7 +207,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'ultimate', name: 'Annihilation', levelReq: 1, cost: 80,
                 type: 'aoe',
                 chargeTime: 2,
-                effect: (lvl) => ({ type: 'magic', multiplier: 6.0 + (lvl * 0.3) }),
+                effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 6.0 + (lvl * 0.3) }),
                 msg: '⚠️ *CHARGING ULTIMATE* ⚠️ — RUN! SURVIVE! USE EVERYTHING!'
             },
         },
