@@ -2884,7 +2884,7 @@ async function processCombatTurn(sock, sessionKey) {
         });
         await nextTurn(
           sock,
-          { actor: activeActor, action: { name: "Unable to Act" } },
+          { actor: activeActor, action: { name: "Unable to Act" }, turnNumber: state.turnCount },
           sessionKey,
         );
         continue;
@@ -2939,9 +2939,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
     ? state.pendingStatusMsg + "\n\n"
     : "";
   state.pendingStatusMsg = null;
-  let msg = statusPrefix + `┏━━━━━━━━━━━━┓\n`;
-  msg += `┃ 🎯 YOUR TURN ┃\n`;
-  msg += `┗━━━━━━━━━━━━┛\n\n`;
+  let msg = statusPrefix + `⚔️ *YOUR TURN*\n`;
 
   msg += `${icon} *${player.name}*\n`;
   msg += `❤️ ${player.stats.hp}/${player.stats.maxHp} HP\n`;
@@ -3033,7 +3031,7 @@ async function performAction(sock, player, action, sessionKey) {
   const icon = player.class?.icon || "👤";
   let resultMsg = `${icon} ${player.name}: `;
   let turnInfo = {
-    turnNumber: state.combatRound + 1,
+    turnNumber: state.turnCount,
     actor: player,
     action: { name: "Basic Attack" },
     target: null,
@@ -3437,6 +3435,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         target: null,
         damage: 0,
         effects: [],
+        turnNumber: state?.turnCount || 0,
       };
 
       // --- RELEASE CHARGE ---
@@ -3477,10 +3476,13 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           enemy.chargingSkill = null;
           enemy.chargeTarget = null;
 
-          setTimeout(async () => {
-            await nextTurn(sock, turnInfo, sessionKey);
-            resolve();
-          }, turnDelay);
+          // No image per enemy action — image is generated on player turn
+          const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          const chargeMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!`;
+          state.roundLog = state.roundLog || [];
+          state.roundLog.push(chargeMsg);
+          setTimeout(() => resolve(), turnDelay);
           return;
         }
       }
@@ -3501,10 +3503,12 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           } catch (err) {}
 
           turnInfo.action.name = "Charging";
-          setTimeout(async () => {
-            await nextTurn(sock, turnInfo, sessionKey);
-            resolve();
-          }, turnDelay);
+          // No image per enemy charge — push to roundLog
+          const chargeStatusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          state.roundLog = state.roundLog || [];
+          state.roundLog.push(chargeStatusPrefix + `⚠️ *${enemy.name}* is charging up!`);
+          setTimeout(() => resolve(), turnDelay);
           return;
         }
 
@@ -3529,10 +3533,8 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
 
-        setTimeout(async () => {
-          await nextTurn(sock, turnInfo, sessionKey);
-          resolve();
-        }, turnDelay);
+        // No image per enemy skill — push to roundLog and resolve
+        setTimeout(() => resolve(), turnDelay);
         return;
       }
 
@@ -3541,10 +3543,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       if (!target || target.isDead) {
         const alive = state.players.filter((p) => !p.isDead);
         if (alive.length === 0) {
-          setTimeout(async () => {
-            await nextTurn(sock, turnInfo, sessionKey);
-            resolve();
-          }, turnDelay);
+          setTimeout(() => resolve(), turnDelay);
           return;
         }
         target = alive[0];
@@ -3583,23 +3582,14 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       state.roundLog = state.roundLog || [];
       state.roundLog.push(fullEnemyMsg);
 
-      setTimeout(async () => {
-        await nextTurn(sock, turnInfo, sessionKey);
-        resolve();
-      }, turnDelay);
+      // No image per enemy attack — roundLog is flushed before player's next prompt
+      setTimeout(() => resolve(), turnDelay);
     } catch (error) {
       console.error(
         `[Combat] Critical error in performEnemyAction for ${enemy.name}:`,
         error,
       );
-      setTimeout(async () => {
-        await nextTurn(
-          sock,
-          { actor: enemy, action: { name: "Error" } },
-          sessionKey,
-        );
-        resolve();
-      }, 1000);
+      setTimeout(() => resolve(), 1000);
     }
   });
 }
@@ -5197,9 +5187,14 @@ const handleCombatAction = async (
     return "❌ Action already chosen!";
   }
 
-  let action = { type: actionType };
+  let normalizedAction = actionType;
+  if (actionType === "atk") normalizedAction = "attack";
+  if (actionType === "def") normalizedAction = "defend";
+  if (actionType === "skill") normalizedAction = "ability";
 
-  if (actionType === "attack") {
+  let action = { type: normalizedAction };
+
+  if (normalizedAction === "attack") {
     if (target !== undefined && target !== "") {
       const targetIndex = parseInt(target) - 1;
       if (
@@ -5216,7 +5211,7 @@ const handleCombatAction = async (
     }
   }
 
-  if (actionType === "ability") {
+  if (normalizedAction === "ability") {
     // Parse target string "1 2" -> index=1, target=2
     const parts = (target || "").toString().split(" ");
     const abilityIndex = parts[0];
@@ -5245,7 +5240,7 @@ const handleCombatAction = async (
     action.result = result;
   }
 
-  if (actionType === "item") {
+  if (normalizedAction === "item") {
     const inventory = inventorySystem.formatInventory(player.jid);
     if (inventory.isEmpty) return "❌ Your bag is empty!";
 

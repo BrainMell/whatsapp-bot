@@ -57,9 +57,8 @@ function generateStartCaption(players, enemies, encounterInfo) {
     };
     const rankBadge = rankColors[encounterInfo.rank] || '⬜';
     
-    let caption = `╔══════════════════════════╗\n`;
-    caption += `   ⚔️ *BATTLE COMMENCES!*\n`;
-    caption += `╚══════════════════════════╝\n\n`;
+    let caption = `⚔️ *BATTLE COMMENCES!* ⚔️\n`;
+    caption += `———————————\n`;
     
     if (encounterInfo.narration) {
         caption += `📜 _${encounterInfo.narration}_\n\n`;
@@ -89,9 +88,8 @@ function generateTurnCaption(players, enemies, turnInfo) {
         else if (/bow|crossbow/.test(wName)) actionVerb = '🏹 *SHOOTS* with';
     }
     
-    let caption = `╔══════════════════════════╗\n`;
-    caption += `   🎮 *TURN ${turnInfo.turnNumber}*\n`;
-    caption += `╚══════════════════════════╝\n\n`;
+    let caption = `🎮 *TURN ${turnInfo.turnNumber || '?'}*\n`;
+    caption += `———————————\n`;
     
     // Action summary
     if (turnInfo.action) {
