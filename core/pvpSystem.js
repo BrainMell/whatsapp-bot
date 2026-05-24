@@ -449,6 +449,22 @@ setInterval(() => {
     }
 }, 60000);
 
+
+function getInvite(chatId, targetJid) {
+    const invite = duelInvites.get(chatId);
+    if (invite && invite.target === targetJid) return invite;
+    return null;
+}
+
+function declineChallenge(chatId, targetJid) {
+    const invite = duelInvites.get(chatId);
+    if (invite && invite.target === targetJid) {
+        duelInvites.delete(chatId);
+        return true;
+    }
+    return false;
+}
+
 module.exports = {
     getDuel,
     getInvite,
@@ -456,4 +472,6 @@ module.exports = {
     acceptChallenge,
     declineChallenge,
     handlePvPAction,
+    getInvite,
+    declineChallenge,
 };

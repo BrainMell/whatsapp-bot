@@ -11605,7 +11605,17 @@ ${senderName} said y'all should know:
                       )
                     ) {
                       const parts = lowerTxt.split(" ");
-                      const action = parts[2];
+                      // Handle both ".g pvp attack" and ".pvp attack"
+                      let action = parts[2];
+                      let target = parts[3];
+                      if (!action && parts[1] && !parts[1].toLowerCase().includes('pvp')) {
+                        // this means parts[0] is .pvp and parts[1] is attack
+                        action = parts[1];
+                        target = parts[2];
+                      } else if (parts[0].includes('pvp') && parts.length >= 2) {
+                          action = parts[1];
+                          target = parts[2];
+                      }
 
                       if (!action) {
                         return await sock.sendMessage(chatId, {
@@ -11615,7 +11625,7 @@ ${senderName} said y'all should know:
                         });
                       }
 
-                      const target = parts[3];
+                      // const target = parts[3]; // Handled above
 
                       const result = await pvpSystem.handlePvPAction(
                         sock,
@@ -11728,7 +11738,7 @@ ${senderName} said y'all should know:
                           `❌ Usage: \`${botConfig.getPrefix()} item <num> [target]\``,
                       });
                     }
-                    const target = parts[3];
+                    // const target = parts[3]; // Handled above
 
                     try {
                       const result = await guildAdventure.handleCombatAction(
