@@ -15802,7 +15802,7 @@ _(Or reply to their message)_
                   const isBotNameMention = nameRegex.test(lowerTxt);
 
                   const hasTrigger =
-                    isBotMentioned || isReplyToBot || isBotNameMention || isBotCommand;
+                    isBotMentioned || isReplyToBot || isBotNameMention;
 
                   // --- Smart Activation Fuse ---
                   // Private DMs: Always respond to triggers
