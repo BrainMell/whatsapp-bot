@@ -49,6 +49,9 @@ const blockedUsers = new Set();
 const globalMods = new Set();
 const overrideUsers = new Set();
 
+// Concurrency lock – prevents double-spend from firing two money commands at once
+const busyUsers = new Set();
+
 // Load blocked users from DB
 async function loadBlockedUsers() {
   const system = require("./system");
@@ -4221,13 +4224,14 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j inventory / .j bag
-                    if (primaryCmd === "inventory" || primaryCmd === "bag") {
+                    // .j inventory / .j bag [page]
+                    if (primaryCmd === "inventory" || primaryCmd === "bag" || primaryCmd === "inv") {
+                      const bagPage = parseInt(cmdArgs[1]) || 1;
                       await rpgCommands.displayInventory(
                         sock,
                         chatId,
                         senderJid,
-                        senderName,
+                        bagPage,
                       );
                       return;
                     }
@@ -4677,43 +4681,6 @@ _💡 Reply with another number from your search list!_`.trim();
                   // 🏹 WILDERNESS SYSTEMS (FISHING & HUNTING)
                   // ============================================
 
-                  if (
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`
-                  ) {
-                    if (!economy.isRegistered(senderJid))
-                      return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌ Register first!",
-                      });
-                    await sock.sendMessage(chatId, {
-                      react: { text: "🎣", key: m.key },
-                    });
-                    const user = economy.getUser(senderJid);
-                    const luck = user.stats?.luck || 5;
-                    let itemKey = "common_fish";
-                    let emoji = "🐟";
-                    const roll = Math.random() * 100 + luck / 5;
-                    if (roll > 98) {
-                      itemKey = "mythic_fish";
-                      emoji = "🦑";
-                    } else if (roll > 85) {
-                      itemKey = "rare_fish";
-                      emoji = "🐠";
-                    }
-                    if (Math.random() < 0.05) {
-                      itemKey = "infected_fish";
-                      emoji = "☣️";
-                    }
-                    const item = lootSystem.getItemInfo(itemKey);
-                    await inventorySystem.addItem(senderJid, itemKey, 1);
-                    let msg =
-                      GET_BANNER(`🎣 FISHING`) +
-                      `\n\nReeled in: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Value: ${ZENI}${item.value.toLocaleString()}`;
-                    return await sock.sendMessage(
-                      chatId,
-                      { text: msg },
-                      { quoted: m },
-                    );
-                  }
 
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`
@@ -6044,14 +6011,18 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .j inventory - View inventory
+                  // .j inventory / .j bag [page]
                   if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} inventory` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} inventory` ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} inv` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} bag`
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} bag` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} inventory `) ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} inv `) ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bag `)
                   ) {
-                    await rpgCommands.displayInventory(sock, chatId, senderJid);
+                    const bagParts = txt.trim().split(/\s+/);
+                    const bagPage = parseInt(bagParts[2]) || 1;
+                    await rpgCommands.displayInventory(sock, chatId, senderJid, bagPage);
                     return;
                   }
 
@@ -10319,6 +10290,11 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`
                     ) {
+                      if (busyUsers.has(senderJid)) {
+                        return await reply('⏳ Still processing your last action...');
+                      }
+                      busyUsers.add(senderJid);
+                      try {
                       if (!economy.isRegistered(senderJid)) {
                         return await sock.sendMessage(chatId, {
                           text:
@@ -10369,6 +10345,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       });
 
                       setTimeout(async () => {
+                        try {
                         const freshUser = economy.getUser(senderJid); // Re-get to ensure latest data
                         freshUser.fishCount = (freshUser.fishCount || 0) + 1;
                         if (freshUser.fishCount === 1)
@@ -10403,7 +10380,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `You reeled something in!\n\n`;
                         msg += `${emoji} *${item.name}*\n`;
                         msg += `▫️ Rarity: ${item.rarity}\n`;
-                        msg += `▫️ Value: ${ZENI}${item.value.toLocaleString()}\n\n`;
+                        msg += `▫️ Value: ${ZENI}${Math.floor(item.value).toLocaleString()}\n\n`;
                         msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
 
                         await sock.sendMessage(
@@ -10412,8 +10389,15 @@ _💡 Reply with another number from your search list!_`.trim();
                           { quoted: m },
                         );
                         await awardProgression(senderJid, chatId);
+                        } finally {
+                          busyUsers.delete(senderJid);
+                        }
                       }, 5000);
                       return;
+                      } catch (e) {
+                        busyUsers.delete(senderJid);
+                        throw e;
+                      }
                     }
 
                     // `${botConfig.getPrefix().toLowerCase()}` hunt - go hunting
@@ -13056,6 +13040,11 @@ Examples:
                       `${botConfig.getPrefix().toLowerCase()} cf `,
                     )
                   ) {
+                    if (busyUsers.has(senderJid)) {
+                      return await reply('⏳ Still processing your last action...');
+                    }
+                    busyUsers.add(senderJid);
+                    try {
                     const args = txt.split(` `);
                     const amount = parseInt(args[2]);
                     const choice = args[3];
@@ -13089,6 +13078,9 @@ Examples:
                     await reply(result.message);
                     await awardProgression(senderJid, chatId, m);
                     return;
+                    } finally {
+                      busyUsers.delete(senderJid);
+                    }
                   }
                   // dice <amount> - Dice roll
                   if (
@@ -13098,6 +13090,11 @@ Examples:
                       `${botConfig.getPrefix().toLowerCase()} dice `,
                     )
                   ) {
+                    if (busyUsers.has(senderJid)) {
+                      return await reply('⏳ Still processing your last action...');
+                    }
+                    busyUsers.add(senderJid);
+                    try {
                     const args = txt.split(` `);
                     const amount = parseInt(args[2]);
 
@@ -13129,6 +13126,9 @@ Examples:
                     await reply(result.message);
                     await awardProgression(senderJid, chatId, m);
                     return;
+                    } finally {
+                      busyUsers.delete(senderJid);
+                    }
                   }
                   // slots <amount> - Slot machine
                   if (
@@ -13143,6 +13143,11 @@ Examples:
                       `${botConfig.getPrefix().toLowerCase()} slot `,
                     )
                   ) {
+                    if (busyUsers.has(senderJid)) {
+                      return await reply('⏳ Still processing your last action...');
+                    }
+                    busyUsers.add(senderJid);
+                    try {
                     const args = txt.split(` `);
                     const amount = parseInt(args[2]);
 
@@ -13169,6 +13174,9 @@ Examples:
                     await reply(result.message);
                     await awardProgression(senderJid, chatId, m);
                     return;
+                    } finally {
+                      busyUsers.delete(senderJid);
+                    }
                   }
 
                   // hl <amount> <higher/lower> - Higher/Lower

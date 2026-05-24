@@ -156,71 +156,82 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
 // 📦 INVENTORY DISPLAY 
 // ========================================== 
 
-async function displayInventory(sock, chatId, senderJid) { 
-    const formatted = inventorySystem.formatInventory(senderJid);
-    const equipment = inventorySystem.getEquipment(senderJid);
-    const equippedIds = Object.values(equipment).filter(item => item !== null).map(item => item.id);
-    
-    let msg = `┏━━━━━━━━━━━━┓\n┃  🎒 BAG     ┃\n┗━━━━━━━━━━━━┛\n\n`;
-    msg += `📦 ${formatted.count}/${formatted.slots} slots\n\n`;
-    
-    if (formatted.isEmpty) { 
-        msg += `_Your inventory is empty!_\n\n💡 Earn items from quests!`;
-    } else { 
-        let itemCounter = 1;
-        // Display in the same rarity-first order as formatInventory (so numbers match sell/equip)
-        const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
-        const rarityGroups = {};
-        for (const item of formatted.items) { 
-            if (!rarityGroups[item.rarity]) rarityGroups[item.rarity] = [];
-            rarityGroups[item.rarity].push(item);
-        }
-        
-        for (const rarity of rarityOrder) { 
-            if (!rarityGroups[rarity] || rarityGroups[rarity].length === 0) continue;
-            const rarityInfo = inventorySystem.ITEM_RARITY[rarity];
-            msg += `━━ ${rarityInfo.icon} ${rarityInfo.name} ━━\n`;
-            
-            for (const item of rarityGroups[rarity]) { 
-                const isEquipped = equippedIds.includes(item.id);
-                const itemName = item.name || item.id;
-                
-                msg += `*${itemCounter}.* ${rarityInfo.icon} ${itemName}`;
-                if (item.quantity > 1) msg += ` ×${item.quantity}`;
-                if (isEquipped) msg += ` ✅`;
-                msg += `\n`;
+async function displayInventory(sock, chatId, senderJid, page = 1) {
+  const formatted = inventorySystem.formatInventory(senderJid);
+  const equipment = inventorySystem.getEquipment(senderJid);
+  const equippedIds = Object.values(equipment).filter(i => i !== null).map(i => i.id);
 
-                // Compact stat comparison
-                if (item.type === 'EQUIPMENT' && !isEquipped && item.stats) { 
-                    const slot = item.slot;
-                    const equippedInSlot = equipment[slot];
-                    if (equippedInSlot?.stats) { 
-                        let compParts = [];
-                        for (const stat of ['atk', 'def', 'mag', 'hp', 'spd']) { 
-                            const delta = (item.stats?.[stat] || 0) - (equippedInSlot.stats?.[stat] || 0);
-                            if (delta !== 0) compParts.push(`${stat.toUpperCase()}${delta > 0 ? '🟢+' : '🔴'}${delta}`);
-                        }
-                        if (compParts.length > 0) msg += `  📊 ${compParts.join(' ')}\n`;
-                    } else { 
-                        let statParts = [];
-                        for (const [s, v] of Object.entries(item.stats)) { 
-                            if (v) statParts.push(`${s.toUpperCase()}+${v}`);
-                        }
-                        if (statParts.length > 0) msg += `  ✨ ${statParts.join(' ')}\n`;
-                    }
-                }
+  const ITEMS_PER_PAGE = 12;
+  const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
 
-                msg += `  💰${getCurrency().symbol}${item.value || 0} | \`${item.id}\`\n`;
-                itemCounter++;
-            }
-            msg += `\n`;
-        }
-        
-        msg += `━━━━━━━━━━━━\n`;
-        msg += `\`.j sell <#>\` \`.j equip <#>\``;
+  if (formatted.isEmpty) {
+    return await sock.sendMessage(chatId, {
+      text: `┏━━━━━━━━━━━━┓\n┃  🎒 BAG     ┃\n┗━━━━━━━━━━━━┛\n\n_Your bag is empty._\n\n💡 Complete quests to earn items!`
+    });
+  }
+
+  // Build flat ordered list
+  const orderedItems = [];
+  const rarityGroups = {};
+  for (const item of formatted.items) {
+    if (!rarityGroups[item.rarity]) rarityGroups[item.rarity] = [];
+    rarityGroups[item.rarity].push(item);
+  }
+  for (const rarity of rarityOrder) {
+    if (rarityGroups[rarity]) orderedItems.push(...rarityGroups[rarity]);
+  }
+
+  const totalItems = orderedItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+  const pageItems = orderedItems.slice((clampedPage - 1) * ITEMS_PER_PAGE, clampedPage * ITEMS_PER_PAGE);
+  const pageStartIndex = (clampedPage - 1) * ITEMS_PER_PAGE;
+
+  let msg = `┏━━━━━━━━━━━━━━┓\n┃  🎒 BAG        ┃\n┗━━━━━━━━━━━━━━┛\n\n`;
+  msg += `📦 ${formatted.count}/${formatted.slots} slots  •  Page ${clampedPage}/${totalPages}\n\n`;
+
+  let lastRarity = null;
+  pageItems.forEach((item, i) => {
+    const globalNum = pageStartIndex + i + 1;
+    const rarityInfo = inventorySystem.ITEM_RARITY[item.rarity];
+    if (item.rarity !== lastRarity) {
+      if (lastRarity !== null) msg += `\n`;
+      msg += `━━ ${rarityInfo.icon} ${rarityInfo.name} ━━\n`;
+      lastRarity = item.rarity;
     }
-    
-    await sock.sendMessage(chatId, { text: msg });
+
+    const isEquipped = equippedIds.includes(item.id);
+    const itemName = item.name || item.id;
+    msg += `*${globalNum}.* ${rarityInfo.icon} ${itemName}`;
+    if (item.quantity > 1) msg += ` ×${item.quantity}`;
+    if (isEquipped) msg += ` ✅`;
+    msg += `\n`;
+
+    // Stat delta (equipment only, compact)
+    if (item.type === 'EQUIPMENT' && !isEquipped && item.stats) {
+      const slot = item.slot;
+      const equippedInSlot = equipment[slot];
+      let statLine = '';
+      if (equippedInSlot?.stats) {
+        const parts = [];
+        for (const s of ['atk', 'def', 'mag', 'hp', 'spd']) {
+          const delta = (item.stats[s] || 0) - (equippedInSlot.stats[s] || 0);
+          if (delta !== 0) parts.push(`${s.toUpperCase()}${delta > 0 ? '🟢+' : '🔴'}${delta}`);
+        }
+        if (parts.length) statLine = `  📊 ${parts.join(' ')}\n`;
+      } else {
+        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}+${v}`);
+        if (parts.length) statLine = `  ✨ ${parts.join(' ')}\n`;
+      }
+      msg += statLine;
+    }
+  });
+
+  msg += `\n━━━━━━━━━━━━━━━━━━\n`;
+  if (totalPages > 1) msg += `📄 \`.j bag ${clampedPage < totalPages ? clampedPage + 1 : 1}\` for next page\n`;
+  msg += `⚔️ \`.j equip <#>\`  💰 \`.j sell <#>\`  🧪 \`.j use <#>\``;
+
+  await sock.sendMessage(chatId, { text: msg });
 }
 
 // ========================================== 

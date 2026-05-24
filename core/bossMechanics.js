@@ -88,13 +88,13 @@ class BossPhaseManager {
 }
 
 // ==========================================
-// 👑 GOBLIN KING - Detailed Boss
+// 🦟 HIVE COMMANDER - Swarm Boss
 // ==========================================
 
-const GOBLIN_KING_BOSS = {
-    id: 'goblin_king',
-    name: 'Gortak the Goblin King',
-    icon: '👑👺',
+const HIVE_COMMANDER_BOSS = {
+    id: 'HIVE_COMMANDER',
+    name: 'The Hive Commander',
+    icon: '🦟👑',
     level: 2,
     
     stats: {
@@ -113,65 +113,65 @@ const GOBLIN_KING_BOSS = {
     // PHASE 1: 100% - 66% HP
     phases: [
         {
-            name: 'Rally the Troops',
+            name: 'Swarm Directive',
             threshold: 100,
-            abilities: ['club_smash', 'war_cry', 'summon_goblins'],
+            abilities: ['mandible_strike', 'infection_surge', 'release_swarm'],
             mechanics: [
                 {
-                    name: 'Goblin Reinforcements',
+                    name: 'Drone Reinforcements',
                     type: 'summon',
                     trigger: 'every_3_turns',
-                    summonType: 'goblin_grunt',
+                    summonType: 'infected_drone',
                     count: 2,
-                    message: 'More goblins rush into battle!'
+                    message: '🦟 More Infected Drones surge into the fray!'
                 }
             ],
-            message: '👑 "Weaklings! My tribe will crush you!"'
+            message: '🦟👑 "The Hive commands — you will be consumed!"'
         },
         
         // PHASE 2: 66% - 33% HP
         {
-            name: 'Fury of the King',
+            name: 'Infestation Frenzy',
             threshold: 66,
-            abilities: ['brutal_slam', 'kings_wrath', 'summon_elite'],
+            abilities: ['brutal_slam', 'chitin_fury', 'release_elite_drones'],
             mechanics: [
                 {
-                    name: 'Reckless Rage',
+                    name: 'Chitinous Rage',
                     type: 'buff',
                     stat: 'atk',
                     value: 40,
                     duration: 999
                 },
                 {
-                    name: 'Goblin Archers',
+                    name: 'Spitter Drones',
                     type: 'summon',
                     trigger: 'on_phase_start',
-                    summonType: 'goblin_archer',
+                    summonType: 'spitter_drone',
                     count: 3,
-                    message: 'Archers take position on the walls!'
+                    message: '🦠 Spitter Drones take up flanking positions!'
                 },
                 {
-                    name: 'Rain of Arrows',
+                    name: 'Acid Rain',
                     type: 'aoe_damage',
                     trigger: 'every_2_turns',
                     damage: 30,
-                    message: '🏹 Arrows rain down on the party!'
+                    message: '☣️ Acid spittle rains down on the party!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'atk', value: 30 }
             ],
-            message: '👑 "You dare wound me?! RAGE!"'
+            message: '🦟👑 "You wounded the Hive?! The swarm RAGES!"'
         },
         
         // PHASE 3: 33% - 0% HP
         {
-            name: 'Last Stand of Gortak',
+            name: 'Last Throes of the Hive',
             threshold: 33,
             abilities: ['berserker_smash', 'final_roar', 'desperate_slam'],
             mechanics: [
                 {
-                    name: 'Berserker Frenzy',
+                    name: 'Swarm Frenzy',
                     type: 'multi_buff',
                     buffs: [
                         { stat: 'atk', value: 60 },
@@ -180,29 +180,29 @@ const GOBLIN_KING_BOSS = {
                     duration: 999
                 },
                 {
-                    name: 'Ground Slam',
+                    name: 'Ground Thrash',
                     type: 'periodic_aoe',
                     trigger: 'every_turn',
                     damage: 40,
                     effect: 'stun',
                     chance: 50,
-                    message: '💥 The ground shakes violently!'
+                    message: '💥 The Hive Commander thrashes wildly, shaking the ground!'
                 },
                 {
-                    name: 'Call of Desperation',
+                    name: 'Call of the Brood',
                     type: 'summon',
                     trigger: 'once_per_phase',
-                    summonType: 'goblin_champion',
+                    summonType: 'brood_champion',
                     count: 1,
                     stats: { hp: 150, atk: 30 },
-                    message: '⚔️ The Goblin Champion arrives!'
+                    message: '🦟⚔️ The Brood Champion erupts from the ground!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'atk', value: 50 },
                 { type: 'stat_boost', stat: 'crit', value: 25 }
             ],
-            message: '👑 "I WILL NOT FALL TO THE LIKES OF YOU!"'
+            message: '🦟👑 "THE HIVE WILL NOT DIE WITH ME!"'
         }
     ],
     
@@ -211,25 +211,25 @@ const GOBLIN_KING_BOSS = {
         turnThreshold: 15,
         stacksPerTurn: 1,
         effectPerStack: { stat: 'atk', value: 10 },
-        message: '⚠️ The Goblin King grows more violent with time!'
+        message: '⚠️ The Hive Commander\'s infection spreads faster!'
     },
     
     loot: {
-        guaranteed: ['goblin_crown', 'kings_club'],
-        possible: ['royal_armor', 'goblin_banner', 'war_horn'],
+        guaranteed: ['hive_crown', 'chitin_club'],
+        possible: ['carapace_armor', 'hive_banner', 'swarm_horn'],
         gold: 1200,
         xp: 600
     }
 };
 
 // ==========================================
-// 💀 THE LICH - Multi-Mechanic Boss
+// ☣️ PLAGUE PRIEST - Multi-Mechanic Boss
 // ==========================================
 
-const LICH_BOSS = {
-    id: 'lich',
-    name: 'Malachar the Eternal',
-    icon: '💀🧙',
+const PLAGUE_PRIEST_BOSS = {
+    id: 'PLAGUE_PRIEST',
+    name: 'Malachar the Plague Priest',
+    icon: '☣️🧙',
     level: 4,
     
     stats: {
@@ -246,128 +246,128 @@ const LICH_BOSS = {
     },
     
     phases: [
-        // PHASE 1: Necromancer Phase
+        // PHASE 1: Plague Caster Phase
         {
-            name: 'The Undying Spellcaster',
+            name: 'The Undying Plague Caster',
             threshold: 100,
-            abilities: ['death_bolt', 'curse_of_ages', 'summon_skeletons', 'drain_essence'],
+            abilities: ['plague_bolt', 'curse_of_rot', 'summon_spore_mages', 'toxic_aura'],
             mechanics: [
                 {
-                    name: 'Phylactery Shield',
+                    name: 'Spore Shield',
                     type: 'damage_reduction',
                     value: 30,
-                    until: 'phylactery_destroyed'
+                    until: 'spore_shield_destroyed'
                 },
                 {
-                    name: 'Skeleton Guard',
+                    name: 'Spore Mage Guard',
                     type: 'summon',
                     trigger: 'on_phase_start',
-                    summonType: 'skeleton_mage',
+                    summonType: 'spore_mage',
                     count: 4,
                     respawnOnDeath: true,
                     respawnDelay: 2,
-                    message: '💀 Skeleton mages rise from the ground!'
+                    message: '☣️ Spore Mages erupt from infected earth!'
                 },
                 {
-                    name: 'Life Drain Aura',
+                    name: 'Toxic Aura',
                     type: 'aura',
                     effect: 'drain_hp',
                     value: 15,
                     trigger: 'every_turn',
-                    message: '🩸 The Lich drains life force from all!'
+                    message: '🧪 The Plague Priest\'s toxic aura saps your vitality!'
                 }
             ],
             interrupt: {
-                ability: 'cast_doom',
+                ability: 'cast_outbreak',
                 channelTime: 3,
                 onComplete: 'team_wipe',
                 interruptable: true,
-                message: '⚠️ THE LICH BEGINS CHANNELING DOOM! INTERRUPT NOW!',
-                completeMessage: '💀 DOOM! The party is obliterated!'
+                message: '⚠️ THE PLAGUE PRIEST CHANNELS OUTBREAK! INTERRUPT NOW!',
+                completeMessage: '☣️ OUTBREAK! The plague consumes the party!'
             },
-            message: '💀 "Foolish mortals. Death comes for you."'
+            message: '☣️ "Foolish mortals. The Infection claims all."'
         },
         
-        // PHASE 2: Soul Harvester
+        // PHASE 2: Plague Harvester
         {
-            name: 'Soul Harvester',
+            name: 'Plague Harvester',
             threshold: 66,
-            abilities: ['soul_rend', 'death_field', 'mass_curse', 'spectral_chains'],
+            abilities: ['soul_rend', 'blight_field', 'mass_infection', 'spore_chains'],
             mechanics: [
                 {
-                    name: 'Phylactery Weakened',
+                    name: 'Spore Shield Weakened',
                     type: 'damage_reduction',
                     value: 15
                 },
                 {
-                    name: 'Death Field',
+                    name: 'Blight Field',
                     type: 'zone_damage',
                     trigger: 'every_2_turns',
                     damage: 35,
                     zones: 3,
-                    message: '💀 Death spreads across the battlefield!'
+                    message: '☣️ Blight spreads across the battlefield!'
                 },
                 {
-                    name: 'Soul Collection',
+                    name: 'Corpse Collection',
                     type: 'mechanic',
-                    onPlayerDeath: 'collect_soul',
+                    onPlayerDeath: 'collect_corpse',
                     soulsNeeded: 1,
                     onCollect: 'heal_boss_50_percent',
-                    message: '💀 The Lich absorbs a fallen soul!'
+                    message: '☣️ The Plague Priest absorbs a fallen body into the Infection!'
                 },
                 {
-                    name: 'Wraith Summon',
+                    name: 'Plague Wraith Summon',
                     type: 'summon',
                     trigger: 'below_50_hp',
-                    summonType: 'wraith',
+                    summonType: 'plague_wraith',
                     count: 3,
-                    abilities: ['life_drain', 'phase'],
-                    message: '👻 Wraiths emerge from the shadows!'
+                    abilities: ['toxic_drain', 'spore_phase'],
+                    message: '👻 Plague Wraiths billow forth from the miasma!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'mag', value: 30 }
             ],
-            message: '💀 "Your souls will fuel my power!"'
+            message: '☣️ "Your bodies will fuel the Plague\'s spread!"'
         },
         
-        // PHASE 3: Ascension
+        // PHASE 3: Ascended Plague Form
         {
-            name: 'Ascended Lich Form',
+            name: 'Ascended Plague Form',
             threshold: 33,
-            abilities: ['apocalypse', 'time_stop', 'death_sentence', 'void_rift'],
+            abilities: ['outbreak', 'time_stop', 'death_sentence', 'void_blight'],
             mechanics: [
                 {
-                    name: 'Phylactery Destroyed',
+                    name: 'Spore Shield Destroyed',
                     type: 'remove_shield',
-                    message: '✨ The phylactery shatters!'
+                    message: '✨ The Spore Shield ruptures in a cloud of contagion!'
                 },
                 {
-                    name: 'Undead Army',
+                    name: 'Plague Vanguard',
                     type: 'summon',
                     trigger: 'on_phase_start',
-                    summonType: 'death_knight',
+                    summonType: 'plague_knight',
                     count: 2,
                     stats: { hp: 180, atk: 35, def: 25 },
-                    message: '⚔️💀 Death Knights rise!'
+                    message: '⚔️☣️ Plague Knights shamble forward!'
                 },
                 {
-                    name: 'Apocalypse Casting',
+                    name: 'Outbreak Casting',
                     type: 'channel',
                     channelTime: 4,
                     damage: 150,
                     aoe: true,
                     interruptable: true,
                     trigger: 'every_5_turns',
-                    message: '⚠️ APOCALYPSE INCOMING!',
-                    completeMessage: '💀☄️ APOCALYPSE! Massive damage to all!'
+                    message: '⚠️ OUTBREAK INCOMING!',
+                    completeMessage: '☣️💀 OUTBREAK! Plague devastates all!'
                 },
                 {
-                    name: 'Resurrection',
+                    name: 'Viral Resurrection',
                     type: 'revive',
                     trigger: 'on_first_death',
                     reviveHP: 25,
-                    message: '💀 "Death? I AM death!" The Lich rises again!'
+                    message: '☣️ "Death? I AM the Plague!" Malachar rises again!'
                 }
             ],
             effects: [
@@ -375,7 +375,7 @@ const LICH_BOSS = {
                 { type: 'stat_boost', stat: 'def', value: 40 },
                 { type: 'heal', value: 100 }
             ],
-            message: '💀 "BEHOLD MY TRUE POWER!"'
+            message: '☣️ "BEHOLD THE TRUE FACE OF THE PLAGUE!"'
         }
     ],
     
@@ -383,25 +383,25 @@ const LICH_BOSS = {
     hardEnrage: {
         atTurn: 30,
         effect: 'instant_wipe',
-        message: '💀 "Time has run out!" The Lich consumes all souls!'
+        message: '☣️ "The Infection is absolute!" Malachar\'s plague devours all!'
     },
     
     loot: {
-        guaranteed: ['staff_of_souls', 'lich_robes'],
-        possible: ['necro_tome', 'soul_gem', 'death_essence', 'phylactery_shard'],
+        guaranteed: ['staff_of_plague', 'infected_robes'],
+        possible: ['plague_tome', 'spore_gem', 'blight_essence', 'spore_shield_shard'],
         gold: 2500,
         xp: 1200
     }
 };
 
 // ==========================================
-// 😈 DEMON LORD BALTHAZAR
+// 🦠 CORRUPTED OVERLORD
 // ==========================================
 
-const DEMON_LORD_BOSS = {
-    id: 'demon_lord',
-    name: 'Balthazar, Lord of the Burning Hells',
-    icon: '😈👑',
+const CORRUPTED_OVERLORD_BOSS = {
+    id: 'CORRUPTED_OVERLORD',
+    name: 'The Corrupted Overlord',
+    icon: '🦠👑',
     level: 6,
     
     stats: {
@@ -418,109 +418,109 @@ const DEMON_LORD_BOSS = {
     },
     
     phases: [
-        // PHASE 1: Demon Form
+        // PHASE 1: Corrupted Form
         {
-            name: 'Demon of Pride',
+            name: 'Herald of Mutation',
             threshold: 100,
-            abilities: ['infernal_slash', 'hellfire', 'dark_pact', 'flame_wave'],
+            abilities: ['mutation_slash', 'blight_pulse', 'dark_pact', 'corruption_wave'],
             mechanics: [
                 {
-                    name: 'Hellfire Pillars',
+                    name: 'Mutagenic Pillars',
                     type: 'environmental',
                     trigger: 'every_3_turns',
                     zones: 4,
                     damage: 40,
-                    effect: 'burn',
+                    effect: 'infect',
                     duration: 2,
-                    message: '🔥 Pillars of hellfire erupt!'
+                    message: '🦠 Mutagenic geysers erupt from the ground!'
                 },
                 {
-                    name: 'Imp Swarm',
+                    name: 'Mutant Imp Swarm',
                     type: 'summon',
                     trigger: 'every_4_turns',
-                    summonType: 'imp',
+                    summonType: 'mutant_imp',
                     count: 5,
                     stats: { hp: 30, atk: 15 },
-                    message: '👹 A swarm of imps appears!'
+                    message: '🦠 A swarm of Mutant Imps bubbles forth!'
                 },
                 {
-                    name: 'Demonic Aura',
+                    name: 'Mutagenic Field',
                     type: 'aura',
                     effect: 'debuff_all',
                     stat: 'def',
                     value: 20,
-                    message: '😈 Fear grips the party!'
+                    message: '🦠 The Mutagenic Field weakens all who stand within!'
                 }
             ],
-            message: '😈 "Mortals dare challenge ME?!"'
+            message: '🦠👑 "You dare oppose the Corruption?!"'
         },
         
-        // PHASE 2: True Demon Form
+        // PHASE 2: True Corrupted Form
         {
-            name: 'Unleashed Fury',
+            name: 'Mutation Unleashed',
             threshold: 66,
-            abilities: ['chaos_storm', 'demonic_possession', 'void_tear', 'infernal_chains'],
+            abilities: ['chaos_storm', 'mutagenic_possession', 'void_tear', 'infested_chains'],
             mechanics: [
                 {
-                    name: 'Transformation',
+                    name: 'Corruption Transformation',
                     type: 'transform',
                     effects: [
                         { stat: 'atk', value: 40 },
                         { stat: 'mag', value: 40 },
                         { stat: 'spd', value: 30 }
                     ],
-                    message: '😈 Balthazar reveals his true form!'
+                    message: '🦠👑 The Corrupted Overlord reveals its true grotesque form!'
                 },
                 {
-                    name: 'Lesser Demon Summon',
+                    name: 'Mutant Spawn',
                     type: 'summon',
                     trigger: 'on_phase_start',
-                    summonType: 'lesser_demon',
+                    summonType: 'lesser_mutant',
                     count: 3,
                     stats: { hp: 120, atk: 28, mag: 22 },
-                    message: '👹 Lesser demons heed the call!'
+                    message: '🦠 Lesser Mutants answer the Overlord\'s call!'
                 },
                 {
-                    name: 'Chaos Storm',
+                    name: 'Corruption Storm',
                     type: 'channel',
                     channelTime: 3,
                     damage: 120,
                     aoe: true,
-                    effects: ['burn', 'curse', 'confusion'],
+                    effects: ['infect', 'mutate', 'confusion'],
                     trigger: 'every_6_turns',
-                    message: '⚠️ A STORM OF CHAOS FORMS!',
-                    completeMessage: '😈🌪️ CHAOS STORM UNLEASHED!'
+                    message: '⚠️ A STORM OF CORRUPTION COALESCES!',
+                    completeMessage: '🦠🌪️ CORRUPTION STORM UNLEASHED!'
                 },
                 {
-                    name: 'Possession',
+                    name: 'Mutagenic Possession',
                     type: 'mind_control',
                     trigger: 'random',
                     chance: 30,
                     duration: 2,
                     target: 'random_player',
-                    message: '😈 "Your will is MINE!"'
+                    message: '🦠 "Your body is now OURS!"'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'atk', value: 35 },
                 { type: 'stat_boost', stat: 'mag', value: 35 }
             ],
-            message: '😈 "NOW YOU FACE TRUE POWER!"'
+            message: '🦠👑 "NOW WITNESS TRUE CORRUPTION!"'
         },
         
-        // PHASE 3: Void-Infused
+        // PHASE 3: Void-Infused Corruption
         {
-            name: 'Lord of Destruction',
+            name: 'Overlord of Ruin',
             threshold: 33,
-            abilities: ['armageddon', 'void_corruption', 'soul_harvest', 'apocalypse_beam'],
+            abilities: ['armageddon', 'void_corruption', 'biomass_harvest', 'plague_beam'],
             mechanics: [
                 {
-                    name: 'Void Portal',
+                    name: 'Corruption Portal',
                     type: 'portal',
                     trigger: 'on_phase_start',
-                    summonType: 'void_spawn',
+                    summonType: 'void_infected',
                     spawnsPerTurn: 2,
-                    message: '🌑 A portal to the void opens!'
+                    message: '🌑 A rift tears open, pouring corrupted horrors through!'
                 },
                 {
                     name: 'Enraged',
@@ -530,31 +530,31 @@ const DEMON_LORD_BOSS = {
                     duration: 999
                 },
                 {
-                    name: 'Desperation Attack',
+                    name: 'Desperation Mutation',
                     type: 'ultimate',
                     trigger: 'below_15_hp',
-                    ability: 'final_destruction',
+                    ability: 'final_mutation_burst',
                     damage: 200,
-                    message: '😈 "IF I FALL, YOU ALL DIE WITH ME!"'
+                    message: '🦠 "IF THE OVERLORD FALLS — THE INFECTION CONSUMES ALL!"'
                 },
                 {
-                    name: 'Dark Rebirth',
+                    name: 'Viral Rebirth',
                     type: 'revive_mechanic',
                     trigger: 'on_death',
                     reviveHP: 30,
                     once: true,
                     requiresInterrupt: true,
                     channelTime: 3,
-                    message: '⚠️ BALTHAZAR BEGINS REVIVAL! STOP HIM!',
-                    successMessage: '😈 "REBORN IN DARKNESS!"',
-                    failMessage: '✨ The ritual is interrupted!'
+                    message: '⚠️ THE OVERLORD BEGINS VIRAL REBIRTH! STOP IT!',
+                    successMessage: '🦠 "REBORN THROUGH CORRUPTION!"',
+                    failMessage: '✨ The viral ritual is disrupted!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'all', value: 50 },
                 { type: 'heal', value: 150 }
             ],
-            message: '😈 "WITNESS THE END OF ALL THINGS!"'
+            message: '🦠👑 "WITNESS THE CORRUPTION OF ALL THINGS!"'
         }
     ],
     
@@ -563,29 +563,29 @@ const DEMON_LORD_BOSS = {
         turnThreshold: 20,
         stacksPerTurn: 2,
         effectPerStack: { stat: 'atk', value: 15, stat2: 'mag', value2: 15 },
-        message: '😈 Balthazar\'s fury intensifies!'
+        message: '🦠 The Corrupted Overlord\'s mutations accelerate!'
     },
     hardEnrage: {
         atTurn: 35,
         effect: 'armageddon_wipe',
-        message: '😈 "ENOUGH!" Balthazar obliterates everything!'
+        message: '🦠 "ENOUGH!" The Overlord\'s corruption obliterates everything!'
     },
     
     loot: {
-        guaranteed: ['demon_blade', 'crown_of_hells', 'infernal_armor'],
-        possible: ['demon_heart', 'void_essence', 'chaos_gem', 'soul_crystal'],
+        guaranteed: ['mutation_blade', 'overlord_carapace', 'corruption_crown'],
+        possible: ['mutant_heart', 'void_essence', 'corruption_gem', 'blight_crystal'],
         gold: 5000,
         xp: 2000
     }
 };
 
 // ==========================================
-// 🌑 VOID TITAN - Environmental Boss
+// 🌑 VOID CORRUPTED - Corruption Entity Boss
 // ==========================================
 
-const VOID_TITAN_BOSS = {
-    id: 'void_titan',
-    name: 'The Void Titan',
+const VOID_CORRUPTED_BOSS = {
+    id: 'void_corrupted',
+    name: 'The Void-Corrupted',
     icon: '🌑👁️',
     level: 8,
     
@@ -604,110 +604,110 @@ const VOID_TITAN_BOSS = {
     
     phases: [
         {
-            name: 'Awakening',
+            name: 'Corruption Awakening',
             threshold: 100,
             abilities: ['void_pulse', 'reality_warp', 'tentacle_slam', 'nullify'],
             mechanics: [
                 {
-                    name: 'Reality Distortion',
+                    name: 'Corruption Distortion',
                     type: 'environmental',
                     effect: 'random_teleport',
                     trigger: 'every_2_turns',
-                    message: '🌀 Reality warps around you!'
+                    message: '🌀 Corruption warps the space around you!'
                 },
                 {
-                    name: 'Void Tentacles',
+                    name: 'Corrupted Tendrils',
                     type: 'summon',
                     trigger: 'every_4_turns',
-                    summonType: 'void_tentacle',
+                    summonType: 'corrupted_tendril',
                     count: 4,
                     stats: { hp: 100, atk: 25 },
                     regenerate: true,
-                    message: '🦑 Tentacles emerge from the void!'
+                    message: '🦑 Corrupted tendrils erupt from infected ground!'
                 },
                 {
-                    name: 'Gravity Well',
+                    name: 'Void Gravity Well',
                     type: 'pull_mechanic',
                     trigger: 'random',
                     damage: 30,
-                    message: '🌀 You\'re pulled toward the Titan!'
+                    message: '🌀 You are pulled into the corruption vortex!'
                 }
             ],
-            message: '🌑 *Incomprehensible whispers fill your mind*'
+            message: '🌑 *Corrupted whispers flood your mind with infection...*'
         },
         
         {
-            name: 'Dimensional Rift',
+            name: 'Corrupted Rift',
             threshold: 66,
             abilities: ['consume', 'void_storm', 'dimensional_tear', 'entropy'],
             mechanics: [
                 {
-                    name: 'Void Rifts',
+                    name: 'Corruption Rifts',
                     type: 'portal_network',
                     trigger: 'on_phase_start',
                     portals: 4,
                     effect: 'random_effects',
-                    message: '🌑 Rifts tear open across dimensions!'
+                    message: '🌑 Corruption rifts tear open — infectious energy pours through!'
                 },
                 {
-                    name: 'Consume Reality',
+                    name: 'Consume Sanity',
                     type: 'channel',
                     channelTime: 4,
                     effect: 'remove_random_ability',
                     aoe: true,
-                    message: '⚠️ THE TITAN CONSUMES REALITY ITSELF!',
-                    completeMessage: '🌑 Abilities vanish into the void!'
+                    message: '⚠️ THE VOID-CORRUPTED CONSUMES YOUR WILL!',
+                    completeMessage: '🌑 Abilities dissolve into corrupted void!'
                 },
                 {
-                    name: 'Void Spawn',
+                    name: 'Corrupted Horrors',
                     type: 'summon',
                     trigger: 'every_3_turns',
-                    summonType: 'void_horror',
+                    summonType: 'void_corrupted_horror',
                     count: 2,
                     stats: { hp: 150, atk: 35, mag: 30 },
-                    message: '👁️ Horrors from beyond manifest!'
+                    message: '👁️ Void-Corrupted Horrors materialize from the infection!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'mag', value: 50 }
             ],
-            message: '🌑 *The fabric of reality tears apart*'
+            message: '🌑 *The infection tears reality apart*'
         },
         
         {
-            name: 'Oblivion',
+            name: 'Void Oblivion',
             threshold: 33,
             abilities: ['heat_death', 'null_zone', 'final_entropy', 'cosmic_horror'],
             mechanics: [
                 {
-                    name: 'Entropic Decay',
+                    name: 'Corrupted Entropic Decay',
                     type: 'debuff_stacking',
                     trigger: 'every_turn',
                     effect: 'reduce_max_hp',
                     value: 5,
-                    message: '🌑 Your very existence begins to fade...'
+                    message: '🌑 The corruption erodes your very existence...'
                 },
                 {
-                    name: 'Void Collapse',
+                    name: 'Void Corruption Collapse',
                     type: 'arena_shrink',
                     trigger: 'every_5_turns',
                     damage: 50,
-                    message: '⚫ The void closes in!'
+                    message: '⚫ The corrupted void closes in — nowhere left to run!'
                 },
                 {
-                    name: 'Final Form',
+                    name: 'Fully Corrupted Form',
                     type: 'buff',
                     stat: 'all',
                     value: 100,
                     duration: 999,
-                    message: '🌑 THE TITAN ASSUMES ITS TRUE FORM!'
+                    message: '🌑 THE VOID-CORRUPTED ASSUMES ITS FINAL FORM!'
                 }
             ],
             effects: [
                 { type: 'stat_boost', stat: 'all', value: 60 },
                 { type: 'heal', value: 200 }
             ],
-            message: '🌑 *OBLIVION AWAITS*'
+            message: '🌑 *CORRUPTED OBLIVION AWAITS*'
         }
     ],
     
@@ -715,12 +715,12 @@ const VOID_TITAN_BOSS = {
     hardEnrage: {
         atTurn: 40,
         effect: 'void_consumption',
-        message: '🌑 *Everything dissolves into nothingness...*'
+        message: '🌑 *Everything dissolves into corrupted nothingness...*'
     },
     
     loot: {
-        guaranteed: ['void_blade', 'reality_shard', 'titan_eye'],
-        possible: ['void_heart', 'cosmic_dust', 'entropy_crystal', 'null_essence'],
+        guaranteed: ['void_blade', 'corruption_shard', 'corrupted_eye'],
+        possible: ['void_heart', 'corruption_dust', 'entropy_crystal', 'null_essence'],
         gold: 8000,
         xp: 3500
     }
@@ -1003,65 +1003,99 @@ const PRIMORDIAL_CHAOS_BOSS = {
 // ==========================================
 
 const BOSS_ABILITIES = {
-    // Goblin King Abilities
-    club_smash: {
-        name: 'Club Smash',
+    // ── HIVE COMMANDER (was: Goblin King) Abilities ──
+    mandible_strike: {
+        name: 'Mandible Strike',
         damage: 1.5,
         targeting: 'single',
         effects: [{ type: 'stun', chance: 40, duration: 1 }]
     },
-    war_cry: {
-        name: 'War Cry',
+    infection_surge: {
+        name: 'Infection Surge',
         damage: 0,
         targeting: 'self',
         effects: [{ type: 'buff', stat: 'atk', value: 30, duration: 3 }]
     },
-    summon_goblins: {
-        name: 'Summon Goblins',
+    release_swarm: {
+        name: 'Release Swarm',
         damage: 0,
         targeting: 'summon',
-        summon: { type: 'goblin_grunt', count: 2 }
+        summon: { type: 'infected_drone', count: 2 }
     },
     ground_pound: {
-        name: 'Ground Pound',
+        name: 'Ground Thrash',
         damage: 3.0,
         targeting: 'aoe',
         isTelegraphed: true,
-        telegraphMessage: ' Gortak raises his massive club high above his head... ⚠️ *DEFEND NOW!*',
+        telegraphMessage: ' The Hive Commander rears back, carapace trembling... ⚠️ *DEFEND NOW!*',
         effects: [{ type: 'stun', chance: 100, duration: 1 }]
     },
-    
-    // Lich Abilities
-    death_bolt: {
-        name: 'Death Bolt',
+
+    // ── PLAGUE PRIEST (was: Lich) Abilities ──
+    plague_bolt: {
+        name: 'Plague Bolt',
         damage: 2.0,
         damageType: 'magical',
         targeting: 'single',
-        effects: [{ type: 'curse', duration: 3 }]
+        effects: [{ type: 'infect', duration: 3 }]
     },
-    soul_reap: {
-        name: 'Soul Reap',
+    toxic_aura: {
+        name: 'Toxic Aura',
+        damage: 0,
+        targeting: 'aoe',
+        effects: [{ type: 'dot', element: 'poison', value: 15, duration: 2 }]
+    },
+    summon_spore_mages: {
+        name: 'Summon Spore Mages',
+        damage: 0,
+        targeting: 'summon',
+        summon: { type: 'spore_mage', count: 2 }
+    },
+    spore_reap: {
+        name: 'Spore Reap',
         damage: 4.5,
         damageType: 'magical',
         targeting: 'single',
         isTelegraphed: true,
-        telegraphMessage: ' Malachar points a bony finger at a soul... it begins to glow with dark energy! ⚠️ *DEFEND NOW!*',
+        telegraphMessage: ' Malachar raises his plague staff — a deadly spore cloud condenses! ⚠️ *DEFEND NOW!*',
         effects: [{ type: 'drain', value: 50 }]
     },
-    apocalypse: {
-        name: 'Apocalypse',
+    outbreak: {
+        name: 'Outbreak',
         damage: 3.5,
         damageType: 'magical',
         targeting: 'aoe',
         channelTime: 4,
         effects: [
-            { type: 'burn', duration: 3 },
-            { type: 'curse', duration: 3 },
-            { type: 'poison', duration: 3 }
+            { type: 'infect', duration: 3 },
+            { type: 'poison', duration: 3 },
+            { type: 'weaken', duration: 3 }
         ]
     },
 
-    // Dragon Abilities
+    // ── CORRUPTED OVERLORD (was: Demon Lord) Abilities ──
+    mutation_slash: {
+        name: 'Mutation Slash',
+        damage: 2.0,
+        targeting: 'single',
+        effects: [{ type: 'infect', chance: 50, duration: 2 }]
+    },
+    blight_pulse: {
+        name: 'Blight Pulse',
+        damage: 1.8,
+        damageType: 'magical',
+        targeting: 'aoe',
+        effects: [{ type: 'dot', element: 'blight', value: 10, duration: 3 }]
+    },
+    corruption_wave: {
+        name: 'Corruption Wave',
+        damage: 2.5,
+        damageType: 'magical',
+        targeting: 'aoe',
+        effects: [{ type: 'debuff', stat: 'def', value: 20, duration: 2 }]
+    },
+
+    // ── Dragon Abilities (unchanged) ──
     dragon_claw: {
         name: 'Draconic Claw',
         damage: 2.5,
@@ -1225,26 +1259,43 @@ class BossFightManager {
 // 📤 EXPORTS
 // ==========================================
 
+// Boss registry — maps boss ID strings used in DUNGEON_RANKS to the boss data objects
+const BOSS_REGISTRY = {
+    HIVE_COMMANDER:      HIVE_COMMANDER_BOSS,
+    PLAGUE_PRIEST:       PLAGUE_PRIEST_BOSS,
+    CORRUPTED_OVERLORD:  CORRUPTED_OVERLORD_BOSS,
+    void_corrupted:      VOID_CORRUPTED_BOSS,
+    primordial_chaos:    PRIMORDIAL_CHAOS_BOSS,
+    ancient_dragon_boss: ANCIENT_DRAGON_BOSS,
+};
+
 module.exports = {
-    GOBLIN_KING_BOSS,
-    LICH_BOSS,
-    DEMON_LORD_BOSS,
-    VOID_TITAN_BOSS,
+    // Retextured legacy bosses (infection/mutation theme)
+    HIVE_COMMANDER_BOSS,
+    PLAGUE_PRIEST_BOSS,
+    CORRUPTED_OVERLORD_BOSS,
+    VOID_CORRUPTED_BOSS,
+    // Active dungeon bosses
     PRIMORDIAL_CHAOS_BOSS,
     ANCIENT_DRAGON_BOSS,
+    // Lookups
+    BOSS_REGISTRY,
     BOSS_ABILITIES,
     BossPhaseManager,
     BossFightManager,
     
-    // Helper function to get boss by act
+    // Helper — look up by registry key or fall back to Hive Commander
+    getBossById: (id) => BOSS_REGISTRY[id] || HIVE_COMMANDER_BOSS,
+
+    // Helper function to get boss by act (updated to new IDs)
     getBossForAct: (act) => {
         const bossMap = {
-            1: GOBLIN_KING_BOSS,
-            2: LICH_BOSS,
-            3: DEMON_LORD_BOSS,
-            4: VOID_TITAN_BOSS,
+            1: HIVE_COMMANDER_BOSS,
+            2: PLAGUE_PRIEST_BOSS,
+            3: CORRUPTED_OVERLORD_BOSS,
+            4: VOID_CORRUPTED_BOSS,
             5: PRIMORDIAL_CHAOS_BOSS
         };
-        return bossMap[act] || GOBLIN_KING_BOSS;
+        return bossMap[act] || HIVE_COMMANDER_BOSS;
     }
 };
