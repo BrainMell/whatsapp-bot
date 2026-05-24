@@ -10,14 +10,14 @@ const economy = require('./economy'); // Integrated with MongoDB
 // ==========================================
 
 const XP_CONFIG = {
-    BASE_XP: 250,           // XP needed for level 2 (Increased from 100)
-    SCALING_FACTOR: 1.18,   // XP increases by 18% per level (Increased from 1.15)
+    BASE_XP: 250,           // XP needed for level 2
+    SCALING_FACTOR: 1.18,   // XP increases by 18% per level
     MAX_LEVEL: 100,         // Level cap
     
     // XP Sources
-    QUEST_BASE_XP: 50,      // Base XP per quest encounter (Reduced from 150)
-    BOSS_MULTIPLIER: 2.5,   // Bosses give 2.5x XP (Reduced from 3.0)
-    QUEST_COMPLETION: 150,  // Bonus for completing full quest (Drastically reduced from 500)
+    QUEST_BASE_XP: 100,     // Base XP per quest encounter
+    BOSS_MULTIPLIER: 3.0,   // Bosses give 3x XP
+    QUEST_COMPLETION: 300,  // Bonus for completing a full quest
     
     // Level Milestones (bonus XP needed)
     MILESTONES: {

@@ -2921,6 +2921,20 @@ async function promptPlayerAction(sock, player, sessionKey) {
       })
     : [];
 
+  // Flush enemy round log
+  if (state.roundLog && state.roundLog.length > 0) {
+    const roundSummary = state.roundLog.join('\n─────────\n');
+    try {
+      await sock.sendMessage(state.chatId, { text: roundSummary });
+    } catch (e) {}
+    state.roundLog = [];
+  }
+
+  const hpBar = (cur, max, len = 10) => {
+    const filled = Math.max(0, Math.round((Math.max(0, cur) / max) * len));
+    return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+  };
+
   const statusPrefix = state.pendingStatusMsg
     ? state.pendingStatusMsg + "\n\n"
     : "";
@@ -2935,6 +2949,16 @@ async function promptPlayerAction(sock, player, sessionKey) {
 
   if (player.statusEffects && player.statusEffects.length > 0) {
     msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
+  }
+
+  const livingEnemies = (state.enemies || []).filter((e) => !e.isDead);
+  if (livingEnemies.length > 0) {
+    msg += `\n*ENEMIES:*\n`;
+    livingEnemies.forEach((e) => {
+      const maxHp = e.stats.maxHp || e.stats.hp;
+      const curHp = Math.max(0, e.stats.hp);
+      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${curHp}/${maxHp} HP\n`;
+    });
   }
 
   msg += `\n*ACTIONS:*\n`;
@@ -3555,9 +3579,9 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         ? state.pendingStatusMsg + "\n"
         : "";
       state.pendingStatusMsg = null;
-      try {
-        await sock.sendMessage(chatId, { text: enemyStatusPrefix + resultMsg });
-      } catch (err) {}
+      const fullEnemyMsg = (enemyStatusPrefix ? enemyStatusPrefix + '\n' : '') + resultMsg;
+      state.roundLog = state.roundLog || [];
+      state.roundLog.push(fullEnemyMsg);
 
       setTimeout(async () => {
         await nextTurn(sock, turnInfo, sessionKey);
@@ -4636,7 +4660,7 @@ async function generateBossEncounter(sock, groq, chatId) {
   const state = getGameState(chatId);
   if (!state) return null;
   const rankData = DUNGEON_RANKS[state.dungeonRank];
-  const bossType = rankData.boss || "goblin_king";
+  const bossType = rankData.boss;
 
   const tier = getCurrentTier(chatId);
   const boss = createBoss(bossType, tier);
@@ -5032,16 +5056,21 @@ async function endAdventure(sock, sessionKey, victory = true) {
   const _completionRankData =
     DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
   const _baseCompletionXP = Math.floor((_completionRankData.xpMult || 1) * 100);
+  
+  // Scale bonus gold with rank
+  const rankGoldMap = { F: 500, E: 800, D: 1200, C: 1800, B: 2600, A: 4000, S: 6000, SS: 8500, SSS: 12000, DRAGON: 5000 };
+  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 500;
+  
   for (const player of state.players) {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
     const finalGold = Math.floor(player.goldEarned * multiplier);
-    const bonusGold = player.isDead ? 0 : 2000;
+    const bonusGold = player.isDead ? 0 : _baseBonusGold;
 
     msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
 
     // Update stats and rank
     if (!player.isDead) {
-      economy.addMoney(player.jid, bonusGold);
+      economy.addMoney(player.jid, finalGold + bonusGold);
       economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
     } else {
       economy.addQuestProgress(player.jid, 0, false); // No progress on death

@@ -75,8 +75,8 @@ const INFECTED_POOLS = {
                 desc: 'A simple corrupted flame flickering with malevolence',
                 stats: { hp: 150, atk: 6, def: 4, mag: 2, spd: 8, luck: 5, crit: 5 },
                 archetype: 'MAGE',
-                xpReward: 120,
-                goldReward: [15, 35],
+                xpReward: 80,
+                goldReward: [10, 22],
                 element: 'fire'
             }
         ],
@@ -89,8 +89,8 @@ const INFECTED_POOLS = {
                 desc: 'A larger, more intense corrupted flame',
                 stats: { hp: 450, atk: 12, def: 10, mag: 4, spd: 12, luck: 10, crit: 10 },
                 archetype: 'BRUTE',
-                xpReward: 300,
-                goldReward: [80, 150],
+                xpReward: 220,
+                goldReward: [55, 100],
                 element: 'fire'
             }
         ]
@@ -112,8 +112,8 @@ const INFECTED_POOLS = {
                 desc: 'Waterlogged infected with bloated flesh',
                 stats: { hp: 280, atk: 10, def: 8, mag: 4, spd: 10, luck: 8, crit: 8 },
                 archetype: 'TANK',
-                xpReward: 180,
-                goldReward: [30, 60],
+                xpReward: 120,
+                goldReward: [20, 42],
                 element: 'water'
             },
             {
@@ -123,8 +123,8 @@ const INFECTED_POOLS = {
                 desc: 'Aquatic infected with sharp fins',
                 stats: { hp: 300, atk: 12, def: 6, mag: 5, spd: 12, luck: 10, crit: 10 },
                 archetype: 'STALKER',
-                xpReward: 200,
-                goldReward: [35, 65],
+                xpReward: 130,
+                goldReward: [22, 45],
                 element: 'water'
             },
             {
@@ -134,8 +134,8 @@ const INFECTED_POOLS = {
                 desc: 'Ethereal infected formed from corrupted mist',
                 stats: { hp: 260, atk: 9, def: 5, mag: 8, spd: 14, luck: 12, crit: 12 },
                 archetype: 'MAGE',
-                xpReward: 190,
-                goldReward: [32, 62],
+                xpReward: 125,
+                goldReward: [21, 43],
                 element: 'water'
             }
         ],
@@ -149,8 +149,8 @@ const INFECTED_POOLS = {
                 stats: { hp: 650, atk: 18, def: 15, mag: 10, spd: 14, luck: 12, crit: 12 },
                 archetype: 'BRUTE',
                 skills: ['Tidal Wave', 'Deep Pressure', 'Whirlpool'],
-                xpReward: 400,
-                goldReward: [100, 180],
+                xpReward: 320,
+                goldReward: [70, 130],
                 element: 'water'
             }
         ]
@@ -172,8 +172,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected with hardened stone skin',
                 stats: { hp: 550, atk: 22, def: 25, mag: 4, spd: 8, luck: 10, crit: 10 },
                 skills: ['Rock Throw', 'Earthquake'],
-                xpReward: 250,
-                goldReward: [50, 90],
+                xpReward: 190,
+                goldReward: [38, 68],
                 element: 'earth'
             },
             {
@@ -183,8 +183,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected with sharp crystal protrusions',
                 stats: { hp: 480, atk: 24, def: 20, mag: 8, spd: 12, luck: 12, crit: 15 },
                 skills: ['Crystal Shard', 'Reflection'],
-                xpReward: 270,
-                goldReward: [55, 95],
+                xpReward: 210,
+                goldReward: [42, 75],
                 element: 'earth'
             },
             {
@@ -194,8 +194,8 @@ const INFECTED_POOLS = {
                 desc: 'Guardian infected bound to the earth',
                 stats: { hp: 580, atk: 20, def: 28, mag: 5, spd: 7, luck: 11, crit: 8 },
                 skills: ['Stone Armor', 'Ground Slam'],
-                xpReward: 260,
-                goldReward: [52, 92],
+                xpReward: 200,
+                goldReward: [40, 72],
                 element: 'earth'
             }
         ],
@@ -208,8 +208,8 @@ const INFECTED_POOLS = {
                 desc: 'Massive stone infected with immense power',
                 stats: { hp: 1250, atk: 30, def: 40, mag: 10, spd: 10, luck: 14, crit: 12 },
                 skills: ['Meteor Strike', 'Stone Prison', 'Landslide'],
-                xpReward: 550,
-                goldReward: [140, 250],
+                xpReward: 500,
+                goldReward: [110, 200],
                 element: 'earth'
             }
         ]
@@ -231,8 +231,8 @@ const INFECTED_POOLS = {
                 desc: 'Frozen infected with icy claws',
                 stats: { hp: 750, atk: 26, def: 18, mag: 12, spd: 16, luck: 13, crit: 18 },
                 skills: ['Ice Claw', 'Freeze'],
-                xpReward: 320,
-                goldReward: [70, 120],
+                xpReward: 280,
+                goldReward: [56, 95],
                 element: 'ice'
             },
             {
@@ -242,8 +242,8 @@ const INFECTED_POOLS = {
                 desc: 'Beast infected with frozen armor',
                 stats: { hp: 850, atk: 24, def: 22, mag: 10, spd: 14, luck: 12, crit: 15 },
                 skills: ['Icicle Barrage', 'Cold Snap'],
-                xpReward: 340,
-                goldReward: [75, 125],
+                xpReward: 300,
+                goldReward: [60, 100],
                 element: 'ice'
             },
             {
@@ -253,8 +253,8 @@ const INFECTED_POOLS = {
                 desc: 'Spectral infected born from blizzards',
                 stats: { hp: 720, atk: 28, def: 15, mag: 15, spd: 20, luck: 15, crit: 22 },
                 skills: ['Frost Nova', 'Blizzard'],
-                xpReward: 360,
-                goldReward: [80, 130],
+                xpReward: 310,
+                goldReward: [62, 105],
                 element: 'ice'
             }
         ],
@@ -267,8 +267,8 @@ const INFECTED_POOLS = {
                 desc: 'Ancient infected encased in ancient ice',
                 stats: { hp: 1850, atk: 32, def: 35, mag: 20, spd: 15, luck: 16, crit: 20 },
                 skills: ['Absolute Zero', 'Ice Age', 'Frozen Domain'],
-                xpReward: 700,
-                goldReward: [180, 320],
+                xpReward: 750,
+                goldReward: [160, 280],
                 element: 'ice'
             }
         ]
@@ -290,8 +290,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected with molten lava flowing through veins',
                 stats: { hp: 1200, atk: 34, def: 20, mag: 14, spd: 18, luck: 14, crit: 20 },
                 skills: ['Lava Burst', 'Molten Armor'],
-                xpReward: 450,
-                goldReward: [100, 160],
+                xpReward: 400,
+                goldReward: [80, 135],
                 element: 'fire'
             },
             {
@@ -301,8 +301,8 @@ const INFECTED_POOLS = {
                 desc: 'Demonic infected wreathed in hellfire',
                 stats: { hp: 1100, atk: 38, def: 18, mag: 16, spd: 22, luck: 16, crit: 24 },
                 skills: ['Infernal Strike', 'Fire Tornado'],
-                xpReward: 480,
-                goldReward: [110, 170],
+                xpReward: 430,
+                goldReward: [85, 145],
                 element: 'fire'
             }
         ],
@@ -315,8 +315,8 @@ const INFECTED_POOLS = {
                 desc: 'Fallen phoenix consumed by corruption',
                 stats: { hp: 3200, atk: 42, def: 28, mag: 25, spd: 30, luck: 20, crit: 28 },
                 skills: ['Phoenix Dive', 'Rebirth', 'Solar Flare'],
-                xpReward: 900,
-                goldReward: [220, 400],
+                xpReward: 1100,
+                goldReward: [240, 420],
                 element: 'fire'
             }
         ]
@@ -338,8 +338,8 @@ const INFECTED_POOLS = {
                 desc: 'Deep sea infected with tentacles',
                 stats: { hp: 1800, atk: 36, def: 22, mag: 20, spd: 20, luck: 18, crit: 22 },
                 skills: ['Tentacle Lash', 'Pressure Crush'],
-                xpReward: 550,
-                goldReward: [130, 200],
+                xpReward: 520,
+                goldReward: [105, 170],
                 element: 'water'
             },
             {
@@ -349,8 +349,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected that commands tidal waves',
                 stats: { hp: 1700, atk: 40, def: 20, mag: 22, spd: 24, luck: 20, crit: 24 },
                 skills: ['Tidal Fury', 'Deluge'],
-                xpReward: 580,
-                goldReward: [140, 210],
+                xpReward: 550,
+                goldReward: [112, 185],
                 element: 'water'
             }
         ],
@@ -363,8 +363,8 @@ const INFECTED_POOLS = {
                 desc: 'Offspring of the ancient kraken',
                 stats: { hp: 4500, atk: 44, def: 30, mag: 28, spd: 26, luck: 22, crit: 26 },
                 skills: ['Whirlpool Vortex', 'Ink Cloud', 'Crush'],
-                xpReward: 1100,
-                goldReward: [280, 480],
+                xpReward: 1400,
+                goldReward: [360, 580],
                 element: 'water'
             }
         ]
@@ -386,8 +386,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected armored in obsidian',
                 stats: { hp: 2800, atk: 38, def: 45, mag: 15, spd: 12, luck: 16, crit: 18 },
                 skills: ['Obsidian Slam', 'Lava Shield'],
-                xpReward: 650,
-                goldReward: [160, 260],
+                xpReward: 700,
+                goldReward: [140, 230],
                 element: 'earth'
             },
             {
@@ -397,8 +397,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected crystalized into diamond',
                 stats: { hp: 2500, atk: 42, def: 40, mag: 18, spd: 16, luck: 18, crit: 22 },
                 skills: ['Diamond Barrage', 'Crystal Fortress'],
-                xpReward: 680,
-                goldReward: [170, 270],
+                xpReward: 730,
+                goldReward: [145, 240],
                 element: 'earth'
             }
         ],
@@ -411,8 +411,8 @@ const INFECTED_POOLS = {
                 desc: 'Living mountain infected of immense size',
                 stats: { hp: 8000, atk: 46, def: 60, mag: 20, spd: 10, luck: 20, crit: 15 },
                 skills: ['Avalanche', 'Mountain Crusher', 'Earthquake'],
-                xpReward: 1300,
-                goldReward: [340, 560],
+                xpReward: 1700,
+                goldReward: [420, 680],
                 element: 'earth'
             }
         ]
@@ -434,8 +434,8 @@ const INFECTED_POOLS = {
                 desc: 'Horrifically mutated infected',
                 stats: { hp: 4500, atk: 45, def: 30, mag: 22, spd: 20, luck: 18, crit: 24 },
                 skills: ['Toxic Spray', 'Mutation Burst'],
-                xpReward: 800,
-                goldReward: [200, 320],
+                xpReward: 900,
+                goldReward: [185, 295],
                 element: 'chaos'
             },
             {
@@ -445,8 +445,8 @@ const INFECTED_POOLS = {
                 desc: 'Multi-headed mutated infected',
                 stats: { hp: 4200, atk: 50, def: 28, mag: 20, spd: 24, luck: 20, crit: 28 },
                 skills: ['Triple Strike', 'Regenerate'],
-                xpReward: 850,
-                goldReward: [210, 340],
+                xpReward: 950,
+                goldReward: [195, 310],
                 element: 'chaos'
             }
         ],
@@ -459,8 +459,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected evolved to perfection',
                 stats: { hp: 12000, atk: 55, def: 38, mag: 30, spd: 28, luck: 24, crit: 32 },
                 skills: ['Adaptive Strike', 'Evolution', 'Bio Hazard'],
-                xpReward: 1500,
-                goldReward: [400, 650],
+                xpReward: 2200,
+                goldReward: [520, 840],
                 element: 'chaos'
             }
         ]
@@ -482,8 +482,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected controlling ice and fire',
                 stats: { hp: 5500, atk: 48, def: 35, mag: 35, spd: 25, luck: 22, crit: 26 },
                 skills: ['Thermal Shock', 'Elemental Fusion'],
-                xpReward: 950,
-                goldReward: [240, 400],
+                xpReward: 1100,
+                goldReward: [230, 380],
                 element: 'hybrid'
             },
             {
@@ -493,8 +493,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected merging lightning and stone',
                 stats: { hp: 6000, atk: 52, def: 40, mag: 32, spd: 22, luck: 20, crit: 24 },
                 skills: ['Thunder Quake', 'Static Armor'],
-                xpReward: 1000,
-                goldReward: [260, 420],
+                xpReward: 1150,
+                goldReward: [240, 400],
                 element: 'hybrid'
             }
         ],
@@ -507,8 +507,8 @@ const INFECTED_POOLS = {
                 desc: 'Master of all elements',
                 stats: { hp: 15000, atk: 58, def: 45, mag: 50, spd: 30, luck: 28, crit: 30 },
                 skills: ['Elemental Chaos', 'Prismatic Blast', 'Omni-Shield'],
-                xpReward: 1800,
-                goldReward: [480, 780],
+                xpReward: 2800,
+                goldReward: [640, 1000],
                 element: 'hybrid'
             }
         ]
@@ -530,8 +530,8 @@ const INFECTED_POOLS = {
                 desc: 'Elite fire infected commander',
                 stats: { hp: 8000, atk: 60, def: 42, mag: 45, spd: 32, luck: 26, crit: 34 },
                 skills: ['Apocalypse Flame', 'Inferno Domain'],
-                xpReward: 1200,
-                goldReward: [300, 500],
+                xpReward: 1400,
+                goldReward: [280, 460],
                 element: 'fire'
             },
             {
@@ -541,8 +541,8 @@ const INFECTED_POOLS = {
                 desc: 'Infected that consumes stars',
                 stats: { hp: 7500, atk: 65, def: 40, mag: 48, spd: 35, luck: 28, crit: 36 },
                 skills: ['Solar Destruction', 'Supernova'],
-                xpReward: 1300,
-                goldReward: [320, 530],
+                xpReward: 1500,
+                goldReward: [300, 490],
                 element: 'fire'
             }
         ],
@@ -555,8 +555,8 @@ const INFECTED_POOLS = {
                 desc: 'The first flame, source of all fire',
                 stats: { hp: 20000, atk: 70, def: 50, mag: 60, spd: 35, luck: 30, crit: 40 },
                 skills: ['Genesis Fire', 'Heat Death', 'Eternal Burn'],
-                xpReward: 2200,
-                goldReward: [600, 1000],
+                xpReward: 3500,
+                goldReward: [800, 1300],
                 element: 'fire'
             }
         ]
@@ -578,8 +578,8 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 12000, atk: 15, def: 10, mag: 5, spd: 10, luck: 8, crit: 8 },
             skills: ['Colossal Slam', 'Infection Spread', 'Rampage', 'Rage Mode'],
             phases: ['Normal', 'Enraged', 'Desperate'],
-            xpReward: 2000,
-            goldReward: [600, 1000],
+            xpReward: 3000,
+            goldReward: [800, 1400],
             specialDrop: 'colossus_core',
             levelRange: [1, 60]
         },
@@ -591,8 +591,8 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 15000, atk: 18, def: 15, mag: 8, spd: 8, luck: 10, crit: 10 },
             skills: ['Guardian Strike', 'Ancient Barrier', 'Judgement', 'Corrupted Fury'],
             phases: ['Defensive', 'Balanced', 'Aggressive'],
-            xpReward: 2200,
-            goldReward: [650, 1100],
+            xpReward: 3500,
+            goldReward: [900, 1600],
             specialDrop: 'guardian_shield',
             levelRange: [1, 60]
         }
@@ -608,8 +608,8 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 35000, atk: 65, def: 50, mag: 80, spd: 35, luck: 30, crit: 30 },
             skills: ['Elemental Storm', 'Prismatic Ray', 'Element Shift', 'Cataclysm'],
             phases: ['Fire Phase', 'Water Phase', 'Final Form'],
-            xpReward: 3500,
-            goldReward: [1000, 1800],
+            xpReward: 6000,
+            goldReward: [1500, 2500],
             specialDrop: 'archon_essence',
             levelRange: [61, 90]
         },
@@ -621,8 +621,8 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 45000, atk: 70, def: 45, mag: 60, spd: 40, luck: 35, crit: 35 },
             skills: ['Adaptive Assault', 'Genetic Overload', 'Evolution Burst', 'Perfect Form'],
             phases: ['Basic', 'Advanced', 'Perfect'],
-            xpReward: 4000,
-            goldReward: [1200, 2000],
+            xpReward: 8000,
+            goldReward: [2000, 3200],
             specialDrop: 'mutation_sample',
             levelRange: [61, 90]
         }
@@ -638,8 +638,8 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 85000, atk: 85, def: 60, mag: 100, spd: 45, luck: 40, crit: 45 },
             skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion'],
             phases: ['Contained', 'Unleashed', 'Transcendent'],
-            xpReward: 6000,
-            goldReward: [2000, 3500],
+            xpReward: 15000,
+            goldReward: [4000, 7000],
             specialDrop: 'void_crystal',
             levelRange: [91, 110]
         },
