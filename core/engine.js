@@ -3676,8 +3676,11 @@ We are happy to have you here.
                     txt.toLowerCase() ===
                       `${botConfig.getPrefix().toLowerCase()} ping`
                   ) {
+                    const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
+                    const diffMs = Date.now() - msgTime;
+                    const diffMicro = diffMs * 1000;
                     return await sock.sendMessage(chatId, {
-                      text: "pong! 🏓 (Engine is alive)",
+                      text: `pong! 🏓\nResponse Time: ${diffMicro} µs`,
                     });
                   }
 
