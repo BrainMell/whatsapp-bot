@@ -15864,8 +15864,11 @@ _(Or reply to their message)_
                     // send text response
                     await reply(replyText);
 
-                    // send sticker only if file exists
-                    if (stickerPath && fs.existsSync(stickerPath)) {
+                    // Determine sticker probability based on mood
+                    const stickerChance = mood === "neutral" ? 0.15 : 0.40;
+                    
+                    // send sticker only if file exists and chance hits
+                    if (stickerPath && fs.existsSync(stickerPath) && Math.random() < stickerChance) {
                       try {
                         await sock.sendMessage(chatId, {
                           sticker: fs.readFileSync(stickerPath),
