@@ -5251,7 +5251,7 @@ const handleCombatAction = async (
 
     const usableItems = inventory.items.filter((item) => {
       const info = lootSystem.getItemInfo(item.id);
-      return info && info.usable;
+      return (info && info.usable) || !!CONSUMABLES[item.id];
     });
 
     const itemIndex = parseInt(target) - 1;
