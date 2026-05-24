@@ -826,18 +826,20 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') || (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
 
     // Base Stat Scaling
-    scaled.stats.hp = Math.floor(enemy.stats.hp * partyFactor * (1 + (rankIndex * 0.15))); // HP scales slightly faster
+    scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * (1 + (rankIndex * 0.15))); // HP scales slightly faster
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
+    scaled.stats.maxHp = scaled.stats.hp; // Store max HP for UI and tracking
 
-    // Apply Damage Scaling (ATK/MAG)
-    scaled.stats.atk = Math.floor(enemy.stats.atk * partyFactor * dmgMult);
-    scaled.stats.mag = Math.floor(enemy.stats.mag * partyFactor * dmgMult);
+    // Apply Damage Scaling (ATK/MAG/DEF)
+    scaled.stats.atk = Math.floor((enemy.stats.atk || 0) * partyFactor * dmgMult);
+    scaled.stats.mag = Math.floor((enemy.stats.mag || 0) * partyFactor * dmgMult);
+    scaled.stats.def = Math.floor((enemy.stats.def || 0) * partyFactor * dmgMult);
     
     // Apply Speed Scaling with Rubber-Banding Logic
     // "High level player -> Mob slower. Low level player -> Mob faster."
     // This implies mobs try to match player speed but deviate based on level gap.
     
-    let baseSpeed = Math.floor(enemy.stats.spd * partyFactor * spdMult);
+    let baseSpeed = Math.floor((enemy.stats.spd || 10) * partyFactor * spdMult);
     if (isElite) baseSpeed = Math.floor(baseSpeed * 1.20);
     
     // Rubber Banding:

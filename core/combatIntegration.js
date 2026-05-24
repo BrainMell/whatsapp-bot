@@ -71,39 +71,6 @@ function generateStartCaption(players, enemies, encounterInfo) {
     }
     caption += `\n`;
     
-    // Party block
-    caption += `┌─────── 👥 PARTY ───────┐\n`;
-    for (const player of players) {
-        const classIcon = player.class?.icon || '⚔️';
-        const maxHp = player.stats?.maxHp || player.stats?.hp || 1;
-        const hpPct = Math.max(0, Math.floor((player.currentHP / maxHp) * 100));
-        const hpBar = createHPBar(hpPct, 8);
-        const energy = player.energy ?? 100;
-        
-        caption += `│ ${classIcon} *${player.name}* (Lv.${player.level})\n`;
-        caption += `│  ❤️ ${hpBar} ${player.currentHP}/${maxHp}\n`;
-        caption += `│  ⚡ ${createEnergyPips(energy)} ${energy}/100\n`;
-        
-        if (player.equipment) {
-            const gear = Object.values(player.equipment).filter(Boolean).map(i => i.name).join(', ');
-            if (gear) caption += `│  ⚙️ _${gear}_\n`;
-        }
-    }
-    caption += `└────────────────────────┘\n\n`;
-    
-    // Enemies block
-    caption += `┌────── 👹 ENEMIES ──────┐\n`;
-    for (const enemy of enemies) {
-        const maxHp = enemy.stats?.maxHp || enemy.stats?.hp || 100;
-        const hpPct = Math.max(0, Math.floor((enemy.currentHP / maxHp) * 100));
-        const hpBar = createHPBar(hpPct, 8);
-        const bossTag = enemy.isBoss ? ' 👑 *BOSS*' : '';
-        
-        caption += `│ ${enemy.icon || '👹'} *${enemy.name}*${bossTag}\n`;
-        caption += `│  ❤️ ${hpBar} ${enemy.currentHP}/${maxHp}\n`;
-    }
-    caption += `└────────────────────────┘\n\n`;
-    
     caption += `⏳ _Awaiting first action..._`;
     return caption;
 }
@@ -136,41 +103,6 @@ function generateTurnCaption(players, enemies, turnInfo) {
         if (turnInfo.effects?.length > 0) caption += `✨ ${turnInfo.effects.join(' · ')}\n`;
         caption += `\n`;
     }
-    
-    // Party status
-    caption += `┌─── 👥 PARTY ───┐\n`;
-    for (const player of players) {
-        if (player.currentHP <= 0) {
-            caption += `│ 💀 ~~${player.name}~~ — *DOWN*\n`;
-            continue;
-        }
-        const maxHp = player.stats?.maxHp || player.stats?.hp || 1;
-        const hpPct = Math.max(0, Math.floor((player.currentHP / maxHp) * 100));
-        const hpBar = createHPBar(hpPct, 8);
-        
-        // Status effect prefix
-        const statusTag = getStatusTag(player.statusEffects);
-        caption += `│ ${player.class?.icon || '⚔️'} ${statusTag}*${player.name}*\n`;
-        caption += `│  ${hpBar} ${player.currentHP}/${maxHp}\n`;
-    }
-    caption += `└─────────────────┘\n\n`;
-    
-    // Enemy status
-    caption += `┌─── 👹 ENEMIES ───┐\n`;
-    for (const enemy of enemies) {
-        if (enemy.currentHP <= 0) {
-            caption += `│ 💀 ~~${enemy.name}~~ — *SLAIN*\n`;
-            continue;
-        }
-        const maxHp = enemy.stats?.maxHp || enemy.stats?.hp || 100;
-        const hpPct = Math.max(0, Math.floor((enemy.currentHP / maxHp) * 100));
-        const hpBar = createHPBar(hpPct, 8);
-        const statusTag = getStatusTag(enemy.statusEffects);
-        
-        caption += `│ ${enemy.icon || '👹'} ${statusTag}*${enemy.name}*\n`;
-        caption += `│  ${hpBar} ${enemy.currentHP}/${maxHp}\n`;
-    }
-    caption += `└──────────────────┘\n\n`;
     
     caption += `⏳ _Next action loading..._`;
     return caption;
