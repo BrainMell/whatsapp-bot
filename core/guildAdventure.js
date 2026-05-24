@@ -2962,10 +2962,10 @@ async function promptPlayerAction(sock, player, sessionKey) {
   }
 
   msg += `\n*ACTIONS:*\n`;
-  msg += `⚔️ \`.j combat atk <#>\`\n`;
-  msg += `✨ \`.j combat skill <#>\`\n`;
-  msg += `🎒 \`.j combat item <#>\`\n`;
-  msg += `🛡️ \`.j combat def\`\n`;
+  msg += `⚔️ \`${botConfig.getPrefix()} combat atk <#>\`\n`;
+  msg += `✨ \`${botConfig.getPrefix()} combat skill <#>\`\n`;
+  msg += `🎒 \`${botConfig.getPrefix()} combat item <#>\`\n`;
+  msg += `🛡️ \`${botConfig.getPrefix()} combat def\`\n`;
 
   if (usableItems.length > 0) {
     msg += `\n*BAG:*\n`;
@@ -2974,7 +2974,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
       msg += `${i + 1}. ${info.name} x${item.quantity}\n`;
     });
     if (usableItems.length > 3)
-      msg += `...+${usableItems.length - 3} more (.j bag)\n`;
+      msg += `...+${usableItems.length - 3} more (${botConfig.getPrefix()} bag)\n`;
   } else {
     msg += `_No usable items_\n`;
   }
@@ -3987,8 +3987,8 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
   }
 
   msg += `━━━━━━━━━━━━\n`;
-  msg += `👉 \`.j ${isSolo ? "solo" : "quest"} <Rank>\`\n`;
-  msg += `Ex: \`.j ${isSolo ? "solo" : "quest"} D\``;
+  msg += `👉 \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} <Rank>\`\n`;
+  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} D\``;
 
   return msg;
 };
@@ -4422,7 +4422,7 @@ async function openShop(sock, sessionKey) {
   });
 
   msg += `━━━━━━━━━━━━\n`;
-  msg += `💬 \`.j buy <#>\` to purchase`;
+  msg += `💬 \`${botConfig.getPrefix()} buy <#>\` to purchase`;
 
   try {
     await sock.sendMessage(state.chatId, { text: msg });
@@ -4486,7 +4486,7 @@ async function nextStage(sock, groq, sessionKey) {
       msg += `┗━━━━━━━━━━━━┛\n\n`;
       msg += `🔴 *Door 1: Riches*\n   Elite Combat — 2x Loot\n\n`;
       msg += `🔵 *Door 2: Safety*\n   Rest — Heal 30% HP/EN\n\n`;
-      msg += `Vote: \`.j vote 1\` or \`.j vote 2\`\n`;
+      msg += `Vote: \`${botConfig.getPrefix()} vote 1\` or \`${botConfig.getPrefix()} vote 2\`\n`;
       msg += `⏱️ 30 seconds!`;
 
       state.votes = {};
@@ -4709,7 +4709,7 @@ async function handleMerchantEncounter(sock, encounter, sessionKey) {
     }
   });
 
-  msg += `💬 Type \`.j buy <#>\` to purchase an item.\n`;
+  msg += `💬 Type \`${botConfig.getPrefix()} buy <#>\` to purchase an item.\n`;
   msg += `⏰ The merchant will leave in ${GAME_CONFIG.VOTE_TIME / 1000}s...`;
 
   try {
@@ -4749,7 +4749,7 @@ async function handleNonCombatEncounter(sock, encounter, sessionKey) {
     msg += `${i + 1}. ${choice.text} (${choice.stat} Check)\n`;
   });
 
-  msg += `\n💬 Type: \`.j vote <#>\` to choose!`;
+  msg += `\n💬 Type: \`${botConfig.getPrefix()} vote <#>\` to choose!`;
 
   try {
     await sock.sendMessage(state.chatId, { text: msg });
@@ -5223,7 +5223,7 @@ const handleCombatAction = async (
     const abilityTarget = parts[1];
 
     if (!abilityIndex) {
-      return "❌ Specify ability number!\n\nExample: `.j combat ability 1` or `.j combat ability 1 2`";
+      return `❌ Specify ability number!\n\nExample: \`${botConfig.getPrefix()} combat ability 1\` or \`${botConfig.getPrefix()} combat ability 1 2\``;
     }
 
     // Check ability validity first

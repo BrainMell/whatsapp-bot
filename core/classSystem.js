@@ -710,7 +710,7 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
             
             // Check Trial
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
-                missing.push(`Defeat ${req.trialBoss} (.j trial)`);
+                missing.push(`Defeat ${req.trialBoss} (${require('../botConfig').getPrefix()} trial)`);
             }
 
             evolutions.push({

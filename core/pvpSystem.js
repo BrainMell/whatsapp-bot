@@ -203,7 +203,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
         const ability = learned[abilityIndex];
 
-        if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`.j abilities\` to see your list.` };
+        if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../botConfig').getPrefix()} abilities\` to see your list.` };
 
         const skillLevel = economy.getUser(currentPlayer.jid)?.skills?.[ability.id] || 1;
         const effect = skillTree.getSkillEffect(ability, skillLevel);

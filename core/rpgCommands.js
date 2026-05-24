@@ -102,7 +102,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     // Stat points
     if (sheet?.statPoints > 0) { 
         msg += `\n✨ *${sheet.statPoints} stat pts!*\n`;
-        msg += `\`.j allocate hp 5\`\n`;
+        msg += `\`${botConfig.getPrefix()} allocate hp 5\`\n`;
     }
     
     // Equipment summary
@@ -122,8 +122,8 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         msg += `_None equipped_\n`;
     }
     
-    msg += `\n📜 Quests: ${economyUser?.questsCompleted || 0}\n`;
-    msg += `\`.j inventory\` · \`.j equip\``;
+    msg += `📜 Quests: ${economyUser?.questsCompleted || 0}\n`;
+    msg += `\`${botConfig.getPrefix()} inventory\` · \`${botConfig.getPrefix()} equip\``;
 
     try {
         if (pfpUrl) { 
@@ -228,8 +228,8 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   });
 
   msg += `\n━━━━━━━━━━━━━━━━━━\n`;
-  if (totalPages > 1) msg += `📄 \`.j bag ${clampedPage < totalPages ? clampedPage + 1 : 1}\` for next page\n`;
-  msg += `⚔️ \`.j equip <#>\`  💰 \`.j sell <#>\`  🧪 \`.j use <#>\``;
+  if (totalPages > 1) msg += `📄 \`${botConfig.getPrefix()} bag ${clampedPage < totalPages ? clampedPage + 1 : 1}\` for next page\n`;
+  msg += `⚔️ \`${botConfig.getPrefix()} equip <#>\`  💰 \`${botConfig.getPrefix()} sell <#>\`  🧪 \`${botConfig.getPrefix()} use <#>\``;
 
   await sock.sendMessage(chatId, { text: msg });
 }
