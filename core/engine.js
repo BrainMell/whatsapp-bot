@@ -3,6 +3,7 @@ const botConfig = require("../botConfig");
 const { storage } = botConfig;
 const system = require("./system");
 const economy = require("./economy");
+const lidResolver = require("./lidResolver");
 const loans = require("./loans");
 const ChatMessage = require("./models/ChatMessage");
 const ErrorLog = require("./models/ErrorLog");
@@ -53,41 +54,7 @@ const overrideUsers = new Set();
 const busyUsers = new Set();
 
 function resolveLidToPhone(jid, authPath) {
-  if (!jid || !jid.endsWith("@lid")) return jid;
-  const lid = jid.split("@")[0];
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    
-    // 1. Try the current instance's auth folder first
-    if (!authPath) {
-      const botConfig = require("../botConfig");
-      authPath = botConfig.getAuthPath();
-    }
-    if (authPath) {
-      const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
-      if (fs.existsSync(reverseLidPath)) {
-        const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
-        if (mappedPhone) return `${mappedPhone}@s.whatsapp.net`;
-      }
-    }
-    
-    // 2. Fallback: Search in all instances' auth folders
-    const instancesDir = path.join(__dirname, "..", "instances");
-    if (fs.existsSync(instancesDir)) {
-      const folders = fs.readdirSync(instancesDir).filter(f => 
-        fs.statSync(path.join(instancesDir, f)).isDirectory()
-      );
-      for (const folder of folders) {
-        const fallbackPath = path.join(instancesDir, folder, "auth", `lid-mapping-${lid}_reverse.json`);
-        if (fs.existsSync(fallbackPath)) {
-          const mappedPhone = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
-          if (mappedPhone) return `${mappedPhone}@s.whatsapp.net`;
-        }
-      }
-    }
-  } catch (e) {}
-  return jid;
+  return lidResolver.resolveLidToPhone(jid, authPath);
 }
 
 
@@ -3209,6 +3176,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           economy.loadEconomy(),
           guilds.loadGuilds(),
           loans.loadLoans(),
+          lidResolver.loadLidMappings(),
         ]);
 
         // Chess must be loaded after system data is ready
