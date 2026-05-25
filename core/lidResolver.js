@@ -2,8 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const LidMapping = require('./models/LidMapping');
 
-// In-memory cache: lid (string) -> phone (string)
+// In-memory caches for bi-directional mapping
 const lidCache = new Map();
+const phoneCache = new Map();
 
 // Load all mappings from MongoDB and scan local auth files for any unsaved ones
 async function loadLidMappings() {
@@ -13,6 +14,7 @@ async function loadLidMappings() {
         const mappings = await LidMapping.find({});
         for (const m of mappings) {
             lidCache.set(m.lid, m.phone);
+            phoneCache.set(m.phone, m.lid);
         }
         console.log(`✅ [LID Resolver] Loaded ${mappings.length} LID mappings from MongoDB`);
 
@@ -26,17 +28,35 @@ async function loadLidMappings() {
             for (const folder of folders) {
                 const authDir = path.join(instancesDir, folder, "auth");
                 if (fs.existsSync(authDir)) {
-                    const files = fs.readdirSync(authDir).filter(file => 
+                    // A. Read reverse mapping files: lid-mapping-<LID>_reverse.json
+                    const reverseFiles = fs.readdirSync(authDir).filter(file => 
                         file.startsWith("lid-mapping-") && file.endsWith("_reverse.json")
                     );
-                    for (const file of files) {
+                    for (const file of reverseFiles) {
                         const lid = file.replace("lid-mapping-", "").replace("_reverse.json", "");
                         if (!lidCache.has(lid)) {
                             try {
                                 const filePath = path.join(authDir, file);
                                 const phone = JSON.parse(fs.readFileSync(filePath, "utf8"));
                                 if (phone) {
-                                    // Save to MongoDB and add to cache
+                                    await saveLidMapping(lid, phone);
+                                    syncedCount++;
+                                }
+                            } catch (err) {}
+                        }
+                    }
+
+                    // B. Read forward mapping files: lid-mapping-<phone>.json
+                    const forwardFiles = fs.readdirSync(authDir).filter(file => 
+                        file.startsWith("lid-mapping-") && !file.endsWith("_reverse.json") && file.endsWith(".json")
+                    );
+                    for (const file of forwardFiles) {
+                        const phone = file.replace("lid-mapping-", "").replace(".json", "");
+                        if (!phoneCache.has(phone)) {
+                            try {
+                                const filePath = path.join(authDir, file);
+                                const lid = JSON.parse(fs.readFileSync(filePath, "utf8"));
+                                if (lid) {
                                     await saveLidMapping(lid, phone);
                                     syncedCount++;
                                 }
@@ -54,10 +74,11 @@ async function loadLidMappings() {
     }
 }
 
-// Save mapping to MongoDB and update local cache
+// Save mapping to MongoDB and update local caches
 async function saveLidMapping(lid, phone) {
     if (!lid || !phone) return;
     lidCache.set(lid, phone);
+    phoneCache.set(phone, lid);
     try {
         console.log(`💾 [LID Resolver] Saving mapping to MongoDB: ${lid} -> ${phone}`);
         await LidMapping.findOneAndUpdate(
@@ -65,71 +86,125 @@ async function saveLidMapping(lid, phone) {
             { $set: { phone: phone } },
             { upsert: true }
         );
-        console.log(`💾 [LID Resolver] Successfully saved mapping to MongoDB for ${lid}`);
     } catch (e) {
         console.error(`❌ [LID Resolver] Error saving LID mapping to MongoDB for ${lid}:`, e.message);
     }
 }
 
-// Synchronous resolver using in-memory cache, filesystem search, and async DB save
+// Bi-directional resolver that maps incoming JID to the canonical JID registered in database
 function resolveLidToPhone(jid, authPath) {
-    if (!jid || !jid.endsWith("@lid")) return jid;
-    const lid = jid.split("@")[0];
+    if (!jid) return jid;
     
-    console.log(`🔍 [LID Resolver] Resolving LID: ${jid} (authPath: ${authPath})`);
-
-    // 1. Try cache
-    if (lidCache.has(lid)) {
-        const phone = `${lidCache.get(lid)}@s.whatsapp.net`;
-        console.log(`✅ [LID Resolver] Cache Hit: ${jid} -> ${phone}`);
-        return phone;
-    }
+    let lid = null;
+    let phone = null;
     
-    // 2. Try the current auth path
-    try {
-        if (authPath) {
-            const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
-            if (fs.existsSync(reverseLidPath)) {
-                const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
-                if (mappedPhone) {
-                    const phone = `${mappedPhone}@s.whatsapp.net`;
-                    console.log(`✅ [LID Resolver] File Hit (Current Auth): ${jid} -> ${phone}`);
-                    saveLidMapping(lid, mappedPhone); // Asynchronous background save
-                    return phone;
-                }
-            }
-        }
-        
-        // 3. Fallback: Scan other instances' auth directories
-        const instancesDir = path.join(__dirname, "..", "instances");
-        if (fs.existsSync(instancesDir)) {
-            const folders = fs.readdirSync(instancesDir).filter(f => 
-                fs.statSync(path.join(instancesDir, f)).isDirectory()
-            );
-            for (const folder of folders) {
-                const fallbackPath = path.join(instancesDir, folder, "auth", `lid-mapping-${lid}_reverse.json`);
-                if (fs.existsSync(fallbackPath)) {
-                    const mappedPhone = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
-                    if (mappedPhone) {
-                        const phone = `${mappedPhone}@s.whatsapp.net`;
-                        console.log(`✅ [LID Resolver] File Hit (Fallback Auth in ${folder}): ${jid} -> ${phone}`);
-                        saveLidMapping(lid, mappedPhone); // Asynchronous background save
-                        return phone;
+    if (jid.endsWith("@lid")) {
+        lid = jid.split("@")[0];
+        // Try cache
+        if (lidCache.has(lid)) {
+            phone = lidCache.get(lid);
+        } else {
+            // Try current auth path
+            try {
+                if (authPath) {
+                    const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
+                    if (fs.existsSync(reverseLidPath)) {
+                        const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
+                        if (mappedPhone) {
+                            phone = mappedPhone;
+                            saveLidMapping(lid, phone);
+                        }
                     }
                 }
-            }
+                // Try fallback other auth paths
+                if (!phone) {
+                    const instancesDir = path.join(__dirname, "..", "instances");
+                    if (fs.existsSync(instancesDir)) {
+                        const folders = fs.readdirSync(instancesDir).filter(f => 
+                            fs.statSync(path.join(instancesDir, f)).isDirectory()
+                        );
+                        for (const folder of folders) {
+                            const fallbackPath = path.join(instancesDir, folder, "auth", `lid-mapping-${lid}_reverse.json`);
+                            if (fs.existsSync(fallbackPath)) {
+                                const mappedPhone = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
+                                if (mappedPhone) {
+                                    phone = mappedPhone;
+                                    saveLidMapping(lid, phone);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {}
         }
-    } catch (e) {
-        console.error("❌ [LID Resolver] Error in resolveLidToPhone:", e.message);
+    } else if (jid.endsWith("@s.whatsapp.net")) {
+        phone = jid.split("@")[0];
+        // Try cache
+        if (phoneCache.has(phone)) {
+            lid = phoneCache.get(phone);
+        } else {
+            // Try current auth path
+            try {
+                if (authPath) {
+                    const forwardLidPath = path.join(authPath, `lid-mapping-${phone}.json`);
+                    if (fs.existsSync(forwardLidPath)) {
+                        const mappedLid = JSON.parse(fs.readFileSync(forwardLidPath, "utf8"));
+                        if (mappedLid) {
+                            lid = mappedLid;
+                            saveLidMapping(lid, phone);
+                        }
+                    }
+                }
+                // Try fallback other auth paths
+                if (!lid) {
+                    const instancesDir = path.join(__dirname, "..", "instances");
+                    if (fs.existsSync(instancesDir)) {
+                        const folders = fs.readdirSync(instancesDir).filter(f => 
+                            fs.statSync(path.join(instancesDir, f)).isDirectory()
+                        );
+                        for (const folder of folders) {
+                            const fallbackPath = path.join(instancesDir, folder, "auth", `lid-mapping-${phone}.json`);
+                            if (fs.existsSync(fallbackPath)) {
+                                const mappedLid = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
+                                if (mappedLid) {
+                                    lid = mappedLid;
+                                    saveLidMapping(lid, phone);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {}
+        }
+    } else {
+        return jid;
     }
     
-    console.log(`⚠️ [LID Resolver] Failed to resolve: ${jid}`);
-    return jid;
+    const lidJid = lid ? `${lid}@lid` : null;
+    const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
+    
+    // Check if either JID is registered in database
+    const economy = require('./economy');
+    if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
+        console.log(`🔗 [LID Resolver] Mapping JID: "${jid}" to registered LID: "${lidJid}"`);
+        return lidJid;
+    }
+    if (phoneJid && economy.economyData && economy.economyData.has(phoneJid)) {
+        console.log(`🔗 [LID Resolver] Mapping JID: "${jid}" to registered Phone: "${phoneJid}"`);
+        return phoneJid;
+    }
+    
+    // If neither JID is registered yet, default to Phone JID if available, else keep incoming
+    const defaultJid = phoneJid || jid;
+    return defaultJid;
 }
 
 module.exports = {
     loadLidMappings,
     saveLidMapping,
     resolveLidToPhone,
-    lidCache
+    lidCache,
+    phoneCache
 };
