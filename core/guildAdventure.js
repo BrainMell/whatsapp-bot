@@ -4117,9 +4117,7 @@ const initAdventure = async (
 
   const modeEmoji = mode === "PERMADEATH" ? "💀" : "🗺️";
   let msg = `
-╔═══════════════╗
    *${upperRank}-RANK* 🏰
-╚═══════════════╝
 
 📜 *Mode:* ${mode === "PERMADEATH" ? "PERMADEATH" : "NORMAL"}
 🏰 *Rank:* ${rankData.name}
@@ -5360,7 +5358,9 @@ async function applyAbilityEffect(
   let totalHealing = 0;
 
   // DAMAGE ABILITIES
-  if (effect.type === "damage" || effect.type.includes("damage")) {
+  const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "multi_hit", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
+  const isDamageType = damageKeywords.some((t) => effect.type && effect.type.includes(t));
+  if (isDamageType && !effect.type.includes("heal_team")) {
     const targets = getTargets(player, effect, targetIndex, chatId);
     for (const target of targets) {
       if (target.stats.hp <= 0) continue;

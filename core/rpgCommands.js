@@ -80,7 +80,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         console.error("Failed to generate Go character card:", err.message);
     }
 
-    let msg = `┏━━━━━━━━━━━━┓\n┃ 👤 PROFILE  ┃\n┗━━━━━━━━━━━━┛\n\n`;
+    let msg = `👤 PROFILE\n\n`;
     
     // Basic info
     msg += `🎭 *${senderName}*\n`;
@@ -166,7 +166,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
 
   if (formatted.isEmpty) {
     return await sock.sendMessage(chatId, {
-      text: `┏━━━━━━━━━━━━┓\n┃  🎒 BAG     ┃\n┗━━━━━━━━━━━━┛\n\n_Your bag is empty._\n\n💡 Complete quests to earn items!`
+      text: `🎒 BAG\n\n_Your bag is empty._\n\n💡 Complete quests to earn items!`
     });
   }
 
@@ -187,7 +187,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   const pageItems = orderedItems.slice((clampedPage - 1) * ITEMS_PER_PAGE, clampedPage * ITEMS_PER_PAGE);
   const pageStartIndex = (clampedPage - 1) * ITEMS_PER_PAGE;
 
-  let msg = `┏━━━━━━━━━━━━━━┓\n┃  🎒 BAG        ┃\n┗━━━━━━━━━━━━━━┛\n\n`;
+  let msg = `🎒 BAG\n\n`;
   msg += `📦 ${formatted.count}/${formatted.slots} slots  •  Page ${clampedPage}/${totalPages}\n\n`;
 
   let lastRarity = null;
@@ -248,7 +248,7 @@ async function allocateStats(sock, chatId, senderJid, stat, amount = 1) {
     
     const sheet = progression.getCharacterSheet(senderJid);
     
-    let msg = `┏━━━━━━━━━━━━┓\n┃ ✨ STAT UP! ┃\n┗━━━━━━━━━━━━┛\n\n`;
+    let msg = `✨ STAT UP!\n\n`;
     msg += `${getStatIcon(result.stat)} *${result.stat}:* +${result.valueGained}\n\n`;
     msg += `📊 Points Spent: ${result.pointsSpent}\n`;
     msg += `💎 Remaining: ${result.remainingPoints}\n\n`;
@@ -293,7 +293,7 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
         return;
     }
     
-    let msg = `┏━━━━━━━━━━━━┓\n┃ 🏆 TOP 10   ┃\n┗━━━━━━━━━━━━┛\n\n`;
+    let msg = `🏆 TOP 10\n\n`;
     msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
     
     for (let i = 0; i < leaderboard.length; i++) { 
@@ -359,7 +359,7 @@ async function upgradeInventory(sock, chatId, senderJid) {
         return;
     }
     
-    let msg = `┏━━━━━━━━━━━━┓\n┃ ✨ BAG+ ✨  ┃\n┗━━━━━━━━━━━━┛\n\n`;
+    let msg = `✨ BAG+ ✨\n\n`;
     msg += `💰 Cost: ${getCurrency().symbol}${result.cost.toLocaleString()}\n`;
     msg += `📦 Slots: ${result.oldSlots} → ${result.newSlots}\n`;
     msg += `🎁 Gained: +${result.slotsGained} slots`;
@@ -376,7 +376,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     if (!equipment) return;
 
     if (!itemId || !slot) { 
-        let msg = `━━━━━━━━━━━━━\n┃   🛡️ EQUIPMENT  ┃ \n┗━━━━━━━━━━━━━\n\n`;
+        let msg = `━━━━━━━━━━━━━\n🛡️ EQUIPMENT \n┗━━━━━━━━━━━━━\n\n`;
         const slots = Object.values(inventorySystem.EQUIPMENT_SLOTS);
         
         slots.forEach(slotName => { 
@@ -468,7 +468,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') 
     const pageItems = recipes.slice(startIdx, startIdx + itemsPerPage);
 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
-    let msg = `┏━━━━━━━━━━━━┓\n┃ ${(titleMap[categoryFilter] || categoryFilter).slice(0,10).padEnd(10)} ┃\n┗━━━━━━━━━━━━┛\n(Page ${currentPage}/${totalPages})\n\n`;
+    let msg = `${(titleMap[categoryFilter] || categoryFilter).slice(0,10).padEnd(10)}\n(Page ${currentPage}/${totalPages})\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found in this category._\n\n`;
 
     pageItems.forEach(r => { 
@@ -518,7 +518,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const miningLevel = economy.getProfessionLevel(senderJid, 'mining');
     
     if (!locationId) { 
-        let msg = `┏━━━━━━━━━━━━┓\n┃ ⛏️ MINING   ┃\n┗━━━━━━━━━━━━┛\n(Mining Lv.${miningLevel})\n\n`;
+        let msg = `⛏️ MINING\n(Mining Lv.${miningLevel})\n\n`;
         const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
         const userRankIdx = rankOrder.indexOf(sheet.adventurerRank);
 
@@ -607,7 +607,7 @@ async function showItemSource(sock, chatId, itemId) {
     const recipes = craftingSystem.getRecipes();
 
     if (!itemId) { 
-        let msg = `━━━━━━━━━━━━━\n┃   🔍 SOURCES    ┃ \n┗━━━━━━━━━━━━━\n\n`;
+        let msg = `━━━━━━━━━━━━━\n🔍 SOURCES \n┗━━━━━━━━━━━━━\n\n`;
         const categories = { 'Drops': [], 'Mining': [], 'Crafting': [] };
         const db = lootSystem.ITEM_DATABASE;
         Object.keys(db).forEach(id => { 
@@ -622,7 +622,7 @@ async function showItemSource(sock, chatId, itemId) {
 
     const id = itemId.toLowerCase();
     const info = lootSystem.getItemInfo(id);
-    let msg = `━━━━━━━━━━━━━\n┃   🔍 FINDING    ┃ \n┗━━━━━━━━━━━━━\n\n*Target:* ${info.name}\n\n`;
+    let msg = `━━━━━━━━━━━━━\n🔍 FINDING \n┗━━━━━━━━━━━━━\n\n*Target:* ${info.name}\n\n`;
     const sources = [];
     for (const loc of Object.values(miningLocs)) if (loc.ores.some(o => o.id === id)) sources.push(`• *Mining*: Found in the *${loc.name}*.`);
     for (const [tableName, table] of Object.entries(lootSystem.LOOT_TABLES)) if (table.items.some(i => i.id === id)) sources.push(`• *${tableName.replace('_', ' ')}*: Found in standard drops.`);
@@ -640,7 +640,7 @@ async function useItem(sock, chatId, senderJid, target) {
             return info.type === 'POTION' || info.type === 'CONSUMABLE';
         });
         let tip = consumables.length > 0 ? `Items you can use: ${consumables.join(', ')}` : "You don't have any usable consumables.";
-        let msg = `┏━━━━━━━━━━━━━━━┓\n┃   🧪 USE ITEM   ┃\n┗━━━━━━━━━━━━━━━┛\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
+        let msg = `🧪 USE ITEM\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
         return await sock.sendMessage(chatId, { text: msg });
     }
     let itemId = target;

@@ -54,9 +54,9 @@ async function displayShop(sock, chatId, category = 'all') {
     
     const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;
     
-    let msg = `┏━━━━━━━━━━━━┓\n`;
-    msg += `┃ ${activeCat.icon} SHOP     ┃\n`;
-    msg += `┗━━━━━━━━━━━━┛\n\n`;
+    let msg = ``;
+    msg += `${activeCat.icon} SHOP\n`;
+    msg += `\n`;
     
     msg += `📂 *Categories:* \n`;
     Object.entries(categoryInfo).forEach(([key, info]) => {
@@ -371,9 +371,9 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     }
 
     // Fallback to text message
-    let msg = `┏━━━━━━━━━━━━┓\n`;
-    msg += `┃ 👤 CHARACTER ┃\n`;
-    msg += `┗━━━━━━━━━━━━┛\n\n`;
+    let msg = ``;
+    msg += `👤 CHARACTER\n`;
+    msg += `\n`;
     
     msg += `*${finalName}*\n\n`;
     

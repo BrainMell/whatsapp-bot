@@ -152,10 +152,8 @@ function coinflip(userId, amount, choice, economyModule) {
         won: false,
         message: `🪙 *COINFLIP* 🪙
 
-╔════════════════╗
-║ Your choice: ${userChoice}
-║ Result: ${result}
-╚════════════════╝
+Your choice: ${userChoice}
+Result: ${result}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -175,10 +173,8 @@ function coinflip(userId, amount, choice, economyModule) {
       won: true,
       message: `🪙 *COINFLIP* 🪙
 
-╔════════════════╗
-║ Your choice: ${userChoice}
-║ Result: ${result}
-╚════════════════╝
+Your choice: ${userChoice}
+Result: ${result}
 
 🎉 *YOU WON!* 🎉
 +${getZENI()}${gain.toLocaleString()}
@@ -197,10 +193,8 @@ function coinflip(userId, amount, choice, economyModule) {
       won: false,
       message: `🪙 *COINFLIP* 🪙
 
-╔════════════════╗
-║ Your choice: ${userChoice}
-║ Result: ${result}
-╚════════════════╝
+Your choice: ${userChoice}
+Result: ${result}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -245,10 +239,8 @@ function diceRoll(userId, amount, economyModule) {
       won: null,
       message: `🎲 *DICE ROLL* 🎲
 
-╔════════════════╗
-║  Your roll: ${playerRoll}
-║  Dealer roll: ${dealerRoll}
-╚════════════════╝
+ Your roll: ${playerRoll}
+ Dealer roll: ${dealerRoll}
 
 🤝 *TIE!* 🤝
 No money lost or gained
@@ -273,10 +265,8 @@ No money lost or gained
         won: false,
         message: `🎲 *DICE ROLL* 🎲
 
-╔════════════════╗
-║  Your roll: ${playerRoll}
-║  Dealer roll: ${dealerRoll}
-╚════════════════╝
+ Your roll: ${playerRoll}
+ Dealer roll: ${dealerRoll}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -296,10 +286,8 @@ No money lost or gained
       won: true,
       message: `🎲 *DICE ROLL* 🎲
 
-╔════════════════╗
-║  Your roll: ${playerRoll}
-║  Dealer roll: ${dealerRoll}
-╚════════════════╝
+ Your roll: ${playerRoll}
+ Dealer roll: ${dealerRoll}
 
 🎉 *YOU WON!* 🎉
 +${getZENI()}${gain.toLocaleString()}
@@ -318,10 +306,8 @@ No money lost or gained
       won: false,
       message: `🎲 *DICE ROLL* 🎲
 
-╔════════════════╗
-║  Your roll: ${playerRoll}
-║  Dealer roll: ${dealerRoll}
-╚════════════════╝
+ Your roll: ${playerRoll}
+ Dealer roll: ${dealerRoll}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -409,9 +395,7 @@ function slots(userId, amount, economyModule) {
         won: false,
         message: `🎰 *SLOT MACHINE* 🎰
 
-╔═════════════════╗
-║  [ ${reel1} | ${reel2} | ${reel3} ]
-╚═════════════════╝
+ [ ${reel1} | ${reel2} | ${reel3} ]
 
 😢 *NO MATCH!* 😢
 
@@ -432,9 +416,7 @@ function slots(userId, amount, economyModule) {
       won: true,
       message: `🎰 *SLOT MACHINE* 🎰
 
-╔═════════════════╗
-║  [ ${reel1} | ${reel2} | ${reel3} ]
-╚═════════════════╝
+ [ ${reel1} | ${reel2} | ${reel3} ]
 
 ${result === 'JACKPOT' ? '🎊 *JACKPOT!* 🎊' : '🎉 *WIN!* 🎉'}
 ${multiplier}x multiplier!
@@ -455,9 +437,7 @@ ${multiplier}x multiplier!
       won: false,
       message: `🎰 *SLOT MACHINE* 🎰
 
-╔═════════════════╗
-║  [ ${reel1} | ${reel2} | ${reel3} ]
-╚═════════════════╝
+ [ ${reel1} | ${reel2} | ${reel3} ]
 
 😢 *NO MATCH!* 😢
 
@@ -575,10 +555,8 @@ function startBlackjack(userId, amount, economyModule) {
         won: true,
         message: `♠️ *BLACKJACK!* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(playerHand)}
-║ Value: ${playerValue}
-╚════════════════════╝
+Your hand: ${formatHand(playerHand)}
+Value: ${playerValue}
 
 🃏 *NATURAL BLACKJACK!* 🃏
 +${getZENI()}${profit.toLocaleString()} (3:2 payout)
@@ -598,10 +576,8 @@ function startBlackjack(userId, amount, economyModule) {
       won: false,
       message: `♠️ *BLACKJACK!* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(playerHand)}
-║ Value: ${playerValue}
-╚════════════════════╝
+Your hand: ${formatHand(playerHand)}
+Value: ${playerValue}
 
 🃏 *NATURAL BLACKJACK!* 🃏
 😢 *YOU LOST!*
@@ -624,12 +600,10 @@ function startBlackjack(userId, amount, economyModule) {
     gameStarted: true,
     message: `♠️ *BLACKJACK* ♠️
 
-╔═════════════════╗
-║ Hand: ${formatHand(playerHand)}
-║ Val: ${playerValue}
-║ 
-║ Deal: ${formatHand(dealerHand, true)}
-╚═════════════════╝
+Hand: ${formatHand(playerHand)}
+Val: ${playerValue}
+
+Deal: ${formatHand(dealerHand, true)}
 
 ━━━━━━━━━━━━━━━
 Type:
@@ -664,10 +638,8 @@ function blackjackHit(userId, economyModule) {
       won: false,
       message: `♠️ *BLACKJACK* ♠️
 
-╔═════════════════╗
-║ Hand: ${formatHand(game.playerHand)}
-║ Value: ${playerValue}
-╚═════════════════╝
+Hand: ${formatHand(game.playerHand)}
+Value: ${playerValue}
 
 💥 *BUST!* 💥
 You went over 21!
@@ -683,12 +655,10 @@ You went over 21!
     continue: true,
     message: `♠️ *BLACKJACK* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(game.playerHand)}
-║ Value: ${playerValue}
-║ 
-║ Dealer: ${formatHand(game.dealerHand, true)}
-╚════════════════════╝
+Your hand: ${formatHand(game.playerHand)}
+Value: ${playerValue}
+
+Dealer: ${formatHand(game.dealerHand, true)}
 
 ━━━━━━━━━━━━━━━━
 ${botConfig.getPrefix()} bj hit - Get another card
@@ -746,13 +716,11 @@ function blackjackStand(userId, economyModule) {
       won: null,
       message: `♠️ *BLACKJACK* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(game.playerHand)}
-║ Value: ${playerValue}
-║ 
-║ Dealer: ${formatHand(game.dealerHand)}
-║ Value: ${dealerValue}
-╚════════════════════╝
+Your hand: ${formatHand(game.playerHand)}
+Value: ${playerValue}
+
+Dealer: ${formatHand(game.dealerHand)}
+Value: ${dealerValue}
 
 ${result}
 
@@ -795,13 +763,11 @@ ${result}
     won,
     message: `♠️ *BLACKJACK* ♠️
 
-╔════════════════════╗
-║ Your hand: ${formatHand(game.playerHand)}
-║ Value: ${playerValue}
-║ 
-║ Dealer: ${formatHand(game.dealerHand)}
-║ Value: ${dealerValue}
-╚════════════════════╝
+Your hand: ${formatHand(game.playerHand)}
+Value: ${playerValue}
+
+Dealer: ${formatHand(game.dealerHand)}
+Value: ${dealerValue}
 
 ${result}
 ${won ? '+' : ''}${getZENI()}${Math.abs(profit).toLocaleString()}
@@ -849,10 +815,8 @@ function blackjackDouble(userId, economyModule) {
       message: `♠️ *BLACKJACK* ♠️
 
 DOUBLED!
-╔════════════════════╗
-║ Your hand: ${formatHand(game.playerHand)}
-║ Value: ${playerValue}
-╚════════════════════╝
+Your hand: ${formatHand(game.playerHand)}
+Value: ${playerValue}
 
 💥 *BUST!* 💥
 
@@ -981,11 +945,9 @@ function roulette(userId, amount, bet, economyModule) {
       won: true,
       message: `🎡 *ROULETTE* 🎡
 
-╔════════════════════╗
-║ Your bet: ${betType}
-║ 
-║ 🎰 Result: ${result} (${color.toUpperCase()}) 🎰
-╚════════════════════╝
+Your bet: ${betType}
+
+🎰 Result: ${result} (${color.toUpperCase()}) 🎰
 
 🎉 *YOU WON!* 🎉
 ${multiplier}x payout!
@@ -1005,11 +967,9 @@ ${multiplier}x payout!
       won: false,
       message: `🎡 *ROULETTE* 🎡
 
-╔════════════════════╗
-║ Your bet: ${betType}
-║ 
-║ 🎰 Result: ${result} (${color.toUpperCase()}) 🎰
-╚════════════════════╝
+Your bet: ${betType}
+
+🎰 Result: ${result} (${color.toUpperCase()}) 🎰
 
 😢 *YOU LOST!* 😢
 
@@ -1088,10 +1048,8 @@ function startCrash(userId, amount, economyModule, sock, chatId) {
     gameStarted: true,
     message: `🚀 *CRASH GAME STARTED!* 🚀
 
-╔════════════════════╗
-║ 💰 Bet: ${getZENI()}${amount.toLocaleString()}
-║ 📈 Starting: 1.00x
-╚════════════════════╝
+💰 Bet: ${getZENI()}${amount.toLocaleString()}
+📈 Starting: 1.00x
 
 🎯 MULTIPLIER IS RISING!
 
@@ -1252,9 +1210,7 @@ You tried to cash out at ${currentMultiplier}x
     won: true,
     message: `🚀 *CASHED OUT!* 🚀
 
-╔════════════════════╗
-║ ✅ ${currentMultiplier}x MULTIPLIER!
-╚════════════════════╝
+✅ ${currentMultiplier}x MULTIPLIER!
 
 Would've crashed at ${game.crashPoint}x
 
@@ -1325,7 +1281,7 @@ function startMines(userId, amount, mineCount, economyModule) {
 
   return {
     success: true,
-    message: `💣 *MINES GAME STARTED* 💣\n\n💰 *Bet:* ${getZENI()}${amount.toLocaleString()}\n💣 *Mines:* ${mines}\n📈 *Current Multiplier:* 1.00x\n\n╔════════════╗\n║ ⬜ ⬜ ⬜ ⬜ ⬜ ║\n║ ⬜ ⬜ ⬜ ⬜ ⬜ ║\n║ ⬜ ⬜ ⬜ ⬜ ⬜ ║\n║ ⬜ ⬜ ⬜ ⬜ ⬜ ║\n║ ⬜ ⬜ ⬜ ⬜ ⬜ ║\n╚════════════╝\n\nType: \`${botConfig.getPrefix()} mines pick <1-25>\` to reveal a cell!\nType: \`${botConfig.getPrefix()} mines out\` to cash out!`
+    message: `💣 *MINES GAME STARTED* 💣\n\n💰 *Bet:* ${getZENI()}${amount.toLocaleString()}\n💣 *Mines:* ${mines}\n📈 *Current Multiplier:* 1.00x\n\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n\nType: \`${botConfig.getPrefix()} mines pick <1-25>\` to reveal a cell!\nType: \`${botConfig.getPrefix()} mines out\` to cash out!`
   };
 }
 
@@ -1385,15 +1341,15 @@ function minesPick(userId, cellIndex, economyModule) {
   const prob = combination(n - m, r) / combination(n, r);
   game.multiplier = Math.round((0.97 / prob) * 100) / 100; // 3% house edge
 
-  let gridDisplay = "╔════════════╗\n";
+  let gridDisplay = "";
   for (let i = 0; i < 25; i++) {
-    if (i > 0 && i % 5 === 0) gridDisplay += " ║\n║ ";
-    else if (i === 0) gridDisplay += "║ ";
+    if (i > 0 && i % 5 === 0) gridDisplay += " ║\n";
+    else if (i === 0) gridDisplay += "";
     
     if (game.revealed.includes(i)) gridDisplay += "💎 ";
     else gridDisplay += "⬜ ";
   }
-  gridDisplay += " ║\n╚════════════╝";
+  gridDisplay += " ║\n";
 
   return {
     success: true,
@@ -1849,10 +1805,8 @@ function higherLower(userId, amount, guess, economyModule) {
       won: null,
       message: `🎴 *HIGHER/LOWER* 🎴
 
-╔════════════════╗
-║ First card: ${firstCard}
-║ Second card: ${secondCard}
-╚════════════════╝
+First card: ${firstCard}
+Second card: ${secondCard}
 
 🤝 *IT'S A TIE!* 🤝
 Bet returned!
@@ -1876,12 +1830,10 @@ Bet returned!
         won: false,
         message: `🎴 *HIGHER/LOWER* 🎴
 
-╔════════════════╗
-║ First card: ${firstCard}
-║ Your guess: ${userGuess}
-║ Second card: ${secondCard}
-║ Result: ${actualResult}
-╚════════════════╝
+First card: ${firstCard}
+Your guess: ${userGuess}
+Second card: ${secondCard}
+Result: ${actualResult}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -1901,12 +1853,10 @@ Bet returned!
       won: true,
       message: `🎴 *HIGHER/LOWER* 🎴
 
-╔════════════════╗
-║ First card: ${firstCard}
-║ Your guess: ${userGuess}
-║ Second card: ${secondCard}
-║ Result: ${actualResult}
-╚════════════════╝
+First card: ${firstCard}
+Your guess: ${userGuess}
+Second card: ${secondCard}
+Result: ${actualResult}
 
 🎉 *YOU WON!* 🎉
 +${getZENI()}${gain.toLocaleString()}
@@ -1925,12 +1875,10 @@ Bet returned!
       won: false,
       message: `🎴 *HIGHER/LOWER* 🎴
 
-╔════════════════╗
-║ First card: ${firstCard}
-║ Your guess: ${userGuess}
-║ Second card: ${secondCard}
-║ Result: ${actualResult}
-╚════════════════╝
+First card: ${firstCard}
+Your guess: ${userGuess}
+Second card: ${secondCard}
+Result: ${actualResult}
 
 😢 *YOU LOST!* 😢
 -${getZENI()}${amount.toLocaleString()}
@@ -2122,9 +2070,7 @@ function scratchCard(userId, amount, economyModule) {
     success: true,
     message: `🎟️ *SCRATCH CARD* 🎫
 
-╔═══════════════╗
 ${grid}
-╚═══════════════╝
 
 ${winnings > 0 ? `🎉 *MATCHED 3x ${winner}!*` : '😢 *NO MATCH!*'}
 📈 Multiplier: ${multiplier}x
