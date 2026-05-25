@@ -3103,19 +3103,20 @@ async function performAction(sock, player, action, sessionKey) {
           state.stats.monstersKilled++;
           if (resolvedTarget.isBoss) state.stats.bossesDefeated++;
 
-          // 💡 Send message BEFORE combat-end check so player always sees result
-          try {
-            await sock.sendMessage(state.chatId, { text: resultMsg });
-          } catch (e) {}
           state.combatHistory.push(resultMsg);
           delete state.pendingActions[player.jid];
 
-          // 💡 Always show the turn image, even on a one-shot kill, before the victory screen
-          try {
-            await nextTurn(sock, turnInfo, sessionKey);
-          } catch (e) {}
-
           if (await checkCombatEnd(sock, state, sessionKey)) {
+            // 💡 Send message BEFORE ending combat so player always sees result
+            try {
+              await sock.sendMessage(state.chatId, { text: resultMsg });
+            } catch (e) {}
+
+            // 💡 Always show the turn image, even on a one-shot kill, before the victory screen
+            try {
+              await nextTurn(sock, turnInfo, sessionKey);
+            } catch (e) {}
+
             // Combat ended - resolve the turn promise so the loop can clean up
             if (state.resolveTurn) {
               const r = state.resolveTurn;
