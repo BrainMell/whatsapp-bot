@@ -4684,6 +4684,121 @@ _💡 Reply with another number from your search list!_`.trim();
                   // 🏹 WILDERNESS SYSTEMS (FISHING & HUNTING)
                   // ============================================
 
+                  // `${botConfig.getPrefix().toLowerCase()}` fish - go fishing
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`
+                  ) {
+                    if (busyUsers.has(senderJid)) {
+                      return await reply('⏳ Still processing your last action...');
+                    }
+                    busyUsers.add(senderJid);
+                    try {
+                      if (!economy.isRegistered(senderJid)) {
+                        busyUsers.delete(senderJid);
+                        return await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            "❌ Register first to start scavenging!",
+                        });
+                      }
+
+                      const user = economy.getUser(senderJid);
+                      const now = Date.now();
+                      const COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+                      const MAX_FISH = 20;
+
+                      // Check if 5-hour cooldown is active
+                      if (user.fishCount >= MAX_FISH) {
+                        const timePassed = now - (user.lastFishReset || 0);
+                        if (timePassed < COOLDOWN_MS) {
+                          const remainingMs = COOLDOWN_MS - timePassed;
+                          const hours = Math.floor(
+                            remainingMs / (60 * 60 * 1000),
+                          );
+                          const minutes = Math.floor(
+                            (remainingMs % (60 * 60 * 1000)) / (60 * 1000),
+                          );
+                          busyUsers.delete(senderJid);
+                          return await sock.sendMessage(
+                            chatId,
+                            {
+                              text:
+                                BOT_MARKER +
+                                `🪣 *FISHING FATIGUE*\n\nYou've fished 20 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.`,
+                            },
+                            { quoted: m },
+                          );
+                        } else {
+                          // Cooldown expired, reset count
+                          user.fishCount = 0;
+                          user.lastFishReset = now;
+                        }
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🎣", key: m.key },
+                      });
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "⏳ Casting your line... please wait 5s.",
+                      });
+
+                      setTimeout(async () => {
+                        try {
+                          const freshUser = economy.getUser(senderJid); // Re-get to ensure latest data
+                          freshUser.fishCount = (freshUser.fishCount || 0) + 1;
+                          if (freshUser.fishCount === 1)
+                            freshUser.lastFishReset = Date.now();
+                          economy.saveUser(senderJid);
+
+                          const luck = freshUser.stats?.luck || 5;
+
+                          // Rarity Logic
+                          let itemKey = "common_fish";
+                          let emoji = "🐟";
+                          const roll = Math.random() * 100 + luck / 5;
+
+                          if (roll > 98) {
+                            itemKey = "mythic_fish";
+                            emoji = "🦑";
+                          } else if (roll > 85) {
+                            itemKey = "rare_fish";
+                            emoji = "🐠";
+                          }
+
+                          // Infection Check (5%)
+                          if (Math.random() < 0.05) {
+                            itemKey = "infected_fish";
+                            emoji = "☣️";
+                          }
+
+                          const item = lootSystem.getItemInfo(itemKey);
+                          await inventorySystem.addItem(senderJid, itemKey, 1);
+
+                          let msg = GET_BANNER(`🎣 FISHING`) + `\n\n`;
+                          msg += `You reeled something in!\n\n`;
+                          msg += `${emoji} *${item.name}*\n`;
+                          msg += `▫️ Rarity: ${item.rarity}\n`;
+                          msg += `▫️ Value: ${ZENI}${Math.floor(item.value).toLocaleString()}\n\n`;
+                          msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
+
+                          await sock.sendMessage(
+                            chatId,
+                            { text: msg },
+                            { quoted: m },
+                          );
+                          await awardProgression(senderJid, chatId);
+                        } finally {
+                          busyUsers.delete(senderJid);
+                        }
+                      }, 5000);
+                      return;
+                    } catch (e) {
+                      busyUsers.delete(senderJid);
+                      throw e;
+                    }
+                  }
 
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`
@@ -10278,207 +10393,6 @@ _💡 Reply with another number from your search list!_`.trim();
                     // ============================================
                     // 🎮 GENERAL FUN COMMANDS
                     // ============================================
-
-                    // ============================================
-                    // 🎮 GENERAL FUN COMMANDS
-                    // ============================================
-
-                    // ============================================
-                    // 🏹 WILDERNESS SYSTEMS (FISHING & HUNTING)
-                    // ============================================
-
-                    // `${botConfig.getPrefix().toLowerCase()}` fish - go fishing
-                    if (
-                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish`
-                    ) {
-                      if (busyUsers.has(senderJid)) {
-                        return await reply('⏳ Still processing your last action...');
-                      }
-                      busyUsers.add(senderJid);
-                      try {
-                      if (!economy.isRegistered(senderJid)) {
-                        busyUsers.delete(senderJid);
-                        return await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER +
-                            "❌ Register first to start scavenging!",
-                        });
-                      }
-
-                      const user = economy.getUser(senderJid);
-                      const now = Date.now();
-                      const COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
-                      const MAX_FISH = 20;
-
-                      // Check if 5-hour cooldown is active
-                      if (user.fishCount >= MAX_FISH) {
-                        const timePassed = now - (user.lastFishReset || 0);
-                        if (timePassed < COOLDOWN_MS) {
-                          const remainingMs = COOLDOWN_MS - timePassed;
-                          const hours = Math.floor(
-                            remainingMs / (60 * 60 * 1000),
-                          );
-                          const minutes = Math.floor(
-                            (remainingMs % (60 * 60 * 1000)) / (60 * 1000),
-                          );
-                          busyUsers.delete(senderJid);
-                          return await sock.sendMessage(
-                            chatId,
-                            {
-                              text:
-                                BOT_MARKER +
-                                `🪣 *FISHING FATIGUE*\n\nYou've fished 20 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.`,
-                            },
-                            { quoted: m },
-                          );
-                        } else {
-                          // Cooldown expired, reset count
-                          user.fishCount = 0;
-                          user.lastFishReset = now;
-                        }
-                      }
-
-                      await sock.sendMessage(chatId, {
-                        react: { text: "🎣", key: m.key },
-                      });
-                      await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "⏳ Casting your line... please wait 5s.",
-                      });
-
-                      setTimeout(async () => {
-                        try {
-                        const freshUser = economy.getUser(senderJid); // Re-get to ensure latest data
-                        freshUser.fishCount = (freshUser.fishCount || 0) + 1;
-                        if (freshUser.fishCount === 1)
-                          freshUser.lastFishReset = Date.now();
-                        economy.saveUser(senderJid);
-
-                        const luck = freshUser.stats?.luck || 5;
-
-                        // Rarity Logic
-                        let itemKey = "common_fish";
-                        let emoji = "🐟";
-                        const roll = Math.random() * 100 + luck / 5;
-
-                        if (roll > 98) {
-                          itemKey = "mythic_fish";
-                          emoji = "🦑";
-                        } else if (roll > 85) {
-                          itemKey = "rare_fish";
-                          emoji = "🐠";
-                        }
-
-                        // Infection Check (5%)
-                        if (Math.random() < 0.05) {
-                          itemKey = "infected_fish";
-                          emoji = "☣️";
-                        }
-
-                        const item = lootSystem.getItemInfo(itemKey);
-                        await inventorySystem.addItem(senderJid, itemKey, 1);
-
-                        let msg = GET_BANNER(`🎣 FISHING`) + `\n\n`;
-                        msg += `You reeled something in!\n\n`;
-                        msg += `${emoji} *${item.name}*\n`;
-                        msg += `▫️ Rarity: ${item.rarity}\n`;
-                        msg += `▫️ Value: ${ZENI}${Math.floor(item.value).toLocaleString()}\n\n`;
-                        msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
-
-                        await sock.sendMessage(
-                          chatId,
-                          { text: msg },
-                          { quoted: m },
-                        );
-                        await awardProgression(senderJid, chatId);
-                        } finally {
-                          busyUsers.delete(senderJid);
-                        }
-                      }, 5000);
-                      return;
-                      } catch (e) {
-                        busyUsers.delete(senderJid);
-                        throw e;
-                      }
-                    }
-
-                    // `${botConfig.getPrefix().toLowerCase()}` hunt - go hunting
-                    if (
-                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`
-                    ) {
-                      if (!economy.isRegistered(senderJid)) {
-                        return await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER +
-                            "❌ Register first to start scavenging!",
-                        });
-                      }
-
-                      await sock.sendMessage(chatId, {
-                        react: { text: "🏹", key: m.key },
-                      });
-                      await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "⏳ Tracking prey... please wait 5s.",
-                      });
-
-                      setTimeout(async () => {
-                        const user = economy.getUser(senderJid);
-                        const luck = user.stats?.luck || 5;
-
-                        // Animal Pool
-                        const animals = [
-                          { id: "rabbit_hide", emoji: "🐇", weight: 60 },
-                          { id: "deer_antler", emoji: "🦌", weight: 30 },
-                          { id: "bear_claw", emoji: "🐻", weight: 10 },
-                        ];
-
-                        let roll = Math.random() * 100 - luck / 10;
-                        let selected = animals[0];
-
-                        for (const a of animals) {
-                          roll -= a.weight;
-                          if (roll <= 0) {
-                            selected = a;
-                            break;
-                          }
-                        }
-
-                        let itemKey = selected.id;
-                        let emoji = selected.emoji;
-
-                        // Infection Check (5%)
-                        let isInfected = false;
-                        if (Math.random() < 0.05) {
-                          itemKey =
-                            Math.random() < 0.5
-                              ? "infected_heart"
-                              : "infected_shard";
-                          emoji = "☣️";
-                          isInfected = true;
-                        }
-
-                        const item = lootSystem.getItemInfo(itemKey);
-                        await inventorySystem.addItem(senderJid, itemKey, 1);
-
-                        let msg = GET_BANNER(`🏹 HUNTING`) + `\n\n`;
-                        if (isInfected) msg += `⚠️️ *ANOMALY DETECTED!*\n`;
-                        msg += `You tracked and took down a target!\n\n`;
-                        msg += `${emoji} *${item.name}*\n`;
-                        msg += `▫️ Rarity: ${item.rarity}\n`;
-                        msg += `▫️ Value: ${ZENI}${item.value.toLocaleString()}\n\n`;
-                        msg += `💡 Captures can be sold for profit or used in the Lab.`;
-
-                        await sock.sendMessage(
-                          chatId,
-                          { text: msg },
-                          { quoted: m },
-                        );
-                        await awardProgression(senderJid, chatId);
-                      }, 5000);
-                      return;
-                    }
 
                     // AI Roasts with profile data
                     // 1. Personal Roast - Uses User Profile Data
