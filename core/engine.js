@@ -52,6 +52,30 @@ const overrideUsers = new Set();
 // Concurrency lock – prevents double-spend from firing two money commands at once
 const busyUsers = new Set();
 
+function resolveLidToPhone(jid, authPath) {
+  if (!jid || !jid.endsWith("@lid")) return jid;
+  const lid = jid.split("@")[0];
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    if (!authPath) {
+      const botConfig = require("../botConfig");
+      authPath = botConfig.getAuthPath();
+    }
+    if (authPath) {
+      const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
+      if (fs.existsSync(reverseLidPath)) {
+        const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
+        if (mappedPhone) {
+          return `${mappedPhone}@s.whatsapp.net`;
+        }
+      }
+    }
+  } catch (e) {}
+  return jid;
+}
+
+
 // Load blocked users from DB
 async function loadBlockedUsers() {
   const system = require("./system");
@@ -1924,12 +1948,16 @@ What to do:
       // Check mentions
       const mentioned =
         m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) return jidNormalizedUser(mentioned[0]);
+      if (mentioned.length > 0) {
+        return resolveLidToPhone(jidNormalizedUser(mentioned[0]), configInstance.getAuthPath());
+      }
 
       // Check direct reply participant
       const replyParticipant =
         m.message?.extendedTextMessage?.contextInfo?.participant;
-      if (replyParticipant) return jidNormalizedUser(replyParticipant);
+      if (replyParticipant) {
+        return resolveLidToPhone(jidNormalizedUser(replyParticipant), configInstance.getAuthPath());
+      }
 
       // Baileys sometimes wraps the quoted message differently
       const quotedMessage =
@@ -1938,7 +1966,7 @@ What to do:
         // If we have a quoted message, the participant JID should be in contextInfo
         const participant =
           m.message?.extendedTextMessage?.contextInfo?.participant;
-        return participant ? jidNormalizedUser(participant) : null;
+        return participant ? resolveLidToPhone(jidNormalizedUser(participant), configInstance.getAuthPath()) : null;
       }
 
       return null;
@@ -3445,12 +3473,13 @@ We are happy to have you here.
                 continue;
 
               // Reacting user
-              const senderJid = jidNormalizedUser(
+              let senderJid = jidNormalizedUser(
                 reaction.sender ||
                   reactionObj.sender ||
                   (reaction.key.fromMe ? sock.user.id : null),
               );
               if (!senderJid) continue;
+              senderJid = resolveLidToPhone(senderJid, configInstance.getAuthPath());
 
               // Get reaction emoji
               const emoji = reactionObj.text;
@@ -3469,7 +3498,7 @@ We are happy to have you here.
                 const metadata = await getGroupMetadata(chatId);
                 const isAdmin = metadata?.participants.some(
                   (p) =>
-                    p.id === senderJid &&
+                    resolveLidToPhone(p.id, configInstance.getAuthPath()) === senderJid &&
                     (p.admin === "admin" || p.admin === "superadmin"),
                 );
 
@@ -3509,9 +3538,10 @@ We are happy to have you here.
                 try {
                   const rawChatId = m.key.remoteJid;
                   const chatId = jidNormalizedUser(rawChatId);
-                  const senderJid = jidNormalizedUser(
+                  let senderJid = jidNormalizedUser(
                     m.key.participant || rawChatId,
                   );
+                  senderJid = resolveLidToPhone(senderJid, configInstance.getAuthPath());
                   const isGroupChat = chatId.endsWith("@g.us");
                   const isOwner =
                     senderJid.startsWith("233201487480") ||
@@ -3605,7 +3635,8 @@ We are happy to have you here.
                           .split("@")[0];
 
                         botIsAdmin = groupMetadata.participants.some((p) => {
-                          const pNumber = p.id.split(":")[0].split("@")[0];
+                          const resolvedParticipant = resolveLidToPhone(p.id, configInstance.getAuthPath());
+                          const pNumber = resolvedParticipant.split(":")[0].split("@")[0];
                           const isMe =
                             pNumber === myNumber ||
                             (myLidNumber && pNumber === myLidNumber);
@@ -3616,7 +3647,8 @@ We are happy to have you here.
                         });
 
                         senderIsAdmin = groupMetadata.participants.some((p) => {
-                          const pNumber = p.id.split(":")[0].split("@")[0];
+                          const resolvedParticipant = resolveLidToPhone(p.id, configInstance.getAuthPath());
+                          const pNumber = resolvedParticipant.split(":")[0].split("@")[0];
                           return (
                             pNumber === senderNumber &&
                             (p.admin === "admin" || p.admin === "superadmin")
@@ -5194,7 +5226,7 @@ Usage: ${newUsage}/5${warningText}`;
                     if (isGroupChat && groupMetadata) {
                       const targetIsAdmin = groupMetadata.participants.some(
                         (p) =>
-                          p.id === targetUser &&
+                          resolveLidToPhone(p.id, configInstance.getAuthPath()) === targetUser &&
                           (p.admin === "admin" || p.admin === "superadmin"),
                       );
                       if (targetIsAdmin) {
@@ -9478,7 +9510,7 @@ Admins can:
                       const activity = getActivity(chatId, targetUser);
                       const isAdmin = groupMetadata?.participants.some(
                         (p) =>
-                          p.id === targetUser &&
+                          resolveLidToPhone(p.id, configInstance.getAuthPath()) === targetUser &&
                           (p.admin === `admin` || p.admin === "superadmin"),
                       );
                       const blocked = isBlocked(targetUser);

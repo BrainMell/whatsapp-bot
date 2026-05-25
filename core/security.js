@@ -1,4 +1,24 @@
 // security.js - ENHANCED for comprehensive link and status detection
+const fs = require('fs');
+const path = require('path');
+
+function resolveLidToPhone(jid, authPath) {
+    if (!jid || !jid.endsWith("@lid")) return jid;
+    const lid = jid.split("@")[0];
+    try {
+        if (authPath) {
+            const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
+            if (fs.existsSync(reverseLidPath)) {
+                const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
+                if (mappedPhone) {
+                    return `${mappedPhone}@s.whatsapp.net`;
+                }
+            }
+        }
+    } catch (e) {}
+    return jid;
+}
+
 module.exports = {
     handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null) {
         try {
@@ -17,8 +37,16 @@ module.exports = {
             const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
             if (!groupMetadata) return;
 
+            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+            const botConfig = require('../botConfig');
+            const authPath = botConfig.getAuthPath();
+
+            const resolvedSender = resolveLidToPhone(jidNormalizedUser(sender), authPath);
             const senderIsAdmin = groupMetadata.participants.some(
-                p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin')
+                p => {
+                    const resolvedParticipant = resolveLidToPhone(jidNormalizedUser(p.id), authPath);
+                    return resolvedParticipant === resolvedSender && (p.admin === 'admin' || p.admin === 'superadmin');
+                }
             );
 
             // Admins are exempt
@@ -121,7 +149,7 @@ module.exports = {
             
             if (violations.length > 0) {
                 const violationType = [...new Set(violations)].join(', ');
-                const userName = sender.split('@')[0];
+                const userName = resolvedSender.split('@')[0];
                 const action = settings.antilinkAction || 'delete';
 
                 // Delete first
@@ -130,20 +158,20 @@ module.exports = {
                 // Warn/Kick logic
                 let warningCount = 0;
                 if (addWarning && getWarningCount) {
-                    warningCount = addWarning(sender, chatId, `Antilink violation: ${violationType}`);
+                    warningCount = addWarning(resolvedSender, chatId, `Antilink violation: ${violationType}`);
                 }
 
                 if (action === 'kick') {
                     const kickMsg = `*🚨 ANTILINK VIOLATION 🚨*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Action:* REMOVED`;
-                    await sock.sendMessage(chatId, { text: kickMsg, contextInfo: { mentionedJid: [sender] } });
-                    setTimeout(() => sock.groupParticipantsUpdate(chatId, [sender], 'remove').catch(() => {}), 1000);
+                    await sock.sendMessage(chatId, { text: kickMsg, contextInfo: { mentionedJid: [resolvedSender] } });
+                    setTimeout(() => sock.groupParticipantsUpdate(chatId, [resolvedSender], 'remove').catch(() => {}), 1000);
                 } 
                 else if (action === 'warn') {
                     const strike = '⚠️'.repeat(Math.min(warningCount, 3));
                     const warnMsg = `*${strike} WARNING ${strike}*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Count:* ${warningCount}/3\n\n_Don't send links or mention status._`;
-                    await sock.sendMessage(chatId, { text: warnMsg, contextInfo: { mentionedJid: [sender] } });
+                    await sock.sendMessage(chatId, { text: warnMsg, contextInfo: { mentionedJid: [resolvedSender] } });
                     if (warningCount >= 3) {
-                        setTimeout(() => sock.groupParticipantsUpdate(chatId, [sender], 'remove').catch(() => {}), 2000);
+                        setTimeout(() => sock.groupParticipantsUpdate(chatId, [resolvedSender], 'remove').catch(() => {}), 2000);
                     }
                 }
             }
