@@ -3316,7 +3316,7 @@ async function performAction(sock, player, action, sessionKey) {
             break;
           case "damage_aoe":
           case "aoe_damage":
-            state.enemies.forEach(async (e) => {
+            for (const e of state.enemies) {
               if (e.stats.hp > 0) {
                 const dmg = item.effectValue || 80;
                 e.stats.hp -= dmg;
@@ -3329,11 +3329,11 @@ async function performAction(sock, player, action, sessionKey) {
                   resultMsg += `\n💀 ${e.name} has fallen!`;
                 }
               }
-            });
+            }
             turnInfo.damage = item.effectValue || 80;
             break;
           case "aoe_debuff_damage":
-            state.enemies.forEach(async (e) => {
+            for (const e of state.enemies) {
               if (e.stats.hp > 0) {
                 const dmg = item.effectValue || 150;
                 e.stats.hp -= dmg;
@@ -3344,7 +3344,7 @@ async function performAction(sock, player, action, sessionKey) {
                   await handleDeath(sock, e, sessionKey, player.name);
                 }
               }
-            });
+            }
             break;
           case "percent_hp_damage":
             // True damage based on % of Max HP (ignores defense)
@@ -3412,10 +3412,8 @@ async function performAction(sock, player, action, sessionKey) {
     console.error("[Combat] nextTurn failed in performAction:", err.message);
   }
 
-  // 💡 BUG FIX: For ability kills, checkCombatEnd was previously called INSIDE
-  // applyAbilityEffect which caused the victory screen to appear BEFORE the
-  // damage/defeat messages. Now we check here, after the full turn output is sent.
-  if (action.type === "ability") {
+  // 💡 BUG FIX: Check combat end for all action types after the turn messages have been sent.
+  if (action.type === "ability" || action.type === "attack" || action.type === "item") {
     if (await checkCombatEnd(sock, state, sessionKey)) {
       if (state.resolveTurn) {
         const r = state.resolveTurn;
