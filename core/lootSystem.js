@@ -39,6 +39,7 @@ const LOOT_TABLES = {
         dropChance: 75,
         items: [
             { id: 'hp_potion', weight: 20, quantity: [1, 2] },
+            { id: 'remedy', weight: 12, quantity: [1, 1] },
             { id: 'refined_steel', weight: 15, quantity: [2, 4] },
             { id: 'mana_crystal', weight: 15, quantity: [1, 1] },
             { id: 'sharp_whetstone', weight: 10, quantity: [1, 1] },
@@ -76,6 +77,7 @@ const LOOT_TABLES = {
         items: [
             { id: 'gold_pile', weight: 40, quantity: [50, 200] },
             { id: 'hp_potion', weight: 25, quantity: [2, 4] },
+            { id: 'remedy', weight: 15, quantity: [1, 2] },
             { id: 'rare_gem', weight: 15, quantity: [1, 2] },
             { id: 'equipment_piece', weight: 20, quantity: [1, 1] }
         ]
@@ -642,6 +644,7 @@ const ITEM_DATABASE = {
     'energy_drink': { name: 'Energy Drink', description: 'Restores 30% Energy.', rarity: 'UNCOMMON', value: 1200, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 0.30 },
     'ether': { name: 'Ether', description: 'Fully restores Energy.', rarity: 'RARE', value: 15000, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 1.0 },
     'phoenix_feather': { name: 'Phoenix Feather', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 5000, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
+    'remedy': { name: 'Remedy', description: 'Cures all negative status effects.', rarity: 'UNCOMMON', value: 500, type: 'POTION', usable: true, effect: 'cure_status' },
     'bandage': { name: 'Bandage', description: 'Simple cloth used to wrap wounds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
     
     // --- SPECIALS ---

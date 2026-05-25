@@ -994,8 +994,16 @@ const CONSUMABLES = {
     cost: 4200,
     effect: "heal",
     effectValue: 1.0,
-    desc: "Fully restores HP. Rare and powerful alchemy.",
+    cureStatus: true,
+    desc: "Fully restores HP and cures all negative status effects. Rare and powerful alchemy.",
     icon: "🍶",
+  },
+  remedy: {
+    name: "Remedy",
+    cost: 500,
+    effect: "cure_status",
+    desc: "Cures all negative status effects (stun, poison, burn, freeze, etc.).",
+    icon: "🌱",
   },
   regen_salve: {
     name: "Regeneration Salve",
@@ -1122,6 +1130,7 @@ const SHOP_LIST = [
   "health_potion",
   "major_potion",
   "elixir",
+  "remedy",
   "regen_salve",
   "mana_potion",
   "ether",
@@ -3215,6 +3224,35 @@ async function performAction(sock, player, action, sessionKey) {
             target.currentHP = target.stats.hp; // Sync
             resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)${hMult < 1 ? " (Healing Reduced)" : ""}`;
             turnInfo.healing = actualHeal;
+
+            if (itemKey === "elixir" || item.cureStatus) {
+              const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
+              if (beforeCount > 0) {
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                const clearedCount = beforeCount - target.statusEffects.length;
+                if (clearedCount > 0) {
+                  resultMsg += `\n✨ Cured ${clearedCount} negative status effect(s)!`;
+                }
+              }
+            }
+            break;
+          case "cure_status":
+            if (target) {
+              const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
+              if (beforeCount > 0) {
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                const clearedCount = beforeCount - target.statusEffects.length;
+                if (clearedCount > 0) {
+                  resultMsg += `\n✨ Cured all negative status effects on ${target.name}! (Cleared: ${clearedCount})`;
+                } else {
+                  resultMsg += `\n(No negative status effects to cure on ${target.name})`;
+                }
+              } else {
+                resultMsg += `\n(No negative status effects to cure on ${target.name})`;
+              }
+            }
             break;
           case "regen":
             const regVal = item.effectValue || 0.1;

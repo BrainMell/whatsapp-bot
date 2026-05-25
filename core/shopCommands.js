@@ -29,11 +29,11 @@ async function displayShop(sock, chatId, category = 'all') {
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
         // Items with an explicit value > 1 that are Equipment, Stones, or specifically categorized
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || id.includes('stone') || id.includes('potion') || id.includes('key'))) {
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy'))) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : '🧪'),
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
                 category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'
@@ -102,11 +102,11 @@ async function buyItem(sock, chatId, senderJid, input) {
     const allDbItems = lootSystem.ITEM_DATABASE;
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || id.includes('stone') || id.includes('potion') || id.includes('key'))) {
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy'))) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : '🧪'),
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
                 type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
