@@ -60,7 +60,9 @@ function generateStartCaption(players, enemies, encounterInfo) {
     let caption = `⚔️ *BATTLE COMMENCES!* ⚔️\n`;
     caption += `———————————\n`;
     
-    if (encounterInfo.narration) {
+    if (encounterInfo.turnOrderStr) {
+        caption += `${encounterInfo.turnOrderStr}\n\n`;
+    } else if (encounterInfo.narration) {
         caption += `📜 _${encounterInfo.narration}_\n\n`;
     }
     

@@ -2625,37 +2625,29 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.pendingActions = {};
   state.combatHistory = [];
 
-  // AI Narration of the encounter start
-  const prompt = `
-    Context: Fantasy RPG. The party enters combat.
-    Enemies: ${state.enemies.map((e) => e.name).join(", ")}.
-    Location Description: ${encounter.description}.
+  // 💡 INITIALIZE ACTION GAUGE
+  const allCombatants = [
+    ...state.players.filter((p) => !p.isDead),
+    ...state.enemies,
+  ];
 
-    Write a dramatic, intense narration (2-3 sentences) setting the scene for the battle.
-    IMPORTANT: Provide ONLY the text narration. No code blocks, no markdown formatting like *bold* (except for proper names), no commentary.
-    `;
+  allCombatants.forEach((c) => {
+    c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Initial headstart based on speed
+  });
 
-  let narration = "";
-  try {
-    if (state.smartGroqCall) {
-      const completion = await state.smartGroqCall({
-        messages: [{ role: "system", content: prompt }],
-        model: "llama-3.1-8b-instant",
-      });
-      narration = completion.choices[0].message.content;
-    } else if (state.groq) {
-      const completion = await state.groq.chat.completions.create({
-        messages: [{ role: "system", content: prompt }],
-        model: "llama-3.1-8b-instant",
-      });
-      narration = completion.choices[0].message.content;
-    }
-  } catch (e) {
-    console.error("Narration error:", e.message);
-    narration = encounter.description; // Fallback
-  }
+  state.turnOrder = allCombatants;
 
-  // NEW: Generate combat image and caption
+  // Build the turn order string to put in the first message's image caption
+  const orderList = state.turnOrder
+    .slice(0, 6)
+    .map((c) => {
+      const icon = c.isEnemy ? c.icon : c.class?.icon || "👤";
+      return `${icon} ${c.name}`;
+    })
+    .join(" → ");
+  const turnOrderStr = `⚔️ *Order:* ${orderList}${state.turnOrder.length > 6 ? " ..." : ""}`;
+
+  // NEW: Generate combat image and caption (with Turn Order merged)
   const scene = await combatIntegration.generateCombatScene(
     state.players,
     state.enemies,
@@ -2667,7 +2659,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
         ...encounter,
         rank: state.dungeonRank, // Also in encounterInfo
         backgroundPath: state.backgroundPath, // CRITICAL FIX for renderCombatStart
-        narration: narration, // Pass narration to caption generator
+        turnOrderStr: turnOrderStr, // Pass turn order here instead of AI narration
         theme: encounter.theme || {
           theme: "Battle",
           description: "A fierce fight breaks out!",
@@ -2726,35 +2718,13 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     }
   }
 
-  // 💡 INITIALIZE ACTION GAUGE
-  const allCombatants = [
-    ...state.players.filter((p) => !p.isDead),
-    ...state.enemies,
-  ];
-
-  allCombatants.forEach((c) => {
-    c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Initial headstart based on speed
-  });
-
-  state.turnOrder = allCombatants;
-
   // Wait before starting first turn - Instant for solo
   const startDelay = state.solo ? 0 : 120000;
   state.timers.combatStart = setTimeout(async () => {
     try {
       if (!state.inCombat) return; // Safety check
 
-      // Compact turn order — list only first 6 combatants to avoid spam
-      const orderList = state.turnOrder
-        .slice(0, 6)
-        .map((c, i) => {
-          const icon = c.isEnemy ? c.icon : c.class?.icon || "👤";
-          return `${icon} ${c.name}`;
-        })
-        .join(" → ");
-      const turnMsg = `⚔️ *BATTLE START!* | Order: ${orderList}${state.turnOrder.length > 6 ? " ..." : ""}`;
-
-      await sock.sendMessage(state.chatId, { text: turnMsg });
+      // Simply process combat turn without sending a second turnMsg
       await processCombatTurn(sock, sessionKey);
     } catch (err) {
       console.error("[Quest] combatStart timer error:", err?.message || err);
