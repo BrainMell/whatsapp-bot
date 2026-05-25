@@ -6,12 +6,26 @@ function resolveLidToPhone(jid, authPath) {
     if (!jid || !jid.endsWith("@lid")) return jid;
     const lid = jid.split("@")[0];
     try {
+        // 1. Try the current instance's auth folder first
         if (authPath) {
             const reverseLidPath = path.join(authPath, `lid-mapping-${lid}_reverse.json`);
             if (fs.existsSync(reverseLidPath)) {
                 const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
-                if (mappedPhone) {
-                    return `${mappedPhone}@s.whatsapp.net`;
+                if (mappedPhone) return `${mappedPhone}@s.whatsapp.net`;
+            }
+        }
+        
+        // 2. Fallback: Search in all instances' auth folders
+        const instancesDir = path.join(__dirname, "..", "instances");
+        if (fs.existsSync(instancesDir)) {
+            const folders = fs.readdirSync(instancesDir).filter(f => 
+                fs.statSync(path.join(instancesDir, f)).isDirectory()
+            );
+            for (const folder of folders) {
+                const fallbackPath = path.join(instancesDir, folder, "auth", `lid-mapping-${lid}_reverse.json`);
+                if (fs.existsSync(fallbackPath)) {
+                    const mappedPhone = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
+                    if (mappedPhone) return `${mappedPhone}@s.whatsapp.net`;
                 }
             }
         }
