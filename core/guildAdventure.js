@@ -2850,7 +2850,7 @@ async function processCombatTurn(sock, sessionKey) {
           : "";
         state.pendingStatusMsg = null;
         await sock.sendMessage(state.chatId, {
-          text: `${statusPrefix}${activeActor.icon} *${activeActor.name}* is unable to act!`,
+          text: `${statusPrefix}${activeActor.icon || activeActor.class?.icon || "👤"} *${activeActor.name}* is unable to act!`,
         });
         await nextTurn(
           sock,
@@ -5418,6 +5418,7 @@ async function applyAbilityEffect(
       // Death check
       if (target.stats.hp <= 0) {
         // 💡 OVERKILL EXECUTION BONUS
+        const overkillThreshold = target.stats.hp + damage;
         if (damage > overkillThreshold * 2.0) {
           const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
           if (!player.isEnemy) {
@@ -5576,6 +5577,7 @@ async function applyAbilityEffect(
       );
       if (target.stats.hp <= 0) {
         // 💡 OVERKILL EXECUTION BONUS
+        const overkillThreshold = target.stats.hp + damage;
         if (damage > overkillThreshold * 2.0) {
           const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
           if (!player.isEnemy) {
