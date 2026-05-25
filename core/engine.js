@@ -3405,14 +3405,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
               // 🟢 WELCOME MESSAGE
               if (action === "add") {
-                const welcomeText = `
-👋 *Hello @${participantJid.split("@")[0]}!*
+                const settings = getGroupSettings(id);
+                if (settings.welcomeEnabled === false) return;
 
-Welcome to *${groupName}*!
-We are happy to have you here.
+                const phoneNumber = participantJid.split("@")[0];
+                let welcomeText =
+                  settings.welcomeMessage ||
+                  `👋 *Hello @${phoneNumber}!*\n\nWelcome to *${groupName}*!\nWe are happy to have you here.\n\n📜 *Please read the group description!*`;
 
-📜 *Please read the group description!*
-                `.trim();
+                welcomeText = welcomeText
+                  .replace(/@user/g, `@${phoneNumber}`)
+                  .replace(/@group/g, groupName);
 
                 await sock.sendMessage(id, {
                   text: welcomeText,
