@@ -14184,8 +14184,20 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       user.profile = initializeUserProfile(senderJid);
                       economy.saveUser(senderJid);
                     }
+                    const memKey = `${senderJid}_${chatId || 'dm'}`;
+                    conversationMemory.delete(memKey);
                     conversationMemory.delete(senderJid);
                     temporaryContext.delete(senderJid);
+
+                    // Clear response cache for this chat to make the reset genuinely fresh
+                    if (chatId) {
+                      for (const key of aiResponseCache.keys()) {
+                        if (key.startsWith(`${chatId}_`)) {
+                          aiResponseCache.delete(key);
+                        }
+                      }
+                    }
+
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + "…alright. starting fresh.",
                     });
@@ -14404,8 +14416,20 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       `${botConfig.getPrefix().toLowerCase()} reset`,
                     )
                   ) {
+                    const memKey = `${senderJid}_${chatId || 'dm'}`;
+                    conversationMemory.delete(memKey);
                     conversationMemory.delete(senderJid);
                     temporaryContext.delete(senderJid);
+
+                    // Clear response cache for this chat to make the reset genuinely fresh
+                    if (chatId) {
+                      for (const key of aiResponseCache.keys()) {
+                        if (key.startsWith(`${chatId}_`)) {
+                          aiResponseCache.delete(key);
+                        }
+                      }
+                    }
+
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + `🗑️ Chat memory cleared.`,
                     });
