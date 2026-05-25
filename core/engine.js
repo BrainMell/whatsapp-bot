@@ -768,6 +768,11 @@ async function startBot(configInstance) {
     const groupMessageHistory = new Map();
     const conversationMemory = new Map();
     const MAX_HISTORY_PER_GROUP = 200;
+    const chatParticipants = new Map(); // tracks who has spoken in each chat (prevents cross-GC bleed)
+    const aiResponseCache = new Map();  // cache: cacheKey -> { reply, ts }
+    const aiUserCooldowns = new Map();  // cooldown: `senderJid_chatId` -> lastCallTimestamp
+    const AI_COOLDOWN_MS = 8000;        // 8s per-user per-chat cooldown to prevent spam
+    const AI_CACHE_TTL_MS = 5 * 60 * 1000; // 5-minute response cache TTL
 
     function loadEnabledChats() {
       try {
@@ -2227,54 +2232,35 @@ What to do:
       return updateUserProfile(jid, { note });
     }
 
-    async function detectTagIntent(message) {
-      try {
-        const intentPrompt = `Analyze if the user is EXPLICITLY asking you to notify/announce something to everyone in the group.
-
-Message: "${message}"
-
-ONLY return true if the message contains DIRECT instructions like:
-- " yo ${botConfig.getBotName()} tell everyone [message]"
-- "let everyone know [message]"
-- "notify the group that [message]"
-- "announce to everyone [message]"
-- "tag everyone and say [message]"
-- "inform the gc [message]"
-- "tell them all [message]"
-
-DO NOT return true for:
-- Normal questions or statements
-- Messages that just mention "everyone" casually
-- Questions about the group
-- General conversation
-
-Return JSON:
-{
-  "shouldTag": true/false,
-  "announcement": "the message to announce" or null
-}
-
-Be STRICT - only return true if it's a clear command to notify everyone.
-Return ONLY the JSON.
-
-JSON:`;
-
-        const response = await groq.chat.completions.create({
-          model: "llama-3.1-8b-instant",
-          messages: [{ role: "user", content: intentPrompt }],
-        });
-
-        const result = response.choices[0].message.content.trim();
-        let cleanJson = result
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim();
-
-        return JSON.parse(cleanJson);
-      } catch (err) {
-        return { shouldTag: false, announcement: null };
+    // Pure regex-based tag intent detection — saves an API call on every group message
+    function detectTagIntent(message) {
+      const tagPatterns = [
+        /\btell\s+everyone\b/i,
+        /\blet\s+everyone\s+know\b/i,
+        /\bnotify\s+(the\s+)?(group|gc|everyone|them)\b/i,
+        /\bannounce\s+(to\s+)?(everyone|the\s+group|the\s+gc)\b/i,
+        /\btag\s+(everyone|all|them)\b/i,
+        /\binform\s+(the\s+)?(gc|group|everyone)\b/i,
+        /\btell\s+(them\s+)?all\b/i,
+      ];
+      for (const pattern of tagPatterns) {
+        if (pattern.test(message)) {
+          const stripped = message
+            .replace(/^(yo\s+)?(joker|bot|goten)[\s,]+/i, '')
+            .replace(/\btell\s+everyone\s+that?\s*/i, '')
+            .replace(/\blet\s+everyone\s+know\s+that?\s*/i, '')
+            .replace(/\bnotify\s+(the\s+)?(group|gc|everyone|them)\s+that?\s*/i, '')
+            .replace(/\bannounce\s+(to\s+)?(everyone|the\s+group|the\s+gc)\s+that?\s*/i, '')
+            .replace(/\btag\s+(everyone|all|them)\s+(and\s+say|saying|that)?\s*/i, '')
+            .replace(/\binform\s+(the\s+)?(gc|group|everyone)\s+that?\s*/i, '')
+            .replace(/\btell\s+(them\s+)?all\s+that?\s*/i, '')
+            .trim();
+          if (stripped.length > 2) return { shouldTag: true, announcement: stripped };
+        }
       }
+      return { shouldTag: false, announcement: null };
     }
+
 
     // ============================================
     // Detect if message is about someone else
@@ -2308,14 +2294,20 @@ JSON:`;
           return context;
         }
 
-        // Look for names in the text by checking against all known profiles
+        // Look for names in the text by checking against known profiles
         const words = text.toLowerCase().split(/\s+/);
 
         // Safety check: Ensure economy cache is initialized
         if (!economy.economyData) return context;
 
-        // Search through all profiles in the economy cache
-        for (const [jid, user] of economy.economyData.entries()) {
+        // Only search users who have spoken in THIS chat — prevents cross-GC name bleed
+        const activePeople = chatId
+          ? (chatParticipants.get(chatId) || new Set())
+          : new Set(economy.economyData.keys());
+
+        for (const jid of activePeople) {
+          const user = economy.economyData.get(jid);
+          if (!user) continue;
           const profile = user.profile;
           if (!profile || !profile.nickname) continue;
 
@@ -2434,7 +2426,15 @@ JSON:`;
       mentionedJids = [],
       chatId = null,
     ) {
-      const history = conversationMemory.get(senderJid) || [];
+      // Scope memory to this specific chat — DM vs group memories don't bleed
+      const memKey = `${senderJid}_${chatId || 'dm'}`;
+      const history = conversationMemory.get(memKey) || [];
+
+      // Register this user as a participant in the current chat
+      if (chatId) {
+        if (!chatParticipants.has(chatId)) chatParticipants.set(chatId, new Set());
+        chatParticipants.get(chatId).add(senderJid);
+      }
 
       // Joker's personality and behavior rules - NOW DYNAMIC per bot instance
       const contentDescription = botConfig.getContentDescription();
@@ -2486,14 +2486,22 @@ JSON:`;
           newMessage.toLowerCase().includes(keyword),
         );
 
-      // Only store in memory if it contains important info or history is short (and not a command)
-      if (shouldStore || (!isCommand && history.length < 5)) {
+      // Only store keyword-triggered content — no bypass for new users
+      if (shouldStore) {
         history.push({ role: `user`, content: newMessage, _ts: Date.now() });
       }
 
       const recentHistory = history.slice(-10);
 
-      let systemPrompt = contentDescription;
+      // Inject time awareness so AI knows when it is
+      const _nowDt = new Date();
+      const _weekDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const _hr = _nowDt.getHours();
+      const _vibe = _hr < 6 ? 'dead of night' : _hr < 12 ? 'morning' : _hr < 17 ? 'afternoon' : _hr < 21 ? 'evening' : 'late night';
+      const _timeStr = _nowDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const _timeCtx = `\n\n[Right now it's ${_timeStr} on ${_weekDays[_nowDt.getDay()]} — ${_vibe}. Respond naturally to time if relevant.]`;
+
+      let systemPrompt = contentDescription + _timeCtx;
 
       // Only add profile context if we have it
       if (userProfile && typeof formatProfileForAI === "function") {
@@ -2543,14 +2551,24 @@ JSON:`;
         }
       }
 
-      // prepare messages for Groq API
-      const groqMessages = [
-        { role: "system", content: systemPrompt },
-        ...recentHistory.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-      ];
+      // Build messages for Groq, injecting time-gap labels so AI understands conversation breaks
+      const groqMessages = [{ role: "system", content: systemPrompt }];
+      for (let _hi = 0; _hi < recentHistory.length; _hi++) {
+        const _hMsg = recentHistory[_hi];
+        if (_hi > 0 && _hMsg._ts && recentHistory[_hi - 1]._ts) {
+          const _gapMs = _hMsg._ts - recentHistory[_hi - 1]._ts;
+          const _gapMins = Math.round(_gapMs / 60000);
+          if (_gapMins >= 30) {
+            const _gapLabel = _gapMins < 60
+              ? `${_gapMins} minutes`
+              : _gapMins < 1440
+                ? `${Math.round(_gapMins / 60)} hour${Math.round(_gapMins / 60) > 1 ? 's' : ''}`
+                : `${Math.round(_gapMins / 1440)} day${Math.round(_gapMins / 1440) > 1 ? 's' : ''}`;
+            groqMessages.push({ role: "system", content: `[${_gapLabel} passed since last message]` });
+          }
+        }
+        groqMessages.push({ role: _hMsg.role, content: _hMsg.content });
+      }
 
       // Using smart API rotation with model selection
       const completion = await smartGroqCall({
@@ -2560,7 +2578,7 @@ JSON:`;
 
       const aiReply = completion.choices[0].message.content;
       history.push({ role: "assistant", content: aiReply, _ts: Date.now() });
-      conversationMemory.set(senderJid, history);
+      conversationMemory.set(memKey, history);
 
       // Update user stats (only if we have the profile and save function)
       if (
@@ -15759,9 +15777,9 @@ _(Or reply to their message)_
                   if (!prompt) return;
 
                   try {
-                    // check if user wants to tag everyone
+                    // check if user wants to tag everyone (regex — no API call)
                     if (isGroupChat) {
-                      const intent = await detectTagIntent(prompt);
+                      const intent = detectTagIntent(prompt);
 
                       if (intent.shouldTag && intent.announcement) {
                         // ask for confirmation first
@@ -15781,6 +15799,30 @@ _(Or reply to their message)_
                       }
                     }
 
+                    // --- API Conservation: per-user per-chat 8s cooldown ---
+                    const _ck = `${senderJid}_${chatId}`;
+                    const _lastAiCall = aiUserCooldowns.get(_ck) || 0;
+                    if (Date.now() - _lastAiCall < AI_COOLDOWN_MS) return;
+                    aiUserCooldowns.set(_ck, Date.now());
+
+                    // --- API Conservation: short-message fast-path (skip API) ---
+                    const _pWords = prompt.trim().split(/\s+/);
+                    const _isShort = _pWords.length <= 2 && !prompt.includes('?') && !(mentionedJids && mentionedJids.length);
+                    if (_isShort && Math.random() < 0.6) {
+                      const _qr = ["hmm.","yeah.","lol.","nah.","facts.","true.","say less.","noted.","sus.","idk man.","real.","ight.","💀","😐","bruh.","wild.","ok.","👀","lmao.","bet."];
+                      await reply(BOT_MARKER + _qr[Math.floor(Math.random() * _qr.length)]);
+                      return;
+                    }
+
+                    // --- API Conservation: 5-min response cache ---
+                    const _normP = prompt.toLowerCase().trim().replace(/\s+/g, ' ');
+                    const _cKey = `${chatId}_${_normP}`;
+                    const _hit = aiResponseCache.get(_cKey);
+                    if (_hit && Date.now() - _hit.ts < AI_CACHE_TTL_MS) {
+                      await reply(BOT_MARKER + _hit.reply);
+                      return;
+                    }
+
                     // extract info from the message
                     //await autoExtractInfo(prompt, senderJid);
 
@@ -15791,6 +15833,11 @@ _(Or reply to their message)_
                       mentionedJids,
                       chatId,
                     );
+
+                    // store valid response in cache
+                    if (aiReply && aiReply.trim().length > 0) {
+                      aiResponseCache.set(_cKey, { reply: aiReply, ts: Date.now() });
+                    }
 
                     if (!aiReply || aiReply.trim().length === 0) {
                       console.log("⚠️️ AI returned empty response, skipping...");
@@ -15806,7 +15853,7 @@ _(Or reply to their message)_
 
                     // Determine sticker probability based on mood
                     const stickerChance = mood === "neutral" ? 0.15 : 0.40;
-                    
+
                     // send sticker only if file exists and chance hits
                     if (stickerPath && fs.existsSync(stickerPath) && Math.random() < stickerChance) {
                       try {
