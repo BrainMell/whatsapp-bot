@@ -68,6 +68,7 @@ async function loadEconomy() {
       economyData.set(userData.userId, userData);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
+    console.log(`🔑 Economy JIDs in memory cache:`, Array.from(economyData.keys()));
   } catch (err) {
     console.error("Error loading economy from DB:", err.message);
   }
@@ -98,6 +99,7 @@ async function saveUser(userId) {
 //==================this part handles new players and thier classes==================
 function isRegistered(userId) {
   const user = economyData.get(userId);
+  console.log(`🔍 [Economy] isRegistered check: "${userId}" -> found: ${!!user} (registered: ${user?.registered})`);
   return user && user.registered === true;
 }
 
