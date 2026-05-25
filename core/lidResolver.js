@@ -8,12 +8,13 @@ const lidCache = new Map();
 // Load all mappings from MongoDB and scan local auth files for any unsaved ones
 async function loadLidMappings() {
     try {
+        console.log(`📥 [LID Resolver] Loading LID mappings from MongoDB...`);
         // 1. Load from MongoDB
         const mappings = await LidMapping.find({});
         for (const m of mappings) {
             lidCache.set(m.lid, m.phone);
         }
-        console.log(`✅ Loaded ${mappings.length} LID mappings from MongoDB`);
+        console.log(`✅ [LID Resolver] Loaded ${mappings.length} LID mappings from MongoDB`);
 
         // 2. Scan local files for any missing mappings to sync to MongoDB
         const instancesDir = path.join(__dirname, "..", "instances");
@@ -45,11 +46,11 @@ async function loadLidMappings() {
                 }
             }
             if (syncedCount > 0) {
-                console.log(`🔄 Synced ${syncedCount} new local LID mappings to MongoDB`);
+                console.log(`🔄 [LID Resolver] Synced ${syncedCount} new local LID mappings to MongoDB`);
             }
         }
     } catch (e) {
-        console.error("❌ Error loading LID mappings:", e.message);
+        console.error("❌ [LID Resolver] Error loading LID mappings:", e.message);
     }
 }
 
@@ -58,13 +59,15 @@ async function saveLidMapping(lid, phone) {
     if (!lid || !phone) return;
     lidCache.set(lid, phone);
     try {
+        console.log(`💾 [LID Resolver] Saving mapping to MongoDB: ${lid} -> ${phone}`);
         await LidMapping.findOneAndUpdate(
             { lid: lid },
             { $set: { phone: phone } },
             { upsert: true }
         );
+        console.log(`💾 [LID Resolver] Successfully saved mapping to MongoDB for ${lid}`);
     } catch (e) {
-        console.error(`❌ Error saving LID mapping to MongoDB for ${lid}:`, e.message);
+        console.error(`❌ [LID Resolver] Error saving LID mapping to MongoDB for ${lid}:`, e.message);
     }
 }
 
@@ -73,9 +76,13 @@ function resolveLidToPhone(jid, authPath) {
     if (!jid || !jid.endsWith("@lid")) return jid;
     const lid = jid.split("@")[0];
     
+    console.log(`🔍 [LID Resolver] Resolving LID: ${jid} (authPath: ${authPath})`);
+
     // 1. Try cache
     if (lidCache.has(lid)) {
-        return `${lidCache.get(lid)}@s.whatsapp.net`;
+        const phone = `${lidCache.get(lid)}@s.whatsapp.net`;
+        console.log(`✅ [LID Resolver] Cache Hit: ${jid} -> ${phone}`);
+        return phone;
     }
     
     // 2. Try the current auth path
@@ -85,8 +92,10 @@ function resolveLidToPhone(jid, authPath) {
             if (fs.existsSync(reverseLidPath)) {
                 const mappedPhone = JSON.parse(fs.readFileSync(reverseLidPath, "utf8"));
                 if (mappedPhone) {
+                    const phone = `${mappedPhone}@s.whatsapp.net`;
+                    console.log(`✅ [LID Resolver] File Hit (Current Auth): ${jid} -> ${phone}`);
                     saveLidMapping(lid, mappedPhone); // Asynchronous background save
-                    return `${mappedPhone}@s.whatsapp.net`;
+                    return phone;
                 }
             }
         }
@@ -102,16 +111,19 @@ function resolveLidToPhone(jid, authPath) {
                 if (fs.existsSync(fallbackPath)) {
                     const mappedPhone = JSON.parse(fs.readFileSync(fallbackPath, "utf8"));
                     if (mappedPhone) {
+                        const phone = `${mappedPhone}@s.whatsapp.net`;
+                        console.log(`✅ [LID Resolver] File Hit (Fallback Auth in ${folder}): ${jid} -> ${phone}`);
                         saveLidMapping(lid, mappedPhone); // Asynchronous background save
-                        return `${mappedPhone}@s.whatsapp.net`;
+                        return phone;
                     }
                 }
             }
         }
     } catch (e) {
-        console.error("❌ Error in resolveLidToPhone:", e.message);
+        console.error("❌ [LID Resolver] Error in resolveLidToPhone:", e.message);
     }
     
+    console.log(`⚠️ [LID Resolver] Failed to resolve: ${jid}`);
     return jid;
 }
 
