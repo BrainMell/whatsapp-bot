@@ -56,8 +56,6 @@ const busyUsers = new Set();
 function resolveLidToPhone(jid, authPath) {
   return lidResolver.resolveLidToPhone(jid, authPath);
 }
-
-
 // Load blocked users from DB
 async function loadBlockedUsers() {
   const system = require("./system");
@@ -1930,16 +1928,12 @@ What to do:
       // Check mentions
       const mentioned =
         m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) {
-        return resolveLidToPhone(jidNormalizedUser(mentioned[0]), configInstance.getAuthPath());
-      }
+      if (mentioned.length > 0) return resolveLidToPhone(jidNormalizedUser(mentioned[0]), configInstance.getAuthPath());
 
       // Check direct reply participant
       const replyParticipant =
         m.message?.extendedTextMessage?.contextInfo?.participant;
-      if (replyParticipant) {
-        return resolveLidToPhone(jidNormalizedUser(replyParticipant), configInstance.getAuthPath());
-      }
+      if (replyParticipant) return resolveLidToPhone(jidNormalizedUser(replyParticipant), configInstance.getAuthPath());
 
       // Baileys sometimes wraps the quoted message differently
       const quotedMessage =
@@ -3481,7 +3475,7 @@ We are happy to have you here.
                 const metadata = await getGroupMetadata(chatId);
                 const isAdmin = metadata?.participants.some(
                   (p) =>
-                    resolveLidToPhone(p.id, configInstance.getAuthPath()) === senderJid &&
+                    lidResolver.resolveToPhone(p.id, configInstance.getAuthPath()) === lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath()) &&
                     (p.admin === "admin" || p.admin === "superadmin"),
                 );
 
@@ -3617,12 +3611,12 @@ We are happy to have you here.
                           .split(":")[0]
                           .split("@")[0];
 
+                        const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
+                        const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+
                         botIsAdmin = groupMetadata.participants.some((p) => {
-                          const resolvedParticipant = resolveLidToPhone(p.id, configInstance.getAuthPath());
-                          const pNumber = resolvedParticipant.split(":")[0].split("@")[0];
-                          const isMe =
-                            pNumber === myNumber ||
-                            (myLidNumber && pNumber === myLidNumber);
+                          const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
+                          const isMe = pPhone === botPhoneJid;
                           return (
                             isMe &&
                             (p.admin === "admin" || p.admin === "superadmin")
@@ -3630,10 +3624,9 @@ We are happy to have you here.
                         });
 
                         senderIsAdmin = groupMetadata.participants.some((p) => {
-                          const resolvedParticipant = resolveLidToPhone(p.id, configInstance.getAuthPath());
-                          const pNumber = resolvedParticipant.split(":")[0].split("@")[0];
+                          const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
                           return (
-                            pNumber === senderNumber &&
+                            pPhone === senderPhoneJid &&
                             (p.admin === "admin" || p.admin === "superadmin")
                           );
                         });
@@ -5209,7 +5202,7 @@ Usage: ${newUsage}/5${warningText}`;
                     if (isGroupChat && groupMetadata) {
                       const targetIsAdmin = groupMetadata.participants.some(
                         (p) =>
-                          resolveLidToPhone(p.id, configInstance.getAuthPath()) === targetUser &&
+                          lidResolver.resolveToPhone(p.id, configInstance.getAuthPath()) === lidResolver.resolveToPhone(targetUser, configInstance.getAuthPath()) &&
                           (p.admin === "admin" || p.admin === "superadmin"),
                       );
                       if (targetIsAdmin) {
@@ -6531,7 +6524,8 @@ Usage: ${newUsage}/5${warningText}`;
 
                   // `${botConfig.getPrefix().toLowerCase()}` lock - only admins can send messages
                   if (
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} lock`
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} lock` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock`
                   ) {
                     if (!canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
@@ -6567,7 +6561,8 @@ Usage: ${newUsage}/5${warningText}`;
                   if (
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} unlock` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} open`
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} open` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} gunlock`
                   ) {
                     if (!canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
@@ -9493,7 +9488,7 @@ Admins can:
                       const activity = getActivity(chatId, targetUser);
                       const isAdmin = groupMetadata?.participants.some(
                         (p) =>
-                          resolveLidToPhone(p.id, configInstance.getAuthPath()) === targetUser &&
+                          lidResolver.resolveToPhone(p.id, configInstance.getAuthPath()) === lidResolver.resolveToPhone(targetUser, configInstance.getAuthPath()) &&
                           (p.admin === `admin` || p.admin === "superadmin"),
                       );
                       const blocked = isBlocked(targetUser);

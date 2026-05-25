@@ -26,14 +26,18 @@ module.exports = {
             if (!groupMetadata) return;
 
             const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+            const lidResolver = require('./lidResolver');
             const botConfig = require('../botConfig');
             const authPath = botConfig.getAuthPath();
 
-            const resolvedSender = resolveLidToPhone(jidNormalizedUser(sender), authPath);
+            const normalizedSender = jidNormalizedUser(sender);
+            const senderPhone = lidResolver.resolveToPhone(normalizedSender, authPath);
+            const resolvedSender = lidResolver.resolveLidToPhone(normalizedSender, authPath);
+
             const senderIsAdmin = groupMetadata.participants.some(
                 p => {
-                    const resolvedParticipant = resolveLidToPhone(jidNormalizedUser(p.id), authPath);
-                    return resolvedParticipant === resolvedSender && (p.admin === 'admin' || p.admin === 'superadmin');
+                    const normalizedParticipant = jidNormalizedUser(p.id);
+                    return lidResolver.resolveToPhone(normalizedParticipant, authPath) === senderPhone && (p.admin === 'admin' || p.admin === 'superadmin');
                 }
             );
 
@@ -149,17 +153,21 @@ module.exports = {
                     warningCount = addWarning(resolvedSender, chatId, `Antilink violation: ${violationType}`);
                 }
 
+                const participantJid = groupMetadata.participants.find(
+                    p => lidResolver.resolveToPhone(jidNormalizedUser(p.id), authPath) === senderPhone
+                )?.id || normalizedSender;
+
                 if (action === 'kick') {
                     const kickMsg = `*🚨 ANTILINK VIOLATION 🚨*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Action:* REMOVED`;
-                    await sock.sendMessage(chatId, { text: kickMsg, contextInfo: { mentionedJid: [resolvedSender] } });
-                    setTimeout(() => sock.groupParticipantsUpdate(chatId, [resolvedSender], 'remove').catch(() => {}), 1000);
+                    await sock.sendMessage(chatId, { text: kickMsg, contextInfo: { mentionedJid: [participantJid] } });
+                    setTimeout(() => sock.groupParticipantsUpdate(chatId, [participantJid], 'remove').catch(() => {}), 1000);
                 } 
                 else if (action === 'warn') {
                     const strike = '⚠️'.repeat(Math.min(warningCount, 3));
                     const warnMsg = `*${strike} WARNING ${strike}*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Count:* ${warningCount}/3\n\n_Don't send links or mention status._`;
-                    await sock.sendMessage(chatId, { text: warnMsg, contextInfo: { mentionedJid: [resolvedSender] } });
+                    await sock.sendMessage(chatId, { text: warnMsg, contextInfo: { mentionedJid: [participantJid] } });
                     if (warningCount >= 3) {
-                        setTimeout(() => sock.groupParticipantsUpdate(chatId, [resolvedSender], 'remove').catch(() => {}), 2000);
+                        setTimeout(() => sock.groupParticipantsUpdate(chatId, [participantJid], 'remove').catch(() => {}), 2000);
                     }
                 }
             }

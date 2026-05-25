@@ -28,7 +28,7 @@ async function loadLidMappings() {
             for (const folder of folders) {
                 const authDir = path.join(instancesDir, folder, "auth");
                 if (fs.existsSync(authDir)) {
-                    // A. Read reverse mapping files: lid-mapping-<LID>_reverse.json
+                    // A. Read reverse mapping files: lid-mapping-<LID>_reverse.json (contains phone)
                     const reverseFiles = fs.readdirSync(authDir).filter(file => 
                         file.startsWith("lid-mapping-") && file.endsWith("_reverse.json")
                     );
@@ -46,7 +46,7 @@ async function loadLidMappings() {
                         }
                     }
 
-                    // B. Read forward mapping files: lid-mapping-<phone>.json
+                    // B. Read forward mapping files: lid-mapping-<phone>.json (contains lid)
                     const forwardFiles = fs.readdirSync(authDir).filter(file => 
                         file.startsWith("lid-mapping-") && !file.endsWith("_reverse.json") && file.endsWith(".json")
                     );
@@ -91,10 +91,8 @@ async function saveLidMapping(lid, phone) {
     }
 }
 
-// Bi-directional resolver that maps incoming JID to the canonical JID registered in database
-function resolveLidToPhone(jid, authPath) {
-    if (!jid) return jid;
-    
+// Synchronous mapping lookup from caches & files
+function getMapping(jid, authPath) {
     let lid = null;
     let phone = null;
     
@@ -178,9 +176,15 @@ function resolveLidToPhone(jid, authPath) {
                 }
             } catch (err) {}
         }
-    } else {
-        return jid;
     }
+    
+    return { lid, phone };
+}
+
+// Bi-directional resolver that maps incoming JID to the canonical JID registered in database
+function resolveLidToPhone(jid, authPath) {
+    if (!jid) return jid;
+    const { lid, phone } = getMapping(jid, authPath);
     
     const lidJid = lid ? `${lid}@lid` : null;
     const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
@@ -201,10 +205,42 @@ function resolveLidToPhone(jid, authPath) {
     return defaultJid;
 }
 
+// Maps incoming JID to the canonical JID registered in database
+function resolveJid(jid, authPath) {
+    if (!jid) return jid;
+    const { lid, phone } = getMapping(jid, authPath);
+    
+    const lidJid = lid ? `${lid}@lid` : null;
+    const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
+    
+    // Check if either JID is registered in database
+    const economy = require('./economy');
+    if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
+        return lidJid;
+    }
+    if (phoneJid && economy.economyData && economy.economyData.has(phoneJid)) {
+        return phoneJid;
+    }
+    
+    // Default to the original JID if neither is registered
+    return jid;
+}
+
+// Helper to resolve any JID to phone number JID format (for comparing admin lists)
+function resolveToPhone(jid, authPath) {
+    if (!jid) return jid;
+    if (jid.endsWith("@s.whatsapp.net")) return jid;
+    
+    const { phone } = getMapping(jid, authPath);
+    return phone ? `${phone}@s.whatsapp.net` : jid;
+}
+
 module.exports = {
     loadLidMappings,
     saveLidMapping,
     resolveLidToPhone,
+    resolveJid,
+    resolveToPhone,
     lidCache,
     phoneCache
 };
