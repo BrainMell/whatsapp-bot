@@ -107,21 +107,20 @@ function generateTurnCaption(players, enemies, turnInfo) {
 }
 
 function generateEndCaption(players, enemies, victory, rewards) {
+    const botConfig = require('./botConfig');
     const ZENI = botConfig.getCurrency().symbol;
     
     if (victory) {
-        let caption = `╔══════════════════════════╗\n`;
-        caption += `   🏆 *VICTORY!*\n`;
-        caption += `╚══════════════════════════╝\n\n`;
+        let caption = `🏆 *VICTORY!* 🏆\n\n`;
         
         if (rewards) {
-            caption += `┌──── 🎁 REWARDS ────┐\n`;
-            caption += `│ 💰 ${ZENI}${rewards.gold.toLocaleString()} Gold\n`;
-            caption += `│ ⭐ ${rewards.xp.toLocaleString()} XP\n`;
+            caption += `🎁 *REWARDS*\n`;
+            caption += `💰 ${ZENI}${rewards.gold.toLocaleString()} Gold\n`;
+            caption += `⭐ ${rewards.xp.toLocaleString()} XP\n`;
             if (rewards.items?.length > 0) {
-                caption += `│ 📦 ${rewards.items.map(i => i.name).join(', ')}\n`;
+                caption += `📦 ${rewards.items.map(i => i.name).join(', ')}\n`;
             }
-            caption += `└────────────────────┘\n\n`;
+            caption += `\n`;
         }
         
         const survivors = players.filter(p => p.currentHP > 0).map(p => p.name);
@@ -134,9 +133,7 @@ function generateEndCaption(players, enemies, victory, rewards) {
         }
         return caption;
     } else {
-        let caption = `╔══════════════════════════╗\n`;
-        caption += `   💀 *PARTY WIPED*\n`;
-        caption += `╚══════════════════════════╝\n\n`;
+        let caption = `💀 *PARTY WIPED* 💀\n\n`;
         caption += `_The party falls into darkness..._\n\n`;
         caption += `💀 ${players.map(p => p.name).join(', ')} have been defeated.\n`;
         return caption;

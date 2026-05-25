@@ -3809,72 +3809,22 @@ async function endCombat(sock, victory, sessionKey) {
     })),
   };
 
-  // Generate final combat image
-  let scene = {
-    success: false,
-    caption: victory ? "✅ Victory!" : "💀 Defeat...",
-  };
+  // Generate text-only combat end message to reduce spam
+  let caption = "✅ Victory!";
   try {
-    scene = await combatIntegration.generateCombatScene(
-      state.players,
-      state.enemies,
-      "END",
-      {
-        victory: victory,
-        rewards: rewards,
-        rank: state.dungeonRank,
-        backgroundPath: state.backgroundPath,
-      },
-    );
+    if (combatIntegration && combatIntegration.generateEndCaption) {
+      caption = combatIntegration.generateEndCaption(state.players, state.enemies, victory, rewards);
+    } else {
+      caption = victory ? "✅ Victory!" : "💀 Defeat...";
+    }
   } catch (sceneErr) {
-    console.error("End combat scene generation failed:", sceneErr.message);
+    console.error("End combat caption generation failed:", sceneErr.message);
   }
 
-  if (scene.success) {
-    try {
-      if (scene.buffer) {
-        await sock.sendMessage(state.chatId, {
-          image: scene.buffer,
-          caption: scene.caption,
-        });
-      } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
-        await sock.sendMessage(state.chatId, {
-          image: fs.readFileSync(scene.imagePath),
-          caption: scene.caption,
-        });
-        // Clean up
-        setTimeout(() => {
-          if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
-        }, 10000);
-      } else {
-        await sock.sendMessage(state.chatId, {
-          text: scene.caption || (victory ? "✅ Victory!" : "💀 Defeat..."),
-        });
-      }
-    } catch (mediaError) {
-      console.error("Media upload failed in endCombat:", mediaError.message);
-      try {
-        await sock.sendMessage(state.chatId, {
-          text: scene.caption || (victory ? "✅ Victory!" : "💀 Defeat..."),
-        });
-      } catch (textError) {
-        console.error(
-          "Failed to send fallback text in endCombat:",
-          textError.message,
-        );
-      }
-    }
-  } else {
-    try {
-      await sock.sendMessage(state.chatId, {
-        text: scene.caption || (victory ? "✅ Victory!" : "💀 Defeat..."),
-      });
-    } catch (err) {
-      console.error(
-        "Failed to send text (else block) in endCombat:",
-        err.message,
-      );
-    }
+  try {
+    await sock.sendMessage(state.chatId, { text: caption });
+  } catch (err) {
+    console.error("Failed to send end combat text:", err.message);
   }
 
   if (victory) {
