@@ -107,7 +107,6 @@ function generateTurnCaption(players, enemies, turnInfo) {
 }
 
 function generateEndCaption(players, enemies, victory, rewards) {
-    const botConfig = require('./botConfig');
     const ZENI = botConfig.getCurrency().symbol;
     
     if (victory) {

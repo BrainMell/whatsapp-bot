@@ -3788,17 +3788,20 @@ async function endCombat(sock, victory, sessionKey) {
   const encounterType = state.currentEncounterType || "COMBAT";
   const bossName = state.enemies[0]?.type || state.enemies[0]?.id || null;
 
+  // Distribute rewards — only when we have alive players (prevents jid crash on defeat)
   let lootResults = { items: [], gold: totalGold, announcements: [] };
-  try {
-    lootResults = await lootSystem.distributeLoot(
-      alivePlayers,
-      encounterType,
-      bossName,
-      state.difficulty,
-      totalGold,
-    );
-  } catch (lootErr) {
-    console.error("Loot distribution failed:", lootErr.message);
+  if (victory && alivePlayers.length > 0) {
+    try {
+      lootResults = await lootSystem.distributeLoot(
+        alivePlayers,
+        encounterType,
+        bossName,
+        state.difficulty,
+        totalGold,
+      );
+    } catch (lootErr) {
+      console.error("Loot distribution failed:", lootErr.message);
+    }
   }
 
   const rewards = {
@@ -3809,16 +3812,16 @@ async function endCombat(sock, victory, sessionKey) {
     })),
   };
 
-  // Generate text-only combat end message to reduce spam
-  let caption = "✅ Victory!";
+  // Generate text-only combat end message
+  // Default caption now correctly respects the victory flag so defeat never shows "Victory!"
+  let caption = victory ? "✅ Victory!" : "💀 Defeat...";
   try {
     if (combatIntegration && combatIntegration.generateEndCaption) {
       caption = combatIntegration.generateEndCaption(state.players, state.enemies, victory, rewards);
-    } else {
-      caption = victory ? "✅ Victory!" : "💀 Defeat...";
     }
   } catch (sceneErr) {
     console.error("End combat caption generation failed:", sceneErr.message);
+    // Keep the safe default already set above
   }
 
   try {
@@ -4517,6 +4520,8 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
       {
         minMobs: rankData.minMobs,
         maxMobs: rankData.maxMobs,
+        // Pin the boss to the one defined for this rank so HP stays sane
+        ...(encounterType === 'BOSS' && rankData.boss ? { forceBossId: rankData.boss } : {}),
       },
     );
   }
@@ -5443,17 +5448,20 @@ async function applyAbilityEffect(
       // Death check
       if (target.stats.hp <= 0) {
         // 💡 OVERKILL EXECUTION BONUS
-        const overkillThreshold = target.stats.hp + damage; // HP before this hit
         if (damage > overkillThreshold * 2.0) {
           const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
-          player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          if (!player.isEnemy) {
+            player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          }
           msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
         }
 
         msg += `💀 ${target.name} has been defeated!\n`;
         target.isDead = true;
         target.currentHP = 0; // Sync
-        player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        if (player.combatStats) {
+          player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        }
         // 💡 Track quest stats (moved out of checkCombatEnd so abilities are counted)
         state.stats.monstersKilled++;
         if (target.isBoss) state.stats.bossesDefeated++;
@@ -5486,8 +5494,10 @@ async function applyAbilityEffect(
       }
     }
 
-    player.combatStats.damageDealt =
-      (player.combatStats.damageDealt || 0) + totalDamage;
+    if (player.combatStats) {
+      player.combatStats.damageDealt =
+        (player.combatStats.damageDealt || 0) + totalDamage;
+    }
   }
 
   // AOE ABILITIES
@@ -5596,25 +5606,30 @@ async function applyAbilityEffect(
       );
       if (target.stats.hp <= 0) {
         // 💡 OVERKILL EXECUTION BONUS
-        const overkillThreshold = target.stats.hp + damage; // HP before this hit
         if (damage > overkillThreshold * 2.0) {
           const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
-          player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          if (!player.isEnemy) {
+            player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          }
           msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
         }
 
         msg += `💀 ${target.name} defeated!\n`;
         target.isDead = true;
         target.currentHP = 0; // Sync
-        player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        if (player.combatStats) {
+          player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        }
         // 💡 Track quest stats for every kill in the AOE sweep
         state.stats.monstersKilled++;
         if (target.isBoss) state.stats.bossesDefeated++;
         // Note: checkCombatEnd called by performAction after full message is sent.
       }
     }
-    player.combatStats.damageDealt =
-      (player.combatStats.damageDealt || 0) + totalDamage;
+    if (player.combatStats) {
+      player.combatStats.damageDealt =
+        (player.combatStats.damageDealt || 0) + totalDamage;
+    }
   }
 
   // HEALING ABILITIES
@@ -5633,7 +5648,9 @@ async function applyAbilityEffect(
 
       const targetIcon = target.class?.icon || "👤";
       msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
-      player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
+      if (!player.isEnemy && player.combatStats) {
+        player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
+      }
     }
   }
 

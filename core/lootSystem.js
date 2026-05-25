@@ -482,17 +482,22 @@ function generateGoldDrop(encounterType, difficulty = 1.0) {
 
 async function distributeLoot(players, encounterType, enemyName = null, difficulty = 1.0, overrideGold = null) {
     const inventorySystem = require('./inventorySystem');
+    const results = {
+        items: [],
+        gold: 0,
+        goldPerPlayer: 0,
+        announcements: []
+    };
+
+    if (!players || players.length === 0) return results;
+
     const loot = generateLoot(encounterType, enemyName, difficulty);
     const goldDrop = overrideGold !== null ? overrideGold : generateGoldDrop(encounterType, difficulty);
     
     const goldPerPlayer = Math.floor(goldDrop / Math.max(1, players.length));
 
-    const results = {
-        items: [],
-        gold: goldDrop,
-        goldPerPlayer: goldPerPlayer,
-        announcements: []
-    };
+    results.gold = goldDrop;
+    results.goldPerPlayer = goldPerPlayer;
     
     for (const drop of loot) {
         const itemInfo = getItemInfo(drop.id);
