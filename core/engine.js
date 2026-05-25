@@ -4168,13 +4168,16 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (primaryCmd === "combat") {
                       const action = cmdArgs[1];
                       const combatTarget = cmdArgs.slice(2).join(" ");
-                      await guildAdventure.handleCombatAction(
+                      const result = await guildAdventure.handleCombatAction(
                         sock,
                         chatId,
                         senderJid,
                         action,
                         combatTarget,
                       );
+                      if (result) {
+                        await reply(result);
+                      }
                       return;
                     }
 

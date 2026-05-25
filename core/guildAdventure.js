@@ -2849,21 +2849,25 @@ async function processCombatTurn(sock, sessionKey) {
       }
 
       const skipEffects = ["freeze", "stun", "sleep"];
-      if (
-        (activeActor.statusEffects || []).some((e) =>
-          skipEffects.includes(e.type),
-        )
-      ) {
+      const activeEffect = (activeActor.statusEffects || []).find((e) =>
+        skipEffects.includes(e.type),
+      );
+      if (activeEffect) {
         const statusPrefix = state.pendingStatusMsg
-          ? state.pendingStatusMsg + "\n"
+          ? state.pendingStatusMsg + "\n\n"
           : "";
         state.pendingStatusMsg = null;
+
+        const effectIcon = activeEffect.icon || "⏳";
+        const effectName = activeEffect.name || activeEffect.type;
+        const stylishMsg = `${statusPrefix}❄️ *STATUS EFFECT ACTIVE* ❄️\n━━━━━━━━━━━━━━━━\n${activeActor.icon || activeActor.class?.icon || "👤"} *${activeActor.name}* is **${effectName.toUpperCase()}**!\n\n${effectIcon} _Unable to act this turn._\n━━━━━━━━━━━━━━━━`;
+
         await sock.sendMessage(state.chatId, {
-          text: `${statusPrefix}${activeActor.icon || activeActor.class?.icon || "👤"} *${activeActor.name}* is unable to act!`,
+          text: stylishMsg,
         });
         await nextTurn(
           sock,
-          { actor: activeActor, action: { name: "Unable to Act" }, turnNumber: state.turnCount },
+          null, // skip round image generation
           sessionKey,
         );
         continue;
@@ -2951,7 +2955,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
       msg += `${i + 1}. ${info.name} x${item.quantity}\n`;
     });
     if (usableItems.length > 3)
-      msg += `...+${usableItems.length - 3} more (${botConfig.getPrefix()} bag)\n`;
+      msg += `...+${usableItems.length - 3} more (${botConfig.getPrefix()} combat item)\n`;
   } else {
     msg += `_No usable items_\n`;
   }
@@ -3173,7 +3177,15 @@ async function performAction(sock, player, action, sessionKey) {
     }
   } else if (action.type === "item") {
     const itemKey = action.itemId;
-    const item = lootSystem.getItemInfo(itemKey);
+    const itemInfo = lootSystem.getItemInfo(itemKey);
+    const shopInfo = CONSUMABLES[itemKey];
+
+    // Merge item properties with CONSUMABLES to resolve usable status and details for shop-only items
+    const item = {
+      ...itemInfo,
+      ...(shopInfo || {}),
+      usable: (itemInfo && itemInfo.usable) || !!shopInfo
+    };
 
     if (!item || !item.usable) {
       resultMsg += `❌ Invalid item!`;
@@ -5210,13 +5222,23 @@ const handleCombatAction = async (
       return (info && info.usable) || !!CONSUMABLES[item.id];
     });
 
+    if (usableItems.length === 0) {
+      return "❌ You have no usable items in your bag!";
+    }
+
+    if (!target || target.trim() === "") {
+      let msg = `🎒 *USABLE COMBAT ITEMS* 🎒\n━━━━━━━━━━━━━━━━\n`;
+      usableItems.forEach((item, i) => {
+        const info = lootSystem.getItemInfo(item.id);
+        msg += `*${i + 1}.* ${info.name} x${item.quantity}\n_${info.description || ''}_\n\n`;
+      });
+      msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
+      return msg;
+    }
+
     const itemIndex = parseInt(target) - 1;
     if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= usableItems.length) {
-      // Check if it's a non-usable item by number
-      if (inventory.items[itemIndex]) {
-        return `❌ *${inventory.items[itemIndex].name}* is not a consumable!`;
-      }
-      return "❌ Invalid item number! Use the number from the 'USABLE ITEMS' list.";
+      return `❌ Invalid item number! Type \`${botConfig.getPrefix()} combat item\` to see all usable items and their numbers.`;
     }
 
     const selectedItem = usableItems[itemIndex];
