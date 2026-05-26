@@ -148,12 +148,12 @@ function coinflip(userId, amount, choice, economyModule) {
   const won = userChoice === result && !maybeForceLoss(ctx);
   
   const coinVisual = `🪙 *COINFLIP* 🪙
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  Choice: *${userChoice.toUpperCase()}*
 ║  Result: *${result.toUpperCase()}*
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(amount, ctx));
@@ -246,12 +246,12 @@ function diceRoll(userId, amount, economyModule) {
   }
   
   const diceVisual = `🎲 *DICE ROLL* 🎲
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  Your Roll: *${playerRoll}* 🎲
 ║  Dealer's: *${dealerRoll}* 🎲
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (playerRoll === dealerRoll) {
     economyModule.logTransaction(userId, "Dice Roll (Tie)", 0, user.wallet);
@@ -400,11 +400,11 @@ function slots(userId, amount, economyModule) {
   const won = profit > 0 && !maybeForceLoss(ctx);
   
   const reelVisual = `🎰 *SLOT MACHINE* 🎰
-━━━━━━━━━━━━━━━━━━━━
-╔══════════════════╗
-║    ${reel1}   ${reel2}   ${reel3}    ║
-╚══════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━
+╔═══════════════╗
+║   ${reel1}  ${reel2}  ${reel3}   ║
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(profit, ctx));
@@ -977,9 +977,9 @@ function roulette(userId, amount, bet, economyModule) {
       success: true,
       won: true,
       message: `🎡 *ROULETTE WHEEL* 🎡
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${spinVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
@@ -1001,9 +1001,9 @@ ${spinVisual}
       success: true,
       won: false,
       message: `🎡 *ROULETTE WHEEL* 🎡
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${spinVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
@@ -1362,14 +1362,14 @@ function startMines(userId, amount, mineCount, economyModule) {
   return {
     success: true,
     message: `💣 *MINES GAME* 💣
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${gridVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟 *Bet:* ${getZENI()}${amount.toLocaleString()}
 💣 *Mines:* ${mines}
 📈 *Multiplier:* 1.00x
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 💡 *Commands:*
 • \`${botConfig.getPrefix()} mines pick <1-25>\`
 • \`${botConfig.getPrefix()} mines out\` (cashout)`
@@ -1410,9 +1410,9 @@ function minesPick(userId, cellIndex, economyModule) {
       success: true,
       won: false,
       message: `💥 *BOOM! EXPLODED!* 💥
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${gridVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
 
@@ -1448,14 +1448,14 @@ ${gridVisual}
   return {
     success: true,
     message: `💎 *SAFE DIG!* 💎
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${gridVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Bet:* ${getZENI()}${game.bet.toLocaleString()}
 📈 *Multiplier:* ${game.multiplier}x
 💵 *Current Value:* ${getZENI()}${Math.floor(game.bet * game.multiplier).toLocaleString()}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 💡 *Commands:*
 • \`${botConfig.getPrefix()} mines pick <1-25>\`
 • \`${botConfig.getPrefix()} mines out\` (cashout)`
@@ -1508,9 +1508,9 @@ function minesCashOut(userId, economyModule) {
   return {
     success: true,
     message: `💰 *CASHED OUT!* 💰
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${gridVisual}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
 
@@ -1547,9 +1547,9 @@ function horseRace(userId, amount, horseNum, economyModule) {
 
   const horses = [1, 2, 3, 4, 5].map(h => h === winner ? `🐎💨 [H${h}] 🏁` : `🐎 [H${h}]`).join('\n');
   const horseVisual = `🏇 *HORSE RACE* 🏇
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${horses}
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const rawGain = amount * 6;
@@ -1634,12 +1634,12 @@ function lottery(userId, amount, economyModule) {
   const won = ticket === winningNum && !maybeForceLoss(ctx);
 
   const lottoVisual = `🎫 *LOTTERY TICKET* 🎫
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  Your Ticket: *${ticket}*
 ║  Winning Num: *${winningNum}*
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const rawGain = amount * 90;
@@ -1728,12 +1728,12 @@ function rps(userId, amount, choice, economyModule) {
   const ctx = beginGamblingRound(user);
 
   const rpsVisual = `✊✋✌️ *ROCK-PAPER-SCISSORS* ✊✋✌️
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  You chose: *${fullUserChoice.toUpperCase()}*
 ║  ${botConfig.getBotName()}: *${botChoice.toUpperCase()}*
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (fullUserChoice === botChoice) {
     economyModule.logTransaction(userId, `RPS Tie (${fullUserChoice})`, 0, user.wallet);
@@ -1840,12 +1840,12 @@ function penalty(userId, amount, direction, economyModule) {
   const won = userDir !== keeperDir && !maybeForceLoss(ctx);
 
   const penaltyVisual = `🥅 *PENALTY KICK* ⚽
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  Kicked: *${userDir.toUpperCase()}* ⚽
 ║  Keeper: *${keeperDir.toUpperCase()}* 🧤
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const rawGain = Math.floor(amount * 0.4);
@@ -1932,12 +1932,12 @@ function guessNumber(userId, amount, guess, economyModule) {
   const won = num === result && !maybeForceLoss(ctx);
 
   const guessVisual = `🔢 *GUESS THE NUMBER* 🔢
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  Your Guess: *${num}*
 ║  Target Num: *${result}*
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━`;
+╚═══════════════╝
+━━━━━━━━━━━━━━━`;
 
   if (won) {
     const rawGain = amount * 8;
@@ -2041,12 +2041,12 @@ function higherLower(userId, amount, guess, economyModule) {
       success: true,
       won: null,
       message: `🎴 *HIGHER OR LOWER* 🎴
-━━━━━━━━━━━━━━━━━━━━
-╔════════════════════╗
+━━━━━━━━━━━━━━━
+╔═══════════════╗
 ║  First Card:  *${firstCard}*
 ║  Second Card: *${secondCard}*
-╚════════════════════╝
-━━━━━━━━━━━━━━━━━━━━
+╚═══════════════╝
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
@@ -2250,9 +2250,9 @@ function plinko(userId, amount, risk, economyModule) {
   return {
     success: true,
     message: `🔴 *PLINKO BOARD* 🔴
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 ${pathStr}
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 👤 *Player:* @${user.nickname || userId.split('@')[0]}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 🎯 *Risk:* ${r.toUpperCase()}
@@ -2348,13 +2348,13 @@ function scratchCard(userId, amount, economyModule) {
   economyModule.saveUser(userId);
 
   const scratchVisual = `🎫 *SCRATCH CARD* 🎫
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
   ${card[0]}  │  ${card[1]}  │  ${card[2]}
   ───┼──────┼───
   ${card[3]}  │  ${card[4]}  │  ${card[5]}
   ───┼──────┼───
   ${card[6]}  │  ${card[7]}  │  ${card[8]}
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━`;
 
   let outcomeMessage = '';
   if (winner) {
@@ -2432,10 +2432,10 @@ function cupGame(userId, amount, choice, economyModule) {
   const finalCups = [1, 2, 3].map(c => c === ball ? '🥎' : '🥤').join('    ');
 
   const cupResultVisual = `🥤 *CUP GAME* 🥤
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
   1      2      3
 ${finalCups}
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━`;
 
   let outcomeMessage = '';
   if (won) {
@@ -2520,11 +2520,11 @@ function wheelOfFortune(userId, amount, economyModule) {
   economyModule.saveUser(userId);
 
   const wheelVisual = `🎡 *WHEEL OF FORTUNE* 🎡
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
   [ 0x │ 2x │ 10x │ 0.5x │ 5x ]
              👇
   >------- *${multiplier}x* -------<
-━━━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━`;
 
   let outcomeMessage = '';
   if (multiplier >= 1) {
