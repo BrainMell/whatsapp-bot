@@ -11928,7 +11928,7 @@ ${senderName} said y'all should know:
                     for (const [id, plan] of Object.entries(
                       invest.INVESTMENT_PLANS,
                     )) {
-                      msg += `• *${plan.name}* (\`${id}\`)\n  Rate: +${(plan.interest * 100).toFixed(0)}% | Time: ${plan.durationDays} days\n  Min: ${economy.getZENI()}${plan.minDeposit.toLocaleString()}\n\n`;
+                      msg += `• *${plan.name}* (\`${id}\`)\n  Rate: +${(plan.interest * 100).toFixed(0)}% | Time: ${plan.durationHours} hours\n  Min: ${economy.getZENI()}${plan.minDeposit.toLocaleString()}\n\n`;
                     }
                     msg += `💡 Use: \`${botConfig.getPrefix()} invest <id> <amount>\` to start or \`${botConfig.getPrefix()} invest claim\` to collect matured funds.`;
                     await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
@@ -13050,6 +13050,22 @@ Examples:
                     );
                   }
 
+                  // Helper for robust parsing of gambling commands
+                  const parseGamblingArgs = (txt, cmdNames) => {
+                    const cleanTxt = txt.replace(/\s+/g, ' ').trim();
+                    const args = cleanTxt.split(' ');
+                    const cmdIdx = args.findIndex(arg => {
+                      const lower = arg.toLowerCase();
+                      return cmdNames.some(name => lower.endsWith(name));
+                    });
+                    if (cmdIdx === -1) return { amount: NaN, extra: null, extra2: null, cmdWord: null };
+                    
+                    const amount = parseInt(args[cmdIdx + 1]);
+                    const extra = args[cmdIdx + 2];
+                    const extra2 = args[cmdIdx + 3];
+                    return { amount, extra, extra2, cmdWord: args[cmdIdx], rawArgs: args.slice(cmdIdx) };
+                  };
+
                   // cf <amount> <heads/tails> - Coinflip
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} cf` ||
@@ -13062,9 +13078,7 @@ Examples:
                     }
                     busyUsers.add(senderJid);
                     try {
-                    const args = txt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const choice = args[3];
+                    const { amount, extra: choice } = parseGamblingArgs(txt, ['cf', 'flip']);
 
                     if (!amount || !choice) {
                       return await sendUsage(
@@ -13112,8 +13126,7 @@ Examples:
                     }
                     busyUsers.add(senderJid);
                     try {
-                    const args = txt.split(` `);
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['dice', 'roll']);
 
                     if (!amount) {
                       return await sendUsage(
@@ -13165,8 +13178,7 @@ Examples:
                     }
                     busyUsers.add(senderJid);
                     try {
-                    const args = txt.split(` `);
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['slots', 'slot']);
 
                     if (!amount) {
                       return await sendUsage(
@@ -13203,9 +13215,7 @@ Examples:
                       `${botConfig.getPrefix().toLowerCase()} hl `,
                     )
                   ) {
-                    const args = txt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const guess = args[3];
+                    const { amount, extra: guess } = parseGamblingArgs(txt, ['hl']);
 
                     if (!amount || !guess) {
                       await sock.sendMessage(chatId, {
@@ -13265,8 +13275,7 @@ Examples:
                       !lowerTxt.includes("stand") &&
                       !lowerTxt.includes("double"))
                   ) {
-                    const args = txt.split(" ");
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['bj', 'blackjack']);
 
                     if (!amount) {
                       return await sendUsage(
@@ -13309,7 +13318,7 @@ Examples:
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + result.message,
                       mentions: [senderJid],
-                    });
+                      });
                     await awardProgression(senderJid, chatId);
                     return;
                   }
@@ -13354,9 +13363,7 @@ Examples:
                       `${botConfig.getPrefix().toLowerCase()} roul `,
                     )
                   ) {
-                    const args = txt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const bet = args[3];
+                    const { amount, extra: bet } = parseGamblingArgs(txt, ['roulette', 'roul']);
 
                     if (!amount || !bet) {
                       await sock.sendMessage(chatId, {
@@ -13399,8 +13406,7 @@ Examples:
                       )) &&
                     !lowerTxt.includes(`out`)
                   ) {
-                    const args = txt.split(" ");
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['crash']);
 
                     if (!amount) {
                       await sock.sendMessage(chatId, {
@@ -13462,9 +13468,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} horse `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const horseNum = args[3];
+                    const { amount, extra: horseNum } = parseGamblingArgs(txt, ['horse']);
 
                     if (isNaN(amount) || !horseNum) {
                       return await sock.sendMessage(chatId, {
@@ -13493,8 +13497,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} lotto `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['lotto']);
 
                     if (isNaN(amount)) {
                       return await sock.sendMessage(chatId, {
@@ -13520,9 +13523,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} rps `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const choice = args[3];
+                    const { amount, extra: choice } = parseGamblingArgs(txt, ['rps']);
 
                     if (isNaN(amount) || !choice) {
                       return await sock.sendMessage(chatId, {
@@ -13554,9 +13555,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} penalty `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const direction = args[3];
+                    const { amount, extra: direction } = parseGamblingArgs(txt, ['penalty']);
 
                     if (isNaN(amount) || !direction) {
                       return await sock.sendMessage(chatId, {
@@ -13588,9 +13587,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} guess `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const guess = args[3];
+                    const { amount, extra: guess } = parseGamblingArgs(txt, ['guess']);
 
                     if (isNaN(amount) || !guess) {
                       return await sock.sendMessage(chatId, {
@@ -13624,10 +13621,10 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} mines `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
+                    const { amount, extra, extra2 } = parseGamblingArgs(txt, ['mines']);
 
-                    if (args[2] === "pick") {
-                      const cell = args[3];
+                    if (extra === "pick") {
+                      const cell = extra2;
                       if (!cell)
                         return await sock.sendMessage(chatId, {
                           text:
@@ -13645,7 +13642,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       });
                     }
 
-                    if (args[2] === "out" || args[2] === "cashout") {
+                    if (extra === "out" || extra === "cashout") {
                       const result = gambling.minesCashOut(senderJid, economy);
                       await awardProgression(senderJid, chatId);
                       return await sock.sendMessage(chatId, {
@@ -13653,8 +13650,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       });
                     }
 
-                    const amount = parseInt(args[2]);
-                    const mineCount = parseInt(args[3]) || 3;
+                    const mineCount = parseInt(extra) || 3;
 
                     if (isNaN(amount)) {
                       return await sendUsage(
@@ -13689,9 +13685,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} plinko `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const risk = args[3] || "mid";
+                    const { amount, extra: risk = "mid" } = parseGamblingArgs(txt, ['plinko']);
 
                     if (isNaN(amount)) {
                       return await sock.sendMessage(chatId, {
@@ -13722,8 +13716,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} scratch `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['scratch']);
 
                     if (isNaN(amount)) {
                       return await sock.sendMessage(chatId, {
@@ -13753,9 +13746,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} cups `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
-                    const choice = args[3];
+                    const { amount, extra: choice } = parseGamblingArgs(txt, ['cups']);
 
                     if (isNaN(amount) || !choice) {
                       return await sock.sendMessage(chatId, {
@@ -13786,8 +13777,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       `${botConfig.getPrefix().toLowerCase()} wheel `,
                     )
                   ) {
-                    const args = lowerTxt.split(` `);
-                    const amount = parseInt(args[2]);
+                    const { amount } = parseGamblingArgs(txt, ['wheel']);
 
                     if (isNaN(amount)) {
                       return await sock.sendMessage(chatId, {

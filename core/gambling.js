@@ -73,13 +73,15 @@ function ensureGamblingProfile(user) {
   }
 }
 
+const DAILY_PROFIT_LIMIT = 2000000; // 2 Million Zeni daily net profit limit
+
 function beginGamblingRound(user) {
   ensureGamblingProfile(user);
   user.gamblingProfile.roundsToday = (user.gamblingProfile.roundsToday || 0) + 1;
 
   const rounds = user.gamblingProfile.roundsToday;
-  const edge = Math.min(0.03 + rounds * 0.004, 0.35);
-  const forcedLossChance = Math.min(Math.max((rounds - 12) * 0.01, 0), 0.22);
+  const edge = Math.min(0.03 + rounds * 0.001, 0.10); // Start at 3%, max 10%
+  const forcedLossChance = Math.min(Math.max((rounds - 20) * 0.005, 0), 0.10); // Starts after 20 rounds, max 10%
 
   return { rounds, edge, forcedLossChance };
 }
@@ -96,9 +98,15 @@ function maybeForceLoss(ctx) {
 }
 
 function capPayoutByDailyLimit(user, payoutAmount) {
-  const maxWallet = getDailyWalletCap(user);
-  const room = Math.max(0, maxWallet - user.wallet);
-  return Math.max(0, Math.min(Math.floor(payoutAmount), room));
+  ensureGamblingProfile(user);
+  const net = user.gamblingProfile.netToday || 0;
+  
+  if (net >= DAILY_PROFIT_LIMIT) {
+    return 0; // Daily profit cap reached
+  }
+  
+  const room = DAILY_PROFIT_LIMIT - net;
+  return Math.min(Math.floor(payoutAmount), room);
 }
 
 function applyEdgeToAmount(amount, ctx) {
@@ -116,7 +124,7 @@ function trackDailyNet(user, delta) {
 
 function coinflip(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -126,7 +134,7 @@ function coinflip(userId, amount, choice, economyModule) {
   }
   
   if (user.wallet < amount) {
-    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
+    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet.toLocaleString()}!` };
   }
   
   const normalizedChoice = choice.toLowerCase();
@@ -139,31 +147,37 @@ function coinflip(userId, amount, choice, economyModule) {
   const ctx = beginGamblingRound(user);
   const won = userChoice === result && !maybeForceLoss(ctx);
   
+  const coinVisual = `🪙 *COINFLIP* 🪙
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  Choice: *${userChoice.toUpperCase()}*
+║  Result: *${result.toUpperCase()}*
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(amount, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `Coinflip Lost (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, `Coinflip Won (Refunded/Daily Cap)`, 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🪙 *COINFLIP* 🪙
+        won: true,
+        message: `${coinVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-Your choice: ${userChoice}
-Result: ${result}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *YOU LOST!* 😢
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Coinflip Won (${userChoice})`, gain, user.wallet);
@@ -171,19 +185,19 @@ Result: ${result}
     return {
       success: true,
       won: true,
-      message: `🪙 *COINFLIP* 🪙
-
-Your choice: ${userChoice}
-Result: ${result}
+      message: `${coinVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *YOU WON!* 🎉
-+${getZENI()}${gain.toLocaleString()}
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Coinflip Lost (${userChoice})`, -amount, user.wallet);
@@ -191,15 +205,14 @@ Result: ${result}
     return {
       success: true,
       won: false,
-      message: `🪙 *COINFLIP* 🪙
-
-Your choice: ${userChoice}
-Result: ${result}
+      message: `${coinVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *YOU LOST!* 😢
--${getZENI()}${amount.toLocaleString()}
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -210,7 +223,7 @@ Result: ${result}
 
 function diceRoll(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -220,7 +233,7 @@ function diceRoll(userId, amount, economyModule) {
   }
   
   if (user.wallet < amount) {
-    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
+    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet.toLocaleString()}!` };
   }
   
   const playerRoll = Math.floor(Math.random() * 6) + 1;
@@ -232,20 +245,27 @@ function diceRoll(userId, amount, economyModule) {
     dealerRoll--;
   }
   
+  const diceVisual = `🎲 *DICE ROLL* 🎲
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  Your Roll: *${playerRoll}* 🎲
+║  Dealer's: *${dealerRoll}* 🎲
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (playerRoll === dealerRoll) {
     economyModule.logTransaction(userId, "Dice Roll (Tie)", 0, user.wallet);
     return {
       success: true,
       won: null,
-      message: `🎲 *DICE ROLL* 🎲
+      message: `${diceVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
- Your roll: ${playerRoll}
- Dealer roll: ${dealerRoll}
+🤝 *IT'S A TIE!* 🤝
+🔄 *Refunded:* ${getZENI()}${amount.toLocaleString()}
 
-🤝 *TIE!* 🤝
-No money lost or gained
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
   
@@ -255,28 +275,26 @@ No money lost or gained
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(winnings, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, "Dice Roll Lost (Daily Cap)", -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Dice Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🎲 *DICE ROLL* 🎲
+        won: true,
+        message: `${diceVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
- Your roll: ${playerRoll}
- Dealer roll: ${dealerRoll}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *YOU LOST!* 😢
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, "Dice Roll Won", gain, user.wallet);
@@ -284,19 +302,19 @@ No money lost or gained
     return {
       success: true,
       won: true,
-      message: `🎲 *DICE ROLL* 🎲
-
- Your roll: ${playerRoll}
- Dealer roll: ${dealerRoll}
+      message: `${diceVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *YOU WON!* 🎉
-+${getZENI()}${gain.toLocaleString()}
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, "Dice Roll Lost", -amount, user.wallet);
@@ -304,15 +322,14 @@ No money lost or gained
     return {
       success: true,
       won: false,
-      message: `🎲 *DICE ROLL* 🎲
-
- Your roll: ${playerRoll}
- Dealer roll: ${dealerRoll}
+      message: `${diceVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *YOU LOST!* 😢
--${getZENI()}${amount.toLocaleString()}
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -382,26 +399,30 @@ function slots(userId, amount, economyModule) {
   const profit = winnings - amount;
   const won = profit > 0 && !maybeForceLoss(ctx);
   
+  const reelVisual = `🎰 *SLOT MACHINE* 🎰
+━━━━━━━━━━━━━━━━━━━━
+╔══════════════════╗
+║    ${reel1}   ${reel2}   ${reel3}    ║
+╚══════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(profit, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, "Slots Lost (Daily Cap)", -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Slots Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🎰 *SLOT MACHINE* 🎰
+        won: true,
+        message: `${reelVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
- [ ${reel1} | ${reel2} | ${reel3} ]
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *NO MATCH!* 😢
-
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
@@ -414,16 +435,14 @@ function slots(userId, amount, economyModule) {
     return {
       success: true,
       won: true,
-      message: `🎰 *SLOT MACHINE* 🎰
+      message: `${reelVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
- [ ${reel1} | ${reel2} | ${reel3} ]
+${result === 'JACKPOT' ? '🎊 *CONGRATULATIONS! JACKPOT!* 🎊' : '🎉 *CONGRATULATIONS! YOU WIN!* 🎉'}
+📈 *Payout:* ${multiplier}x (+${getZENI()}${gain.toLocaleString()})
 
-${result === 'JACKPOT' ? '🎊 *JACKPOT!* 🎊' : '🎉 *WIN!* 🎉'}
-${multiplier}x multiplier!
-
-+${getZENI()}${gain.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
@@ -435,15 +454,14 @@ ${multiplier}x multiplier!
     return {
       success: true,
       won: false,
-      message: `🎰 *SLOT MACHINE* 🎰
+      message: `${reelVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
- [ ${reel1} | ${reel2} | ${reel3} ]
+😢 *NO MATCH! BETTER LUCK NEXT TIME!* 😢
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
 
-😢 *NO MATCH!* 😢
-
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -537,51 +555,36 @@ function startBlackjack(userId, amount, economyModule) {
   const playerValue = calculateHandValue(playerHand);
   
   if (playerValue === 21) {
-    const rawPayout = Math.floor(amount * 4.0);
+    const rawPayout = Math.floor(amount * 2.5);
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-    const payout = capPayoutByDailyLimit(user, adjustedPayout);
+    let payout = capPayoutByDailyLimit(user, adjustedPayout);
+    if (payout < amount) {
+      payout = amount; // Refund bet on cap
+    }
     const profit = payout - amount;
 
+    user.wallet += payout;
+    if (!user.stats) user.stats = {};
     if (profit > 0) {
-      user.wallet += payout;
-      user.stats.totalEarned += profit;
+      user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
       trackDailyNet(user, profit);
       updateGamblingStats(userId, amount, true, economyModule);
       economyModule.logTransaction(userId, "Blackjack Win (Natural)", profit, user.wallet);
-      economyModule.saveUser(userId);
-
-      return {
-        success: true,
-        won: true,
-        message: `♠️ *BLACKJACK!* ♠️
-
-Your hand: ${formatHand(playerHand)}
-Value: ${playerValue}
-
-🃏 *NATURAL BLACKJACK!* 🃏
-+${getZENI()}${profit.toLocaleString()} (3:2 payout)
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
-      };
+    } else {
+      economyModule.logTransaction(userId, "Blackjack Natural Capped (Refunded)", 0, user.wallet);
     }
-
-    user.stats.totalSpent += amount;
-    trackDailyNet(user, -amount);
-    updateGamblingStats(userId, amount, false, economyModule);
-    economyModule.logTransaction(userId, "Blackjack Lost (Natural Reduced)", -amount, user.wallet);
     economyModule.saveUser(userId);
 
     return {
       success: true,
-      won: false,
+      won: true,
       message: `♠️ *BLACKJACK!* ♠️
 
 Your hand: ${formatHand(playerHand)}
 Value: ${playerValue}
 
 🃏 *NATURAL BLACKJACK!* 🃏
-😢 *YOU LOST!*
--${getZENI()}${amount.toLocaleString()}
+${profit > 0 ? `🎉 *CONGRATULATIONS!* 🎉\n+${getZENI()}${profit.toLocaleString()} (3:2 payout)` : `⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`}
 
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
     };
@@ -694,16 +697,22 @@ function blackjackStand(userId, economyModule) {
     const rawPayout = game.bet * 2;
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
     payout = capPayoutByDailyLimit(user, adjustedPayout);
+    if (payout < game.bet) {
+      payout = game.bet; // Refund bet on cap
+    }
     profit = payout - game.bet;
-    user.wallet += Math.max(0, payout);
+    user.wallet += payout;
     result = '🎉 DEALER BUST! YOU WIN! 🎉';
   } else if (playerValue > dealerValue) {
     won = true;
     const rawPayout = game.bet * 2;
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
     payout = capPayoutByDailyLimit(user, adjustedPayout);
+    if (payout < game.bet) {
+      payout = game.bet; // Refund bet on cap
+    }
     profit = payout - game.bet;
-    user.wallet += Math.max(0, payout);
+    user.wallet += payout;
     result = '🎉 YOU WIN! 🎉';
   } else if (playerValue === dealerValue) {
     payout = game.bet;
@@ -740,14 +749,8 @@ ${result}
       updateGamblingStats(userId, game.bet, true, economyModule);
       economyModule.logTransaction(userId, "Blackjack Win", profit, user.wallet);
     } else {
-      won = false;
-      result = '😢 DEALER WINS! 😢';
-      user.stats.totalSpent += game.bet;
-      trackDailyNet(user, -game.bet);
-      updateGamblingStats(userId, game.bet, false, economyModule);
-      economyModule.logTransaction(userId, "Blackjack Loss", 0, user.wallet);
-      profit = -game.bet;
-      payout = 0;
+      updateGamblingStats(userId, game.bet, true, economyModule);
+      economyModule.logTransaction(userId, "Blackjack Win (Refunded/Daily Cap)", 0, user.wallet);
     }
   } else {
     user.stats.totalSpent += game.bet;
@@ -770,7 +773,7 @@ Dealer: ${formatHand(game.dealerHand)}
 Value: ${dealerValue}
 
 ${result}
-${won ? '+' : ''}${getZENI()}${Math.abs(profit).toLocaleString()}
+${won ? (profit > 0 ? `+${getZENI()}${profit.toLocaleString()}` : `⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${game.bet.toLocaleString()} (No loss, no gain)`) : `-${getZENI()}${Math.abs(profit).toLocaleString()}`}
 
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
   };
@@ -837,6 +840,46 @@ function roulette(userId, amount, bet, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
   
+  // 1. Parse and Validate Bet First!
+  const betLower = bet.toLowerCase();
+  let multiplier = 0;
+  let betType = '';
+  let checkValid = false;
+  
+  if (betLower === 'red' || betLower === 'r') {
+    multiplier = 2;
+    betType = '🔴 RED';
+    checkValid = true;
+  } else if (betLower === 'black' || betLower === 'b') {
+    multiplier = 2;
+    betType = '⚫ BLACK';
+    checkValid = true;
+  } else if (betLower === 'green' || betLower === 'g' || betLower === '0') {
+    multiplier = 36;
+    betType = '🟢 GREEN (0)';
+    checkValid = true;
+  } else if (betLower === 'even' || betLower === 'e') {
+    multiplier = 2;
+    betType = '🔢 EVEN';
+    checkValid = true;
+  } else if (betLower === 'odd' || betLower === 'o') {
+    multiplier = 2;
+    betType = '🔢 ODD';
+    checkValid = true;
+  } else {
+    const num = parseInt(betLower);
+    if (!isNaN(num) && num >= 0 && num <= 36) {
+      multiplier = 36;
+      betType = `🎯 NUMBER ${num}`;
+      checkValid = true;
+    }
+  }
+
+  if (!checkValid) {
+    return { success: false, message: "❌ Invalid bet! Use: red/black/green/even/odd or a number (0-36)" };
+  }
+
+  // 2. Standard Bet Limits Checks
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
   }
@@ -876,66 +919,56 @@ function roulette(userId, amount, bet, economyModule) {
     return { success: false, message: `⏳ *ROULETTE LIMIT REACHED* ⏳\n\nYou've used your ${MAX_SPINS} spins for this cycle.\nCooldown: ${hours}h ${minutes}m.` };
   }
 
-  // Increment usage immediately
+  // Increment usage count ONLY now!
   user.gamblingLimits.roulette.count++;
   economyModule.saveUser(userId);
-  
-  const betLower = bet.toLowerCase();
   
   // Deduct bet IMMEDIATELY
   user.wallet -= amount;
   const ctx = beginGamblingRound(user);
   
   const result = Math.floor(Math.random() * 37); // 0-36
-  
   const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
   const isRed = redNumbers.includes(result);
   const color = result === 0 ? 'green' : (isRed ? 'red' : 'black');
   
   let won = false;
-  let multiplier = 0;
-  let betType = '';
-  
   if (betLower === 'red' || betLower === 'r') {
     won = color === 'red' && !maybeForceLoss(ctx);
-    multiplier = 2;
-    betType = '🔴 RED';
   } else if (betLower === 'black' || betLower === 'b') {
     won = color === 'black' && !maybeForceLoss(ctx);
-    multiplier = 2;
-    betType = '⚫ BLACK';
   } else if (betLower === 'green' || betLower === 'g' || betLower === '0') {
     won = result === 0 && !maybeForceLoss(ctx);
-    multiplier = 36;
-    betType = '🟢 GREEN (0)';
   } else if (betLower === 'even' || betLower === 'e') {
     won = result !== 0 && result % 2 === 0 && !maybeForceLoss(ctx);
-    multiplier = 2;
-    betType = '🔢 EVEN';
   } else if (betLower === 'odd' || betLower === 'o') {
     won = result !== 0 && result % 2 !== 0 && !maybeForceLoss(ctx);
-    multiplier = 2;
-    betType = '🔢 ODD';
   } else {
     const num = parseInt(betLower);
-    if (!isNaN(num) && num >= 0 && num <= 36) {
-      won = result === num && !maybeForceLoss(ctx);
-      multiplier = 36;
-      betType = `🎯 NUMBER ${num}`;
-    } else {
-      // Refund if invalid
-      user.wallet += amount;
-      return { success: false, message: "❌ Invalid bet! Use: red/black/green/even/odd or a number (0-36)" };
-    }
+    won = result === num && !maybeForceLoss(ctx);
   }
   
+  // Generate a simulated spin history to wow the user (dynamic UI!)
+  const history = [];
+  for (let i = 0; i < 4; i++) {
+    const r = Math.floor(Math.random() * 37);
+    const c = r === 0 ? '🟢' : (redNumbers.includes(r) ? '🔴' : '⚫');
+    history.push(`${c} ${r}`);
+  }
+  const colorEmoji = color === 'green' ? '🟢' : (color === 'red' ? '🔴' : '⚫');
+  const spinVisual = `🎰 *Spinning:*  ${history.join('  ➔  ')}  ➔  🌟 *[ ${colorEmoji} ${result} ]* 🌟`;
+
   if (won) {
     const rawPayout = Math.floor(amount * multiplier);
     const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-    const payout = capPayoutByDailyLimit(user, adjustedPayout);
+    let payout = capPayoutByDailyLimit(user, adjustedPayout);
+    if (payout < amount) {
+      payout = amount; // Refund the bet if profit cap is hit
+    }
     const profit = payout - amount;
     user.wallet += payout;
-    user.stats.totalEarned += profit;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Roulette Won (${betType})`, profit, user.wallet);
@@ -943,18 +976,20 @@ function roulette(userId, amount, bet, economyModule) {
     return {
       success: true,
       won: true,
-      message: `🎡 *ROULETTE* 🎡
+      message: `🎡 *ROULETTE WHEEL* 🎡
+━━━━━━━━━━━━━━━━━━━━
+${spinVisual}
+━━━━━━━━━━━━━━━━━━━━
 
-Your bet: ${betType}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
 
-🎰 Result: ${result} (${color.toUpperCase()}) 🎰
+🎰 *Result:* ${colorEmoji} *${result}* (${color.toUpperCase()})
 
-🎉 *YOU WON!* 🎉
-${multiplier}x payout!
+🎉 *CONGRATULATIONS! YOU WON!* 🎉
+📈 *Payout:* ${multiplier}x (+${getZENI()}${profit.toLocaleString()})
 
-+${getZENI()}${profit.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.stats.totalSpent += amount;
@@ -965,17 +1000,20 @@ ${multiplier}x payout!
     return {
       success: true,
       won: false,
-      message: `🎡 *ROULETTE* 🎡
+      message: `🎡 *ROULETTE WHEEL* 🎡
+━━━━━━━━━━━━━━━━━━━━
+${spinVisual}
+━━━━━━━━━━━━━━━━━━━━
 
-Your bet: ${betType}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
 
-🎰 Result: ${result} (${color.toUpperCase()}) 🎰
+🎰 *Result:* ${colorEmoji} *${result}* (${color.toUpperCase()})
 
-😢 *YOU LOST!* 😢
+😢 *YOU LOST! BETTER LUCK NEXT TIME!* 😢
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
 
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1192,18 +1230,31 @@ You tried to cash out at ${currentMultiplier}x
   // SUCCESSFUL CASHOUT!
   const rawPayout = Math.floor(game.bet * currentMultiplier);
   const adjustedPayout = applyEdgeToAmount(rawPayout, game.roundCtx || { edge: 0, forcedLossChance: 0 });
-  const winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  if (winnings < game.bet) {
+    winnings = game.bet; // Refund bet on cap
+  }
   const profit = winnings - game.bet;
 
   user.wallet += winnings;
+  if (!user.stats) user.stats = {};
   if (profit > 0) {
-    user.stats.totalEarned += profit;
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
+    updateGamblingStats(userId, game.bet, true, economyModule);
+    economyModule.logTransaction(userId, `Crash Won (${currentMultiplier}x)`, profit, user.wallet);
   } else {
-    user.stats.totalSpent += game.bet;
-    trackDailyNet(user, -game.bet);
+    updateGamblingStats(userId, game.bet, true, economyModule);
+    economyModule.logTransaction(userId, `Crash Refund (Daily Cap)`, 0, user.wallet);
   }
   economyModule.saveUser(userId);
+  
+  let outcomeMessage = '';
+  if (profit > 0) {
+    outcomeMessage = `🎉 *YOU WON!* 🎉\n💰 Bet: ${getZENI()}${game.bet.toLocaleString()}\n📈 Multiplier: ${currentMultiplier}x\n💵 Won: ${getZENI()}${winnings.toLocaleString()}\n🏆 Profit: +${getZENI()}${profit.toLocaleString()}`;
+  } else {
+    outcomeMessage = `🎉 *YOU WON!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${game.bet.toLocaleString()} (No loss, no gain)`;
+  }
   
   return {
     success: true,
@@ -1214,11 +1265,7 @@ You tried to cash out at ${currentMultiplier}x
 
 Would've crashed at ${game.crashPoint}x
 
-🎉 *YOU WON!*
-💰 Bet: ${getZENI()}${game.bet.toLocaleString()}
-📈 Multiplier: ${currentMultiplier}x
-💵 Won: ${getZENI()}${winnings.toLocaleString()}
-🏆 Profit: +${getZENI()}${profit.toLocaleString()}
+${outcomeMessage}
 
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}
 
@@ -1232,6 +1279,35 @@ Perfect timing! 🔥`
 // ============================================
 // 13. MINES - 5x5 Grid with hidden mines
 // ============================================
+
+function renderMinesGrid(game, showAll = false, explodedIdx = null) {
+  let gridDisplay = "╔═══════════════════╗\n";
+  for (let i = 0; i < 25; i++) {
+    if (i % 5 === 0) gridDisplay += "║  ";
+    
+    if (explodedIdx !== null && i === explodedIdx) {
+      gridDisplay += "💥  ";
+    } else if (game.grid[i]) {
+      if (showAll) {
+        gridDisplay += "💣  ";
+      } else {
+        gridDisplay += "⬜  ";
+      }
+    } else {
+      if (game.revealed.includes(i)) {
+        gridDisplay += "💎  ";
+      } else if (showAll) {
+        gridDisplay += "🟢  ";
+      } else {
+        gridDisplay += "⬜  ";
+      }
+    }
+    
+    if (i % 5 === 4) gridDisplay += "║\n";
+  }
+  gridDisplay += "╚═══════════════════╝";
+  return gridDisplay;
+}
 
 function startMines(userId, amount, mineCount, economyModule) {
   const user = economyModule.getUser(userId);
@@ -1270,18 +1346,33 @@ function startMines(userId, amount, mineCount, economyModule) {
     }
   }
 
-  activeMinesGames.set(userId, {
+  const game = {
     bet: amount,
     mineCount: mines,
     grid: grid,
     revealed: [],
     multiplier: 1.0,
     roundCtx: ctx
-  });
+  };
+
+  activeMinesGames.set(userId, game);
+
+  const gridVisual = renderMinesGrid(game, false);
 
   return {
     success: true,
-    message: `💣 *MINES GAME STARTED* 💣\n\n💰 *Bet:* ${getZENI()}${amount.toLocaleString()}\n💣 *Mines:* ${mines}\n📈 *Current Multiplier:* 1.00x\n\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n⬜ ⬜ ⬜ ⬜ ⬜\n\nType: \`${botConfig.getPrefix()} mines pick <1-25>\` to reveal a cell!\nType: \`${botConfig.getPrefix()} mines out\` to cash out!`
+    message: `💣 *MINES GAME* 💣
+━━━━━━━━━━━━━━━━━━━━
+${gridVisual}
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟 *Bet:* ${getZENI()}${amount.toLocaleString()}
+💣 *Mines:* ${mines}
+📈 *Multiplier:* 1.00x
+━━━━━━━━━━━━━━━━━━━━
+💡 *Commands:*
+• \`${botConfig.getPrefix()} mines pick <1-25>\`
+• \`${botConfig.getPrefix()} mines out\` (cashout)`
   };
 }
 
@@ -1306,16 +1397,29 @@ function minesPick(userId, cellIndex, economyModule) {
   // HIT A MINE!
   if (game.grid[idx]) {
     activeMinesGames.delete(userId);
-    user.stats.totalSpent += game.bet;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + game.bet;
     trackDailyNet(user, -game.bet);
     updateGamblingStats(userId, game.bet, false, economyModule);
     economyModule.logTransaction(userId, "Mines Lost (Hit Mine)", 0, user.wallet);
     economyModule.saveUser(userId);
 
+    const gridVisual = renderMinesGrid(game, true, idx);
+
     return {
       success: true,
       won: false,
-      message: `💥 *BOOM!* 💥\n\nYou hit a mine at cell ${cellIndex}!\nYou lost your bet of ${getZENI()}${game.bet.toLocaleString()}.\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `💥 *BOOM! EXPLODED!* 💥
+━━━━━━━━━━━━━━━━━━━━
+${gridVisual}
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
+
+😢 *YOU HIT A MINE AT CELL ${cellIndex}!*
+📉 *Loss:* -${getZENI()}${game.bet.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 
@@ -1323,12 +1427,10 @@ function minesPick(userId, cellIndex, economyModule) {
   game.revealed.push(idx);
   
   // Calculate new multiplier
-  // Standard Mines formula approximation
   const n = 25;
   const m = game.mineCount;
   const r = game.revealed.length;
   
-  function factorial(x) { return x <= 1 ? 1 : x * factorial(x - 1); }
   function combination(n, k) { 
     if (k < 0 || k > n) return 0;
     if (k === 0 || k === n) return 1;
@@ -1341,19 +1443,22 @@ function minesPick(userId, cellIndex, economyModule) {
   const prob = combination(n - m, r) / combination(n, r);
   game.multiplier = Math.round((0.97 / prob) * 100) / 100; // 3% house edge
 
-  let gridDisplay = "";
-  for (let i = 0; i < 25; i++) {
-    if (i > 0 && i % 5 === 0) gridDisplay += " ║\n";
-    else if (i === 0) gridDisplay += "";
-    
-    if (game.revealed.includes(i)) gridDisplay += "💎 ";
-    else gridDisplay += "⬜ ";
-  }
-  gridDisplay += " ║\n";
+  const gridVisual = renderMinesGrid(game, false);
 
   return {
     success: true,
-    message: `💎 *SAFE!* 💎\n\n📈 *Multiplier:* ${game.multiplier}x\n💵 *Current Value:* ${getZENI()}${Math.floor(game.bet * game.multiplier).toLocaleString()}\n\n${gridDisplay}\n\nType: \`${botConfig.getPrefix()} mines pick <1-25>\` or \`${botConfig.getPrefix()} mines out\``
+    message: `💎 *SAFE DIG!* 💎
+━━━━━━━━━━━━━━━━━━━━
+${gridVisual}
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Bet:* ${getZENI()}${game.bet.toLocaleString()}
+📈 *Multiplier:* ${game.multiplier}x
+💵 *Current Value:* ${getZENI()}${Math.floor(game.bet * game.multiplier).toLocaleString()}
+━━━━━━━━━━━━━━━━━━━━
+💡 *Commands:*
+• \`${botConfig.getPrefix()} mines pick <1-25>\`
+• \`${botConfig.getPrefix()} mines out\` (cashout)`
   };
 }
 
@@ -1370,34 +1475,50 @@ function minesCashOut(userId, economyModule) {
   const user = economyModule.getUser(userId);
   const rawPayout = Math.floor(game.bet * game.multiplier);
   const adjustedPayout = applyEdgeToAmount(rawPayout, game.roundCtx || { edge: 0, forcedLossChance: 0 });
-  const winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  if (winnings < game.bet) {
+    winnings = game.bet; // Refund bet on cap
+  }
   const profit = winnings - game.bet;
 
   user.wallet += winnings;
+  if (!user.stats) user.stats = {};
   if (profit > 0) {
-    user.stats.totalEarned += profit;
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
     updateGamblingStats(userId, game.bet, true, economyModule);
     economyModule.logTransaction(userId, `Mines Won (${game.multiplier}x)`, profit, user.wallet);
   } else {
-    user.stats.totalSpent += game.bet;
-    trackDailyNet(user, -game.bet);
-    updateGamblingStats(userId, game.bet, false, economyModule);
-    economyModule.logTransaction(userId, `Mines Lost (${game.multiplier}x)`, -game.bet, user.wallet);
+    updateGamblingStats(userId, game.bet, true, economyModule);
+    economyModule.logTransaction(userId, `Mines Refund (Daily Cap)`, 0, user.wallet);
   }
   
   activeMinesGames.delete(userId);
   economyModule.saveUser(userId);
 
+  const gridVisual = renderMinesGrid(game, true);
+
+  let outcomeMessage = '';
+  if (profit > 0) {
+    outcomeMessage = `🎉 *YOU WON!* 🎉\n📈 *Multiplier:* ${game.multiplier}x\n💵 *Payout:* ${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}`;
+  } else {
+    outcomeMessage = `🎉 *YOU WON!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${game.bet.toLocaleString()} (No loss, no gain)`;
+  }
+
   return {
     success: true,
-    message: `💰 *CASHED OUT!* 💰\n\n🎉 *YOU WON!*\n📈 Multiplier: ${game.multiplier}x\n💵 Won: ${getZENI()}${winnings.toLocaleString()}\n🏆 Profit: +${getZENI()}${profit.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+    message: `💰 *CASHED OUT!* 💰
+━━━━━━━━━━━━━━━━━━━━
+${gridVisual}
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
+
+${outcomeMessage}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
-
-// ============================================
-// MINES - Avoid the hidden mines
-// ============================================
 
 // ============================================
 // 8. HORSE RACE - Bet on a horse
@@ -1425,50 +1546,68 @@ function horseRace(userId, amount, horseNum, economyModule) {
   const won = horse === winner && !maybeForceLoss(ctx);
 
   const horses = [1, 2, 3, 4, 5].map(h => h === winner ? `🐎💨 [H${h}] 🏁` : `🐎 [H${h}]`).join('\n');
+  const horseVisual = `🏇 *HORSE RACE* 🏇
+━━━━━━━━━━━━━━━━━━━━
+${horses}
+━━━━━━━━━━━━━━━━━━━━`;
 
   if (won) {
     const rawGain = amount * 6;
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `Horse Race Lost (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, `Horse Race Won (Refunded/Daily Cap)`, 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🏇 *HORSE RACE* 🏇
+        won: true,
+        message: `${horseVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-${horses}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *HORSE ${winner} WON!* You lost.
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Horse Race Won (Horse ${horse})`, gain, user.wallet);
     return {
       success: true,
       won: true,
-      message: `🏇 *HORSE RACE* 🏇\n\n${horses}\n\n🎉 *HORSE ${winner} WON!* 🎉\n+${getZENI()}${gain.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${horseVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🎉 *HORSE ${winner} WON! YOU WIN!* 🎉
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Horse Race Lost (Horse ${horse})`, -amount, user.wallet);
     return {
       success: true,
       won: false,
-      message: `🏇 *HORSE RACE* 🏇\n\n${horses}\n\n😢 *HORSE ${winner} WON!* You lost.\n-${getZENI()}${amount.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${horseVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+😢 *HORSE ${winner} WON!* You lost.
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1494,50 +1633,71 @@ function lottery(userId, amount, economyModule) {
   const ctx = beginGamblingRound(user);
   const won = ticket === winningNum && !maybeForceLoss(ctx);
 
+  const lottoVisual = `🎫 *LOTTERY TICKET* 🎫
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  Your Ticket: *${ticket}*
+║  Winning Num: *${winningNum}*
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (won) {
     const rawGain = amount * 90;
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, "Lottery Lost (Daily Cap)", -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Lottery Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🎫 *LOTTERY* 🎫
+        won: true,
+        message: `${lottoVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-Your Ticket: ${ticket}
-Winning Number: ${winningNum}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *BETTER LUCK NEXT TIME!*
--${getZENI()}${amount.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, "Lottery Won", gain, user.wallet);
     return {
       success: true,
       won: true,
-      message: `🎫 *LOTTERY* 🎫\n\nYour Ticket: ${ticket}\nWinning Number: ${winningNum}\n\n🎊 *JACKPOT!!!* 🎊\n+${getZENI()}${gain.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${lottoVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🎊 *JACKPOT!!! YOU WON THE LOTTERY!* 🎊
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, "Lottery Lost", -amount, user.wallet);
     return {
       success: true,
       won: false,
-      message: `🎫 *LOTTERY* 🎫\n\nYour Ticket: ${ticket}\nWinning Number: ${winningNum}\n\n😢 *BETTER LUCK NEXT TIME!*\n-${getZENI()}${amount.toLocaleString()}\n\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${lottoVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+😢 *BETTER LUCK NEXT TIME!*
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1567,9 +1727,28 @@ function rps(userId, amount, choice, economyModule) {
   const fullUserChoice = userChoice.startsWith('r') ? 'rock' : (userChoice.startsWith('p') ? 'paper' : 'scissors');
   const ctx = beginGamblingRound(user);
 
+  const rpsVisual = `✊✋✌️ *ROCK-PAPER-SCISSORS* ✊✋✌️
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  You chose: *${fullUserChoice.toUpperCase()}*
+║  ${botConfig.getBotName()}: *${botChoice.toUpperCase()}*
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (fullUserChoice === botChoice) {
     economyModule.logTransaction(userId, `RPS Tie (${fullUserChoice})`, 0, user.wallet);
-    return { success: true, won: null, message: `✊✋✌️ *RPS* ✊✋✌️\n\nYou: ${fullUserChoice}\n${botConfig.getBotName()}: ${botChoice}\n\n🤝 *TIE!*` };
+    return {
+      success: true,
+      won: null,
+      message: `${rpsVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🤝 *IT'S A TIE!* 🤝
+🔄 *Refunded:* ${getZENI()}${amount.toLocaleString()}
+
+💰 *Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
+    };
   }
 
   const winMap = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
@@ -1578,45 +1757,59 @@ function rps(userId, amount, choice, economyModule) {
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(amount, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `RPS Lost (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "RPS Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `✊✋✌️ *RPS* ✊✋✌️
+        won: true,
+        message: `${rpsVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-You: ${fullUserChoice}
-${botConfig.getBotName()}: ${botChoice}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *YOU LOST!*
--${getZENI()}${amount.toLocaleString()}
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `RPS Won (${fullUserChoice})`, gain, user.wallet);
     return {
       success: true,
       won: true,
-      message: `✊✋✌️ *RPS* ✊✋✌️\n\nYou: ${fullUserChoice}\n${botConfig.getBotName()}: ${botChoice}\n\n🎉 *YOU WON!*\n+${getZENI()}${gain.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${rpsVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🎉 *YOU WON!* 🎉
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `RPS Lost (${fullUserChoice})`, -amount, user.wallet);
     return {
       success: true,
       won: false,
-      message: `✊✋✌️ *RPS* ✊✋✌️\n\nYou: ${fullUserChoice}\n${botConfig.getBotName()}: ${botChoice}\n\n😢 *YOU LOST!*\n-${getZENI()}${amount.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${rpsVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+😢 *YOU LOST!* 😢
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1646,49 +1839,71 @@ function penalty(userId, amount, direction, economyModule) {
   const ctx = beginGamblingRound(user);
   const won = userDir !== keeperDir && !maybeForceLoss(ctx);
 
+  const penaltyVisual = `🥅 *PENALTY KICK* ⚽
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  Kicked: *${userDir.toUpperCase()}* ⚽
+║  Keeper: *${keeperDir.toUpperCase()}* 🧤
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (won) {
     const rawGain = Math.floor(amount * 0.4);
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `Penalty Miss (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Penalty Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `⚽ *PENALTY* ⚽
+        won: true,
+        message: `${penaltyVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-You kicked: ${userDir}
-Keeper saved it! 🧤
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *MISSED!*
--${getZENI()}${amount.toLocaleString()}
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Penalty Goal (${userDir})`, gain, user.wallet);
     return {
       success: true,
       won: true,
-      message: `⚽ *PENALTY* ⚽\n\nYou kicked: ${userDir}\nKeeper dived: ${keeperDir}\n\n🥅 *GOAL!!!*\n+${getZENI()}${gain.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${penaltyVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🥅 *GOAL!!! YOU SCORED!* 🎉
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Penalty Miss (${userDir})`, -amount, user.wallet);
     return {
       success: true,
       won: false,
-      message: `⚽ *PENALTY* ⚽\n\nYou kicked: ${userDir}\nKeeper saved it! 🧤\n\n😢 *MISSED!*\n-${getZENI()}${amount.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${penaltyVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+😢 *MISSED! SAVED BY THE KEEPER!* 🧤
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1716,49 +1931,71 @@ function guessNumber(userId, amount, guess, economyModule) {
   const ctx = beginGamblingRound(user);
   const won = num === result && !maybeForceLoss(ctx);
 
+  const guessVisual = `🔢 *GUESS THE NUMBER* 🔢
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  Your Guess: *${num}*
+║  Target Num: *${result}*
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━`;
+
   if (won) {
     const rawGain = amount * 8;
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `Guess Lost (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Guess Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
-        message: `🔢 *GUESS THE NUMBER* 🔢
+        won: true,
+        message: `${guessVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-Your Guess: ${num}
-Actual Number: ${result}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
-😢 *WRONG!*
--${getZENI()}${amount.toLocaleString()}
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
       };
     }
 
     user.wallet += gain;
-    user.stats.totalEarned += gain;
+    if (!user.stats) user.stats = {};
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Guess Won (${num})`, gain, user.wallet);
     return {
       success: true,
       won: true,
-      message: `🔢 *GUESS THE NUMBER* 🔢\n\nYour Guess: ${num}\nActual Number: ${result}\n\n🎯 *BULLSEYE!*\n+${getZENI()}${gain.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${guessVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+🎯 *BULLSEYE! CORRECT GUESS!* 🎉
+📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    if (!user.stats) user.stats = {};
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Guess Lost (${num})`, -amount, user.wallet);
     return {
       success: true,
       won: false,
-      message: `🔢 *GUESS THE NUMBER* 🔢\n\nYour Guess: ${num}\nActual Number: ${result}\n\n😢 *WRONG!*\n-${getZENI()}${amount.toLocaleString()}\n💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+      message: `${guessVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+
+😢 *WRONG GUESS!*
+📉 *Loss:* -${getZENI()}${amount.toLocaleString()}
+
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
 }
@@ -1803,15 +2040,20 @@ function higherLower(userId, amount, guess, economyModule) {
     return {
       success: true,
       won: null,
-      message: `🎴 *HIGHER/LOWER* 🎴
-
-First card: ${firstCard}
-Second card: ${secondCard}
+      message: `🎴 *HIGHER OR LOWER* 🎴
+━━━━━━━━━━━━━━━━━━━━
+╔════════════════════╗
+║  First Card:  *${firstCard}*
+║  Second Card: *${secondCard}*
+╚════════════════════╝
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🤝 *IT'S A TIE!* 🤝
-Bet returned!
+🔄 *Refunded:* ${getZENI()}${amount.toLocaleString()}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *Wallet Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };
   }
   
@@ -1820,14 +2062,12 @@ Bet returned!
   if (won) {
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(amount, ctx));
     if (gain <= 0) {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, `Higher/Lower Lost (Daily Cap)`, -amount, user.wallet);
+      if (!user.stats) user.stats = {};
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Higher/Lower Won (Refunded/Daily Cap)", 0, user.wallet);
       return {
         success: true,
-        won: false,
+        won: true,
         message: `🎴 *HIGHER/LOWER* 🎴
 
 First card: ${firstCard}
@@ -1835,8 +2075,8 @@ Your guess: ${userGuess}
 Second card: ${secondCard}
 Result: ${actualResult}
 
-😢 *YOU LOST!* 😢
--${getZENI()}${amount.toLocaleString()}
+⚠️ *DAILY CAP REACHED!*
+🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)
 
 💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
       };
@@ -1944,16 +2184,22 @@ function plinko(userId, amount, risk, economyModule) {
 
   const rawPayout = Math.floor(amount * multiplier);
   const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-  const winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  if (multiplier >= 1 && winnings < amount) {
+    winnings = amount; // Refund bet on cap
+  }
   const profit = winnings - amount;
 
   user.wallet += winnings;
+  if (!user.stats) user.stats = {};
   if (profit > 0) {
-    user.stats.totalEarned += profit;
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
     updateGamblingStats(userId, amount, true, economyModule);
+  } else if (multiplier >= 1) {
+    updateGamblingStats(userId, amount, true, economyModule);
   } else {
-    user.stats.totalSpent += amount;
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
   }
@@ -1961,21 +2207,60 @@ function plinko(userId, amount, risk, economyModule) {
   economyModule.logTransaction(userId, `Plinko (${r} risk)`, profit, user.wallet);
   economyModule.saveUser(userId);
 
-  const paths = [
-    "      ⚪\n     / \\\n    /   \\\n   🟡    ⚪\n  / \\   / \\\n ⚪   🟡   ⚪\n",
-    "      ⚪\n     / \\\n    ⚪   \\\n   ⚪    🟡\n  / \\   / \\\n ⚪   ⚪   🟡\n"
-  ];
-  const path = paths[Math.floor(Math.random() * paths.length)];
+  // Generate Plinko path staggered pyramid
+  const bucketIdx = tables[r].indexOf(multiplier);
+  const steps = [];
+  for (let i = 0; i < bucketIdx; i++) steps.push(1);
+  for (let i = 0; i < 6 - bucketIdx; i++) steps.push(-1);
+
+  // Shuffle steps
+  for (let i = steps.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [steps[i], steps[j]] = [steps[j], steps[i]];
+  }
+
+  const pos = [0];
+  for (let stepIdx = 1; stepIdx <= 6; stepIdx++) {
+    pos.push(pos[stepIdx - 1] + steps[stepIdx - 1]);
+  }
+
+  const rows = [];
+  for (let rowIdx = 0; rowIdx < 7; rowIdx++) {
+    let rowStr = "  ".repeat(6 - rowIdx);
+    for (let p = 0; p <= rowIdx; p++) {
+      const pegVal = -rowIdx + p * 2;
+      const isBall = pos[rowIdx] === pegVal;
+      rowStr += isBall ? "🔴" : "⚪";
+      if (p < rowIdx) rowStr += "  ";
+    }
+    rows.push(rowStr);
+  }
+
+  let bucketsStr = "  ";
+  if (r === 'low') {
+    bucketsStr += "[0.5][1.0][1.1][1.2][1.5][2.0][5.0]";
+  } else if (r === 'mid') {
+    bucketsStr += "[0.2][0.5][1.0][1.5][2.5][10][25]";
+  } else {
+    bucketsStr += "[0.0][0.1][0.2][1.5][5.0][50][100]";
+  }
+
+  const pathStr = rows.join("\n") + "\n" + bucketsStr;
 
   return {
     success: true,
-    message: `🔴 *PLINKO* 🔴
-
-${path}
-━━━━━━━━━━━━━━━━
+    message: `🔴 *PLINKO BOARD* 🔴
+━━━━━━━━━━━━━━━━━━━━
+${pathStr}
+━━━━━━━━━━━━━━━━━━━━
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 🎯 *Risk:* ${r.toUpperCase()}
+
+${multiplier >= 1 ? '🎉 *YOU WON!* 🎉' : '😢 *YOU LOST!* 😢'}
 📈 *Multiplier:* ${multiplier}x
-💰 *Result:* ${getZENI()}${winnings.toLocaleString()}
+💵 *Payout:* ${getZENI()}${winnings.toLocaleString()}
+🏆 *Net Profit:* ${profit >= 0 ? '+' : ''}${getZENI()}${profit.toLocaleString()}
 
 💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
@@ -2035,24 +2320,26 @@ function scratchCard(userId, amount, economyModule) {
 
   const rawPayout = Math.floor(amount * multiplier);
   const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-  const winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  if (winner && winnings < amount) {
+    winnings = amount; // Refund the card price on cap
+  }
   const profit = winnings - amount;
 
+  if (!user.stats) user.stats = {};
   if (winnings > 0) {
     user.wallet += winnings;
     if (profit > 0) {
-      user.stats.totalEarned += profit;
+      user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
       trackDailyNet(user, profit);
       updateGamblingStats(userId, amount, true, economyModule);
       economyModule.logTransaction(userId, `Scratch Card Won (${winner})`, profit, user.wallet);
     } else {
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, "Scratch Card Lost", -amount, user.wallet);
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, `Scratch Card Refund (Daily Cap)`, 0, user.wallet);
     }
   } else {
-    user.stats.totalSpent += amount;
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, "Scratch Card Lost", -amount, user.wallet);
@@ -2060,23 +2347,35 @@ function scratchCard(userId, amount, economyModule) {
 
   economyModule.saveUser(userId);
 
-  const grid = `
-  [ ${card[0]} | ${card[1]} | ${card[2]} ]
-  [ ${card[3]} | ${card[4]} | ${card[5]} ]
-  [ ${card[6]} | ${card[7]} | ${card[8]} ]
-  `.trim();
+  const scratchVisual = `🎫 *SCRATCH CARD* 🎫
+━━━━━━━━━━━━━━━━━━━━
+  ${card[0]}  │  ${card[1]}  │  ${card[2]}
+  ───┼──────┼───
+  ${card[3]}  │  ${card[4]}  │  ${card[5]}
+  ───┼──────┼───
+  ${card[6]}  │  ${card[7]}  │  ${card[8]}
+━━━━━━━━━━━━━━━━━━━━`;
+
+  let outcomeMessage = '';
+  if (winner) {
+    if (profit > 0) {
+      outcomeMessage = `🎉 *MATCHED 3x ${winner}!* 🎉\n📈 *Multiplier:* ${multiplier}x\n💵 *Payout:* +${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}`;
+    } else {
+      outcomeMessage = `🎉 *MATCHED 3x ${winner}!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`;
+    }
+  } else {
+    outcomeMessage = `😢 *NO MATCH! BETTER LUCK NEXT TIME!*\n📉 *Loss:* -${getZENI()}${amount.toLocaleString()}`;
+  }
 
   return {
     success: true,
-    message: `🎟️ *SCRATCH CARD* 🎫
+    message: `${scratchVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Card Cost:* ${getZENI()}${amount.toLocaleString()}
 
-${grid}
+${outcomeMessage}
 
-${winnings > 0 ? `🎉 *MATCHED 3x ${winner}!*` : '😢 *NO MATCH!*'}
-📈 Multiplier: ${multiplier}x
-💵 Payout: ${getZENI()}${winnings.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
 
@@ -2103,27 +2402,26 @@ function cupGame(userId, amount, choice, economyModule) {
   const ball = Math.floor(Math.random() * 3) + 1;
   const won = cup === ball && !maybeForceLoss(ctx);
 
+  const rawPayout = amount * 4; // 4x payout
+  const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
+  const winnings = won ? capPayoutByDailyLimit(user, adjustedPayout) : 0;
+  const profit = winnings - amount;
+
+  if (!user.stats) user.stats = {};
   if (won) {
-    const rawPayout = amount * 4; // 4x payout
-    const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-    const payout = capPayoutByDailyLimit(user, adjustedPayout);
-    const profit = payout - amount;
     if (profit > 0) {
-      user.wallet += payout;
-      user.stats.totalEarned += profit;
+      user.wallet += winnings;
+      user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
       trackDailyNet(user, profit);
       updateGamblingStats(userId, amount, true, economyModule);
       economyModule.logTransaction(userId, "Cup Game Won", profit, user.wallet);
     } else {
-      user.wallet -= amount;
-      user.stats.totalSpent += amount;
-      trackDailyNet(user, -amount);
-      updateGamblingStats(userId, amount, false, economyModule);
-      economyModule.logTransaction(userId, "Cup Game Lost", -amount, user.wallet);
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, "Cup Game Refund (Daily Cap)", 0, user.wallet);
     }
   } else {
     user.wallet -= amount;
-    user.stats.totalSpent += amount;
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, "Cup Game Lost", -amount, user.wallet);
@@ -2131,20 +2429,35 @@ function cupGame(userId, amount, choice, economyModule) {
 
   economyModule.saveUser(userId);
 
-  const cups = [1, 2, 3].map(c => c === ball ? '🥎' : '🥤').join('  ');
+  const finalCups = [1, 2, 3].map(c => c === ball ? '🥎' : '🥤').join('    ');
+
+  const cupResultVisual = `🥤 *CUP GAME* 🥤
+━━━━━━━━━━━━━━━━━━━━
+  1      2      3
+${finalCups}
+━━━━━━━━━━━━━━━━━━━━`;
+
+  let outcomeMessage = '';
+  if (won) {
+    if (profit > 0) {
+      outcomeMessage = `🎉 *YOU FOUND THE BALL!* 🥎\n📈 *Payout:* +${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}`;
+    } else {
+      outcomeMessage = `🎉 *YOU FOUND THE BALL!* 🥎\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`;
+    }
+  } else {
+    outcomeMessage = `😢 *WRONG CUP!* (Ball was under Cup ${ball})\n📉 *Loss:* -${getZENI()}${amount.toLocaleString()}`;
+  }
 
   return {
     success: true,
-    message: `🥤 *CUP GAME* 🥤
+    message: `${cupResultVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
+👉 *Picked Cup:* ${cup}
 
-Shuffle shuffle...
+${outcomeMessage}
 
-${won ? '✅ *YOU FOUND IT!*' : '❌ *WRONG CUP!*'}
-The ball was under cup ${ball}:
-${cups}
-
-💰 Payout: ${getZENI()}${won ? (amount * 2.8).toLocaleString() : '0'}
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
 
@@ -2183,16 +2496,22 @@ function wheelOfFortune(userId, amount, economyModule) {
 
   const rawPayout = Math.floor(amount * multiplier);
   const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-  const winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
+  if (multiplier >= 1 && winnings < amount) {
+    winnings = amount; // Refund bet on cap
+  }
   const profit = winnings - amount;
 
   user.wallet = user.wallet - amount + winnings;
+  if (!user.stats) user.stats = {};
   if (profit > 0) {
-    user.stats.totalEarned += profit;
+    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
     updateGamblingStats(userId, amount, true, economyModule);
+  } else if (multiplier >= 1) {
+    updateGamblingStats(userId, amount, true, economyModule);
   } else {
-    user.stats.totalSpent += amount;
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
   }
@@ -2200,20 +2519,33 @@ function wheelOfFortune(userId, amount, economyModule) {
   economyModule.logTransaction(userId, "Wheel of Fortune", profit, user.wallet);
   economyModule.saveUser(userId);
 
+  const wheelVisual = `🎡 *WHEEL OF FORTUNE* 🎡
+━━━━━━━━━━━━━━━━━━━━
+  [ 0x │ 2x │ 10x │ 0.5x │ 5x ]
+             👇
+  >------- *${multiplier}x* -------<
+━━━━━━━━━━━━━━━━━━━━`;
+
+  let outcomeMessage = '';
+  if (multiplier >= 1) {
+    if (profit > 0) {
+      outcomeMessage = `🎉 *NICE SPIN! YOU WIN!* 🎉\n📈 *Multiplier:* ${multiplier}x\n💵 *Payout:* ${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}`;
+    } else {
+      outcomeMessage = `🎉 *NICE SPIN! YOU WIN!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`;
+    }
+  } else {
+    outcomeMessage = `😢 *OOF! BAD SPIN!*\n📈 *Multiplier:* ${multiplier}x\n📉 *Loss:* -${getZENI()}${amount.toLocaleString()}`;
+  }
+
   return {
     success: true,
-    message: `🎡 *WHEEL OF FORTUNE* 🎡
+    message: `${wheelVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
-Spinning...
-[ 0x | 2x | 10x | 0.5x | 5x ]
-         👇
->------- *${multiplier}x* -------<
+${outcomeMessage}
 
-${multiplier >= 1 ? '🎉 *NICE!*' : '😢 *OOF!*'}
-📈 Multiplier: ${multiplier}x
-💵 Payout: ${getZENI()}${winnings.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
 

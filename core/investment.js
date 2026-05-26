@@ -5,10 +5,10 @@
 const economy = require('./economy');
 
 const INVESTMENT_PLANS = {
-    'BOND': { name: 'Low-Risk Bond', durationDays: 1, interest: 0.05, minDeposit: 1000, risk: 0 },
-    'FUND': { name: 'Balanced Fund', durationDays: 3, interest: 0.15, minDeposit: 5000, risk: 0.05 },
-    'GROWTH': { name: 'High-Growth', durationDays: 7, interest: 0.35, minDeposit: 10000, risk: 0.10 },
-    'VENTURE': { name: 'Venture Capital', durationDays: 14, interest: 0.80, minDeposit: 25000, risk: 0.20 } // 20% chance of total loss
+    'BOND': { name: 'Low-Risk Bond', durationHours: 2, interest: 0.05, minDeposit: 1000, risk: 0 },
+    'FUND': { name: 'Balanced Fund', durationHours: 6, interest: 0.15, minDeposit: 5000, risk: 0.02 },
+    'GROWTH': { name: 'High-Growth', durationHours: 12, interest: 0.35, minDeposit: 10000, risk: 0.05 },
+    'VENTURE': { name: 'Venture Capital', durationHours: 24, interest: 0.80, minDeposit: 25000, risk: 0.12 } // 12% chance of total loss
 };
 
 function startInvestment(userId, planId, amount) {
@@ -41,7 +41,7 @@ function startInvestment(userId, planId, amount) {
         planId: planId.toUpperCase(),
         amount: amount,
         startTime: Date.now(),
-        endTime: Date.now() + (plan.durationDays * 24 * 60 * 60 * 1000),
+        endTime: Date.now() + (plan.durationHours * 60 * 60 * 1000),
         expectedPayout: Math.floor(amount * (1 + plan.interest)),
         risk: plan.risk
     };
@@ -51,7 +51,7 @@ function startInvestment(userId, planId, amount) {
     
     return { 
         success: true, 
-        message: `📊 *INVESTMENT STARTED!*\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amount.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleDateString()}`
+        message: `📊 *INVESTMENT STARTED!*\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amount.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleString()}`
     };
 }
 
