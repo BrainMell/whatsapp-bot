@@ -11519,6 +11519,14 @@ ${senderName} said y'all should know:
                       });
                     }
 
+                    // Check if it's pvp command being used as a challenge (e.g. .pvp @user)
+                    const isPvpChallenge = (
+                      (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
+                       lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pvp `)) &&
+                      getMentionOrReply(m) &&
+                      !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[1])
+                    );
+
                     // duel @user [stake] / challenge @user [stake] - Challenge someone to a duel
                     if (
                       lowerTxt ===
@@ -11530,7 +11538,8 @@ ${senderName} said y'all should know:
                         `${botConfig.getPrefix().toLowerCase()} challenge` ||
                       lowerTxt.startsWith(
                         `${botConfig.getPrefix().toLowerCase()} challenge `,
-                      )
+                      ) ||
+                      isPvpChallenge
                     ) {
                       if (!economy.isRegistered(senderJid)) {
                         return await sock.sendMessage(chatId, {
