@@ -3414,8 +3414,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   `👋 *Hello @${phoneNumber}!*\n\nWelcome to *${groupName}*!\nWe are happy to have you here.\n\n📜 *Please read the group description!*`;
 
                 welcomeText = welcomeText
-                  .replace(/@user/g, `@${phoneNumber}`)
-                  .replace(/@group/g, groupName);
+                  .replace(/@user/gi, `@${phoneNumber}`)
+                  .replace(/{user}/gi, `@${phoneNumber}`)
+                  .replace(/{tag}/gi, `@${phoneNumber}`)
+                  .replace(/{mention}/gi, `@${phoneNumber}`)
+                  .replace(/@group/gi, groupName)
+                  .replace(/{group}/gi, groupName);
 
                 await sock.sendMessage(id, {
                   text: welcomeText,
@@ -6769,7 +6773,7 @@ Usage: ${newUsage}/5${warningText}`;
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `👋 *Current Welcome Message:*\n\n${current}\n\n*To change:* \`${botConfig.getPrefix()} setwelcome <text>\`\n*Tip:* Use @user to tag the new member.`,
+                          `👋 *Current Welcome Message:*\n\n${current}\n\n*To change:* \`${botConfig.getPrefix()} setwelcome <text>\`\n*Tip:* Use @user, {user}, {tag}, or {mention} to tag the new member, and @group or {group} for the group name.`,
                       });
                     }
 
@@ -7399,6 +7403,36 @@ Commands:
                         "mute @spam 1h",
                         "Durations: 10s, 5m, 2h, 1d.",
                       );
+                    }
+
+                    if (targetUser === senderJid) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ You cannot mute yourself!`,
+                      });
+                    }
+
+                    const targetIsAdmin = groupMetadata?.participants.some((p) => {
+                      const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
+                      const targetPhone = lidResolver.resolveToPhone(targetUser, configInstance.getAuthPath());
+                      return (
+                        pPhone === targetPhone &&
+                        (p.admin === "admin" || p.admin === "superadmin")
+                      );
+                    });
+
+                    const isTargetOwner =
+                      targetUser.startsWith("233201487480") ||
+                      targetUser.includes("251453323092189") ||
+                      targetUser.includes("105712667648066");
+
+                    const isTargetGlobalMod = isGlobalMod(targetUser);
+
+                    if (targetIsAdmin || isTargetOwner || isTargetGlobalMod) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `❌ You cannot mute an admin, owner, or global moderator!`,
+                      });
                     }
 
                     // Find duration in args
@@ -11253,9 +11287,22 @@ _💡 Reply with another number from your search list!_`.trim();
 
                         if (isNewUser) {
                           console.log(`New user detected:`, senderJid);
+                          const phoneNumber = senderJid.split("@")[0];
+                          const groupMetadata = await getGroupMetadata(chatId);
+                          const groupName = groupMetadata ? groupMetadata.subject : "the group";
+
+                          let welcomeText = settings.welcomeMessage;
+                          welcomeText = welcomeText
+                            .replace(/@user/gi, `@${phoneNumber}`)
+                            .replace(/{user}/gi, `@${phoneNumber}`)
+                            .replace(/{tag}/gi, `@${phoneNumber}`)
+                            .replace(/{mention}/gi, `@${phoneNumber}`)
+                            .replace(/@group/gi, groupName)
+                            .replace(/{group}/gi, groupName);
+
                           // Send the welcome message to the new user
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + settings.welcomeMessage,
+                            text: BOT_MARKER + welcomeText,
                             mentions: [senderJid],
                           });
                         }
