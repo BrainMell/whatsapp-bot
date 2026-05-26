@@ -120,7 +120,23 @@ async function buyItem(sock, chatId, senderJid, input) {
     const sanitizedInput = input.toLowerCase().trim().replace(/ /g, '_');
     let item = allItems[sanitizedInput];
     
-    // If not found by ID, check if it's a number (index from displayed shop)
+    // Fallback 1: Try stripping all underscores, hyphens, and spaces to match IDs (e.g. minor_hp_potion -> minorhppotion)
+    if (!item) {
+        const flatInput = sanitizedInput.replace(/_/g, '').replace(/-/g, '');
+        item = Object.values(allItems).find(itm => 
+            itm.id.replace(/_/g, '').replace(/-/g, '') === flatInput
+        );
+    }
+
+    // Fallback 2: Try matching against the item's name (case-insensitive, ignoring non-alphanumeric characters)
+    if (!item) {
+        const flatNameInput = input.toLowerCase().replace(/[^a-z0-9]/g, '');
+        item = Object.values(allItems).find(itm => 
+            itm.name.toLowerCase().replace(/[^a-z0-9]/g, '') === flatNameInput
+        );
+    }
+    
+    // Fallback 3: If not found by ID or Name, check if it's a number (index from displayed shop)
     if (!item && !isNaN(parseInt(input))) {
         const index = parseInt(input) - 1;
         if (index >= 0 && index < allItemsList.length) {
