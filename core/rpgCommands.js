@@ -229,7 +229,10 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
 
   msg += `\n━━━━━━━━━━━━━━━━━━\n`;
   if (totalPages > 1) msg += `📄 \`${botConfig.getPrefix()} bag ${clampedPage < totalPages ? clampedPage + 1 : 1}\` for next page\n`;
-  msg += `⚔️ \`${botConfig.getPrefix()} equip <#>\`  💰 \`${botConfig.getPrefix()} sell <#>\`  🧪 \`${botConfig.getPrefix()} use <#>\``;
+  msg += `⚔️ \`${botConfig.getPrefix()} equip <#>\`  💰 \`${botConfig.getPrefix()} sell <#>\`  🧪 \`${botConfig.getPrefix()} use <#>\n\n`;
+  msg += `💡 *Quick Tips:*\n`;
+  msg += `• Sell: \`${botConfig.getPrefix()} sell <#> <number of items to sell>\` (e.g., \`${botConfig.getPrefix()} sell 1 5\`)\n`;
+  msg += `• Fish: \`${botConfig.getPrefix()} fish\` to gather more loot!`;
 
   await sock.sendMessage(chatId, { text: msg });
 }

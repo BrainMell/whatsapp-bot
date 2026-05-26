@@ -58,7 +58,7 @@ const ITEM_RARITY = {
     },
     MYTHIC: {
         name: 'Mythic',
-        icon: '⚪', // White/Bright
+        icon: '🟣', // Purple
         sellMultiplier: 1.2,
         dropChance: 0.1
     }

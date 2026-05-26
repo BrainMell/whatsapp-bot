@@ -1021,11 +1021,9 @@ ${spinVisual}
 // ============================================
 // 6. CRASH - Multiplier game
 
-
-
-function startCrash(userId, amount, economyModule, sock, chatId) {
+function crash(userId, amount, multiplierStr, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1035,27 +1033,27 @@ function startCrash(userId, amount, economyModule, sock, chatId) {
   }
   
   if (user.wallet < amount) {
-    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
+    return { success: false, message: `❌ You only have ${getZENI()}${user.wallet.toLocaleString()}!` };
   }
-  
-  if (activeCrashGames.has(userId)) {
-    return { success: false, message: "❌ You already have an active crash game! Cash out or wait for it to crash!" };
+
+  if (!multiplierStr) {
+    return { success: false, message: `❌ Usage: \`${botConfig.getPrefix()} crash <amount> <multiplier>\`\nExample: \`${botConfig.getPrefix()} crash 100 2.5\`` };
   }
-  
-  // Deduct bet IMMEDIATELY (just like Aviator!)
-  user.wallet -= amount;
+
+  const targetMultiplier = parseFloat(multiplierStr);
+  if (isNaN(targetMultiplier) || targetMultiplier <= 1.0) {
+    return { success: false, message: "❌ Invalid target multiplier! Must be greater than 1.00 (e.g. 1.5, 2.0)" };
+  }
+
+  if (targetMultiplier > 1000) {
+    return { success: false, message: "❌ Maximum target multiplier is 1,000x!" };
+  }
+
   const ctx = beginGamblingRound(user);
-  economyModule.logTransaction(userId, "Crash Bet", -amount, user.wallet);
-  economyModule.saveUser(userId);
-  
+
   // Generate crash point with realistic house odds
-  // 3% chance: Instant crash at 1.00x
-  // 47% chance: 1.01x - 1.5x
-  // 30% chance: 1.5x - 3.0x
-  // 20% chance: 3.0x - 50.0x
   let crashPoint;
   const rand = Math.random();
-  
   if (rand < 0.03) {
     crashPoint = 1.00;
   } else if (rand < 0.50) {
@@ -1065,211 +1063,74 @@ function startCrash(userId, amount, economyModule, sock, chatId) {
   } else {
     crashPoint = 3.0 + Math.pow(Math.random(), 2) * 47.0;
   }
-  
   crashPoint = Math.round(crashPoint * 100) / 100;
+
+  // Force loss check if active
+  const forcedLoss = maybeForceLoss(ctx);
   
-  activeCrashGames.set(userId, {
-    bet: amount,
-    crashPoint: crashPoint,
-    startTime: Date.now(),
-    chatId: chatId,
-    userId: userId,
-    crashed: false,
-    roundCtx: ctx
-  });
+  // Player wins if the crash point is greater than or equal to their target multiplier, and not a forced loss
+  const won = !forcedLoss && (crashPoint >= targetMultiplier);
+
+  const rawPayout = won ? Math.floor(amount * targetMultiplier) : 0;
+  const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
+  let winnings = won ? capPayoutByDailyLimit(user, adjustedPayout) : 0;
   
-  // Start the live spam updates!
-  spamCrashUpdates(userId, sock, chatId, economyModule);
-  
-  return {
-    success: true,
-    gameStarted: true,
-    message: `🚀 *CRASH GAME STARTED!* 🚀
-
-💰 Bet: ${getZENI()}${amount.toLocaleString()}
-📈 Starting: 1.00x
-
-🎯 MULTIPLIER IS RISING!
-
-Type: ${botConfig.getPrefix()} crash out
-
-⚡ SPAM INCOMING...`
-  };
-}
-
-// Spam multiplier updates in chat
-async function spamCrashUpdates(userId, sock, chatId, economyModule) {
-  const game = activeCrashGames.get(userId);
-  if (!game || game.crashed) return;
-  
-  const BOT_MARKER = "\u200B";
-  let updateCount = 0;
-  const maxUpdates = 20; // Spam for up to 20 updates (30 seconds)
-  
-  const interval = setInterval(async () => {
-    if (!activeCrashGames.has(userId)) {
-      clearInterval(interval);
-      return;
-    }
-    
-    const currentGame = activeCrashGames.get(userId);
-    if (currentGame.crashed) {
-      clearInterval(interval);
-      return;
-    }
-    
-    // Calculate current multiplier based on time
-    const timePassed = (Date.now() - currentGame.startTime) / 1000;
-    let currentMultiplier = 1.0 + (timePassed * 0.15) + (Math.sqrt(timePassed) * 0.08);
-    currentMultiplier = Math.max(1.00, currentMultiplier);
-    currentMultiplier = Math.round(currentMultiplier * 100) / 100;
-    
-    // Check if it should crash NOW
-    if (currentMultiplier >= currentGame.crashPoint) {
-      currentGame.crashed = true;
-      activeCrashGames.delete(userId);
-      
-      const user = economyModule.getUser(userId);
-      user.stats.totalSpent += currentGame.bet;
-      trackDailyNet(user, -currentGame.bet);
-      economyModule.saveUser(userId);
-      
-      // SEND CRASH MESSAGE
-      await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `🚀 *CRASH!* 🚀
-
-💥💥💥 CRASHED AT ${currentGame.crashPoint}x! 💥💥💥
-
-@${userId.split('@')[0]} LOST!
--${getZENI()}${currentGame.bet.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}
-
-Better luck next time! 😢`,
-        mentions: [userId]
-      });
-      
-      clearInterval(interval);
-      return;
-    }
-    
-    // Send multiplier update (SPAM!)
-    await sock.sendMessage(chatId, {
-      text: BOT_MARKER + `🚀 ${currentMultiplier}x 📈`
-    });
-    
-    updateCount++;
-    if (updateCount >= maxUpdates) {
-      // Max updates reached, auto-crash
-      currentGame.crashed = true;
-      activeCrashGames.delete(userId);
-      
-      const user = economyModule.getUser(userId);
-      user.stats.totalSpent += currentGame.bet;
-      trackDailyNet(user, -currentGame.bet);
-      economyModule.saveUser(userId);
-      
-      await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `🚀 *AUTO-CRASH!* 🚀
-
-💥 Took too long! Crashed at ${currentGame.crashPoint}x!
-
-@${userId.split('@')[0]} LOST!
--${getZENI()}${currentGame.bet.toLocaleString()}`,
-        mentions: [userId]
-      });
-      
-      clearInterval(interval);
-    }
-  }, 1500); // Update every 1.5 seconds
-}
-
-function crashCashOut(userId, economyModule) {
-  if (!activeCrashGames.has(userId)) {
-    return { success: false, message: "❌ No active crash game! Start one with '${botConfig.getPrefix()} crash <amount>'" };
+  if (won && winnings < amount) {
+    winnings = amount; // Refund bet on cap
   }
-  
-  const game = activeCrashGames.get(userId);
-  
-  if (game.crashed) {
-    return { success: false, message: "❌ Already crashed!" };
-  }
-  
-  const user = economyModule.getUser(userId);
-  
-  // Calculate current multiplier
-  const timePassed = (Date.now() - game.startTime) / 1000;
-  let currentMultiplier = 1.0 + (timePassed * 0.15) + (Math.sqrt(timePassed) * 0.08);
-  currentMultiplier = Math.max(1.00, currentMultiplier);
-  currentMultiplier = Math.round(currentMultiplier * 100) / 100;
-  
-  game.crashed = true;
-  activeCrashGames.delete(userId);
-  
-  // Check if already crashed
-  if (currentMultiplier >= game.crashPoint) {
-    user.stats.totalSpent += game.bet;
-    trackDailyNet(user, -game.bet);
-    economyModule.saveUser(userId);
-    
-    return {
-      success: true,
-      won: false,
-      message: `🚀 *TOO LATE!* 🚀
+  const profit = winnings - amount;
 
-💥 It crashed at ${game.crashPoint}x!
-You tried to cash out at ${currentMultiplier}x
+  // Apply money transaction
+  user.wallet = user.wallet - amount + winnings;
 
-😢 *YOU LOST!*
--${getZENI()}${game.bet.toLocaleString()}
-
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}`
-    };
-  }
-  
-  // SUCCESSFUL CASHOUT!
-  const rawPayout = Math.floor(game.bet * currentMultiplier);
-  const adjustedPayout = applyEdgeToAmount(rawPayout, game.roundCtx || { edge: 0, forcedLossChance: 0 });
-  let winnings = capPayoutByDailyLimit(user, adjustedPayout);
-  if (winnings < game.bet) {
-    winnings = game.bet; // Refund bet on cap
-  }
-  const profit = winnings - game.bet;
-
-  user.wallet += winnings;
   if (!user.stats) user.stats = {};
-  if (profit > 0) {
-    user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
-    trackDailyNet(user, profit);
-    updateGamblingStats(userId, game.bet, true, economyModule);
-    economyModule.logTransaction(userId, `Crash Won (${currentMultiplier}x)`, profit, user.wallet);
+  
+  if (won) {
+    if (profit > 0) {
+      user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
+      trackDailyNet(user, profit);
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, `Crash Won (${targetMultiplier}x)`, profit, user.wallet);
+    } else {
+      updateGamblingStats(userId, amount, true, economyModule);
+      economyModule.logTransaction(userId, `Crash Refund (Daily Cap)`, 0, user.wallet);
+    }
   } else {
-    updateGamblingStats(userId, game.bet, true, economyModule);
-    economyModule.logTransaction(userId, `Crash Refund (Daily Cap)`, 0, user.wallet);
+    user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
+    trackDailyNet(user, -amount);
+    updateGamblingStats(userId, amount, false, economyModule);
+    economyModule.logTransaction(userId, `Crash Lost (${targetMultiplier}x target)`, -amount, user.wallet);
   }
+
   economyModule.saveUser(userId);
-  
+
+  const crashVisual = `🚀 *CRASH MULTIPLIER* 🚀
+━━━━━━━━━━━━━━━
+📈 *Target Multiplier:* ${targetMultiplier.toFixed(2)}x
+💥 *Crashed At:* ${crashPoint.toFixed(2)}x
+━━━━━━━━━━━━━━━`;
+
   let outcomeMessage = '';
-  if (profit > 0) {
-    outcomeMessage = `🎉 *YOU WON!* 🎉\n💰 Bet: ${getZENI()}${game.bet.toLocaleString()}\n📈 Multiplier: ${currentMultiplier}x\n💵 Won: ${getZENI()}${winnings.toLocaleString()}\n🏆 Profit: +${getZENI()}${profit.toLocaleString()}`;
+  if (won) {
+    if (profit > 0) {
+      outcomeMessage = `🎉 *SUCCESSFUL CASH OUT!* 🎉\n📈 *Multiplier:* ${targetMultiplier.toFixed(2)}x\n💵 *Payout:* ${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}\n\n📈 _The rocket was flying high and crashed later at ${crashPoint.toFixed(2)}x!_`;
+    } else {
+      outcomeMessage = `🎉 *SUCCESSFUL CASH OUT!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`;
+    }
   } else {
-    outcomeMessage = `🎉 *YOU WON!* 🎉\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${game.bet.toLocaleString()} (No loss, no gain)`;
+    outcomeMessage = `💥 *BOOM! CRASHED!* 💥\n😢 _The rocket crashed at ${crashPoint.toFixed(2)}x before reaching your ${targetMultiplier.toFixed(2)}x target!_\n📉 *Loss:* -${getZENI()}${amount.toLocaleString()}`;
   }
-  
+
   return {
     success: true,
-    won: true,
-    message: `🚀 *CASHED OUT!* 🚀
-
-✅ ${currentMultiplier}x MULTIPLIER!
-
-Would've crashed at ${game.crashPoint}x
+    won: won,
+    message: `${crashVisual}
+👤 *Player:* @${user.nickname || userId.split('@')[0]}
+🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ${outcomeMessage}
 
-💰 Balance: ${getZENI()}${user.wallet.toLocaleString()}
-
-Perfect timing! 🔥`
+💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
   };
 }
 

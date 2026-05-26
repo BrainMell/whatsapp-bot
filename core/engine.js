@@ -4812,11 +4812,15 @@ _💡 Reply with another number from your search list!_`.trim();
                           const item = lootSystem.getItemInfo(itemKey);
                           await inventorySystem.addItem(senderJid, itemKey, 1);
 
+                          const rarityInfo = inventorySystem.ITEM_RARITY[item.rarity || 'COMMON'] || inventorySystem.ITEM_RARITY.COMMON;
+                          const sellMultiplier = rarityInfo.sellMultiplier || 0.6;
+                          const sellValue = Math.floor((item.value || 0) * sellMultiplier);
+
                           let msg = GET_BANNER(`🎣 FISHING`) + `\n\n`;
                           msg += `You reeled something in!\n\n`;
                           msg += `${emoji} *${item.name}*\n`;
                           msg += `▫️ Rarity: ${item.rarity}\n`;
-                          msg += `▫️ Value: ${ZENI}${Math.floor(item.value).toLocaleString()}\n\n`;
+                          msg += `▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}\n\n`;
                           msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
 
                           await sock.sendMessage(
@@ -4868,9 +4872,14 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
                     const item = lootSystem.getItemInfo(itemKey);
                     await inventorySystem.addItem(senderJid, itemKey, 1);
+
+                    const rarityInfo = inventorySystem.ITEM_RARITY[item.rarity || 'COMMON'] || inventorySystem.ITEM_RARITY.COMMON;
+                    const sellMultiplier = rarityInfo.sellMultiplier || 0.6;
+                    const sellValue = Math.floor((item.value || 0) * sellMultiplier);
+
                     let msg =
                       GET_BANNER(`🏹 HUNTING`) +
-                      `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Value: ${ZENI}${item.value.toLocaleString()}`;
+                      `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}`;
                     return await sock.sendMessage(
                       chatId,
                       { text: msg },
@@ -13397,26 +13406,25 @@ Examples:
                     return;
                   }
 
-                  // `${botConfig.getPrefix().toLowerCase()}` crash <amount> - Start crash game
+                  // `${botConfig.getPrefix().toLowerCase()}` crash <amount> <multiplier> - Start crash game
                   if (
-                    (lowerTxt ===
+                    lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} crash` ||
-                      lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} crash `,
-                      )) &&
-                    !lowerTxt.includes(`out`)
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} crash `,
+                    )
                   ) {
-                    const { amount } = parseGamblingArgs(txt, ['crash']);
+                    const { amount, extra: multiplierStr } = parseGamblingArgs(txt, ['crash']);
 
-                    if (!amount) {
+                    if (!amount || !multiplierStr) {
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ Usage: \`${botConfig.getPrefix().toLowerCase()} crash <amount>\`
-
+                          `❌ Usage: \`${botConfig.getPrefix().toLowerCase()} crash <amount> <multiplier>\`
+ 
 Cash out before it crashes!
-
-Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
+ 
+Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                         mentions: [senderJid],
                       });
                       return;
@@ -13430,28 +13438,12 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300\``,
                       return;
                     }
 
-                    const result = gambling.startCrash(
+                    const result = gambling.crash(
                       senderJid,
                       amount,
+                      multiplierStr,
                       economy,
-                      sock,
-                      chatId,
                     );
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + result.message,
-                      mentions: [senderJid],
-                    });
-                    await awardProgression(senderJid, chatId);
-                    return;
-                  }
-
-                  // `${botConfig.getPrefix().toLowerCase()}` crash out - Cash out from crash
-                  if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} crash out` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} co`
-                  ) {
-                    const result = gambling.crashCashOut(senderJid, economy);
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + result.message,
                       mentions: [senderJid],
