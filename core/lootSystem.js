@@ -30,7 +30,9 @@ const LOOT_TABLES = {
             { id: 'spider_silk', weight: 10, quantity: [1, 2] },
             { id: 'iron_shard', weight: 15, quantity: [1, 3] },
             { id: 'minor_enhancement_stone', weight: 5, quantity: [1, 1] },
-            { id: 'equipment_piece', weight: 5, quantity: [1, 1] }
+            { id: 'equipment_piece', weight: 5, quantity: [1, 1] },
+            { id: 'bronze_spear', weight: 5, quantity: [1, 1] },
+            { id: 'chainmail', weight: 5, quantity: [1, 1] },
         ]
     },
     
@@ -50,7 +52,12 @@ const LOOT_TABLES = {
             { id: 'ghost_essence', weight: 10, quantity: [1, 1] },
             { id: 'mythril_ore', weight: 10, quantity: [1, 2] },
             { id: 'rare_enhancement_stone', weight: 8, quantity: [1, 1] },
-            { id: 'equipment_piece', weight: 15, quantity: [1, 1] }
+            { id: 'equipment_piece', weight: 15, quantity: [1, 1] },
+            { id: 'crystal_staff', weight: 5, quantity: [1, 1] },
+            { id: 'greatsword', weight: 5, quantity: [1, 1] },
+            { id: 'bronze_spear', weight: 5, quantity: [1, 1] },
+            { id: 'chainmail', weight: 5, quantity: [1, 1] },
+            { id: 'equipment_piece', weight: 5, quantity: [1, 1] },
         ]
     },
     
@@ -68,6 +75,8 @@ const LOOT_TABLES = {
             { id: 'boss_essence', weight: 15, quantity: [1, 2] },
             { id: 'legendary_enhancement_stone', weight: 10, quantity: [1, 1] },
             { id: 'legendary_shard', weight: 5, quantity: [1, 1] }
+            { id: 'dragon_helm', weight: 5, quantity: [1,1] },
+            { id: 'legendary_shard', weight: 5, quantity: [1,1] },
         ]
     },
     
@@ -624,6 +633,13 @@ const ITEM_DATABASE = {
     'steel_sabre': { name: 'Steel Sabre', description: 'Sharp and finely forged. (+25 ATK, +5 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 25, spd: 5 }, slot: 'main_hand', reqLevel: 10 },
     'mythril_staff': { name: 'Mythril Staff', description: 'Amplifies resonance. (+45 MAG, +15 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { mag: 45, hp: 15 }, slot: 'main_hand', reqLevel: 20, isTwoHanded: true },
     'dragon_fang_dagger': { name: 'Dragon-Fang Dagger', description: 'Blade carved from a wyvern’s tooth. (+55 ATK, +15% Crit)', rarity: 'EPIC', value: 22000, type: 'EQUIPMENT', stats: { atk: 55, crit: 15 }, slot: 'main_hand', reqLevel: 25 },
+    // --- NEW EQUIPMENT ---
+    'bronze_spear': { name: 'Bronze Spear', description: 'A sturdy bronze spear. (+8 ATK)', rarity: 'COMMON', value: 1200, type: 'EQUIPMENT', stats: { atk: 8 }, slot: 'main_hand', reqLevel: 2 },
+    'chainmail': { name: 'Chainmail', description: 'Interlinked metal rings. (+12 DEF)', rarity: 'UNCOMMON', value: 2500, type: 'EQUIPMENT', stats: { def: 12 }, slot: 'armor', reqLevel: 4 },
+    'crystal_staff': { name: 'Crystal Staff', description: 'A staff of pure crystal. (+10 MAG)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { mag: 10 }, slot: 'main_hand', reqLevel: 6 },
+    'greatsword': { name: 'Greatsword', description: 'A massive two-handed blade. (+15 ATK)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'main_hand', reqLevel: 8 },
+    'dragon_helm': { name: 'Dragon Helm', description: 'Helm forged from dragon scales. (+20 DEF, +10 HP)', rarity: 'EPIC', value: 12000, type: 'EQUIPMENT', stats: { def: 20, hp: 10 }, slot: 'armor', reqLevel: 12 },
+
     
     // --- EQUIPMENT: ARMOR ---
     'leather_tunic': { name: 'Leather Tunic', description: 'Basic protection. (+8 DEF)', rarity: 'COMMON', value: 1600, type: 'EQUIPMENT', stats: { def: 8 }, slot: 'armor', reqLevel: 1 },
