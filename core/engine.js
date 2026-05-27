@@ -2511,6 +2511,83 @@ What to do:
 
       let systemPrompt = contentDescription + _timeCtx + groundingSafeguards;
 
+      // --- HYBRID GROUP TRANSCRIPT, SOCIAL GRAPH & ROLLING SUMMARY INTEGRATION ---
+      let groupTranscript = "";
+      let activeParticipants = new Set();
+      if (chatId && chatId.endsWith("@g.us")) {
+        try {
+          const messages = await ChatMessage.find({ chatId: chatId })
+            .sort({ timestamp: -1 })
+            .limit(15);
+          
+          messages.reverse();
+          
+          groupTranscript += "\n--- Recent Group Chat Transcript ---\n";
+          for (const msg of messages) {
+            const userObj = economy.getUser(msg.sender);
+            const name = userObj?.nickname || msg.sender.split("@")[0];
+            const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
+            groupTranscript += `[${timeStr}] ${name}: ${msg.body || "Media"}\n`;
+            activeParticipants.add(msg.sender);
+          }
+          groupTranscript += "------------------------------------\n\n";
+          
+          // Fetch relationships between sender and active group participants
+          const socialSystem = require('./socialSystem');
+          const relationshipText = socialSystem.getRelationshipsText([...activeParticipants], senderJid);
+          
+          if (groupTranscript) systemPrompt += groupTranscript;
+          if (relationshipText) systemPrompt += relationshipText;
+
+          // Rolling background summarization compaction
+          const summaryKey = `summary_${chatId}`;
+          const msgCountKey = `msg_count_${chatId}`;
+          let rollingSummary = conversationMemory.get(summaryKey) || "";
+          let groupMsgCount = conversationMemory.get(msgCountKey) || 0;
+          
+          groupMsgCount++;
+          conversationMemory.set(msgCountKey, groupMsgCount);
+
+          if (groupMsgCount % 25 === 0 || !rollingSummary) {
+            Promise.resolve().then(async () => {
+              try {
+                const oldMessages = await ChatMessage.find({ chatId: chatId })
+                  .sort({ timestamp: -1 })
+                  .skip(15)
+                  .limit(30);
+
+                if (oldMessages.length > 5) {
+                  oldMessages.reverse();
+                  let summaryPrompt = "Summarize the key topics and vibe of this WhatsApp group chat conversation in a single, short sentence (max 20 words):\n\n";
+                  for (const msg of oldMessages) {
+                    const userObj = economy.getUser(msg.sender);
+                    const name = userObj?.nickname || msg.sender.split("@")[0];
+                    summaryPrompt += `${name}: ${msg.body || "Media"}\n`;
+                  }
+
+                  const summaryCompletion = await smartGroqCall({
+                    model: selectModel(summaryPrompt.length, false),
+                    messages: [{ role: "user", content: summaryPrompt }],
+                  });
+
+                  const newSummary = summaryCompletion.choices[0].message.content.trim();
+                  conversationMemory.set(summaryKey, newSummary);
+                  console.log(`📝 [ContextCompactor] Updated rolling summary for ${chatId}: "${newSummary}"`);
+                }
+              } catch (compErr) {
+                console.error("❌ ContextCompactor error:", compErr.message);
+              }
+            });
+          }
+
+          if (rollingSummary) {
+            systemPrompt += `\n[Context of earlier conversation: ${rollingSummary}]\n`;
+          }
+        } catch (socialErr) {
+          console.error("❌ Failed to compile group transcript/social graph:", socialErr.message);
+        }
+      }
+
       // Only add profile context if we have it
       if (userProfile && typeof formatProfileForAI === "function") {
         const profileContext = formatProfileForAI(userProfile, senderJid);

@@ -409,6 +409,11 @@ module.exports = {
       const moneyReward = points * 100; // 100, 200, 300
       economy.addMoney(result.game.winner, moneyReward);
 
+      try {
+        const socialSystem = require('./socialSystem');
+        socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 4);
+      } catch (socialErr) {}
+
       caption = botMarker + `🏆 *${marker === 'X' ? '❌' : '⭕'} @${normalizeJid(result.game.winner)} WINS!*\n\n+${points} points for winner!\n💰 +${moneyReward} Zeni\n-1 point for loser!`;
       mentionedJid = [result.game.playerA, result.game.playerB];
       deleteGame(chatId);
@@ -416,6 +421,11 @@ module.exports = {
       // UPDATE: Add players to scoreboard with 0 points so they appear on leaderboard
       updateScoreboard(result.game.playerA, 'Player', 0);
       updateScoreboard(result.game.playerB, 'Player', 0);
+
+      try {
+        const socialSystem = require('./socialSystem');
+        socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 3);
+      } catch (socialErr) {}
 
       caption = botMarker + `⚖️ *DRAW!* No winning moves left.\n\nNo points awarded, but match recorded!`;
       mentionedJid = [result.game.playerA, result.game.playerB];

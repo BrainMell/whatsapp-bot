@@ -505,6 +505,15 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         const reward = 500;
         economy.addMoney(player.fullJid, reward);
         message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
+        try {
+          const socialSystem = require('./socialSystem');
+          const gamePlayers = game.players.map(p => p.fullJid);
+          for (let i = 0; i < gamePlayers.length; i++) {
+            for (let j = i + 1; j < gamePlayers.length; j++) {
+              socialSystem.incrementRelationship(gamePlayers[i], gamePlayers[j], 5);
+            }
+          }
+        } catch (socialErr) {}
         activeGames.delete(chatId);
       } else {
         if (moveResult.extraTurn || game.hasExtraTurn) {
@@ -556,6 +565,15 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       const reward = 500;
       economy.addMoney(player.fullJid, reward);
       message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
+      try {
+        const socialSystem = require('./socialSystem');
+        const gamePlayers = game.players.map(p => p.fullJid);
+        for (let i = 0; i < gamePlayers.length; i++) {
+          for (let j = i + 1; j < gamePlayers.length; j++) {
+            socialSystem.incrementRelationship(gamePlayers[i], gamePlayers[j], 5);
+          }
+        }
+      } catch (socialErr) {}
       activeGames.delete(chatId);
     } else {
       if (moveResult.extraTurn || game.hasExtraTurn) {

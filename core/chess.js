@@ -464,11 +464,19 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         gameEnded = true;
         updateChessScore(currentPlayer, 'win');
         updateChessScore(!isWhiteTurn ? state.playerB : state.playerW, 'loss');
+        try {
+            const socialSystem = require('./socialSystem');
+            socialSystem.incrementRelationship(state.playerW, state.playerB, 6);
+        } catch (socialErr) {}
     } else if (state.chess.isDraw()) {
         resultMsg = `⚖️ *DRAW!* The game ended in a draw.`;
         gameEnded = true;
         updateChessScore(state.playerW, 'draw');
         updateChessScore(state.playerB, 'draw');
+        try {
+            const socialSystem = require('./socialSystem');
+            socialSystem.incrementRelationship(state.playerW, state.playerB, 4);
+        } catch (socialErr) {}
     } else if (state.chess.isCheck()) {
         resultMsg = `⚠️ *CHECK!* @${normalizeJid(state.chess.turn() === 'w' ? state.playerW : state.playerB)} is in check!`;
     }
@@ -570,6 +578,10 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
         updateChessScore(winner, 'win');
         updateChessScore(loser, 'loss');
+        try {
+            const socialSystem = require('./socialSystem');
+            socialSystem.incrementRelationship(state.playerW, state.playerB, 4);
+        } catch (socialErr) {}
         deleteGame(chatId);
 
         return sock.sendMessage(chatId, { 

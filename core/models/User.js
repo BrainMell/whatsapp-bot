@@ -144,7 +144,8 @@ const UserSchema = new mongoose.Schema({
         firstSeen: { type: Date, default: Date.now },
         lastSeen: { type: Date, default: Date.now },
         messageCount: { type: Number, default: 0 }
-    }
+    },
+    relationships: { type: Map, of: Number, default: {} }
   }
 
 }, { timestamps: true, minimize: false });

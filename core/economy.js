@@ -1104,6 +1104,11 @@ function robUser(thiefId, victimId) {
 
   const success = Math.random() < 0.4;
   thief.lastRob = now;
+
+  try {
+    const socialSystem = require('./socialSystem');
+    socialSystem.incrementRelationship(thiefId, victimId, -15);
+  } catch (socialErr) {}
   
   if (success) {
     const percent = Math.floor(Math.random() * 20) + 10;
