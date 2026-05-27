@@ -11490,6 +11490,10 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (pendingNameRequests.has(senderJid) || isQuotedNameRequest) {
                       if (senderJid === botJid || (botLid && senderJid === botLid)) return;
                       const pending = pendingNameRequests.get(senderJid);
+                      if (pending && Date.now() - pending.timestamp > 15 * 60 * 1000) {
+                        pendingNameRequests.delete(senderJid);
+                        if (!isQuotedNameRequest) return;
+                      }
                       pendingNameRequests.delete(senderJid); // Consume request
 
                       let chosenName = txt.trim();
