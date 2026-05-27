@@ -112,6 +112,27 @@ function registerUser(userId, nickname) {
   const classSystem = require('./classSystem');
   const starterClass = classSystem.getRandomStarterClass();
 
+  const existingUser = economyData.get(userId);
+  const profile = existingUser?.profile || {
+    whatsappName: null,
+    nickname: nickname,
+    notes: [],
+    memories: {
+      likes: [],
+      dislikes: [],
+      hobbies: [],
+      personal: [],
+      other: []
+    },
+    stats: {
+      firstSeen: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      messageCount: 0
+    },
+    relationships: {}
+  };
+  profile.nickname = nickname;
+
   const userData = {
     userId: userId, // Ensure userId is stored in the object
     wallet: STARTING_BALANCE,
@@ -174,6 +195,7 @@ function registerUser(userId, nickname) {
               netToday: 0
             },
             skills: {},
+            profile: profile,
     
     // NEW: Sprite assignment
     spriteIndex: Math.floor(Math.random() * 100)
@@ -315,6 +337,26 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
   const user = economyData.get(userId);
   
   // 💡 Ensure all fields exist (Lazy Migration)
+  if (!user.profile) {
+    user.profile = {
+      whatsappName: null,
+      nickname: user.nickname || defaultNickname,
+      notes: [],
+      memories: {
+        likes: [],
+        dislikes: [],
+        hobbies: [],
+        personal: [],
+        other: []
+      },
+      stats: {
+        firstSeen: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        messageCount: 0
+      },
+      relationships: {}
+    };
+  }
   if (!user.stats) {
     user.stats = {
       totalEarned: user.wallet || 0,
