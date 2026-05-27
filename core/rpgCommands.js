@@ -64,7 +64,36 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
             gamesWon: economyUser.stats?.gamesWon || 0,
             messageCount: economyUser.profile?.stats?.messageCount || 0,
             pfpUrl: pfpUrl || "",
-            title: economyUser.title || ""
+            title: economyUser.title || "",
+
+            // RPG Stats
+            hp: stats?.hp || 100,
+            atk: stats?.atk || 10,
+            def: stats?.def || 10,
+            mag: stats?.mag || 10,
+            spd: stats?.spd || 10,
+            luck: stats?.luck || 10,
+            crit: stats?.crit || 0,
+            evasion: stats?.evasion || 0,
+
+            // Gear Stats
+            equipHp: equipStats?.hp || 0,
+            equipAtk: equipStats?.atk || 0,
+            equipDef: equipStats?.def || 0,
+            equipMag: equipStats?.mag || 0,
+            equipSpd: equipStats?.spd || 0,
+            equipLuck: equipStats?.luck || 0,
+
+            // Gear Item Names
+            gearMainHand: equipment?.main_hand ? (lootSystem.getItemInfo(equipment.main_hand.id)?.name || "None") : "None",
+            gearOffHand: equipment?.off_hand ? (lootSystem.getItemInfo(equipment.off_hand.id)?.name || "None") : "None",
+            gearArmor: equipment?.armor ? (lootSystem.getItemInfo(equipment.armor.id)?.name || "None") : "None",
+            gearHelmet: equipment?.helmet ? (lootSystem.getItemInfo(equipment.helmet.id)?.name || "None") : "None",
+            gearBoots: equipment?.boots ? (lootSystem.getItemInfo(equipment.boots.id)?.name || "None") : "None",
+            gearRing: equipment?.ring ? (lootSystem.getItemInfo(equipment.ring.id)?.name || "None") : "None",
+            gearAmulet: equipment?.amulet ? (lootSystem.getItemInfo(equipment.amulet.id)?.name || "None") : "None",
+            gearCloak: equipment?.cloak ? (lootSystem.getItemInfo(equipment.cloak.id)?.name || "None") : "None",
+            gearGloves: equipment?.gloves ? (lootSystem.getItemInfo(equipment.gloves.id)?.name || "None") : "None"
         };
 
         const cardBuffer = await goService.generateProfileCard(cardData);
