@@ -3874,7 +3874,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   if (cardHandled) return; // stop further processing if handled by cards
                   // ───────────────────────────────────────────
 
-                  const isSelf = !!m.key.fromMe;
+                  const isSelf = !!m.key.fromMe || senderJid === botJid || (botLid && senderJid === botLid);
                   if (isSelf) return;
 
                   // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
@@ -11479,6 +11479,7 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // check for pending name request replies
                     if (pendingNameRequests.has(senderJid)) {
+                      if (senderJid === botJid || (botLid && senderJid === botLid)) return;
                       const pending = pendingNameRequests.get(senderJid);
                       pendingNameRequests.delete(senderJid); // Consume request
 
@@ -16006,6 +16007,7 @@ _(Or reply to their message)_
 
                   // Conversational nickname placeholder acquisition for unregistered users
                   if (!economy.isRegistered(senderJid)) {
+                    if (senderJid === botJid || (botLid && senderJid === botLid)) return;
                     const user = economy.getOrCreateUser(senderJid);
                     const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
                     if (isNameUnknown) {
