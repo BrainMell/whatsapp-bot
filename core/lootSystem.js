@@ -74,9 +74,9 @@ const LOOT_TABLES = {
             { id: 'mystic_thread', weight: 15, quantity: [2, 4] },
             { id: 'boss_essence', weight: 15, quantity: [1, 2] },
             { id: 'legendary_enhancement_stone', weight: 10, quantity: [1, 1] },
-            { id: 'legendary_shard', weight: 5, quantity: [1, 1] }
-            { id: 'dragon_helm', weight: 5, quantity: [1,1] },
-            { id: 'legendary_shard', weight: 5, quantity: [1,1] },
+            { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
+            { id: 'dragon_helm', weight: 5, quantity: [1, 1] },
+            { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
         ]
     },
     
