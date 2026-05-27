@@ -148,8 +148,18 @@ function getUser(userId) {
 
 function getXPForLevel(level) {
     if (level <= 1) return 0;
-    let totalXP = 0;
-    for (let i = 1; i < level; i++) {
+    
+    // Overrides for early levels (2-5) to make early progression much faster
+    const earlyXP = {
+        2: 80,       // Level 2 (80 XP total)
+        3: 200,      // Level 3 (200 XP total)
+        4: 400,      // Level 4 (400 XP total)
+        5: 700       // Level 5 (700 XP total)
+    };
+    if (earlyXP[level] !== undefined) return earlyXP[level];
+    
+    let totalXP = earlyXP[5];
+    for (let i = 5; i < level; i++) {
         let xpNeeded = Math.floor(XP_CONFIG.BASE_XP * Math.pow(XP_CONFIG.SCALING_FACTOR, i - 1));
         // Apply milestones
         if (i >= 10) xpNeeded = Math.floor(xpNeeded * 1.2);

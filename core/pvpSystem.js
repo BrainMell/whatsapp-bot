@@ -199,6 +199,9 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
 
     } else if (action === 'ability') {
+        if (!target || isNaN(parseInt(target))) {
+            return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../botConfig').getPrefix()} pvp ability 1\`` };
+        }
         const abilityIndex = parseInt(target) - 1;
         const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
         const ability = learned[abilityIndex];
@@ -450,21 +453,6 @@ setInterval(() => {
 }, 60000);
 
 
-function getInvite(chatId, targetJid) {
-    const invite = duelInvites.get(chatId);
-    if (invite && invite.target === targetJid) return invite;
-    return null;
-}
-
-function declineChallenge(chatId, targetJid) {
-    const invite = duelInvites.get(chatId);
-    if (invite && invite.target === targetJid) {
-        duelInvites.delete(chatId);
-        return true;
-    }
-    return false;
-}
-
 module.exports = {
     getDuel,
     getInvite,
@@ -472,6 +460,4 @@ module.exports = {
     acceptChallenge,
     declineChallenge,
     handlePvPAction,
-    getInvite,
-    declineChallenge,
 };

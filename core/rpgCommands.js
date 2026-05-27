@@ -378,7 +378,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     const equipment = inventorySystem.getEquipment(senderJid);
     if (!equipment) return;
 
-    if (!itemId || !slot) { 
+    if (!itemId) { 
         let msg = `━━━━━━━━━━━━━\n🛡️ EQUIPMENT \n┗━━━━━━━━━━━━━\n\n`;
         const slots = Object.values(inventorySystem.EQUIPMENT_SLOTS);
         
@@ -394,7 +394,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
             }
         });
         
-        msg += `━━━━━━━━━━━━━\n📖 *HOW TO EQUIP:*\nType: \`${getPrefix()} equip <# or id> <slot>\`\n📌 Example: \`${getPrefix()} equip 1 weapon\``;
+        msg += `━━━━━━━━━━━━━\n📖 *HOW TO EQUIP:*\nType: \`${getPrefix()} equip <# or id> [slot]\`\n📌 Example: \`${getPrefix()} equip 1\``;
         await sock.sendMessage(chatId, { text: msg });
         return;
     }

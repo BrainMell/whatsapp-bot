@@ -11426,7 +11426,7 @@ ${senderName} said y'all should know:
                         if (result.success) {
                           if (result.image?.success) {
                             await sock.sendMessage(chatId, {
-                              image: { url: result.image.path },
+                              image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
                             });
                           } else {
@@ -11620,28 +11620,24 @@ ${senderName} said y'all should know:
                         `${botConfig.getPrefix().toLowerCase()} pvp `,
                       )
                     ) {
-                      const parts = lowerTxt.split(" ");
-                      // Handle both ".g pvp attack" and ".pvp attack"
-                      let action = parts[2];
-                      let target = parts[3];
-                      if (!action && parts[1] && !parts[1].toLowerCase().includes('pvp')) {
-                        // this means parts[0] is .pvp and parts[1] is attack
-                        action = parts[1];
-                        target = parts[2];
-                      } else if (parts[0].includes('pvp') && parts.length >= 2) {
-                          action = parts[1];
-                          target = parts[2];
+                      const words = lowerTxt.split(/\s+/);
+                      const pvpIdx = words.findIndex(w => w.toLowerCase().includes("pvp"));
+                      let action = "";
+                      let target = "";
+                      if (pvpIdx !== -1 && pvpIdx + 1 < words.length) {
+                        action = words[pvpIdx + 1];
+                        if (pvpIdx + 2 < words.length) {
+                          target = words[pvpIdx + 2];
+                        }
                       }
 
                       if (!action) {
                         return await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix()} pvp <attack|ability|item|stats|flee>\``,
+                            `❌ Usage: \`${botConfig.getPrefix()} pvp <attack | ability <n> | flee>\``,
                         });
                       }
-
-                      // const target = parts[3]; // Handled above
 
                       const result = await pvpSystem.handlePvPAction(
                         sock,
@@ -11654,7 +11650,7 @@ ${senderName} said y'all should know:
                       if (result.success) {
                         if (result.image?.success) {
                           await sock.sendMessage(chatId, {
-                            image: { url: result.image.path },
+                            image: result.image.buffer,
                             caption: BOT_MARKER + result.message,
                             mentions: result.mentions || [],
                           });
