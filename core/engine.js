@@ -2479,16 +2479,14 @@ What to do:
           .startsWith(`${botConfig.getPrefix().toLowerCase()}`) ||
         newMessage.trim().startsWith(".");
 
-      // Check if message contains important keywords
-      const shouldStore =
-        !isCommand &&
-        MEMORY_KEYWORDS.some((keyword) =>
-          newMessage.toLowerCase().includes(keyword),
-        );
-
-      // Only store keyword-triggered content — no bypass for new users
-      if (shouldStore) {
+      // Save every user message to in-memory session history so the AI can actually see it
+      if (!isCommand) {
         history.push({ role: `user`, content: newMessage, _ts: Date.now() });
+      }
+
+      // Cap session history length to avoid memory bloat
+      while (history.length > 20) {
+        history.shift();
       }
 
       const recentHistory = history.slice(-10);
@@ -2578,6 +2576,25 @@ What to do:
           }
         }
         groqMessages.push({ role: _hMsg.role, content: _hMsg.content });
+      }
+
+      // Priority intent classification & direct grounding overrides
+      const cleanMsg = newMessage.trim().toLowerCase();
+      const isQuestion = cleanMsg.includes('?') || 
+                         /\b(what|who|where|when|why|how|tell me|show me|give me|time|date|is there)\b/i.test(cleanMsg);
+      const isInterruption = /\b(huh|what|talking about|tf|wtf|weird|confused|excuse me|are you sure|nonsense|hallucinating|apologize|sorry)\b/i.test(cleanMsg) ||
+                             cleanMsg.length <= 4;
+
+      if (isInterruption) {
+        groqMessages.push({
+          role: "system",
+          content: "[CRITICAL CONVERSATIONAL REPAIR DIRECTIVE: The user is expressing confusion or interruption (e.g. saying 'huh', 'tf', 'what are you talking about'). You MUST immediately drop any off-screen roleplay/storylines, apologize briefly, and directly address their previous or current query with absolute clarity. Do NOT invent new activities or continue unrelated storylines.]"
+        });
+      } else if (isQuestion) {
+        groqMessages.push({
+          role: "system",
+          content: "[CRITICAL QUESTION DIRECTIVE: The user asked a direct question. You MUST prioritize answering their question directly, accurately, and immediately, keeping your response natural but completely grounded. Do NOT ignore the question or talk about unrelated off-screen lore.]"
+        });
       }
 
       // Using smart API rotation with model selection
