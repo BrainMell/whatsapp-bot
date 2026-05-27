@@ -907,6 +907,7 @@ async function startBot(configInstance) {
 
     const temporaryContext = new Map();
     const pendingTagRequests = new Map();
+    const pendingNameRequests = new Map();
     const activityTracker = new Map();
     const spamTracker = new Map();
 
@@ -1980,6 +1981,11 @@ What to do:
         if (now - req.timestamp > 120000) pendingTagRequests.delete(jid);
       }
 
+      // pendingNameRequests: drop anything older than 2 min
+      for (const [jid, req] of pendingNameRequests.entries()) {
+        if (now - req.timestamp > 120000) pendingNameRequests.delete(jid);
+      }
+
       // activityTracker: cap nested maps at 200 most recent users per chat
       for (const [chatId, users] of activityTracker.entries()) {
         if (users.size > 200) {
@@ -2133,7 +2139,7 @@ What to do:
 
     // ✅ User profiles storage - Integrated with Economy/MongoDB
     function getUserProfile(jid) {
-      const user = economy.getUser(jid);
+      const user = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
       if (!user || !user.profile) return null;
       return user.profile;
     }
@@ -2143,7 +2149,7 @@ What to do:
     }
 
     function initializeUserProfile(jid) {
-      const user = economy.getUser(jid);
+      const user = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
 
       return {
         jid: jid,
@@ -2167,7 +2173,7 @@ What to do:
     }
 
     function updateUserProfile(jid, updates = {}) {
-      const user = economy.getUser(jid);
+      const user = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
       if (!user) return null;
 
       if (!user.profile) {
@@ -2508,7 +2514,7 @@ What to do:
 4. COREFERENCE & SPEAKER RESOLUTION: In group chats, pay close attention to speaker markers in the transcript. If a user refers to someone else (e.g., "she's denying being mean"), resolve the pronouns (like "she", "he", "they") correctly against active group participants (like Rosaline) instead of assuming they refer to you (Goten).
 5. STANCE & PERSONALITY STABILITY: Maintain a consistent, stable, and loyal character identity. Do not passively flip-flop your stance, become submissive, or sound confused. Keep your cool, casual, slightly cheeky half-Saiyan high schooler voice stable.
 6. NO AGGRESSIVE PARROT-ECHOING: Do not mirror or copy the user's specific vocabulary or insults too aggressively (e.g., if a user calls you a name or says "dumby", do not submissively echo "lol." or parrot their exact phrases). Keep your own distinct verbal voice and slang.
-7. Avoid unsolicited lore/backstory. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
+7. NO UNSOLICITED LORE/ROLEPLAY INTRUSION: Do NOT invent unsolicited lore or random teen-life roleplay elements (like "eating onigiri", "gotta go to school", "mum is calling", or "Trunks is waiting") as a substitute for an actual reply. Fictional flavor and personality should be used purely as conversational seasoning on top of a direct and relevant response — never replace the direct response with random character lore. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
 ------------------------------------------------`;
 
       let systemPrompt = contentDescription + _timeCtx + groundingSafeguards;
@@ -5156,9 +5162,9 @@ _💡 Reply with another number from your search list!_`.trim();
                         whatsappName: m.pushName,
                       });
 
-                      // Also set as nickname if user doesn't have one yet
+                      // Also set as nickname if user doesn't have one yet (ONLY if they are registered)
                       const currentProfile = getUserProfile(senderJid);
-                      if (currentProfile && !currentProfile.nickname) {
+                      if (currentProfile && !currentProfile.nickname && economy.isRegistered(senderJid)) {
                         updateUserProfile(senderJid, { nickname: m.pushName });
                       }
                     }
@@ -11465,6 +11471,61 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     console.log(finalLog);
 
+                    // check for pending name request replies
+                    if (pendingNameRequests.has(senderJid)) {
+                      const pending = pendingNameRequests.get(senderJid);
+                      pendingNameRequests.delete(senderJid); // Consume request
+
+                      let chosenName = txt.trim();
+                      const nameRegex = /^(my name is|call me|i'm|i am|im|name is)\s+/i;
+                      if (nameRegex.test(chosenName)) {
+                        chosenName = chosenName.replace(nameRegex, "").trim();
+                      }
+                      
+                      // Strip trailing punctuation (like periods or exclamation marks) but keep letters/numbers/spaces
+                      chosenName = chosenName.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
+
+                      if (chosenName.length < 2 || chosenName.length > 20) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`
+                        });
+                        // Re-stage the request
+                        pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
+                        return;
+                      }
+
+                      // Save as nickname placeholder in economy (registered: false)
+                      const user = economy.getOrCreateUser(senderJid, chosenName);
+                      user.nickname = chosenName;
+                      if (!user.profile) {
+                        user.profile = {
+                          whatsappName: m.pushName || null,
+                          nickname: chosenName,
+                          notes: [],
+                          memories: { likes: [], dislikes: [], hobbies: [], personal: [], other: [] },
+                          stats: { firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), messageCount: 0 },
+                          relationships: {}
+                        };
+                      } else {
+                        user.profile.nickname = chosenName;
+                      }
+                      economy.scheduleSave(senderJid);
+
+                      // Conversational confirmation in Goten's teen voice
+                      const replies = [
+                        `Awesome! I'll call you *${chosenName}* from now on. What's up?`,
+                        `Dope, *${chosenName}* it is! What's on your mind?`,
+                        `Sweet, nice to meet you *${chosenName}*! How can I help you today?`,
+                        `Got it, *${chosenName}*! What's crackin'?`
+                      ];
+                      const chosenReply = replies[Math.floor(Math.random() * replies.length)];
+
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + chosenReply
+                      });
+                      return;
+                    }
+
                     // check for yes/no confirmation to tag-everyone requests
                     if (pendingTagRequests.has(senderJid)) {
                       const pending = pendingTagRequests.get(senderJid);
@@ -15936,6 +15997,19 @@ _(Or reply to their message)_
                   const isBotEnabled = isDM || enabledChats.has(chatId);
 
                   if (!isBotEnabled || !hasTrigger) return;
+
+                  // Conversational nickname placeholder acquisition for unregistered users
+                  if (!economy.isRegistered(senderJid)) {
+                    const user = economy.getOrCreateUser(senderJid);
+                    const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
+                    if (isNameUnknown) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `Yo! I don't know your name yet. What should I call you?`
+                      });
+                      pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
+                      return;
+                    }
+                  }
 
                   const prompt = txt
                     .replace(new RegExp(`${botConfig.getPrefix()}`, "gi"), "")

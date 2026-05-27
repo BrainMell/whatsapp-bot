@@ -236,6 +236,83 @@ function getUser(userId) {
     return null;
   }
   const user = economyData.get(userId);
+  if (user && user.registered !== true) {
+    return null;
+  }
+  
+  // 💡 Ensure all fields exist (Lazy Migration)
+  if (!user.stats) {
+    user.stats = {
+      totalEarned: user.wallet || 0,
+      totalSpent: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      questsCompleted: user.questsCompleted || 0
+    };
+  }
+  if (user.bank === undefined) user.bank = 0;
+  if (user.jailUntil === undefined) user.jailUntil = 0;
+  if (user.prisonUntil === undefined) user.prisonUntil = 0;
+  if (user.robberyStrikes === undefined) user.robberyStrikes = 0;
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: getTodayKey(),
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  const today = getTodayKey();
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
+  if (!user.frozenAssets) {
+    user.frozenAssets = {
+      wallet: 0,
+      bank: 0,
+      reason: ""
+    };
+  }
+  
+  return user;
+}
+
+function getOrCreateUser(userId, defaultNickname = "Adventurer") {
+  if (!economyData.has(userId)) {
+    const newUser = {
+      userId: userId,
+      wallet: 0,
+      bank: 0,
+      registered: false,
+      nickname: defaultNickname,
+      profile: {
+        whatsappName: null,
+        nickname: defaultNickname,
+        notes: [],
+        memories: {
+          likes: [],
+          dislikes: [],
+          hobbies: [],
+          personal: [],
+          other: []
+        },
+        stats: {
+          firstSeen: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+          messageCount: 0
+        },
+        relationships: {}
+      }
+    };
+    economyData.set(userId, newUser);
+    scheduleSave(userId);
+  }
+  const user = economyData.get(userId);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.stats) {
@@ -1181,6 +1258,7 @@ module.exports = {
   loadEconomy,
   saveUser,
   getUser,
+  getOrCreateUser,
   logTransaction,
   
   getBalance,
