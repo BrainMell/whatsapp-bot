@@ -16023,6 +16023,32 @@ _(Or reply to their message)_
                     .trim();
                   if (!prompt) return;
 
+                  // Prepend quoted message context to prompt if user is replying to a specific message
+                  let promptWithReply = prompt;
+                  if (waContextInfo && waContextInfo.quotedMessage) {
+                    const quotedMsg = waContextInfo.quotedMessage;
+                    const quotedText = quotedMsg.conversation ||
+                      quotedMsg.extendedTextMessage?.text ||
+                      quotedMsg.imageMessage?.caption ||
+                      quotedMsg.videoMessage?.caption ||
+                      "";
+                    
+                    if (quotedText.trim()) {
+                      const quotedParticipant = waContextInfo.participant;
+                      let quotedName = "someone";
+                      if (quotedParticipant) {
+                        const normalizedQuotedJid = jidNormalizedUser(quotedParticipant);
+                        if (normalizedQuotedJid === botJid || (botLid && normalizedQuotedJid === botLid)) {
+                          quotedName = botConfig.getBotName();
+                        } else {
+                          const quotedUser = economy.getOrCreateUser(normalizedQuotedJid);
+                          quotedName = quotedUser?.nickname || normalizedQuotedJid.split("@")[0];
+                        }
+                      }
+                      promptWithReply = `[Replying to ${quotedName}'s message: "${quotedText.trim()}"] ${prompt}`;
+                    }
+                  }
+
                   try {
                     // check if user wants to tag everyone (regex — no API call)
                     if (isGroupChat) {
@@ -16062,7 +16088,7 @@ _(Or reply to their message)_
                     }
 
                     // --- API Conservation: 5-min response cache ---
-                    const _normP = prompt.toLowerCase().trim().replace(/\s+/g, ' ');
+                    const _normP = promptWithReply.toLowerCase().trim().replace(/\s+/g, ' ');
                     const _cKey = `${chatId}_${_normP}`;
                     const _hit = aiResponseCache.get(_cKey);
                     if (_hit && Date.now() - _hit.ts < AI_CACHE_TTL_MS) {
@@ -16076,7 +16102,7 @@ _(Or reply to their message)_
                     // get AI response
                     const aiReply = await askAI(
                       senderJid,
-                      prompt,
+                      promptWithReply,
                       mentionedJids,
                       chatId,
                     );
