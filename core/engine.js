@@ -2669,6 +2669,13 @@ What to do:
         groqMessages.push({ role: _hMsg.role, content: _hMsg.content });
       }
 
+      // Ensure the latest user message is ALWAYS the last user message in the payload
+      const formattedLatest = isGroup ? `${senderName}: ${newMessage}` : newMessage;
+      const lastGroqMsg = groqMessages[groqMessages.length - 1];
+      if (!lastGroqMsg || lastGroqMsg.role !== "user" || lastGroqMsg.content !== formattedLatest) {
+        groqMessages.push({ role: "user", content: formattedLatest });
+      }
+
       // Priority intent classification & direct grounding overrides
       const cleanMsg = newMessage.trim().toLowerCase();
       const isQuestion = cleanMsg.includes('?') || 

@@ -31,8 +31,8 @@ function setScore(relationships, targetJid, score) {
 function incrementRelationship(user1Jid, user2Jid, delta) {
     if (user1Jid === user2Jid) return; // Can't have relationships with yourself
 
-    const user1 = economy.getUser(user1Jid);
-    const user2 = economy.getUser(user2Jid);
+    const user1 = economy.getUser(user1Jid) || (economy.economyData && economy.economyData.get(user1Jid));
+    const user2 = economy.getUser(user2Jid) || (economy.economyData && economy.economyData.get(user2Jid));
     if (!user1 || !user2) return;
 
     // Load relationships for user1 -> user2
@@ -61,7 +61,7 @@ function getRelationshipsText(activeJids, senderJid) {
     if (!activeJids || activeJids.length === 0) return "";
 
     let relationshipLines = [];
-    const sender = economy.getUser(senderJid);
+    const sender = economy.getUser(senderJid) || (economy.economyData && economy.economyData.get(senderJid));
     if (!sender) return "";
 
     const rels = getRelationshipsMap(sender);
@@ -69,7 +69,7 @@ function getRelationshipsText(activeJids, senderJid) {
     for (const jid of activeJids) {
         if (jid === senderJid) continue;
         
-        const otherUser = economy.getUser(jid);
+        const otherUser = economy.getUser(jid) || (economy.economyData && economy.economyData.get(jid));
         if (!otherUser) continue;
 
         const score = getScore(rels, jid);
