@@ -11478,7 +11478,16 @@ _💡 Reply with another number from your search list!_`.trim();
                     console.log(finalLog);
 
                     // check for pending name request replies
-                    if (pendingNameRequests.has(senderJid)) {
+                    const tempCtx =
+                      m.message?.extendedTextMessage?.contextInfo ||
+                      m.message?.imageMessage?.contextInfo ||
+                      m.message?.videoMessage?.contextInfo ||
+                      m.message?.stickerMessage?.contextInfo;
+                    const tempQuoted = tempCtx?.quotedMessage;
+                    const tempQuotedText = tempQuoted?.conversation || tempQuoted?.extendedTextMessage?.text || "";
+                    const isQuotedNameRequest = tempQuotedText.includes("don't know your name yet") || tempQuotedText.includes("What should I call you");
+
+                    if (pendingNameRequests.has(senderJid) || isQuotedNameRequest) {
                       if (senderJid === botJid || (botLid && senderJid === botLid)) return;
                       const pending = pendingNameRequests.get(senderJid);
                       pendingNameRequests.delete(senderJid); // Consume request
@@ -16012,6 +16021,7 @@ _(Or reply to their message)_
                   // Conversational nickname placeholder acquisition for unregistered users
                   if (!economy.isRegistered(senderJid)) {
                     if (senderJid === botJid || (botLid && senderJid === botLid)) return;
+                    if (pendingNameRequests.has(senderJid)) return; // Already waiting for name response!
                     const user = economy.getOrCreateUser(senderJid);
                     const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
                     if (isNameUnknown) {
