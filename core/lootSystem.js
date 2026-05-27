@@ -638,7 +638,7 @@ const ITEM_DATABASE = {
     'chainmail': { name: 'Chainmail', description: 'Interlinked metal rings. (+12 DEF)', rarity: 'UNCOMMON', value: 2500, type: 'EQUIPMENT', stats: { def: 12 }, slot: 'armor', reqLevel: 4 },
     'crystal_staff': { name: 'Crystal Staff', description: 'A staff of pure crystal. (+10 MAG)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { mag: 10 }, slot: 'main_hand', reqLevel: 6 },
     'greatsword': { name: 'Greatsword', description: 'A massive two-handed blade. (+15 ATK)', rarity: 'RARE', value: 6000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'main_hand', reqLevel: 8 },
-    'dragon_helm': { name: 'Dragon Helm', description: 'Helm forged from dragon scales. (+20 DEF, +10 HP)', rarity: 'EPIC', value: 12000, type: 'EQUIPMENT', stats: { def: 20, hp: 10 }, slot: 'armor', reqLevel: 12 },
+    'dragon_helm': { name: 'Dragon Helm', description: 'Helm forged from dragon scales. (+20 DEF, +10 HP)', rarity: 'EPIC', value: 12000, type: 'EQUIPMENT', stats: { def: 20, hp: 10 }, slot: 'helmet', reqLevel: 12 },
 
     
     // --- EQUIPMENT: ARMOR ---

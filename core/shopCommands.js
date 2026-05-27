@@ -12,6 +12,7 @@ const progression = require('./progression');
 const botConfig = require('../botConfig');
 const GoImageService = require('./goImageService');
 const goService = new GoImageService();
+const profileHelper = require('./profileHelper');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -352,35 +353,17 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
 
     // Try Go Image Service first
     try {
-        const cardData = {
-            nickname: user.nickname || finalName,
-            whatsappName: user.profile?.whatsappName || finalName,
-            level: level,
-            xp: charSheet?.xpProgress || 0,
-            xpNeeded: charSheet?.xpForThisLevel || 100,
-            gp: gp,
-            rank: rank,
-            class: classData?.name || "Adventurer",
-            classIcon: classData?.icon || "🛡️",
-            guildName: require('./guilds').getUserGuild(finalJid) || "",
-            wallet: user.wallet || 0,
-            bank: user.bank || 0,
-            zeniSymbol: getZENI(),
-            questsWon: user.questsWon || 0,
-            gamesWon: user.stats?.gamesWon || 0,
-            messageCount: user.profile?.stats?.messageCount || 0,
-            pfpUrl: pfpUrl || "",
-            title: user.title || ""
-        };
-
-        const cardBuffer = await goService.generateProfileCard(cardData);
-        if (cardBuffer) {
-            await sock.sendMessage(chatId, { 
-                image: cardBuffer,
-                caption: `👤 *Profile:* ${cardData.nickname}\n🏆 *Rank:* ${rank}`,
-                mentions: [finalJid]
-            });
-            return;
+        const cardData = await profileHelper.buildCardData(finalJid, finalName, pfpUrl);
+        if (cardData) {
+            const cardBuffer = await goService.generateProfileCard(cardData);
+            if (cardBuffer) {
+                await sock.sendMessage(chatId, { 
+                    image: cardBuffer,
+                    caption: `👤 *Profile:* ${cardData.nickname}\n🏆 *Rank:* ${rank}`,
+                    mentions: [finalJid]
+                });
+                return;
+            }
         }
     } catch (err) {
         console.error("Failed to generate Go profile card:", err.message);

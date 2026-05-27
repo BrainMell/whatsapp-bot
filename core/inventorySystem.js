@@ -371,10 +371,50 @@ async function equipItem(userId, itemId, slot) {
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
     }
 
+    // Ensure the item type is strictly EQUIPMENT, and not a fish or other category
+    const isFish = itemId.toLowerCase().includes('fish') || (itemInfo.category && itemInfo.category.toLowerCase() === 'fish');
+    if (itemInfo.type !== 'EQUIPMENT' || isFish) {
+        return {
+            success: false,
+            message: `❌ ${itemInfo.name || itemId} is not equipment and cannot be equipped!`,
+        };
+    }
+
+    // Ensure targetSlot is a valid equipment slot
     if (!targetSlot || !EQUIPMENT_SLOTS[targetSlot.toUpperCase()]) {
         return {
             success: false,
             message: `❌ Invalid or missing equipment slot! (Valid: main_hand, off_hand, armor, helmet, boots, ring, amulet, cloak, gloves)`
+        };
+    }
+
+    // Verify slot alignment compatibility to prevent cross-category slot leakage
+    const itemSlot = (itemToEquip.slot || itemInfo.slot || '').toLowerCase();
+    const cleanTargetSlot = targetSlot.toLowerCase();
+
+    let isCompatible = false;
+    if (itemSlot === 'main_hand' || itemSlot === 'weapon') {
+        isCompatible = (cleanTargetSlot === 'main_hand' || cleanTargetSlot === 'off_hand');
+    } else if (itemSlot === 'armor') {
+        isCompatible = (cleanTargetSlot === 'armor');
+    } else if (itemSlot === 'helmet') {
+        isCompatible = (cleanTargetSlot === 'helmet');
+    } else if (itemSlot === 'boots') {
+        isCompatible = (cleanTargetSlot === 'boots');
+    } else if (itemSlot === 'ring') {
+        isCompatible = (cleanTargetSlot === 'ring');
+    } else if (itemSlot === 'amulet') {
+        isCompatible = (cleanTargetSlot === 'amulet');
+    } else if (itemSlot === 'cloak') {
+        isCompatible = (cleanTargetSlot === 'cloak');
+    } else if (itemSlot === 'gloves') {
+        isCompatible = (cleanTargetSlot === 'gloves');
+    }
+
+    if (!isCompatible) {
+        return {
+            success: false,
+            message: `❌ Mismatched slot assignment! ${itemInfo.name || itemId} belongs in the ${itemSlot.toUpperCase()} slot, and cannot be equipped to ${cleanTargetSlot.toUpperCase()}.`,
         };
     }
     

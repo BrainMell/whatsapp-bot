@@ -2501,7 +2501,17 @@ What to do:
       const _timeStr = _nowDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       const _timeCtx = `\n\n[Right now it's ${_timeStr} on ${_weekDays[_nowDt.getDay()]} — ${_vibe}. Respond naturally to time if relevant.]`;
 
-      let systemPrompt = contentDescription + _timeCtx;
+      // Conversational grounding safeguards (Priority 1 Core Chat Fix)
+      const groundingSafeguards = `
+--- CRITICAL CONVERSATIONAL GROUNDING RULES ---
+1. Prioritize a direct response to the user's actual input. 
+2. Ground your first response layer strictly in what the user said.
+3. NEVER invent off-screen events, fictional scenarios, external character interactions, or ongoing storylines (e.g. do NOT say you were doing homework, fighting, at school, dealing with Krillin/Trunks, etc.) unless explicitly asked, previously established in this conversation, or found in memory.
+4. Do NOT treat basic messages as a roleplay writing prompt or progression opportunity.
+5. Avoid unsolicited lore/backstory. Keep the response natural, brief, in character, but completely grounded in the actual conversation context.
+------------------------------------------------`;
+
+      let systemPrompt = contentDescription + _timeCtx + groundingSafeguards;
 
       // Only add profile context if we have it
       if (userProfile && typeof formatProfileForAI === "function") {
