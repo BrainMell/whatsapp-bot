@@ -2432,8 +2432,10 @@ What to do:
       mentionedJids = [],
       chatId = null,
     ) {
-      // Scope memory to this specific chat — DM vs group memories don't bleed
-      const memKey = `${senderJid}_${chatId || 'dm'}`;
+      // Scope memory to this specific chat — DM vs group memories don't bleed.
+      // For groups, we use a single unified memory key so the bot understands group conversation flow.
+      const isGroup = chatId && chatId.endsWith("@g.us");
+      const memKey = isGroup ? chatId : `${senderJid}_${chatId || 'dm'}`;
       const history = conversationMemory.get(memKey) || [];
 
       // Register this user as a participant in the current chat
@@ -2487,7 +2489,10 @@ What to do:
 
       // Save every user message to in-memory session history so the AI can actually see it
       if (!isCommand) {
-        history.push({ role: `user`, content: newMessage, _ts: Date.now() });
+        const userObj = economy.getUser(senderJid);
+        const senderName = userObj?.nickname || userProfile?.nickname || senderJid.split("@")[0];
+        const formattedContent = isGroup ? `${senderName}: ${newMessage}` : newMessage;
+        history.push({ role: `user`, content: formattedContent, _ts: Date.now() });
       }
 
       // Cap session history length to avoid memory bloat
@@ -2515,6 +2520,7 @@ What to do:
 5. STANCE & PERSONALITY STABILITY: Maintain a consistent, stable, and loyal character identity. Do not passively flip-flop your stance, become submissive, or sound confused. Keep your cool, casual, slightly cheeky half-Saiyan high schooler voice stable.
 6. NO AGGRESSIVE PARROT-ECHOING: Do not mirror or copy the user's specific vocabulary or insults too aggressively (e.g., if a user calls you a name or says "dumby", do not submissively echo "lol." or parrot their exact phrases). Keep your own distinct verbal voice and slang.
 7. NO UNSOLICITED LORE/ROLEPLAY INTRUSION: Do NOT invent unsolicited lore or random teen-life roleplay elements (like "eating onigiri", "gotta go to school", "mum is calling", or "Trunks is waiting") as a substitute for an actual reply. Fictional flavor and personality should be used purely as conversational seasoning on top of a direct and relevant response — never replace the direct response with random character lore. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
+8. EXPLICIT TOPIC ACKNOWLEDGMENT: When a user brings up a specific topic, question, or request (e.g., "popcorn", "time", "how are you"), your response MUST explicitly refer to, acknowledge, or directly answer that topic. Never pivot to character-flavor monologues without first addressing and validating their topic.
 ------------------------------------------------`;
 
       let systemPrompt = contentDescription + _timeCtx + groundingSafeguards;
