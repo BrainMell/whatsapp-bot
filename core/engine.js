@@ -3828,6 +3828,107 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   const txt = text ? text.trim() : "";
 
+                  const handlePendingNameReply = async () => {
+                    const tempCtx =
+                      m.message?.extendedTextMessage?.contextInfo ||
+                      m.message?.imageMessage?.contextInfo ||
+                      m.message?.videoMessage?.contextInfo ||
+                      m.message?.stickerMessage?.contextInfo;
+                    const tempQuoted = tempCtx?.quotedMessage;
+                    const tempQuotedText =
+                      tempQuoted?.conversation ||
+                      tempQuoted?.extendedTextMessage?.text ||
+                      "";
+                    const isQuotedNameRequest =
+                      tempQuotedText.includes("don't know your name yet") ||
+                      tempQuotedText.includes("What should I call you");
+
+                    if (!pendingNameRequests.has(senderJid) && !isQuotedNameRequest) {
+                      return false;
+                    }
+
+                    if (senderJid === botJid || (botLid && senderJid === botLid)) {
+                      return true;
+                    }
+
+                    const pending = pendingNameRequests.get(senderJid);
+                    if (pending && Date.now() - pending.timestamp > 15 * 60 * 1000) {
+                      pendingNameRequests.delete(senderJid);
+                      if (!isQuotedNameRequest) return true;
+                    }
+                    pendingNameRequests.delete(senderJid);
+
+                    let chosenName = txt.trim();
+                    const nameRegex = /^(my name is|call me|i'm|i am|im|name is)\s+/i;
+                    if (nameRegex.test(chosenName)) {
+                      chosenName = chosenName.replace(nameRegex, "").trim();
+                    }
+
+                    chosenName = chosenName
+                      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+                      .trim();
+
+                    if (chosenName.length < 2 || chosenName.length > 20) {
+                      await reply(
+                        `Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`,
+                      );
+                      pendingNameRequests.set(senderJid, {
+                        chatId,
+                        timestamp: Date.now(),
+                      });
+                      return true;
+                    }
+
+                    const user = economy.getOrCreateUser(senderJid, chosenName);
+                    user.nickname = chosenName;
+                    if (!user.profile) {
+                      user.profile = {
+                        whatsappName: m.pushName || null,
+                        nickname: chosenName,
+                        notes: [],
+                        memories: {
+                          likes: [],
+                          dislikes: [],
+                          hobbies: [],
+                          personal: [],
+                          other: [],
+                        },
+                        stats: {
+                          firstSeen: new Date().toISOString(),
+                          lastSeen: new Date().toISOString(),
+                          messageCount: 0,
+                        },
+                        relationships: {},
+                      };
+                    } else {
+                      user.profile.nickname = chosenName;
+                    }
+
+                    try {
+                      if (typeof economy.scheduleSave === "function") {
+                        economy.scheduleSave(senderJid);
+                      } else if (typeof economy.saveUser === "function") {
+                        await economy.saveUser(senderJid);
+                      }
+                    } catch (saveErr) {
+                      console.error(
+                        "⚠️ Error saving nickname placeholder:",
+                        saveErr.message,
+                      );
+                    }
+
+                    const replies = [
+                      `Awesome! I'll call you *${chosenName}* from now on. What's up?`,
+                      `Dope, *${chosenName}* it is! What's on your mind?`,
+                      `Sweet, nice to meet you *${chosenName}*! How can I help you today?`,
+                      `Got it, *${chosenName}*! What's crackin'?`,
+                    ];
+                    await reply(replies[Math.floor(Math.random() * replies.length)]);
+                    return true;
+                  };
+
+                  if (await handlePendingNameReply()) return;
+
                   // 🚨 HARD-PING TEST (Bypasses everything)
                   if (
                     txt.toLowerCase() === "ping" ||
@@ -11484,79 +11585,6 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     console.log(finalLog);
 
-                    // check for pending name request replies
-                    const tempCtx =
-                      m.message?.extendedTextMessage?.contextInfo ||
-                      m.message?.imageMessage?.contextInfo ||
-                      m.message?.videoMessage?.contextInfo ||
-                      m.message?.stickerMessage?.contextInfo;
-                    const tempQuoted = tempCtx?.quotedMessage;
-                    const tempQuotedText = tempQuoted?.conversation || tempQuoted?.extendedTextMessage?.text || "";
-                    const isQuotedNameRequest = tempQuotedText.includes("don't know your name yet") || tempQuotedText.includes("What should I call you");
-
-                    if (pendingNameRequests.has(senderJid) || isQuotedNameRequest) {
-                      if (senderJid === botJid || (botLid && senderJid === botLid)) return;
-                      const pending = pendingNameRequests.get(senderJid);
-                      if (pending && Date.now() - pending.timestamp > 15 * 60 * 1000) {
-                        pendingNameRequests.delete(senderJid);
-                        if (!isQuotedNameRequest) return;
-                      }
-                      pendingNameRequests.delete(senderJid); // Consume request
-
-                      let chosenName = txt.trim();
-                      const nameRegex = /^(my name is|call me|i'm|i am|im|name is)\s+/i;
-                      if (nameRegex.test(chosenName)) {
-                        chosenName = chosenName.replace(nameRegex, "").trim();
-                      }
-                      
-                      // Strip trailing punctuation (like periods or exclamation marks) but keep letters/numbers/spaces
-                      chosenName = chosenName.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
-
-                      if (chosenName.length < 2 || chosenName.length > 20) {
-                        await reply(`Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`);
-                        // Re-stage the request
-                        pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
-                        return;
-                      }
-
-                      // Save as nickname placeholder in economy (registered: false)
-                      const user = economy.getOrCreateUser(senderJid, chosenName);
-                      user.nickname = chosenName;
-                      if (!user.profile) {
-                        user.profile = {
-                          whatsappName: m.pushName || null,
-                          nickname: chosenName,
-                          notes: [],
-                          memories: { likes: [], dislikes: [], hobbies: [], personal: [], other: [] },
-                          stats: { firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), messageCount: 0 },
-                          relationships: {}
-                        };
-                      } else {
-                        user.profile.nickname = chosenName;
-                      }
-                      try {
-                        if (typeof economy.scheduleSave === "function") {
-                          economy.scheduleSave(senderJid);
-                        } else if (typeof economy.saveUser === "function") {
-                          economy.saveUser(senderJid);
-                        }
-                      } catch (saveErr) {
-                        console.error("⚠️ Error saving nickname placeholder:", saveErr.message);
-                      }
-
-                      // Conversational confirmation in Goten's teen voice
-                      const replies = [
-                        `Awesome! I'll call you *${chosenName}* from now on. What's up?`,
-                        `Dope, *${chosenName}* it is! What's on your mind?`,
-                        `Sweet, nice to meet you *${chosenName}*! How can I help you today?`,
-                        `Got it, *${chosenName}*! What's crackin'?`
-                      ];
-                      const chosenReply = replies[Math.floor(Math.random() * replies.length)];
-
-                      await reply(chosenReply);
-                      return;
-                    }
-
                     // check for yes/no confirmation to tag-everyone requests
                     if (pendingTagRequests.has(senderJid)) {
                       const pending = pendingTagRequests.get(senderJid);
@@ -11731,7 +11759,7 @@ ${senderName} said y'all should know:
                       (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
                        lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pvp `)) &&
                       getMentionOrReply(m) &&
-                      !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[1])
+                      !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[2])
                     );
 
                     // duel @user [stake] / challenge @user [stake] - Challenge someone to a duel
@@ -11858,6 +11886,10 @@ ${senderName} said y'all should know:
                             mentions: result.mentions || [],
                           });
                         }
+                      } else {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.message,
+                        });
                       }
                       return;
                     }

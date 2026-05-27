@@ -143,13 +143,22 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   const formatted = inventorySystem.formatInventory(senderJid);
   const equipment = inventorySystem.getEquipment(senderJid);
   const equippedIds = Object.values(equipment).filter(i => i !== null).map(i => i.id);
+  const economyUser = economy.getUser(senderJid);
+  const currency = getCurrency();
+  const walletBalance = economyUser?.wallet || 0;
+  const questGold = economyUser?.questGold || 0;
 
   const ITEMS_PER_PAGE = 12;
   const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
 
   if (formatted.isEmpty) {
+    let emptyMsg = `🎒 BAG\n\n`;
+    emptyMsg += `💰 Wallet: ${currency.symbol}${walletBalance.toLocaleString()}\n`;
+    if (questGold > 0) emptyMsg += `🏆 Quest Gold: ${questGold.toLocaleString()}\n`;
+    emptyMsg += `\n_Your bag is empty._\n\n💡 Complete quests to earn items!`;
+
     return await sock.sendMessage(chatId, {
-      text: `🎒 BAG\n\n_Your bag is empty._\n\n💡 Complete quests to earn items!`
+      text: emptyMsg
     });
   }
 
@@ -171,6 +180,9 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   const pageStartIndex = (clampedPage - 1) * ITEMS_PER_PAGE;
 
   let msg = `🎒 BAG\n\n`;
+  msg += `💰 Wallet: ${currency.symbol}${walletBalance.toLocaleString()}`;
+  if (questGold > 0) msg += `  •  🏆 Quest Gold: ${questGold.toLocaleString()}`;
+  msg += `\n`;
   msg += `📦 ${formatted.count}/${formatted.slots} slots  •  Page ${clampedPage}/${totalPages}\n\n`;
 
   let lastRarity = null;

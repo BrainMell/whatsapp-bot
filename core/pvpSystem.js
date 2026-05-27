@@ -139,8 +139,18 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     activeDuels.set(chatId, duelState);
     const image = await generateDuelImage(duelState);
-    
-    return { success: true, duel: duelState, image };
+
+    const p1 = duelState.players[0];
+    const p2 = duelState.players[1];
+    const startMsg =
+        `⚔️ *DUEL STARTED!* ⚔️\n\n` +
+        `🔴 *${p1.name}* (Lv.${p1.level} ${p1.class?.name || 'Fighter'}) — ${p1.hp}/${p1.maxHp} HP\n` +
+        `🔵 *${p2.name}* (Lv.${p2.level} ${p2.class?.name || 'Fighter'}) — ${p2.hp}/${p2.maxHp} HP\n\n` +
+        `🎯 *${p1.name}* goes first!\n` +
+        `⚡ Energy: ${p1.energy}/${p1.maxEnergy}\n\n` +
+        `🗡️ \`attack\` | 🔮 \`ability <n>\` | 🏃 \`flee\``;
+
+    return { success: true, duel: duelState, image, message: startMsg };
 }
 
 function buildDuelPlayer(jid, userData, stats, idx) {

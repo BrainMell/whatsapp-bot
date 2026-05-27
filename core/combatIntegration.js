@@ -116,7 +116,7 @@ function generateEndCaption(players, enemies, victory, rewards) {
         
         if (rewards) {
             caption += `🎁 *REWARDS*\n`;
-            caption += `💰 ${ZENI}${rewards.gold.toLocaleString()} Gold\n`;
+            caption += `💰 ${ZENI}${rewards.gold.toLocaleString()} ${botConfig.getCurrency().name}\n`;
             caption += `⭐ ${rewards.xp.toLocaleString()} XP\n`;
             if (rewards.items?.length > 0) {
                 caption += `📦 ${rewards.items.map(i => i.name).join(', ')}\n`;
