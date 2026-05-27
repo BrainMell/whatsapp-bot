@@ -11516,7 +11516,15 @@ _💡 Reply with another number from your search list!_`.trim();
                       } else {
                         user.profile.nickname = chosenName;
                       }
-                      economy.scheduleSave(senderJid);
+                      try {
+                        if (typeof economy.scheduleSave === "function") {
+                          economy.scheduleSave(senderJid);
+                        } else if (typeof economy.saveUser === "function") {
+                          economy.saveUser(senderJid);
+                        }
+                      } catch (saveErr) {
+                        console.error("⚠️ Error saving nickname placeholder:", saveErr.message);
+                      }
 
                       // Conversational confirmation in Goten's teen voice
                       const replies = [
