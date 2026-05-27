@@ -140,13 +140,16 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     let targetSkill = null;
     let foundInClassName = null;
     
+    const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
+    
     for (const classId of lineage) {
         const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
         if (!tree) continue;
         for (const [, treeData] of Object.entries(tree.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
-                if (sId.toLowerCase() === skillId.toLowerCase() || 
-                    skill.name.toLowerCase().includes(skillId.toLowerCase())) {
+                const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
                     targetSkill = { ...skill, id: sId };
                     foundInClassName = classSystem.getClassById(classId)?.name || classId;
                     break;
@@ -407,13 +410,16 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
     let targetSkill = null;
     let sourceClassId = null;
 
+    const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
+
     // Search ALL trees OUTSIDE the player's own lineage
     for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
         if (lineage.includes(classId)) continue;
         for (const [, treeData] of Object.entries(classData.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
-                if (sId.toLowerCase() === skillId.toLowerCase() ||
-                    skill.name.toLowerCase().includes(skillId.toLowerCase())) {
+                const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
                     targetSkill = { ...skill, id: sId };
                     sourceClassId = classId;
                     break;
