@@ -4858,10 +4858,10 @@ _💡 Reply with another number from your search list!_`.trim();
 
                       const user = economy.getUser(senderJid);
                       const now = Date.now();
-                      const COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
-                      const MAX_FISH = 20;
+                      const COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour
+                      const MAX_FISH = 25;
 
-                      // Check if 5-hour cooldown is active
+                      // Check if 1-hour cooldown is active
                       if (user.fishCount >= MAX_FISH) {
                         const timePassed = now - (user.lastFishReset || 0);
                         if (timePassed < COOLDOWN_MS) {
@@ -4878,7 +4878,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             {
                               text:
                                 BOT_MARKER +
-                                `🪣 *FISHING FATIGUE*\n\nYou've fished 20 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.`,
+                                `🪣 *FISHING FATIGUE*\n\nYou've fished 25 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.`,
                             },
                             { quoted: m },
                           );
