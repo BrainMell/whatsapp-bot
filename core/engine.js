@@ -11493,9 +11493,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       chosenName = chosenName.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
 
                       if (chosenName.length < 2 || chosenName.length > 20) {
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`
-                        });
+                        await reply(`Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`);
                         // Re-stage the request
                         pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
                         return;
@@ -11535,9 +11533,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       ];
                       const chosenReply = replies[Math.floor(Math.random() * replies.length)];
 
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + chosenReply
-                      });
+                      await reply(chosenReply);
                       return;
                     }
 
@@ -16019,9 +16015,7 @@ _(Or reply to their message)_
                     const user = economy.getOrCreateUser(senderJid);
                     const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
                     if (isNameUnknown) {
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `Yo! I don't know your name yet. What should I call you?`
-                      });
+                      await reply(`Yo! I don't know your name yet. What should I call you?`);
                       pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
                       return;
                     }
