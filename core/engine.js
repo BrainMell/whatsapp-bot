@@ -1602,17 +1602,21 @@ What to do:
           return response;
         } catch (error) {
           markKeyFailure();
-          const isRateLimit =
-            error.message?.includes("rate_limit") || error.status === 429;
-          if (isRateLimit && attempt < retries) {
-            const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
-            console.log("⏳ Waiting ${waitTime}ms before retry...");
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
+          console.error(`⚠️️ Groq API error on Key #${currentKeyIndex + 1} (attempt ${attempt + 1}/${retries + 1}):`, error.message);
+          
+          if (attempt < retries) {
             if (GROQ_API_KEYS.length > 1) {
               currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
               console.log(
                 `🔄 Switching to API Key ${currentKeyIndex + 1}/${GROQ_API_KEYS.length}`,
               );
+            }
+            const isRateLimit =
+              error.message?.includes("rate_limit") || error.status === 429;
+            if (isRateLimit) {
+              const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+              console.log(`⏳ Waiting ${waitTime}ms before retry due to rate limit...`);
+              await new Promise((resolve) => setTimeout(resolve, waitTime));
             }
             continue;
           }
@@ -7646,15 +7650,6 @@ Commands:
                       });
                     }
 
-                    const targetIsAdmin = groupMetadata?.participants.some((p) => {
-                      const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
-                      const targetPhone = lidResolver.resolveToPhone(targetUser, configInstance.getAuthPath());
-                      return (
-                        pPhone === targetPhone &&
-                        (p.admin === "admin" || p.admin === "superadmin")
-                      );
-                    });
-
                     const isTargetOwner =
                       targetUser.startsWith("233201487480") ||
                       targetUser.includes("251453323092189") ||
@@ -7662,11 +7657,11 @@ Commands:
 
                     const isTargetGlobalMod = isGlobalMod(targetUser);
 
-                    if (targetIsAdmin || isTargetOwner || isTargetGlobalMod) {
+                    if (isTargetOwner || isTargetGlobalMod) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You cannot mute an admin, owner, or global moderator!`,
+                          `❌ You cannot mute the owner or global moderator!`,
                       });
                     }
 
@@ -8104,121 +8099,115 @@ ${memberList}`;
 
                     // IF NO CONTENT AT ALL
                     if (!customText && !contentToSend) {
-                      if (
-                        !textToHide &&
-                        !m.message.extendedTextMessage?.contextInfo
-                          ?.quotedMessage
-                      ) {
-                        return await sendUsage(
-                          sock,
-                          chatId,
-                          BOT_MARKER,
-                          "👻 HIDETAG",
-                          "hidetag <text>",
-                          "hidetag Hello!",
-                          "Silently tags all members. You can also reply to media.",
-                        );
-                      }
+                      return await sendUsage(
+                        sock,
+                        chatId,
+                        BOT_MARKER,
+                        "👻 HIDETAG",
+                        "hidetag <text>",
+                        "hidetag Hello!",
+                        "Silently tags all members. You can also reply to media.",
+                      );
+                    }
 
-                      // Build message with member count info
-                      let messageText = customText || contentToSend || "";
+                    // Build message with member count info
+                    let messageText = customText || contentToSend || "";
 
-                      const senderHeader = `👤 *Message by:* @${senderJid.split("@")[0]}\n`;
-                      let replyTag = "";
-                      if (quotedParticipant) {
-                        replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
-                      }
+                    const senderHeader = `👤 *Message by:* @${senderJid.split("@")[0]}\n`;
+                    let replyTag = "";
+                    if (quotedParticipant) {
+                      replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
+                    }
 
-                      // Mentions list should include all participants + quoted user
-                      const allMentions = [...participants];
-                      if (
-                        quotedParticipant &&
-                        !allMentions.includes(quotedParticipant)
-                      ) {
-                        allMentions.push(quotedParticipant);
-                      }
+                    // Mentions list should include all participants + quoted user
+                    const allMentions = [...participants];
+                    if (
+                      quotedParticipant &&
+                      !allMentions.includes(quotedParticipant)
+                    ) {
+                      allMentions.push(quotedParticipant);
+                    }
 
-                      // Add member count footer
-                      const memberCount = participants.length;
-                      const footer = `\n\n━━━━━━━━━━━━━\n${senderHeader}${replyTag}👥 ${memberCount} members tagged silently`;
+                    // Add member count footer
+                    const memberCount = participants.length;
+                    const footer = `\n\n━━━━━━━━━━━━━\n${senderHeader}${replyTag}👥 ${memberCount} members tagged silently`;
 
-                      if (messageType === "text") {
-                        messageText = messageText + footer;
-                      }
+                    if (messageType === "text") {
+                      messageText = messageText + footer;
+                    }
 
-                      // Send based on content type
-                      try {
-                        if (messageType === "image" && contentToSend) {
-                          await sock.sendMessage(chatId, {
-                            image: contentToSend,
-                            caption: BOT_MARKER + (customText || "") + footer,
-                            contextInfo: { mentionedJid: allMentions },
-                          });
-                        } else if (messageType === "video" && contentToSend) {
-                          await sock.sendMessage(chatId, {
-                            video: contentToSend,
-                            caption: BOT_MARKER + (customText || "") + footer,
-                            contextInfo: { mentionedJid: allMentions },
-                          });
-                        } else if (messageType === "sticker" && contentToSend) {
-                          await sock.sendMessage(chatId, {
-                            sticker: contentToSend,
-                          });
-                          await sock.sendMessage(chatId, {
-                            text:
-                              BOT_MARKER +
-                              (customText || "Tagged silently") +
-                              footer,
-                            contextInfo: { mentionedJid: allMentions },
-                          });
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + messageText,
-                            contextInfo: { mentionedJid: allMentions },
-                          });
-                        }
-
-                        // Delete the original command message
-                        try {
-                          await sock.sendMessage(chatId, {
-                            delete: m.key,
-                          });
-                        } catch (delErr) {
-                          console.log(
-                            `⚠️️ Couldn't delete original message: ${delErr.message}`,
-                          );
-                        }
-
-                        // If there was a quoted message, try to delete that too
-                        if (quotedMsgKey && quotedParticipant) {
-                          try {
-                            await sock.sendMessage(chatId, {
-                              delete: {
-                                remoteJid: chatId,
-                                fromMe: false,
-                                id: quotedMsgKey,
-                                participant: quotedParticipant,
-                              },
-                            });
-                          } catch (delErr) {
-                            console.log(
-                              "⚠️️ Couldn't delete quoted message:",
-                              delErr.message,
-                            );
-                          }
-                        }
-                      } catch (err) {
-                        console.error("❌ Hidetag send error:", err);
+                    // Send based on content type
+                    try {
+                      if (messageType === "image" && contentToSend) {
+                        await sock.sendMessage(chatId, {
+                          image: contentToSend,
+                          caption: BOT_MARKER + (customText || "") + footer,
+                          contextInfo: { mentionedJid: allMentions },
+                        });
+                      } else if (messageType === "video" && contentToSend) {
+                        await sock.sendMessage(chatId, {
+                          video: contentToSend,
+                          caption: BOT_MARKER + (customText || "") + footer,
+                          contextInfo: { mentionedJid: allMentions },
+                        });
+                      } else if (messageType === "sticker" && contentToSend) {
+                        await sock.sendMessage(chatId, {
+                          sticker: contentToSend,
+                        });
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            "❌❌ Failed to send hidden tag message.",
+                            (customText || "Tagged silently") +
+                            footer,
+                          contextInfo: { mentionedJid: allMentions },
+                        });
+                      } else {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + messageText,
+                          contextInfo: { mentionedJid: allMentions },
                         });
                       }
 
-                      await awardProgression(senderJid, chatId);
-                      return;
+                      // Delete the original command message
+                      try {
+                        await sock.sendMessage(chatId, {
+                          delete: m.key,
+                        });
+                      } catch (delErr) {
+                        console.log(
+                          `⚠️️ Couldn't delete original message: ${delErr.message}`,
+                        );
+                      }
+
+                      // If there was a quoted message, try to delete that too
+                      if (quotedMsgKey && quotedParticipant) {
+                        try {
+                          await sock.sendMessage(chatId, {
+                            delete: {
+                              remoteJid: chatId,
+                              fromMe: false,
+                              id: quotedMsgKey,
+                              participant: quotedParticipant,
+                            },
+                          });
+                        } catch (delErr) {
+                          console.log(
+                            "⚠️️ Couldn't delete quoted message:",
+                            delErr.message,
+                          );
+                        }
+                      }
+                    } catch (err) {
+                      console.error("❌ Hidetag send error:", err);
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌❌ Failed to send hidden tag message.",
+                      });
                     }
+
+                    await awardProgression(senderJid, chatId);
+                    return;
 
                     // ============================================
                     // GUILD COMMANDS
