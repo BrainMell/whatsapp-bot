@@ -1562,7 +1562,7 @@ What to do:
       const failures = keyFailureCounts.get(apiKey) || 0;
       if (failures >= MAX_FAILURES_PER_KEY && GROQ_API_KEYS.length > 1) {
         console.log(
-          "⚠️️ API Key ${currentKeyIndex + 1} has ${failures} failures, switching...",
+          `⚠️️ API Key ${currentKeyIndex + 1} has ${failures} failures, switching...`,
         );
         currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
         apiKey = GROQ_API_KEYS[currentKeyIndex];
@@ -2566,7 +2566,7 @@ What to do:
           groupMsgCount++;
           conversationMemory.set(msgCountKey, groupMsgCount);
 
-          if (groupMsgCount % 25 === 0 || !rollingSummary) {
+          if (groupMsgCount % 25 === 0) {
             Promise.resolve().then(async () => {
               try {
                 const oldMessages = await ChatMessage.find({ chatId: chatId })
