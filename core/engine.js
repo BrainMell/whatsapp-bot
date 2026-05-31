@@ -1705,6 +1705,33 @@ What to do:
     // basically rng but for stickers
     // maybe improve mood system later marker[01]
     function getRandomSticker(mood) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const stickersDir = botConfig.getStickerPath();
+        if (fs.existsSync(stickersDir)) {
+          const files = fs.readdirSync(stickersDir).filter(f => f.endsWith('.webp'));
+          let prefixes = [];
+          if (mood === 'neutral') prefixes = ['casual'];
+          else if (mood === 'happy') prefixes = ['smile', 'flutred'];
+          else if (mood === 'sarcastic') prefixes = ['sus', 'confident'];
+          else if (mood === 'thinking') prefixes = ['thinkking', 'thinking', 'interesting', 'interestong', 'confused', 'nervous'];
+          else if (mood === 'concerned') prefixes = ['uninterested', 'tired', 'angry'];
+          
+          const filtered = files.filter(f => {
+            const lower = f.toLowerCase();
+            return prefixes.some(p => lower.startsWith(p));
+          });
+          
+          if (filtered.length > 0) {
+            const chosen = filtered[Math.floor(Math.random() * filtered.length)];
+            return botConfig.getStickerPath(chosen);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Error reading stickers dynamically:", err.message);
+      }
+
       const list = stickerPaths[mood] || stickerPaths.neutral;
       return list[Math.floor(Math.random() * list.length)];
     }
