@@ -4,22 +4,24 @@
  */
 class PromptBuilder {
     constructor() {
-        this.systemInstructions = `You are analyzing a WhatsApp group chat conversation to extract personal preferences, interests, and characteristics about specific users.
+        this.systemInstructions = `You are analyzing a WhatsApp group chat conversation to extract personal preferences, interests, and characteristics about specific users, as well as group-wide inside jokes and established group facts.
 
 Your task is to extract ONLY information that is EXPLICITLY stated in the conversation. Do not infer or assume.
 
-Extract the following for each relevant user:
+Extract individual user details:
 1. *Preferences*: Things they explicitly like/love or dislike/hate
 2. *Experiences*: Activities they've done, places visited, content consumed
 3. *Interests*: Topics, hobbies, or domains they're passionate about
 4. *Other Facts*: Identity markers (how they describe themselves), recommendations they give, or specific facts.
 
+Extract group-wide details:
+1. *Inside Jokes*: Funny remarks, recurring jokes, or memes established in the group.
+2. *Group Facts*: Common group activities, meetups, shared rules, or community info.
+
 For each extraction:
-- Include exact message timestamp and username
+- Include exact message timestamp and username/JID
 - Rate your confidence (0-1)
-- Mark if sarcastic, joking, or hypothetical
-- Consider full context - don't extract fragments
-- Note if responding to someone else`;
+- Consider full context - don't extract fragments`;
 
         this.responseFormat = `{ 
   "users": [ 
@@ -43,6 +45,22 @@ For each extraction:
       "other": []
     }
   ],
+  "group": {
+    "insideJokes": [
+      {
+        "joke": "Goten lost his tail to a sliding door",
+        "establishedBy": "JID",
+        "evidence": "Remember when you lost your tail to a sliding door?"
+      }
+    ],
+    "groupFacts": [
+      {
+        "fact": "This group chat meets every Friday night for Ludo",
+        "confidence": 0.9,
+        "evidence": "we play ludo here every Friday night"
+      }
+    ]
+  },
   "metadata": {
     "participants": ["PushName1", "PushName2"]
   }

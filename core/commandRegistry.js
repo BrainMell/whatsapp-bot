@@ -37,7 +37,10 @@ const COMMAND_REGISTRY = {
     { cmd: 'dislikes', desc: 'Add things you dislike to your memory profile.', usage: 'dislikes <text>' },
     { cmd: 'hobby', desc: 'Add your hobbies to your memory profile.', usage: 'hobby <text>' },
     { cmd: 'personal', desc: 'Add personal facts to your memory profile.', usage: 'personal <text>' },
-    { cmd: 'forget me', desc: 'Delete all your data and start fresh.', usage: 'forget me' }
+    { cmd: 'forget me', desc: 'Delete all your data and start fresh.', usage: 'forget me' },
+    { cmd: 'remembergroup', desc: 'Add a shared group fact or inside joke to this chat.', usage: 'remembergroup <fact>' },
+    { cmd: 'groupmemory', desc: 'View all saved facts and inside jokes for this group.', usage: 'groupmemory' },
+    { cmd: 'forgetgroup', desc: 'Remove matching group facts or inside jokes from group memory.', usage: 'forgetgroup <keyword>' }
   ],
   ADMIN: [
     { cmd: 'kick', desc: 'Remove a user from the group chat.', usage: 'kick @user' },

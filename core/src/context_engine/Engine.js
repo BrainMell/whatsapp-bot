@@ -14,8 +14,8 @@ class ContextEngine {
         this.isRunning = false;
         
         // Setup storage callback
-        adaptiveProcessor.setStorageCallback(async (result) => {
-            await this.saveResults(result);
+        adaptiveProcessor.setStorageCallback(async (result, batch) => {
+            await this.saveResults(result, batch);
         });
 
         console.log("🚀 Context-Aware Extraction Engine Ready.");
@@ -69,8 +69,11 @@ class ContextEngine {
     /*
      * Save extracted results to MongoDB
      */
-    async saveResults(data) {
-        if (!data || !data.users) return;
+    async saveResults(data, batch) {
+        if (!data) return;
+
+        // Save individual user details
+        if (data.users) {
 
         for (const userData of data.users) {
             const jid = userData.userId;
@@ -162,6 +165,62 @@ class ContextEngine {
             if (changes > 0) {
                 economy.saveUser(finalJid);
                 console.log(`🧠 Brain: Learned ${changes} new things about ${user.nickname || finalJid.split('@')[0]}`);
+            }
+        }
+        }
+
+        // Save group-wide context
+        const chatId = batch && batch.length > 0 ? batch[0].message.chatId : null;
+        if (chatId && chatId.endsWith("@g.us") && data.group) {
+            try {
+                const GroupProfile = require('../../models/GroupProfile');
+                let groupProfile = await GroupProfile.findOne({ chatId });
+                if (!groupProfile) {
+                    groupProfile = new GroupProfile({ chatId });
+                }
+                
+                let groupChanges = 0;
+                
+                if (data.group.insideJokes && Array.isArray(data.group.insideJokes)) {
+                    if (!groupProfile.insideJokes) groupProfile.insideJokes = [];
+                    data.group.insideJokes.forEach(j => {
+                        if (j.joke && j.joke.trim()) {
+                            const exists = groupProfile.insideJokes.some(existing => existing.joke.toLowerCase() === j.joke.toLowerCase());
+                            if (!exists) {
+                                groupProfile.insideJokes.push({
+                                    joke: j.joke.trim(),
+                                    establishedBy: j.establishedBy || "Unknown",
+                                    timestamp: new Date()
+                                });
+                                groupChanges++;
+                            }
+                        }
+                    });
+                }
+                
+                if (data.group.groupFacts && Array.isArray(data.group.groupFacts)) {
+                    if (!groupProfile.groupFacts) groupProfile.groupFacts = [];
+                    data.group.groupFacts.forEach(f => {
+                        if (f.fact && f.fact.trim()) {
+                            const exists = groupProfile.groupFacts.some(existing => existing.fact.toLowerCase() === f.fact.toLowerCase());
+                            if (!exists) {
+                                groupProfile.groupFacts.push({
+                                    fact: f.fact.trim(),
+                                    confidence: f.confidence || 1.0,
+                                    timestamp: new Date()
+                                });
+                                groupChanges++;
+                            }
+                        }
+                    });
+                }
+                
+                if (groupChanges > 0) {
+                    await groupProfile.save();
+                    console.log(`🧠 Brain: Learned ${groupChanges} new group facts/jokes for ${chatId}`);
+                }
+            } catch (err) {
+                console.error("❌ Brain: Failed to save group context results:", err.message);
             }
         }
     }

@@ -65,7 +65,7 @@ class AdaptiveProcessor {
 
             // 4. Send to storage
             if (result && this.apiCallback) {
-                await this.apiCallback(result);
+                await this.apiCallback(result, currentBatch);
             }
 
         } catch (err) {

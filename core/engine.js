@@ -2557,6 +2557,41 @@ What to do:
           if (groupTranscript) systemPrompt += groupTranscript;
           if (relationshipText) systemPrompt += relationshipText;
 
+          // Fetch group profile memory context
+          try {
+            const GroupProfile = require('./models/GroupProfile');
+            const groupProfileObj = await GroupProfile.findOne({ chatId: chatId });
+            if (groupProfileObj) {
+              let groupMemText = "\n--- Group Facts, Pinned Info & Rules ---\n";
+              let hasFacts = false;
+              if (groupProfileObj.groupFacts && groupProfileObj.groupFacts.length > 0) {
+                groupProfileObj.groupFacts.slice(-5).forEach(f => {
+                  groupMemText += `- Fact: ${f.fact}\n`;
+                });
+                hasFacts = true;
+              }
+              if (groupProfileObj.insideJokes && groupProfileObj.insideJokes.length > 0) {
+                groupMemText += `\n--- Group Inside Jokes ---\n`;
+                groupProfileObj.insideJokes.slice(-5).forEach(j => {
+                  groupMemText += `- "${j.joke}" (established by ${j.establishedBy})\n`;
+                });
+                hasFacts = true;
+              }
+              if (groupProfileObj.metadata?.pinnedRules && groupProfileObj.metadata.pinnedRules.length > 0) {
+                groupMemText += `\n--- Group Rules ---\n`;
+                groupProfileObj.metadata.pinnedRules.forEach(r => {
+                  groupMemText += `- Rule: ${r}\n`;
+                });
+                hasFacts = true;
+              }
+              if (hasFacts) {
+                systemPrompt += groupMemText + "\n";
+              }
+            }
+          } catch (gErr) {
+            console.error("❌ Failed to query group memory profile:", gErr.message);
+          }
+
           // Rolling background summarization compaction
           const summaryKey = `summary_${chatId}`;
           const msgCountKey = `msg_count_${chatId}`;
@@ -12549,6 +12584,138 @@ ${senderName} said y'all should know:
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + "got it.",
                     });
+                    return;
+                  }
+
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} remembergroup `,
+                    )
+                  ) {
+                    const content = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} remembergroup `
+                          .length,
+                      )
+                      .trim();
+                    if (!content) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `❌ Usage: \`${botConfig.getPrefix()} remembergroup <group_fact_or_joke>\``,
+                      });
+                      return;
+                    }
+                    try {
+                      const GroupProfile = require("./models/GroupProfile");
+                      let groupProfile = await GroupProfile.findOne({ chatId });
+                      if (!groupProfile) {
+                        groupProfile = new GroupProfile({ chatId });
+                      }
+                      groupProfile.groupFacts.push({
+                        fact: content,
+                        confidence: 1.0,
+                        timestamp: new Date()
+                      });
+                      await groupProfile.save();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `got it. added to group facts.`,
+                      });
+                    } catch (err) {
+                      console.error("❌ remembergroup error:", err.message);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Failed to save group memory.`,
+                      });
+                    }
+                    return;
+                  }
+
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} groupmemory`
+                  ) {
+                    try {
+                      const GroupProfile = require("./models/GroupProfile");
+                      const groupProfile = await GroupProfile.findOne({ chatId });
+                      if (!groupProfile || ((!groupProfile.groupFacts || groupProfile.groupFacts.length === 0) && (!groupProfile.insideJokes || groupProfile.insideJokes.length === 0))) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `this group has no saved memories yet.`,
+                        });
+                        return;
+                      }
+                      let res = BOT_MARKER + `*Group Memories for ${groupProfile.name || 'this group'}*\n\n`;
+                      if (groupProfile.groupFacts && groupProfile.groupFacts.length > 0) {
+                        res += `*Group Facts & Info:*\n`;
+                        groupProfile.groupFacts.forEach((f, i) => {
+                          res += `${i + 1}. ${f.fact}\n`;
+                        });
+                        res += `\n`;
+                      }
+                      if (groupProfile.insideJokes && groupProfile.insideJokes.length > 0) {
+                        res += `*Inside Jokes:*\n`;
+                        groupProfile.insideJokes.forEach((j, i) => {
+                          res += `${i + 1}. "${j.joke}" (established by ${j.establishedBy})\n`;
+                        });
+                      }
+                      await sock.sendMessage(chatId, {
+                        text: res,
+                      });
+                    } catch (err) {
+                      console.error("❌ groupmemory error:", err.message);
+                    }
+                    return;
+                  }
+
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} forgetgroup `,
+                    )
+                  ) {
+                    const keyword = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} forgetgroup `
+                          .length,
+                      )
+                      .trim();
+                    if (!keyword) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `❌ Usage: \`${botConfig.getPrefix()} forgetgroup <keyword_to_remove>\``,
+                      });
+                      return;
+                    }
+                    try {
+                      const GroupProfile = require("./models/GroupProfile");
+                      const groupProfile = await GroupProfile.findOne({ chatId });
+                      if (!groupProfile) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `no group memories found.`,
+                        });
+                        return;
+                      }
+                      const initialFactCount = groupProfile.groupFacts.length;
+                      const initialJokeCount = groupProfile.insideJokes.length;
+                      
+                      groupProfile.groupFacts = groupProfile.groupFacts.filter(f => !f.fact.toLowerCase().includes(keyword.toLowerCase()));
+                      groupProfile.insideJokes = groupProfile.insideJokes.filter(j => !j.joke.toLowerCase().includes(keyword.toLowerCase()));
+                      
+                      const removedFacts = initialFactCount - groupProfile.groupFacts.length;
+                      const removedJokes = initialJokeCount - groupProfile.insideJokes.length;
+                      
+                      if (removedFacts > 0 || removedJokes > 0) {
+                        await groupProfile.save();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `forgot ${removedFacts} facts and ${removedJokes} inside jokes containing "${keyword}".`,
+                        });
+                      } else {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `no matching group memories found for "${keyword}".`,
+                        });
+                      }
+                    } catch (err) {
+                      console.error("❌ forgetgroup error:", err.message);
+                    }
                     return;
                   }
 
