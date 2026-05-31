@@ -667,7 +667,23 @@ function useItem(userId, itemId) {
 
     const itemInfo = lootSystem.getItemInfo(itemId);
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
-        return { success: false, message: `❌ This item cannot be used this way! Use \`${botConfig.getPrefix()} equip\` for gear.` };
+        // Give specific guidance based on item type
+        if (itemId === 'ascension_stone' || itemId === 'evolution_stone') {
+            const stoneTier = itemId === 'ascension_stone' ? 'T3 Ascension' : 'T2 Evolution';
+            return { success: false, message: `🔮 *${itemInfo.name}* is a ${stoneTier} catalyst, not a consumable!\n\nUse \`${botConfig.getPrefix()} evolve\` to trigger your class evolution/ascension. The stone will be consumed automatically.` };
+        }
+        if (itemId.includes('enhancement_stone')) {
+            return { success: false, message: `💎 *${itemInfo.name}* is used for gear enhancement!\n\nUse \`${botConfig.getPrefix()} enhance <#bag_index>\` on the gear you want to boost.` };
+        }
+        const isGear = ['WEAPON', 'ARMOR', 'ACCESSORY', 'HELMET', 'BOOTS'].includes(itemInfo.type);
+        if (isGear) {
+            return { success: false, message: `⚔️ *${itemInfo.name}* is equipment — you wear it, not consume it!\n\nUse \`${botConfig.getPrefix()} equip <#bag_index>\` to put it on.` };
+        }
+        const isCombatItem = itemInfo.type === 'COMBAT' || itemInfo.type === 'ITEM';
+        if (isCombatItem) {
+            return { success: false, message: `🎒 *${itemInfo.name}* can only be used during combat!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate it.` };
+        }
+        return { success: false, message: `❌ *${itemInfo.name}* (${itemInfo.type}) cannot be used this way.` };
     }
 
     // Effect handling

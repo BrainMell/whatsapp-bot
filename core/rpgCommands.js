@@ -82,10 +82,13 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     msg += `💨 SPD:${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
     msg += `💥 CRIT:${stats?.crit || 0}% | 🕊️ EVA:${(stats?.evasion || 0).toFixed(1)}%\n`;
     
-    // Stat points
-    if (sheet?.statPoints > 0) { 
-        msg += `\n✨ *${sheet.statPoints} stat pts!*\n`;
-        msg += `\`${botConfig.getPrefix()} allocate hp 5\`\n`;
+    // Stat points — always visible so players know the feature exists
+    const statPts = sheet?.statPoints || 0;
+    if (statPts > 0) {
+        msg += `\n✨ *${statPts} Stat Points available!*\n`;
+        msg += `\`${botConfig.getPrefix()} allocate <stat> <amount>\`\n`;
+    } else {
+        msg += `\n🔹 *Stat Points:* 0 _(earn more by leveling up)_\n`;
     }
     
     // Equipment summary
