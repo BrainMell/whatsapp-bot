@@ -11,6 +11,27 @@ const GoImageService = require('./goImageService');
 
 const goService = new GoImageService();
 
+let globalSock = null;
+
+const normalizeJid = (jid) => {
+  if (!jid) return '';
+  return jid.split('@')[0].split(':')[0];
+};
+
+const promiseWithTimeout = (promise, ms) => {
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timeoutId);
+      return res;
+    }),
+    timeoutPromise
+  ]);
+};
+
 // ============================================
 // PROFILE PICTURE MANAGEMENT
 // ============================================
@@ -117,8 +138,9 @@ const SAFE_SQUARES = [0, 13, 26, 39];
 const activeGames = new Map();
 
 class LudoGame {
-  constructor(chatId, playerJids) {
+  constructor(chatId, playerJids, sock = null) {
     this.chatId = chatId;
+    this.sock = sock;
     this.players = [];
 
     const availableColors = [COLORS.RED, COLORS.GREEN, COLORS.YELLOW, COLORS.BLUE];
@@ -149,34 +171,33 @@ class LudoGame {
     this.timeout = setTimeout(async () => {
       if (activeGames.has(chatId)) {
         activeGames.delete(chatId);
-        const engine = require('./engine');
-        const sock = engine.getSock();
         const botMarker = `*${botConfig.getBotName()}*\n\n`;
         try {
-          if (sock) await sock.sendMessage(chatId, { 
-            text: botMarker + "⌛ *LUDO TIMEOUT!* ⌛\n\nThe game has been cancelled due to inactivity." 
+          const clientSock = this.sock || globalSock;
+          if (clientSock) await clientSock.sendMessage(chatId, { 
+            text: botMarker + "⌛ *LUDO GAME OVER* ⌛\n\nThe game has ended due to inactivity (30 minutes of no actions)." 
           });
         } catch (e) {}
       }
-    }, 10 * 60 * 1000); // 10 minutes for Ludo
+    }, 30 * 60 * 1000); // 30 minutes for Ludo
   }
 
-  resetTimeout() {
+  resetTimeout(sock = null) {
+    if (sock) this.sock = sock;
     if (this.timeout) clearTimeout(this.timeout);
     this.lastAction = Date.now();
     this.timeout = setTimeout(async () => {
       if (activeGames.has(this.chatId)) {
         activeGames.delete(this.chatId);
-        const engine = require('./engine');
-        const sock = engine.getSock();
         const botMarker = `*${botConfig.getBotName()}*\n\n`;
         try {
-          if (sock) await sock.sendMessage(this.chatId, { 
-            text: botMarker + "⌛ *LUDO TIMEOUT!* ⌛\n\nThe game has been cancelled due to inactivity." 
+          const clientSock = this.sock || globalSock;
+          if (clientSock) await clientSock.sendMessage(this.chatId, { 
+            text: botMarker + "⌛ *LUDO GAME OVER* ⌛\n\nThe game has ended due to inactivity (30 minutes of no actions)." 
           });
         } catch (e) {}
       }
-    }, 10 * 60 * 1000);
+    }, 30 * 60 * 1000);
   }
 
   getCurrentPlayer() {
@@ -184,7 +205,8 @@ class LudoGame {
   }
 
   getPlayerByJid(jid) {
-    return this.players.find(p => p.jid === jid || p.fullJid === jid);
+    const target = normalizeJid(jid);
+    return this.players.find(p => normalizeJid(p.jid) === target || normalizeJid(p.fullJid) === target);
   }
 
   rollDice() {
@@ -219,7 +241,7 @@ class LudoGame {
   checkWall(position, excludePlayer = null) {
     const piecesAtPosition = [];
     this.players.forEach(player => {
-      if (excludePlayer && player.jid === excludePlayer.jid) return;
+      if (excludePlayer && normalizeJid(player.jid) === normalizeJid(excludePlayer.jid)) return;
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
           piecesAtPosition.push({ player, piece });
@@ -327,7 +349,7 @@ class LudoGame {
   checkCapture(currentPlayer, position) {
     let captured = false;
     this.players.forEach(player => {
-      if (player.jid === currentPlayer.jid) return;
+      if (normalizeJid(player.jid) === normalizeJid(currentPlayer.jid)) return;
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
           piece.position = -1;
@@ -375,10 +397,13 @@ async function renderBoard(game, sock = null) {
   try {
     const pfpUrls = {};
     if (sock) {
-      for (const player of game.players) {
-        const pfp = await fetchProfilePicture(sock, player.fullJid);
-        if (pfp) pfpUrls[player.fullJid] = pfp;
-      }
+      const pfpPromises = game.players.map(async (player) => {
+        try {
+          const pfp = await promiseWithTimeout(fetchProfilePicture(sock, player.fullJid), 3000);
+          if (pfp) pfpUrls[player.fullJid] = pfp;
+        } catch (e) {}
+      });
+      await Promise.all(pfpPromises);
     }
 
     const payload = {
@@ -412,18 +437,28 @@ async function renderBoard(game, sock = null) {
 
 module.exports = {
   startGame: async (sock, chatId, starterJid, mentionedJids, BOT_MARKER, m) => {
+    globalSock = sock;
     if (activeGames.has(chatId)) {
       return {
         success: false,
         message: BOT_MARKER + `❌ A Ludo game is already in progress!\nUse \`${botConfig.getPrefix()} ludo end\` to stop it.`
       };
     }
-    const allPlayers = [starterJid, ...mentionedJids];
+    const uniquePlayers = [];
+    const seen = new Set();
+    for (const jid of [starterJid, ...mentionedJids]) {
+      const norm = normalizeJid(jid);
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        uniquePlayers.push(jid);
+      }
+    }
+    const allPlayers = uniquePlayers;
     if (allPlayers.length < 2 || allPlayers.length > 4) {
       return { success: false, message: BOT_MARKER + "❌ Ludo needs 2-4 players!" };
     }
 
-    const game = new LudoGame(chatId, allPlayers);
+    const game = new LudoGame(chatId, allPlayers, sock);
     activeGames.set(chatId, game);
 
     const colorEmojis = ['🔴', '🟢', '🟡', '🔵'];
@@ -470,12 +505,13 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   },
 
   rollDice: async (sock, chatId, senderJid, BOT_MARKER, m) => {
+    globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
-    if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
+    if (normalizeJid(game.getCurrentPlayer().fullJid) !== normalizeJid(senderJid)) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const rollResult = game.rollDice();
-    game.resetTimeout();
+    game.resetTimeout(sock);
     const player = game.getCurrentPlayer();
     const movablePieces = game.getMovablePieces(player);
 
@@ -514,6 +550,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
             }
           }
         } catch (socialErr) {}
+        if (game.timeout) clearTimeout(game.timeout);
         activeGames.delete(chatId);
       } else {
         if (moveResult.extraTurn || game.hasExtraTurn) {
@@ -544,14 +581,15 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   },
 
   movePiece: async (sock, chatId, senderJid, pieceNum, BOT_MARKER, m) => {
+    globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     const player = game.getPlayerByJid(senderJid);
     if (!player) return { success: false, message: BOT_MARKER + "❌ You're not in this game!" };
-    if (game.getCurrentPlayer().fullJid !== senderJid) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
+    if (normalizeJid(game.getCurrentPlayer().fullJid) !== normalizeJid(senderJid)) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
 
     const moveResult = game.movePiece(player, pieceNum);
-    game.resetTimeout();
+    game.resetTimeout(sock);
     if (!moveResult.success) {
       await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${moveResult.error}` }, { quoted: m });
       return { success: false };
@@ -574,6 +612,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
           }
         }
       } catch (socialErr) {}
+      if (game.timeout) clearTimeout(game.timeout);
       activeGames.delete(chatId);
     } else {
       if (moveResult.extraTurn || game.hasExtraTurn) {
@@ -596,6 +635,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   },
 
   showBoard: async (sock, chatId, BOT_MARKER, m) => {
+    globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     const imageBuffer = await renderBoard(game, sock);
@@ -610,8 +650,10 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   },
 
   endGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
+    globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
+    if (game.timeout) clearTimeout(game.timeout);
     activeGames.delete(chatId);
     await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Ludo game ended!" }, { quoted: m });
     return { success: true };

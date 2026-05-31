@@ -122,6 +122,7 @@ class GoImageService {
         }
         const response = await this.client.post("/api/ludo", data, {
           responseType: "arraybuffer",
+          timeout: 15000,
         });
         return Buffer.from(response.data);
       } catch (error) {
