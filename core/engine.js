@@ -2491,10 +2491,11 @@ What to do:
           .startsWith(`${botConfig.getPrefix().toLowerCase()}`) ||
         newMessage.trim().startsWith(".");
 
+      const userObj = economy.getUser(senderJid);
+      const senderName = userObj?.nickname || userProfile?.nickname || senderJid.split("@")[0];
+
       // Save every user message to in-memory session history so the AI can actually see it
       if (!isCommand) {
-        const userObj = economy.getUser(senderJid);
-        const senderName = userObj?.nickname || userProfile?.nickname || senderJid.split("@")[0];
         const formattedContent = isGroup ? `${senderName}: ${newMessage}` : newMessage;
         history.push({ role: `user`, content: formattedContent, _ts: Date.now() });
       }
