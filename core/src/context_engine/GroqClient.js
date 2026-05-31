@@ -12,7 +12,7 @@ class GroqClient {
             .map((key) => key.trim())
             .filter((key) => key !== "");
         this.currentKeyIndex = 0;
-        this.model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+        this.model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         
         console.log(`🔌 Groq Client initialized (Model: ${this.model}, hasKeys: ${this.keys.length > 0})`);
