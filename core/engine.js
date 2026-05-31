@@ -2435,7 +2435,25 @@ What to do:
       newMessage,
       mentionedJids = [],
       chatId = null,
+      pushName = null,
     ) {
+      const botJid = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
+      const botLid = sock?.user?.lid ? jidNormalizedUser(sock.user.lid) : null;
+
+      function getDisplayName(jid, pName = null) {
+        const isBot = jid === botJid || (botLid && jid === botLid) || jid === "bot";
+        if (isBot) {
+          return botConfig.getBotName();
+        }
+        const userObj = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
+        const profile = userObj?.profile;
+        if (userObj?.nickname && userObj.nickname !== "Adventurer") return userObj.nickname;
+        if (profile?.nickname && profile.nickname !== "Adventurer") return profile.nickname;
+        if (pName) return pName;
+        if (profile?.whatsappName) return profile.whatsappName;
+        return jid.split("@")[0];
+      }
+
       // Scope memory to this specific chat — DM vs group memories don't bleed.
       // For groups, we use a single unified memory key so the bot understands group conversation flow.
       const isGroup = chatId && chatId.endsWith("@g.us");
@@ -2491,8 +2509,7 @@ What to do:
           .startsWith(`${botConfig.getPrefix().toLowerCase()}`) ||
         newMessage.trim().startsWith(".");
 
-      const userObj = economy.getUser(senderJid);
-      const senderName = userObj?.nickname || userProfile?.nickname || senderJid.split("@")[0];
+      const senderName = getDisplayName(senderJid, pushName);
 
       // Save every user message to in-memory session history so the AI can actually see it
       if (!isCommand) {
@@ -2526,6 +2543,7 @@ What to do:
 6. NO AGGRESSIVE PARROT-ECHOING: Do not mirror or copy the user's specific vocabulary or insults too aggressively (e.g., if a user calls you a name or says "dumby", do not submissively echo "lol." or parrot their exact phrases). Keep your own distinct verbal voice and slang.
 7. NO UNSOLICITED LORE/ROLEPLAY INTRUSION: Do NOT invent unsolicited lore or random teen-life roleplay elements (like "eating onigiri", "gotta go to school", "mum is calling", or "Trunks is waiting") as a substitute for an actual reply. Fictional flavor and personality should be used purely as conversational seasoning on top of a direct and relevant response — never replace the direct response with random character lore. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
 8. EXPLICIT TOPIC ACKNOWLEDGMENT: When a user brings up a specific topic, question, or request (e.g., "popcorn", "time", "how are you"), your response MUST explicitly refer to, acknowledge, or directly answer that topic. Never pivot to character-flavor monologues without first addressing and validating their topic.
+9. NO PEDANTIC CORRECTIONS: Never correct the user's typos, spelling errors, grammar, or casual chat slang/shorthand (such as "yh", "rn", "u", "r", "lmao"). Respond to what they meant naturally and casually, matching their casual texting style without calling out how they wrote it.
 ------------------------------------------------`;
 
       let systemPrompt = contentDescription + _timeCtx + groundingSafeguards;
@@ -2543,8 +2561,7 @@ What to do:
           
           groupTranscript += "\n--- Recent Group Chat Transcript ---\n";
           for (const msg of messages) {
-            const userObj = economy.getUser(msg.sender);
-            const name = userObj?.nickname || msg.sender.split("@")[0];
+            const name = getDisplayName(msg.sender);
             const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
             groupTranscript += `[${timeStr}] ${name}: ${msg.body || "Media"}\n`;
             activeParticipants.add(msg.sender);
@@ -2737,13 +2754,27 @@ What to do:
 
       // Using smart API rotation with model selection
       const completion = await smartGroqCall({
-        model: selectModel(newMessage.length, false),
+        model: selectModel(newMessage.length, isGroup),
         messages: groqMessages,
       });
 
       const aiReply = completion.choices[0].message.content;
       history.push({ role: "assistant", content: aiReply, _ts: Date.now() });
       conversationMemory.set(memKey, history);
+
+      // Save bot's reply to MongoDB so it is included in future transcripts
+      if (chatId) {
+        ChatMessage.create({
+          sender: botJid || "bot",
+          body: aiReply,
+          type: "text",
+          timestamp: new Date(),
+          chatId: chatId,
+          botId: botConfig.getBotId(),
+        }).catch((err) => {
+          console.error("❌ Failed to save bot reply to MongoDB:", err.message);
+        });
+      }
 
       // Update user stats (only if we have the profile and save function)
       if (
@@ -16319,6 +16350,7 @@ _(Or reply to their message)_
                       promptWithReply,
                       mentionedJids,
                       chatId,
+                      m.pushName,
                     );
 
                     // store valid response in cache
