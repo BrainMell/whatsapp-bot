@@ -7,11 +7,14 @@ const botConfig = require('../../../botConfig');
  */
 class GroqClient {
     constructor() {
-        this.apiKey = process.env.GROQ_API_KEY;
+        const keys = (process.env.GROQ_API_KEYS || "")
+            .split(",")
+            .filter((key) => key.trim() !== "");
+        this.apiKey = process.env.GROQ_API_KEY || keys[0] || '';
         this.model = process.env.GROQ_MODEL || 'mixtral-8x7b-32768';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         
-        console.log(`🔌 Groq Client initialized (Model: ${this.model})`);
+        console.log(`🔌 Groq Client initialized (Model: ${this.model}, hasKey: ${!!this.apiKey})`);
     }
 
     /*
