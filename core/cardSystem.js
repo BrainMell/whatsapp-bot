@@ -411,6 +411,27 @@ function getTopImageUrls(topCards) {
   return topCards.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
 }
 
+/**
+ * Detects whether the Go server returned an MP4 (Cloudinary slideshow)
+ * or a PNG (lightweight grid fallback image) and sends it appropriately.
+ */
+async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  if (isPng) {
+    return await sock.sendMessage(chatId, {
+      image: buffer,
+      caption,
+      ...(mentions ? { mentions } : {})
+    });
+  }
+  return await sock.sendMessage(chatId, {
+    video: buffer,
+    gifPlayback: true,
+    caption,
+    ...(mentions ? { mentions } : {})
+  });
+}
+
 async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
@@ -459,11 +480,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     }
 
     if (gifBuffer) {
-      return await inst.sock_ref.sendMessage(chatId, { 
-          video: gifBuffer, 
-          gifPlayback: true, 
-          caption: finalMsg 
-      });
+      return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, finalMsg);
     }
   }
 
@@ -541,11 +558,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-      return await inst.sock_ref.sendMessage(chatId, { 
-          video: gifBuffer, 
-          gifPlayback: true, 
-          caption: fullText 
-      });
+      return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, fullText);
     }
   }
 
@@ -615,11 +628,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        return await inst.sock_ref.sendMessage(chatId, { 
-            video: gifBuffer, 
-            gifPlayback: true, 
-            caption: msg 
-        });
+        return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, msg);
     }
   }
 
@@ -1582,11 +1591,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        return await inst.sock_ref.sendMessage(chatId, { 
-            video: gifBuffer, 
-            gifPlayback: true, 
-            caption: msg 
-        });
+        return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, msg);
     }
   }
 
