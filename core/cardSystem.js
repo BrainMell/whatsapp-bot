@@ -1767,6 +1767,13 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   const inst = getInst();
   if (!inst.sock_ref) return false;
 
+  try {
+    const lidResolver = require('./lidResolver');
+    senderJid = lidResolver.resolveJid(senderJid);
+  } catch (e) {
+    console.error("Error resolving senderJid in cardSystem:", e.message);
+  }
+
   const reply = (text, options = {}) => inst.sock_ref.sendMessage(chatId, { text, ...options });
   const p = P();
   
