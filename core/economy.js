@@ -97,14 +97,27 @@ async function saveUser(userId) {
 //========================================
 
 //==================this part handles new players and thier classes==================
+function resolveJidHelper(userId) {
+  if (!userId) return userId;
+  try {
+    const lidResolver = require('./lidResolver');
+    return lidResolver.resolveJid(userId);
+  } catch (e) {
+    console.error("Error resolving JID in resolveJidHelper:", e.message);
+    return userId;
+  }
+}
+
 function isRegistered(userId) {
-  const user = economyData.get(userId);
-  console.log(`🔍 [Economy] isRegistered check: "${userId}" -> found: ${!!user} (registered: ${user?.registered})`);
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  console.log(`🔍 [Economy] isRegistered check: "${userId}" (resolved to: "${resolvedId}") -> found: ${!!user} (registered: ${user?.registered})`);
   return user && user.registered === true;
 }
 
 function registerUser(userId, nickname) {
-  if (isRegistered(userId)) {
+  const resolvedId = resolveJidHelper(userId);
+  if (isRegistered(resolvedId)) {
     return { success: false, message: `❌ *ALREADY REGISTERED*\n\n🎮 You're already in the game, ${nickname}!` };
   }
 
@@ -112,7 +125,7 @@ function registerUser(userId, nickname) {
   const classSystem = require('./classSystem');
   const starterClass = classSystem.getRandomStarterClass();
 
-  const existingUser = economyData.get(userId);
+  const existingUser = economyData.get(resolvedId);
   const profile = existingUser?.profile || {
     whatsappName: null,
     nickname: nickname,
@@ -134,7 +147,7 @@ function registerUser(userId, nickname) {
   profile.nickname = nickname;
 
   const userData = {
-    userId: userId, // Ensure userId is stored in the object
+    userId: resolvedId, // Ensure userId is stored in the object
     wallet: STARTING_BALANCE,
     bank: 0,
     lastDaily: 0,
@@ -201,12 +214,12 @@ function registerUser(userId, nickname) {
     spriteIndex: Math.floor(Math.random() * 100)
   };
   
-  economyData.set(userId, userData);
+  economyData.set(resolvedId, userData);
   
   // log the bonus
-  logTransaction(userId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
+  logTransaction(resolvedId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
   
-  scheduleSave(userId);
+  scheduleSave(resolvedId);
   
   return {
     success: true,
@@ -254,10 +267,11 @@ function logTransaction(userId, description, amount, newBalance) {
 }
 
 function getUser(userId) {
-  if (!economyData.has(userId)) {
+  const resolvedId = resolveJidHelper(userId);
+  if (!economyData.has(resolvedId)) {
     return null;
   }
-  const user = economyData.get(userId);
+  const user = economyData.get(resolvedId);
   if (user && user.registered !== true) {
     return null;
   }
@@ -305,9 +319,10 @@ function getUser(userId) {
 }
 
 function getOrCreateUser(userId, defaultNickname = "Adventurer") {
-  if (!economyData.has(userId)) {
+  const resolvedId = resolveJidHelper(userId);
+  if (!economyData.has(resolvedId)) {
     const newUser = {
-      userId: userId,
+      userId: resolvedId,
       wallet: 0,
       bank: 0,
       registered: false,
@@ -331,10 +346,10 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
         relationships: {}
       }
     };
-    economyData.set(userId, newUser);
-    scheduleSave(userId);
+    economyData.set(resolvedId, newUser);
+    scheduleSave(resolvedId);
   }
-  const user = economyData.get(userId);
+  const user = economyData.get(resolvedId);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.profile) {
