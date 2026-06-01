@@ -180,6 +180,9 @@ class GoImageService {
 
     if (isCloudinaryConfigured) {
       try {
+        if (!imageUrls || imageUrls.length === 0) {
+          throw new Error("No image URLs provided for slideshow");
+        }
         console.log(`[Cloudinary] Generating card slideshow for ${imageUrls.length} images...`);
         const cloudinary = require('cloudinary').v2;
         cloudinary.config({
@@ -189,39 +192,39 @@ class GoImageService {
         });
 
         const tag = `deck_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const publicIds = imageUrls.map((_, index) => `${tag}_${String(index).padStart(3, '0')}`);
         
         // 1. Upload images in parallel
         const uploadPromises = imageUrls.map((url, index) => {
-          const publicId = `${tag}_${String(index).padStart(3, '0')}`;
           return cloudinary.uploader.upload(url, {
-            public_id: publicId,
+            public_id: publicIds[index],
             tags: [tag]
           });
         });
         await Promise.all(uploadPromises);
 
-        // 2. Generate multi-image GIF
-        const result = await cloudinary.uploader.multi(tag, {
-          delay: 1500, // 1.5 seconds between cards
-          format: 'gif'
-        });
+        // 2. Generate multi-image sliding video slideshow
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        let url = `https://res.cloudinary.com/${cloudName}/image/upload/w_500,h_500,c_fill,du_1.5/`;
+        
+        for (let i = 1; i < publicIds.length; i++) {
+          url += `fl_splice:transition_(name_slideright;du_0.5),l_${publicIds[i]}/w_500,h_500,c_fill,du_1.5/fl_layer_apply/`;
+        }
+        
+        url += `${publicIds[0]}.mp4`;
 
-        const gifUrl = result.secure_url || result.url;
-        if (!gifUrl) throw new Error("Cloudinary multi-image URL not found");
+        console.log(`[Cloudinary] Generated sliding MP4 URL: ${url}`);
 
-        console.log(`[Cloudinary] Generated GIF: ${gifUrl}`);
-
-        // 3. Download the generated GIF as buffer
-        const response = await axios.get(gifUrl, { responseType: 'arraybuffer' });
-        const gifBuffer = Buffer.from(response.data);
+        // 3. Download the generated video as buffer
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        const videoBuffer = Buffer.from(response.data);
 
         // 4. Clean up individual uploaded images in background to save space
-        const publicIdsToDelete = imageUrls.map((_, index) => `${tag}_${String(index).padStart(3, '0')}`);
-        cloudinary.api.delete_resources(publicIdsToDelete).catch(err => {
+        cloudinary.api.delete_resources(publicIds).catch(err => {
           console.error("[Cloudinary] Cleanup error:", err.message);
         });
 
-        return gifBuffer;
+        return videoBuffer;
       } catch (err) {
         console.error("[Cloudinary] Error generating slideshow:", err.message);
         console.log("⚠️ Falling back to Go service...");
