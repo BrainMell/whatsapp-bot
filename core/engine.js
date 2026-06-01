@@ -4525,6 +4525,54 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (primaryCmd === "combat") {
                       const action = cmdArgs[1];
                       const combatTarget = cmdArgs.slice(2).join(" ");
+
+                      // PvP Duel Intercept: If there is an active PvP duel and the sender is a player in it
+                      const pvpDuel = pvpSystem.getDuel(chatId);
+                      const isSenderInPvP = pvpDuel && pvpDuel.players.some(p => p.jid === senderJid);
+
+                      if (isSenderInPvP) {
+                        let pvpAction = action;
+                        if (pvpAction === "atk") pvpAction = "attack";
+                        if (pvpAction === "skill") pvpAction = "ability";
+
+                        if (!pvpAction) {
+                          return await sock.sendMessage(chatId, {
+                            text:
+                              BOT_MARKER +
+                              `❌ Usage: \`${botConfig.getPrefix()} combat <attack | ability <n> | flee>\``,
+                          });
+                        }
+
+                        const result = await pvpSystem.handlePvPAction(
+                          sock,
+                          chatId,
+                          senderJid,
+                          pvpAction,
+                          combatTarget,
+                          m,
+                        );
+                        if (result.success) {
+                          if (result.image?.success) {
+                            await sock.sendMessage(chatId, {
+                              image: result.image.buffer,
+                              caption: BOT_MARKER + result.message,
+                              mentions: result.mentions || [],
+                            });
+                          } else {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + result.message,
+                              mentions: result.mentions || [],
+                            });
+                          }
+                        } else {
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + result.message,
+                          });
+                        }
+                        return;
+                      }
+
+                      // Otherwise, regular solo/guild adventure combat action
                       const result = await guildAdventure.handleCombatAction(
                         sock,
                         chatId,

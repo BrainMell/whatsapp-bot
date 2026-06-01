@@ -59,6 +59,13 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
         return { success: false, message: '❌ A challenge is already pending! Accept or wait for it to expire.' };
     }
 
+    if (!economy.isRegistered(challengerJid)) {
+        return { success: false, message: '❌ You must be registered to challenge someone!' };
+    }
+    if (!economy.isRegistered(targetJid)) {
+        return { success: false, message: '❌ The player you challenged is not registered!' };
+    }
+
     if (stake > 0) {
         const user = economy.getUser(challengerJid);
         if ((user?.wallet || 0) < stake) {
@@ -89,6 +96,13 @@ async function acceptChallenge(sock, chatId, targetJid) {
         return { success: false, message: '❌ Challenge expired! (2 min limit)' };
     }
 
+    if (!economy.isRegistered(invite.challenger)) {
+        return { success: false, message: '❌ Challenger is no longer registered!' };
+    }
+    if (!economy.isRegistered(targetJid)) {
+        return { success: false, message: '❌ You need to register first before accepting a duel!' };
+    }
+
     // Validate stakes
     if (invite.stake > 0) {
         const challenger = economy.getUser(invite.challenger);
@@ -108,6 +122,10 @@ async function acceptChallenge(sock, chatId, targetJid) {
     // Build duel state
     const p1Data = economy.getUser(invite.challenger);
     const p2Data = economy.getUser(targetJid);
+    if (!p1Data || !p2Data) {
+        return { success: false, message: '❌ Failed to load player data for the duel!' };
+    }
+
     const p1Stats = progression.getBaseStats(invite.challenger, p1Data.class);
     const p2Stats = progression.getBaseStats(targetJid, p2Data.class);
 
@@ -148,7 +166,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `🔵 *${p2.name}* (Lv.${p2.level} ${p2.class?.name || 'Fighter'}) — ${p2.hp}/${p2.maxHp} HP\n\n` +
         `🎯 *${p1.name}* goes first!\n` +
         `⚡ Energy: ${p1.energy}/${p1.maxEnergy}\n\n` +
-        `🗡️ \`attack\` | 🔮 \`ability <n>\` | 🏃 \`flee\``;
+        `🗡️ \`${botConfig.getPrefix()} combat attack\` | 🔮 \`${botConfig.getPrefix()} combat ability <n>\` | 🏃 \`${botConfig.getPrefix()} combat flee\``;
 
     return { success: true, duel: duelState, image, message: startMsg };
 }
@@ -210,7 +228,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     } else if (action === 'ability') {
         if (!target || isNaN(parseInt(target))) {
-            return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../botConfig').getPrefix()} pvp ability 1\`` };
+            return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../botConfig').getPrefix()} combat ability 1\`` };
         }
         const abilityIndex = parseInt(target) - 1;
         const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
@@ -315,7 +333,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     statusMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
     statusMsg += `🎯 *@${nextPlayer.jid.split('@')[0]}* — it's your turn!\n`;
     statusMsg += `⚡ Energy: ${Math.floor(nextPlayer.energy)}/${nextPlayer.maxEnergy}\n`;
-    statusMsg += `🗡️ \`attack\` | 🔮 \`ability <n>\` | 🏃 \`flee\``;
+    statusMsg += `🗡️ \`${botConfig.getPrefix()} combat attack\` | 🔮 \`${botConfig.getPrefix()} combat ability <n>\` | 🏃 \`${botConfig.getPrefix()} combat flee\``;
 
     return {
         success: true,
