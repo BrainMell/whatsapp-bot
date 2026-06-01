@@ -606,7 +606,7 @@ function sellItem(userId, itemId, quantity = 1) {
     let sellMultiplier = ITEM_RARITY[rarity]?.sellMultiplier || 0.6;
     
     // Special case for gold currency item: 1:15 exchange rate (100% of base value)
-    if (itemId === 'gold') sellMultiplier = 1.0;
+    if (itemId === 'gold' || itemId === 'gold_pile') sellMultiplier = 1.0;
     
     const totalValue = Math.floor(baseValue * sellMultiplier * quantity);
     let sellValue = totalValue;
@@ -656,10 +656,13 @@ function sellItem(userId, itemId, quantity = 1) {
 // 🛠️ ITEM USAGE
 // ==========================================
 
-function useItem(userId, itemId) {
+function useItem(userId, rawItemId) {
     const inventory = getInventory(userId);
     const progression = require('./progression');
     const sheet = progression.getCharacterSheet(userId);
+    
+    // Normalize item ID (lowercase, trim, replace spaces with underscores)
+    const itemId = (rawItemId || '').toLowerCase().trim().replace(/ /g, '_');
     
     if (!inventory[itemId]) {
         return { success: false, message: `❌ You don't have this item!` };

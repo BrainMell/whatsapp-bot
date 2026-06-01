@@ -43,6 +43,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         messageCount: economyUser.profile?.stats?.messageCount || 0,
         pfpUrl: pfpUrl || "",
         title: economyUser.title || "",
+        statPoints: sheet.statPoints || 0,
 
         // RPG Stats
         hp: stats?.hp || 100,

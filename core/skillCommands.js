@@ -480,7 +480,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const questsDone = user.questsCompleted || 0;
 
     const evolutionCheck = classSystem.canEvolve(
-        user.class, level, questsDone, user.stats?.dragonsKilled || 0
+        user.class, level, questsDone, user.stats?.dragonsKilled || 0, user.completedTrials || [], user.wallet || 0
     );
 
     if (!evolutionCheck.canEvolve) {
@@ -530,7 +530,8 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
     
     const chosen = allPaths[choiceNum - 1];
-    if (!chosen.meetsRequirements) {
+    const nonTrialMissing = chosen.missingRequirements.filter(reqStr => !reqStr.toLowerCase().includes('defeat') && !reqStr.toLowerCase().includes('trial'));
+    if (nonTrialMissing.length > 0) {
         return sock.sendMessage(chatId, { 
             text: `🔒 *Path Locked*\n\n*${chosen.name}* requires:\n• ${chosen.missingRequirements.join('\n• ')}` 
         });

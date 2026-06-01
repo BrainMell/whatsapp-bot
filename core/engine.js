@@ -8314,8 +8314,9 @@ ${memberList}`;
 
                     await awardProgression(senderJid, chatId);
                     return;
+                  }
 
-                    // ============================================
+                  // ============================================
                     // GUILD COMMANDS
                     // ============================================
 
@@ -9828,6 +9829,11 @@ Admins can:
                         await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
                         return;
                       }
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "🔒 Admins only.",
+                        });
+                      }
                       const periodArg = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} active`, "").trim() || null;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
@@ -10892,9 +10898,9 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                     }
 
                     // --- PERSISTENT SELECTION LOGIC ---
-                    const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
-                    if (numOnly) {
-                      const idx = parseInt(numOnly[1], 10);
+                    const animeNumOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
+                    if (animeNumOnly) {
+                      const idx = parseInt(animeNumOnly[1], 10);
                       let cached = null;
                       const quotedId = getQuotedMessageId(m);
 
@@ -12221,7 +12227,6 @@ ${senderName} said y'all should know:
                       console.error("Combat action failed:", err.message);
                     }
                     return;
-                  }
 
                   // SHORTCUT: .j item <num> [target]
                   if (

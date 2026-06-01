@@ -307,9 +307,17 @@ async function handleConsumable(senderJid, item) {
     });
     
     if (result.success) {
+        let helpMsg = `Use in quests with \`${getPrefix()} combat item <number>\``;
+        if (baseId === 'ascension_stone' || baseId === 'evolution_stone') {
+            const stoneTier = baseId === 'ascension_stone' ? 'T3 Ascension' : 'T2 Evolution';
+            helpMsg = `🔮 This is a ${stoneTier} catalyst.\nUse \`${getPrefix()} evolve\` to trigger your class evolution/ascension.`;
+        } else if (itemInfo.type === 'POTION' || itemInfo.type === 'CONSUMABLE') {
+            helpMsg = `Use it from your inventory with \`${getPrefix()} use <#bag_index>\``;
+        }
+        
         return {
             success: true,
-            message: `${item.icon} *${item.name}* added to inventory!\n\nUse in quests with \`${getPrefix()} combat item <number>\``
+            message: `${item.icon} *${item.name}* added to inventory!\n\n💡 ${helpMsg}`
         };
     }
     return result;
@@ -357,9 +365,10 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         if (cardData) {
             const cardBuffer = await goService.generateProfileCard(cardData);
             if (cardBuffer) {
+                const captionMsg = `👤 *Profile:* ${cardData.nickname}\n🏆 *Rank:* ${rank}${cardData.statPoints > 0 ? `\n\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.` : ''}`;
                 await sock.sendMessage(chatId, { 
                     image: cardBuffer,
-                    caption: `👤 *Profile:* ${cardData.nickname}\n🏆 *Rank:* ${rank}`,
+                    caption: captionMsg,
                     mentions: [finalJid]
                 });
                 return;

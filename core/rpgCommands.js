@@ -51,9 +51,10 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         if (cardData) {
             const cardBuffer = await goService.generateProfileCard(cardData);
             if (cardBuffer) {
+                const captionMsg = `👤 *Character:* ${cardData.nickname}\n🏆 *Rank:* ${cardData.rank}${cardData.statPoints > 0 ? `\n\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.` : ''}`;
                 await sock.sendMessage(chatId, { 
                     image: cardBuffer,
-                    caption: `👤 *Character:* ${cardData.nickname}\n🏆 *Rank:* ${cardData.rank}`,
+                    caption: captionMsg,
                     mentions: [senderJid]
                 });
                 return;
@@ -644,7 +645,7 @@ async function useItem(sock, chatId, senderJid, target) {
         let msg = `🧪 USE ITEM\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
         return await sock.sendMessage(chatId, { text: msg });
     }
-    let itemId = target;
+    let itemId = target.toLowerCase().trim().replace(/ /g, '_');
     if (!isNaN(target)) {
         const invData = inventorySystem.formatInventory(senderJid);
         const item = invData.items[parseInt(target) - 1];
