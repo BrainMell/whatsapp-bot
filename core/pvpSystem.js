@@ -16,6 +16,17 @@ const combatImageGenerator = require('./combatImageGenerator');
 const activeDuels = new Map();  // chatId → duelState
 const duelInvites = new Map();  // chatId → { challenger, target, stake, timestamp }
 
+function resolveJid(jid) {
+    if (!jid) return jid;
+    try {
+        const lidResolver = require('./lidResolver');
+        return lidResolver.resolveJid(jid);
+    } catch (e) {
+        console.error("Error resolving JID in pvpSystem:", e.message);
+        return jid;
+    }
+}
+
 // ─── PvP Balance Constants ────────────────────
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
 const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
@@ -30,15 +41,17 @@ function getDuel(chatId) {
 }
 
 function getInvite(chatId, targetJid) {
+    const resolvedTarget = resolveJid(targetJid);
     const invite = duelInvites.get(chatId);
     if (!invite) return null;
-    if (invite.target === targetJid) return invite;
+    if (invite.target === resolvedTarget) return invite;
     return null;
 }
 
 function declineChallenge(chatId, targetJid) {
+    const resolvedTarget = resolveJid(targetJid);
     const invite = duelInvites.get(chatId);
-    if (invite && invite.target === targetJid) {
+    if (invite && invite.target === resolvedTarget) {
         duelInvites.delete(chatId);
         return true;
     }
@@ -59,23 +72,26 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
         return { success: false, message: '❌ A challenge is already pending! Accept or wait for it to expire.' };
     }
 
-    if (!economy.isRegistered(challengerJid)) {
+    const resolvedChallenger = resolveJid(challengerJid);
+    const resolvedTarget = resolveJid(targetJid);
+
+    if (!economy.isRegistered(resolvedChallenger)) {
         return { success: false, message: '❌ You must be registered to challenge someone!' };
     }
-    if (!economy.isRegistered(targetJid)) {
+    if (!economy.isRegistered(resolvedTarget)) {
         return { success: false, message: '❌ The player you challenged is not registered!' };
     }
 
     if (stake > 0) {
-        const user = economy.getUser(challengerJid);
+        const user = economy.getUser(resolvedChallenger);
         if ((user?.wallet || 0) < stake) {
             return { success: false, message: `❌ Insufficient funds! You need ${botConfig.getCurrency().symbol}${stake.toLocaleString()} to stake.` };
         }
     }
 
     duelInvites.set(chatId, {
-        challenger: challengerJid,
-        target: targetJid,
+        challenger: resolvedChallenger,
+        target: resolvedTarget,
         stake,
         timestamp: Date.now(),
     });
@@ -88,9 +104,10 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
 // ==========================================
 
 async function acceptChallenge(sock, chatId, targetJid) {
+    const resolvedTarget = resolveJid(targetJid);
     const invite = duelInvites.get(chatId);
     if (!invite) return { success: false, message: '❌ No pending challenge found.' };
-    if (invite.target !== targetJid) return { success: false, message: '❌ This challenge was not issued to you!' };
+    if (invite.target !== resolvedTarget) return { success: false, message: '❌ This challenge was not issued to you!' };
     if (Date.now() - invite.timestamp > CHALLENGE_TIMEOUT) {
         duelInvites.delete(chatId);
         return { success: false, message: '❌ Challenge expired! (2 min limit)' };
@@ -99,14 +116,14 @@ async function acceptChallenge(sock, chatId, targetJid) {
     if (!economy.isRegistered(invite.challenger)) {
         return { success: false, message: '❌ Challenger is no longer registered!' };
     }
-    if (!economy.isRegistered(targetJid)) {
+    if (!economy.isRegistered(resolvedTarget)) {
         return { success: false, message: '❌ You need to register first before accepting a duel!' };
     }
 
     // Validate stakes
     if (invite.stake > 0) {
         const challenger = economy.getUser(invite.challenger);
-        const target = economy.getUser(targetJid);
+        const target = economy.getUser(resolvedTarget);
         if ((challenger?.wallet || 0) < invite.stake) {
             return { success: false, message: '❌ Challenger no longer has enough Zeni for the stake!' };
         }
@@ -114,14 +131,14 @@ async function acceptChallenge(sock, chatId, targetJid) {
             return { success: false, message: `❌ You need ${botConfig.getCurrency().symbol}${invite.stake.toLocaleString()} to accept!` };
         }
         economy.removeMoney(invite.challenger, invite.stake);
-        economy.removeMoney(targetJid, invite.stake);
+        economy.removeMoney(resolvedTarget, invite.stake);
     }
 
     duelInvites.delete(chatId);
 
     // Build duel state
     const p1Data = economy.getUser(invite.challenger);
-    const p2Data = economy.getUser(targetJid);
+    const p2Data = economy.getUser(resolvedTarget);
     if (!p1Data || !p2Data) {
         return { success: false, message: '❌ Failed to load player data for the duel!' };
     }
@@ -200,13 +217,14 @@ function buildDuelPlayer(jid, userData, stats, idx) {
 // ==========================================
 
 async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
+    const resolvedSender = resolveJid(senderJid);
     const duel = activeDuels.get(chatId);
     if (!duel) return { success: false, message: '❌ No active duel here!' };
 
     const currentPlayer = duel.players[duel.turn];
     const opponent = duel.players[1 - duel.turn];
     
-    if (currentPlayer.jid !== senderJid) {
+    if (currentPlayer.jid !== resolvedSender) {
         return { success: false, message: `⏳ It's not your turn! Waiting on *${currentPlayer.name}*...` };
     }
 

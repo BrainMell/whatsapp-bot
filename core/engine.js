@@ -908,7 +908,6 @@ async function startBot(configInstance) {
     const temporaryContext = new Map();
     const pendingTagRequests = new Map();
     const pendingNameRequests = new Map();
-    const activityTracker = new Map();
     const spamTracker = new Map();
 
     function addWarning(userId, groupId, reason) {
@@ -938,26 +937,49 @@ async function startBot(configInstance) {
     function trackActivity(chatId, userId) {
       const key = `${chatId}_${userId}`;
       const now = Date.now();
-      if (!activityTracker.has(key)) {
-        activityTracker.set(key, {
-          count: 0,
-          firstSeen: now,
-          lastMessage: now,
-        });
+      const ChatActivity = require('./models/ChatActivity');
+      ChatActivity.updateOne(
+        { key },
+        {
+          $inc: { count: 1 },
+          $set: { lastMessage: now },
+          $setOnInsert: { firstSeen: now }
+        },
+        { upsert: true }
+      ).catch((err) => console.error(`Error saving activity for ${key}:`, err.message));
+    }
+
+    async function getActivity(chatId, userId) {
+      const key = `${chatId}_${userId}`;
+      const ChatActivity = require('./models/ChatActivity');
+      try {
+        const doc = await ChatActivity.findOne({ key });
+        return doc ? {
+          count: doc.count,
+          firstSeen: doc.firstSeen,
+          lastMessage: doc.lastMessage
+        } : null;
+      } catch (err) {
+        console.error(`Error getting activity for ${key}:`, err.message);
+        return null;
       }
-      const data = activityTracker.get(key);
-      data.count++;
-      data.lastMessage = now;
     }
 
-    function getActivity(chatId, userId) {
-      return activityTracker.get(`${chatId}_${userId}`);
-    }
-
-    function getChatActivity(chatId) {
-      return Array.from(activityTracker.entries())
-        .filter(([key]) => key.startsWith(chatId + "_"))
-        .map(([key, data]) => ({ userId: key.split("_")[1], ...data }));
+    async function getChatActivity(chatId) {
+      const ChatActivity = require('./models/ChatActivity');
+      try {
+        const escapedChatId = chatId.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const docs = await ChatActivity.find({ key: { $regex: '^' + escapedChatId + '_' } });
+        return docs.map(doc => ({
+          userId: doc.key.split('_')[1],
+          count: doc.count,
+          firstSeen: doc.firstSeen,
+          lastMessage: doc.lastMessage
+        }));
+      } catch (err) {
+        console.error(`Error getting chat activity for ${chatId}:`, err.message);
+        return [];
+      }
     }
 
     // ============================================
@@ -2015,17 +2037,6 @@ What to do:
       // pendingNameRequests: drop anything older than 2 min
       for (const [jid, req] of pendingNameRequests.entries()) {
         if (now - req.timestamp > 120000) pendingNameRequests.delete(jid);
-      }
-
-      // activityTracker: cap nested maps at 200 most recent users per chat
-      for (const [chatId, users] of activityTracker.entries()) {
-        if (users.size > 200) {
-          const sorted = [...users.entries()].sort(
-            (a, b) => b[1].lastMessage - a[1].lastMessage,
-          );
-          users.clear();
-          sorted.slice(0, 200).forEach(([k, v]) => users.set(k, v));
-        }
       }
     }, 120000); // every 2 min
 
@@ -9857,7 +9868,7 @@ Admins can:
                       lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} activity`
                     ) {
-                      const activity = getChatActivity(chatId);
+                      const activity = await getChatActivity(chatId);
                       const total = activity.reduce(
                         (sum, user) => sum + user.count,
                         0,
@@ -9887,7 +9898,7 @@ Admins can:
                       const periodLabel = formatPeriodLabel(periodArg);
                       const now = Date.now();
 
-                      let activity = getChatActivity(chatId);
+                      let activity = await getChatActivity(chatId);
                       // If a time filter is given, filter by lastMessage timestamp
                       if (periodMs !== null) {
                         activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
@@ -9932,7 +9943,7 @@ Admins can:
                       const periodLabel = formatPeriodLabel(periodArg);
                       const now = Date.now();
 
-                      const activity = getChatActivity(chatId);
+                      const activity = await getChatActivity(chatId);
                       // Users who HAVE been active within the period
                       const activeUserSet = new Set(
                         periodMs !== null
@@ -9994,7 +10005,7 @@ Admins can:
                       const periodLabel = formatPeriodLabel(periodArg);
                       const now = Date.now();
 
-                      let activity = getChatActivity(chatId);
+                      let activity = await getChatActivity(chatId);
                       if (periodMs !== null) {
                         activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
                       }
@@ -10039,7 +10050,7 @@ Admins can:
                       const periodLabel = formatPeriodLabel(periodArg);
                       const now = Date.now();
 
-                      const activity = getChatActivity(chatId);
+                      const activity = await getChatActivity(chatId);
                       const activeUserSet = new Set(
                         periodMs !== null
                           ? activity.filter((u) => (now - u.lastMessage) <= periodMs).map((u) => u.userId)
@@ -10089,7 +10100,7 @@ Admins can:
                       const profile = getUserProfile(targetUser);
                       const warnings = getWarningCount(targetUser, chatId);
                       const muteInfo = getMuteInfo(targetUser, chatId);
-                      const activity = getActivity(chatId, targetUser);
+                      const activity = await getActivity(chatId, targetUser);
                       const isAdmin = groupMetadata?.participants.some(
                         (p) =>
                           lidResolver.resolveToPhone(p.id, configInstance.getAuthPath()) === lidResolver.resolveToPhone(targetUser, configInstance.getAuthPath()) &&
