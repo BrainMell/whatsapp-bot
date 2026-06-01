@@ -408,7 +408,14 @@ function getTopCards(cards) {
 }
 
 function getTopImageUrls(topCards) {
-  return topCards.map(uc => CARD_INDEX()[uc.cardId]?.imageUrl).filter(Boolean);
+  return topCards.map(uc => {
+    const card = CARD_INDEX()[uc.cardId];
+    if (!card) return null;
+    return {
+      url: card.imageUrl,
+      animated: String(card.tier) === '6' || String(card.tier) === 'S'
+    };
+  }).filter(Boolean);
 }
 
 /**
