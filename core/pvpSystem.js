@@ -161,16 +161,14 @@ async function acceptChallenge(sock, chatId, targetJid) {
     const p1 = duelState.players[0];
     const p2 = duelState.players[1];
     const startMsg =
-        `╔════════════════════════╗\n` +
-        `   🏟️   *PHANTOM STANDOFF*   🏟️\n` +
-        `╚════════════════════════╝\n\n` +
+        `🏟️ *PHANTOM STANDOFF* 🏟️\n` +
+        `———————————\n` +
         `🔴 *${p1.name}* \`Lv.${p1.level}\` (${p1.class?.name || 'Fighter'})\n` +
-        `   ↳ ❤️ HP: \`${p1.hp}/${p1.maxHp}\` · ⚡ EN: \`${p1.energy}/${p1.maxEnergy}\`\n\n` +
+        `   ↳ ❤️ HP: \`${p1.hp}/${p1.maxHp}\` · ⚡ EN: \`${p1.energy}/${p1.maxEnergy}\`\n` +
         `🔵 *${p2.name}* \`Lv.${p2.level}\` (${p2.class?.name || 'Fighter'})\n` +
         `   ↳ ❤️ HP: \`${p2.hp}/${p2.maxHp}\` · ⚡ EN: \`${p2.energy}/${p2.maxEnergy}\`\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `🎯 *${p1.name}* claims the initiative!\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `———————————\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
         `🏃 \`${botConfig.getPrefix()} combat flee\``;
@@ -180,6 +178,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
 function buildDuelPlayer(jid, userData, stats, idx) {
     const classData = economy.getUserClass(jid);
+    const progData = progression.getUser(jid);
     return {
         jid,
         name: userData.nickname || jid.split('@')[0],
@@ -188,7 +187,7 @@ function buildDuelPlayer(jid, userData, stats, idx) {
         energy: 100,
         maxEnergy: 100,
         stats,
-        level: userData.level || 1,
+        level: progData?.level || 1,
         class: classData,
         spriteIndex: userData.spriteIndex || idx,
         statusEffects: [],
@@ -333,17 +332,13 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     const imageResult = await generateDuelImage(duel);
     
-    let statusMsg = `╔════════════════════════╗\n` +
-                    `   ⚔️   *COMBAT STATUS*   ⚔️\n` +
-                    `╚════════════════════════╝\n\n` +
+    let statusMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
+                    `———————————\n` +
                     `${actionResult}\n\n` +
-                    `🔴 *${currentPlayer.name}*\n` +
-                    `   ↳ ❤️ HP: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` · ⚡ EN: \`${Math.floor(currentPlayer.energy)}\`\n` +
-                    `🔵 *${opponent.name}*\n` +
-                    `   ↳ ❤️ HP: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` · ⚡ EN: \`${Math.floor(opponent.energy)}\`\n\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `🔴 *${currentPlayer.name}*: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
+                    `🔵 *${opponent.name}*: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
                     `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    `———————————\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
                     `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
                     `🏃 \`${botConfig.getPrefix()} combat flee\``;
@@ -441,9 +436,8 @@ async function finishDuel(chatId, duel, winner, loser) {
 
     progression.addXP(winner.jid, xpGain, 'PvP Victory');
 
-    let msg = `╔════════════════════════╗\n`;
-    msg += `   🏆   *DUEL RESULT*   🏆\n`;
-    msg += `╚════════════════════════╝\n\n`;
+    let msg = `🏆 *DUEL RESULT* 🏆\n`;
+    msg += `———————————\n`;
     msg += `👑 *Winner:* ${winner.name}\n`;
     msg += `💀 *Defeated:* ${loser.name}\n\n`;
     msg += `🎁 *Rewards:*\n`;
