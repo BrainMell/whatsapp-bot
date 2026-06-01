@@ -174,6 +174,60 @@ class GoImageService {
    * Generate Card Collection/Deck GIF
    */
   async generateCardGif(imageUrls, title) {
+    const isCloudinaryConfigured = process.env.CLOUDINARY_CLOUD_NAME && 
+                                   process.env.CLOUDINARY_API_KEY && 
+                                   process.env.CLOUDINARY_API_SECRET;
+
+    if (isCloudinaryConfigured) {
+      try {
+        console.log(`[Cloudinary] Generating card slideshow for ${imageUrls.length} images...`);
+        const cloudinary = require('cloudinary').v2;
+        cloudinary.config({
+          cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+          api_key: process.env.CLOUDINARY_API_KEY,
+          api_secret: process.env.CLOUDINARY_API_SECRET
+        });
+
+        const tag = `deck_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        
+        // 1. Upload images in parallel
+        const uploadPromises = imageUrls.map((url, index) => {
+          const publicId = `${tag}_${String(index).padStart(3, '0')}`;
+          return cloudinary.uploader.upload(url, {
+            public_id: publicId,
+            tags: [tag]
+          });
+        });
+        await Promise.all(uploadPromises);
+
+        // 2. Generate multi-image GIF
+        const result = await cloudinary.uploader.multi(tag, {
+          delay: 1500, // 1.5 seconds between cards
+          format: 'gif'
+        });
+
+        const gifUrl = result.secure_url || result.url;
+        if (!gifUrl) throw new Error("Cloudinary multi-image URL not found");
+
+        console.log(`[Cloudinary] Generated GIF: ${gifUrl}`);
+
+        // 3. Download the generated GIF as buffer
+        const response = await axios.get(gifUrl, { responseType: 'arraybuffer' });
+        const gifBuffer = Buffer.from(response.data);
+
+        // 4. Clean up individual uploaded images in background to save space
+        const publicIdsToDelete = imageUrls.map((_, index) => `${tag}_${String(index).padStart(3, '0')}`);
+        cloudinary.api.delete_resources(publicIdsToDelete).catch(err => {
+          console.error("[Cloudinary] Cleanup error:", err.message);
+        });
+
+        return gifBuffer;
+      } catch (err) {
+        console.error("[Cloudinary] Error generating slideshow:", err.message);
+        console.log("⚠️ Falling back to Go service...");
+      }
+    }
+
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
