@@ -9965,7 +9965,7 @@ Admins can:
                         text += `${i + 1}. @${p.id.split("@")[0]}\n`;
                       });
                       if (inactive.length > 20) text += `\n...and ${inactive.length - 20} more.`;
-                      const mentions = inactive.slice(0, 20).map((p) => p.id);
+                      const mentions = inactive.map((p) => p.id);
                       await sock.sendMessage(chatId, { text, mentions });
                       return;
                     }
