@@ -17,10 +17,10 @@ const activeDuels = new Map();  // chatId → duelState
 const duelInvites = new Map();  // chatId → { challenger, target, stake, timestamp }
 
 // ─── PvP Balance Constants ────────────────────
-const PVP_DAMAGE_MULT   = 0.38;  // Base damage dampener — prevents one-shots
-const PVP_ENERGY_REGEN  = 18;    // Energy gained per turn
-const PVP_DEFENSE_CAP   = 0.65;  // Max 65% damage reduction from DEF
-const PVP_ABILITY_MULT  = 0.50;  // Ability damage dampener (slightly higher than basic)
+const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
+const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
+const PVP_DEFENSE_CAP   = 0.50;  // Max 50% damage reduction from DEF in PvP
+const PVP_ABILITY_MULT  = 1.00;  // Ability damage multiplier in PvP
 const PVP_CRIT_MULT     = 1.5;   // Crit multiplier in PvP
 const PVP_TIMEOUT_MS    = 300000; // 5 minutes inactivity = expired duel
 const CHALLENGE_TIMEOUT = 120000; // 2 minutes to accept challenge
@@ -161,12 +161,19 @@ async function acceptChallenge(sock, chatId, targetJid) {
     const p1 = duelState.players[0];
     const p2 = duelState.players[1];
     const startMsg =
-        `⚔️ *DUEL STARTED!* ⚔️\n\n` +
-        `🔴 *${p1.name}* (Lv.${p1.level} ${p1.class?.name || 'Fighter'}) — ${p1.hp}/${p1.maxHp} HP\n` +
-        `🔵 *${p2.name}* (Lv.${p2.level} ${p2.class?.name || 'Fighter'}) — ${p2.hp}/${p2.maxHp} HP\n\n` +
-        `🎯 *${p1.name}* goes first!\n` +
-        `⚡ Energy: ${p1.energy}/${p1.maxEnergy}\n\n` +
-        `🗡️ \`${botConfig.getPrefix()} combat attack\` | 🔮 \`${botConfig.getPrefix()} combat ability <n>\` | 🏃 \`${botConfig.getPrefix()} combat flee\``;
+        `╔════════════════════════╗\n` +
+        `   🏟️   *PHANTOM STANDOFF*   🏟️\n` +
+        `╚════════════════════════╝\n\n` +
+        `🔴 *${p1.name}* \`Lv.${p1.level}\` (${p1.class?.name || 'Fighter'})\n` +
+        `   ↳ ❤️ HP: \`${p1.hp}/${p1.maxHp}\` · ⚡ EN: \`${p1.energy}/${p1.maxEnergy}\`\n\n` +
+        `🔵 *${p2.name}* \`Lv.${p2.level}\` (${p2.class?.name || 'Fighter'})\n` +
+        `   ↳ ❤️ HP: \`${p2.hp}/${p2.maxHp}\` · ⚡ EN: \`${p2.energy}/${p2.maxEnergy}\`\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 *${p1.name}* claims the initiative!\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
+        `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+        `🏃 \`${botConfig.getPrefix()} combat flee\``;
 
     return { success: true, duel: duelState, image, message: startMsg };
 }
@@ -257,7 +264,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * PVP_ABILITY_MULT);
             // Partial defense mitigation
             const defReduction = Math.min(opponent.stats.def * 0.2, damage * PVP_DEFENSE_CAP);
-            damage = Math.max(8, Math.floor(damage - defReduction));
+            damage = Math.max(20, Math.floor(damage - defReduction));
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
             
@@ -275,7 +282,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         } else if (effect?.type === 'damage_cc') {
             const statBase = currentPlayer.stats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.0) * PVP_ABILITY_MULT);
-            damage = Math.max(5, damage - Math.floor(opponent.stats.def * 0.15));
+            damage = Math.max(15, damage - Math.floor(opponent.stats.def * 0.15));
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 *${damage}* damage`;
             if (Math.random() * 100 < (effect.ccChance || 30)) {
@@ -326,14 +333,20 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     const imageResult = await generateDuelImage(duel);
     
-    let statusMsg = actionResult;
-    statusMsg += `\n\n━━━━━━━━━━━━━━━━━━━━━\n`;
-    statusMsg += `❤️ *${currentPlayer.name}:* ${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\n`;
-    statusMsg += `❤️ *${opponent.name}:* ${Math.max(0, opponent.hp)}/${opponent.maxHp}\n`;
-    statusMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    statusMsg += `🎯 *@${nextPlayer.jid.split('@')[0]}* — it's your turn!\n`;
-    statusMsg += `⚡ Energy: ${Math.floor(nextPlayer.energy)}/${nextPlayer.maxEnergy}\n`;
-    statusMsg += `🗡️ \`${botConfig.getPrefix()} combat attack\` | 🔮 \`${botConfig.getPrefix()} combat ability <n>\` | 🏃 \`${botConfig.getPrefix()} combat flee\``;
+    let statusMsg = `╔════════════════════════╗\n` +
+                    `   ⚔️   *COMBAT STATUS*   ⚔️\n` +
+                    `╚════════════════════════╝\n\n` +
+                    `${actionResult}\n\n` +
+                    `🔴 *${currentPlayer.name}*\n` +
+                    `   ↳ ❤️ HP: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` · ⚡ EN: \`${Math.floor(currentPlayer.energy)}\`\n` +
+                    `🔵 *${opponent.name}*\n` +
+                    `   ↳ ❤️ HP: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` · ⚡ EN: \`${Math.floor(opponent.energy)}\`\n\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
+                    `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+                    `🏃 \`${botConfig.getPrefix()} combat flee\``;
 
     return {
         success: true,
@@ -365,7 +378,7 @@ function resolveBasicAttack(attacker, defender) {
         Math.floor(defender.stats.def * 0.25),
         Math.floor(damage * PVP_DEFENSE_CAP)
     );
-    damage = Math.max(5, damage - defReduction);
+    damage = Math.max(15, damage - defReduction);
 
     return { damage, isCrit, missed: false };
 }
@@ -428,14 +441,14 @@ async function finishDuel(chatId, duel, winner, loser) {
 
     progression.addXP(winner.jid, xpGain, 'PvP Victory');
 
-    let msg = `╔══════════════════════════╗\n`;
-    msg += `   🏆 *DUEL RESULT*\n`;
-    msg += `╚══════════════════════════╝\n\n`;
+    let msg = `╔════════════════════════╗\n`;
+    msg += `   🏆   *DUEL RESULT*   🏆\n`;
+    msg += `╚════════════════════════╝\n\n`;
     msg += `👑 *Winner:* ${winner.name}\n`;
     msg += `💀 *Defeated:* ${loser.name}\n\n`;
     msg += `🎁 *Rewards:*\n`;
-    msg += `${rewardMsg}\n`;
-    msg += `⭐ +${xpGain} XP\n`;
+    msg += `   ↳ ${rewardMsg}\n`;
+    msg += `   ↳ ⭐ +${xpGain} XP\n`;
     
     return msg;
 }
