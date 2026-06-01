@@ -81,7 +81,11 @@ function beginGamblingRound(user) {
 
   const rounds = user.gamblingProfile.roundsToday;
   const edge = Math.min(0.03 + rounds * 0.001, 0.10); // Start at 3%, max 10%
-  const forcedLossChance = Math.min(Math.max((rounds - 20) * 0.005, 0), 0.10); // Starts after 20 rounds, max 10%
+  let forcedLossChance = Math.min(Math.max((rounds - 20) * 0.005, 0), 0.10); // Starts after 20 rounds, max 10%
+
+  if (user.wallet >= getDailyWalletCap(user)) {
+    forcedLossChance = 1.0;
+  }
 
   return { rounds, edge, forcedLossChance };
 }

@@ -8087,14 +8087,26 @@ ${memberList}`;
                       lowerTxt.startsWith(
                         `${botConfig.getPrefix().toLowerCase()} hidetag `,
                       )) &&
-                    isGroupChat &&
-                    groupMetadata
+                    isGroupChat
                   ) {
                     if (!canUseAdminCommands) {
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
                           `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+
+                    // Ensure we have group metadata (cold cache fallback)
+                    if (!groupMetadata) {
+                      try {
+                        groupMetadata = await getGroupMetadata(chatId, true);
+                      } catch (_) {}
+                    }
+                    if (!groupMetadata) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Couldn't load group info. Try again in a moment.",
                       });
                       return;
                     }
@@ -9770,6 +9782,27 @@ Admins can:
                     // ACTIVITY COMMANDS
                     // ============================================
 
+                    // Helper: parse a time-period arg like "1m", "1h", "1d", "1w" → ms
+                    function parseTimePeriod(arg) {
+                      if (!arg) return null;
+                      const match = arg.trim().match(/^(\d+)([mhdw])$/);
+                      if (!match) return null;
+                      const n = parseInt(match[1]);
+                      const unit = match[2];
+                      const multipliers = { m: 60000, h: 3600000, d: 86400000, w: 604800000 };
+                      return n * multipliers[unit];
+                    }
+
+                    function formatPeriodLabel(arg) {
+                      if (!arg) return "today";
+                      const match = arg.trim().match(/^(\d+)([mhdw])$/);
+                      if (!match) return arg;
+                      const n = match[1];
+                      const labels = { m: "minute", h: "hour", d: "day", w: "week" };
+                      const label = labels[match[2]];
+                      return `last ${n} ${label}${n > 1 ? "s" : ""}`;
+                    }
+
                     // `${botConfig.getPrefix().toLowerCase()}` activity - show total messages today
                     if (
                       lowerTxt ===
@@ -9781,65 +9814,209 @@ Admins can:
                         0,
                       );
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `total messages today: ${total}`,
+                        text: BOT_MARKER + `📊 Total messages this session: *${total}*`,
                       });
                       return;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` active - show most active members
+                    // `${botConfig.getPrefix().toLowerCase()}` active [period] - show most active members (optional time filter)
                     if (
-                      lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} active`
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} active` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} active `)
                     ) {
-                      const activity = getChatActivity(chatId);
-                      const sorted = activity
-                        .sort((a, b) => b.count - a.count)
-                        .slice(0, 10);
-                      let text = BOT_MARKER + "User activity:\n\n";
+                      if (!isGroupChat) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                        return;
+                      }
+                      const periodArg = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} active`, "").trim() || null;
+                      const periodMs = parseTimePeriod(periodArg);
+                      const periodLabel = formatPeriodLabel(periodArg);
+                      const now = Date.now();
+
+                      let activity = getChatActivity(chatId);
+                      // If a time filter is given, filter by lastMessage timestamp
+                      if (periodMs !== null) {
+                        activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
+                      }
+
+                      const sorted = activity.sort((a, b) => b.count - a.count).slice(0, 15);
+
+                      if (sorted.length === 0) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 No activity recorded in the ${periodLabel}.`,
+                        });
+                        return;
+                      }
+
+                      let text = BOT_MARKER + `🏆 *Most Active Members* (${periodLabel})\n\n`;
                       sorted.forEach((user, i) => {
-                        text += `${i + 1}. @${user.userId.split(`@`)[0]} - ${user.count} messages\n`;
+                        const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+                        text += `${medal} @${user.userId.split("@")[0]} — *${user.count}* msg${user.count !== 1 ? "s" : ""}\n`;
                       });
                       const mentions = sorted.map((u) => u.userId);
                       await sock.sendMessage(chatId, { text, mentions });
                       return;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` inactive - show inactive members
+                    // `${botConfig.getPrefix().toLowerCase()}` inactive [period] - show inactive members (admin only)
                     if (
-                      lowerTxt ===
-                        `${botConfig.getPrefix().toLowerCase()} inactive` &&
-                      isGroupChat &&
-                      groupMetadata
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} inactive` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} inactive `)
                     ) {
+                      if (!isGroupChat || !groupMetadata) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                        return;
+                      }
                       if (!canUseAdminCommands) {
                         return await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "Admins only.",
+                          text: BOT_MARKER + "🔒 Admins only.",
                         });
                       }
-                      const activity = getChatActivity(chatId);
-                      const activeUsers = new Set(
-                        activity.map((a) => a.userId),
-                      );
-                      const inactive = groupMetadata.participants
-                        .filter(
-                          (p) =>
-                            !activeUsers.has(p.id) && p.id !== sock.user.id,
-                        )
-                        .slice(0, 10);
 
-                      if (inactive.length > 0) {
-                        let text =
-                          BOT_MARKER + "inactive members, below top 10\n\n";
-                        inactive.forEach((p, i) => {
-                          text += `${i + 1}. @${p.id.split(`@`)[0]}\n`;
-                        });
-                        const mentions = inactive.map((p) => p.id);
-                        await sock.sendMessage(chatId, { text, mentions });
-                      } else {
+                      const periodArg = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} inactive`, "").trim() || null;
+                      const periodMs = parseTimePeriod(periodArg);
+                      const periodLabel = formatPeriodLabel(periodArg);
+                      const now = Date.now();
+
+                      const activity = getChatActivity(chatId);
+                      // Users who HAVE been active within the period
+                      const activeUserSet = new Set(
+                        periodMs !== null
+                          ? activity.filter((u) => (now - u.lastMessage) <= periodMs).map((u) => u.userId)
+                          : activity.map((u) => u.userId)
+                      );
+
+                      const botJidNorm = jidNormalizedUser(sock.user.id);
+                      const inactive = groupMetadata.participants.filter((p) => {
+                        if (p.id === botJidNorm) return false;
+                        // Resolve LID vs phone for comparison
+                        const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
+                        // Check if any active userId matches
+                        for (const aId of activeUserSet) {
+                          const aPhone = lidResolver.resolveToPhone(aId, configInstance.getAuthPath());
+                          if (pPhone === aPhone) return false;
+                        }
+                        return true;
+                      });
+
+                      if (inactive.length === 0) {
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "everyone's been active today.",
+                          text: BOT_MARKER + `✅ Everyone has been active in the ${periodLabel}!`,
+                        });
+                        return;
+                      }
+
+                      let text = BOT_MARKER + `💤 *Inactive Members* (${periodLabel}) — ${inactive.length} found\n\n`;
+                      inactive.slice(0, 20).forEach((p, i) => {
+                        text += `${i + 1}. @${p.id.split("@")[0]}\n`;
+                      });
+                      if (inactive.length > 20) text += `\n...and ${inactive.length - 20} more.`;
+                      const mentions = inactive.slice(0, 20).map((p) => p.id);
+                      await sock.sendMessage(chatId, { text, mentions });
+                      return;
+                    }
+
+                    // `${botConfig.getPrefix().toLowerCase()}` tagactive [period] - tag/mention active members (admin only)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} tagactive` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tagactive `)
+                    ) {
+                      if (!isGroupChat) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                        return;
+                      }
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "🔒 Admins only.",
                         });
                       }
+
+                      const rawAfter = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} tagactive`, "").trim();
+                      // rawAfter might be: "1h", "1d Some custom text", or just custom text
+                      const parts = rawAfter.split(" ");
+                      const periodArg = parseTimePeriod(parts[0]) !== null ? parts[0] : null;
+                      const customMsg = periodArg ? parts.slice(1).join(" ").trim() : rawAfter;
+                      const periodMs = parseTimePeriod(periodArg);
+                      const periodLabel = formatPeriodLabel(periodArg);
+                      const now = Date.now();
+
+                      let activity = getChatActivity(chatId);
+                      if (periodMs !== null) {
+                        activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
+                      }
+
+                      if (activity.length === 0) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 No active members found in the ${periodLabel}.`,
+                        });
+                        return;
+                      }
+
+                      const mentions = activity.map((u) => u.userId);
+                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const msgText = customMsg || `Hey everyone active in the ${periodLabel}! 👋`;
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📢 *Tagging active members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
+                        mentions,
+                      });
+                      return;
+                    }
+
+                    // `${botConfig.getPrefix().toLowerCase()}` taginactive [period] [msg] - tag/mention inactive members (admin only)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} taginactive` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} taginactive `)
+                    ) {
+                      if (!isGroupChat || !groupMetadata) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                        return;
+                      }
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "🔒 Admins only.",
+                        });
+                      }
+
+                      const rawAfter = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} taginactive`, "").trim();
+                      const parts = rawAfter.split(" ");
+                      const periodArg = parseTimePeriod(parts[0]) !== null ? parts[0] : null;
+                      const customMsg = periodArg ? parts.slice(1).join(" ").trim() : rawAfter;
+                      const periodMs = parseTimePeriod(periodArg);
+                      const periodLabel = formatPeriodLabel(periodArg);
+                      const now = Date.now();
+
+                      const activity = getChatActivity(chatId);
+                      const activeUserSet = new Set(
+                        periodMs !== null
+                          ? activity.filter((u) => (now - u.lastMessage) <= periodMs).map((u) => u.userId)
+                          : activity.map((u) => u.userId)
+                      );
+
+                      const botJidNorm2 = jidNormalizedUser(sock.user.id);
+                      const inactiveMembers = groupMetadata.participants.filter((p) => {
+                        if (p.id === botJidNorm2) return false;
+                        const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
+                        for (const aId of activeUserSet) {
+                          const aPhone = lidResolver.resolveToPhone(aId, configInstance.getAuthPath());
+                          if (pPhone === aPhone) return false;
+                        }
+                        return true;
+                      });
+
+                      if (inactiveMembers.length === 0) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Everyone has been active in the ${periodLabel}!`,
+                        });
+                        return;
+                      }
+
+                      const mentions = inactiveMembers.map((p) => p.id);
+                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const msgText = customMsg || `Hey, we haven't seen you in a while! Come chat 👀`;
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📢 *Tagging inactive members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
+                        mentions,
+                      });
                       return;
                     }
 

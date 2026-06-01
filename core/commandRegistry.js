@@ -134,9 +134,11 @@ const COMMAND_REGISTRY = {
     { cmd: 'record', desc: 'Toggle message recording for summaries.', usage: 'record on/off' },
     { cmd: 'summary', desc: 'Generate an AI summary of recent messages.', usage: 'summary' },
     { cmd: 'recap', desc: 'Alias for summary.', usage: 'recap' },
-    { cmd: 'activity', desc: 'View member activity statistics for this group.', usage: 'activity' },
-    { cmd: 'active', desc: 'List the most active members.', usage: 'active' },
-    { cmd: 'inactive', desc: 'List members who haven\'t spoken recently.', usage: 'inactive' }
+    { cmd: 'activity', desc: 'View total message count this session.', usage: 'activity' },
+    { cmd: 'active', desc: 'List most active members. Add a time period: 1m, 1h, 1d, 1w.', usage: 'active [1m/1h/1d/1w]' },
+    { cmd: 'inactive', desc: 'List members who have not spoken in a time period. Admins only.', usage: 'inactive [1m/1h/1d/1w]' },
+    { cmd: 'tagactive', desc: 'Mention all active members in the group. Admins only.', usage: 'tagactive [1m/1h/1d/1w] [message]' },
+    { cmd: 'taginactive', desc: 'Mention all inactive members to get their attention. Admins only.', usage: 'taginactive [1m/1h/1d/1w] [message]' }
   ],
   PROGRESSION: [
     { cmd: 'level', desc: 'Check your current level and XP progress.', usage: 'level [user]' },
