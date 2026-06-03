@@ -1,0 +1,45 @@
+const FALLBACK_MAP = {
+  // Targeted fallbacks
+  nuzzle: 'cuddle',
+  punch: 'slap',
+  shoot: 'yeet',
+  kill: 'slap',
+  kick: 'slap',
+  stab: 'slap',
+  throw: 'yeet',
+  tickle: 'poke',
+  chase: 'wave',
+  headpat: 'pat',
+  carry: 'hug',
+  arrest: 'bonk',
+  trap: 'bonk',
+  triggered: 'bully',
+
+  // Self fallbacks
+  facepalm: 'sad',
+  shrug: 'smile',
+  sip: 'smug',
+  stare: 'glance',
+  think: 'smug',
+  thumbsup: 'happy',
+  sleep: 'sad',
+  panic: 'cry',
+  laugh: 'smile',
+  bored: 'sad',
+  angry: 'bully',
+  confused: 'glance',
+  scream: 'cry',
+  run: 'smile',
+  hide: 'wink',
+  yes: 'smile',
+  no: 'sad',
+  clap: 'happy',
+  nervous: 'blush',
+  pout: 'sad',
+  celebrate: 'dance',
+  faint: 'sad',
+  peek: 'glance',
+  nod: 'happy'
+};
+
+module.exports = { FALLBACK_MAP };

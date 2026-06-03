@@ -287,6 +287,11 @@ const COMMAND_REGISTRY = {
     { cmd: 'on', desc: 'Turn the bot ON for this chat.', usage: 'on' },
     { cmd: 'off', desc: 'Turn the bot OFF for this chat.', usage: 'off' }
   ],
+  REACTIONS: [
+    { cmd: 'reactions', desc: 'List all available anime reaction commands.', usage: 'reactions' },
+    { cmd: 'hug', desc: 'Send a hug GIF. Requires tag or reply.', usage: 'hug @user' },
+    { cmd: 'wink', desc: 'Wink to express your vibes.', usage: 'wink' }
+  ],
   MODERATOR: [
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },
     { cmd: 'cardmod', desc: 'Manage Card Moderators (Owner only).', usage: 'cardmod <add/del/list> @user' },

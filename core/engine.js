@@ -165,6 +165,8 @@ const pvpSystem = require("./pvpSystem");
 const cardSystem = require("./cardSystem");
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
 const NodeCache = require("node-cache");
+const REACTIONS = require("../reactions/config");
+const { handleReaction } = require("../reactions/handler");
 
 async function startBot(configInstance) {
   let sock;
@@ -2997,6 +2999,7 @@ What to do:
       ANIME: "🎎",
 
       INFO: "ℹ️",
+      REACTIONS: "💞",
     };
 
     // 📢 CHANNEL CONFIGURATION
@@ -4244,6 +4247,43 @@ _💡 Reply with another number from your search list!_`.trim();
                     console.log(
                       `DEBUG: lowerTxt='${lowerTxt}', Prefix='${currentPrefix}', cmd='${primaryCmd}'`,
                     );
+
+                    // --- REACTION COMMANDS ---
+                    const reaction = REACTIONS.find((r) => r.type === primaryCmd);
+                    if (reaction) {
+                      await handleReaction(
+                        sock,
+                        m,
+                        reaction.type,
+                        reaction.emoji,
+                        reaction.targeted,
+                        chatId,
+                        senderJid,
+                        senderName
+                      );
+                      return;
+                    }
+
+                    if (primaryCmd === "reactions") {
+                      const targeted = REACTIONS.filter((r) => r.targeted)
+                        .map((r) => `${r.emoji} ${r.type}`)
+                        .join(", ");
+                      const self = REACTIONS.filter((r) => !r.targeted)
+                        .map((r) => `${r.emoji} ${r.type}`)
+                        .join(", ");
+
+                      const helpMessage =
+                        `🎭 *REACTION COMMANDS*\n\n` +
+                        `👉 *Targeted (tag someone or reply):*\n${targeted}\n\n` +
+                        `✨ *Self (no target needed):*\n${self}`;
+
+                      await sock.sendMessage(
+                        chatId,
+                        { text: BOT_MARKER + helpMessage },
+                        { quoted: m }
+                      );
+                      return;
+                    }
 
                     // .j menu or .j help
                     if (primaryCmd === "menu" || primaryCmd === "help") {
