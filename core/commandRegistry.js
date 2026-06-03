@@ -299,7 +299,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'wink', desc: 'Wink to express your vibes.', usage: 'wink' },
     { cmd: 'cry', desc: 'Cry out loud.', usage: 'cry' },
     { cmd: 'dance', desc: 'Start dancing.', usage: 'dance' },
-    { cmd: 'smug', desc: 'Look smug.', usage: 'smug' }
+    { cmd: 'smug', desc: 'Look smug.', usage: 'smug' },
+    { cmd: 'eat', desc: 'Eat/Nom something or someone.', usage: 'eat @user' }
   ],
   MODERATOR: [
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },

@@ -30,6 +30,14 @@ const REACTIONS = [
   { type: 'arrest', emoji: '👮', targeted: true },
   { type: 'trap', emoji: '🪤', targeted: true },
   { type: 'triggered', emoji: '💢', targeted: true },
+  { type: 'eat', emoji: '😋', targeted: true },
+  { type: 'baka', emoji: '💢', targeted: true },
+  { type: 'blowkiss', emoji: '😘', targeted: true },
+  { type: 'handshake', emoji: '🤝', targeted: true },
+  { type: 'kabedon', emoji: '🫣', targeted: true },
+  { type: 'lappillow', emoji: '💤', targeted: true },
+  { type: 'peck', emoji: '😘', targeted: true },
+  { type: 'shake', emoji: '🤝', targeted: true },
 
   // Self reactions
   { type: 'wink', emoji: '😉', targeted: false },
@@ -63,7 +71,18 @@ const REACTIONS = [
   { type: 'peek', emoji: '🫣', targeted: false },
   { type: 'sad', emoji: '😔', targeted: false },
   { type: 'awoo', emoji: '🐺', targeted: false },
-  { type: 'nod', emoji: '👍', targeted: false }
+  { type: 'nod', emoji: '👍', targeted: false },
+  { type: 'bleh', emoji: '👅', targeted: false },
+  { type: 'lurk', emoji: '👀', targeted: false },
+  { type: 'nope', emoji: '🙅', targeted: false },
+  { type: 'nya', emoji: '🐱', targeted: false },
+  { type: 'salute', emoji: '🫡', targeted: false },
+  { type: 'shocked', emoji: '😲', targeted: false },
+  { type: 'spin', emoji: '🌀', targeted: false },
+  { type: 'tableflip', emoji: '┬─┬', targeted: false },
+  { type: 'teehee', emoji: '🤭', targeted: false },
+  { type: 'wag', emoji: '🐕', targeted: false },
+  { type: 'yawn', emoji: '🥱', targeted: false }
 ];
 
 module.exports = REACTIONS;

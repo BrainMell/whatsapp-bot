@@ -12,6 +12,14 @@ const WAIFU_PICS_MAP = {
   arrest: 'bonk',
   trap: 'bonk',
   triggered: 'bully',
+  eat: 'nom',
+  baka: 'bully',
+  blowkiss: 'kiss',
+  handshake: 'wave',
+  kabedon: 'cuddle',
+  lappillow: 'cuddle',
+  peck: 'kiss',
+  shake: 'wave',
 
   // Self categories mapped to closest Waifu.pics SFW categories
   facepalm: 'sad',
@@ -37,7 +45,18 @@ const WAIFU_PICS_MAP = {
   celebrate: 'dance',
   faint: 'sad',
   peek: 'glance',
-  nod: 'happy'
+  nod: 'happy',
+  bleh: 'smug',
+  lurk: 'wink',
+  nope: 'cringe',
+  nya: 'neko',
+  salute: 'smile',
+  shocked: 'cry',
+  spin: 'dance',
+  tableflip: 'bully',
+  teehee: 'smile',
+  wag: 'dance',
+  yawn: 'happy'
 };
 
 const NEKOS_BEST_MAP = {
@@ -54,6 +73,7 @@ const NEKOS_BEST_MAP = {
   headpat: 'pat',
   trap: 'cuddle',
   triggered: 'slap',
+  eat: 'nom',
 
   // Self categories mapped to closest Nekos.best SFW categories
   panic: 'cry',
