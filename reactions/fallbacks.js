@@ -56,7 +56,8 @@ const WAIFU_PICS_MAP = {
   tableflip: 'bully',
   teehee: 'smile',
   wag: 'dance',
-  yawn: 'happy'
+  yawn: 'happy',
+  backflip: 'dance'
 };
 
 const NEKOS_BEST_MAP = {
@@ -84,7 +85,8 @@ const NEKOS_BEST_MAP = {
   nervous: 'blush',
   celebrate: 'dance',
   faint: 'cry',
-  peek: 'wink'
+  peek: 'wink',
+  backflip: 'spin'
 };
 
 module.exports = {

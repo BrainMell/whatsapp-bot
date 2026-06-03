@@ -82,7 +82,8 @@ const REACTIONS = [
   { type: 'tableflip', emoji: '┬─┬', targeted: false },
   { type: 'teehee', emoji: '🤭', targeted: false },
   { type: 'wag', emoji: '🐕', targeted: false },
-  { type: 'yawn', emoji: '🥱', targeted: false }
+  { type: 'yawn', emoji: '🥱', targeted: false },
+  { type: 'backflip', emoji: '🤸', targeted: false }
 ];
 
 module.exports = REACTIONS;
