@@ -949,6 +949,14 @@ async function startBot(configInstance) {
         },
         { upsert: true }
       ).catch((err) => console.error(`Error saving activity for ${key}:`, err.message));
+
+      // Also log in ActivityLog for time-windowed active queries
+      const ActivityLog = require('./models/ActivityLog');
+      ActivityLog.create({
+        chatId,
+        userId,
+        timestamp: new Date()
+      }).catch((err) => console.error(`Error saving ActivityLog for ${chatId}/${userId}:`, err.message));
     }
 
     async function getActivity(chatId, userId) {
@@ -980,6 +988,29 @@ async function startBot(configInstance) {
         }));
       } catch (err) {
         console.error(`Error getting chat activity for ${chatId}:`, err.message);
+        return [];
+      }
+    }
+
+    async function getChatActivityForPeriod(chatId, periodMs) {
+      const ActivityLog = require('./models/ActivityLog');
+      try {
+        const query = { chatId };
+        if (periodMs !== null) {
+          query.timestamp = { $gte: new Date(Date.now() - periodMs) };
+        }
+
+        const results = await ActivityLog.aggregate([
+          { $match: query },
+          { $group: { _id: '$userId', count: { $sum: 1 } } }
+        ]);
+
+        return results.map(r => ({
+          userId: r._id,
+          count: r.count
+        }));
+      } catch (err) {
+        console.error(`Error getting chat activity for period in ${chatId}:`, err.message);
         return [];
       }
     }
@@ -9941,14 +9972,9 @@ Admins can:
                       const periodArg = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} active`, "").trim() || null;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
-                      const now = Date.now();
 
-                      let activity = await getChatActivity(chatId);
-                      // If a time filter is given, filter by lastMessage timestamp
-                      if (periodMs !== null) {
-                        activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
-                      }
-
+                      // Use windowed activity tracking (defaults to last 24 hours if no period is specified)
+                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
                       const sorted = activity.sort((a, b) => b.count - a.count).slice(0, 15);
 
                       if (sorted.length === 0) {
@@ -9986,15 +10012,9 @@ Admins can:
                       const periodArg = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} inactive`, "").trim() || null;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
-                      const now = Date.now();
 
-                      const activity = await getChatActivity(chatId);
-                      // Users who HAVE been active within the period
-                      const activeUserSet = new Set(
-                        periodMs !== null
-                          ? activity.filter((u) => (now - u.lastMessage) <= periodMs).map((u) => u.userId)
-                          : activity.map((u) => u.userId)
-                      );
+                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm = jidNormalizedUser(sock.user.id);
                       const inactive = groupMetadata.participants.filter((p) => {
@@ -10048,12 +10068,8 @@ Admins can:
                       const customMsg = periodArg ? parts.slice(1).join(" ").trim() : rawAfter;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
-                      const now = Date.now();
 
-                      let activity = await getChatActivity(chatId);
-                      if (periodMs !== null) {
-                        activity = activity.filter((u) => (now - u.lastMessage) <= periodMs);
-                      }
+                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
 
                       if (activity.length === 0) {
                         await sock.sendMessage(chatId, {
@@ -10093,14 +10109,9 @@ Admins can:
                       const customMsg = periodArg ? parts.slice(1).join(" ").trim() : rawAfter;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
-                      const now = Date.now();
 
-                      const activity = await getChatActivity(chatId);
-                      const activeUserSet = new Set(
-                        periodMs !== null
-                          ? activity.filter((u) => (now - u.lastMessage) <= periodMs).map((u) => u.userId)
-                          : activity.map((u) => u.userId)
-                      );
+                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm2 = jidNormalizedUser(sock.user.id);
                       const inactiveMembers = groupMetadata.participants.filter((p) => {
