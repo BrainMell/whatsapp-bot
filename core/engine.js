@@ -698,9 +698,30 @@ async function startBot(configInstance) {
       }
     }
 
-    // --------------------------
-    // Helpers
-    // --------------------------
+    function decodeHtmlEntities(text) {
+      if (!text) return "";
+      return text
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&deg;/g, '°')
+        .replace(/&rsquo;/g, "'")
+        .replace(/&lsquo;/g, "'")
+        .replace(/&ldquo;/g, '"')
+        .replace(/&rdquo;/g, '"')
+        .replace(/&ndash;/g, '-')
+        .replace(/&mdash;/g, '-')
+        .replace(/&hellip;/g, '...')
+        .replace(/&eacute;/g, 'é')
+        .replace(/&aacute;/g, 'á')
+        .replace(/&oacute;/g, 'ó')
+        .replace(/&iacute;/g, 'í')
+        .replace(/&uacute;/g, 'ú')
+        .replace(/&ntilde;/g, 'ñ');
+    }
+
     function resolveImageUrl(img, base) {
       if (!img) return null;
       img = String(img).trim();
@@ -909,6 +930,7 @@ async function startBot(configInstance) {
 
     const temporaryContext = new Map();
     const pendingTagRequests = new Map();
+    const activeTrivias = new Map();
     const pendingNameRequests = new Map();
     const spamTracker = new Map();
 
@@ -12529,6 +12551,399 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // Trivia Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} trivia`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🧠", key: m.key },
+                      });
+                      try {
+                        const response = await axios.get("https://opentdb.com/api.php?amount=1&type=multiple", { timeout: 8000 });
+                        const data = response.data;
+                        
+                        if (data && data.results && data.results[0]) {
+                          const result = data.results[0];
+                          const question = decodeHtmlEntities(result.question);
+                          const correctAnswer = decodeHtmlEntities(result.correct_answer);
+                          const incorrectAnswers = result.incorrect_answers.map(ans => decodeHtmlEntities(ans));
+                          
+                          const options = [correctAnswer, ...incorrectAnswers];
+                          for (let i = options.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [options[i], options[j]] = [options[j], options[i]];
+                          }
+
+                          activeTrivias.set(chatId, {
+                            question,
+                            correctAnswer,
+                            options,
+                            expiresAt: Date.now() + 60000
+                          });
+
+                          const triviaMsg = [
+                            `${BOT_MARKER}🧠 *TRIVIA QUESTION* 🧠`,
+                            `*Category:* ${result.category} | *Difficulty:* ${result.difficulty}`,
+                            `━━━━━━━━━━━━━━━━━`,
+                            question,
+                            ``,
+                            `1️⃣ ${options[0]}`,
+                            `2️⃣ ${options[1]}`,
+                            `3️⃣ ${options[2]}`,
+                            `4️⃣ ${options[3]}`,
+                            `━━━━━━━━━━━━━━━━━`,
+                            `💡 _Reply with the number (1-4) or the correct text to answer!_`,
+                            `⏳ _You have 60 seconds!_`
+                          ].join("\n");
+
+                          await sock.sendMessage(chatId, { text: triviaMsg }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Invalid API response structure");
+                        }
+                      } catch (err) {
+                        console.error("Trivia Command Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ Trivia service is busy. Try again shortly!"
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // QR Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} qr` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} qr `)
+                    ) {
+                      const textInput = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} qr `.length)
+                        .trim();
+
+                      if (!textInput || lowerTxt === `${botConfig.getPrefix().toLowerCase()} qr`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🖼️ QR GENERATOR",
+                          "qr <text_or_url>",
+                          "qr https://google.com",
+                          "Generate a QR code from any text or link."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "📷", key: m.key },
+                      });
+
+                      try {
+                        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(textInput)}`;
+                        const imageResponse = await axios.get(qrUrl, { responseType: "arraybuffer", timeout: 15000 });
+                        
+                        await sock.sendMessage(chatId, {
+                          image: Buffer.from(imageResponse.data),
+                          caption: `${BOT_MARKER}📱 *QR CODE GENERATED*\n\n*Content:* _${textInput}_`
+                        }, { quoted: m });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("QR Code Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ QR Code generation failed."
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // URL Shortener Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} short` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} short `)
+                    ) {
+                      const urlInput = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} short `.length)
+                        .trim();
+
+                      if (!urlInput || lowerTxt === `${botConfig.getPrefix().toLowerCase()} short`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🔗 URL SHORTENER",
+                          "short <url>",
+                          "short https://github.com/BrainMell/whatsapp-bot",
+                          "Shorten any long URL link."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🔗", key: m.key },
+                      });
+
+                      try {
+                        const response = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(urlInput)}`, { timeout: 8000 });
+                        const shortUrl = response.data;
+                        if (shortUrl && shortUrl.startsWith("http")) {
+                          await sock.sendMessage(chatId, {
+                            text: `${BOT_MARKER}🔗 *SHORTENED URL*\n\n*Original:* ${urlInput}\n*Short:* ${shortUrl}`
+                          }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Invalid response format");
+                        }
+                      } catch (err) {
+                        console.error("TinyURL Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ Shortening failed. Check if the URL is valid."
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // GitHub Profile Search Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} git` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} git `)
+                    ) {
+                      const username = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} git `.length)
+                        .trim();
+
+                      if (!username || lowerTxt === `${botConfig.getPrefix().toLowerCase()} git`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🐙 GITHUB SEARCH",
+                          "git <username>",
+                          "git BrainMell",
+                          "Fetch statistics about any GitHub user profile."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🐙", key: m.key },
+                      });
+
+                      try {
+                        const response = await axios.get(`https://api.github.com/users/${encodeURIComponent(username)}`, { timeout: 8000 });
+                        const profile = response.data;
+                        
+                        if (profile && profile.login) {
+                          const bio = profile.bio || "No biography provided.";
+                          const name = profile.name || profile.login;
+                          
+                          const report = [
+                            `${BOT_MARKER}🐙 *GITHUB PROFILE: ${name.toUpperCase()}*`,
+                            `━━━━━━━━━━━━━━━━━`,
+                            `*Username:* ${profile.login}`,
+                            `*Bio:* _${bio}_`,
+                            `*Public Repos:* ${profile.public_repos}`,
+                            `*Gists:* ${profile.public_gists}`,
+                            `*Followers:* ${profile.followers} | *Following:* ${profile.following}`,
+                            `*Company:* ${profile.company || "None"}`,
+                            `*Location:* ${profile.location || "Earth"}`,
+                            `*Profile Link:* ${profile.html_url}`,
+                            `━━━━━━━━━━━━━━━━━`
+                          ].join("\n");
+
+                          if (profile.avatar_url) {
+                            try {
+                              const imgResponse = await axios.get(profile.avatar_url, { responseType: "arraybuffer", timeout: 10000 });
+                              await sock.sendMessage(chatId, {
+                                image: Buffer.from(imgResponse.data),
+                                caption: report
+                              }, { quoted: m });
+                            } catch (imgErr) {
+                              console.log("Failed to load GitHub avatar, sending text");
+                              await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                            }
+                          } else {
+                            await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                          }
+
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Profile not found");
+                        }
+                      } catch (err) {
+                        console.error("GitHub API Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ GitHub user "${username}" was not found.`
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Anime Quote Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} animequote`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "💬", key: m.key },
+                      });
+                      try {
+                        let quote = "";
+                        let character = "";
+                        let anime = "";
+
+                        try {
+                          const response = await axios.get("https://animechan.xyz/api/random", { timeout: 8000 });
+                          if (response.data && response.data.quote) {
+                            quote = response.data.quote;
+                            character = response.data.character;
+                            anime = response.data.anime;
+                          }
+                        } catch (apiErr) {
+                          console.log("Anime quote API failed, trying fallback list or Groq", apiErr.message);
+                        }
+
+                        if (!quote) {
+                          try {
+                            const res = await groq.chat.completions.create({
+                              messages: [
+                                {
+                                  role: "user",
+                                  content: "Provide one famous, iconic anime quote. Return in JSON format only: {\"quote\": \"...\", \"character\": \"...\", \"anime\": \"...\"}"
+                                }
+                              ],
+                              model: "llama-3.1-8b-instant",
+                              response_format: { type: "json_object" },
+                              timeout: 5000
+                            });
+                            const data = JSON.parse(res.choices[0].message.content);
+                            quote = data.quote;
+                            character = data.character;
+                            anime = data.anime;
+                          } catch (groqErr) {
+                            console.log("Groq quote generation failed, using static list");
+                          }
+                        }
+
+                        if (!quote) {
+                          const fallbacks = [
+                            { quote: "If you don't like your destiny, don't accept it. Instead, have the courage to change it the way you want it to be!", character: "Naruto Uzumaki", anime: "Naruto" },
+                            { quote: "Whatever you lose, you'll find it again. But what you throw away you'll never get back.", character: "Kenshin Himura", anime: "Rurouni Kenshin" },
+                            { quote: "People's dreams... never end!", character: "Marshall D. Teach", anime: "One Piece" },
+                            { quote: "I will make you eat those words!", character: "Luffy", anime: "One Piece" }
+                          ];
+                          const item = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                          quote = item.quote;
+                          character = item.character;
+                          anime = item.anime;
+                        }
+
+                        const responseMsg = [
+                          `${BOT_MARKER}💬 *ANIME QUOTE* 💬`,
+                          "",
+                          `> "${quote}"`,
+                          `— _*${character}*_ (${anime})`
+                        ].join("\n");
+
+                        await sock.sendMessage(chatId, { text: responseMsg }, { quoted: m });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Animequote Command Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Cat/Dog Commands (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} cat` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} dog`
+                    ) {
+                      const type = lowerTxt.endsWith("cat") ? "cat" : "dog";
+                      await sock.sendMessage(chatId, {
+                        react: { text: type === "cat" ? "🐱" : "🐶", key: m.key },
+                      });
+
+                      try {
+                        let imgUrl = "";
+                        if (type === "cat") {
+                          const res = await axios.get("https://api.thecatapi.com/v1/images/search", { timeout: 8000 });
+                          if (res.data && res.data[0] && res.data[0].url) {
+                            imgUrl = res.data[0].url;
+                          }
+                        } else {
+                          const res = await axios.get("https://dog.ceo/api/breeds/image/random", { timeout: 8000 });
+                          if (res.data && res.data.message) {
+                            imgUrl = res.data.message;
+                          }
+                        }
+
+                        if (imgUrl) {
+                          const imageResponse = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 15000 });
+                          await sock.sendMessage(chatId, {
+                            image: Buffer.from(imageResponse.data),
+                            caption: `${BOT_MARKER}${type === "cat" ? "🐱 Meow!" : "🐶 Woof!"}`
+                          }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("No image URL returned");
+                        }
+                      } catch (err) {
+                        console.error(`Cat/Dog Error (${type}):`, err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Couldn't fetch a cute ${type} picture right now.`
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Waifu Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} waifu`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🌸", key: m.key },
+                      });
+                      try {
+                        let imgUrl = "";
+                        try {
+                          const res = await axios.get("https://nekos.best/api/v2/waifu", { timeout: 8000 });
+                          if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
+                            imgUrl = res.data.results[0].url;
+                          }
+                        } catch (nekoErr) {
+                          console.log("Nekos.best failed, trying waifu.pics", nekoErr.message);
+                          const res = await axios.get("https://api.waifu.pics/sfw/waifu", { timeout: 8000 });
+                          if (res.data && res.data.url) {
+                            imgUrl = res.data.url;
+                          }
+                        }
+
+                        if (imgUrl) {
+                          const imageResponse = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 15000 });
+                          await sock.sendMessage(chatId, {
+                            image: Buffer.from(imageResponse.data),
+                            caption: `${BOT_MARKER}🌸 Here is your Waifu!`
+                          }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("No image URL found");
+                        }
+                      } catch (err) {
+                        console.error("Waifu command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ Failed to retrieve waifu image."
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
                     // `${botConfig.getPrefix().toLowerCase()}` summary / `${botConfig.getPrefix().toLowerCase()}` recap - Summarize recent group chat
                     // `${botConfig.getPrefix().toLowerCase()}` record
                     if (
@@ -12703,6 +13118,50 @@ ${senderName} said y'all should know:
                         });
                         pendingTagRequests.delete(senderJid);
                         return;
+                      }
+                    }
+
+                    // Check if there is an active trivia in this chat
+                    if (activeTrivias.has(chatId)) {
+                      const triviaData = activeTrivias.get(chatId);
+                      if (Date.now() > triviaData.expiresAt) {
+                        activeTrivias.delete(chatId);
+                      } else {
+                        const choice = parseInt(lowerTxt.trim());
+                        const isCorrectNumber = !isNaN(choice) && choice >= 1 && choice <= 4 && triviaData.options[choice - 1] === triviaData.correctAnswer;
+                        const isCorrectText = lowerTxt.trim() === triviaData.correctAnswer.toLowerCase();
+                        
+                        if (isCorrectNumber || isCorrectText) {
+                          activeTrivias.delete(chatId);
+                          const rewardZeni = 500;
+                          const rewardXp = 50;
+                          
+                          try {
+                            economy.addMoney(senderJid, rewardZeni, "Trivia Reward");
+                            const xpResult = progression.addXP(senderJid, 45, "Trivia Answer");
+                            if (xpResult && xpResult.leveledUp) {
+                              const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
+                              let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
+                              msg += `📈 *Rank:* ${levelDisplay}\n`;
+                              msg += `✨ *Stat Points:* +${xpResult.statPointsGained}\n`;
+                              msg += `🔮 *Skill Points:* +${xpResult.skillPointsGained}\n\n`;
+                              msg += `💡 Use \`${botConfig.getPrefix()} profile\` to see your updated stats!\n`;
+                              msg += `💡 Use \`${botConfig.getPrefix()} allocate\` to spend your points.`;
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + msg }, { quoted: m });
+                            }
+                          } catch (e) {
+                            console.error("Trivia reward error:", e);
+                          }
+
+                          await sock.sendMessage(chatId, {
+                            react: { text: "🎉", key: m.key }
+                          });
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `🎉 *CORRECT!* 🎉\n\n@${senderJid.split("@")[0]} got it right!\n*Answer:* ${triviaData.correctAnswer}\n\n*Rewards:* +${rewardZeni} Zeni | +${rewardXp} XP`,
+                            contextInfo: { mentionedJid: [senderJid] }
+                          }, { quoted: m });
+                          return;
+                        }
                       }
                     }
 
@@ -16834,6 +17293,20 @@ _(Or reply to their message)_
                       "define",
                       "8ball",
                       "motivate",
+                      "meme",
+                      "wyr",
+                      "quote",
+                      "weather",
+                      "translate",
+                      "crypto",
+                      "trivia",
+                      "qr",
+                      "short",
+                      "git",
+                      "animequote",
+                      "cat",
+                      "dog",
+                      "waifu",
                       "mods",
                       "addmod",
                       "delmod",
@@ -17021,6 +17494,20 @@ _(Or reply to their message)_
                       "rate",
                       "8ball",
                       "motivate",
+                      "meme",
+                      "wyr",
+                      "quote",
+                      "weather",
+                      "translate",
+                      "crypto",
+                      "trivia",
+                      "qr",
+                      "short",
+                      "git",
+                      "animequote",
+                      "cat",
+                      "dog",
+                      "waifu",
                       "fish",
                       "hunt",
                       "anime trending",
