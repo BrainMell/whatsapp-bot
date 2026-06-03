@@ -3,7 +3,6 @@ const WAIFU_PICS_MAP = {
   nuzzle: 'cuddle',
   punch: 'slap',
   shoot: 'yeet',
-  kick: 'slap',
   stab: 'kill', // Waifu.pics has kill
   throw: 'yeet',
   tickle: 'poke',
@@ -46,30 +45,22 @@ const NEKOS_BEST_MAP = {
   kill: 'shoot', // Nekos.best supports shoot
   stab: 'shoot',
   arrest: 'slap',
-  bonk: 'slap',
   bully: 'slap',
   awoo: 'wink',
   glance: 'stare', // Nekos.best supports stare
-  handhold: 'cuddle',
-  highfive: 'wave',
   nuzzle: 'cuddle',
   throw: 'yeet',
-  tickle: 'poke',
   chase: 'wave',
   headpat: 'pat',
-  carry: 'hug',
   trap: 'cuddle',
   triggered: 'slap',
 
   // Self categories mapped to closest Nekos.best SFW categories
-  sip: 'smug',
   panic: 'cry',
   scream: 'cry',
-  run: 'wave',
   hide: 'wink',
   yes: 'smile',
   no: 'pout', // Nekos.best supports pout
-  clap: 'happy',
   nervous: 'blush',
   celebrate: 'dance',
   faint: 'cry',
