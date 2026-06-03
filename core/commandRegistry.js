@@ -13,7 +13,9 @@ const COMMAND_REGISTRY = {
   STICKERS: [
     { cmd: 's', desc: 'Create a sticker from an image/video (use -c to auto-crop) OR search for images to stickerize.', usage: 's [-c] OR s [count] [query]' },
     { cmd: 'toimg', desc: 'Convert a sticker back into an image.', usage: 'toimg (reply to sticker)' },
-    { cmd: 'tovid', desc: 'Convert an animated sticker back into a video.', usage: 'tovid (reply to sticker)' }
+    { cmd: 'tovid', desc: 'Convert an animated sticker back into a video.', usage: 'tovid (reply to sticker)' },
+    { cmd: 'setpack', desc: 'Set custom sticker pack name (Owner/Mod only).', usage: 'setpack <name>' },
+    { cmd: 'setauthor', desc: 'Set custom sticker creator/author name (Owner/Mod only).', usage: 'setauthor <name>' }
   ],
   SEARCH: [
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },

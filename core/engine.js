@@ -6170,9 +6170,12 @@ Usage: ${newUsage}/5${warningText}`;
                       if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
                       if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
+                      const customPack = system.get(`sticker_pack_name_${BOT_ID}`);
+                      const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
+
                       const sticker = new Sticker(buffer, {
-                        pack: `${botConfig.getBotName()} Pack 🃏`,
-                        author: m.pushName || `${botConfig.getBotName()} User`,
+                        pack: customPack || `${botConfig.getBotName()} Pack 🃏`,
+                        author: customAuthor || m.pushName || `${botConfig.getBotName()} User`,
                         type: StickerTypes.DEFAULT, // FFmpeg already handled all geometry
                         quality: 70,
                       });
@@ -6256,6 +6259,8 @@ Usage: ${newUsage}/5${warningText}`;
 
                       // Dynamic pack name based on search term
                       const packName = `${searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1)} Pack 🃏`;
+                      const customPack = system.get(`sticker_pack_name_${BOT_ID}`);
+                      const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
 
                       let successCount = 0;
 
@@ -6269,9 +6274,9 @@ Usage: ${newUsage}/5${warningText}`;
 
                           // Convert to sticker with CROPPED type
                           const sticker = new Sticker(buffer, {
-                            pack: packName,
+                            pack: customPack || packName,
                             author:
-                              m.pushName || `${botConfig.getBotName()} User`,
+                              customAuthor || m.pushName || `${botConfig.getBotName()} User`,
                             type: StickerTypes.CROPPED, // ✅ CHANGED FROM FULL TO CROPPED
                             quality: 70,
                           });
@@ -6317,6 +6322,56 @@ Usage: ${newUsage}/5${warningText}`;
                     }
 
                     return;
+                  }
+
+                  // --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` setpack ---
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} setpack` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} setpack `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the Owner or Global Moderators can customize the sticker pack name.",
+                      });
+                    }
+
+                    const args = txt.substring(`${botConfig.getPrefix().toLowerCase()} setpack`.length).trim();
+                    if (!args) {
+                      const currentPack = system.get(`sticker_pack_name_${BOT_ID}`) || `${botConfig.getBotName()} Pack 🃏`;
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📦 *Custom Sticker Pack Name*\n\nCurrent Pack Name: *${currentPack}*\n\nTo change it, use: \`${botConfig.getPrefix().toLowerCase()} setpack <new name>\``,
+                      });
+                    }
+
+                    await system.set(`sticker_pack_name_${BOT_ID}`, args);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ Sticker Pack Name has been successfully set to: *${args}*`,
+                    });
+                  }
+
+                  // --- COMMAND: `${botConfig.getPrefix().toLowerCase()}` setauthor ---
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} setauthor` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} setauthor `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the Owner or Global Moderators can customize the sticker creator/author name.",
+                      });
+                    }
+
+                    const args = txt.substring(`${botConfig.getPrefix().toLowerCase()} setauthor`.length).trim();
+                    if (!args) {
+                      const currentAuthor = system.get(`sticker_author_name_${BOT_ID}`) || `${botConfig.getBotName()} User`;
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `👤 *Custom Sticker Creator/Author Name*\n\nCurrent Author Name: *${currentAuthor}*\n\nTo change it, use: \`${botConfig.getPrefix().toLowerCase()} setauthor <new name>\``,
+                      });
+                    }
+
+                    await system.set(`sticker_author_name_${BOT_ID}`, args);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ Sticker Creator/Author Name has been successfully set to: *${args}*`,
+                    });
                   }
 
                   // `${botConfig.getPrefix().toLowerCase()}` toimg - Convert sticker to image
