@@ -34,10 +34,21 @@ function resolveTarget(msg) {
 }
 
 /**
- * Resolves and fetches the GIF URL from Waifu.pics or falls back to Nekos.best.
+ * Resolves and fetches the GIF URL from Nekos.best (Primary) or falls back to Waifu.pics (Backup).
  */
 async function fetchGifUrl(category) {
-  // Try 1: Waifu.pics (Standard axios)
+  // Try 1: Nekos.best API (Primary - extremely fast & reliable on this host)
+  try {
+    const nekosCat = NEKOS_BEST_MAP[category] || category;
+    const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 10000 });
+    if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
+      return res.data.results[0].url;
+    }
+  } catch (err) {
+    console.warn(`Nekos.best fetch failed for ${category}: ${err.message}`);
+  }
+
+  // Try 2: Waifu.pics (Standard - Fallback backup)
   try {
     const waifuCat = WAIFU_PICS_MAP[category] || category;
     const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, { timeout: 10000 });
@@ -46,7 +57,7 @@ async function fetchGifUrl(category) {
     console.warn(`Waifu.pics standard fetch failed for ${category}: ${err.message}`);
   }
 
-  // Try 2: Waifu.pics (With browser User-Agent headers)
+  // Try 3: Waifu.pics (Browser headers - Fallback backup)
   try {
     const waifuCat = WAIFU_PICS_MAP[category] || category;
     const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, {
@@ -63,18 +74,7 @@ async function fetchGifUrl(category) {
     console.warn(`Waifu.pics browser-header fetch failed for ${category}: ${err.message}`);
   }
 
-  // Try 3: Nekos.best API fallback
-  try {
-    const nekosCat = NEKOS_BEST_MAP[category] || category;
-    const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 10000 });
-    if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
-      return res.data.results[0].url;
-    }
-  } catch (err) {
-    console.warn(`Nekos.best fetch failed for ${category}: ${err.message}`);
-  }
-
-  throw new Error('All SFW GIF endpoints (Waifu.pics and Nekos.best) timed out or failed to connect.');
+  throw new Error('All SFW GIF endpoints (Nekos.best and Waifu.pics) timed out or failed to connect.');
 }
 
 /**
