@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-const { FALLBACK_MAP } = require('./fallbacks');
+const { WAIFU_PICS_MAP, NEKOS_BEST_MAP } = require('./fallbacks');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
@@ -8,25 +8,6 @@ const path = require('path');
 const os = require('os');
 
 const execPromise = promisify(exec);
-
-// Fallback category mapping for Nekos.best API
-const NEKOS_BEST_MAP = {
-  bonk: 'slap',
-  bully: 'slap',
-  awoo: 'wink',
-  glance: 'stare',
-  handhold: 'cuddle',
-  highfive: 'wave',
-  nom: 'nom',
-  bite: 'bite',
-  slap: 'slap',
-  wink: 'wink',
-  happy: 'happy',
-  sad: 'cry',
-  dance: 'dance',
-  feed: 'feed',
-  poke: 'poke'
-};
 
 /**
  * Resolves the target JID based on priority:
@@ -58,7 +39,8 @@ function resolveTarget(msg) {
 async function fetchGifUrl(category) {
   // Try 1: Waifu.pics (Standard axios)
   try {
-    const res = await axios.get(`https://api.waifu.pics/sfw/${category}`, { timeout: 10000 });
+    const waifuCat = WAIFU_PICS_MAP[category] || category;
+    const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, { timeout: 10000 });
     if (res.data && res.data.url) return res.data.url;
   } catch (err) {
     console.warn(`Waifu.pics standard fetch failed for ${category}: ${err.message}`);
@@ -66,7 +48,8 @@ async function fetchGifUrl(category) {
 
   // Try 2: Waifu.pics (With browser User-Agent headers)
   try {
-    const res = await axios.get(`https://api.waifu.pics/sfw/${category}`, {
+    const waifuCat = WAIFU_PICS_MAP[category] || category;
+    const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*'
@@ -82,8 +65,8 @@ async function fetchGifUrl(category) {
 
   // Try 3: Nekos.best API fallback
   try {
-    const mappedCategory = NEKOS_BEST_MAP[category] || category;
-    const res = await axios.get(`https://nekos.best/api/v2/${mappedCategory}`, { timeout: 10000 });
+    const nekosCat = NEKOS_BEST_MAP[category] || category;
+    const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 10000 });
     if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
       return res.data.results[0].url;
     }
@@ -147,10 +130,8 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
   const tempVideo = path.join(os.tmpdir(), `video_${uniqueId}.mp4`);
 
   try {
-    const resolved = FALLBACK_MAP[type] || type;
-
-    // Resolve URL using multi-stage fetch
-    const gifUrl = await fetchGifUrl(resolved);
+    // Resolve URL using multi-stage fetch with original type
+    const gifUrl = await fetchGifUrl(type);
     
     // Download the GIF file
     let bufferResponse;
