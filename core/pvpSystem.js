@@ -233,6 +233,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     let healing = 0;
     let isCrit = false;
     let missed = false;
+    let abilityObj = null;
 
     if (action === 'attack') {
         const result = resolveBasicAttack(currentPlayer, opponent);
@@ -257,6 +258,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         const abilityIndex = parseInt(target) - 1;
         const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
         const ability = learned[abilityIndex];
+        abilityObj = ability;
 
         if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../botConfig').getPrefix()} abilities\` to see your list.` };
 
@@ -274,7 +276,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
 
         currentPlayer.energy -= energyCost;
-        if (effect?.cooldown) currentPlayer.cooldowns[ability.id] = effect.cooldown;
+        const cooldownVal = effect?.cooldown !== undefined ? effect.cooldown : ability.cooldown;
+        if (cooldownVal) currentPlayer.cooldowns[ability.id] = cooldownVal;
 
         if (effect?.type === 'damage' || effect?.type === 'aoe') {
             const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
@@ -342,6 +345,9 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     // Tick cooldowns
     for (const [skillId, cd] of Object.entries(currentPlayer.cooldowns)) {
+        if (action === 'ability' && abilityObj && skillId === abilityObj.id) {
+            continue; // Do not decrement cooldown on the turn it is applied
+        }
         currentPlayer.cooldowns[skillId] = cd - 1;
         if (currentPlayer.cooldowns[skillId] <= 0) delete currentPlayer.cooldowns[skillId];
     }

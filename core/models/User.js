@@ -96,6 +96,9 @@ const UserSchema = new mongoose.Schema({
   skillPoints: { type: Number, default: 0 },
   skills: { type: Map, of: Number, default: {} }, // Skill levels
   borrowedSkills: { type: Array, default: [] },
+  completedTrials: { type: [String], default: [] },
+  evolutionHistory: { type: Array, default: [] },
+  evolvedAt: { type: Number, default: 0 },
   history: { type: Array, default: [] }, // Transaction logs
 
   // Merged Progression Data

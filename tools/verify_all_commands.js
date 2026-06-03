@@ -161,10 +161,10 @@ async function runFullVerification() {
         },
         {
             name: 'Crafting: Material Consumption',
-            fn: () => {
+            fn: async () => {
                 setupUser();
                 inventorySystem.addItem(testUser, 'healing_herb', 5);
-                craftingSystem.performCraft(testUser, 'lucky_salad');
+                await craftingSystem.performCraft(testUser, 'lucky_salad', 'COOKING');
                 const inv = inventorySystem.getInventory(testUser);
                 return !inv['healing_herb'] || inv['healing_herb'].quantity === 0;
             }
@@ -183,7 +183,8 @@ async function runFullVerification() {
     for (const test of assertions) {
         total++;
         try {
-            if (test.fn()) {
+            const result = await test.fn();
+            if (result) {
                 console.log('  [OK] ' + test.name.padEnd(25) + ' | PASSED');
                 passed++;
             } else {

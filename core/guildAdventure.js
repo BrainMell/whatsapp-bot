@@ -1883,6 +1883,20 @@ function getGameState(chatId, senderJid = null) {
   return null;
 }
 
+function isUserInAdventure(sessionKey) {
+  if (gameStates.has(sessionKey)) return true;
+  const parts = sessionKey.split("_");
+  if (parts.length > 1) {
+    const chatId = parts[0];
+    const senderJid = parts[1];
+    const groupState = gameStates.get(chatId);
+    if (groupState && groupState.active && groupState.players.some(p => p.jid === senderJid)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function deleteGameState(chatId, senderJid = null) {
   // Determine the key
   let key = chatId;
@@ -4087,6 +4101,7 @@ const initAdventure = async (
     votes: {},
     timers: {},
     trialData, // ⚔️ Special trial payload
+    trialTarget: trialData ? trialData.trialBoss : null,
   });
   gameStates.set(sessionKey, state);
 
@@ -4477,10 +4492,10 @@ async function nextStage(sock, groq, sessionKey) {
     }
 
     // ... (rest of standard encounter logic)
-    const rankData = DUNGEON_RANKS[state.dungeonRank];
+    const rankData = DUNGEON_RANKS[state.dungeonRank] || {};
     const isLowRank = ["F", "E", "D"].includes(state.dungeonRank);
     const isBossEncounter =
-      state.encounter === state.maxEncounters && rankData.boss;
+      state.mode === "TRIAL" || (state.encounter === state.maxEncounters && rankData.boss);
 
     let encounterType;
     if (isBossEncounter) {
@@ -4980,9 +4995,33 @@ async function endAdventure(sock, sessionKey, victory = true) {
         `Evolved to ${nextClass.name}`,
       );
 
+      // Update actual User base stats in the database
+      if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+      Object.assign(user.stats, nextClass.stats);
+
+      // Preserve skills structure
+      if (!user.skills) user.skills = {};
+
+      // Record completed trials
+      if (!user.completedTrials) user.completedTrials = [];
+      if (trialData.trialBoss && !user.completedTrials.includes(trialData.trialBoss)) {
+        user.completedTrials.push(trialData.trialBoss);
+      }
+
       // Grant Bonus Points
       const bonusPoints = nextClass.tier === "ASCENDED" ? 10 : 5;
       user.skillPoints = (user.skillPoints || 0) + bonusPoints;
+
+      // Evolution history
+      const level = progression.getLevel(player.jid);
+      user.evolvedAt = level;
+      if (!user.evolutionHistory) user.evolutionHistory = [];
+      user.evolutionHistory.push({
+        from: oldClassName,
+        to: nextClass.name,
+        level,
+        timestamp: Date.now(),
+      });
 
       economy.saveUser(player.jid);
 
@@ -6092,6 +6131,7 @@ module.exports = {
     return "🗳️ Vote cast!";
   },
   getGameState,
+  isUserInAdventure,
   // Export for use in index.js
   CLASSES,
   CONSUMABLES,

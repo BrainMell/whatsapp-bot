@@ -555,7 +555,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     // === TRIALS SYSTEM: Trigger Boss Fight if required ===
-    if (chosen.requirement?.trialBoss) {
+    if (chosen.requirement?.trialBoss && !(user.completedTrials || []).includes(chosen.requirement.trialBoss)) {
         const guildAdventure = require('./guildAdventure');
         const sessionKey = `${chatId}_${senderJid}`;
         
