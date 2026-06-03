@@ -4301,6 +4301,10 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     if (primaryCmd === "reactions" || primaryCmd === "interactions" || primaryCmd === "intaractions") {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🪄", key: m.key },
+                      });
+
                       const targeted = REACTIONS.filter((r) => r.targeted)
                         .map((r) => `${r.emoji} ${r.type}`)
                         .join(", ");
