@@ -9,6 +9,25 @@ const os = require('os');
 
 const execPromise = promisify(exec);
 
+// Fallback category mapping for Nekos.best API
+const NEKOS_BEST_MAP = {
+  bonk: 'slap',
+  bully: 'slap',
+  awoo: 'wink',
+  glance: 'stare',
+  handhold: 'cuddle',
+  highfive: 'wave',
+  nom: 'nom',
+  bite: 'bite',
+  slap: 'slap',
+  wink: 'wink',
+  happy: 'happy',
+  sad: 'cry',
+  dance: 'dance',
+  feed: 'feed',
+  poke: 'poke'
+};
+
 /**
  * Resolves the target JID based on priority:
  * 1. @mention in message text
@@ -31,6 +50,48 @@ function resolveTarget(msg) {
   }
 
   return null;
+}
+
+/**
+ * Resolves and fetches the GIF URL from Waifu.pics or falls back to Nekos.best.
+ */
+async function fetchGifUrl(category) {
+  // Try 1: Waifu.pics (Standard axios)
+  try {
+    const res = await axios.get(`https://api.waifu.pics/sfw/${category}`, { timeout: 10000 });
+    if (res.data && res.data.url) return res.data.url;
+  } catch (err) {
+    console.warn(`Waifu.pics standard fetch failed for ${category}: ${err.message}`);
+  }
+
+  // Try 2: Waifu.pics (With browser User-Agent headers)
+  try {
+    const res = await axios.get(`https://api.waifu.pics/sfw/${category}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      timeout: 10000
+    });
+    let data = res.data;
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (data && data.url) return data.url;
+  } catch (err) {
+    console.warn(`Waifu.pics browser-header fetch failed for ${category}: ${err.message}`);
+  }
+
+  // Try 3: Nekos.best API fallback
+  try {
+    const mappedCategory = NEKOS_BEST_MAP[category] || category;
+    const res = await axios.get(`https://nekos.best/api/v2/${mappedCategory}`, { timeout: 10000 });
+    if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
+      return res.data.results[0].url;
+    }
+  } catch (err) {
+    console.warn(`Nekos.best fetch failed for ${category}: ${err.message}`);
+  }
+
+  throw new Error('All SFW GIF endpoints (Waifu.pics and Nekos.best) timed out or failed to connect.');
 }
 
 /**
@@ -88,27 +149,23 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
   try {
     const resolved = FALLBACK_MAP[type] || type;
 
-    // Fetch JSON from waifu.pics (without custom browser headers to avoid Cloudflare TLS fingerprinter block)
-    const response = await axios.get(`https://api.waifu.pics/sfw/${resolved}`);
-    
-    let responseData = response.data;
-    if (typeof responseData === 'string') {
-      try {
-        responseData = JSON.parse(responseData);
-      } catch (e) {
-        throw new Error(`Failed to parse JSON response. Response starts with: ${responseData.slice(0, 150)}`);
-      }
-    }
-
-    if (!responseData || !responseData.url) {
-      const keys = responseData ? Object.keys(responseData).join(', ') : 'none';
-      throw new Error(`Missing url in response. Response keys: ${keys}. Data: ${JSON.stringify(responseData).slice(0, 150)}`);
-    }
-    
-    const gifUrl = responseData.url;
+    // Resolve URL using multi-stage fetch
+    const gifUrl = await fetchGifUrl(resolved);
     
     // Download the GIF file
-    const bufferResponse = await axios.get(gifUrl, { responseType: 'arraybuffer' });
+    let bufferResponse;
+    try {
+      bufferResponse = await axios.get(gifUrl, { responseType: 'arraybuffer', timeout: 15000 });
+    } catch (downloadErr) {
+      // Retry with browser headers if direct download fails
+      bufferResponse = await axios.get(gifUrl, {
+        responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        },
+        timeout: 15000
+      });
+    }
     const buffer = Buffer.from(bufferResponse.data);
     fs.writeFileSync(tempGif, buffer);
 
