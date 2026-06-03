@@ -11594,117 +11594,249 @@ _💡 Reply with another number from your search list!_`.trim();
                       return await sock.sendMessage(chatId, { text: response });
                     }
 
-                    // Random Joke (AI)
+                    // Random Joke
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} joke`
                     ) {
-                      const res = await groq.chat.completions.create({
-                        messages: [
-                          {
-                            role: `user`,
-                            content:
-                              "Tell me a short funny,actually cultrally funny joke be creative",
-                          },
-                        ],
-                        model: "llama-3.1-8b-instant",
-                      });
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + `😂 ${res.choices[0].message.content}`,
+                        react: { text: "😂", key: m.key },
                       });
+                      try {
+                        let jokeText = "";
+                        try {
+                          const apiRes = await axios.get("https://v2.jokeapi.dev/joke/Any?safe-mode", { timeout: 6000 });
+                          if (apiRes.data) {
+                            if (apiRes.data.type === "single") {
+                              jokeText = apiRes.data.joke;
+                            } else if (apiRes.data.type === "twopart") {
+                              jokeText = `${apiRes.data.setup}\n\n*...* \n\n${apiRes.data.delivery}`;
+                            }
+                          }
+                        } catch (apiErr) {
+                          console.log("Joke API failed, calling Groq AI", apiErr.message);
+                        }
+
+                        if (!jokeText) {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: `user`,
+                                content: "Tell me a short funny, actually culturally funny joke. Be creative.",
+                              },
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          jokeText = res.choices[0].message.content;
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `😂 ${jokeText}`,
+                        });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Joke command error:", err.message);
+                        const fallbacks = [
+                          "Why don't scientists trust atoms? Because they make up everything! ⚛️",
+                          "What do you call a fake noodle? An impasta! 🍝",
+                          "Why did the scarecrow win an award? Because he was outstanding in his field! 🌾",
+                          "Why don't skeletons fight each other? They don't have the guts! 💀"
+                        ];
+                        const randomJoke = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `😂 ${randomJoke}`,
+                        });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      }
                       await awardProgression(senderJid, chatId);
                       return;
                     }
 
-                    // Truth or Dare (AI)
+                    // Truth (AI/Fallback)
                     if (
                       lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} truth`
                     ) {
-                      const res = await groq.chat.completions.create({
-                        messages: [
-                          {
-                            role: `user`,
-                            content:
-                              "Ask one spicy/embarrassing truth question.",
-                          },
-                        ],
-                        model: "llama-3.1-8b-instant",
-                      });
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          `🧐 *Truth:* ${res.choices[0].message.content}`,
+                        react: { text: "🧐", key: m.key },
                       });
+                      try {
+                        let truthText = "";
+                        try {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: `user`,
+                                content: "Ask one spicy/embarrassing truth question.",
+                              },
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          truthText = res.choices[0].message.content;
+                        } catch (aiErr) {
+                          console.log("Truth AI failed, using fallback", aiErr.message);
+                        }
+
+                        if (!truthText) {
+                          const truths = [
+                            "What is your biggest secret that nobody in this group knows?",
+                            "What is the most embarrassing thing you've ever done on a date?",
+                            "If you could trade lives with someone in this group for a day, who would it be and why?",
+                            "What is the longest you've ever gone without showering?",
+                            "Have you ever lied to get out of plans with friends? What was the lie?",
+                            "What is the most childish thing you still do?",
+                            "What's the worst purchase you've ever made?",
+                            "What is the weirdest habit you have?",
+                            "Who was your first crush, and do they know?"
+                          ];
+                          truthText = truths[Math.floor(Math.random() * truths.length)];
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🧐 *Truth:* ${truthText}`,
+                        });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Truth command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      }
                       await awardProgression(senderJid, chatId);
                       return;
                     }
 
+                    // Dare (AI/Fallback)
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} dare`
                     ) {
-                      const res = await groq.chat.completions.create({
-                        messages: [
-                          {
-                            role: `user`,
-                            content:
-                              "Give one funny dare that can be done in a WhatsApp group.",
-                          },
-                        ],
-                        model: "llama-3.1-8b-instant",
-                      });
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          `🔥 *Dare:* ${res.choices[0].message.content}`,
+                        react: { text: "🔥", key: m.key },
                       });
+                      try {
+                        let dareText = "";
+                        try {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: `user`,
+                                content: "Give one funny dare that can be done in a WhatsApp group.",
+                              },
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          dareText = res.choices[0].message.content;
+                        } catch (aiErr) {
+                          console.log("Dare AI failed, using fallback", aiErr.message);
+                        }
+
+                        if (!dareText) {
+                          const dares = [
+                            "Send the 5th picture in your gallery to the group without context.",
+                            "Send a voice note singing the chorus of your favorite song.",
+                            "Change your profile picture to a funny meme for the next 2 hours.",
+                            "Text your crush or ex saying 'I have a confession to make' and screenshot their reaction.",
+                            "Send a voice note speaking in an accent (e.g. British, French) for 30 seconds.",
+                            "Type using only emojis for the next 15 minutes in this chat.",
+                            "Tell the group the most embarrassing story of your childhood.",
+                            "Rate everyone in this group chat from 1 to 10."
+                          ];
+                          dareText = dares[Math.floor(Math.random() * dares.length)];
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🔥 *Dare:* ${dareText}`,
+                        });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Dare command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      }
                       await awardProgression(senderJid, chatId);
                       return;
                     }
 
-                    // Motivation
+                    // Motivation (AI/Fallback)
                     if (
                       lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} motivate`
                     ) {
-                      const res = await groq.chat.completions.create({
-                        messages: [
-                          {
-                            role: `user`,
-                            content:
-                              "Give me an aggressive 1-sentence motivation.",
-                          },
-                        ],
-                        model: "llama-3.1-8b-instant",
-                      });
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + `😤 ${res.choices[0].message.content}`,
+                        react: { text: "😤", key: m.key },
                       });
+                      try {
+                        let mot = "";
+                        try {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: `user`,
+                                content: "Give me an aggressive 1-sentence motivation.",
+                              },
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          mot = res.choices[0].message.content;
+                        } catch (aiErr) {
+                          console.log("Motivate AI failed, using fallback", aiErr.message);
+                        }
+
+                        if (!mot) {
+                          const motivations = [
+                            "Stop waiting for opportunity. Create it! 💥",
+                            "Wake up with determination. Go to bed with satisfaction! 🎯",
+                            "Do something today that your future self will thank you for! 🚀",
+                            "Success isn't given. It's earned. On the track, on the field, in the gym. With blood, sweat, and the occasional tear! 🔥"
+                          ];
+                          mot = motivations[Math.floor(Math.random() * motivations.length)];
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `😤 ${mot}`,
+                        });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Motivate command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      }
                       await awardProgression(senderJid, chatId);
                       return;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` fact - Random fact
+                    // Fact - Random fact
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} fact`
                     ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "💡", key: m.key },
+                      });
                       try {
-                        const factPrompt = `Generate one interesting random fact. Keep it under 100 words. Be fascinating and accurate.`;
+                        let fact = "";
+                        try {
+                          const apiRes = await axios.get("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", { timeout: 6000 });
+                          if (apiRes.data && apiRes.data.text) {
+                            fact = apiRes.data.text;
+                          }
+                        } catch (apiErr) {
+                          console.log("Useless fact API failed, calling Groq AI", apiErr.message);
+                        }
 
-                        const completion = await smartGroqCall({
-                          model: selectModel(factPrompt.length, false),
-                          messages: [
-                            {
-                              role: "system",
-                              content:
-                                "You are a knowledgeable fact generator.",
-                            },
-                            { role: "user", content: factPrompt },
-                          ],
-                        });
+                        if (!fact) {
+                          const factPrompt = `Generate one interesting random fact. Keep it under 100 words. Be fascinating and accurate.`;
+                          const completion = await smartGroqCall({
+                            model: selectModel(factPrompt.length, false),
+                            messages: [
+                              {
+                                role: "system",
+                                content: "You are a knowledgeable fact generator.",
+                              },
+                              { role: "user", content: factPrompt },
+                            ],
+                          });
+                          fact = completion.choices[0].message.content;
+                        }
 
-                        const fact = completion.choices[0].message.content;
                         await sock.sendMessage(
                           chatId,
                           {
@@ -11712,17 +11844,30 @@ _💡 Reply with another number from your search list!_`.trim();
                           },
                           { quoted: m },
                         );
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
                       } catch (err) {
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER + "❌ Couldn't fetch a fact right now!",
-                        });
+                        console.error("Fact command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        const fallbacks = [
+                          "Bananas are curved because they grow towards the sun against gravity in a process called negative geotropism! 🍌",
+                          "Wombat feces are cube-shaped, which stops them from rolling away! 💩",
+                          "Honey never spoils. You can theoretically eat 3,000-year-old Egyptian tomb honey! 🍯",
+                          "A day on Venus is longer than a year on Venus! 🪐"
+                        ];
+                        const randomFact = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                        await sock.sendMessage(
+                          chatId,
+                          {
+                            text: BOT_MARKER + `💡 *DID YOU KNOW?*\n\n${randomFact}`,
+                          },
+                          { quoted: m },
+                        );
                       }
                       await awardProgression(senderJid, chatId);
                       return;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` define <word> - Define a word
+                    // Define a word
                     if (
                       lowerTxt ===
                         `${botConfig.getPrefix().toLowerCase()} define` ||
@@ -11749,23 +11894,41 @@ _💡 Reply with another number from your search list!_`.trim();
                         );
                       }
 
+                      await sock.sendMessage(chatId, {
+                        react: { text: "📖", key: m.key },
+                      });
+
                       try {
-                        const definePrompt = `Define the word "${word}" in simple terms. Include: 1) Definition, 2) Part of speech, 3) Example sentence. Keep it concise but detailed when needed`;
+                        let definition = "";
+                        try {
+                          const apiRes = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 6000 });
+                          if (apiRes.data && apiRes.data[0]) {
+                            const entry = apiRes.data[0];
+                            const mean = entry.meanings[0];
+                            const partOfSpeech = mean.partOfSpeech;
+                            const def = mean.definitions[0].definition;
+                            const ex = mean.definitions[0].example || "";
+                            definition = `*(${partOfSpeech})*\n${def}` + (ex ? `\n\n*Example:* _"${ex}"_` : "");
+                          }
+                        } catch (apiErr) {
+                          console.log("Dictionary API failed, using Groq", apiErr.message);
+                        }
 
-                        const completion = await smartGroqCall({
-                          model: selectModel(definePrompt.length, false),
-                          messages: [
-                            {
-                              role: "system",
-                              content:
-                                "You are a dictionary. Be clear and concise.",
-                            },
-                            { role: "user", content: definePrompt },
-                          ],
-                        });
+                        if (!definition) {
+                          const definePrompt = `Define the word "${word}" in simple terms. Include: 1) Definition, 2) Part of speech, 3) Example sentence. Keep it concise but detailed when needed`;
+                          const completion = await smartGroqCall({
+                            model: selectModel(definePrompt.length, false),
+                            messages: [
+                              {
+                                role: "system",
+                                content: "You are a dictionary. Be clear and concise.",
+                              },
+                              { role: "user", content: definePrompt },
+                            ],
+                          });
+                          definition = completion.choices[0].message.content;
+                        }
 
-                        const definition =
-                          completion.choices[0].message.content;
                         await sock.sendMessage(
                           chatId,
                           {
@@ -11775,7 +11938,10 @@ _💡 Reply with another number from your search list!_`.trim();
                           },
                           { quoted: m },
                         );
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
                       } catch (err) {
+                        console.error("Define command error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + "❌ Couldn't define that word!",
                         });
@@ -11784,7 +11950,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` rate <thing> - Rate something out of 10
+                    // Rate something out of 10
                     if (
                       lowerTxt ===
                         `${botConfig.getPrefix().toLowerCase()} rate` ||
@@ -11891,6 +12057,473 @@ _💡 Reply with another number from your search list!_`.trim();
                           },
                           { quoted: m },
                         );
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Reddit Meme API (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} meme`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🖼️", key: m.key },
+                      });
+                      try {
+                        let data;
+                        for (let i = 0; i < 3; i++) {
+                          const response = await axios.get("https://meme-api.com/gimme", { timeout: 10000 });
+                          data = response.data;
+                          if (data && !data.nsfw) break;
+                        }
+                        if (data && data.url) {
+                          const imageResponse = await axios.get(data.url, { responseType: "arraybuffer", timeout: 15000 });
+                          await sock.sendMessage(chatId, {
+                            image: Buffer.from(imageResponse.data),
+                            caption: `${BOT_MARKER}🤣 *${data.title}*\n\nSubreddit: r/${data.subreddit}\nPost: ${data.postLink}`
+                          }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Invalid response format or only NSFW found");
+                        }
+                      } catch (err) {
+                        console.error("Meme API Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        let fallbackMeme = "When the API fails, but you still expect a good meme. 💀";
+                        try {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: "user",
+                                content: "Generate a funny internet-style text meme (e.g. Me: ... / Also Me: ... or similar formats). Keep it short and funny."
+                              }
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          fallbackMeme = res.choices[0].message.content;
+                        } catch (aiErr) {
+                          console.log("Meme AI generation fallback failed too", aiErr.message);
+                        }
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ Couldn't fetch a meme right now. Fallback AI meme:\n\n" + fallbackMeme
+                        }, { quoted: m });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Would You Rather (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} wyr`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🤔", key: m.key },
+                      });
+                      try {
+                        const wyrQuestions = [
+                          "Would you rather always have to speak in rhymes OR always have to shout everything you say?",
+                          "Would you rather be able to fly but only at walking speed OR be able to teleport but only to places you can already see?",
+                          "Would you rather have a permanently clogged nose OR always have a tiny piece of food stuck between your teeth?",
+                          "Would you rather fight 1 horse-sized duck OR 100 duck-sized horses?",
+                          "Would you rather always speak your mind OR never speak again?",
+                          "Would you rather have all your text messages made public OR all your search history made public?",
+                          "Would you rather have your chest hair be made of spaghetti OR sweat maple syrup?",
+                          "Would you rather have to announce every time you are going to the bathroom OR never be able to use a phone again?",
+                          "Would you rather live without music OR live without television/movies?",
+                          "Would you rather be able to read minds but everyone knows when you do it OR have everyone else be able to read your mind?",
+                          "Would you rather always be 15 minutes late OR always be 30 minutes early?",
+                          "Would you rather have a third eye on the back of your head OR a third arm?",
+                          "Would you rather only be able to eat pizza for the rest of your life OR never be able to eat pizza again?",
+                          "Would you rather live in a world where everyone has a superpower except you OR a world where only you have a useless superpower?",
+                          "Would you rather always feel like you have to sneeze but never can OR always have the hiccups?",
+                          "Would you rather find true love but be poor forever OR be a multi-billionaire but never find love?",
+                          "Would you rather be able to speak all human languages OR be able to talk to animals?",
+                          "Would you rather live 100 years in the future OR 100 years in the past?",
+                          "Would you rather always smell like wet dog OR always smell like onions?",
+                          "Would you rather be forced to dance every time you hear music OR be forced to sing along to every song you hear?"
+                        ];
+                        
+                        let question = wyrQuestions[Math.floor(Math.random() * wyrQuestions.length)];
+                        
+                        try {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: "user",
+                                content: "Generate one creative, funny, and engaging 'Would you rather' question. Format it as: 'Would you rather [Option A] OR [Option B]?'"
+                              }
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            timeout: 5000
+                          });
+                          if (res.choices[0].message.content) {
+                            question = res.choices[0].message.content;
+                          }
+                        } catch (aiErr) {
+                          console.log("WYR AI generation failed, using local list", aiErr.message);
+                        }
+
+                        const formatted = [
+                          `${BOT_MARKER}🤔 *WOULD YOU RATHER?* 🤔`,
+                          "",
+                          question,
+                          "",
+                          "Reply with your choice! 🅰️ or 🅱️"
+                        ].join("\n");
+
+                        await sock.sendMessage(chatId, { text: formatted }, { quoted: m });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("WYR Command Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Quote Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} quote`
+                    ) {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "📜", key: m.key },
+                      });
+                      try {
+                        let quoteText = "";
+                        let author = "";
+                        
+                        try {
+                          const response = await axios.get("https://dummyjson.com/quotes/random", { timeout: 5000 });
+                          if (response.data && response.data.quote) {
+                            quoteText = response.data.quote;
+                            author = response.data.author;
+                          }
+                        } catch (apiErr) {
+                          console.log("Quote API failed, using Groq", apiErr.message);
+                        }
+
+                        if (!quoteText) {
+                          const res = await groq.chat.completions.create({
+                            messages: [
+                              {
+                                role: "user",
+                                content: "Provide one inspiring, philosophical, or funny quote. Output in JSON format only: {\"quote\": \"...\", \"author\": \"...\"}"
+                              }
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            response_format: { type: "json_object" },
+                            timeout: 5000
+                          });
+                          const data = JSON.parse(res.choices[0].message.content);
+                          quoteText = data.quote;
+                          author = data.author;
+                        }
+
+                        const responseMsg = [
+                          `${BOT_MARKER}📜 *QUOTE OF THE DAY*`,
+                          "",
+                          `> "${quoteText}"`,
+                          `— _*${author || "Unknown"}*_`
+                        ].join("\n");
+
+                        await sock.sendMessage(chatId, { text: responseMsg }, { quoted: m });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Quote Command Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "📜 *Quote:*\n\"I have not failed. I've just found 10,000 ways that won't work.\"\n— _*Thomas A. Edison*_"
+                        }, { quoted: m });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Weather Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} weather` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} weather `)
+                    ) {
+                      const city = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} weather `.length)
+                        .trim();
+
+                      if (!city || lowerTxt === `${botConfig.getPrefix().toLowerCase()} weather`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🌤️ WEATHER",
+                          "weather <city>",
+                          "weather Tokyo",
+                          "Check current weather conditions for any city."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🌤️", key: m.key },
+                      });
+
+                      try {
+                        const response = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, { timeout: 10000 });
+                        const data = response.data;
+                        
+                        if (data && data.current_condition && data.current_condition[0]) {
+                          const current = data.current_condition[0];
+                          const area = data.nearest_area[0];
+                          const cityName = area.areaName[0].value;
+                          const country = area.country[0].value;
+                          
+                          const tempC = current.temp_C;
+                          const tempF = current.temp_F;
+                          const desc = current.weatherDesc[0].value;
+                          const humidity = current.humidity;
+                          const windSpeed = current.windspeedKmph;
+                          const feelsLike = current.FeelsLikeC;
+                          
+                          let weatherEmoji = "🌤️";
+                          const descLower = desc.toLowerCase();
+                          if (descLower.includes("rain") || descLower.includes("drizzle") || descLower.includes("shower")) weatherEmoji = "🌧️";
+                          else if (descLower.includes("thunder") || descLower.includes("storm")) weatherEmoji = "⛈️";
+                          else if (descLower.includes("snow") || descLower.includes("ice") || descLower.includes("freeze")) weatherEmoji = "❄️";
+                          else if (descLower.includes("cloud") || descLower.includes("overcast")) weatherEmoji = "☁️";
+                          else if (descLower.includes("sunny") || descLower.includes("clear")) weatherEmoji = "☀️";
+                          else if (descLower.includes("fog") || descLower.includes("mist") || descLower.includes("haze")) weatherEmoji = "🌫️";
+
+                          const report = [
+                            `${BOT_MARKER}${weatherEmoji} *WEATHER REPORT: ${cityName.toUpperCase()}, ${country.toUpperCase()}*`,
+                            `━━━━━━━━━━━━━━━━━`,
+                            `*Condition:* ${desc}`,
+                            `*Temperature:* ${tempC}°C / ${tempF}°F`,
+                            `*Feels Like:* ${feelsLike}°C`,
+                            `*Humidity:* ${humidity}%`,
+                            `*Wind Speed:* ${windSpeed} km/h`,
+                            `━━━━━━━━━━━━━━━━━`
+                          ].join("\n");
+
+                          await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Unexpected format");
+                        }
+                      } catch (err) {
+                        console.error("Weather API error, trying textual wttr.in fallback", err.message);
+                        try {
+                          const response = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%h+%w`, { timeout: 8000 });
+                          const info = response.data.trim();
+                          if (info) {
+                            await sock.sendMessage(chatId, {
+                              text: `${BOT_MARKER}🌤️ *Weather in ${city}:* ${info}`
+                            }, { quoted: m });
+                            await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                            await awardProgression(senderJid, chatId);
+                            return;
+                          }
+                        } catch (wttrErr) {
+                          console.error("Textual weather fallback failed too:", wttrErr.message);
+                        }
+                        
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Could not find weather details for "${city}". Make sure the name is correct.`
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Translate Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} translate` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} translate `)
+                    ) {
+                      const args = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} translate `.length)
+                        .trim();
+
+                      if (!args || lowerTxt === `${botConfig.getPrefix().toLowerCase()} translate`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🌐 TRANSLATE",
+                          "translate <text>  _OR_  translate [target_lang] <text>",
+                          "translate es hello (translates hello to Spanish)\n.j translate hello (translates hello to English)",
+                          "Translate text into a target language (Default: English)."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🌐", key: m.key },
+                      });
+
+                      try {
+                        const spaceIndex = args.indexOf(" ");
+                        let targetLang = "English";
+                        let textToTranslate = args;
+
+                        if (spaceIndex > 0) {
+                          const potentialLang = args.substring(0, spaceIndex).toLowerCase();
+                          const languageCodes = {
+                            en: "English", es: "Spanish", fr: "French", de: "German",
+                            it: "Italian", pt: "Portuguese", ru: "Russian", zh: "Chinese",
+                            ja: "Japanese", ko: "Korean", ar: "Arabic", hi: "Hindi",
+                            tr: "Turkish", vi: "Vietnamese", id: "Indonesian", tl: "Tagalog"
+                          };
+                          
+                          if (languageCodes[potentialLang] || potentialLang.length <= 3) {
+                            targetLang = languageCodes[potentialLang] || potentialLang;
+                            textToTranslate = args.substring(spaceIndex + 1).trim();
+                          }
+                        }
+
+                        const res = await groq.chat.completions.create({
+                          messages: [
+                            {
+                              role: "system",
+                              content: `You are a professional translator. Translate the given text accurately to ${targetLang}. Keep any formatting, links, and tone intact. Only output the translated text, do not add explanations or quotes.`
+                            },
+                            { role: "user", content: textToTranslate }
+                          ],
+                          model: "llama-3.1-8b-instant",
+                          timeout: 8000
+                        });
+
+                        const translatedText = res.choices[0].message.content.trim();
+
+                        const report = [
+                          `${BOT_MARKER}🌐 *TRANSLATION* 🌐`,
+                          `*Target:* ${targetLang}`,
+                          `━━━━━━━━━━━━━━━━━`,
+                          translatedText,
+                          `━━━━━━━━━━━━━━━━━`
+                        ].join("\n");
+
+                        await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("Translation Command Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ Translation service failed."
+                        });
+                      }
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
+                    // Crypto Command (NEW)
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} crypto` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} crypto `)
+                    ) {
+                      const coinInput = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} crypto `.length)
+                        .trim();
+
+                      if (!coinInput || lowerTxt === `${botConfig.getPrefix().toLowerCase()} crypto`) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "📈 CRYPTO",
+                          "crypto <coin>",
+                          "crypto bitcoin",
+                          "Get the current USD price and 24h change of any cryptocurrency."
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🪙", key: m.key },
+                      });
+
+                      try {
+                        const coin = coinInput.toLowerCase().replace(/\s+/g, "-");
+                        const response = await axios.get(
+                          `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coin)}&vs_currencies=usd&include_24hr_change=true`,
+                          { timeout: 8000 }
+                        );
+                        
+                        const data = response.data;
+                        if (data && data[coin]) {
+                          const details = data[coin];
+                          const price = details.usd;
+                          const change = details.usd_24h_change;
+                          const changeFormatted = change ? change.toFixed(2) : "0.00";
+                          const changeEmoji = change >= 0 ? "📈" : "📉";
+                          const changeSign = change >= 0 ? "+" : "";
+
+                          const formattedPrice = new Intl.NumberFormat('en-US', {
+                            style: 'currency',
+                            currency: 'USD'
+                          }).format(price);
+
+                          const report = [
+                            `${BOT_MARKER}🪙 *CRYPTO MARKET INFO* 🪙`,
+                            `*Asset:* ${coinInput.toUpperCase()}`,
+                            `━━━━━━━━━━━━━━━━━`,
+                            `*Current Price:* ${formattedPrice}`,
+                            `*24h Change:* ${changeEmoji} ${changeSign}${changeFormatted}%`,
+                            `━━━━━━━━━━━━━━━━━`
+                          ].join("\n");
+
+                          await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                        } else {
+                          throw new Error("Asset not found");
+                        }
+                      } catch (err) {
+                        console.error("Crypto API error, attempting fallback lookup", err.message);
+                        try {
+                          const searchResponse = await axios.get(
+                            `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(coinInput)}`,
+                            { timeout: 5000 }
+                          );
+                          const searchData = searchResponse.data;
+                          if (searchData && searchData.coins && searchData.coins[0]) {
+                            const matchedCoinId = searchData.coins[0].id;
+                            const priceResponse = await axios.get(
+                              `https://api.coingecko.com/api/v3/simple/price?ids=${matchedCoinId}&vs_currencies=usd&include_24hr_change=true`,
+                              { timeout: 5000 }
+                            );
+                            const priceData = priceResponse.data;
+                            if (priceData && priceData[matchedCoinId]) {
+                              const details = priceData[matchedCoinId];
+                              const price = details.usd;
+                              const change = details.usd_24h_change;
+                              const changeFormatted = change ? change.toFixed(2) : "0.00";
+                              const changeEmoji = change >= 0 ? "📈" : "📉";
+                              const changeSign = change >= 0 ? "+" : "";
+                              
+                              const formattedPrice = new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: 'USD'
+                              }).format(price);
+
+                              const report = [
+                                `${BOT_MARKER}🪙 *CRYPTO MARKET INFO* 🪙`,
+                                `*Asset:* ${searchData.coins[0].name} (${searchData.coins[0].symbol})`,
+                                `━━━━━━━━━━━━━━━━━`,
+                                `*Current Price:* ${formattedPrice}`,
+                                `*24h Change:* ${changeEmoji} ${changeSign}${changeFormatted}%`,
+                                `━━━━━━━━━━━━━━━━━`
+                              ].join("\n");
+
+                              await sock.sendMessage(chatId, { text: report }, { quoted: m });
+                              await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                              await awardProgression(senderJid, chatId);
+                              return;
+                            }
+                          }
+                        } catch (subErr) {
+                          console.error("Sub-lookup failed", subErr.message);
+                        }
+
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Cryptocurrency "${coinInput}" not found or API limits exceeded.`
+                        });
                       }
                       await awardProgression(senderJid, chatId);
                       return;

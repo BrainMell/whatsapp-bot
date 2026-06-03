@@ -241,6 +241,12 @@ const COMMAND_REGISTRY = {
     { cmd: 'rate', desc: 'Let the bot rate anything.', usage: 'rate <thing>' },
     { cmd: '8ball', desc: 'Ask the magic 8-ball a question.', usage: '8ball <q>' },
     { cmd: 'motivate', desc: 'Get a motivational quote.', usage: 'motivate' },
+    { cmd: 'meme', desc: 'Get a random meme from Reddit.', usage: 'meme' },
+    { cmd: 'wyr', desc: 'Get a random \'Would You Rather\' question.', usage: 'wyr' },
+    { cmd: 'quote', desc: 'Get a random inspiring or famous quote.', usage: 'quote' },
+    { cmd: 'weather', desc: 'Check current weather conditions for any city.', usage: 'weather <city>' },
+    { cmd: 'translate', desc: 'Translate text into a target language.', usage: 'translate [target_lang] <text>' },
+    { cmd: 'crypto', desc: 'Get the current USD price and 24h change of any cryptocurrency.', usage: 'crypto <coin>' },
     { cmd: 'fish', desc: 'Go scavenging at the coast for rare fish and shards.', usage: 'fish' },
     { cmd: 'hunt', desc: 'Track and capture wilderness animals for profit.', usage: 'hunt' }
   ],
