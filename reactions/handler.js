@@ -87,19 +87,28 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
 
   try {
     const resolved = FALLBACK_MAP[type] || type;
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/plain, */*'
-    };
 
-    const response = await axios.get(`https://api.waifu.pics/sfw/${resolved}`, { headers });
-    if (!response.data || !response.data.url) {
-      throw new Error('Invalid response format from Waifu.pics API');
+    // Fetch JSON from waifu.pics (without custom browser headers to avoid Cloudflare TLS fingerprinter block)
+    const response = await axios.get(`https://api.waifu.pics/sfw/${resolved}`);
+    
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+      } catch (e) {
+        throw new Error(`Failed to parse JSON response. Response starts with: ${responseData.slice(0, 150)}`);
+      }
     }
-    const gifUrl = response.data.url;
+
+    if (!responseData || !responseData.url) {
+      const keys = responseData ? Object.keys(responseData).join(', ') : 'none';
+      throw new Error(`Missing url in response. Response keys: ${keys}. Data: ${JSON.stringify(responseData).slice(0, 150)}`);
+    }
+    
+    const gifUrl = responseData.url;
     
     // Download the GIF file
-    const bufferResponse = await axios.get(gifUrl, { responseType: 'arraybuffer', headers });
+    const bufferResponse = await axios.get(gifUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(bufferResponse.data);
     fs.writeFileSync(tempGif, buffer);
 
