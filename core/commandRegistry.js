@@ -287,10 +287,17 @@ const COMMAND_REGISTRY = {
     { cmd: 'on', desc: 'Turn the bot ON for this chat.', usage: 'on' },
     { cmd: 'off', desc: 'Turn the bot OFF for this chat.', usage: 'off' }
   ],
-  REACTIONS: [
-    { cmd: 'reactions', desc: 'List all available anime reaction commands.', usage: 'reactions' },
-    { cmd: 'hug', desc: 'Send a hug GIF. Requires tag or reply.', usage: 'hug @user' },
-    { cmd: 'wink', desc: 'Wink to express your vibes.', usage: 'wink' }
+  INTERACTIONS: [
+    { cmd: 'interactions', desc: 'List all available interaction/reaction commands.', usage: 'interactions' },
+    { cmd: 'kiss', desc: 'Kiss someone.', usage: 'kiss @user' },
+    { cmd: 'hug', desc: 'Give someone a warm hug.', usage: 'hug @user' },
+    { cmd: 'pat', desc: 'Pat someone on the head.', usage: 'pat @user' },
+    { cmd: 'slap', desc: 'Slap someone.', usage: 'slap @user' },
+    { cmd: 'kill', desc: 'Falsely murder someone.', usage: 'kill @user' },
+    { cmd: 'wink', desc: 'Wink to express your vibes.', usage: 'wink' },
+    { cmd: 'cry', desc: 'Cry out loud.', usage: 'cry' },
+    { cmd: 'dance', desc: 'Start dancing.', usage: 'dance' },
+    { cmd: 'smug', desc: 'Look smug.', usage: 'smug' }
   ],
   MODERATOR: [
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },

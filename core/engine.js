@@ -2999,7 +2999,7 @@ What to do:
       ANIME: "🎎",
 
       INFO: "ℹ️",
-      REACTIONS: "💞",
+      INTERACTIONS: "💞",
     };
 
     // 📢 CHANNEL CONFIGURATION
@@ -3078,7 +3078,12 @@ What to do:
         (k) =>
           k.toLowerCase() === fullInput ||
           k.toLowerCase() === categoryInput ||
-          k.toLowerCase() === cleanArgs.join(" ").toLowerCase(),
+          k.toLowerCase() === cleanArgs.join(" ").toLowerCase() ||
+          (k.toLowerCase() === "interactions" &&
+            (fullInput === "intaractions" ||
+              categoryInput === "intaractions" ||
+              fullInput === "reactions" ||
+              categoryInput === "reactions")),
       );
 
       if (matchedCat) {
@@ -4264,7 +4269,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    if (primaryCmd === "reactions") {
+                    if (primaryCmd === "reactions" || primaryCmd === "interactions" || primaryCmd === "intaractions") {
                       const targeted = REACTIONS.filter((r) => r.targeted)
                         .map((r) => `${r.emoji} ${r.type}`)
                         .join(", ");
@@ -4273,7 +4278,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         .join(", ");
 
                       const helpMessage =
-                        `🎭 *REACTION COMMANDS*\n\n` +
+                        `🎭 *INTERACTION COMMANDS*\n\n` +
                         `👉 *Targeted (tag someone or reply):*\n${targeted}\n\n` +
                         `✨ *Self (no target needed):*\n${self}`;
 
