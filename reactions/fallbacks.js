@@ -13,6 +13,7 @@ const WAIFU_PICS_MAP = {
   trap: 'bonk',
   triggered: 'bully',
   eat: 'nom',
+  animekick: 'kick',
   baka: 'bully',
   blowkiss: 'kiss',
   handshake: 'wave',
@@ -75,6 +76,7 @@ const NEKOS_BEST_MAP = {
   trap: 'cuddle',
   triggered: 'slap',
   eat: 'nom',
+  animekick: 'kick',
 
   // Self categories mapped to closest Nekos.best SFW categories
   panic: 'cry',

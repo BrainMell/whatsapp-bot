@@ -17,7 +17,7 @@ const REACTIONS = [
   { type: 'shoot', emoji: '🔫', targeted: true },
   { type: 'yeet', emoji: '💨', targeted: true },
   { type: 'kill', emoji: '⚰️', targeted: true },
-  { type: 'kick', emoji: '💥', targeted: true },
+  { type: 'animekick', emoji: '💥', targeted: true },
   { type: 'stab', emoji: '🗡️', targeted: true },
   { type: 'throw', emoji: '🤾', targeted: true },
   { type: 'tickle', emoji: '😂', targeted: true },
