@@ -4876,7 +4876,8 @@ function getSkillEffect(skill, level) {
                     effect.ccDuration = dur || 1;
                 } else if (effId === 'instantKill') {
                     if (effect.type === 'none' || effect.type === 'damage') effect.type = 'execute';
-                    effect.threshold = val.threshold || 30;
+                    const thresholdVal = getVal(effData.threshold);
+                    effect.threshold = thresholdVal !== undefined ? thresholdVal : (val?.threshold || val || 30);
                 } else if (effId === 'dot' || effId === 'burn' || effId === 'poison' || effId === 'bleed') {
                     effect.dot = effData.element || effId;
                     effect.dotDuration = dur || 3;
