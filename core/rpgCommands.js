@@ -51,7 +51,18 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         if (cardData) {
             const cardBuffer = await goService.generateProfileCard(cardData);
             if (cardBuffer) {
-                const captionMsg = `👤 *Character:* ${cardData.nickname}\n🏆 *Rank:* ${cardData.rank}${cardData.statPoints > 0 ? `\n\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.` : ''}`;
+                let captionMsg = `👤 *Character:* ${cardData.nickname}\n`;
+                captionMsg += `🛡️ *Class:* ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n`;
+                captionMsg += `⭐ *Level:* ${sheet?.level || 1}  |  🏆 *Rank:* ${cardData.rank}\n`;
+                captionMsg += `💰 *Zeni:* ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
+                captionMsg += `*STATS:*\n`;
+                captionMsg += `❤️ HP: ${stats?.hp || 100}${equipStats?.hp ? `+${equipStats.hp}` : ''}  |  ⚔️ ATK: ${stats?.atk || 10}${equipStats?.atk ? `+${equipStats.atk}` : ''}\n`;
+                captionMsg += `🛡️ DEF: ${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''}  |  🔮 MAG: ${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
+                captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
+                captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
+                if (cardData.statPoints > 0) {
+                    captionMsg += `\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.`;
+                }
                 await sock.sendMessage(chatId, { 
                     image: cardBuffer,
                     caption: captionMsg,
@@ -227,7 +238,12 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   });
 
   msg += `\n━━━━━━━━━━━━━━━━━━\n`;
-  if (totalPages > 1) msg += `📄 \`${botConfig.getPrefix()} bag ${clampedPage < totalPages ? clampedPage + 1 : 1}\` for next page\n`;
+  if (totalPages > 1) {
+    let hints = [];
+    if (clampedPage > 1) hints.push(`Prev: \`${botConfig.getPrefix()} bag ${clampedPage - 1}\``);
+    if (clampedPage < totalPages) hints.push(`Next: \`${botConfig.getPrefix()} bag ${clampedPage + 1}\``);
+    msg += `📄 ${hints.join(' | ')}\n`;
+  }
   msg += `⚔️ \`${botConfig.getPrefix()} equip <#>\`  💰 \`${botConfig.getPrefix()} sell <#>\`  🧪 \`${botConfig.getPrefix()} use <#>\n\n`;
   msg += `💡 *Quick Tips:*\n`;
   msg += `• Sell: \`${botConfig.getPrefix()} sell <#> <number of items to sell>\` (e.g., \`${botConfig.getPrefix()} sell 1 5\`)\n`;

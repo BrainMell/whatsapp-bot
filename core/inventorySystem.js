@@ -344,15 +344,23 @@ async function equipItem(userId, itemId, slot) {
     const equipment = getEquipment(userId);
     const progression = require('./progression');
     
-    if (!inventory[itemId]) {
+    // Loose matching for underscores and spaces
+    let targetItemId = itemId;
+    const cleanItemId = (itemId || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
+    const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
+    if (foundKey) {
+        targetItemId = foundKey;
+    }
+
+    if (!inventory[targetItemId]) {
         return {
             success: false,
             message: `❌ You don't have ${itemId} in your inventory!`
         };
     }
 
-    const itemToEquip = inventory[itemId];
-    const itemInfo = lootSystem.getItemInfo(itemId);
+    const itemToEquip = inventory[targetItemId];
+    const itemInfo = lootSystem.getItemInfo(targetItemId);
     const playerLevel = progression.getLevel(userId);
 
     // 💡 LEVEL REQUIREMENT CHECK
@@ -582,14 +590,22 @@ function enhanceItem(userId, itemId, stoneId) {
 function sellItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
     
-    if (!inventory[itemId]) {
+    // Loose matching for underscores and spaces
+    let targetItemId = itemId;
+    const cleanItemId = (itemId || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
+    const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
+    if (foundKey) {
+        targetItemId = foundKey;
+    }
+
+    if (!inventory[targetItemId]) {
         return {
             success: false,
             message: `❌ You don't have ${itemId}!`
         };
     }
     
-    const item = inventory[itemId];
+    const item = inventory[targetItemId];
     const currentQuantity = item.quantity || 1;
     
     if (currentQuantity < quantity) {
@@ -600,20 +616,20 @@ function sellItem(userId, itemId, quantity = 1) {
     }
     
     // Calculate sell value
-    const itemInfo = lootSystem.getItemInfo(itemId);
+    const itemInfo = lootSystem.getItemInfo(targetItemId);
     const baseValue = item.value || itemInfo.value || 100;
     const rarity = item.rarity || itemInfo.rarity || 'COMMON';
     let sellMultiplier = ITEM_RARITY[rarity]?.sellMultiplier || 0.6;
     
-    // Special case for gold currency item: 1:15 exchange rate (100% of base value)
-    if (itemId === 'gold' || itemId === 'gold_pile') sellMultiplier = 1.0;
+    // Special case for gold currency item: 1:15 exchange rate (15x base value of 1)
+    if (targetItemId === 'gold' || targetItemId === 'gold_pile') sellMultiplier = 15.0;
     
     const totalValue = Math.floor(baseValue * sellMultiplier * quantity);
     let sellValue = totalValue;
     let guildContribution = null;
 
     // Remove item
-    const removeResult = removeItem(userId, itemId, quantity);
+    const removeResult = removeItem(userId, targetItemId, quantity);
     if (!removeResult.success) return removeResult;
 
     // Guild House Contribution System (5% tax)
@@ -662,7 +678,14 @@ function useItem(userId, rawItemId) {
     const sheet = progression.getCharacterSheet(userId);
     
     // Normalize item ID (lowercase, trim, replace spaces with underscores)
-    const itemId = (rawItemId || '').toLowerCase().trim().replace(/ /g, '_');
+    let itemId = (rawItemId || '').toLowerCase().trim().replace(/ /g, '_');
+    
+    // Loose matching for underscores and spaces
+    const cleanItemId = itemId.replace(/_/g, '');
+    const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
+    if (foundKey) {
+        itemId = foundKey;
+    }
     
     if (!inventory[itemId]) {
         return { success: false, message: `❌ You don't have this item!` };

@@ -724,6 +724,21 @@ function selectBoss(avgLevel, forceId = null) {
             const found = pool.find(b => b.id === forceId);
             if (found) return { ...found };
         }
+        // Fallback: search in bossMechanics registry
+        try {
+            const bossMechanics = require('./bossMechanics');
+            if (bossMechanics && bossMechanics.BOSS_REGISTRY) {
+                const targetKey = forceId.toLowerCase();
+                for (const key of Object.keys(bossMechanics.BOSS_REGISTRY)) {
+                    if (key.toLowerCase() === targetKey) {
+                        const foundBoss = bossMechanics.BOSS_REGISTRY[key];
+                        return { id: forceId, ...foundBoss };
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error loading boss from bossMechanics in selectBoss fallback:", err);
+        }
     }
 
     let pool;

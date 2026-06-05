@@ -31,7 +31,7 @@ function resolveJid(jid) {
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
 const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
 const PVP_DEFENSE_CAP   = 0.50;  // Max 50% damage reduction from DEF in PvP
-const PVP_ABILITY_MULT  = 1.00;  // Ability damage multiplier in PvP
+const PVP_ABILITY_MULT  = 0.45;  // Ability damage multiplier in PvP
 const PVP_CRIT_MULT     = 1.5;   // Crit multiplier in PvP
 const PVP_TIMEOUT_MS    = 300000; // 5 minutes inactivity = expired duel
 const CHALLENGE_TIMEOUT = 120000; // 2 minutes to accept challenge
@@ -279,7 +279,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         const cooldownVal = effect?.cooldown !== undefined ? effect.cooldown : ability.cooldown;
         if (cooldownVal) currentPlayer.cooldowns[ability.id] = cooldownVal;
 
-        if (effect?.type === 'damage' || effect?.type === 'aoe') {
+        if (effect?.type === 'damage' || effect?.type === 'aoe' || effect?.type === 'damage_dot' || effect?.type === 'multi_hit' || effect?.type === 'damage_heal') {
             const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * PVP_ABILITY_MULT);
             // Partial defense mitigation
@@ -288,7 +288,29 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
             
-        } else if (effect?.type === 'heal' || effect?.type === 'heal_team') {
+            if (effect.type === 'damage_dot' && effect.dot) {
+                if (!opponent.statusEffects) opponent.statusEffects = [];
+                opponent.statusEffects.push({ type: effect.dot, duration: effect.dotDuration || 2, dotDamage: effect.dotDamage || 10 });
+                actionResult += `\n🔥 *${effect.dot.toUpperCase()}* applied for ${effect.dotDuration || 2} turns!`;
+            }
+            if (effect.type === 'damage_heal') {
+                const healVal = Math.floor(damage * (effect.healPercent || 30) / 100);
+                currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healVal);
+                actionResult += `\n💚 Healed self for *${healVal}* HP!`;
+            }
+        } else if (effect?.type === 'execute') {
+            const hpPercent = (opponent.hp / opponent.maxHp) * 100;
+            const mult = hpPercent <= (effect.threshold || 30) ? 2.5 : 1.0;
+            const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
+            damage = Math.floor(statBase * (effect.multiplier || 1.2) * mult * PVP_ABILITY_MULT);
+            const defReduction = Math.min(opponent.stats.def * 0.2, damage * PVP_DEFENSE_CAP);
+            damage = Math.max(20, Math.floor(damage - defReduction));
+            opponent.hp -= damage;
+            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            if (mult > 1.0) {
+                actionResult += `\n⚡ *EXECUTE THRESHOLD TRIGGERED!* ⚡`;
+            }
+        } else if (effect?.type === 'heal' || effect?.type === 'heal_team' || effect?.type === 'heal_self') {
             healing = Math.floor(effect.value || 80);
             currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healing);
             actionResult = `💚 *${currentPlayer.name}* used *${ability.name}*!\nRestored *${healing}* HP! (${currentPlayer.hp}/${currentPlayer.maxHp})`;

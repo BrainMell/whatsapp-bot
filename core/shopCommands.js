@@ -37,7 +37,8 @@ async function displayShop(sock, chatId, category = 'all') {
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
-                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
+                slot: item.slot // Copy the item's slot property
             };
         }
     });

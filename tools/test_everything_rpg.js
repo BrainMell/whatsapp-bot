@@ -64,13 +64,14 @@ const mockSock = {
 
 // Sync timeout runner to execute trial and shop sequences immediately
 const originalSetTimeout = global.setTimeout;
+global.pendingTimers = {};
 global.setTimeout = (fn, delay) => {
-    // Sync trigger for shop transitions (90s), evolution transition (5s), crossroads (30s), and nextStage break (1s)
-    if (delay === 5000 || delay === 90000 || delay === 30000 || delay === 1000) {
-        fn();
+    if (delay === 60000) {
+        global.pendingTimers['reg'] = fn;
         return {};
     }
-    return originalSetTimeout(fn, delay);
+    const deferDelay = delay >= 30000 ? 20 : 1;
+    return originalSetTimeout(fn, deferDelay);
 };
 
 function setupUsers() {
@@ -198,11 +199,15 @@ async function runAllTests() {
         await inventorySystem.addItem(testUser, 'evolution_stone', 1);
         await skillCommands.handleEvolve(mockSock, testChat, testUser, 'Tester', ['1']);
         
-        // Yield thread for microtasks
-        await new Promise(resolve => originalSetTimeout(resolve, 100));
-
+        // Poll dynamically for combat to start
         const sessionKey = `${testChat}_${testUser}`;
-        const state = guildAdventure.getGameState(sessionKey);
+        let state = null;
+        for (let i = 0; i < 100; i++) {
+            state = guildAdventure.getGameState(sessionKey);
+            if (state && state.inCombat) break;
+            await new Promise(resolve => originalSetTimeout(resolve, 1));
+        }
+
         assert.ok(state, 'Trial adventure state should exist');
         assert.strictEqual(state.mode, 'TRIAL', 'Adventure mode must be TRIAL');
         assert.strictEqual(state.trialTarget, 'INFECTED_COLOSSUS', 'Trial boss target should match the evolution requirements');
@@ -284,9 +289,10 @@ async function runAllTests() {
         assert.ok(lobbyState, 'Group adventure state should exist');
         assert.strictEqual(lobbyState.players.length, 2, 'Raid party should consist of 2 players');
 
-        // Force start lobby
-        lobbyState.isStarting = true;
-        lobbyState.phase = "PLAYING";
+        // Trigger the registration timer manually now that players are in lobby
+        if (global.pendingTimers && global.pendingTimers['reg']) {
+            global.pendingTimers['reg']();
+        }
         
         // Trigger first stage combat
         await new Promise((resolve) => {

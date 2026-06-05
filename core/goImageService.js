@@ -61,6 +61,7 @@ class GoImageService {
       try {
         const response = await this.client.post("/api/combat", data, {
           responseType: "arraybuffer",
+          timeout: 5000, // 5s timeout for fast fallback
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -81,6 +82,7 @@ class GoImageService {
           { text },
           {
             responseType: "arraybuffer",
+            timeout: 5000, // 5s timeout for fast fallback
           },
         );
         return Buffer.from(response.data);

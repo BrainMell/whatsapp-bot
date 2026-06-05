@@ -508,6 +508,13 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             text += `   📝 ${evo.desc}\n`;
             text += `   🎭 ${evo.role}  |  💰 ${evo.evolutionCost.toLocaleString()} Zeni\n`;
             if (evo.passive) text += `   ⚡ *${evo.passive.name}:* _${evo.passive.desc}_\n`;
+            if (evo.evolves_into && evo.evolves_into.length > 0) {
+                const nextTierNames = evo.evolves_into.map(evoId => {
+                    const c = classSystem.getClassById(evoId);
+                    return c ? `${c.icon} ${c.name}` : evoId;
+                }).join(', ');
+                text += `   ⏫ Next Tier: ${nextTierNames}\n`;
+            }
             if (!evo.meetsRequirements) {
                 text += `   🔒 Missing: ${evo.missingRequirements.join(', ')}\n`;
             } else {

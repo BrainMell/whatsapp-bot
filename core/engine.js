@@ -4493,6 +4493,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         if (isSolo) {
                           let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || "F"}*\n🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*\n\n⚔️ Preparing the battlefield...`;
                           await reply(startMsg);
+                        } else {
+                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`.g join\` to enter.`);
                         }
                       } else {
                         await reply(result.msg);
@@ -6620,6 +6622,7 @@ Usage: ${newUsage}/5${warningText}`;
                   // ============================================
 
                   // .j character - View character sheet
+                  const isClassCmd = lowerTxt === `${botConfig.getPrefix().toLowerCase()} class` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} class `);
                   if (
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} character` ||
@@ -6627,8 +6630,22 @@ Usage: ${newUsage}/5${warningText}`;
                       `${botConfig.getPrefix().toLowerCase()} char` ||
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} stats` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} class`
+                    isClassCmd
                   ) {
+                    if (isClassCmd) {
+                      const args = txt.trim().split(/\s+/).slice(2);
+                      if (args.length > 0) {
+                        let targetClassId = args[0];
+                        if (targetClassId.toLowerCase() === "info") {
+                          const sheet = progression.getCharacterSheet(senderJid);
+                          targetClassId = sheet ? sheet.class : null;
+                        }
+                        if (targetClassId) {
+                          await classCommands.displayEvolutionTree(sock, chatId, targetClassId);
+                          return;
+                        }
+                      }
+                    }
                     await rpgCommands.displayCharacterSheet(
                       sock,
                       chatId,
@@ -13393,7 +13410,7 @@ ${senderName} said y'all should know:
                         return await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix()} pvp <attack | ability <n> | flee>\``,
+                            `❌ Usage: \`${botConfig.getPrefix()} pvp @user [wager]\``,
                         });
                       }
 
