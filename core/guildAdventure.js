@@ -5008,12 +5008,16 @@ async function endAdventure(sock, sessionKey, victory = true) {
         user.completedTrials.push(trialData.trialBoss);
       }
 
+      const level = progression.getLevel(player.jid);
+
+      // Initialize skill points if undefined/null
+      skillTree.ensureSkillPointsInitialized(user, trialData.targetClass, level);
+
       // Grant Bonus Points
       const bonusPoints = nextClass.tier === "ASCENDED" ? 10 : 5;
       user.skillPoints = (user.skillPoints || 0) + bonusPoints;
 
       // Evolution history
-      const level = progression.getLevel(player.jid);
       user.evolvedAt = level;
       if (!user.evolutionHistory) user.evolutionHistory = [];
       user.evolutionHistory.push({

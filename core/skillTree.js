@@ -4914,6 +4914,67 @@ function getSkillEffect(skill, level) {
     return skill.effect;
 }
 
+function calculateSpentPoints(user, userClassId) {
+    if (!user || !user.skills) return 0;
+    const classSystem = require('./classSystem');
+    const lineage = classSystem.getLineage(userClassId);
+    let totalSpent = 0;
+
+    for (const [skillId, level] of Object.entries(user.skills)) {
+        if (level <= 0) continue;
+        
+        // Find skill definition in lineage
+        let targetSkill = null;
+        for (const classId of lineage) {
+            const tree = SKILL_TREES[classId.toUpperCase()];
+            if (!tree) continue;
+            for (const [, treeData] of Object.entries(tree.trees)) {
+                if (treeData.skills[skillId]) {
+                    targetSkill = treeData.skills[skillId];
+                    break;
+                }
+            }
+            if (targetSkill) break;
+        }
+
+        // If not found in lineage, check all skill trees as fallback
+        if (!targetSkill) {
+            for (const [, tree] of Object.entries(SKILL_TREES)) {
+                for (const [, treeData] of Object.entries(tree.trees)) {
+                    if (treeData.skills[skillId]) {
+                        targetSkill = treeData.skills[skillId];
+                        break;
+                    }
+                }
+                if (targetSkill) break;
+            }
+        }
+
+        if (targetSkill) {
+            for (let i = 1; i <= level; i++) {
+                if (targetSkill.skillPointCost && targetSkill.skillPointCost[i - 1] !== undefined) {
+                    totalSpent += targetSkill.skillPointCost[i - 1];
+                } else {
+                    totalSpent += 1;
+                }
+            }
+        } else {
+            totalSpent += level;
+        }
+    }
+    return totalSpent;
+}
+
+function ensureSkillPointsInitialized(user, userClassId, level) {
+    if (!user) return false;
+    if (user.skillPoints === undefined || user.skillPoints === null) {
+        const spent = calculateSpentPoints(user, userClassId);
+        user.skillPoints = Math.max(0, calculateSkillPoints(level) - spent);
+        return true;
+    }
+    return false;
+}
+
 // ==========================================
 // 📤 EXPORTS
 // ==========================================
@@ -4930,5 +4991,7 @@ module.exports = {
     canLearnSkill,
     getSkillEffect,
     checkComboAvailable,
-    getAllAbilitiesForClass
+    getAllAbilitiesForClass,
+    calculateSpentPoints,
+    ensureSkillPointsInitialized
 };

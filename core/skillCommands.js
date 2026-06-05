@@ -29,9 +29,8 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     
     if (!user.skills) {
         user.skills = {};
-        if (user.skillPoints === undefined || user.skillPoints === null) {
-            user.skillPoints = skillTree.calculateSkillPoints(level);
-        }
+    }
+    if (skillTree.ensureSkillPointsInitialized(user, userClass.id, level)) {
         economy.saveUser(senderJid);
     }
     
@@ -132,7 +131,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     if (!user.skills) {
         user.skills = {};
-        user.skillPoints = skillTree.calculateSkillPoints(level);
+    }
+    if (skillTree.ensureSkillPointsInitialized(user, userClass.id, level)) {
+        economy.saveUser(senderJid);
     }
     
     // Search the full class lineage for the skill
@@ -186,7 +187,10 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         return;
     }
     
-    const cost = skillTree.getSkillCost(currentLevel + 1);
+    let cost = 1;
+    if (targetSkill.skillPointCost && targetSkill.skillPointCost[currentLevel] !== undefined) {
+        cost = targetSkill.skillPointCost[currentLevel];
+    }
     if ((user.skillPoints || 0) < cost) {
         await sock.sendMessage(chatId, { 
             text: `❌ Not enough skill points!\n\nNeed: ${cost} | Have: ${user.skillPoints || 0}\n\n💡 Earn points by leveling up!` 
@@ -231,9 +235,20 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
 async function resetSkills(sock, chatId, senderJid) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
+    const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
     
-    if (!user.skills || Object.keys(user.skills).length === 0) {
+    if (!userClass) {
+        await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
+        return;
+    }
+
+    if (!user.skills) {
+        user.skills = {};
+    }
+    skillTree.ensureSkillPointsInitialized(user, userClass.id, level);
+    
+    if (Object.keys(user.skills).length === 0) {
         await sock.sendMessage(chatId, { text: '❌ You have no skills to reset!' });
         return;
     }
@@ -249,7 +264,7 @@ async function resetSkills(sock, chatId, senderJid) {
     }
     
     // Refund ALL invested points
-    const spentPoints = Object.values(user.skills).reduce((sum, lvl) => sum + lvl, 0);
+    const spentPoints = skillTree.calculateSpentPoints(user, userClass.id);
     const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
     user.skillPoints = totalPoints;
@@ -613,6 +628,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
     // PRESERVE SKILLS: Do not wipe user.skills
     if (!user.skills) user.skills = {};
+    
+    // Initialize skill points if undefined/null
+    skillTree.ensureSkillPointsInitialized(user, user.class, level);
     
     // Grant Bonus Points for Evolution Tier
     const bonusPoints = nextTier === 'ASCENDED' ? 10 : 5;
