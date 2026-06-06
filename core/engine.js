@@ -184,6 +184,45 @@ async function startBot(configInstance) {
   const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
   const commandCooldowns = new Map();
 
+  // ─── Batched ChatMessage write buffer ────────────────────────────────────
+  // Avoids a DB round-trip on every single incoming message.
+  // Records accumulate here and are flushed in bulk every FLUSH_INTERVAL ms
+  // or whenever BATCH_SIZE is reached, whichever comes first.
+  const MSG_BATCH_SIZE = 15;
+  const MSG_FLUSH_INTERVAL = 3000; // 3 seconds
+  let msgWriteBuffer = [];
+  let msgFlushTimer = null;
+  let msgFlushing = false;
+
+  async function flushMsgBuffer() {
+    if (msgFlushing || msgWriteBuffer.length === 0) return;
+    msgFlushing = true;
+    const batch = msgWriteBuffer.splice(0, msgWriteBuffer.length);
+    try {
+      await ChatMessage.insertMany(batch, { ordered: false });
+    } catch (err) {
+      // insertMany partial failures are fine — ordered:false lets good docs through
+    } finally {
+      msgFlushing = false;
+    }
+  }
+
+  function queueMsgWrite(record) {
+    msgWriteBuffer.push(record);
+    if (msgWriteBuffer.length >= MSG_BATCH_SIZE) {
+      // Batch full — flush immediately without waiting
+      if (msgFlushTimer) { clearTimeout(msgFlushTimer); msgFlushTimer = null; }
+      flushMsgBuffer();
+    } else if (!msgFlushTimer) {
+      // Schedule a flush after the interval
+      msgFlushTimer = setTimeout(() => {
+        msgFlushTimer = null;
+        flushMsgBuffer();
+      }, MSG_FLUSH_INTERVAL);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // RAM Metric Collection (Every 5 mins)
   setInterval(async () => {
     try {
@@ -3925,7 +3964,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.imageMessage?.caption ||
                     m.message.videoMessage?.caption ||
                     null;
-                  ChatMessage.create({
+                  // Persist message to MongoDB — batched write (non-blocking)
+                  queueMsgWrite({
                     sender: senderJid,
                     body: messageBody,
                     type: m.message.imageMessage
@@ -3938,7 +3978,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     timestamp: new Date(),
                     chatId: chatId,
                     botId: BOT_ID,
-                  }).catch((err) => {});
+                  });
 
                   // 1. Get Group Metadata & Admin Status EARLY (Needed for Security & Commands)
                   let groupMetadata = null;
