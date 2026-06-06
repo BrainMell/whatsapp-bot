@@ -3688,7 +3688,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           const admins = new Set();
           for (const p of participants) {
             if (p.admin === 'admin' || p.admin === 'superadmin') {
+              // Store the raw JID (could be @lid or @s.whatsapp.net)
               admins.add(p.id);
+              // Also store the resolved phone JID so lookups work either way
+              // resolveToPhone is O(1) from in-memory lidCache for known mappings
+              const phoneJid = lidResolver.resolveToPhone(p.id, null);
+              if (phoneJid && phoneJid !== p.id) admins.add(phoneJid);
             }
           }
           adminSetCache.set(groupJid, { admins, expires: Date.now() + ADMIN_CACHE_TTL });
@@ -3989,37 +3994,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     try {
                       groupMetadata = await getGroupMetadata(chatId);
                       if (groupMetadata) {
-                        const myNumber = sock.user.id
-                          .split(":")[0]
-                          .split("@")[0];
-                        const myLid = sock.authState.creds?.me?.lid;
-                        const myLidNumber = myLid ? myLid.split(":")[0] : null;
-                        const senderNumber = senderJid
-                          .split(":")[0]
-                          .split("@")[0];
+                        // Build/refresh admin Set cache for O(1) lookups
+                        const adminSet = buildAdminCache(chatId, groupMetadata.participants);
 
+                        // Resolve bot + sender JID once — NOT inside a loop over 1k participants
                         const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
                         const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
 
-                        // Build/refresh admin Set cache for O(1) lookups
-                        buildAdminCache(chatId, groupMetadata.participants);
-
-                        botIsAdmin = groupMetadata.participants.some((p) => {
-                          const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
-                          const isMe = pPhone === botPhoneJid;
-                          return (
-                            isMe &&
-                            (p.admin === "admin" || p.admin === "superadmin")
-                          );
-                        });
-
-                        senderIsAdmin = groupMetadata.participants.some((p) => {
-                          const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
-                          return (
-                            pPhone === senderPhoneJid &&
-                            (p.admin === "admin" || p.admin === "superadmin")
-                          );
-                        });
+                        // O(1) Set lookup — replaces .some() scanning all participants
+                        botIsAdmin = adminSet.has(botPhoneJid) || adminSet.has(botJid);
+                        senderIsAdmin = adminSet.has(senderPhoneJid) || adminSet.has(senderJid);
                       }
                     } catch (e) {}
                   }
