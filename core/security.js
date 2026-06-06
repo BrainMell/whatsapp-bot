@@ -8,7 +8,7 @@ function resolveLidToPhone(jid, authPath) {
 }
 
 module.exports = {
-    handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null) {
+    handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null, cachedAdminSet = null) {
         try {
             if (!msg || !msg.message) return;
             const chatId = msg.key.remoteJid;
@@ -34,12 +34,19 @@ module.exports = {
             const senderPhone = lidResolver.resolveToPhone(normalizedSender, authPath);
             const resolvedSender = lidResolver.resolveLidToPhone(normalizedSender, authPath);
 
-            const senderIsAdmin = groupMetadata.participants.some(
-                p => {
-                    const normalizedParticipant = jidNormalizedUser(p.id);
-                    return lidResolver.resolveToPhone(normalizedParticipant, authPath) === senderPhone && (p.admin === 'admin' || p.admin === 'superadmin');
-                }
-            );
+            // O(1) admin check using pre-built Set from engine.js (avoids loop over 1k participants)
+            let senderIsAdmin = false;
+            if (cachedAdminSet) {
+                senderIsAdmin = cachedAdminSet.has(senderPhone) || cachedAdminSet.has(normalizedSender);
+            } else {
+                // Fallback: linear scan (only if Set wasn't passed in)
+                senderIsAdmin = groupMetadata.participants.some(
+                    p => {
+                        const normalizedParticipant = jidNormalizedUser(p.id);
+                        return lidResolver.resolveToPhone(normalizedParticipant, authPath) === senderPhone && (p.admin === 'admin' || p.admin === 'superadmin');
+                    }
+                );
+            }
 
             // Admins are exempt
             if (senderIsAdmin) return;

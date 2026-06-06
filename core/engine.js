@@ -3953,14 +3953,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.audioMessage;
                   if (!hasRealContent && m.messageStubType) return;
 
-                  // 4. Diagnostic Log
-                  const msgText =
-                    m.message?.conversation ||
-                    m.message?.extendedTextMessage?.text ||
-                    "Media/System";
-                  console.log(
-                    `📩 [${botConfig.getBotId()}] Msg from ${senderJid}: "${msgText.substring(0, 20)}..." (Mentions: ${m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length || 0})`,
-                  );
+                  // 4. Diagnostic Log (debug only — disabled in production)
+                  // console.log(`📩 [${botConfig.getBotId()}] Msg from ${senderJid}`);
 
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
@@ -3989,21 +3983,22 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   let groupMetadata = null;
                   let botIsAdmin = false;
                   let senderIsAdmin = false;
+                  let cachedAdminSet = null;
 
                   if (isGroupChat) {
                     try {
                       groupMetadata = await getGroupMetadata(chatId);
                       if (groupMetadata) {
                         // Build/refresh admin Set cache for O(1) lookups
-                        const adminSet = buildAdminCache(chatId, groupMetadata.participants);
+                        cachedAdminSet = buildAdminCache(chatId, groupMetadata.participants);
 
                         // Resolve bot + sender JID once — NOT inside a loop over 1k participants
                         const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
                         const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
 
                         // O(1) Set lookup — replaces .some() scanning all participants
-                        botIsAdmin = adminSet.has(botPhoneJid) || adminSet.has(botJid);
-                        senderIsAdmin = adminSet.has(senderPhoneJid) || adminSet.has(senderJid);
+                        botIsAdmin = cachedAdminSet.has(botPhoneJid) || cachedAdminSet.has(botJid);
+                        senderIsAdmin = cachedAdminSet.has(senderPhoneJid) || cachedAdminSet.has(senderJid);
                       }
                     } catch (e) {}
                   }
@@ -4021,6 +4016,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       addWarning,
                       getWarningCount,
                       groupMetadata,
+                      cachedAdminSet, // pre-built Set — skips O(n) scan inside security
                     );
 
                     // 2. Antispam Detection
@@ -4356,9 +4352,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
 
-                    console.log(
-                      `DEBUG: lowerTxt='${lowerTxt}', Prefix='${currentPrefix}', cmd='${primaryCmd}'`,
-                    );
+                    // debug log removed from hot path
 
                     // --- REACTION COMMANDS ---
                     const reaction = REACTIONS.find((r) => r.type === primaryCmd);
@@ -5230,10 +5224,7 @@ _💡 Reply with another number from your search list!_`.trim();
                   const isBotCommand = lowerTxt.startsWith(
                     `${botConfig.getPrefix().toLowerCase()}`,
                   );
-                  if (isBotCommand)
-                    console.log(
-                      `🤖 Command detected: ${lowerTxt.split(" ")[0]}`,
-                    );
+                  // isBotCommand log removed from hot path
 
                   // ============================================
                   // 🌍 GLOBAL WEATHER SYSTEM

@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const LidMapping = require('./models/LidMapping');
+let _economy = null; // lazy singleton — avoids circular dep on startup
+function getEconomy() { return _economy || (_economy = require('./economy')); }
 
 // In-memory caches for bi-directional mapping
 const lidCache = new Map();
@@ -185,24 +187,21 @@ function getMapping(jid, authPath) {
 function resolveLidToPhone(jid, authPath) {
     if (!jid) return jid;
     const { lid, phone } = getMapping(jid, authPath);
-    
+
     const lidJid = lid ? `${lid}@lid` : null;
     const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
-    
+
     // Check if either JID is registered in database
-    const economy = require('./economy');
+    const economy = getEconomy();
     if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
-        console.log(`🔗 [LID Resolver] Mapping JID: "${jid}" to registered LID: "${lidJid}"`);
         return lidJid;
     }
     if (phoneJid && economy.economyData && economy.economyData.has(phoneJid)) {
-        console.log(`🔗 [LID Resolver] Mapping JID: "${jid}" to registered Phone: "${phoneJid}"`);
         return phoneJid;
     }
-    
-    // If neither JID is registered yet, default to Phone JID if available, else keep incoming
-    const defaultJid = phoneJid || jid;
-    return defaultJid;
+
+    // Default to Phone JID if available, else keep incoming
+    return phoneJid || jid;
 }
 
 // Maps incoming JID to the canonical JID registered in database
