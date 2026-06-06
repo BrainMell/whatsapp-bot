@@ -4107,9 +4107,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   ) {
                     const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
                     const diffMs = Date.now() - msgTime;
-                    const diffMicro = diffMs * 1000;
+                    const diffSec = (diffMs / 1000).toFixed(2);
                     return await sock.sendMessage(chatId, {
-                      text: `pong! 🏓\nResponse Time: ${diffMicro} µs`,
+                      text: `pong! 🏓\nResponse Time: ${diffSec}s`,
                     });
                   }
 
