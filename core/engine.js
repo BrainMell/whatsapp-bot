@@ -179,6 +179,9 @@ async function startBot(configInstance) {
   let botStartTime;
   const msgRetryCounterCache = new NodeCache({ stdTTL: 300 }); // 5 min TTL
   const groupMetadataCache = new NodeCache({ stdTTL: 300 });
+  // O(1) admin lookup cache: groupJid -> { admins: Set<jid>, expires: number }
+  const adminSetCache = new Map();
+  const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
   const commandCooldowns = new Map();
 
   // RAM Metric Collection (Every 5 mins)
@@ -3510,6 +3513,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           },
           logger: P({ level: "silent" }),
           experimentalStore: true,
+          syncFullHistory: false,       // skip loading old message history on boot
+          markOnlineOnConnect: false,   // don't broadcast online status on connect
         });
 
         sendQueue.bind(sock);
@@ -3629,6 +3634,28 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         /*
          * Helper to get group metadata with caching
          */
+        /**
+         * O(1) admin check using a per-group Set cache (TTL: 10 min)
+         */
+        function isAdminCached(groupJid, participantJid) {
+          const entry = adminSetCache.get(groupJid);
+          if (entry && Date.now() < entry.expires) {
+            return entry.admins.has(participantJid);
+          }
+          return null; // cache miss — caller falls back to metadata
+        }
+
+        function buildAdminCache(groupJid, participants) {
+          const admins = new Set();
+          for (const p of participants) {
+            if (p.admin === 'admin' || p.admin === 'superadmin') {
+              admins.add(p.id);
+            }
+          }
+          adminSetCache.set(groupJid, { admins, expires: Date.now() + ADMIN_CACHE_TTL });
+          return admins;
+        }
+
         async function getGroupMetadata(id, forceRefresh = false) {
           if (!id.endsWith("@g.us")) return null;
 
@@ -3933,6 +3960,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                         const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
                         const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+
+                        // Build/refresh admin Set cache for O(1) lookups
+                        buildAdminCache(chatId, groupMetadata.participants);
 
                         botIsAdmin = groupMetadata.participants.some((p) => {
                           const pPhone = lidResolver.resolveToPhone(p.id, configInstance.getAuthPath());
