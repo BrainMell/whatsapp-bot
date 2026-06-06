@@ -3574,7 +3574,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             }
 
             if (connection === "open") {
-              console.log("✅ WhatsApp connected (open).");
+              console.log(`✅ [${BOT_ID}] WhatsApp connected (open).`);
               isRekeying = false; // BOT IS STABLE
               ignoreBroadcasts = false; // Allow broadcasts after successful connection
 
@@ -3616,18 +3616,18 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             if (connection === "close") {
               isRekeying = true; // BOT IS CHURNING
               const statusCode = lastDisconnect?.error?.output?.statusCode;
-              console.log("🔻 Connection closed. Status code:", statusCode);
+              console.log(`🔻 [${BOT_ID}] Connection closed. Status code:`, statusCode);
               botStarting = false; // CLEAR GUARD
 
               if (!hasAuth(configInstance.getAuthPath())) {
-                console.log("🛑 No auth folder. NOT reconnecting.");
+                console.log(`🛑 [${BOT_ID}] No auth folder. NOT reconnecting.`);
                 sendQueue.clear("No auth folder - cannot reconnect");
                 return;
               }
 
               if (statusCode === DisconnectReason.loggedOut) {
                 console.log(
-                  "🔒 Session logged out. Delete ./auth and re-scan.",
+                  `🔒 [${BOT_ID}] Session logged out. Delete this instance auth and re-scan.`,
                 );
                 sendQueue.clear("Logged out");
                 return;
@@ -3636,12 +3636,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // Special handling for conflicts (Another instance of the bot is running)
               if (statusCode === 440 || statusCode === 428) {
                 console.log(
-                  "⚠️ Connection conflict detected! (StatusCode: " +
+                  "⚠️ [" +
+                    BOT_ID +
+                    "] Connection conflict detected! (StatusCode: " +
                     statusCode +
                     ")",
                 );
                 console.log(
-                  "💡 Ensure Goten and Joker are not using the exact same session data/device.",
+                  `💡 [${BOT_ID}] Ensure this auth is not running in another process/service.`,
                 );
 
                 // Increase retryCount significantly to slow down the clash
@@ -3650,7 +3652,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
               const delayMs = getBackoff();
               console.log(
-                `🔁 Reconnecting in ${Math.round(delayMs / 1000)}s...`,
+                `🔁 [${BOT_ID}] Reconnecting in ${Math.round(delayMs / 1000)}s...`,
               );
 
               if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -3738,6 +3740,118 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // ============================================
         // 👋 WELCOME
         // ============================================
+        const welcomeBatchMembers = new Map();
+        const welcomeBatchTimers = new Map();
+        const welcomeStorms = new Map();
+        const WELCOME_BATCH_DELAY_MS = 8000;
+        const WELCOME_MENTION_LIMIT = 25;
+        const WELCOME_STORM_BATCH_LIMIT = 8;
+        const WELCOME_STORM_WINDOW_LIMIT = 15;
+        const WELCOME_STORM_WINDOW_MS = 60 * 1000;
+        const WELCOME_STORM_COOLDOWN_MS = 5 * 60 * 1000;
+
+        function normalizeParticipantJid(participant) {
+          const jid =
+            typeof participant === "string"
+              ? participant
+              : participant?.id || String(participant);
+          return jid.includes("[object") ? null : jid;
+        }
+
+        function queueWelcome(groupId, groupName, participantJid) {
+          if (!participantJid) return;
+
+          const now = Date.now();
+          const storm = welcomeStorms.get(groupId) || {
+            timestamps: [],
+            mutedUntil: 0,
+            lastNoticeAt: 0,
+          };
+          storm.timestamps = storm.timestamps.filter(
+            (timestamp) => now - timestamp < WELCOME_STORM_WINDOW_MS,
+          );
+          storm.timestamps.push(now);
+          welcomeStorms.set(groupId, storm);
+
+          if (!welcomeBatchMembers.has(groupId)) {
+            welcomeBatchMembers.set(groupId, new Set());
+          }
+          welcomeBatchMembers.get(groupId).add(participantJid);
+
+          if (welcomeBatchTimers.has(groupId)) return;
+
+          const timer = setTimeout(async () => {
+            welcomeBatchTimers.delete(groupId);
+            const members = Array.from(welcomeBatchMembers.get(groupId) || []);
+            welcomeBatchMembers.delete(groupId);
+            if (members.length === 0) return;
+
+            const settings = getGroupSettings(groupId);
+            if (settings.welcomeEnabled === false) return;
+
+            const stormState = welcomeStorms.get(groupId);
+            const stormNow = Date.now();
+            const recentJoinCount =
+              stormState?.timestamps.filter(
+                (timestamp) => stormNow - timestamp < WELCOME_STORM_WINDOW_MS,
+              ).length || members.length;
+            const isWelcomeStorm =
+              members.length >= WELCOME_STORM_BATCH_LIMIT ||
+              recentJoinCount >= WELCOME_STORM_WINDOW_LIMIT ||
+              (stormState?.mutedUntil || 0) > stormNow;
+
+            if (isWelcomeStorm) {
+              const canSendNotice =
+                !stormState?.lastNoticeAt ||
+                stormNow - stormState.lastNoticeAt > WELCOME_STORM_COOLDOWN_MS;
+
+              welcomeStorms.set(groupId, {
+                timestamps: stormState?.timestamps || [],
+                mutedUntil: stormNow + WELCOME_STORM_COOLDOWN_MS,
+                lastNoticeAt: canSendNotice
+                  ? stormNow
+                  : stormState?.lastNoticeAt || stormNow,
+              });
+
+              if (canSendNotice) {
+                await sock.sendMessage(groupId, {
+                  text:
+                    `👋 Welcome to the new members joining *${groupName}*.\n\n` +
+                    `Please read the group description and settle in.`,
+                });
+              }
+              return;
+            }
+
+            const mentionedMembers = members.slice(0, WELCOME_MENTION_LIMIT);
+            const extraCount = members.length - mentionedMembers.length;
+            const mentionsText = mentionedMembers
+              .map((jid) => `@${jid.split("@")[0]}`)
+              .join(", ");
+            const mentionSuffix = extraCount > 0 ? ` and ${extraCount} more` : "";
+            const userText = `${mentionsText}${mentionSuffix}`;
+
+            let welcomeText =
+              settings.welcomeMessage ||
+              `👋 *Hello ${userText}!*\n\nWelcome to *${groupName}*!\nWe are happy to have you here.\n\n📜 *Please read the group description!*`;
+
+            welcomeText = welcomeText
+              .replace(/@user/gi, userText)
+              .replace(/{user}/gi, userText)
+              .replace(/{tag}/gi, userText)
+              .replace(/{mention}/gi, userText)
+              .replace(/@group/gi, groupName)
+              .replace(/{group}/gi, groupName);
+
+            await sock.sendMessage(groupId, {
+              text: welcomeText,
+              mentions: mentionedMembers,
+            });
+          }, WELCOME_BATCH_DELAY_MS);
+
+          welcomeBatchTimers.set(groupId, timer);
+        }
+
         sock.ev.on("groups.update", async (updates) => {
           for (const update of updates) {
             if (update.id) {
@@ -3762,35 +3876,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             // Loop through participants (usually just one)
             for (let participant of participants) {
               // ✅ IMPROVED FIX: Handle both string and object formats from Baileys
-              const participantJid =
-                typeof participant === "string"
-                  ? participant
-                  : participant.id || String(participant);
+              const participantJid = normalizeParticipantJid(participant);
 
-              if (participantJid.includes("[object")) continue; // Safety skip
+              if (!participantJid) continue; // Safety skip
 
               // 🟢 WELCOME MESSAGE
               if (action === "add") {
-                const settings = getGroupSettings(id);
-                if (settings.welcomeEnabled === false) return;
-
-                const phoneNumber = participantJid.split("@")[0];
-                let welcomeText =
-                  settings.welcomeMessage ||
-                  `👋 *Hello @${phoneNumber}!*\n\nWelcome to *${groupName}*!\nWe are happy to have you here.\n\n📜 *Please read the group description!*`;
-
-                welcomeText = welcomeText
-                  .replace(/@user/gi, `@${phoneNumber}`)
-                  .replace(/{user}/gi, `@${phoneNumber}`)
-                  .replace(/{tag}/gi, `@${phoneNumber}`)
-                  .replace(/{mention}/gi, `@${phoneNumber}`)
-                  .replace(/@group/gi, groupName)
-                  .replace(/{group}/gi, groupName);
-
-                await sock.sendMessage(id, {
-                  text: welcomeText,
-                  mentions: [participantJid],
-                });
+                queueWelcome(id, groupName, participantJid);
               }
 
               // 🔴 GOODBYE MESSAGE (Optional)
@@ -5615,10 +5707,6 @@ _💡 Reply with another number from your search list!_`.trim();
                     // Silently ignore - they get no response
                     return;
                   }
-
-                  let currentParticipants = groupMetadata
-                    ? groupMetadata.participants.map((p) => p.id)
-                    : [];
 
                   // Override command - allows user to bypass admin checks
                   if (
@@ -13056,45 +13144,6 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // --- END OF ADMIN COMMANDS ---
 
-                    // Welcome message for Group chat marker1
-
-                    // Store the list of current participants in a variable
-
-                    // Main message processing logic
-                    if (isGroupChat && !senderIsAdmin) {
-                      const settings = getGroupSettings(chatId);
-
-                      if (settings.welcomeMessage) {
-                        // Check if the sender is a new user
-                        const isNewUser =
-                          !currentParticipants.includes(senderJid) &&
-                          !senderIsAdmin &&
-                          !botIsAdmin;
-
-                        if (isNewUser) {
-                          console.log(`New user detected:`, senderJid);
-                          const phoneNumber = senderJid.split("@")[0];
-                          const groupMetadata = await getGroupMetadata(chatId);
-                          const groupName = groupMetadata ? groupMetadata.subject : "the group";
-
-                          let welcomeText = settings.welcomeMessage;
-                          welcomeText = welcomeText
-                            .replace(/@user/gi, `@${phoneNumber}`)
-                            .replace(/{user}/gi, `@${phoneNumber}`)
-                            .replace(/{tag}/gi, `@${phoneNumber}`)
-                            .replace(/{mention}/gi, `@${phoneNumber}`)
-                            .replace(/@group/gi, groupName)
-                            .replace(/{group}/gi, groupName);
-
-                          // Send the welcome message to the new user
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + welcomeText,
-                            mentions: [senderJid],
-                          });
-                        }
-                      }
-                    }
-
                     // ============================================
                     // REGULAR BOT FUNCTIONALITY - AI responses
                     // ============================================
@@ -17912,16 +17961,16 @@ _(Or reply to their message)_
           console.log("📈 Stock prices updated.");
         }, 1800000);
       } catch (err) {
-        console.error("❌ initSocket failed:", err.message);
+        console.error(`❌ [${BOT_ID}] initSocket failed:`, err.message);
         botStarting = false;
 
         if (!hasAuth(configInstance.getAuthPath())) {
-          console.log("🛑 Auth missing. Fix before retrying.");
+          console.log(`🛑 [${BOT_ID}] Auth missing. Fix before retrying.`);
           return;
         }
 
         const delayMs = getBackoff();
-        console.log(`🔁 Retrying in ${Math.round(delayMs / 1000)}s...`);
+        console.log(`🔁 [${BOT_ID}] Retrying in ${Math.round(delayMs / 1000)}s...`);
         setTimeout(() => {
           if (!botStarting) {
             initSocket().catch((e) =>

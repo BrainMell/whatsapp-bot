@@ -65,9 +65,20 @@ async function boot() {
         process.exit(1);
     }
 
-    const folders = fs.readdirSync(instancesDir).filter(f => {
+    let folders = fs.readdirSync(instancesDir).filter(f => {
         return fs.statSync(path.join(instancesDir, f)).isDirectory();
     });
+
+    const selectedInstances = (process.env.BOT_INSTANCES || process.env.BOT_INSTANCE || '')
+        .split(',')
+        .map(name => name.trim())
+        .filter(Boolean);
+
+    if (selectedInstances.length > 0) {
+        const selected = new Set(selectedInstances);
+        folders = folders.filter(folder => selected.has(folder));
+        console.log(`🎯 Instance filter active: ${selectedInstances.join(', ')}`);
+    }
 
     if (folders.length === 0) {
         console.warn("⚠️ No bot instances found in /instances. Please create a folder with botConfig.json.");
