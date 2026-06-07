@@ -31,20 +31,417 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Keep-alive endpoint for Render/UptimeRobot
+const fs = require('fs');
+const path = require('path');
+const { startBot, getBotInstancesHealth } = require('./core/engine');
+const { BotConfig } = require('./botConfig');
+const connectDB = require('./db');
+
+// Keep-alive endpoint for Render/UptimeRobot - serves a rich dashboard
 app.get('/', (req, res) => {
-  res.send('Multi-Tenant Bot Manager is Running!');
+    const uptimeSeconds = process.uptime();
+    const uptimeStr = formatUptime(uptimeSeconds);
+    const memory = process.memoryUsage();
+    const rssMb = (memory.rss / 1024 / 1024).toFixed(1);
+    const limitMb = 512;
+    const memoryPercent = Math.min((memory.rss / 1024 / 1024 / limitMb) * 100, 100).toFixed(0);
+
+    const healthMap = getBotInstancesHealth ? getBotInstancesHealth() : new Map();
+    const instances = [];
+    let activeCount = 0;
+    let disconnectedCount = 0;
+    let qrCount = 0;
+
+    for (const [botId, health] of healthMap.entries()) {
+        instances.push({ botId, ...health });
+        if (health.status === 'connected') activeCount++;
+        else if (health.status === 'disconnected') disconnectedCount++;
+        else if (health.status === 'needs_qr') qrCount++;
+    }
+
+    let overallStatus = 'Healthy';
+    let overallClass = 'healthy';
+    if (instances.length > 0) {
+        if (disconnectedCount === instances.length) {
+            overallStatus = 'Offline';
+            overallClass = 'down';
+        } else if (disconnectedCount > 0 || qrCount > 0) {
+            overallStatus = 'Degraded';
+            overallClass = 'degraded';
+        }
+    } else {
+        overallStatus = 'Idle';
+        overallClass = 'degraded';
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joker Bot Manager Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1a1c29, #0f1016);
+            color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 28px;
+            padding: 35px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding-bottom: 20px;
+        }
+        .header-title h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #a78bfa, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-title p {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .status-pill.healthy {
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            color: #34d399;
+        }
+        .status-pill.degraded {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+        .status-pill.down {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: currentColor;
+            box-shadow: 0 0 8px currentColor;
+            animation: pulse 1.8s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 18px;
+            padding: 20px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 6px;
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: 600;
+            color: #f3f4f6;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #6366f1, #818cf8);
+        }
+        .progress-fill.warn {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+        .progress-fill.danger {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #d1d5db;
+            letter-spacing: 0.5px;
+        }
+        .bot-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .bot-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 16px 20px;
+            transition: all 0.25s ease;
+        }
+        .bot-item:hover {
+            border-color: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            transform: translateY(-1px);
+        }
+        .bot-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .bot-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #f3f4f6;
+        }
+        .bot-id {
+            font-size: 11px;
+            color: #6b7280;
+            font-family: monospace;
+        }
+        .bot-status-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .bot-status {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 50px;
+            text-transform: capitalize;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .bot-status.connected { background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.25); color: #34d399; }
+        .bot-status.connecting { background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.25); color: #fbbf24; }
+        .bot-status.needs_qr { background: rgba(167, 139, 250, 0.15); border: 1px solid rgba(167, 139, 250, 0.25); color: #a78bfa; }
+        .bot-status.disconnected { background: rgba(248, 113, 113, 0.15); border: 1px solid rgba(248, 113, 113, 0.25); color: #f87171; }
+        
+        .bot-meta {
+            font-size: 11px;
+            color: #9ca3af;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 120px;
+        }
+        .bot-meta span {
+            color: #ef4444;
+            font-size: 10px;
+        }
+        .no-bots {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px dashed rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+        }
+        .footer {
+            margin-top: 35px;
+            font-size: 11px;
+            color: #4b5563;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .footer-guardian {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #818cf8;
+        }
+        .guardian-active-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #818cf8;
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h1>Joker Bot Manager</h1>
+                <p>Render Free Tier Optimization Console</p>
+            </div>
+            <div class="status-pill ${overallClass}">
+                <div class="pulse-dot"></div>
+                ${overallStatus}
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">RAM Usage</div>
+                <div class="stat-value">${rssMb} MB / ${limitMb} MB</div>
+                <div class="progress-bar">
+                    <div class="progress-fill ${memoryPercent > 80 ? 'danger' : memoryPercent > 65 ? 'warn' : ''}" style="width: ${memoryPercent}%"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value">${uptimeStr}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Bots</div>
+                <div class="stat-value">${activeCount} / ${instances.length} Online</div>
+            </div>
+        </div>
+
+        <div class="section-title">Spawned Tenant Instances</div>
+        <div class="bot-list">
+            ${instances.length === 0 ? '<div class="no-bots">No bot instances have registered yet. Spawning in progress...</div>' : ''}
+            ${instances.map(bot => {
+                const dateStr = new Date(bot.lastUpdated).toLocaleTimeString();
+                const statusClass = bot.status;
+                const errText = bot.error ? `<span>${bot.error}</span>` : '';
+                return `
+                <div class="bot-item">
+                    <div class="bot-info">
+                        <div class="bot-name">${bot.name}</div>
+                        <div class="bot-id">ID: ${bot.botId}</div>
+                    </div>
+                    <div class="bot-status-container">
+                        <div class="bot-meta">
+                            Last State Sync: &nbsp;${dateStr}
+                            ${errText}
+                        </div>
+                        <div class="bot-status ${statusClass}">
+                            <div class="pulse-dot" style="animation-duration: 2.5s"></div>
+                            ${bot.status.replace('_', ' ')}
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('')}
+        </div>
+
+        <div class="footer">
+            <div>&copy; 2026 Joker Multi-Tenant Manager</div>
+            <div class="footer-guardian">
+                <div class="guardian-active-dot"></div>
+                Render Guardian Active (Self-Healing Enabled)
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+    `;
+    res.send(html);
 });
+
+function formatUptime(seconds) {
+    const d = Math.floor(seconds / (3600*24));
+    const h = Math.floor(seconds % (3600*24) / 3600);
+    const m = Math.floor(seconds % 3600 / 60);
+    const s = Math.floor(seconds % 60);
+
+    const dDisplay = d > 0 ? d + "d " : "";
+    const hDisplay = h > 0 ? h + "h " : "";
+    const mDisplay = m > 0 ? m + "m " : "";
+    const sDisplay = s + "s";
+    return dDisplay + hDisplay + mDisplay + sDisplay;
+}
 
 app.listen(port, () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });
 
-const fs = require('fs');
-const path = require('path');
-const { startBot } = require('./core/engine');
-const { BotConfig } = require('./botConfig');
-const connectDB = require('./db');
+// Self-healing connection guardian (specifically for Render Free Tier stability)
+const BOOT_GRACE_PERIOD = 5 * 60 * 1000; // 5 minutes grace period on startup
+const DISCONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes maximum disconnected state allowed
+const spawnTime = Date.now();
+const disconnectedTimestamps = new Map(); // botId -> timestamp
+
+setInterval(() => {
+    const uptime = Date.now() - spawnTime;
+    if (uptime < BOOT_GRACE_PERIOD) return; // Wait until grace period passes
+
+    const healthMap = getBotInstancesHealth ? getBotInstancesHealth() : new Map();
+    let needsReboot = false;
+    let stuckBotName = '';
+
+    for (const [botId, health] of healthMap.entries()) {
+        if (health.status === 'disconnected') {
+            if (!disconnectedTimestamps.has(botId)) {
+                disconnectedTimestamps.set(botId, Date.now());
+            } else {
+                const disconnectedDuration = Date.now() - disconnectedTimestamps.get(botId);
+                if (disconnectedDuration > DISCONNECT_TIMEOUT) {
+                    needsReboot = true;
+                    stuckBotName = health.name;
+                    break;
+                }
+            }
+        } else {
+            disconnectedTimestamps.delete(botId);
+        }
+    }
+
+    if (needsReboot) {
+        console.error(`🚨 [Guardian] Bot instance '${stuckBotName}' has been offline for over 5 minutes. Triggering container restart...`);
+        process.exit(1);
+    }
+}, 30000);
 
 async function boot() {
     // Kill Switch Check

@@ -24,6 +24,9 @@ const {
   hasPendingSelection,
 } = require("./powerscale");
 const classSystem = require("./classSystem");
+
+// Global map to track connection health of bot instances
+const botInstancesHealth = new Map();
 const guilds = require("./guilds");
 const guildAdventure = require("./guildAdventure");
 const skillTree = require("./skillTree");
@@ -204,13 +207,25 @@ async function startBot(configInstance) {
       // insertMany partial failures are fine — ordered:false lets good docs through
     } finally {
       msgFlushing = false;
+      // If more messages were added to the buffer while flushing was in progress,
+      // check if we need to flush them immediately or schedule a flush.
+      if (msgWriteBuffer.length > 0) {
+        if (msgWriteBuffer.length >= MSG_BATCH_SIZE) {
+          flushMsgBuffer();
+        } else if (!msgFlushTimer) {
+          msgFlushTimer = setTimeout(() => {
+            msgFlushTimer = null;
+            flushMsgBuffer();
+          }, MSG_FLUSH_INTERVAL);
+        }
+      }
     }
   }
 
   function queueMsgWrite(record) {
     msgWriteBuffer.push(record);
     if (msgWriteBuffer.length >= MSG_BATCH_SIZE) {
-      // Batch full — flush immediately without waiting
+      // Batch full — flush immediately
       if (msgFlushTimer) { clearTimeout(msgFlushTimer); msgFlushTimer = null; }
       flushMsgBuffer();
     } else if (!msgFlushTimer) {
@@ -3569,11 +3584,23 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             if (qr && !qrShown) {
               qrShown = true;
+              botInstancesHealth.set(BOT_ID, {
+                name: BOT_NAME,
+                status: "needs_qr",
+                lastUpdated: Date.now(),
+                error: "Authentication QR code generated. Scan to login.",
+              });
               console.log("📱 Scan this QR code to login:");
               qrcode.generate(qr, { small: true });
             }
 
             if (connection === "open") {
+              botInstancesHealth.set(BOT_ID, {
+                name: BOT_NAME,
+                status: "connected",
+                lastUpdated: Date.now(),
+                error: null,
+              });
               console.log(`✅ [${BOT_ID}] WhatsApp connected (open).`);
               isRekeying = false; // BOT IS STABLE
               ignoreBroadcasts = false; // Allow broadcasts after successful connection
@@ -3616,6 +3643,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             if (connection === "close") {
               isRekeying = true; // BOT IS CHURNING
               const statusCode = lastDisconnect?.error?.output?.statusCode;
+              botInstancesHealth.set(BOT_ID, {
+                name: BOT_NAME,
+                status: "disconnected",
+                lastUpdated: Date.now(),
+                error: statusCode ? `Closed (Status Code: ${statusCode})` : (lastDisconnect?.error?.message || "Connection closed"),
+              });
               console.log(`🔻 [${BOT_ID}] Connection closed. Status code:`, statusCode);
               botStarting = false; // CLEAR GUARD
 
@@ -3661,6 +3694,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 if (!botStarting) {
                   // Re-wrap in storage context for reconnect
                   botConfig.storage.run(configInstance, () => {
+                    botInstancesHealth.set(BOT_ID, {
+                      name: BOT_NAME,
+                      status: "connecting",
+                      lastUpdated: Date.now(),
+                      error: null,
+                    });
                     initSocket().catch((e) => {
                       console.error("❌ Reconnect failed:", e.message);
                       botStarting = false;
@@ -3738,6 +3777,28 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         }
 
         // ============================================
+        // 🐘 LARGE GROUP GUARD
+        // Groups above this size skip eager metadata fetch —
+        // metadata is only loaded on-demand when a command or
+        // security check actually needs it. Keeps the bot from
+        // lagging just because it's sitting in a big GC.
+        // ============================================
+        const LARGE_GROUP_THRESHOLD = 150;
+        const groupSizeCache = new Map(); // groupJid -> { size, ts }
+        const GROUP_SIZE_CACHE_TTL = 10 * 60 * 1000; // 10 min
+
+        function getCachedGroupSize(groupJid) {
+          const entry = groupSizeCache.get(groupJid);
+          if (entry && Date.now() - entry.ts < GROUP_SIZE_CACHE_TTL) return entry.size;
+          return null;
+        }
+
+        function updateGroupSizeCache(groupJid, metadata) {
+          if (!metadata?.participants) return;
+          groupSizeCache.set(groupJid, { size: metadata.participants.length, ts: Date.now() });
+        }
+
+        // ============================================
         // 👋 WELCOME
         // ============================================
         const welcomeBatchMembers = new Map();
@@ -3751,11 +3812,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         const WELCOME_STORM_COOLDOWN_MS = 5 * 60 * 1000;
 
         function normalizeParticipantJid(participant) {
+          if (!participant) return null;
           const jid =
             typeof participant === "string"
               ? participant
               : participant?.id || String(participant);
-          return jid.includes("[object") ? null : jid;
+          return (jid.includes("[object") || jid === "undefined") ? null : jid;
         }
 
         function queueWelcome(groupId, groupName, participantJid) {
@@ -3855,10 +3917,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         sock.ev.on("groups.update", async (updates) => {
           for (const update of updates) {
             if (update.id) {
-              console.log(
-                `♻️ Group updated: ${update.id}, refreshing cache...`,
-              );
-              await getGroupMetadata(update.id, true);
+              const cached = groupMetadataCache.get(update.id);
+              if (cached) {
+                Object.assign(cached, update);
+                groupMetadataCache.set(update.id, cached);
+              }
             }
           }
         });
@@ -3867,9 +3930,39 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           try {
             const { id, participants, action } = update;
 
-            // Refresh metadata on participant change
-            const groupMetadata = await getGroupMetadata(id, true);
+            // Get cached metadata or fetch it (non-forced)
+            let groupMetadata = await getGroupMetadata(id, false);
             if (!groupMetadata) return;
+
+            // In-memory sync of the cached participants list
+            if (groupMetadata.participants) {
+              const pArray = Array.isArray(participants) ? participants : [participants];
+              if (action === "add") {
+                for (const p of pArray) {
+                  const pId = normalizeParticipantJid(p);
+                  if (pId && !groupMetadata.participants.some(x => (x.id || x) === pId)) {
+                    groupMetadata.participants.push({ id: pId, admin: null });
+                  }
+                }
+              } else if (action === "remove") {
+                const pSet = new Set(pArray.map(p => normalizeParticipantJid(p)).filter(Boolean));
+                groupMetadata.participants = groupMetadata.participants.filter(x => !pSet.has(x.id || x));
+              } else if (action === "promote") {
+                const pSet = new Set(pArray.map(p => normalizeParticipantJid(p)).filter(Boolean));
+                for (const x of groupMetadata.participants) {
+                  if (pSet.has(x.id || x)) x.admin = "admin";
+                }
+              } else if (action === "demote") {
+                const pSet = new Set(pArray.map(p => normalizeParticipantJid(p)).filter(Boolean));
+                for (const x of groupMetadata.participants) {
+                  if (pSet.has(x.id || x)) x.admin = null;
+                }
+              }
+              groupMetadataCache.set(id, groupMetadata);
+              updateGroupSizeCache(id, groupMetadata);
+              // Rebuild/refresh admin Set cache in-memory
+              buildAdminCache(id, groupMetadata.participants);
+            }
 
             const groupName = groupMetadata.subject;
 
@@ -4078,21 +4171,55 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   let cachedAdminSet = null;
 
                   if (isGroupChat) {
-                    try {
-                      groupMetadata = await getGroupMetadata(chatId);
-                      if (groupMetadata) {
-                        // Build/refresh admin Set cache for O(1) lookups
-                        cachedAdminSet = buildAdminCache(chatId, groupMetadata.participants);
+                    // Large group optimisation: skip eager metadata fetch for idle messages.
+                    // We only fetch upfront when:
+                    //   a) group is small (< LARGE_GROUP_THRESHOLD), OR
+                    //   b) message looks like a command / bot-mention (needs metadata to run), OR
+                    //   c) metadata is already in cache (free)
+                    const rawTxt = (
+                      m.message?.conversation ||
+                      m.message?.extendedTextMessage?.text ||
+                      m.message?.imageMessage?.caption ||
+                      m.message?.videoMessage?.caption || ""
+                    ).trim();
+                    const looksLikeCommand = rawTxt.startsWith(PREFIX) || rawTxt.startsWith(".");
+                    const mentionsBot = rawTxt.toLowerCase().includes(botJid.split("@")[0]) ||
+                      (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).includes(botJid);
+                    const cachedSize = getCachedGroupSize(chatId);
+                    const isLargeGroup = cachedSize !== null && cachedSize >= LARGE_GROUP_THRESHOLD;
+                    const metadataAlreadyCached = !!groupMetadataCache.get(chatId);
 
-                        // Resolve bot + sender JID once — NOT inside a loop over 1k participants
-                        const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
-                        const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+                    const shouldFetchEarly = !isLargeGroup || looksLikeCommand || mentionsBot || metadataAlreadyCached;
 
-                        // O(1) Set lookup — replaces .some() scanning all participants
-                        botIsAdmin = cachedAdminSet.has(botPhoneJid) || cachedAdminSet.has(botJid);
-                        senderIsAdmin = cachedAdminSet.has(senderPhoneJid) || cachedAdminSet.has(senderJid);
-                      }
-                    } catch (e) {}
+                    if (shouldFetchEarly) {
+                      try {
+                        groupMetadata = await getGroupMetadata(chatId);
+                        if (groupMetadata) {
+                          updateGroupSizeCache(chatId, groupMetadata);
+                          // O(1) admin Set cache lookup — avoids rebuilding the Set on every message
+                          const cachedEntry = adminSetCache.get(chatId);
+                          if (cachedEntry && Date.now() < cachedEntry.expires) {
+                            cachedAdminSet = cachedEntry.admins;
+                          } else {
+                            cachedAdminSet = buildAdminCache(chatId, groupMetadata.participants);
+                          }
+
+                          // Resolve bot + sender JID once — NOT inside a loop over 1k participants
+                          const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
+                          const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+
+                          // O(1) Set lookup — replaces .some() scanning all participants
+                          botIsAdmin = cachedAdminSet.has(botPhoneJid) || cachedAdminSet.has(botJid);
+                          senderIsAdmin = cachedAdminSet.has(senderPhoneJid) || cachedAdminSet.has(senderJid);
+                        }
+                      } catch (e) {}
+                    } else {
+                      // Large group idle message — warm the size cache in the background
+                      // so future command messages know the group is large.
+                      getGroupMetadata(chatId).then((meta) => {
+                        if (meta) updateGroupSizeCache(chatId, meta);
+                      }).catch(() => {});
+                    }
                   }
 
                   // ============================================
@@ -8468,7 +8595,7 @@ ${memberList}`;
                     // Ensure we have group metadata (cold cache fallback)
                     if (!groupMetadata) {
                       try {
-                        groupMetadata = await getGroupMetadata(chatId, true);
+                        groupMetadata = await getGroupMetadata(chatId);
                       } catch (_) {}
                     }
                     if (!groupMetadata) {
@@ -17998,4 +18125,5 @@ module.exports = {
   delGlobalMod,
   isGlobalMod,
   loadGlobalMods,
+  getBotInstancesHealth: () => botInstancesHealth,
 };
