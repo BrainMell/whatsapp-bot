@@ -186,6 +186,7 @@ async function startBot(configInstance) {
   const adminSetCache = new Map();
   const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
   const commandCooldowns = new Map();
+  let stockMarketInterval = null; // Prevent stock market interval leak on reconnect
 
   // ─── Batched ChatMessage write buffer ────────────────────────────────────
   // Avoids a DB round-trip on every single incoming message.
@@ -13296,7 +13297,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       let groupName = "Unknown Group";
                       try {
                         // Try to get cached group name first to save API calls
-                        const groupMetadata = await sock.groupMetadata(chatId);
+                        const groupMetadata = await getGroupMetadata(chatId);
                         groupName = groupMetadata.subject;
                       } catch (e) {
                         groupName = chatId.split("@")[0];
@@ -13322,7 +13323,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         lowerTxt === "yeah" ||
                         lowerTxt === "yep"
                       ) {
-                        const groupMetadata = await sock.groupMetadata(
+                        const groupMetadata = await getGroupMetadata(
                           pending.chatId,
                         );
                         const participants = groupMetadata.participants.map(
@@ -18083,7 +18084,8 @@ _(Or reply to their message)_
         startNewsLoop(sock);
 
         // Stock Market Update Loop (Every 30 mins)
-        setInterval(() => {
+        if (stockMarketInterval) clearInterval(stockMarketInterval);
+        stockMarketInterval = setInterval(() => {
           stockMarket.updatePrices();
           console.log("📈 Stock prices updated.");
         }, 1800000);
