@@ -215,6 +215,16 @@ function declineLoan(lenderJid) {
   };
 }
 
+// Find a pending loan request by borrower JID
+function getPendingRequest(borrowerJid) {
+  for (const [lenderJid, req] of pendingLoans.entries()) {
+    if (req.borrowerJid === borrowerJid) {
+      return { lenderJid, ...req };
+    }
+  }
+  return null;
+}
+
 // Check loans (run this in interval)
 function checkDueLoans() {
   const now = Date.now();
@@ -313,6 +323,7 @@ module.exports = {
   checkDueLoans,
   isLoanBlocked,
   getLoanBlockTime,
-  getTotalDebt
+  getTotalDebt,
+  getPendingRequest
 };
 

@@ -13469,7 +13469,7 @@ ${senderName} said y'all should know:
                       // 3. Check Loan Invites
                       const loanRequest = loans.getPendingRequest(senderJid);
                       if (loanRequest) {
-                        const result = loans.acceptLoan(senderJid);
+                        const result = loans.acceptLoan(loanRequest.lenderJid);
                         if (result.success) {
                           await sock.sendMessage(chatId, {
                             text:
@@ -13519,7 +13519,7 @@ ${senderName} said y'all should know:
                       // 3. Check Loan
                       const loanRequest = loans.getPendingRequest(senderJid);
                       if (loanRequest) {
-                        const result = loans.declineLoan(senderJid);
+                        const result = loans.declineLoan(loanRequest.lenderJid);
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + "❌ Loan request declined.",
                         });

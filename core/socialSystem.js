@@ -11,17 +11,19 @@ function getRelationshipsMap(user) {
 }
 
 function getScore(relationships, targetJid) {
+    const escapedJid = targetJid.replace(/\./g, '_');
     if (typeof relationships.get === 'function') {
-        return relationships.get(targetJid) || 0;
+        return relationships.get(escapedJid) || relationships.get(targetJid) || 0;
     }
-    return relationships[targetJid] || 0;
+    return relationships[escapedJid] || relationships[targetJid] || 0;
 }
 
 function setScore(relationships, targetJid, score) {
+    const escapedJid = targetJid.replace(/\./g, '_');
     if (typeof relationships.set === 'function') {
-        relationships.set(targetJid, score);
+        relationships.set(escapedJid, score);
     } else {
-        relationships[targetJid] = score;
+        relationships[escapedJid] = score;
     }
 }
 
