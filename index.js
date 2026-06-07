@@ -266,6 +266,7 @@ app.get('/', (req, res) => {
         .bot-status.connected { background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.25); color: #34d399; }
         .bot-status.connecting { background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.25); color: #fbbf24; }
         .bot-status.needs_qr { background: rgba(167, 139, 250, 0.15); border: 1px solid rgba(167, 139, 250, 0.25); color: #a78bfa; }
+        .bot-status.logged_out { background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.25); color: #f43f5e; }
         .bot-status.disconnected { background: rgba(248, 113, 113, 0.15); border: 1px solid rgba(248, 113, 113, 0.25); color: #f87171; }
         
         .bot-meta {
@@ -421,7 +422,9 @@ setInterval(() => {
     let stuckBotName = '';
 
     for (const [botId, health] of healthMap.entries()) {
-        if (health.status === 'disconnected') {
+        const isLoggedOut = health.status === 'logged_out' || 
+                            (health.error && (health.error.includes('401') || health.error.toLowerCase().includes('logged out')));
+        if (health.status === 'disconnected' && !isLoggedOut) {
             if (!disconnectedTimestamps.has(botId)) {
                 disconnectedTimestamps.set(botId, Date.now());
             } else {

@@ -45,8 +45,6 @@ class ContextEngine {
         const triggers = triggerDetector.detect(msg.content);
 
         if (triggers.length > 0) {
-            console.log(`🧠 Brain: High-value message detected from ${msg.username}!`);
-            
             // 4. Get Context
             const context = bufferManager.getContext(msg.chatId, msg.id, 15, 3);
 
@@ -164,7 +162,6 @@ class ContextEngine {
             // Save back to DB
             if (changes > 0) {
                 economy.saveUser(finalJid);
-                console.log(`🧠 Brain: Learned ${changes} new things about ${user.nickname || finalJid.split('@')[0]}`);
             }
         }
         }
@@ -217,7 +214,6 @@ class ContextEngine {
                 
                 if (groupChanges > 0) {
                     await groupProfile.save();
-                    console.log(`🧠 Brain: Learned ${groupChanges} new group facts/jokes for ${chatId}`);
                 }
             } catch (err) {
                 console.error("❌ Brain: Failed to save group context results:", err.message);

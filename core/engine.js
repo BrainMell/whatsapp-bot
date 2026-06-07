@@ -3647,7 +3647,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const statusCode = lastDisconnect?.error?.output?.statusCode;
               botInstancesHealth.set(BOT_ID, {
                 name: BOT_NAME,
-                status: "disconnected",
+                status: statusCode === DisconnectReason.loggedOut ? "logged_out" : "disconnected",
                 lastUpdated: Date.now(),
                 error: statusCode ? `Closed (Status Code: ${statusCode})` : (lastDisconnect?.error?.message || "Connection closed"),
               });

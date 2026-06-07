@@ -82,7 +82,6 @@ async function saveLidMapping(lid, phone) {
     lidCache.set(lid, phone);
     phoneCache.set(phone, lid);
     try {
-        console.log(`💾 [LID Resolver] Saving mapping to MongoDB: ${lid} -> ${phone}`);
         await LidMapping.findOneAndUpdate(
             { lid: lid },
             { $set: { phone: phone } },

@@ -68,7 +68,6 @@ async function loadEconomy() {
       economyData.set(userData.userId, userData);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
-    console.log(`🔑 Economy JIDs in memory cache:`, Array.from(economyData.keys()));
   } catch (err) {
     console.error("Error loading economy from DB:", err.message);
   }
@@ -111,7 +110,6 @@ function resolveJidHelper(userId) {
 function isRegistered(userId) {
   const resolvedId = resolveJidHelper(userId);
   const user = economyData.get(resolvedId);
-  console.log(`🔍 [Economy] isRegistered check: "${userId}" (resolved to: "${resolvedId}") -> found: ${!!user} (registered: ${user?.registered})`);
   return user && user.registered === true;
 }
 

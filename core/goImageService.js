@@ -6,18 +6,22 @@ class GoImageService {
       overrideUrl ||
       process.env.GO_IMAGE_SERVICE_URL ||
       "https://mellow2006-mellowbotbackend.hf.space";
-    console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
+    
+    if (!global.goServiceInitialized) {
+      global.goServiceInitialized = true;
+      console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
+      // Startup health check — confirms Go service is reachable on boot
+      this.healthCheck()
+        .then((h) => console.log("[GoService] Health:", JSON.stringify(h)))
+        .catch((e) => console.error("[GoService] Health FAIL:", e.message));
+    }
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 120000, // 120s timeout for browser ops
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
     });
-
-    // Startup health check — confirms Go service is reachable on boot
-    this.healthCheck()
-      .then((h) => console.log("[GoService] Health:", JSON.stringify(h)))
-      .catch((e) => console.error("[GoService] Health FAIL:", e.message));
 
     // Queue for sequential processing
     this.heavyOpQueue = Promise.resolve();
