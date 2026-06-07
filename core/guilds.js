@@ -181,7 +181,7 @@ function saveGuilds() {
 
 async function loadChallenges() {
   try {
-    const sys = await System.findOne({ key: 'guild_challenges' });
+    const sys = await System.findOne({ key: 'guild_challenges' }).lean();
     if (sys && sys.value) {
       for (const [id, chall] of Object.entries(sys.value)) {
         activeChallenges.set(id, chall);
@@ -1102,9 +1102,9 @@ function getChallenges() {
 }
 //========================================
 
-// setup
-loadGuilds();
-loadChallenges();
+// setup - now explicitly called during boot in engine.js
+// loadGuilds();
+// loadChallenges();
 
 module.exports = {
   loadGuilds,

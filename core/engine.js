@@ -3540,6 +3540,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           system.loadSystemData(),
           economy.loadEconomy(),
           guilds.loadGuilds(),
+          guilds.loadChallenges(),
           loans.loadLoans(),
           lidResolver.loadLidMappings(),
         ]);
