@@ -3569,6 +3569,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           logger: P({ level: "silent" }),
           experimentalStore: true,
           syncFullHistory: false,       // skip loading old message history on boot
+          shouldSyncHistoryMessage: () => false, // ⚡ SKIP downloading/decrypting history sync messages
           markOnlineOnConnect: true,    // broadcast online status to keep connection active and warm
         });
 
