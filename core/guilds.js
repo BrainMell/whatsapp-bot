@@ -76,7 +76,7 @@ async function loadGuilds() {
     await connectDB();
     
     // 1. Load System Mappings
-    const sys = await System.findOne({ key: 'guild_system' });
+    const sys = await System.findOne({ key: 'guild_system' }).lean();
     if (sys && sys.value) {
       globalGuildData.memberGuilds = sys.value.memberGuilds || {};
       globalGuildData.guildOwners = sys.value.guildOwners || {};
@@ -84,7 +84,7 @@ async function loadGuilds() {
     }
 
     // 2. Load Individual Guilds
-    const guilds = await GuildModel.find({});
+    const guilds = await GuildModel.find({}).lean();
     for (const g of guilds) {
         const titles = {};
         const admins = [];

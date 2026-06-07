@@ -6,7 +6,7 @@ const systemCache = new Map();
 async function loadSystemData() {
     try {
         await connectDB();
-        const data = await System.find({});
+        const data = await System.find({}).lean();
         for (const item of data) {
             systemCache.set(item.key, item.value);
         }

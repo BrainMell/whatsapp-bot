@@ -44,28 +44,22 @@ function scheduleSave(userId) {
 async function loadEconomy() {
   try {
     await connectDB();
-    const users = await User.find({});
+    const users = await User.find({}).lean();
     
     for (const user of users) {
-      // Convert Mongoose document to plain object
-      const userData = user.toObject({ getters: true, virtuals: false });
-      
-      // 🚨 CRITICAL FIX: Convert Mongoose Maps to Plain Objects 🚨
-      // The bot code expects user.inventory['id'], not user.inventory.get('id')
-      
-      if (userData.inventory && userData.inventory instanceof Map) {
-          userData.inventory = Object.fromEntries(userData.inventory);
+      // With lean() it's already a plain object.
+      // Convert Map fields to plain objects if they are somehow still Maps.
+      if (user.inventory && user.inventory instanceof Map) {
+          user.inventory = Object.fromEntries(user.inventory);
       }
-      
-      if (userData.skills && userData.skills instanceof Map) {
-          userData.skills = Object.fromEntries(userData.skills);
+      if (user.skills && user.skills instanceof Map) {
+          user.skills = Object.fromEntries(user.skills);
       }
-      
-      if (userData.portfolio && userData.portfolio instanceof Map) {
-          userData.portfolio = Object.fromEntries(userData.portfolio);
+      if (user.portfolio && user.portfolio instanceof Map) {
+          user.portfolio = Object.fromEntries(user.portfolio);
       }
 
-      economyData.set(userData.userId, userData);
+      economyData.set(user.userId, user);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
   } catch (err) {

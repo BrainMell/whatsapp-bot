@@ -403,7 +403,7 @@ function formatUptime(seconds) {
     return dDisplay + hDisplay + mDisplay + sDisplay;
 }
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });
 

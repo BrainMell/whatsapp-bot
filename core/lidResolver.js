@@ -13,7 +13,7 @@ async function loadLidMappings() {
     try {
         console.log(`📥 [LID Resolver] Loading LID mappings from MongoDB...`);
         // 1. Load from MongoDB
-        const mappings = await LidMapping.find({});
+        const mappings = await LidMapping.find({}).lean();
         for (const m of mappings) {
             lidCache.set(m.lid, m.phone);
             phoneCache.set(m.phone, m.lid);

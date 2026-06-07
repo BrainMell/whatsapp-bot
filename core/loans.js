@@ -23,12 +23,12 @@ async function loadLoans() {
     await connectDB();
     
     // 1. Load Active Loans
-    const loans = await LoanModel.find({ status: 'active' });
+    const loans = await LoanModel.find({ status: 'active' }).lean();
     activeLoans.length = 0; // Clear array
-    loans.forEach(l => activeLoans.push(l.toObject()));
+    loans.forEach(l => activeLoans.push(l));
 
     // 2. Load Loan Blocks
-    const sys = await System.findOne({ key: 'loan_blocks' });
+    const sys = await System.findOne({ key: 'loan_blocks' }).lean();
     if (sys && sys.value) {
       for (const [id, time] of Object.entries(sys.value)) {
         loanBlocks.set(id, time);
