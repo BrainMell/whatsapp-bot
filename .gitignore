@@ -2,7 +2,6 @@ node_modules
 .env
 temp/
 tools/
-instances/*/auth/
 package-lock.json
 ACHANGES.md
 bug report.md
