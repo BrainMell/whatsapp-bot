@@ -6917,8 +6917,7 @@ Usage: ${newUsage}/5${warningText}`;
 
                       // Robust Video Conversion
                       // 1. WebP -> GIF (Handles animation)
-                      // Using -ignore_loop 0 BEFORE -i for animated inputs
-                      const toGif = `"${FFMPEG_PATH}" -ignore_loop 0 -i "${tempSticker}" -vf "fps=20,scale=512:-1:flags=lanczos" -y "${tempGif}"`;
+                      const toGif = `"${FFMPEG_PATH}" -i "${tempSticker}" -vf "fps=20,scale=512:-1:flags=lanczos" -y "${tempGif}"`;
 
                       try {
                         await execPromise(toGif);
@@ -6926,7 +6925,7 @@ Usage: ${newUsage}/5${warningText}`;
                         console.log(
                           "⚠️️ WebP to GIF failed, attempting direct path...",
                         );
-                        const toMp4Direct = `"${FFMPEG_PATH}" -ignore_loop 0 -i "${tempSticker}" -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
+                        const toMp4Direct = `"${FFMPEG_PATH}" -i "${tempSticker}" -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
                         await execPromise(toMp4Direct);
                       }
 

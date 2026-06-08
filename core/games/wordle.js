@@ -17,7 +17,7 @@ const activeGames = new Map();
 
 // Load words from TXT file
 function loadWordsFromTXT() {
-  const wordsPath = path.join(__dirname, './Ldatabase/words.txt');
+  const wordsPath = path.join(__dirname, '../Ldatabase/words.txt');
   
   try {
     if (!fs.existsSync(wordsPath)) {

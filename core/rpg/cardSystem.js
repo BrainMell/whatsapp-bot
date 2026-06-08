@@ -31,7 +31,7 @@ const P          = () => botConfig.getPrefix().toLowerCase();
 //  SECTION 1 — CONSTANTS & TABLES
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CARDS_DB_PATH = path.join(__dirname, 'data', 'cards_data.json');
+const CARDS_DB_PATH = path.join(__dirname, '..', 'data', 'cards_data.json');
 const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1 };
 const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999 };
 
