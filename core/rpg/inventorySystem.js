@@ -7,7 +7,7 @@ const economy = require('./economy');
 const lootSystem = require('./lootSystem');
 const guilds = require('./guilds');
 const classSystem = require('./classSystem');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 // ==========================================
 // 📦 INVENTORY CONFIGURATION

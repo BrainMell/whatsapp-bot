@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const economy = require('../rpg/economy');
 const system = require('../utils/system'); // NEW: Database System Module
 const GoImageService = require('../utils/goImageService');
@@ -282,7 +282,7 @@ function makeMove(chatId, playerJid, cellIndex) {
     clearTimeout(game.timeout);
     game.timeout = setTimeout(async () => {
       const sock = require('../engine').getSock(); // Fallback if sock not easily accessible
-      const botMarker = `*${require('../botConfig').getBotName()}*\n\n`;
+      const botMarker = `*${require('../../botConfig').getBotName()}*\n\n`;
       if (activeGames.has(chatId)) {
         activeGames.delete(chatId);
         try {

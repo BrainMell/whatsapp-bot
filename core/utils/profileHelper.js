@@ -3,7 +3,7 @@ const inventorySystem = require('../rpg/inventorySystem');
 const lootSystem = require('../rpg/lootSystem');
 const classSystem = require('../rpg/classSystem');
 const progression = require('../rpg/progression');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 async function buildCardData(userId, userName, pfpUrl = "") {
     // Initialize class if needed

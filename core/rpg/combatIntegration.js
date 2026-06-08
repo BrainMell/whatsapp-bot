@@ -3,7 +3,7 @@
 // ============================================
 
 const combatImageGen = require('./combatImageGenerator');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const fs = require('fs');
 
 // ==========================================

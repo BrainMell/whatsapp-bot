@@ -1,12 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
 const GuildModel = require('../models/Guild');
 const System = require('../models/System');
-const connectDB = require('../db');
+const connectDB = require('../../db');
 
 const BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;
 

@@ -11,7 +11,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const botConfig = require("../botConfig");
+const botConfig = require('../../botConfig');
 const economy = require("./economy");
 const progression = require("./progression");
 const skillTree = require("./skillTree");

@@ -5,7 +5,7 @@
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
 const skillTree = require('../rpg/skillTree');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
 

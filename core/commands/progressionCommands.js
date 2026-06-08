@@ -1,7 +1,7 @@
 const progression = require('../rpg/progression');
 const economy = require('../rpg/economy');
 const guilds = require('../rpg/guilds');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
 const getBotMarker = () => `🃏 *${botConfig.getBotName()}*\n\n`;

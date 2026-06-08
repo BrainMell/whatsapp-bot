@@ -10,7 +10,7 @@
 const economy = require('./economy');
 const progression = require('./progression');
 const skillTree = require('./skillTree');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const combatImageGenerator = require('./combatImageGenerator');
 
 const activeDuels = new Map();  // chatId → duelState
@@ -253,14 +253,14 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     } else if (action === 'ability') {
         if (!target || isNaN(parseInt(target))) {
-            return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../botConfig').getPrefix()} combat ability 1\`` };
+            return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../../botConfig').getPrefix()} combat ability 1\`` };
         }
         const abilityIndex = parseInt(target) - 1;
         const learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
         const ability = learned[abilityIndex];
         abilityObj = ability;
 
-        if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../botConfig').getPrefix()} abilities\` to see your list.` };
+        if (!ability) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../../botConfig').getPrefix()} abilities\` to see your list.` };
 
         const skillLevel = economy.getUser(currentPlayer.jid)?.skills?.[ability.id] || 1;
         const effect = skillTree.getSkillEffect(ability, skillLevel);

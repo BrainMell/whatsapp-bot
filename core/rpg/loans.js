@@ -1,13 +1,13 @@
 const fs = require('fs');
 const economy = require('./economy');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const path = require('path');
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
 const LoanModel = require('../models/Loan');
 const System = require('../models/System');
-const connectDB = require('../db');
+const connectDB = require('../../db');
 
 // State
 const pendingLoans = new Map(); // Key: lenderJid, Value: { borrowerJid, amount, interest, duration, timestamp }

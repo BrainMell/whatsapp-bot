@@ -1,12 +1,12 @@
 // yo this is the economy file, handles all the bread and getZENI()
 const fs = require('fs');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const classSystem = require('./classSystem');
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const connectDB = require('../db');
+const connectDB = require('../../db');
 
 // currency shi
 const getCurrency = () => botConfig.getCurrency();

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const connectDB = require('../db');
+const connectDB = require('../../db');
 const User = require('../models/User');
 const Guild = require('../models/Guild');
 const Loan = require('../models/Loan');

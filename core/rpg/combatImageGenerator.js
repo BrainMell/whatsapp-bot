@@ -3,7 +3,7 @@
 // ============================================ 
 
 const GoImageService = require('../utils/goImageService');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 
 const goService = new GoImageService();
 

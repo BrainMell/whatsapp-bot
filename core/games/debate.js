@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const system = require('../utils/system'); // NEW: Database System Module
 
 // Active debates storage

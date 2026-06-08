@@ -23,7 +23,7 @@ const System     = require('../models/System');
 const economy    = require('./economy');
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const botConfig  = require('../botConfig');
+const botConfig  = require('../../botConfig');
 const ZENI       = () => botConfig.getCurrency().symbol;
 const P          = () => botConfig.getPrefix().toLowerCase();
 

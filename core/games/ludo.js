@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const botConfig = require('../botConfig');
+const botConfig = require('../../botConfig');
 const axios = require('axios');
 const economy = require('../rpg/economy');
 const GoImageService = require('../utils/goImageService');

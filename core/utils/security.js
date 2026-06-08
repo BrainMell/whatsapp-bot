@@ -27,7 +27,7 @@ module.exports = {
 
             const { jidNormalizedUser } = require('@whiskeysockets/baileys');
             const lidResolver = require('./lidResolver');
-            const botConfig = require('../botConfig');
+            const botConfig = require('../../botConfig');
             const authPath = botConfig.getAuthPath();
 
             const normalizedSender = jidNormalizedUser(sender);
