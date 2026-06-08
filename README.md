@@ -6,16 +6,16 @@ A multi-tenant, high-performance turn-based RPG, utility, and moderation bot for
 
 ## 🌟 Key Features
 
-* **🎭 Multi-Tenant Architecture:** Runs multiple isolated bot profiles concurrently using `AsyncLocalStorage` context namespaces.
+* **Multi-Tenant Architecture:** Runs multiple isolated bot profiles concurrently using `AsyncLocalStorage` context namespaces.
 * **⚔️ Rich Visual RPG Engine:** Complete turn-based dungeon combat, quests, leveling, abilities, and PvP duels rendered into dynamic image overlays via a Go microservice.
-* **📈 Dynamic Stocks & Investments:** Realistic stock ticker market updates, volatile growth funds, and P2P loan systems.
+* **📈 Economy with Stocks & Investments:** Realistic stock ticker market updates, volatile growth funds, and P2P loan systems.
 * **🛡️ Security & Auto-Mod:** Advanced anti-spam triggers, link scanners, status mention blocks, and warning strike systems.
 * **🧠 Context-Aware AI:** Groq-powered chat logs, automatic topic segmentation, and smart group summaries.
 * **🖼️ Media Engine:** FFmpeg-powered sticker/GIF converter and scraping integration.
 
 ---
 
-## 🤝 Multi-Developer Collaboration Guide
+## Developer Collaboration Guide
 
 To ensure a smooth workflow when multiple developers are collaborating on the codebase, please adhere to the following setup and guidelines:
 
@@ -30,7 +30,7 @@ Key environment variables to configure locally:
 * `GO_IMAGE_SERVICE_URL`: URL to your local or hosted Go Image Service engine (needed for rendering profile and combat cards).
 
 ### 2. Managing Multi-Tenant Instances
-Mellow's Bot supports running multiple bots simultaneously. Each bot instance is defined under the `instances/` directory:
+This Bot supports running multiple bots simultaneously. Each bot instance is defined under the `instances/` directory:
 * To add a new instance, create a subdirectory: `instances/<bot_id>/`.
 * Inside, create `botConfig.json` containing configuration keys (like name, description, prefix, and settings).
 * Place the instance's specific assets (like `banner.png`, `zeni.png`, `pfp.png`) in `instances/<bot_id>/assets/`.
@@ -125,7 +125,7 @@ All modules, APIs, and systems are documented with code snippets, line reference
 ### Prerequisites
 * Node.js v18+
 * MongoDB database instance
-* Running Go Image Service (optional, required for RPG card and profile rendering)
+* Running Go Image Service (This is in a seperate repo you won't have to worry about for now)
 
 ### Installation
 1. Clone the repository and navigate into the `whatsapp-bot` folder:
