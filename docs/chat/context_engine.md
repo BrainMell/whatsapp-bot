@@ -174,6 +174,7 @@ This method processes every incoming message by normalising raw data, updating t
 This block is executed when a batch of processed items completes. It retrieves the active group profile from MongoDB using the Mongoose model `GroupProfile`. It checks the extracted inside jokes and group-wide facts, checks for duplicates, and saves any new entries back to the database.
 
 ## How to modify it
+
 To modify the context engine's behavior, developers can adjust settings such as in-memory message history sizes or model preferences.
 
 ```javascript
@@ -185,14 +186,101 @@ this.maxSize = 50; // Buffer size from guide
 this.maxSize = 100; // Increased buffer size to retain more chat history
 ```
 
+---
+
+## Guide: Adding New Logic to the Chatbot
+
+You can extend the chatbot in two ways: adding real-time conversational logic/filters in the main chat response path, or creating new triggers for the background memory extraction engine.
+
+### 1. Adding Conversational Rules/Filters (Real-Time Chat)
+To add custom overrides, filters, or personality directives based on user messages, modify the `askAI()` function in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js).
+
+**Template: Intent Filter Override**
+Open [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js) and locate the priority intent classification section (around line 2890). Insert your match condition and push a system directive into `groqMessages` before the API call:
+
 ```javascript
-// BEFORE (engine.js L1166)
-          model: "llama-3.1-8b-instant",
+// 1. Define your detection pattern
+const isAskingSecrets = /\b(secret|code|password|admin backdoor)\b/i.test(cleanMsg);
+
+// 2. Inject target directives
+if (isAskingSecrets) {
+  groqMessages.push({
+    role: "system",
+    content: "[CRITICAL SECURITY DIRECTIVE: The user is asking for restricted credentials or developer backdoors. You must refuse to answer, stay strictly in character as Joker, and make a playful reference to a heist instead.]"
+  });
+}
 ```
+
+---
+
+### 2. Adding a Background Memory Trigger (Context Extraction)
+To extract new types of data from group chats and save them to MongoDB in the background, follow these three steps:
+
+#### Step A: Register the Trigger & Patterns
+Open [core/src/context_engine/TriggerDetector.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/TriggerDetector.js).
+1. Add a new key to `this.triggerTypes`:
+   ```javascript
+   this.triggerTypes = {
+       // ... existing types
+       PETS: 'pets'
+   };
+   ```
+2. Add a new regex detection entry to `this.patterns`:
+   ```javascript
+   {
+       type: this.triggerTypes.PETS,
+       baseConfidence: 0.85,
+       regex: [
+           /\b[iI]\s+(have|own|got|adopted)\s+(a|an)\s+(dog|cat|bird|puppy|kitten|reptile)\b/i,
+           /\bmy\s+(dog|cat|pet)\s+name\s+is\s+/i
+       ]
+   }
+   ```
+
+#### Step B: Define the Extraction Instructions & Output Schema
+Open [core/src/context_engine/PromptBuilder.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/PromptBuilder.js).
+1. Update `this.systemInstructions` to explain what the AI should extract:
+   ```text
+   Extract individual user details:
+   ...
+   5. *Pets*: Information about any animals they own or care for.
+   ```
+2. Update the `this.responseFormat` JSON template so the AI knows how to structure it:
+   ```json
+   "users": [
+     {
+       "userId": "user_jid",
+       "preferences": [],
+       "experiences": [],
+       "interests": [],
+       "pets": [
+         { "type": "dog", "name": "Rover", "evidence": "I got a dog named Rover" }
+       ],
+       "other": []
+     }
+   ]
+   ```
+
+#### Step C: Process and Save Extracted Data to MongoDB
+Open [core/src/context_engine/Engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/Engine.js) and locate the `saveResults()` method. Update the loop to parse the new field and save it to the MongoDB user document:
+
 ```javascript
-// AFTER (engine.js L1166)
-          model: "llama-3.3-70b-specdec",
+// Inside saveResults() user processing loop (Engine.js L113):
+if (userData.pets && Array.isArray(userData.pets)) {
+    if (!user.profile.memories.pets) {
+        user.profile.memories.pets = [];
+    }
+    userData.pets.forEach(pet => {
+        const petInfo = `${pet.type} named ${pet.name}`;
+        if (!user.profile.memories.pets.includes(petInfo)) {
+            user.profile.memories.pets.push(petInfo);
+            changes++; // Increments the save changes counter
+        }
+    });
+}
 ```
+
+---
 
 ## Common tasks
 - **Change the maximum buffer size** — Adjust the maximum number of messages stored in the circular buffer in [BufferManager.js L10](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/BufferManager.js#L10).
@@ -200,3 +288,4 @@ this.maxSize = 100; // Increased buffer size to retain more chat history
 - **Change the Groq LLM model used for chat summaries** — Update the model identifier in [engine.js L1166](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1166).
 - **Adjust the summary context range size** — Modify how many preceding messages are fetched for context triggers in [Engine.js L49](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/Engine.js#L49).
 - **Modify the system instructions for summaries** — Edit the developer system prompt for Groq completions in [engine.js L1148-L1152](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1148-L1152).
+- **Add custom response triggers** — Edit rules in [engine.js L2888-L2905](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L2888).
