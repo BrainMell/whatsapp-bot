@@ -1,10 +1,10 @@
 require("dotenv").config();
 const botConfig = require("../botConfig");
 const { storage } = botConfig;
-const system = require("./system");
-const economy = require("./economy");
-const lidResolver = require("./lidResolver");
-const loans = require("./loans");
+const system = require('./utils/system');
+const economy = require('./rpg/economy');
+const lidResolver = require('./utils/lidResolver');
+const loans = require('./rpg/loans');
 const ChatMessage = require("./models/ChatMessage");
 const ErrorLog = require("./models/ErrorLog");
 const Metric = require("./models/Metric");
@@ -22,15 +22,15 @@ const {
   getPowerScale,
   handlePowerscaleSelection,
   hasPendingSelection,
-} = require("./powerscale");
-const classSystem = require("./classSystem");
+} = require('./utils/powerscale');
+const classSystem = require('./rpg/classSystem');
 
 // Global map to track connection health of bot instances
 const botInstancesHealth = new Map();
-const guilds = require("./guilds");
-const guildAdventure = require("./guildAdventure");
-const skillTree = require("./skillTree");
-const bossMechanics = require("./bossMechanics");
+const guilds = require('./rpg/guilds');
+const guildAdventure = require('./rpg/guildAdventure');
+const skillTree = require('./rpg/skillTree');
+const bossMechanics = require('./rpg/bossMechanics');
 const qrcode = require("qrcode-terminal");
 const Groq = require("groq-sdk");
 const fs = require("fs");
@@ -40,7 +40,7 @@ const { promisify } = require("util");
 const execPromise = promisify(exec);
 const axios = require("axios");
 const cheerio = require("cheerio");
-const GoImageService = require("./goImageService");
+const GoImageService = require('./utils/goImageService');
 const goService = new GoImageService();
 const play = require("play-dl");
 const yts = require("yt-search");
@@ -61,7 +61,7 @@ function resolveLidToPhone(jid, authPath) {
 }
 // Load blocked users from DB
 async function loadBlockedUsers() {
-  const system = require("./system");
+  const system = require('./utils/system');
   const botConfig = require("../botConfig");
   try {
     const data = system.get(botConfig.getBotId() + "_blocked_users", []);
@@ -75,7 +75,7 @@ async function loadBlockedUsers() {
 }
 
 function saveBlockedUsers() {
-  const system = require("./system");
+  const system = require('./utils/system');
   const botConfig = require("../botConfig");
   system.set(botConfig.getBotId() + "_blocked_users", Array.from(blockedUsers));
 }
@@ -92,14 +92,14 @@ function unblockUser(userId) {
 
 function isBlocked(userId) {
   if (blockedUsers.has(userId)) return true;
-  const loans = require("./loans");
+  const loans = require('./rpg/loans');
   if (loans.isLoanBlocked(userId)) return true;
   return false;
 }
 
 // Load global mods from DB
 async function loadGlobalMods() {
-  const system = require("./system");
+  const system = require('./utils/system');
   const botConfig = require("../botConfig");
   try {
     const data = system.get(botConfig.getBotId() + "_global_mods", []);
@@ -113,7 +113,7 @@ async function loadGlobalMods() {
 }
 
 function saveGlobalMods() {
-  const system = require("./system");
+  const system = require('./utils/system');
   const botConfig = require("../botConfig");
   system.set(botConfig.getBotId() + "_global_mods", Array.from(globalMods));
 }
@@ -145,27 +145,27 @@ async function getGot() {
 
 const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
-const { getAnikaiBestMatch } = require("./anikaiResolver");
-const runSecurity = require("./security");
-const tictactoe = require("./tictactoe");
-const chess = require("./chess");
-const debate = require("./debate");
-const ludo = require("./ludo");
-const wordle = require("./wordle");
-const news = require("./news"); // ✅ Added news module
-const stockMarket = require("./stockMarket"); // ✅ Added stock market module
+const { getAnikaiBestMatch } = require('./utils/anikaiResolver');
+const runSecurity = require('./utils/security');
+const tictactoe = require('./games/tictactoe');
+const chess = require('./games/chess');
+const debate = require('./games/debate');
+const ludo = require('./games/ludo');
+const wordle = require('./games/wordle');
+const news = require('./utils/news'); // ✅ Added news module
+const stockMarket = require('./rpg/stockMarket'); // ✅ Added stock market module
 const P = require("pino");
 const gambling = require("./gambling");
-const progression = require("./progression");
-const rpgCommands = require("./rpgCommands");
-const inventorySystem = require("./inventorySystem");
-const lootSystem = require("./lootSystem");
-const progressionCommands = require("./progressionCommands");
-const shopCommands = require("./shopCommands");
-const skillCommands = require("./skillCommands");
-const classCommands = require("./classCommands");
-const pvpSystem = require("./pvpSystem");
-const cardSystem = require("./cardSystem");
+const progression = require('./rpg/progression');
+const rpgCommands = require('./commands/rpgCommands');
+const inventorySystem = require('./rpg/inventorySystem');
+const lootSystem = require('./rpg/lootSystem');
+const progressionCommands = require('./commands/progressionCommands');
+const shopCommands = require('./commands/shopCommands');
+const skillCommands = require('./commands/skillCommands');
+const classCommands = require('./commands/classCommands');
+const pvpSystem = require('./rpg/pvpSystem');
+const cardSystem = require('./rpg/cardSystem');
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
 const NodeCache = require("node-cache");
 const REACTIONS = require("../reactions/config");
@@ -1950,7 +1950,7 @@ What to do:
     }
 
     // ---------- scraper (Hybrid Node/Go Service) ----------
-    const GoImageService = require("./goImageService");
+    const GoImageService = require('./utils/goImageService');
     const goService = new GoImageService();
 
     async function scrapePornPics(searchTerm, count = 10, options = {}) {
@@ -2721,7 +2721,7 @@ What to do:
           groupTranscript += "------------------------------------\n\n";
           
           // Fetch relationships between sender and active group participants
-          const socialSystem = require('./socialSystem');
+          const socialSystem = require('./rpg/socialSystem');
           const relationshipText = socialSystem.getRelationshipsText([...activeParticipants], senderJid);
           
           if (groupTranscript) systemPrompt += groupTranscript;
@@ -3067,7 +3067,7 @@ What to do:
       }
     }
 
-    const COMMAND_REGISTRY = require("./commandRegistry");
+    const COMMAND_REGISTRY = require('./utils/commandRegistry');
 
     // Banner template for all menus
     const GET_BANNER = (title) => {
@@ -13890,8 +13890,8 @@ ${senderName} said y'all should know:
                     `${botConfig.getPrefix().toLowerCase()} economy`
                   ) {
                     const stats = economy.getGlobalEconomyStats();
-                    const loans = require("./loans");
-                    const stockMarket = require("./stockMarket");
+                    const loans = require('./rpg/loans');
+                    const stockMarket = require('./rpg/stockMarket');
                     const totalDebt = loans.getTotalDebt();
                     const marketCap = stockMarket.getMarketCap();
 
@@ -13926,7 +13926,7 @@ ${senderName} said y'all should know:
                       `${botConfig.getPrefix().toLowerCase()} sell stock `,
                     )
                   ) {
-                    const stockMarket = require("./stockMarket");
+                    const stockMarket = require('./rpg/stockMarket');
                     const isBuy = lowerTxt.includes("buy");
                     const parts = lowerTxt.split(" ");
                     const symbol = parts[3]?.toUpperCase();
@@ -13953,7 +13953,7 @@ ${senderName} said y'all should know:
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} invest`
                   ) {
-                    const invest = require("./investment");
+                    const invest = require('./rpg/investment');
                     let msg = `🏦 *INVESTMENT PROGRAMS* 🏦\n\n`;
                     for (const [id, plan] of Object.entries(
                       invest.INVESTMENT_PLANS,
@@ -13970,7 +13970,7 @@ ${senderName} said y'all should know:
                       `${botConfig.getPrefix().toLowerCase()} invest `,
                     )
                   ) {
-                    const invest = require("./investment");
+                    const invest = require('./rpg/investment');
                     const parts = lowerTxt.split(" ");
                     const action = parts[2];
 
@@ -14006,7 +14006,7 @@ ${senderName} said y'all should know:
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} claim`
                   ) {
                     try {
-                      const invest = require("./investment");
+                      const invest = require('./rpg/investment');
                       const result = invest.claimInvestment(senderJid);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -14146,8 +14146,8 @@ ${senderName} said y'all should know:
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} monsters`
                   ) {
-                    const monsterSkills = require("./monsterSkills");
-                    const bossMechanics = require("./bossMechanics");
+                    const monsterSkills = require('./rpg/monsterSkills');
+                    const bossMechanics = require('./rpg/bossMechanics');
 
                     let msg = monsterSkills.formatMonsterGuide();
 
@@ -14770,7 +14770,7 @@ ${senderName} said y'all should know:
                     // Card system handles card claims via cardSystem.handleCommand above
                     // If we get here, try investment claim
                     try {
-                      const invest = require("./investment");
+                      const invest = require('./rpg/investment');
                       const result = invest.claimInvestment(senderJid);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -16280,8 +16280,8 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       let profileCardSent = false;
                       try {
                         const userForCard = economy.getUser(targetJid);
-                        const progression = require("./progression");
-                        const classSystem = require("./classSystem");
+                        const progression = require('./rpg/progression');
+                        const classSystem = require('./rpg/classSystem');
                         const userLevel = progression.getLevel(targetJid);
                         const userXP = progression.getXP
                           ? progression.getXP(targetJid)
