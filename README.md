@@ -1,4 +1,4 @@
-# 🤖 WhatsApp Bot Engine & RPG Subsystem
+# 🤖 Mellow's Bot
 
 A multi-tenant, high-performance turn-based RPG, utility, and moderation bot for WhatsApp group chats, powered by **Baileys WebSockets**, **MongoDB**, and the **Go Image Service**.
 
@@ -12,6 +12,39 @@ A multi-tenant, high-performance turn-based RPG, utility, and moderation bot for
 * **🛡️ Security & Auto-Mod:** Advanced anti-spam triggers, link scanners, status mention blocks, and warning strike systems.
 * **🧠 Context-Aware AI:** Groq-powered chat logs, automatic topic segmentation, and smart group summaries.
 * **🖼️ Media Engine:** FFmpeg-powered sticker/GIF converter and scraping integration.
+
+---
+
+## 🤝 Multi-Developer Collaboration Guide
+
+To ensure a smooth workflow when multiple developers are collaborating on the codebase, please adhere to the following setup and guidelines:
+
+### 1. Local Environment Configuration
+Each developer must create their own local `.env` file based on the config template.
+> [!WARNING]
+> **Never commit your `.env` file** or bot instance credentials to the repository. The `.gitignore` is set up to block these.
+
+Key environment variables to configure locally:
+* `MONGODB_URI`: Connection string to your local MongoDB server.
+* `GROQ_API_KEY`: API keys for Groq LLM context-aware processing.
+* `GO_IMAGE_SERVICE_URL`: URL to your local or hosted Go Image Service engine (needed for rendering profile and combat cards).
+
+### 2. Managing Multi-Tenant Instances
+Mellow's Bot supports running multiple bots simultaneously. Each bot instance is defined under the `instances/` directory:
+* To add a new instance, create a subdirectory: `instances/<bot_id>/`.
+* Inside, create `botConfig.json` containing configuration keys (like name, description, prefix, and settings).
+* Place the instance's specific assets (like `banner.png`, `zeni.png`, `pfp.png`) in `instances/<bot_id>/assets/`.
+* The credentials/session state will automatically generate in `instances/<bot_id>/auth/` when you boot the bot and scan the QR code.
+
+### 3. Database Schema Updates
+When adding fields or modifying schemas:
+* Keep all database Mongoose models under `core/models/` (e.g. [User.js](docs/database/schema.md)).
+* Document any new schema changes inside [docs/database/schema.md](docs/database/schema.md) using the 4-section standard.
+
+### 4. Git Workflow
+* **Branching:** Work on feature branches (e.g. `feature/pvp-rebalance` or `bugfix/anti-link`) instead of committing directly to `main`.
+* **Testing:** Test your commands locally using a private testing group before opening a Pull Request.
+* **Ignored Folders:** Do not remove the ignores for `node_modules`, `temp/`, `tools/`, or `instances/*/auth/`.
 
 ---
 

@@ -1,7 +1,8 @@
 node_modules
 .env
-temp
-tools
+temp/
+tools/
+instances/*/auth/
 package-lock.json
 ACHANGES.md
 bug report.md
@@ -18,8 +19,6 @@ bot.log
 Scrape_logic
 ImageGenScrapes
 
-
 # Assets and Generated
-temp/
 *.exe
 *.log
