@@ -53,11 +53,12 @@ When adding fields or modifying schemas:
 ```bash
 whatsapp-bot/
 ├── core/                # Core engine code modules
+│   ├── commands/        # WhatsApp command execution logic (e.g. rpgCommands.js)
+│   ├── games/           # Mini-games modules (e.g. chess.js, wordle.js)
 │   ├── models/          # MongoDB Mongoose schemas
-│   ├── classSystem.js   # RPG classes and statistics
-│   ├── pvpSystem.js     # 1v1 PvP turn state machine
-│   ├── guildAdventure.js# Quests, raids, and turn queues
-│   └── ...              # Other core modules
+│   ├── rpg/             # RPG core systems (e.g. pvpSystem.js, combatIntegration.js)
+│   ├── utils/           # Helper utilities (e.g. commandRegistry.js, goImageService.js)
+│   └── engine.js        # Core message routing and orchestration (root of core)
 ├── docs/                # Comprehensive Developer Documentation
 │   ├── admin/           # Moderation and security rules
 │   ├── chat/            # AI context and chat triggers

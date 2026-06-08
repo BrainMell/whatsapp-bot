@@ -5,7 +5,7 @@ The Economy Subsystem controls all cash flow, financial operations, peer-to-peer
 
 ## How it works
 
-**Peer-to-Peer Transfer Operation** — [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/economy.js#L631-L670)
+**Peer-to-Peer Transfer Operation** — [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L631-L670)
 ```javascript
 function transferMoney(fromUserId, toUserId, amount) {
   const sender = getUser(fromUserId);
@@ -52,7 +52,7 @@ This function validates user registration, parses the transfer amount, check if 
 
 ---
 
-**Daily Reward Claims** — [economy.js L779–824](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/economy.js#L779-L824)
+**Daily Reward Claims** — [economy.js L779–824](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L779-L824)
 ```javascript
 function claimDaily(userId) {
   const user = getUser(userId);
@@ -105,7 +105,7 @@ This handler verifies if the user's daily check-in timestamp cooldown (24 hours)
 
 ---
 
-**Shop Purchase Balance Gate** — [shopCommands.js L166–211](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/shopCommands.js#L166-L211)
+**Shop Purchase Balance Gate** — [shopCommands.js L166–211](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L166-L211)
 ```javascript
     // Check balance
     const balance = economy.getBalance(senderJid);
@@ -158,22 +158,22 @@ This is the core purchase gate. It checks the player's wallet balance against th
 ## How to modify it
 
 ### Tweaking Daily Reward Amount
-To adjust the quantity of Zeni awarded for daily login claims, edit the `DAILY_REWARD` constant in `core/economy.js`.
+To adjust the quantity of Zeni awarded for daily login claims, edit the `DAILY_REWARD` constant in `core/rpg/economy.js`.
 
-**Before (core/economy.js L16):**
+**Before (core/rpg/economy.js L16):**
 ```javascript
 const DAILY_REWARD = 500;
 ```
 
-**After (core/economy.js L16):**
+**After (core/rpg/economy.js L16):**
 ```javascript
 const DAILY_REWARD = 1000; // Increased daily reward amount
 ```
 
 ### Expanding Class Shop Purchase Restrictions
-To expand the restrictions on specific shop items (like restricting key purchases to multiple lineages), modify the lineage checks in `core/shopCommands.js`.
+To expand the restrictions on specific shop items (like restricting key purchases to multiple lineages), modify the lineage checks in `core/commands/shopCommands.js`.
 
-**Before (core/shopCommands.js L159–164):**
+**Before (core/commands/shopCommands.js L159–164):**
 ```javascript
     if (itemId === 'dragon_key') {
         const currentClass = economy.getUserClass(senderJid);
@@ -183,7 +183,7 @@ To expand the restrictions on specific shop items (like restricting key purchase
     }
 ```
 
-**After (core/shopCommands.js L159–164):**
+**After (core/commands/shopCommands.js L159–164):**
 ```javascript
     if (itemId === 'dragon_key') {
         const currentClass = economy.getUserClass(senderJid);
@@ -194,8 +194,8 @@ To expand the restrictions on specific shop items (like restricting key purchase
 ```
 
 ## Common tasks
-- **Modify daily check-in rewards** — Change the amount awarded daily to users in [economy.js L16](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/economy.js#L16).
-- **Edit money transfer parameters** — Adjust balance checks and verification messages in [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/economy.js#L631-L670).
-- **Tune daily reward cooldown** — Modify the claiming cooldown duration (default 24 hours) in [economy.js L784](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/economy.js#L784).
-- **Update shop purchase balance checks** — Customize purchase validation messages and requirements in [shopCommands.js L166–173](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/shopCommands.js#L166-L173).
-- **Modify post-purchase money deduction** — Adjust wallet deductions after successful transaction completions in [shopCommands.js L207](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/shopCommands.js#L207).
+- **Modify daily check-in rewards** — Change the amount awarded daily to users in [economy.js L16](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L16).
+- **Edit money transfer parameters** — Adjust balance checks and verification messages in [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L631-L670).
+- **Tune daily reward cooldown** — Modify the claiming cooldown duration (default 24 hours) in [economy.js L784](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L784).
+- **Update shop purchase balance checks** — Customize purchase validation messages and requirements in [shopCommands.js L166–173](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L166-L173).
+- **Modify post-purchase money deduction** — Adjust wallet deductions after successful transaction completions in [shopCommands.js L207](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L207).

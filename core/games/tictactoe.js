@@ -6,9 +6,9 @@
 const fs = require('fs');
 const path = require('path');
 const botConfig = require('../botConfig');
-const economy = require('./economy');
-const system = require('./system'); // NEW: Database System Module
-const GoImageService = require('./goImageService');
+const economy = require('../rpg/economy');
+const system = require('../utils/system'); // NEW: Database System Module
+const GoImageService = require('../utils/goImageService');
 
 const goService = new GoImageService();
 
@@ -281,7 +281,7 @@ function makeMove(chatId, playerJid, cellIndex) {
   if (game.timeout) {
     clearTimeout(game.timeout);
     game.timeout = setTimeout(async () => {
-      const sock = require('./engine').getSock(); // Fallback if sock not easily accessible
+      const sock = require('../engine').getSock(); // Fallback if sock not easily accessible
       const botMarker = `*${require('../botConfig').getBotName()}*\n\n`;
       if (activeGames.has(chatId)) {
         activeGames.delete(chatId);
@@ -410,7 +410,7 @@ module.exports = {
       economy.addMoney(result.game.winner, moneyReward);
 
       try {
-        const socialSystem = require('./socialSystem');
+        const socialSystem = require('../rpg/socialSystem');
         socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 4);
       } catch (socialErr) {}
 
@@ -423,7 +423,7 @@ module.exports = {
       updateScoreboard(result.game.playerB, 'Player', 0);
 
       try {
-        const socialSystem = require('./socialSystem');
+        const socialSystem = require('../rpg/socialSystem');
         socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 3);
       } catch (socialErr) {}
 

@@ -19,7 +19,7 @@ const duelInvites = new Map();  // chatId → { challenger, target, stake, times
 function resolveJid(jid) {
     if (!jid) return jid;
     try {
-        const lidResolver = require('./lidResolver');
+        const lidResolver = require('../utils/lidResolver');
         return lidResolver.resolveJid(jid);
     } catch (e) {
         console.error("Error resolving JID in pvpSystem:", e.message);
@@ -522,7 +522,7 @@ setInterval(() => {
     for (const [chatId, duel] of activeDuels.entries()) {
         if (now - duel.lastAction > PVP_TIMEOUT_MS) {
             activeDuels.delete(chatId);
-            const engine = require('./engine');
+            const engine = require('../engine');
             const sock = engine.getSock();
             if (sock) {
                 sock.sendMessage(chatId, { 

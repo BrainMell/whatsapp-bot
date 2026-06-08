@@ -8,10 +8,10 @@ The Security and Spam Controls subsystem intercepts group messages to enforce ch
 
 ## How it works
 
-**Moderation Guard and Admin Bypass** — [`security.js` L11–50](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L11-L50)
+**Moderation Guard and Admin Bypass** — [`security.js` L11–50](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L11-L50)
 
 ```javascript
-// core/security.js L11–50
+// core/utils/security.js L11–50
 handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null, cachedAdminSet = null) {
     try {
         if (!msg || !msg.message) return;
@@ -57,10 +57,10 @@ This entry point checks if the message was sent in a group chat with the `antili
 
 ---
 
-**Antilink & Status Mention Interceptor** — [`security.js` L102–143](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L102-L143)
+**Antilink & Status Mention Interceptor** — [`security.js` L102–143](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L102-L143)
 
 ```javascript
-// core/security.js L102–143
+// core/utils/security.js L102–143
 const allText = extractAllText(msg.message).join(' ');
 const lowerText = allText.toLowerCase();
 
@@ -109,10 +109,10 @@ The message contents are flattened to raw strings and recursively searched. The 
 
 ---
 
-**Auto Action Penalties** — [`security.js` L149–180](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L149-L180)
+**Auto Action Penalties** — [`security.js` L149–180](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L149-L180)
 
 ```javascript
-// core/security.js L149–180
+// core/utils/security.js L149–180
 if (violations.length > 0) {
     const violationType = [...new Set(violations)].join(', ');
     const userName = resolvedSender.split('@')[0];
@@ -154,7 +154,7 @@ If violations are present, the bot issues a Baileys deletion command. It then qu
 ## How to modify it
 
 **Whitelisting a specific domain:**
-To prevent the antilink filter from triggering on links from a specific domain (e.g. `youtube.com` or `mywebsite.com`), add a bypass check in the link scanner block in `core/security.js` at line 139:
+To prevent the antilink filter from triggering on links from a specific domain (e.g. `youtube.com` or `mywebsite.com`), add a bypass check in the link scanner block in `core/utils/security.js` at line 139:
 
 ```javascript
 // BEFORE
@@ -180,7 +180,7 @@ if (warningCount >= 5) { ... }
 ## Common tasks
 
 - **Change punishment type (delete/warn/kick)** — Edit the `antilinkAction` field inside group settings documents in MongoDB.
-- **Whitelist a domain** — Add domain bypass checks at [security.js L139](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L139).
-- **Modify status mention detection regex** — Edit the broadcast check conditionals at [security.js L106](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L106).
-- **Configure anti-spam warn threshold** — Edit warning limit conditionals at [security.js L176](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L176).
-- **Add custom warning text** — Modify `warnMsg` at [security.js L174](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/security.js#L174).
+- **Whitelist a domain** — Add domain bypass checks at [security.js L139](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L139).
+- **Modify status mention detection regex** — Edit the broadcast check conditionals at [security.js L106](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L106).
+- **Configure anti-spam warn threshold** — Edit warning limit conditionals at [security.js L176](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L176).
+- **Add custom warning text** — Modify `warnMsg` at [security.js L174](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L174).

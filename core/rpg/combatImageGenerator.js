@@ -2,7 +2,7 @@
 // 🎨 COMBAT IMAGE GENERATOR - GO MICROSERVICE CLIENT 
 // ============================================ 
 
-const GoImageService = require('./goImageService');
+const GoImageService = require('../utils/goImageService');
 const botConfig = require('../botConfig');
 
 const goService = new GoImageService();

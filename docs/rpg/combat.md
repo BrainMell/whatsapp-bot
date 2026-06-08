@@ -9,7 +9,7 @@ The Combat subsystem drives turn-based encounters (PvE and PvP) in the RPG modul
 
 ## How it works
 
-**Payload Creation for Combat Renderer** — [combatImageGenerator.js L13-L48](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/combatImageGenerator.js#L13-L48)
+**Payload Creation for Combat Renderer** — [combatImageGenerator.js L13-L48](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L13-L48)
 ```javascript
 async function generateCombatImage(players, enemies, options = {}) {
     try {
@@ -52,7 +52,7 @@ This function normalizes in-memory player attributes (levels, HP status, energy,
 
 ---
 
-**Enemy AI Turn Resolution** — [performEnemyAction_new.js L1-L43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/performEnemyAction_new.js#L1-L43)
+**Enemy AI Turn Resolution** — [performEnemyAction_new.js L1-L43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/performEnemyAction_new.js#L1-L43)
 ```javascript
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
@@ -103,7 +103,7 @@ This function runs the enemy combat turn. It checks if the battle is active, que
 
 ---
 
-**Combat Scene rendering** — [combatIntegration.js L26-L39](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/combatIntegration.js#L26-L39)
+**Combat Scene rendering** — [combatIntegration.js L26-L39](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatIntegration.js#L26-L39)
 ```javascript
 async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
@@ -127,10 +127,10 @@ This function acts as an integration layer between the combat engine and the ren
 ## How to modify it
 
 ### Add Custom Weapon Verbs
-To expand the list of active combat verbs when players hit with custom weapon types, edit `core/combatIntegration.js`.
+To expand the list of active combat verbs when players hit with custom weapon types, edit `core/rpg/combatIntegration.js`.
 
 ```javascript
-// Before (core/combatIntegration.js L83-91)
+// Before (core/rpg/combatIntegration.js L83-91)
     let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
     if (actor?.equipment?.main_hand) {
         const wName = actor.equipment.main_hand.name?.toLowerCase() || '';
@@ -143,7 +143,7 @@ To expand the list of active combat verbs when players hit with custom weapon ty
 ```
 
 ```javascript
-// After (core/combatIntegration.js L83-91)
+// After (core/rpg/combatIntegration.js L83-91)
     let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
     if (actor?.equipment?.main_hand) {
         const wName = actor.equipment.main_hand.name?.toLowerCase() || '';
@@ -157,22 +157,22 @@ To expand the list of active combat verbs when players hit with custom weapon ty
 ```
 
 ### Alter Turn Delay Behaviors
-To change the pace of combat actions, modify the delay logic inside `core/performEnemyAction_new.js`.
+To change the pace of combat actions, modify the delay logic inside `core/rpg/performEnemyAction_new.js`.
 
 ```javascript
-// Before (core/performEnemyAction_new.js L5-7)
+// Before (core/rpg/performEnemyAction_new.js L5-7)
     const chatId = state.chatId;
     const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
 ```
 
 ```javascript
-// After (core/performEnemyAction_new.js L5-7)
+// After (core/rpg/performEnemyAction_new.js L5-7)
     const chatId = state.chatId;
     const turnDelay = state.solo ? 0 : 2000; // Force a 2-second enemy turn delay regardless of config
 ```
 
 ## Common tasks
-- **Add custom combat action verbs** — Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/combatIntegration.js#L84-L91).
-- **Alter enemy AI turn delays** — Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/performEnemyAction_new.js#L6-L8).
-- **Modify normalized player properties payload** — Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/combatImageGenerator.js#L15-L26).
-- **Modify normalized enemy properties payload** — Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/combatImageGenerator.js#L27-L35).
+- **Add custom combat action verbs** — Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatIntegration.js#L84-L91).
+- **Alter enemy AI turn delays** — Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/performEnemyAction_new.js#L6-L8).
+- **Modify normalized player properties payload** — Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L15-L26).
+- **Modify normalized enemy properties payload** — Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L27-L35).

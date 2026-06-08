@@ -5,7 +5,7 @@ The Mini-Games subsystem provides interactive, multiplayer, and AI-driven games 
 
 ## How it works
 
-**AI Chess minimax Evaluation** — [chess.js L17-L33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/chess.js#L17-L33)
+**AI Chess minimax Evaluation** — [chess.js L17-L33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/chess.js#L17-L33)
 ```javascript
 const PIECE_VALUES = {
     'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000,
@@ -29,7 +29,7 @@ This snippet defines the heuristic evaluation values for pieces and a Piece-Squa
 
 ---
 
-**Debate Leaderboard update** — [debate.js L31-L39](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/debate.js#L31-L39)
+**Debate Leaderboard update** — [debate.js L31-L39](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/debate.js#L31-L39)
 ```javascript
 // Update leaderboard stats
 function updateLeaderboard(winnerJid, score) {
@@ -46,7 +46,7 @@ This snippet increments statistics on the global debate leaderboard for a winnin
 
 ---
 
-**Wordle Feedback calculation** — [wordle.js L355-L385](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/wordle.js#L355-L385)
+**Wordle Feedback calculation** — [wordle.js L355-L385](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/wordle.js#L355-L385)
 ```javascript
   calculateFeedback(guess) {
     const result = [];
@@ -87,10 +87,10 @@ This function computes the green (correct), yellow (present), and grey (absent) 
 ## How to modify it
 
 ### Modify Chess Piece Valuations
-To adjust the weights assigned to chess pieces inside the engine evaluations, edit `core/chess.js`.
+To adjust the weights assigned to chess pieces inside the engine evaluations, edit `core/games/chess.js`.
 
 ```javascript
-// Before (core/chess.js L17-20)
+// Before (core/games/chess.js L17-20)
 const PIECE_VALUES = {
     'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000,
     'P': 100, 'N': 320, 'B': 330, 'R': 500, 'Q': 900, 'K': 20000
@@ -98,7 +98,7 @@ const PIECE_VALUES = {
 ```
 
 ```javascript
-// After (core/chess.js L17-20)
+// After (core/games/chess.js L17-20)
 const PIECE_VALUES = {
     'p': 100, 'n': 350, 'b': 330, 'r': 500, 'q': 900, 'k': 20000, // Boosted knight to 350
     'P': 100, 'N': 350, 'B': 330, 'R': 500, 'Q': 900, 'K': 20000
@@ -106,25 +106,25 @@ const PIECE_VALUES = {
 ```
 
 ### Modify Wordle Fallback Word Dictionary
-To expand the default word library used when the words text database is missing, modify `core/wordle.js`.
+To expand the default word library used when the words text database is missing, modify `core/games/wordle.js`.
 
 ```javascript
-// Before (core/wordle.js L48-51)
+// Before (core/games/wordle.js L48-51)
 const FALLBACK_WORDS = [
   'ABOUT', 'ABOVE', 'ABUSE', 'ACTOR', 'ACUTE', 'ADMIT', 'ADOPT', 'ADULT', 'AFTER', 'AGAIN',
   'AGENT', 'AGREE', 'AHEAD', 'ALARM', 'ALBUM', 'ALERT', 'ALIKE', 'ALIVE', 'ALLOW', 'ALONE',
 ```
 
 ```javascript
-// After (core/wordle.js L48-51)
+// After (core/games/wordle.js L48-51)
 const FALLBACK_WORDS = [
   'JOKER', 'BOTS', 'ABOUT', 'ABOVE', 'ABUSE', 'ACTOR', 'ACUTE', 'ADMIT', 'ADOPT', 'ADULT', // Added JOKER and BOTS
   'AGENT', 'AGREE', 'AHEAD', 'ALARM', 'ALBUM', 'ALERT', 'ALIKE', 'ALIVE', 'ALLOW', 'ALONE',
 ```
 
 ## Common tasks
-- **Change Chess Piece weights** — Update positional evaluations by modifying the value weight map inside [chess.js L17-20](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/chess.js#L17-L20).
-- **Edit Debate Leaderboard fields** — Customize the tracking properties added to winning users in [debate.js L31-34](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/debate.js#L31-L34).
-- **Modify Wordle Fallback dictionary** — Add or delete allowed 5-letter words from the hardcoded array in [wordle.js L48-52](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/wordle.js#L48-L52).
-- **Alter Wordle Feedback values** — Customize the output result strings returned from feedback calculations in [wordle.js L355-385](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/wordle.js#L355-L385).
-- **Manage Debate entry points** — Customize debate invocation checks, arguments, or AI models in [debate.js L53-55](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/debate.js#L53-L55).
+- **Change Chess Piece weights** — Update positional evaluations by modifying the value weight map inside [chess.js L17-20](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/chess.js#L17-L20).
+- **Edit Debate Leaderboard fields** — Customize the tracking properties added to winning users in [debate.js L31-34](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/debate.js#L31-L34).
+- **Modify Wordle Fallback dictionary** — Add or delete allowed 5-letter words from the hardcoded array in [wordle.js L48-52](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/wordle.js#L48-L52).
+- **Alter Wordle Feedback values** — Customize the output result strings returned from feedback calculations in [wordle.js L355-385](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/wordle.js#L355-L385).
+- **Manage Debate entry points** — Customize debate invocation checks, arguments, or AI models in [debate.js L53-55](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/games/debate.js#L53-L55).

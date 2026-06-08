@@ -1,6 +1,6 @@
-const progression = require('./progression');
-const economy = require('./economy');
-const guilds = require('./guilds');
+const progression = require('../rpg/progression');
+const economy = require('../rpg/economy');
+const guilds = require('../rpg/guilds');
 const botConfig = require('../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();

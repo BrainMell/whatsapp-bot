@@ -73,7 +73,7 @@ const MAX_FISH = 25; // Maximum attempts per cycle (Change this integer)
 ```
 
 ### 2. Adding a New Fish Type
-To add a new fish tier (e.g. `legendary_fish`), first define it in `ITEM_DATABASE` inside [core/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/lootSystem.js), and then modify the roll distribution logic in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js).
+To add a new fish tier (e.g. `legendary_fish`), first define it in `ITEM_DATABASE` inside [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js), and then modify the roll distribution logic in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js).
 
 #### Before
 ```javascript
@@ -109,5 +109,5 @@ if (roll > 99.5) {
 ## Common tasks
 
 * **Change the fishing cooldown**: Open [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5504) and adjust `COOLDOWN_MS` to your target duration.
-* **Add a new fish catch**: Insert the item definition in the database at [core/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/lootSystem.js#L618) and map its probability roll range in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5559).
+* **Add a new fish catch**: Insert the item definition in the database at [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L618) and map its probability roll range in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5559).
 * **Edit the fatigue message**: Modify the hardcoded string returned inside the fatigue validation block in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5524).

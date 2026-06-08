@@ -2,17 +2,17 @@
 // 👤 CHARACTER & RPG COMMANDS 
 // ============================================ 
 
-const progression = require('./progression');
-const inventorySystem = require('./inventorySystem');
-const lootSystem = require('./lootSystem');
-const craftingSystem = require('./craftingSystem');
-const economy = require('./economy');
-const classSystem = require('./classSystem');
+const progression = require('../rpg/progression');
+const inventorySystem = require('../rpg/inventorySystem');
+const lootSystem = require('../rpg/lootSystem');
+const craftingSystem = require('../rpg/craftingSystem');
+const economy = require('../rpg/economy');
+const classSystem = require('../rpg/classSystem');
 const botConfig = require('../botConfig');
-const GoImageService = require('./goImageService');
+const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 const fs = require('fs');
-const profileHelper = require('./profileHelper');
+const profileHelper = require('../utils/profileHelper');
 
 const getPrefix = () => botConfig.getPrefix();
 const getCurrency = () => botConfig.getCurrency();

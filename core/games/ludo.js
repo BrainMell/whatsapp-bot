@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const botConfig = require('../botConfig');
 const axios = require('axios');
-const economy = require('./economy');
-const GoImageService = require('./goImageService');
+const economy = require('../rpg/economy');
+const GoImageService = require('../utils/goImageService');
 
 const goService = new GoImageService();
 
@@ -542,7 +542,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         economy.addMoney(player.fullJid, reward);
         message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
         try {
-          const socialSystem = require('./socialSystem');
+          const socialSystem = require('../rpg/socialSystem');
           const gamePlayers = game.players.map(p => p.fullJid);
           for (let i = 0; i < gamePlayers.length; i++) {
             for (let j = i + 1; j < gamePlayers.length; j++) {
@@ -604,7 +604,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       economy.addMoney(player.fullJid, reward);
       message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
       try {
-        const socialSystem = require('./socialSystem');
+        const socialSystem = require('../rpg/socialSystem');
         const gamePlayers = game.players.map(p => p.fullJid);
         for (let i = 0; i < gamePlayers.length; i++) {
           for (let j = i + 1; j < gamePlayers.length; j++) {

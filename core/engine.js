@@ -991,6 +991,7 @@ async function startBot(configInstance) {
     const activeTrivias = new Map();
     const pendingNameRequests = new Map();
     const spamTracker = new Map();
+    const menuSessions = new Map();
 
     function addWarning(userId, groupId, reason) {
       const key = `${userId}@${groupId}`;
@@ -3159,113 +3160,188 @@ What to do:
 
     // New dynamic menu function
 
-    async function sendBotMenu(sock, chatId, botMarker, args = []) {
-      const botName = botConfig.getBotName();
-      const prefix = botConfig.getPrefix();
+    async function sendBotMenu(sock, chatId, botMarker, args = [], senderJid) {
+      const botName = botConfig.getBotName() || "Mellow's Bot";
+      const prefix = botConfig.getPrefix() || ".j";
       const showHidden = args.includes("-h");
 
-      // Filter out flags for input parsing
+      // Filter out flags
       const cleanArgs = args.filter((a) => !a.startsWith("-"));
-      const categoryInput = cleanArgs[0]?.toLowerCase();
-      const fullInput = cleanArgs.join(" ").toLowerCase();
+      
+      // Parse potential page numbers or navigation keywords
+      let pageNum = null;
+      let navDir = null; // 'next' or 'prev'
+      
+      const remainingArgs = [];
+      for (const arg of cleanArgs) {
+        const numMatch = arg.match(/^([1-9][0-9]*)$/);
+        if (numMatch) {
+          pageNum = parseInt(numMatch[1], 10);
+        } else if (arg.toLowerCase() === "next") {
+          navDir = "next";
+        } else if (arg.toLowerCase() === "prev" || arg.toLowerCase() === "back") {
+          navDir = "prev";
+        } else {
+          remainingArgs.push(arg);
+        }
+      }
+
+      const categoryOrCommandInput = remainingArgs.join(" ").toLowerCase().trim();
+
+      // Retrieve existing session if any
+      let session = senderJid ? menuSessions.get(senderJid) : null;
+
+      // Resolve context: category or main?
+      let targetCategory = null;
+      let targetCommand = null;
+      let isAll = false;
+
+      if (categoryOrCommandInput === "all") {
+        isAll = true;
+      } else if (categoryOrCommandInput) {
+        // Try to match a category
+        const matchedCat = Object.keys(COMMAND_REGISTRY).find(
+          (k) =>
+            k.toLowerCase() === categoryOrCommandInput ||
+            (k.toLowerCase() === "interactions" &&
+              (categoryOrCommandInput === "intaractions" ||
+                categoryOrCommandInput === "reactions")),
+        );
+        if (matchedCat) {
+          targetCategory = matchedCat;
+        } else {
+          // Try to match a command
+          for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
+            const match = cmds.find((c) => c.cmd.toLowerCase() === categoryOrCommandInput);
+            if (match) {
+              targetCommand = match;
+              targetCategory = cat;
+              break;
+            }
+          }
+        }
+      }
 
       // 1. SHOW ALL COMMANDS (.j menu all)
-      if (categoryInput === "all") {
+      if (isAll) {
         let allMsg = GET_BANNER(`✨ ${botName.toUpperCase()}`) + `\n`;
-        allMsg += `*Prefix* ${botConfig.getPrefix()}\n\n`;
+        allMsg += `*Prefix* ${prefix}\n\n`;
         for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
           const emoji = CATEGORY_EMOJIS[cat] || "◈";
           allMsg += `${emoji}─── ＊ ${cat} ＊ ───${emoji}\n`;
           cmds.forEach((c) => {
-            allMsg += `• \`${botConfig.getPrefix()} ${c.cmd}\`\n`;
+            allMsg += `• \`${prefix} ${c.cmd}\`\n`;
           });
           allMsg += "\n";
         }
         return await sendMenuWithBanner(sock, chatId, allMsg);
       }
 
-      // 2. CATEGORY MENU (.j menu <CATEGORY>)
-      const matchedCat = Object.keys(COMMAND_REGISTRY).find(
-        (k) =>
-          k.toLowerCase() === fullInput ||
-          k.toLowerCase() === categoryInput ||
-          k.toLowerCase() === cleanArgs.join(" ").toLowerCase() ||
-          (k.toLowerCase() === "interactions" &&
-            (fullInput === "intaractions" ||
-              categoryInput === "intaractions" ||
-              fullInput === "reactions" ||
-              categoryInput === "reactions")),
-      );
+      // 2. COMMAND EXPLAIN MODE (.j menu <command>)
+      if (targetCommand && !showHidden) {
+        const emoji = CATEGORY_EMOJIS[targetCategory] || "✨";
+        let explainMsg =
+          GET_BANNER(`${emoji} ${botName.toUpperCase()}`) + `\n\n`;
+        explainMsg += `*Command:* \`${prefix} ${targetCommand.cmd}\`
 
-      if (matchedCat) {
-        const cmds = COMMAND_REGISTRY[matchedCat];
-        const emoji = CATEGORY_EMOJIS[matchedCat] || "📂";
-        let catMsg =
-          GET_BANNER(`${emoji} ${matchedCat.toUpperCase()}`) + `\n\n`;
+*Description:*
+${targetCommand.desc}
 
-        cmds.forEach((c) => {
-          catMsg += `➤ \`${botConfig.getPrefix()} ${c.cmd}\` – ${c.desc.split(".")[0]}\n`;
+*Usage:*
+\`${prefix} ${targetCommand.usage}\`
+
+*Category:*
+${targetCategory}`;
+        return await sendMenuWithBanner(sock, chatId, explainMsg);
+      }
+
+      // 3. CATEGORY MENU WITH PAGINATION
+      if (targetCategory || (session && session.type === "category" && !categoryOrCommandInput)) {
+        const catName = targetCategory || session.category;
+        const cmds = COMMAND_REGISTRY[catName] || [];
+        const visibleCmds = cmds.filter(c => !c.hidden || showHidden);
+        const pageSize = 8;
+        const totalPages = Math.ceil(visibleCmds.length / pageSize) || 1;
+
+        let page = 1;
+        if (pageNum !== null) {
+          page = Math.min(Math.max(pageNum, 1), totalPages);
+        } else if (navDir && session && session.type === "category" && session.category === catName) {
+          const offset = navDir === "next" ? 1 : -1;
+          page = Math.min(Math.max(session.page + offset, 1), totalPages);
+        } else if (session && session.type === "category" && session.category === catName) {
+          page = session.page;
+        }
+
+        // Save session
+        if (senderJid) {
+          menuSessions.set(senderJid, { type: "category", category: catName, page });
+        }
+
+        const startIdx = (page - 1) * pageSize;
+        const endIdx = Math.min(startIdx + pageSize, visibleCmds.length);
+        const slicedCmds = visibleCmds.slice(startIdx, endIdx);
+
+        const emoji = CATEGORY_EMOJIS[catName] || "📂";
+        let catMsg = GET_BANNER(`${emoji} ${catName.toUpperCase()}`) + `\n\n`;
+
+        slicedCmds.forEach((c) => {
+          catMsg += `➤ \`${prefix} ${c.cmd}\` – ${c.desc.split(".")[0]}\n`;
         });
+
+        catMsg += `\n*Page ${page} of ${totalPages}*\n`;
+        catMsg += `➤ Use \`${prefix} menu ${catName} <page>\` to jump.\n`;
+        if (page < totalPages) {
+          catMsg += `➤ Type \`${prefix} menu next\` for page ${page + 1}.\n`;
+        }
+        if (page > 1) {
+          catMsg += `➤ Type \`${prefix} menu prev\` for page ${page - 1}.\n`;
+        }
+        catMsg += `➤ Type \`${prefix} menu\` for main menu.`;
 
         return await sendMenuWithBanner(sock, chatId, catMsg);
       }
 
-      // 3. COMMAND EXPLAIN MODE (.j menu <command>)
-      if (categoryInput && !showHidden) {
-        let foundCommand = null;
-        let commandCategory = "";
-
-        for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-          const match = cmds.find((c) => c.cmd.toLowerCase() === categoryInput);
-          if (match) {
-            foundCommand = match;
-            commandCategory = cat;
-            break;
-          }
-        }
-
-        if (foundCommand) {
-          const emoji = CATEGORY_EMOJIS[commandCategory] || "✨";
-          let explainMsg =
-            GET_BANNER(`${emoji} ${botName.toUpperCase()}`) + `\n\n`;
-          explainMsg += `*Command:* \`${botConfig.getPrefix()} ${foundCommand.cmd}\`
-
-*Description:*
-${foundCommand.desc}
-
-*Usage:*
-\`${botConfig.getPrefix()} ${foundCommand.usage}\`
-
-*Category:*
-${commandCategory}`;
-          return await sendMenuWithBanner(sock, chatId, explainMsg);
-        }
-      }
-
       // 4. MAIN CATEGORY SELECTOR (.j menu)
-
       const categories = Object.keys(COMMAND_REGISTRY);
-
-      let mainMsg =
-        GET_BANNER(`✨ *${botName.toUpperCase()}*`) +
-        `\n *Version ${botConfig.getVersion()}* \n *By mellow* \n\n`;
-
-      mainMsg += `*Prefix:* ${botConfig.getPrefix()}\n\n`;
-
-      mainMsg += `📂 Select a category by typing \`${botConfig.getPrefix()} menu <name>\`:\n\n`;
-
-      // Display categories with emojis
       const visibleCategories = categories.filter(
         (cat) => cat !== "MODERATOR" || showHidden,
       );
+      const pageSize = 6;
+      const totalPages = Math.ceil(visibleCategories.length / pageSize) || 1;
 
-      for (let i = 0; i < visibleCategories.length; i += 2) {
+      let page = 1;
+      if (pageNum !== null) {
+        page = Math.min(Math.max(pageNum, 1), totalPages);
+      } else if (navDir && session && session.type === "main") {
+        const offset = navDir === "next" ? 1 : -1;
+        page = Math.min(Math.max(session.page + offset, 1), totalPages);
+      } else if (session && session.type === "main") {
+        page = session.page;
+      }
+
+      // Save session
+      if (senderJid) {
+        menuSessions.set(senderJid, { type: "main", page });
+      }
+
+      const startIdx = (page - 1) * pageSize;
+      const endIdx = Math.min(startIdx + pageSize, visibleCategories.length);
+
+      let mainMsg =
+        GET_BANNER(`✨ *${botName.toUpperCase()}*`) +
+        `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\n`;
+
+      mainMsg += `*Prefix:* ${prefix}\n\n`;
+      mainMsg += `📂 Select a category by typing \`${prefix} menu <name>\`:\n\n`;
+
+      for (let i = startIdx; i < endIdx; i += 2) {
         const cat1Name = visibleCategories[i];
         const emoji1 = CATEGORY_EMOJIS[cat1Name] || "📂";
         const cat1 = `\`${emoji1} ${cat1Name}\``.padEnd(18);
 
         let cat2 = "";
-        if (visibleCategories[i + 1]) {
+        if (i + 1 < endIdx) {
           const cat2Name = visibleCategories[i + 1];
           const emoji2 = CATEGORY_EMOJIS[cat2Name] || "📂";
           cat2 = `\`${emoji2} ${cat2Name}\``;
@@ -3273,9 +3349,15 @@ ${commandCategory}`;
         mainMsg += `${cat1} ${cat2}\n`;
       }
 
-      mainMsg += `\n➤ Type:\`${botConfig.getPrefix()} menu <CATEGORY>\`
-➤ Or:\`${botConfig.getPrefix()} menu all\`
-➤ Info:\`${botConfig.getPrefix()} menu <command>\``;
+      mainMsg += `\n*Page ${page} of ${totalPages}*\n`;
+      mainMsg += `➤ Type \`${prefix} menu <CATEGORY>\` to open.\n`;
+      if (page < totalPages) {
+        mainMsg += `➤ Type \`${prefix} menu next\` for page ${page + 1}.\n`;
+      }
+      if (page > 1) {
+        mainMsg += `➤ Type \`${prefix} menu prev\` for page ${page - 1}.\n`;
+      }
+      mainMsg += `➤ Type \`${prefix} menu all\` for all commands.`;
 
       return await sendMenuWithBanner(sock, chatId, mainMsg);
     }
@@ -4410,8 +4492,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     );
                   }
 
-                  // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, _, ~) for command parsing
-                  const cleanTxt = txt.replace(/[*_~]/g, "");
+                  // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, ~, outer _) for command parsing
+                  const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
                   let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
 
                   // ── CARD SYSTEM INTERCEPT ──────────────────
@@ -4626,7 +4708,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j menu or .j help
                     if (primaryCmd === "menu" || primaryCmd === "help") {
                       const menuArgs = cmdArgs.slice(1);
-                      await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs);
+                      await sendBotMenu(sock, chatId, BOT_MARKER, menuArgs, senderJid);
                       return;
                     }
 

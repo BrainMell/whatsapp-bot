@@ -7,7 +7,7 @@ The Alchemy system manages item brewing, allowing players to combine raw materia
 
 ### Snippet 1: Command Router Wrapper
 ```javascript
-// File: core/rpgCommands.js (Lines 513)
+// File: core/commands/rpgCommands.js (Lines 513)
 async function brewItem(sock, chatId, senderJid, recipeId) { 
     return craftItem(sock, chatId, senderJid, recipeId, 'BREWING'); 
 }
@@ -19,7 +19,7 @@ async function brewItem(sock, chatId, senderJid, recipeId) {
 
 ### Snippet 2: Recipe Validation & Station Enforcer
 ```javascript
-// File: core/craftingSystem.js (Lines 475-495)
+// File: core/rpg/craftingSystem.js (Lines 475-495)
 async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const check = canCraft(userId, recipeId);
     if (!check.canCraft) return { success: false, message: check.reason };
@@ -44,7 +44,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
 ### Snippet 3: Inventory Deductions & Grant
 ```javascript
-// File: core/craftingSystem.js (Lines 497-516)
+// File: core/rpg/craftingSystem.js (Lines 497-516)
     // 1. Remove ingredients
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         inventorySystem.removeItem(userId, ingId, qty);
@@ -74,12 +74,12 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 ## How to modify it
 
 To add a new alchemy potion/recipe, you must edit two files:
-1. **Item Definition**: Define the item in `ITEM_DATABASE` inside [core/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/lootSystem.js).
-2. **Recipe Registry**: Register the recipe in `BREWING_RECIPES` inside [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js).
+1. **Item Definition**: Define the item in `ITEM_DATABASE` inside [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js).
+2. **Recipe Registry**: Register the recipe in `BREWING_RECIPES` inside [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js).
 
 ### Before
 ```javascript
-// File: core/craftingSystem.js (Line 298)
+// File: core/rpg/craftingSystem.js (Line 298)
 const BREWING_RECIPES = {
     'mega_potion': {
         name: 'Mega Health Potion', id: 'mega_potion', category: 'BREWING',
@@ -92,7 +92,7 @@ const BREWING_RECIPES = {
 
 ### After
 ```javascript
-// File: core/craftingSystem.js (Line 298)
+// File: core/rpg/craftingSystem.js (Line 298)
 const BREWING_RECIPES = {
     'mega_potion': {
         name: 'Mega Health Potion', id: 'mega_potion', category: 'BREWING',
@@ -108,10 +108,10 @@ const BREWING_RECIPES = {
     }
 };
 ```
-*Note: Make sure to add `'hyper_elixir'` to the `ITEM_DATABASE` in [core/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/lootSystem.js) as a consumable type so the inventory loader can resolve its description.*
+*Note: Make sure to add `'hyper_elixir'` to the `ITEM_DATABASE` in [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js) as a consumable type so the inventory loader can resolve its description.*
 
 ## Common tasks
 
-* **Add a new alchemy recipe**: Insert a new object with the `'BREWING'` category filter inside `const BREWING_RECIPES` in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L298).
-* **Change potion ingredient costs**: Modify the `ingredients` keys and integer quantities for the target potion in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L302).
-* **Edit recipe requirements warnings**: Update the hardcoded warning string inside `performCraft` in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L489).
+* **Add a new alchemy recipe**: Insert a new object with the `'BREWING'` category filter inside `const BREWING_RECIPES` in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L298).
+* **Change potion ingredient costs**: Modify the `ingredients` keys and integer quantities for the target potion in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L302).
+* **Edit recipe requirements warnings**: Update the hardcoded warning string inside `performCraft` in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L489).

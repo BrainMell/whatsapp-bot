@@ -5,7 +5,7 @@ The Investment, Stock, and Loan subsystem provides users with mechanisms to accu
 
 ## How it works
 
-**Fixed Deposit Investment Start** — [investment.js L14–56](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/investment.js#L14-L56)
+**Fixed Deposit Investment Start** — [investment.js L14–56](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/investment.js#L14-L56)
 ```javascript
 function startInvestment(userId, planId, amount) {
     const user = economy.getUser(userId);
@@ -55,7 +55,7 @@ This function initiates fixed-term investments for players. It validates user re
 
 ---
 
-**Stock Price Simulation Update** — [stockMarket.js L19–33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/stockMarket.js#L19-L33)
+**Stock Price Simulation Update** — [stockMarket.js L19–33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/stockMarket.js#L19-L33)
 ```javascript
 function updatePrices() {
     for (const symbol in STOCKS) {
@@ -77,7 +77,7 @@ This function iterates through all active stock listings to simulate market tick
 
 ---
 
-**Loan Default Block Check** — [loans.js L81–91](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/loans.js#L81-L91)
+**Loan Default Block Check** — [loans.js L81–91](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/loans.js#L81-L91)
 ```javascript
 function isLoanBlocked(userId) {
   if (!loanBlocks.has(userId)) return false;
@@ -96,9 +96,9 @@ This utility determines whether a player is restricted from participating in the
 ## How to modify it
 
 ### Adjusting Investment Plan Parameters
-To change durations, interest rates, or risk thresholds of default plans, modify the `INVESTMENT_PLANS` dictionary in `core/investment.js`.
+To change durations, interest rates, or risk thresholds of default plans, modify the `INVESTMENT_PLANS` dictionary in `core/rpg/investment.js`.
 
-**Before (core/investment.js L7–12):**
+**Before (core/rpg/investment.js L7–12):**
 ```javascript
 const INVESTMENT_PLANS = {
     'BOND': { name: 'Low-Risk Bond', durationHours: 2, interest: 0.05, minDeposit: 1000, risk: 0 },
@@ -108,7 +108,7 @@ const INVESTMENT_PLANS = {
 };
 ```
 
-**After (core/investment.js L7–12):**
+**After (core/rpg/investment.js L7–12):**
 ```javascript
 const INVESTMENT_PLANS = {
     'BOND': { name: 'Low-Risk Bond', durationHours: 2, interest: 0.08, minDeposit: 1000, risk: 0 }, // Increased interest yield
@@ -119,9 +119,9 @@ const INVESTMENT_PLANS = {
 ```
 
 ### Adding New Stock Tickers
-To add or adjust the volatility and initial price profiles of available stocks, modify the `STOCKS` configuration in `core/stockMarket.js`.
+To add or adjust the volatility and initial price profiles of available stocks, modify the `STOCKS` configuration in `core/rpg/stockMarket.js`.
 
-**Before (core/stockMarket.js L7–13):**
+**Before (core/rpg/stockMarket.js L7–13):**
 ```javascript
 const STOCKS = {
     'ARCH': { name: 'Architect Solutions', price: 150, volatility: 0.05, trend: 0.01 },
@@ -132,7 +132,7 @@ const STOCKS = {
 };
 ```
 
-**After (core/stockMarket.js L7–13):**
+**After (core/rpg/stockMarket.js L7–13):**
 ```javascript
 const STOCKS = {
     'ARCH': { name: 'Architect Solutions', price: 150, volatility: 0.05, trend: 0.01 },
@@ -145,9 +145,9 @@ const STOCKS = {
 ```
 
 ## Common tasks
-- **Modify max active investments limit** — Change the numeric check for active investments allowed per user in [investment.js L21](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/investment.js#L21).
-- **Change risk management wallet limit** — Edit the percentage multiplier defining the maximum investment cap relative to wallet size in [investment.js L29](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/investment.js#L29).
-- **Alter stock trend reversal rates** — Modify the likelihood of stock trend direction changes during market simulation ticks in [stockMarket.js L23](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/stockMarket.js#L23).
-- **Adjust the minimum price bounds of stocks** — Tweak the floor value limit in [stockMarket.js L28](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/stockMarket.js#L28).
-- **Edit pending loan request lifetime** — Modify the time window allowed for lenders to accept loan proposals in [loans.js L152](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/loans.js#L152).
-- **Tune borrower block duration check** — Adjust database synchronization checks for loan block status updates in [loans.js L81](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/loans.js#L81).
+- **Modify max active investments limit** — Change the numeric check for active investments allowed per user in [investment.js L21](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/investment.js#L21).
+- **Change risk management wallet limit** — Edit the percentage multiplier defining the maximum investment cap relative to wallet size in [investment.js L29](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/investment.js#L29).
+- **Alter stock trend reversal rates** — Modify the likelihood of stock trend direction changes during market simulation ticks in [stockMarket.js L23](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/stockMarket.js#L23).
+- **Adjust the minimum price bounds of stocks** — Tweak the floor value limit in [stockMarket.js L28](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/stockMarket.js#L28).
+- **Edit pending loan request lifetime** — Modify the time window allowed for lenders to accept loan proposals in [loans.js L152](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/loans.js#L152).
+- **Tune borrower block duration check** — Adjust database synchronization checks for loan block status updates in [loans.js L81](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/loans.js#L81).

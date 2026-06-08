@@ -5,7 +5,7 @@ The Profile Cards Subsystem manages compilation, rendering, and delivery of char
 
 ## How it works
 
-**JSON Card Data Compilation** — [profileHelper.js L8–77](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/profileHelper.js#L8-L77)
+**JSON Card Data Compilation** — [profileHelper.js L8–77](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L8-L77)
 ```javascript
 async function buildCardData(userId, userName, pfpUrl = "") {
     // Initialize class if needed
@@ -82,7 +82,7 @@ This helper method gathers player details, attributes, rank, wallet contents, st
 
 ---
 
-**HTTP Image Rendering Call** — [goImageService.js L440–453](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/goImageService.js#L440-L453)
+**HTTP Image Rendering Call** — [goImageService.js L440–453](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L440-L453)
 ```javascript
   async generateProfileCard(data) {
     try {
@@ -104,7 +104,7 @@ This service method handles the HTTP POST request to compile JSON card metrics o
 
 ---
 
-**Command Handler Execution** — [rpgCommands.js L40–72](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpgCommands.js#L40-L72)
+**Command Handler Execution** — [rpgCommands.js L40–72](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L40-L72)
 ```javascript
     // Handle PFP
     let pfpUrl;
@@ -149,24 +149,24 @@ This is the core profile execution block inside the main RPG command routers. It
 ## How to modify it
 
 ### Adding Default Value Fallbacks
-To insert fallback values or defaults for player cards (e.g. default titles or empty avatar fallbacks), edit `core/profileHelper.js`.
+To insert fallback values or defaults for player cards (e.g. default titles or empty avatar fallbacks), edit `core/utils/profileHelper.js`.
 
-**Before (core/profileHelper.js L44–45):**
+**Before (core/utils/profileHelper.js L44–45):**
 ```javascript
         pfpUrl: pfpUrl || "",
         title: economyUser.title || "",
 ```
 
-**After (core/profileHelper.js L44–45):**
+**After (core/utils/profileHelper.js L44–45):**
 ```javascript
         pfpUrl: pfpUrl || "https://example.com/default_avatar.png", // Added avatar fallback URL
         title: economyUser.title || "Novice Adventurer", // Set default title fallback
 ```
 
 ### Adjusting Image Rendering Timeouts
-To adjust the timeout limits for profile card HTTP rendering request tasks, modify the configuration properties in `core/goImageService.js`.
+To adjust the timeout limits for profile card HTTP rendering request tasks, modify the configuration properties in `core/utils/goImageService.js`.
 
-**Before (core/goImageService.js L442–445):**
+**Before (core/utils/goImageService.js L442–445):**
 ```javascript
       const response = await this.client.post("/api/cards/profile", data, {
         responseType: "arraybuffer",
@@ -174,7 +174,7 @@ To adjust the timeout limits for profile card HTTP rendering request tasks, modi
       });
 ```
 
-**After (core/goImageService.js L442–445):**
+**After (core/utils/goImageService.js L442–445):**
 ```javascript
       const response = await this.client.post("/api/cards/profile", data, {
         responseType: "arraybuffer",
@@ -183,8 +183,8 @@ To adjust the timeout limits for profile card HTTP rendering request tasks, modi
 ```
 
 ## Common tasks
-- **Modify Go service profile endpoint** — Edit target path routing configuration parameters in [goImageService.js L442](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/goImageService.js#L442).
-- **Edit external HTTP service request timeout** — Adjust connection and rendering timeout parameters in [goImageService.js L444](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/goImageService.js#L444).
-- **Update avatar fallback settings** — Set the default picture link if none is found in the user profile in [profileHelper.js L44](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/profileHelper.js#L44).
-- **Adjust gear database lookup mapping** — Edit inventory weapon/armor mapping queries in [profileHelper.js L67–75](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/profileHelper.js#L67-L75).
-- **Modify structural base stats payload** — Edit raw player metrics mappings in [profileHelper.js L49–56](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/profileHelper.js#L49-L56).
+- **Modify Go service profile endpoint** — Edit target path routing configuration parameters in [goImageService.js L442](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L442).
+- **Edit external HTTP service request timeout** — Adjust connection and rendering timeout parameters in [goImageService.js L444](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L444).
+- **Update avatar fallback settings** — Set the default picture link if none is found in the user profile in [profileHelper.js L44](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L44).
+- **Adjust gear database lookup mapping** — Edit inventory weapon/armor mapping queries in [profileHelper.js L67–75](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L67-L75).
+- **Modify structural base stats payload** — Edit raw player metrics mappings in [profileHelper.js L49–56](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L49-L56).

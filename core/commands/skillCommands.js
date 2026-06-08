@@ -2,9 +2,9 @@
 // 🌳 SKILL TREE COMMANDS
 // ============================================ 
 
-const economy = require('./economy');
-const progression = require('./progression');
-const skillTree = require('./skillTree');
+const economy = require('../rpg/economy');
+const progression = require('../rpg/progression');
+const skillTree = require('../rpg/skillTree');
 const botConfig = require('../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
@@ -18,7 +18,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
-    const classSystem = require('./classSystem');
+    const classSystem = require('../rpg/classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { 
@@ -122,7 +122,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
-    const classSystem = require('./classSystem');
+    const classSystem = require('../rpg/classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
@@ -284,7 +284,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
-    const classSystem = require('./classSystem');
+    const classSystem = require('../rpg/classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
@@ -418,7 +418,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
         return;
     }
 
-    const classSystem = require('./classSystem');
+    const classSystem = require('../rpg/classSystem');
     const userClass = economy.getUserClass(senderJid);
     const lineage = classSystem.getLineage(userClass?.id || '');
 
@@ -483,7 +483,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 // ==========================================
 
 async function handleEvolve(sock, chatId, senderJid, senderName, args) {
-    const classSystem = require('./classSystem');
+    const classSystem = require('../rpg/classSystem');
     const user = economy.getUser(senderJid);
     
     if (!user) {
@@ -559,7 +559,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         });
     }
 
-    const inventorySystem = require('./inventorySystem');
+    const inventorySystem = require('../rpg/inventorySystem');
     
     if (!inventorySystem.hasItem(senderJid, requiredStone)) {
         return sock.sendMessage(chatId, { text: `❌ You need a *${stoneName}* to evolve! Buy one from the shop.` });
@@ -578,7 +578,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
     // === TRIALS SYSTEM: Trigger Boss Fight if required ===
     if (chosen.requirement?.trialBoss && !(user.completedTrials || []).includes(chosen.requirement.trialBoss)) {
-        const guildAdventure = require('./guildAdventure');
+        const guildAdventure = require('../rpg/guildAdventure');
         const sessionKey = `${chatId}_${senderJid}`;
         
         if (guildAdventure.isUserInAdventure(sessionKey)) {

@@ -70,7 +70,7 @@ This method handles structured query extraction using the Groq API. It targets a
 
 ---
 
-**Go Service Image Generation** — [goImageService.js L63-L76](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/goImageService.js#L63-L76)
+**Go Service Image Generation** — [goImageService.js L63-L76](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L63-L76)
 ```javascript
   async generateCombatImage(data) {
     return this._enqueue(async () => {
@@ -91,7 +91,7 @@ This method makes a POST request to the `/api/combat` endpoint of the Go microse
 
 ---
 
-**News Fetching** — [news.js L24-L33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/news.js#L24-L33)
+**News Fetching** — [news.js L24-L33](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/news.js#L24-L33)
 ```javascript
 async function getLatestNews() {
     try {
@@ -129,6 +129,6 @@ To configure API request options or connection delays, developers can change key
 
 ## Common tasks
 - **Change Groq extraction timeout** — Adjust the max response wait time for Groq completions in [GroqClient.js L72](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/GroqClient.js#L72).
-- **Change Go Service combat render timeout** — Customize the API request timeout for rendering combat cards in [goImageService.js L68](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/goImageService.js#L68).
+- **Change Go Service combat render timeout** — Customize the API request timeout for rendering combat cards in [goImageService.js L68](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L68).
 - **Configure Groq model key rotation limit** — Update the maximum retry attempts when rotating keys in [GroqClient.js L43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/src/context_engine/GroqClient.js#L43).
-- **Adjust news history cache limit** — Set how many article link hashes are saved in the system database to prevent duplicates in [news.js L16-L19](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/news.js#L16-L19).
+- **Adjust news history cache limit** — Set how many article link hashes are saved in the system database to prevent duplicates in [news.js L16-L19](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/news.js#L16-L19).

@@ -5,7 +5,7 @@ The Guilds and Factions Subsystem provides player association, cooperative miles
 
 ## How it works
 
-**Guild Caches Hydration** — [guilds.js L74–124](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L74-L124)
+**Guild Caches Hydration** — [guilds.js L74–124](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L74-L124)
 ```javascript
 async function loadGuilds() {
   try {
@@ -63,7 +63,7 @@ This module connects to MongoDB upon system launch to fetch and populate structu
 
 ---
 
-**Factions Guild Creation** — [guilds.js L216–285](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L216-L285)
+**Factions Guild Creation** — [guilds.js L216–285](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L216-L285)
 ```javascript
 function createGuild(guildName, creatorJid, archetype = 'ADVENTURER') {
   const info = globalGuildData;
@@ -141,7 +141,7 @@ This is the guild creation entry point. It verifies that the requestor doesn't a
 
 ---
 
-**Daily Board Progress Updates** — [guilds.js L854–882](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L854-L882)
+**Daily Board Progress Updates** — [guilds.js L854–882](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L854-L882)
 ```javascript
 function updateBoardProgress(guildName, targetType, amount) {
   const guild = globalGuildData.guilds[guildName];
@@ -178,9 +178,9 @@ This utility adjusts a guild's daily challenge progress counter when members tri
 ## How to modify it
 
 ### Updating Archetype Parameters
-To edit or customize faction perks, icons, or descriptions, modify `GUILD_ARCHETYPES` inside `core/guilds.js`.
+To edit or customize faction perks, icons, or descriptions, modify `GUILD_ARCHETYPES` inside `core/rpg/guilds.js`.
 
-**Before (core/guilds.js L21–28):**
+**Before (core/rpg/guilds.js L21–28):**
 ```javascript
 const GUILD_ARCHETYPES = {
   ADVENTURER: {
@@ -192,7 +192,7 @@ const GUILD_ARCHETYPES = {
   },
 ```
 
-**After (core/guilds.js L21–28):**
+**After (core/rpg/guilds.js L21–28):**
 ```javascript
 const GUILD_ARCHETYPES = {
   ADVENTURER: {
@@ -207,7 +207,7 @@ const GUILD_ARCHETYPES = {
 ### Expanding Initial Faction Building Slots
 To append custom upgrade targets or change starting building levels when a guild is registered, modify the configuration block in `createGuild`.
 
-**Before (core/guilds.js L267–271):**
+**Before (core/rpg/guilds.js L267–271):**
 ```javascript
     buildings: {
       hall: { level: 1, name: 'Guild Hall' },
@@ -216,7 +216,7 @@ To append custom upgrade targets or change starting building levels when a guild
     }
 ```
 
-**After (core/guilds.js L267–271):**
+**After (core/rpg/guilds.js L267–271):**
 ```javascript
     buildings: {
       hall: { level: 1, name: 'Guild Hall' },
@@ -227,8 +227,8 @@ To append custom upgrade targets or change starting building levels when a guild
 ```
 
 ## Common tasks
-- **Modify archetype settings or icons** — Edit archetypes and perks maps in [guilds.js L21–43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L21-L43).
-- **Edit daily board challenge lifespan** — Adjust check interval thresholds for board generation resets in [guilds.js L859](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L859).
-- **Adjust default building configurations** — Edit levels or name profiles of faction buildings in [guilds.js L267–271](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L267-L271).
-- **Modify board completion XP rewards** — Update rewards payouts awarded upon daily milestone completions in [guilds.js L875–879](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L875-L879).
-- **Tune registration verification loops** — Adjust member/ownership validation operations in [guilds.js L216–250](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guilds.js#L216-L250).
+- **Modify archetype settings or icons** — Edit archetypes and perks maps in [guilds.js L21–43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L21-L43).
+- **Edit daily board challenge lifespan** — Adjust check interval thresholds for board generation resets in [guilds.js L859](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L859).
+- **Adjust default building configurations** — Edit levels or name profiles of faction buildings in [guilds.js L267–271](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L267-L271).
+- **Modify board completion XP rewards** — Update rewards payouts awarded upon daily milestone completions in [guilds.js L875–879](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L875-L879).
+- **Tune registration verification loops** — Adjust member/ownership validation operations in [guilds.js L216–250](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guilds.js#L216-L250).

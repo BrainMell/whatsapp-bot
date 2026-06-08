@@ -5,7 +5,7 @@ The Character Progression Subsystem manages player experience points (XP), level
 
 ## How it works
 
-**XP Injection & Level Verification** — [progression.js L206–244](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L206-L244)
+**XP Injection & Level Verification** — [progression.js L206–244](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L206-L244)
 ```javascript
 function addXP(userId, amount = 10, source = 'Unknown') {
     const user = getUser(userId);
@@ -51,7 +51,7 @@ This is the progression engine's main update gateway. It increments raw XP count
 
 ---
 
-**Attribute Point Allocation** — [progression.js L300–329](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L300-L329)
+**Attribute Point Allocation** — [progression.js L300–329](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L300-L329)
 ```javascript
 function allocateStatPoint(userId, stat, amount = 1) {
     const user = getUser(userId);
@@ -88,7 +88,7 @@ This utility allocates earned stat points to a player's core attributes. It chec
 
 ---
 
-**Character Stat Reset** — [progression.js L331–343](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L331-L343)
+**Character Stat Reset** — [progression.js L331–343](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L331-L343)
 ```javascript
 function resetStats(userId) {
     const user = getUser(userId);
@@ -109,9 +109,9 @@ This method resets all character stat points allocated by the player. It sums up
 ## How to modify it
 
 ### Updating XP Level Scaling Parameters
-To configure maximum player levels or adjust progression XP curves, update the parameters in `XP_CONFIG` inside `core/progression.js`.
+To configure maximum player levels or adjust progression XP curves, update the parameters in `XP_CONFIG` inside `core/rpg/progression.js`.
 
-**Before (core/progression.js L12–15):**
+**Before (core/rpg/progression.js L12–15):**
 ```javascript
 const XP_CONFIG = {
     BASE_XP: 250,           // XP needed for level 2
@@ -119,7 +119,7 @@ const XP_CONFIG = {
     MAX_LEVEL: 100,         // Level cap
 ```
 
-**After (core/progression.js L12–15):**
+**After (core/rpg/progression.js L12–15):**
 ```javascript
 const XP_CONFIG = {
     BASE_XP: 300,           // Increased base XP requirement
@@ -130,22 +130,22 @@ const XP_CONFIG = {
 ### Adjusting Attribute Allocation Yields
 To customize the baseline statistics gained per point allocated, modify the mapping dictionary in `allocateStatPoint`.
 
-**Before (core/progression.js L318–319):**
+**Before (core/rpg/progression.js L318–319):**
 ```javascript
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
     const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
 ```
 
-**After (core/progression.js L318–319):**
+**After (core/rpg/progression.js L318–319):**
 ```javascript
     const baseStatValues = { hp: 20, atk: 4, def: 3, mag: 4, spd: 3, luck: 3, crit: 2 }; // Increased base stat payouts
     const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
 ```
 
 ## Common tasks
-- **Modify maximum level cap** — Change level cap parameters in [progression.js L15](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L15).
-- **Edit XP scaling factor** — Adjust leveling curve steepness parameters in [progression.js L14](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L14).
-- **Adjust base quest XP rewards** — Tune standard quest experience payouts in [progression.js L18](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L18).
-- **Alter level-up statutory rewards** — Modify points awarded upon leveling up in [progression.js L225–233](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L225-L233).
-- **Update manual stat allocation yields** — Adjust base stats yields from allocated points in [progression.js L318](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L318).
-- **Tweak evolution tier multipliers** — Adjust the multiplier values for Evolved or Ascended class tiers in [progression.js L314–316](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/progression.js#L314-L316).
+- **Modify maximum level cap** — Change level cap parameters in [progression.js L15](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L15).
+- **Edit XP scaling factor** — Adjust leveling curve steepness parameters in [progression.js L14](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L14).
+- **Adjust base quest XP rewards** — Tune standard quest experience payouts in [progression.js L18](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L18).
+- **Alter level-up statutory rewards** — Modify points awarded upon leveling up in [progression.js L225–233](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L225-L233).
+- **Update manual stat allocation yields** — Adjust base stats yields from allocated points in [progression.js L318](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L318).
+- **Tweak evolution tier multipliers** — Adjust the multiplier values for Evolved or Ascended class tiers in [progression.js L314–316](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L314-L316).

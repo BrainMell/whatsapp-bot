@@ -10,16 +10,16 @@
 const fs      = require('fs');
 const path    = require('path');
 const axios   = require('axios');
-const GoImageService = require('./goImageService');
+const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 
 // ── Mongoose Models ──────────────────────────────────────────────────────────
-const CardStat   = require('./models/CardStat');
-const UserCard   = require('./models/UserCard');
-const CardMarket = require('./models/CardMarket');
-const CardDeck   = require('./models/CardDeck');
-const User       = require('./models/User');
-const System     = require('./models/System');
+const CardStat   = require('../models/CardStat');
+const UserCard   = require('../models/UserCard');
+const CardMarket = require('../models/CardMarket');
+const CardDeck   = require('../models/CardDeck');
+const User       = require('../models/User');
+const System     = require('../models/System');
 const economy    = require('./economy');
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -1780,7 +1780,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (!inst.sock_ref) return false;
 
   try {
-    const lidResolver = require('./lidResolver');
+    const lidResolver = require('../utils/lidResolver');
     senderJid = lidResolver.resolveJid(senderJid);
   } catch (e) {
     console.error("Error resolving senderJid in cardSystem:", e.message);

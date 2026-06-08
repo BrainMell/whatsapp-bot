@@ -1,4 +1,4 @@
-const System = require('./models/System');
+const System = require('../models/System');
 const connectDB = require('../db');
 
 const systemCache = new Map();

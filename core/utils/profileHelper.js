@@ -1,8 +1,8 @@
-const economy = require('./economy');
-const inventorySystem = require('./inventorySystem');
-const lootSystem = require('./lootSystem');
-const classSystem = require('./classSystem');
-const progression = require('./progression');
+const economy = require('../rpg/economy');
+const inventorySystem = require('../rpg/inventorySystem');
+const lootSystem = require('../rpg/lootSystem');
+const classSystem = require('../rpg/classSystem');
+const progression = require('../rpg/progression');
 const botConfig = require('../botConfig');
 
 async function buildCardData(userId, userName, pfpUrl = "") {
@@ -34,7 +34,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         rank: rank,
         class: classData?.name || "Adventurer",
         classIcon: classData?.icon || "🛡️",
-        guildName: require('./guilds').getUserGuild(userId) || "",
+        guildName: require('../rpg/guilds').getUserGuild(userId) || "",
         wallet: economyUser.wallet || 0,
         bank: economyUser.bank || 0,
         zeniSymbol: botConfig.getCurrency().symbol,

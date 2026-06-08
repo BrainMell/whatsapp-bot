@@ -10,7 +10,7 @@ Items and stat panels are displayed to the user as formatted tables sorted by ra
 
 ## How it works
 
-**Item Addition and Stacking** — [inventorySystem.js L127-L189](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L127-L189)
+**Item Addition and Stacking** — [inventorySystem.js L127-L189](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L127-L189)
 ```javascript
 async function addItem(userId, itemId, quantity = 1, itemData = {}) {
     const inventory = getInventory(userId);
@@ -80,7 +80,7 @@ This function handles adding an item to the player's inventory. It checks if the
 
 ---
 
-**Equipment Slot Management** — [inventorySystem.js L342-L472](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L342-L472)
+**Equipment Slot Management** — [inventorySystem.js L342-L472](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L342-L472)
 ```javascript
 async function equipItem(userId, itemId, slot) {
     const inventory = getInventory(userId);
@@ -126,7 +126,7 @@ This function equips an item to a designated gear slot. It validates player leve
 
 ---
 
-**Unequipping Slots** — [inventorySystem.js L474-L517](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L474-L517)
+**Unequipping Slots** — [inventorySystem.js L474-L517](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L474-L517)
 ```javascript
 async function unequipItem(userId, slot) {
     const equipment = getEquipment(userId);
@@ -173,10 +173,10 @@ This function handles unequipping an item from a designated slot. It validates t
 ## How to modify it
 
 ### Bypass Level Restrictions
-To disable player level verification when equipping powerful gear (e.g. for testing purposes), edit `core/inventorySystem.js`.
+To disable player level verification when equipping powerful gear (e.g. for testing purposes), edit `core/rpg/inventorySystem.js`.
 
 ```javascript
-// Before (core/inventorySystem.js L366-373)
+// Before (core/rpg/inventorySystem.js L366-373)
     // 💡 LEVEL REQUIREMENT CHECK
     const reqLevel = itemToEquip.reqLevel || itemInfo.reqLevel || 1;
     if (playerLevel < reqLevel) {
@@ -188,7 +188,7 @@ To disable player level verification when equipping powerful gear (e.g. for test
 ```
 
 ```javascript
-// After (core/inventorySystem.js L366-373)
+// After (core/rpg/inventorySystem.js L366-373)
     // 💡 LEVEL REQUIREMENT CHECK (Disabled for testing)
     const reqLevel = itemToEquip.reqLevel || itemInfo.reqLevel || 1;
     if (false && playerLevel < reqLevel) { // Bypassed checks
@@ -200,10 +200,10 @@ To disable player level verification when equipping powerful gear (e.g. for test
 ```
 
 ### Expand Slot Assignments
-To customize slot verification logic or map alternative gear categories, adjust compatibility checks in `core/inventorySystem.js`.
+To customize slot verification logic or map alternative gear categories, adjust compatibility checks in `core/rpg/inventorySystem.js`.
 
 ```javascript
-// Before (core/inventorySystem.js L403-407)
+// Before (core/rpg/inventorySystem.js L403-407)
     let isCompatible = false;
     if (itemSlot === 'main_hand' || itemSlot === 'weapon') {
         isCompatible = (cleanTargetSlot === 'main_hand' || cleanTargetSlot === 'off_hand');
@@ -212,7 +212,7 @@ To customize slot verification logic or map alternative gear categories, adjust 
 ```
 
 ```javascript
-// After (core/inventorySystem.js L403-407)
+// After (core/rpg/inventorySystem.js L403-407)
     let isCompatible = false;
     if (itemSlot === 'main_hand' || itemSlot === 'weapon') {
         isCompatible = (cleanTargetSlot === 'main_hand' || cleanTargetSlot === 'off_hand');
@@ -221,8 +221,8 @@ To customize slot verification logic or map alternative gear categories, adjust 
 ```
 
 ## Common tasks
-- **Add or modify equipment slot types** — Adjust compatibility mappings between item slots and player slots in [inventorySystem.js L400-420](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L400-L420).
-- **Configure item level restrictions** — Modify how the equipment system validates player level requirements in [inventorySystem.js L366-373](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L366-L373).
-- **Modify two-handed weapon slots** — Change how unequipping of off-hand weapons behaves when two-handed weapons are equipped in [inventorySystem.js L437-444](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L437-L444).
-- **Adjust inventory space checks** — Edit the validation limits for checking if player bags are full in [inventorySystem.js L131-136](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L131-L136).
-- **Adjust unequip space limits** — Check how space is validated when moving items from gear slots back to the bag in [inventorySystem.js L496-501](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/inventorySystem.js#L496-L501).
+- **Add or modify equipment slot types** — Adjust compatibility mappings between item slots and player slots in [inventorySystem.js L400-420](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L400-L420).
+- **Configure item level restrictions** — Modify how the equipment system validates player level requirements in [inventorySystem.js L366-373](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L366-L373).
+- **Modify two-handed weapon slots** — Change how unequipping of off-hand weapons behaves when two-handed weapons are equipped in [inventorySystem.js L437-444](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L437-L444).
+- **Adjust inventory space checks** — Edit the validation limits for checking if player bags are full in [inventorySystem.js L131-136](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L131-L136).
+- **Adjust unequip space limits** — Check how space is validated when moving items from gear slots back to the bag in [inventorySystem.js L496-501](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L496-L501).

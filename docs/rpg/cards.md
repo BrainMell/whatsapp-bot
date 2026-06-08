@@ -5,7 +5,7 @@ The Card Deck and Gacha Subsystem controls collectible cards, player decks, wild
 
 ## How it works
 
-**Wild Card Spawning** — [cardSystem.js L257–334](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L257-L334)
+**Wild Card Spawning** — [cardSystem.js L257–334](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L257-L334)
 ```javascript
 async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, targetGroup = null) {
   const inst  = getInst();
@@ -90,7 +90,7 @@ This function rolls for a card to spawn in a target chat group. It rolls for a c
 
 ---
 
-**Sell Card on Market** — [cardSystem.js L1365–1391](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L1365-L1391)
+**Sell Card on Market** — [cardSystem.js L1365–1391](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1365-L1391)
 ```javascript
 async function cmdSC(senderJid, reply, args = []) {
   const p = P();
@@ -124,7 +124,7 @@ This command handler retrieves a card equipped in a player's active deck slot, c
 
 ---
 
-**Locking Cards** — [cardSystem.js L1393–1413](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L1393-L1413)
+**Locking Cards** — [cardSystem.js L1393–1413](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1393-L1413)
 ```javascript
 async function cmdLock(senderJid, reply, args = []) {
   const p = P();
@@ -153,9 +153,9 @@ This utility allows players to lock or unlock individual cards using either thei
 ## How to modify it
 
 ### Tweaking Spawn Weights
-To configure spawn frequencies for Card Tiers 1 through 4, adjust the weights array inside `core/cardSystem.js`.
+To configure spawn frequencies for Card Tiers 1 through 4, adjust the weights array inside `core/rpg/cardSystem.js`.
 
-**Before (core/cardSystem.js L48–53):**
+**Before (core/rpg/cardSystem.js L48–53):**
 ```javascript
 const SPAWN_WEIGHTS = [
   { tier: '1', w: 20 },
@@ -165,7 +165,7 @@ const SPAWN_WEIGHTS = [
 ];
 ```
 
-**After (core/cardSystem.js L48–53):**
+**After (core/rpg/cardSystem.js L48–53):**
 ```javascript
 const SPAWN_WEIGHTS = [
   { tier: '1', w: 10 }, // Decreased common tier weight
@@ -178,22 +178,22 @@ const SPAWN_WEIGHTS = [
 ### Modifying Card Claim Timers & Deck Size Limits
 To adjust how long spawned cards remain claimable or the capacity limits of main decks, modify the following variables.
 
-**Before (core/cardSystem.js L57–58):**
+**Before (core/rpg/cardSystem.js L57–58):**
 ```javascript
 const CLAIM_WINDOW_MS = 30 * 60 * 1000; 
 const MAIN_DECK_SIZE = 12;
 ```
 
-**After (core/cardSystem.js L57–58):**
+**After (core/rpg/cardSystem.js L57–58):**
 ```javascript
 const CLAIM_WINDOW_MS = 15 * 60 * 1000; // Reduced window to 15 minutes
 const MAIN_DECK_SIZE = 15; // Increased deck capacity limit
 ```
 
 ## Common tasks
-- **Modify stars representation** — Update the star symbols rendered for card tiers in [cardSystem.js L38–41](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L38-L41).
-- **Edit claim expiration duration** — Change the lifetime window before spawned cards expire in [cardSystem.js L57](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L57).
-- **Alter spawn probability tables** — Modify the relative weights for tiers 1–4 in [cardSystem.js L48–53](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L48-L53).
-- **Adjust tier copy cap values** — Customize the maximum global copies allowed per tier in [cardSystem.js L35](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L35).
-- **Modify player main deck capacity limit** — Alter the maximum slots available in standard decks in [cardSystem.js L58](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L58).
-- **Change default baseline pricing** — Configure minimum transaction values for listing cards in [cardSystem.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/cardSystem.js#L36).
+- **Modify stars representation** — Update the star symbols rendered for card tiers in [cardSystem.js L38–41](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L38-L41).
+- **Edit claim expiration duration** — Change the lifetime window before spawned cards expire in [cardSystem.js L57](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L57).
+- **Alter spawn probability tables** — Modify the relative weights for tiers 1–4 in [cardSystem.js L48–53](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L48-L53).
+- **Adjust tier copy cap values** — Customize the maximum global copies allowed per tier in [cardSystem.js L35](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L35).
+- **Modify player main deck capacity limit** — Alter the maximum slots available in standard decks in [cardSystem.js L58](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L58).
+- **Change default baseline pricing** — Configure minimum transaction values for listing cards in [cardSystem.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L36).

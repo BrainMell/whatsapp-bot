@@ -7,7 +7,7 @@ The Crafting system enables players to combine lower-tier raw materials into adv
 
 ### Snippet 1: Recipe Validation and Ingredients Deduction
 ```javascript
-// File: core/craftingSystem.js (Lines 475-498)
+// File: core/rpg/craftingSystem.js (Lines 475-498)
 async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const check = canCraft(userId, recipeId);
     if (!check.canCraft) return { success: false, message: check.reason };
@@ -40,7 +40,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
 ### Snippet 2: Item Granting and Rollback
 ```javascript
-// File: core/craftingSystem.js (Lines 500-516)
+// File: core/rpg/craftingSystem.js (Lines 500-516)
     const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
         name: recipe.name,
         stats: resultItem.stats || {},
@@ -63,7 +63,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
 ### Snippet 3: Command Router Interface
 ```javascript
-// File: core/rpgCommands.js (Lines 506-511)
+// File: core/commands/rpgCommands.js (Lines 506-511)
 async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') {
     if (!recipeId) return displayRecipes(sock, chatId, 1, categoryFilter);
     const result = await craftingSystem.performCraft(senderJid, recipeId.toLowerCase(), categoryFilter);
@@ -79,13 +79,13 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
 ## How to modify it
 
 To add a new recipe:
-1. Locate `CRAFTING_RECIPES` inside [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js).
+1. Locate `CRAFTING_RECIPES` inside [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js).
 2. Insert a new recipe configuration defining the ingredients and the result stats/slot.
-3. Make sure to define the result item object inside `ITEM_DATABASE` in [core/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/lootSystem.js).
+3. Make sure to define the result item object inside `ITEM_DATABASE` in [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js).
 
 ### Before
 ```javascript
-// File: core/craftingSystem.js (Line 14)
+// File: core/rpg/craftingSystem.js (Line 14)
 const CRAFTING_RECIPES = {
     'steel_sabre': {
         name: 'Steel Sabre', category: 'WEAPON', id: 'steel_sabre',
@@ -98,7 +98,7 @@ const CRAFTING_RECIPES = {
 
 ### After
 ```javascript
-// File: core/craftingSystem.js (Line 14)
+// File: core/rpg/craftingSystem.js (Line 14)
 const CRAFTING_RECIPES = {
     'steel_sabre': {
         name: 'Steel Sabre', category: 'WEAPON', id: 'steel_sabre',
@@ -117,6 +117,6 @@ const CRAFTING_RECIPES = {
 
 ## Common tasks
 
-* **Add a new crafting recipe**: Add a new key and configuration object into `CRAFTING_RECIPES` in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L14).
-* **Change recipe ingredients**: Edit the quantity integers inside the `ingredients` map for the target key in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L19).
-* **Update station restriction labels**: Change the hardcoded mapping strings (e.g. `Laboratory` or `Blacksmith Forge`) inside `performCraft` in [core/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/craftingSystem.js#L485).
+* **Add a new crafting recipe**: Add a new key and configuration object into `CRAFTING_RECIPES` in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L14).
+* **Change recipe ingredients**: Edit the quantity integers inside the `ingredients` map for the target key in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L19).
+* **Update station restriction labels**: Change the hardcoded mapping strings (e.g. `Laboratory` or `Blacksmith Forge`) inside `performCraft` in [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L485).

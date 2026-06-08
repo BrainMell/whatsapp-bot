@@ -6,8 +6,8 @@
 const fs = require('fs');
 const path = require('path');
 const botConfig = require('../botConfig');
-const economy = require('./economy');
-const system = require('./system'); // NEW: Database System Module
+const economy = require('../rpg/economy');
+const system = require('../utils/system'); // NEW: Database System Module
 
 // ============================================
 // WORD LIST & GAME STATE

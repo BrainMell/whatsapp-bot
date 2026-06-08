@@ -5,7 +5,7 @@ The Raids subsystem handles multiplayer boss battles within the guild adventure 
 
 ## How it works
 
-**Raid Lobby and Party Gathering** — [guildAdventure.js L4169-L4232](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L4169-L4232)
+**Raid Lobby and Party Gathering** — [guildAdventure.js L4169-L4232](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L4169-L4232)
 ```javascript
 const joinAdventure = (chatId, senderJid, senderName) => {
   const state = getGameState(chatId);
@@ -76,7 +76,7 @@ This function handles player registration in the adventure/raid lobby. It retrie
 
 ---
 
-**Boss HP and Phase Transitions** — [guildAdventure.js L3629-L3671](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L3629-L3671)
+**Boss HP and Phase Transitions** — [guildAdventure.js L3629-L3671](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L3629-L3671)
 ```javascript
 async function checkBossPhase(sock, boss, chatId) {
   if (!boss.isBoss || !boss.phases) return null;
@@ -126,7 +126,7 @@ This function is run during boss battles to evaluate phase progression. It compu
 
 ---
 
-**Boss Combat Turn Logic** — [bossMechanics.js L1144-L1179](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/bossMechanics.js#L1144-L1179)
+**Boss Combat Turn Logic** — [bossMechanics.js L1144-L1179](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/bossMechanics.js#L1144-L1179)
 ```javascript
     processTurn() {
         this.currentTurn++;
@@ -172,27 +172,27 @@ The `BossFightManager` manages the active boss encounter turn loop. It increment
 ## How to modify it
 
 ### Modify Raid Lobby Setup
-To adjust the configuration parameters of a raid—such as changing the maximum party size or adjusting the registration lobby time limit—locate the configuration blocks in `core/guildAdventure.js`.
+To adjust the configuration parameters of a raid—such as changing the maximum party size or adjusting the registration lobby time limit—locate the configuration blocks in `core/rpg/guildAdventure.js`.
 
 ```javascript
-// Before (core/guildAdventure.js L267-270)
+// Before (core/rpg/guildAdventure.js L267-270)
 const GAME_CONFIG = {
   MIN_PLAYERS: 2,
   MAX_PLAYERS: 6,
 ```
 
 ```javascript
-// After (core/guildAdventure.js L267-270)
+// After (core/rpg/guildAdventure.js L267-270)
 const GAME_CONFIG = {
   MIN_PLAYERS: 2,
   MAX_PLAYERS: 10, // Increased max players for larger raids
 ```
 
 ### Modify Enrage Scaling Formulas
-To scale or modify enrage mechanics, edit the turn loop inside the `BossFightManager` processor in `core/bossMechanics.js`.
+To scale or modify enrage mechanics, edit the turn loop inside the `BossFightManager` processor in `core/rpg/bossMechanics.js`.
 
 ```javascript
-// Before (core/bossMechanics.js L1162-1166)
+// Before (core/rpg/bossMechanics.js L1162-1166)
         if (this.boss.softEnrage && this.currentTurn >= this.boss.softEnrage.turnThreshold) {
             this.phaseManager.softEnrageStacks++;
             const effect = this.boss.softEnrage.effectPerStack;
@@ -201,7 +201,7 @@ To scale or modify enrage mechanics, edit the turn loop inside the `BossFightMan
 ```
 
 ```javascript
-// After (core/bossMechanics.js L1162-1166)
+// After (core/rpg/bossMechanics.js L1162-1166)
         if (this.boss.softEnrage && this.currentTurn >= this.boss.softEnrage.turnThreshold) {
             this.phaseManager.softEnrageStacks++;
             const effect = this.boss.softEnrage.effectPerStack;
@@ -211,8 +211,8 @@ To scale or modify enrage mechanics, edit the turn loop inside the `BossFightMan
 ```
 
 ## Common tasks
-- **Change the max raid player limit** — Adjust the registration size of the party by editing [guildAdventure.js L269](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L269).
-- **Adjust the registration lobby duration** — Control the lobby timeout countdown via `REGISTRATION_TIME` in [guildAdventure.js L270](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L270).
-- **Modify soft enrage stat growth** — Customize the stat growth of enraged bosses per turn in [bossMechanics.js L1162-1166](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/bossMechanics.js#L1162-L1166).
-- **Define unique boss phase transition thresholds** — Set how the HP percentage triggers new boss phases in [bossMechanics.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/bossMechanics.js#L36).
-- **Add custom phase effects** — Add or update boss buffs/heals upon transitioning phases in [bossMechanics.js L74-87](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/bossMechanics.js#L74-L87).
+- **Change the max raid player limit** — Adjust the registration size of the party by editing [guildAdventure.js L269](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L269).
+- **Adjust the registration lobby duration** — Control the lobby timeout countdown via `REGISTRATION_TIME` in [guildAdventure.js L270](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L270).
+- **Modify soft enrage stat growth** — Customize the stat growth of enraged bosses per turn in [bossMechanics.js L1162-1166](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/bossMechanics.js#L1162-L1166).
+- **Define unique boss phase transition thresholds** — Set how the HP percentage triggers new boss phases in [bossMechanics.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/bossMechanics.js#L36).
+- **Add custom phase effects** — Add or update boss buffs/heals upon transitioning phases in [bossMechanics.js L74-87](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/bossMechanics.js#L74-L87).

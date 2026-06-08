@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 const connectDB = require('../db');
-const User = require('./models/User');
-const Guild = require('./models/Guild');
-const Loan = require('./models/Loan');
+const User = require('../models/User');
+const Guild = require('../models/Guild');
+const Loan = require('../models/Loan');
 const readline = require('readline');
 
 const rl = readline.createInterface({

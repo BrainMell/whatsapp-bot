@@ -5,7 +5,7 @@ const classSystem = require('./classSystem');
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
-const User = require('./models/User');
+const User = require('../models/User');
 const connectDB = require('../db');
 
 // currency shi
@@ -93,7 +93,7 @@ async function saveUser(userId) {
 function resolveJidHelper(userId) {
   if (!userId) return userId;
   try {
-    const lidResolver = require('./lidResolver');
+    const lidResolver = require('../utils/lidResolver');
     return lidResolver.resolveJid(userId);
   } catch (e) {
     console.error("Error resolving JID in resolveJidHelper:", e.message);

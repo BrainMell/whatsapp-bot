@@ -2,7 +2,7 @@ const bufferManager = require('./BufferManager');
 const triggerDetector = require('./TriggerDetector');
 const topicSegmenter = require('./TopicSegmenter');
 const adaptiveProcessor = require('./AdaptiveProcessor');
-const economy = require('../../economy'); // To interact with MongoDB users
+const economy = require('../../rpg/economy'); // To interact with MongoDB users
 const Baileys = require("@whiskeysockets/baileys");
 const jidNormalizedUser = Baileys.jidNormalizedUser;
 

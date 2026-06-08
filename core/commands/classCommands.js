@@ -2,7 +2,7 @@
 // 🎭 CLASS COMMANDS
 // ============================================
 
-const classSystem = require('./classSystem');
+const classSystem = require('../rpg/classSystem');
 const botConfig = require('../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();

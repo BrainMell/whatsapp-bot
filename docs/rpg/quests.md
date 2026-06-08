@@ -7,7 +7,7 @@ The Quests & Adventures system runs the interactive PvE game loop for solo playe
 
 ### Snippet 1: Adventure Instance Initialization
 ```javascript
-// File: core/guildAdventure.js (Lines 1867-1896)
+// File: core/rpg/guildAdventure.js (Lines 1867-1896)
 async function initAdventure(sock, chatId, senderJid, difficulty = 'F', isSolo = false) {
   const sessionKey = getSessionKey(chatId, isSolo ? senderJid : null);
   
@@ -44,7 +44,7 @@ async function initAdventure(sock, chatId, senderJid, difficulty = 'F', isSolo =
 
 ### Snippet 2: Post-Victory Reward Calculations
 ```javascript
-// File: core/guildAdventure.js (Lines 3815-3838)
+// File: core/rpg/guildAdventure.js (Lines 3815-3838)
   const alivePlayers = state.players.filter((p) => !p.isDead);
   const playerCount = Math.max(1, alivePlayers.length);
   const xpPerPlayer = Math.floor(totalXP / playerCount);
@@ -73,12 +73,12 @@ async function initAdventure(sock, chatId, senderJid, difficulty = 'F', isSolo =
 ## How to modify it
 
 To add a new difficulty tier, customize the encounters length, or change the end-boss mapping:
-1. Locate `DUNGEON_RANKS` in [core/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js).
+1. Locate `DUNGEON_RANKS` in [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js).
 2. Define a new tier object (e.g. `'Z'`) and customize its values.
 
 ### Before
 ```javascript
-// File: core/guildAdventure.js (Line 31)
+// File: core/rpg/guildAdventure.js (Line 31)
 const DUNGEON_RANKS = {
   F: {
     name: "F-Rank",
@@ -95,7 +95,7 @@ const DUNGEON_RANKS = {
 
 ### After
 ```javascript
-// File: core/guildAdventure.js (Line 31)
+// File: core/rpg/guildAdventure.js (Line 31)
 const DUNGEON_RANKS = {
   F: {
     name: "F-Rank",
@@ -122,6 +122,6 @@ const DUNGEON_RANKS = {
 
 ## Common tasks
 
-* **Add a new adventure rank**: Insert a new configuration dictionary block into `DUNGEON_RANKS` in [core/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L31).
-* **Change the boss of a rank**: Edit the mapped boss ID string value (e.g., `'INFECTED_COLOSSUS'`) inside [core/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L38).
-* **Modify maximum encounter phases length for solo runs**: Adjust the `maxEncounters` assignment expression inside `initAdventure` in [core/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/guildAdventure.js#L1889).
+* **Add a new adventure rank**: Insert a new configuration dictionary block into `DUNGEON_RANKS` in [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L31).
+* **Change the boss of a rank**: Edit the mapped boss ID string value (e.g., `'INFECTED_COLOSSUS'`) inside [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L38).
+* **Modify maximum encounter phases length for solo runs**: Adjust the `maxEncounters` assignment expression inside `initAdventure` in [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L1889).

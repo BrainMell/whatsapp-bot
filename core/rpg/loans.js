@@ -5,8 +5,8 @@ const path = require('path');
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
-const LoanModel = require('./models/Loan');
-const System = require('./models/System');
+const LoanModel = require('../models/Loan');
+const System = require('../models/System');
 const connectDB = require('../db');
 
 // State

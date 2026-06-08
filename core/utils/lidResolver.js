@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const LidMapping = require('./models/LidMapping');
+const LidMapping = require('../models/LidMapping');
 let _economy = null; // lazy singleton — avoids circular dep on startup
-function getEconomy() { return _economy || (_economy = require('./economy')); }
+function getEconomy() { return _economy || (_economy = require('../rpg/economy')); }
 
 // In-memory caches for bi-directional mapping
 const lidCache = new Map();
@@ -212,7 +212,7 @@ function resolveJid(jid, authPath) {
     const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
     
     // Check if either JID is registered in database
-    const economy = require('./economy');
+    const economy = require('../rpg/economy');
     if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
         return lidJid;
     }

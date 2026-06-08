@@ -8,10 +8,10 @@ The PvP system runs 1v1 turn-based duels ("Phantom Standoff") inside WhatsApp gr
 
 ## How it works
 
-**Challenge / invite state machine** — [`pvpSystem.js` L65–99](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L65-L99)
+**Challenge / invite state machine** — [`pvpSystem.js` L65–99](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L65-L99)
 
 ```javascript
-// core/pvpSystem.js  L65–99
+// core/rpg/pvpSystem.js  L65–99
 function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
     if (activeDuels.has(chatId)) {
         return { success: false, message: '❌ A duel is already active in this chat!' };
@@ -41,10 +41,10 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
 
 ---
 
-**Damage calculation — basic attack** — [`pvpSystem.js` L405–425](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L405-L425)
+**Damage calculation — basic attack** — [`pvpSystem.js` L405–425](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L405-L425)
 
 ```javascript
-// core/pvpSystem.js  L405–425
+// core/rpg/pvpSystem.js  L405–425
 function resolveBasicAttack(attacker, defender) {
     if (Math.random() * 100 < (defender.stats.evasion || 0)) {
         return { damage: 0, isCrit: false, missed: true };
@@ -69,10 +69,10 @@ Raw damage = `atk × rand(0.85–1.15) × PVP_DAMAGE_MULT` (0.80). A crit check 
 
 ---
 
-**Win/loss resolution** — [`pvpSystem.js` L468–494](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L468-L494)
+**Win/loss resolution** — [`pvpSystem.js` L468–494](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L468-L494)
 
 ```javascript
-// core/pvpSystem.js  L468–494
+// core/rpg/pvpSystem.js  L468–494
 async function finishDuel(chatId, duel, winner, loser) {
     const ZENI    = botConfig.getCurrency().symbol;
     const xpGain  = Math.floor(80 + (loser.level * 15));
@@ -107,7 +107,7 @@ DB writes: `economy.addMoney()` updates the `users` collection `wallet` field; `
 **All balance constants live at the top of the file, L31–37:**
 
 ```javascript
-// core/pvpSystem.js  L31–37
+// core/rpg/pvpSystem.js  L31–37
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
 const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
 const PVP_DEFENSE_CAP   = 0.50;  // Max 50% damage reduction from DEF in PvP
@@ -163,14 +163,14 @@ To set `duel.mode`, add a `mode` parameter to `challengePlayer` / `acceptChallen
 
 ## Common tasks
 
-- **Raise or lower overall PvP damage** — change `PVP_DAMAGE_MULT` at [pvpSystem.js L31](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L31). Values below 1.0 dampen damage; raise toward 1.0 for harder hits.
+- **Raise or lower overall PvP damage** — change `PVP_DAMAGE_MULT` at [pvpSystem.js L31](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L31). Values below 1.0 dampen damage; raise toward 1.0 for harder hits.
 
-- **Change how long a challenge invite lasts** — edit `CHALLENGE_TIMEOUT` at [pvpSystem.js L37](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L37). Default is `120000` ms (2 min). Also controls the sweeper at L516–519.
+- **Change how long a challenge invite lasts** — edit `CHALLENGE_TIMEOUT` at [pvpSystem.js L37](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L37). Default is `120000` ms (2 min). Also controls the sweeper at L516–519.
 
-- **Change how long an active duel can go idle before auto-cancellation** — edit `PVP_TIMEOUT_MS` at [pvpSystem.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L36). Default is `300000` ms (5 min). The sweeper at L522–533 reads this constant.
+- **Change how long an active duel can go idle before auto-cancellation** — edit `PVP_TIMEOUT_MS` at [pvpSystem.js L36](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L36). Default is `300000` ms (5 min). The sweeper at L522–533 reads this constant.
 
-- **Change the stat cap ceiling for ATK/DEF/MAG/SPD/CRIT/EVA in PvP** — edit `capPvPStats` inside `acceptChallenge` at [pvpSystem.js L150–160](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L150-L160). Each stat has its own `Math.min` upper bound.
+- **Change the stat cap ceiling for ATK/DEF/MAG/SPD/CRIT/EVA in PvP** — edit `capPvPStats` inside `acceptChallenge` at [pvpSystem.js L150–160](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L150-L160). Each stat has its own `Math.min` upper bound.
 
-- **Change ability damage scaling in PvP** — edit `PVP_ABILITY_MULT` at [pvpSystem.js L34](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L34). This multiplier is applied to all ability damage branches inside `handlePvPAction` (L282–337).
+- **Change ability damage scaling in PvP** — edit `PVP_ABILITY_MULT` at [pvpSystem.js L34](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L34). This multiplier is applied to all ability damage branches inside `handlePvPAction` (L282–337).
 
-- **Change the minimum damage floor** — two places: basic attacks at [pvpSystem.js L422](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L422) (`Math.max(15, ...)`), and ability damage at [pvpSystem.js L287](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/pvpSystem.js#L287) (`Math.max(20, ...)`).
+- **Change the minimum damage floor** — two places: basic attacks at [pvpSystem.js L422](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L422) (`Math.max(15, ...)`), and ability damage at [pvpSystem.js L287](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L287) (`Math.max(20, ...)`).
