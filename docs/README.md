@@ -9,6 +9,7 @@ This directory contains technical documentation for all subsystems in the WhatsA
 * [Alchemy](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/alchemy.md) — Item brewing and consumables creation system.
 * [Fishing](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/fishing.md) — Scavenging command flow with fatigue checks and drop tables.
 * [Crafting](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/crafting.md) — Recipe lookup, ingredient validation, space checking, and item creation.
+* [Mining](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/mining.md) — Mining command flow with energy costs, locations configuration, and drop updates.
 * [Quests](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/quests.md) — Group and solo adventure loop, dungeon choice voting, and phase managers.
 * [PvP](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/pvp.md) — Challenger-target flow, duel stakes, turn resolution, and stat capping.
 * [Raids](file:///home/mellow/Desktop/Joker/whatsapp-bot/docs/rpg/raids.md) — Dungeon boss mechanics, phase transitions, and loot distribution.
