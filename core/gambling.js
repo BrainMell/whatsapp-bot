@@ -7,8 +7,8 @@ const botConfig = require('../botConfig');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 
-const GLOBAL_MAX_BET = 100000; // 100k max bet to protect economy
-const GLOBAL_MIN_BET = 100;   // 100 min bet
+const GLOBAL_MAX_BET = 500000; // 500k max bet to protect economy
+const GLOBAL_MIN_BET = 50;   // 50 min bet
 
 // Active game states
 const activeBlackjackGames = new Map();
