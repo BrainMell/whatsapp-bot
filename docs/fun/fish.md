@@ -207,13 +207,59 @@ User sends ".j fish"
 ---
 
 ## 4. How to Modify
-To adjust fishing configs:
-- **Change cast wait time (default 5s)**: Modify the millisecond duration in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5526):
+
+### How to Add a New Fish Type
+To register a new catchable fish type in the bot:
+1. **Define the Fish Item**:
+   * Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+   * Add the new fish key inside the `ITEM_DATABASE` under the `// --- FISHING ---` category:
+     ```javascript
+     'golden_salmon': { 
+         name: '🔸 Golden Salmon', 
+         description: 'A shimmering salmon with golden scales.', 
+         rarity: 'EPIC', 
+         value: 3000, 
+         type: 'MATERIAL' 
+     }
+     ```
+2. **Add to the Fishing Roll Pool**:
+   * Open [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js).
+   * Locate the `.j fish` handler block (around line 5550) and insert your new fish condition along with its probability mapping and emoji:
+     ```javascript
+     let itemKey = "common_fish";
+     let emoji = "🐟";
+     const roll = Math.random() * 100 + luck / 5;
+
+     if (roll > 98) {
+       itemKey = "mythic_fish";
+       emoji = "🦑";
+     } else if (roll > 90) { // Add new tier mapping
+       itemKey = "golden_salmon";
+       emoji = "🔸";
+     } else if (roll > 80) {
+       itemKey = "rare_fish";
+       emoji = "🐠";
+     }
+     ```
+
+---
+
+### How to Adjust Fishing System Parameters
+* **Change Cast Duration**: Edit the timeout duration inside [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js):
   ```javascript
-  }, 3000); // Reduce cast wait to 3 seconds
+  setTimeout(async () => {
+    // ... payout logic
+  }, 5000); // 5000ms (5 seconds). Change to 3000 for 3 seconds.
   ```
-- **Change max cast limit (default 25)**: Edit `MAX_FISH` variable in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5487).
-- **Change fish drops details**: Edit properties inside `core/rpg/lootSystem.js` for key IDs `common_fish`, `rare_fish`, `mythic_fish`, `infected_fish`.
+* **Modify Fatigue / Max Daily Cast Limit**: Edit the `MAX_FISH` variable inside [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js):
+  ```javascript
+  const MAX_FISH = 25; // Increase or decrease the daily cast limit check
+  ```
+* **Alter Fish Selling Price Multiplier**: Locate the high-quality (HQ) value multipliers inside [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js):
+  ```javascript
+  const isHQ = Math.random() < 0.15 + luck / 200; // 15% base chance + luck factor
+  const multiplier = isHQ ? 2 : 1; // 2x value for High Quality catch
+  ```
 
 
 

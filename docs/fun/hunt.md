@@ -148,14 +148,50 @@ User sends ".j hunt"
 ---
 
 ## 4. How to Modify
-To adjust hunting rules:
-- **Add or Modify Animals / Weights**: Edit the `animals` array in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5596-L5600):
+
+### How to Add a New Wild Animal / Hunt Loot
+To add a new target animal to the hunting encounter pool:
+1. **Define the Pelt/Drop Item**:
+   * Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+   * Register the hide or pelt in `ITEM_DATABASE` under the `// --- HUNTING ---` category:
+     ```javascript
+     'boar_tusk': { 
+         name: '🐗 Boar Tusk', 
+         description: 'A sharp tusk from a wild boar.', 
+         rarity: 'UNCOMMON', 
+         value: 500, 
+         type: 'MATERIAL' 
+     }
+     ```
+2. **Add to the Hunting Roll Table**:
+   * Open [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js).
+   * Locate the `.j hunt` handler block and find the `animals` array definition:
+     ```javascript
+     const animals = [
+       { id: "rabbit_hide", emoji: "🐇", weight: 50 },
+       { id: "deer_antler", emoji: "🦌", weight: 30 },
+       { id: "bear_claw", emoji: "🐻", weight: 15 },
+       { id: "boar_tusk", emoji: "🐗", weight: 25 }, // Add the new animal and roll weight
+     ];
+     ```
+   * **Note on Weights**: The system sums up all animal weights in this local array and generates a random float between `0` and the `totalWeight`. The animal whose weighted range matches the float is selected. Adjust these weights to control creature spawn frequency.
+
+---
+
+### How to Adjust Hunting System Parameters
+* **Change Mutation / Infection Rate**: Locate the check in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5612):
   ```javascript
-  // Change weights or add a Wolf item
-  { id: "wolf_pelt", emoji: "🐺", weight: 20 }
+  const isInfected = Math.random() < 0.05; // 5% chance. Change to 0.10 for 10%.
   ```
-- **Change Infection Rate**: Adjust the percentage check in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5612) (default 0.05 / 5%).
-- **Add Cooldowns (fatigue)**: You can copy the fishing fatigue checking loop and apply it to hunting to prevent players from farming hides indefinitely.
+  This alters the probability that a captured animal is prefixed as corrupted/infected (affecting XP and value multipliers).
+* **Add a Fatigue / Cooldown System**: To prevent infinite hunting spam, you can add a user tracking check in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js) inside the `hunt` command block:
+  ```javascript
+  const freshUser = economy.getUser(senderJid);
+  freshUser.huntCount = (freshUser.huntCount || 0) + 1;
+  if (freshUser.huntCount > 20) {
+      return sock.sendMessage(chatId, { text: "❌ You are too tired to hunt! Rest a while." });
+  }
+  ```
 
 
 

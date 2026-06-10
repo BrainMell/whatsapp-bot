@@ -213,9 +213,53 @@ User command
 ---
 
 ## 4. How to Modify
-- **Adjust Registration Wait Time**: Modify the `GAME_CONFIG.REGISTRATION_TIME` variable inside [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L20).
-- **Edit Dungeon Rank Difficulties/Encounters**: Modify the `DUNGEON_RANKS` object configuration parameters in `core/rpg/guildAdventure.js`.
-- **Change Class Trial Settings**: Edit `TRIAL` parameters inside `initAdventure()`.
+
+### How to Add a New Dungeon Rank Difficulty
+To configure a new dungeon level difficulty rank:
+1. **Define the Rank Configuration**:
+   * Open [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js).
+   * Find the `DUNGEON_RANKS` definition and append your rank:
+     ```javascript
+     S: {
+         name: 'S-Rank Abyss',
+         reqLevel: 45,
+         energyCost: 50,
+         baseGold: 5000,
+         baseXp: 8000,
+         stages: 6, // Total combat encounters before boss
+         boss: 'ABYSSAL_KRAKEN', // Boss ID
+         mobs: ['shadow_fiend', 'void_cultist', 'lich_reaper'] // Pool of random mobs for non-boss stages
+     }
+     ```
+2. **Configure Boss Statistics**:
+   * Locate the boss mechanics mapping inside [core/rpg/bossMechanics.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/bossMechanics.js) or `guildAdventure.js`.
+   * Add the boss characteristics, HP thresholds, special skills, and item drop rates in the `BOSS_TEMPLATES` mapping.
+
+---
+
+### How to Alter Class Trial Parameters
+To adjust evolution trial bosses:
+* Open [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js).
+* Locate the `TRIAL` configurations inside `initAdventure()`.
+* Change the default trial boss names or scale boss attributes:
+  ```javascript
+  const trialBosses = {
+      MUTATION_PRIME: { hp: 5000, atk: 45, def: 20 },
+      INFECTED_COLOSSUS: { hp: 8000, atk: 35, def: 40 },
+  };
+  ```
+
+---
+
+### How to Change Lobby Wait Intervals
+To change the time allowed for guild members to vote or register to join an active quest adventure:
+* Edit `GAME_CONFIG` constants at the top of [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L20):
+  ```javascript
+  const GAME_CONFIG = {
+      REGISTRATION_TIME: 60 * 1000, // 60 seconds gathering window. Reduce to 30 * 1000 for 30s.
+      VOTE_TIMEOUT: 45 * 1000 // 45 seconds to vote.
+  };
+  ```
 
 
 ---

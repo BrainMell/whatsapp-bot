@@ -189,10 +189,50 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 ---
 
 ## 4. How to Modify
-To adjust crafting rules:
-- **Add Crafting Recipes**: Edit `CRAFTING_RECIPES` object definition in `core/rpg/craftingSystem.js`.
-- **Change Ingredient Salvage Yields**: Change the percentage in [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js#L547).
-- **Dismantling returns (default 40% of craft ingredients)**: Edit values inside the `dismantleItem` function.
+
+### How to Add a New Crafting Recipe (Weapons & Armor)
+To add a new piece of forgeable gear or item recipe to the bot:
+1. **Define the Crafting Recipe**:
+   * Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js).
+   * Locate the `CRAFTING_RECIPES` object and append a new gear recipe:
+     ```javascript
+     'titanium_shield': {
+         name: 'Titanium Shield', 
+         category: 'ARMOR', // Can be WEAPON, ARMOR, ACCESSORY, etc.
+         id: 'titanium_shield',
+         desc: 'A heavy shield that blocks the mightiest blows. (+30 DEF, +50 HP)',
+         ingredients: { 'refined_steel': 5, 'iron_shard': 15, 'golem_core': 1 },
+         result: { 
+             id: 'titanium_shield', 
+             stats: { def: 30, hp: 50 }, 
+             slot: 'off_hand' // Equip slot (e.g. main_hand, off_hand, armor, ring, helmet)
+         }
+     }
+     ```
+2. **Register the Gear in the Database**:
+   * Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+   * Register the item key inside `ITEM_DATABASE`:
+     ```javascript
+     'titanium_shield': { 
+         name: '🛡️ Titanium Shield', 
+         description: 'A heavy titanium shield. (+30 DEF, +50 HP)', 
+         rarity: 'RARE', 
+         value: 8000, 
+         type: 'EQUIPMENT', 
+         stats: { def: 30, hp: 50 }, 
+         slot: 'off_hand', 
+         reqLevel: 10 
+     }
+     ```
+
+---
+
+### How to Adjust System Crafting Multipliers
+* **Adjust Dismantling Material Returns**: Locate the material recovery factor inside the `dismantleItem` function in [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js#L547):
+  ```javascript
+  const returnChance = 0.40; // 40% of materials returned. Increase to 0.60 for 60% salvage recovery.
+  ```
+* **Alter Enhancement Success Probability**: Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js) and locate the gear enhancement code block to adjust success rates or stone requirements at higher tiers.
 
 
 

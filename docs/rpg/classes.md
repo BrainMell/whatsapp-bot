@@ -194,9 +194,47 @@ function getLineage(classId) {
 ---
 
 ## 4. How to Modify
-- **Add Classes**: Modify definitions in `STARTER_CLASSES` or `EVOLVED_CLASSES` arrays inside [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js).
-- **Edit Evolution Nodes**: Alter the `evolves_into` array properties in class files.
-- **Modify Tree Formatting**: Customize characters like `└─ ` inside [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js#L109).
+
+### How to Add a New Character Class
+To add a brand new playable starter class or advanced evolution:
+1. **Define the Class Object**:
+   * Open [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js).
+   * **If a Starter Class**: Add your class entry to the `STARTER_CLASSES` object:
+     ```javascript
+     ARCHER: {
+         id: 'ARCHER',
+         name: 'Archer',
+         icon: '🏹',
+         desc: 'A marksman who strikes from afar with precision.',
+         tier: 'STARTER',
+         role: 'DPS',
+         stats: { hp: 95, atk: 11, def: 6, mag: 2, spd: 13, luck: 10, crit: 15 },
+         evolves_into: ['HUNTER', 'SNIPER'] // Evolved classes ids
+     }
+     ```
+   * **If an Evolved/Ascended Class**: Add your class entry to the `EVOLVED_CLASSES` object:
+     ```javascript
+     HUNTER: {
+         id: 'HUNTER',
+         name: 'Hunter',
+         icon: '🐾',
+         desc: 'A master of traps and companion beasts.',
+         tier: 'EVOLVED',
+         evolvedFrom: 'ARCHER',
+         role: 'DPS',
+         stats: { hp: 200, atk: 22, def: 12, mag: 5, spd: 22, luck: 15, crit: 20 },
+         requirement: { level: 15, questsCompleted: 20, trialBoss: 'MUTATION_PRIME' },
+         evolutionCost: 5000,
+         passive: { name: 'Beast Mastery', desc: 'Increases all hunting yields by 20%.' },
+         evolves_into: ['BEASTMASTER']
+     }
+     ```
+
+---
+
+### How to Configure Class Evolution Trees and Commands
+* **Modify Evolution Requirements**: Edit the `requirement` parameters in `EVOLVED_CLASSES` (e.g., `level`, `questsCompleted`, `victories`, `gold`, `trialBoss`). The evolution checks are automatically validated in [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js).
+* **Customize evolution branch symbols**: To change the formatting characters used in the tree graphics (`└─`, `├─`), modify the formatting loops in `printClassTree()` inside [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js#L109).
 
 
 
