@@ -8,6 +8,14 @@ const loans = require('./rpg/loans');
 const ChatMessage = require("./models/ChatMessage");
 const ErrorLog = require("./models/ErrorLog");
 const Metric = require("./models/Metric");
+// Lazy loader — avoids circular dep with index.js
+let _recordUpsert = null;
+function recordUpsert(botId) {
+    try {
+        if (!_recordUpsert) _recordUpsert = require('../index').recordUpsert;
+        if (typeof _recordUpsert === 'function') _recordUpsert(botId);
+    } catch (e) { /* not running under index.js (e.g. local dev) — safe to skip */ }
+}
 const makeWASocket = require("@whiskeysockets/baileys").default;
 const {
   useMultiFileAuthState,
@@ -4087,6 +4095,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 console.log(`⏳ [${botConfig.getBotId()}] Skipped stale/backlog message (age: ${Math.floor((Date.now() - msgTime) / 1000)}s) - Check if server/local clock is out of sync!`);
                 return;
               }
+
+              // ✅ Real message — reset zombie silence timer
+              recordUpsert(BOT_ID);
 
               await botConfig.storage.run(configInstance, async () => {
                 try {

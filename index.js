@@ -7,13 +7,14 @@ require("dotenv").config();
 const maskLogs = (originalFn) => {
     return function(...args) {
         const str = args[0];
+        // NOTE: Only mask truly noisy library internals that spam the log with large buffers.
+        // 'Connection Closed', '440', and similar disconnect signals are LEFT UNMASKED
+        // so we can diagnose the "connected but silent" outage pattern.
         if (typeof str === 'string' && (
             str.includes('Removing old closed session') || 
             str.includes('SessionEntry') || 
             str.includes('Closing open session') ||
-            str.includes('Ratchet') ||
-            str.includes('Connection Closed') ||
-            str.includes('440')
+            str.includes('Ratchet')
         )) {
             return;
         }
@@ -407,6 +408,38 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });
 
+// ============================================================
+// 💓 EVENT LOOP HEARTBEAT
+// Prints every 30s. If this stops printing during a freeze,
+// the Node.js event loop itself is blocked (not a socket issue).
+// If this keeps printing but messages stop → zombie socket.
+// ============================================================
+setInterval(() => {
+    const mem = process.memoryUsage();
+    const rssMb = (mem.rss / 1024 / 1024).toFixed(1);
+    const heapMb = (mem.heapUsed / 1024 / 1024).toFixed(1);
+    console.log(`💓 [Heartbeat] ALIVE | uptime=${Math.floor(process.uptime())}s | rss=${rssMb}MB | heap=${heapMb}MB`);
+}, 30000);
+
+// ============================================================
+// 🧟 ZOMBIE SOCKET DETECTOR
+// Tracks the last time messages.upsert fired across all bots.
+// If the bot is 'connected' but silent for 4+ minutes in an
+// active chat window, this triggers a process.exit so Render
+// restarts cleanly instead of staying in zombie state.
+// ============================================================
+const lastUpsertTime = new Map(); // botId -> timestamp
+const ZOMBIE_SILENCE_THRESHOLD = 4 * 60 * 1000; // 4 minutes
+const ZOMBIE_CHECK_INTERVAL = 60 * 1000; // check every minute
+
+// Engine calls this whenever a real (non-stale) message is processed
+function recordUpsert(botId) {
+    lastUpsertTime.set(botId, Date.now());
+}
+
+module.exports = module.exports || {};
+module.exports.recordUpsert = recordUpsert;
+
 // Self-healing connection guardian (specifically for Render Free Tier stability)
 const BOOT_GRACE_PERIOD = 5 * 60 * 1000; // 5 minutes grace period on startup
 const DISCONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes maximum disconnected state allowed
@@ -438,10 +471,24 @@ setInterval(() => {
         } else {
             disconnectedTimestamps.delete(botId);
         }
+
+        // ── Zombie socket check ──────────────────────────────
+        // Guardian only catches 'disconnected' status bots. But
+        // zombie sockets stay in 'connected' status while dead.
+        // This catches that case: connected + silent = zombie.
+        if (health.status === 'connected' && lastUpsertTime.has(botId)) {
+            const silence = Date.now() - lastUpsertTime.get(botId);
+            if (silence > ZOMBIE_SILENCE_THRESHOLD) {
+                console.error(`🧟 [Guardian] Zombie socket detected on '${health.name}'! Connected but silent for ${Math.floor(silence/1000)}s. Triggering restart...`);
+                needsReboot = true;
+                stuckBotName = health.name;
+                break;
+            }
+        }
     }
 
     if (needsReboot) {
-        console.error(`🚨 [Guardian] Bot instance '${stuckBotName}' has been offline for over 5 minutes. Triggering container restart...`);
+        console.error(`🚨 [Guardian] Bot instance '${stuckBotName}' is unresponsive. Triggering container restart...`);
         process.exit(1);
     }
 }, 30000);
