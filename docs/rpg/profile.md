@@ -1,190 +1,158 @@
 # RPG Subsystem: Profile Cards
 
-## What it is
+## 1. Description
 The Profile Cards Subsystem manages compilation, rendering, and delivery of character sheets as graphical profile cards. When players execute profile commands, the system polls character info, stats, rank progression, and active gear assets from MongoDB collections (`users`, `inventories`). It compiles this data into a JSON payload and dispatches it via an HTTP POST request to an external Go image rendering microservice. The microservice processes the payload to construct a custom composite image (including the player's WhatsApp profile picture), returning the binary card stream, which is sent back to the chat using Baileys WebSockets.
 
-## How it works
+---
 
-**JSON Card Data Compilation** — [profileHelper.js L8–77](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L8-L77)
+## 2. Hierarchical Execution Tree
+```text
+User sends ".j profile"
+└── core/engine.js
+    └── messages.upsert handler (L4066)
+        └── Command detection (L4558)
+        └── primaryCmd check: if (primaryCmd === "profile") (L4617)
+            └── core/commands/rpgCommands.js
+                └── displayProfile(sock, chatId, senderJid, senderName) (L40)
+                    └── sock.profilePictureUrl(senderJid, 'image')
+                    └── profileHelper.buildCardData(senderJid, senderName, pfpUrl)
+                    └── goService.generateProfileCard(cardData)
+                    └── sock.sendMessage(chatId, { image: cardBuffer, ... })
+```
+
+---
+
+## 3. Step-by-Step Code Execution Flow
+
+### Step 1: Entry Point Trigger
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4066-4074
+* **Called From**: Baileys socket event emitter
+* **Defined In**: `core/engine.js`
+* **Inputs**: `{ messages, type }` payload from WhatsApp
+* **Outputs**: None (passes control to inner map)
+
 ```javascript
-async function buildCardData(userId, userName, pfpUrl = "") {
-    // Initialize class if needed
-    economy.initializeClass(userId);
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  if (type !== "notify" && type !== "append") return;
+  if (isRekeying) return;
 
-    const sheet = progression.getCharacterSheet(userId);
-    const economyUser = economy.getUser(userId);
-    if (!sheet || !economyUser) {
-        return null;
-    }
+  await Promise.all(
+    messages.map(async (m) => {
+      if (!m.message) return;
+```
 
-    const classData = classSystem.getClassById(sheet.class);
-    const stats = progression.getBaseStats(userId, sheet.class);
-    const equipment = inventorySystem.getEquipment(userId);
-    const equipStats = inventorySystem.getEquipmentStats(userId);
+#### Explanation
+- `sock.ev.on("messages.upsert", ...)`: Registers a listener that fires whenever the bot receives new message notifications.
+- `if (type !== "notify" && type !== "append") return`: Drops status updates or metadata modifications to only process actual incoming messages.
+- `if (isRekeying) return`: Prevents processing when the session encryption keys are refreshing.
+- `messages.map(...)`: Iterates over the batch of received messages to process them in parallel.
 
-    // Update rank
-    economy.updateAdventurerRank(userId);
-    const rank = economyUser.adventurerRank || 'F';
+---
 
-    return {
-        nickname: economyUser.nickname || userName,
-        whatsappName: economyUser.profile?.whatsappName || userName,
-        level: sheet.level || 1,
-        xp: sheet.xpProgress || 0,
-        xpNeeded: sheet.xpForThisLevel || 100,
-        gp: sheet.gp || 0,
-        rank: rank,
-        class: classData?.name || "Adventurer",
-        classIcon: classData?.icon || "🛡️",
-        guildName: require('./guilds').getUserGuild(userId) || "",
-        wallet: economyUser.wallet || 0,
-        bank: economyUser.bank || 0,
-        zeniSymbol: botConfig.getCurrency().symbol,
-        questsWon: economyUser.questsWon || 0,
-        gamesWon: economyUser.stats?.gamesWon || 0,
-        messageCount: economyUser.profile?.stats?.messageCount || 0,
-        pfpUrl: pfpUrl || "",
-        title: economyUser.title || "",
-        statPoints: sheet.statPoints || 0,
+### Step 2: Command Matching
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4558-4564
+* **Called From**: Inner message processor loop
+* **Inputs**: Raw message body string `lowerTxt`
+* **Outputs**: `primaryCmd` and `cmdArgs` array
 
-        // RPG Stats
-        hp: stats?.hp || 100,
-        atk: stats?.atk || 10,
-        def: stats?.def || 10,
-        mag: stats?.mag || 10,
-        spd: stats?.spd || 10,
-        luck: stats?.luck || 10,
-        crit: stats?.crit || 0,
-        evasion: stats?.evasion || 0,
+```javascript
+if (lowerTxt.startsWith(currentPrefix)) {
+  const cmdBody = lowerTxt
+    .substring(currentPrefix.length)
+    .trim();
+  const cmdArgs = cmdBody.split(" ");
+  const primaryCmd = cmdArgs[0];
+```
 
-        // Gear Stats
-        equipHp: equipStats?.hp || 0,
-        equipAtk: equipStats?.atk || 0,
-        equipDef: equipStats?.def || 0,
-        equipMag: equipStats?.mag || 0,
-        equipSpd: equipStats?.spd || 0,
-        equipLuck: equipStats?.luck || 0,
+#### Explanation
+- `lowerTxt.startsWith(currentPrefix)`: Checks if the incoming text begins with the configured bot prefix (e.g. `.j`).
+- `lowerTxt.substring(...)`: Strips the prefix from the message.
+- `cmdBody.split(" ")`: Splits the command body by spaces to separate the command name from its arguments.
+- `cmdArgs[0]`: Assigns the first element as `primaryCmd` (e.g. `"profile"`).
 
-        // Gear Item Names
-        gearMainHand: equipment?.main_hand ? (lootSystem.getItemInfo(equipment.main_hand.id)?.name || "None") : "None",
-        gearOffHand: equipment?.off_hand ? (lootSystem.getItemInfo(equipment.off_hand.id)?.name || "None") : "None",
-        gearArmor: equipment?.armor ? (lootSystem.getItemInfo(equipment.armor.id)?.name || "None") : "None",
-        gearHelmet: equipment?.helmet ? (lootSystem.getItemInfo(equipment.helmet.id)?.name || "None") : "None",
-        gearBoots: equipment?.boots ? (lootSystem.getItemInfo(equipment.boots.id)?.name || "None") : "None",
-        gearRing: equipment?.ring ? (lootSystem.getItemInfo(equipment.ring.id)?.name || "None") : "None",
-        gearAmulet: equipment?.amulet ? (lootSystem.getItemInfo(equipment.amulet.id)?.name || "None") : "None",
-        gearCloak: equipment?.cloak ? (lootSystem.getItemInfo(equipment.cloak.id)?.name || "None") : "None",
-        gearGloves: equipment?.gloves ? (lootSystem.getItemInfo(equipment.gloves.id)?.name || "None") : "None"
-    };
+---
+
+### Step 3: Command Routing for Profile
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4617-4623
+* **Called From**: Command routing block in `engine.js`
+* **Imported From**: `const rpgCommands = require("./commands/rpgCommands");`
+* **Inputs**: `sock`, `chatId`, `senderJid`, `senderName`
+* **Outputs**: Promise resolved by `rpgCommands.displayProfile`
+
+```javascript
+if (
+  primaryCmd === "profile" ||
+  primaryCmd === "me" ||
+  primaryCmd === "whois"
+) {
+  await rpgCommands.displayProfile(sock, chatId, senderJid, senderName);
+  return;
 }
 ```
-This helper method gathers player details, attributes, rank, wallet contents, stat allocation milestones, and active inventory items. It formats these metrics into a structured configuration object ready for rendering.
+
+#### Explanation
+- `if (primaryCmd === "profile" || ...)`: Matches the profile trigger keywords.
+- `rpgCommands.displayProfile(...)`: Routes control to the RPG commands module with active session parameters.
 
 ---
 
-**HTTP Image Rendering Call** — [goImageService.js L440–453](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L440-L453)
+### Step 4: Card Generation Orchestration
+* **File Path**: `core/commands/rpgCommands.js`
+* **Line Numbers**: Around 40-72
+* **Called From**: `core/engine.js`
+* **Imported From**: `core/utils/profileHelper.js`, `core/utils/goImageService.js`
+* **Inputs**: `(sock, chatId, senderJid, senderName)`
+* **Outputs**: Fetches properties, calls rendering pipeline, and sends image to chat
+
 ```javascript
-  async generateProfileCard(data) {
-    try {
-      const response = await this.client.post("/api/cards/profile", data, {
-        responseType: "arraybuffer",
-        timeout: 45000,
-      });
-      const buf = Buffer.from(response.data);
-      if (buf.length < 100) return null;
-      return buf;
-      return buf;
-    } catch (error) {
-      console.error("GoService Profile Card Error:", error.message);
-      return null;
-    }
+async function displayProfile(sock, chatId, senderJid, senderName) {
+  let pfpUrl;
+  try { 
+    pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
+  } catch (e) { 
+    pfpUrl = null;
   }
+
+  try {
+    const cardData = await profileHelper.buildCardData(senderJid, senderName, pfpUrl);
+    if (cardData) {
+      const cardBuffer = await goService.generateProfileCard(cardData);
+      if (cardBuffer) {
+        return await sock.sendMessage(chatId, { 
+          image: cardBuffer,
+          caption: `👤 *Character:* ${cardData.nickname}`,
+          mentions: [senderJid]
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to generate profile card:", err.message);
+  }
+}
 ```
-This service method handles the HTTP POST request to compile JSON card metrics onto a card asset. It transmits the payload to `/api/cards/profile`, specifying binary response formats, and returns the compiled image buffer.
+
+#### Explanation
+- `sock.profilePictureUrl(...)`: Leverages Baileys client connection to fetch the user's public avatar URL from the WhatsApp CDN.
+- `profileHelper.buildCardData(...)`: Compiles user database properties, levels, gear, stats, and Zeni into a flat JSON payload.
+- `goService.generateProfileCard(...)`: Transmits the payload via HTTP POST to the Go image microservice, which returns the binary buffer representation of the card.
+- `sock.sendMessage(...)`: Sends the resulting profile card image back to WhatsApp.
 
 ---
 
-**Command Handler Execution** — [rpgCommands.js L40–72](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L40-L72)
+## 4. How to Modify
+To adjust profile image generation timeouts or base paths, modify `goImageService.js`:
+
 ```javascript
-    // Handle PFP
-    let pfpUrl;
-    try { 
-        pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
-    } catch (e) { 
-        pfpUrl = null;
-    }
+// BEFORE:
+const response = await this.client.post("/api/cards/profile", data, {
+  timeout: 45000,
+});
 
-    // Try Go Image Service first
-    try {
-        const cardData = await profileHelper.buildCardData(senderJid, senderName, pfpUrl);
-        if (cardData) {
-            const cardBuffer = await goService.generateProfileCard(cardData);
-            if (cardBuffer) {
-                let captionMsg = `👤 *Character:* ${cardData.nickname}\n`;
-                captionMsg += `🛡️ *Class:* ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n`;
-                captionMsg += `⭐ *Level:* ${sheet?.level || 1}  |  🏆 *Rank:* ${cardData.rank}\n`;
-                captionMsg += `💰 *Zeni:* ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
-                captionMsg += `*STATS:*\n`;
-                captionMsg += `❤️ HP: ${stats?.hp || 100}${equipStats?.hp ? `+${equipStats.hp}` : ''}  |  ⚔️ ATK: ${stats?.atk || 10}${equipStats?.atk ? `+${equipStats.atk}` : ''}\n`;
-                captionMsg += `🛡️ DEF: ${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''}  |  🔮 MAG: ${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
-                captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
-                captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
-                if (cardData.statPoints > 0) {
-                    captionMsg += `\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.`;
-                }
-                await sock.sendMessage(chatId, { 
-                    image: cardBuffer,
-                    caption: captionMsg,
-                    mentions: [senderJid]
-                });
-                return;
-            }
-        }
-    } catch (err) {
-        console.error("Failed to generate Go character card:", err.message);
-    }
+// AFTER:
+const response = await this.client.post("/api/cards/profile", data, {
+  timeout: 60000, // Extends rendering wait to 60 seconds
+});
 ```
-This is the core profile execution block inside the main RPG command routers. It requests the user's current WhatsApp avatar, builds the JSON packet, routes it to the rendering pipeline, builds a fallback text summary if the render fails, and delivers the message.
-
-## How to modify it
-
-### Adding Default Value Fallbacks
-To insert fallback values or defaults for player cards (e.g. default titles or empty avatar fallbacks), edit `core/utils/profileHelper.js`.
-
-**Before (core/utils/profileHelper.js L44–45):**
-```javascript
-        pfpUrl: pfpUrl || "",
-        title: economyUser.title || "",
-```
-
-**After (core/utils/profileHelper.js L44–45):**
-```javascript
-        pfpUrl: pfpUrl || "https://example.com/default_avatar.png", // Added avatar fallback URL
-        title: economyUser.title || "Novice Adventurer", // Set default title fallback
-```
-
-### Adjusting Image Rendering Timeouts
-To adjust the timeout limits for profile card HTTP rendering request tasks, modify the configuration properties in `core/utils/goImageService.js`.
-
-**Before (core/utils/goImageService.js L442–445):**
-```javascript
-      const response = await this.client.post("/api/cards/profile", data, {
-        responseType: "arraybuffer",
-        timeout: 45000,
-      });
-```
-
-**After (core/utils/goImageService.js L442–445):**
-```javascript
-      const response = await this.client.post("/api/cards/profile", data, {
-        responseType: "arraybuffer",
-        timeout: 60000, // Raised request limit to 60 seconds
-      });
-```
-
-## Common tasks
-- **Modify Go service profile endpoint** — Edit target path routing configuration parameters in [goImageService.js L442](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L442).
-- **Edit external HTTP service request timeout** — Adjust connection and rendering timeout parameters in [goImageService.js L444](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js#L444).
-- **Update avatar fallback settings** — Set the default picture link if none is found in the user profile in [profileHelper.js L44](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L44).
-- **Adjust gear database lookup mapping** — Edit inventory weapon/armor mapping queries in [profileHelper.js L67–75](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L67-L75).
-- **Modify structural base stats payload** — Edit raw player metrics mappings in [profileHelper.js L49–56](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/profileHelper.js#L49-L56).

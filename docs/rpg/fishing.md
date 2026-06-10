@@ -1,113 +1,163 @@
 # RPG Subsystem: Fishing
 
-## What it is
+## 1. Description
 The Fishing system handles coastal scavenging, enabling players to reel in materials (such as fish and shards) to sell or use in crafting. It solves the problem of downtime engagement by providing a risk-free gathering minigame governed by time limits (cooldown fatigue) and random number distributions. It integrates directly into the wilderness command handler.
 
-## How it works
+---
 
-### Snippet 1: Fatigue and Cooldown Enforcement
+## 2. Hierarchical Execution Tree
+```text
+User sends ".j fish"
+└── core/engine.js
+    └── messages.upsert handler (L4066)
+        └── Command detection (L4558)
+        └── primaryCmd check: if (lowerTxt === ".j fish") (L5468)
+            └── Cooldown / fatigue validation checks (L5490)
+            └── Start asynchronous cast delay (5 seconds) (L5521)
+                └── Roll drops with player luck (L5540)
+                └── inventorySystem.addItem(senderJid, itemKey, 1) (L5558)
+                └── economy.saveUser(senderJid)
+                └── sock.sendMessage(chatId, { text: ... })
+```
+
+---
+
+## 3. Step-by-Step Code Execution Flow
+
+### Step 1: Entry Point Trigger
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4066-4074
+* **Called From**: Baileys socket event emitter
+* **Defined In**: `core/engine.js`
+* **Inputs**: `{ messages, type }` payload from WhatsApp
+* **Outputs**: None (passes control to inner map)
+
 ```javascript
-// File: core/engine.js (Lines 5508-5527)
-if (user.fishCount >= MAX_FISH) {
-  const timePassed = now - (user.lastFishReset || 0);
-  if (timePassed < COOLDOWN_MS) {
-    const remainingMs = COOLDOWN_MS - timePassed;
-    const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-    const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-    busyUsers.delete(senderJid);
-    return await sock.sendMessage(
-      chatId,
-      {
-        text: BOT_MARKER + `🪣 *FISHING FATIGUE*\n\nYou've fished 25 times! Your arms are tired. Please rest for *${hours}h ${minutes}m* before casting again.`,
-      },
-      { quoted: m },
-    );
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  if (type !== "notify" && type !== "append") return;
+  if (isRekeying) return;
+
+  await Promise.all(
+    messages.map(async (m) => {
+      if (!m.message) return;
+```
+
+#### Explanation
+- `sock.ev.on("messages.upsert", ...)`: Registers a listener that fires whenever the bot receives new message notifications.
+- `if (type !== "notify" && type !== "append") return`: Drops status updates or metadata modifications to only process actual incoming messages.
+- `if (isRekeying) return`: Prevents processing when the session encryption keys are refreshing.
+- `messages.map(...)`: Iterates over the batch of received messages to process them in parallel.
+
+---
+
+### Step 2: Command Matching and Fatigue Check
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 5468-5506
+* **Called From**: Message processing block in `engine.js`
+* **Inputs**: Raw message body string `lowerTxt`, user profile from database
+* **Outputs**: Response warning message or triggers async cast
+
+```javascript
+if (
+  lowerTxt === `${botConfig.getPrefix().toLowerCase()} fish` ||
+  lowerTxt === "fish"
+) {
+  const user = economy.getUser(senderJid);
+  const MAX_FISH = 25;
+  const COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour
+
+  if (user.fishCount >= MAX_FISH) {
+    const timePassed = Date.now() - (user.lastFishReset || 0);
+    if (timePassed < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - timePassed;
+      const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+      const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+      return await reply(`🪣 *FISHING FATIGUE*\n\nYou've fished 25 times! Rest for *${hours}h ${minutes}m* before casting again.`);
+    } else {
+      user.fishCount = 0;
+      user.lastFishReset = Date.now();
+    }
   }
 ```
-* **Explanation**: Located in the core engine commands block, this code enforces a maximum of 25 fishing rounds. If a player exceeds this within a 1-hour timeframe (`COOLDOWN_MS`), their access is locked and a descriptive timer message is returned.
-* **DB Calls**: Reads `fishCount` and `lastFishReset` fields from the `users` collection.
-* **External HTTP Calls**: None.
-* **Baileys API Used**: `sock.sendMessage` to return the warning message.
 
-### Snippet 2: Catch Calculations & Grant
+#### Explanation
+- `lowerTxt === ...`: Checks if the text matches the fishing command or its raw keyword.
+- `economy.getUser(...)`: Resolves the user profile representation to check current fatigue level (`fishCount`) and cooldown tracking.
+- `if (user.fishCount >= MAX_FISH)`: Enforces the soft cap on consecutive fishing casts. If reached, calculates elapsed time against `COOLDOWN_MS` (1 hour).
+- If the cooldown has not passed, displays the remaining duration in a formatted error reply. Otherwise, resets `fishCount` and updates the reset timestamp to enable a new cycle.
+
+---
+
+### Step 3: Delayed Casting Resolution
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 5519-5544
+* **Called From**: Fishing command block after validation
+* **Inputs**: Socket connections and user variables
+* **Outputs**: Timeout execution
+
 ```javascript
-// File: core/engine.js (Lines 5546-5575)
-const freshUser = economy.getUser(senderJid);
-freshUser.fishCount = (freshUser.fishCount || 0) + 1;
-if (freshUser.fishCount === 1) freshUser.lastFishReset = Date.now();
-economy.saveUser(senderJid);
+await reply("🎣 You cast your line into the water... Wait 5 seconds.");
 
-const luck = freshUser.stats?.luck || 5;
-let itemKey = "common_fish";
-let emoji = "🐟";
-const roll = Math.random() * 100 + luck / 5;
+setTimeout(async () => {
+  const freshUser = economy.getUser(senderJid);
+  freshUser.fishCount = (freshUser.fishCount || 0) + 1;
+  if (freshUser.fishCount === 1) freshUser.lastFishReset = Date.now();
 
-if (roll > 98) {
-  itemKey = "mythic_fish";
-  emoji = "🦑";
-} else if (roll > 85) {
-  itemKey = "rare_fish";
-  emoji = "🐠";
-}
-if (Math.random() < 0.05) {
-  itemKey = "infected_fish";
-  emoji = "☣️";
-}
-const item = lootSystem.getItemInfo(itemKey);
-await inventorySystem.addItem(senderJid, itemKey, 1);
-```
-* **Explanation**: Executes after a 5-second asynchronous delay. It checks the player's Luck attribute to scale drop probabilities, registers the catch, and adds the corresponding item to their inventory.
-* **DB Calls**: Reads and updates `fishCount`, `lastFishReset`, and `inventory` inside the `users` collection.
-* **External HTTP Calls**: None.
-* **Baileys API Used**: None.
-
-## How to modify it
-
-All fishing parameters (cooldowns, maximum limits, drop rates, and catch logs) are hardcoded inside [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js).
-
-### 1. Adjusting Limits & Cooldowns
-Modify the variables at lines 5503-5505:
-```javascript
-const COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour (Change this integer)
-const MAX_FISH = 25; // Maximum attempts per cycle (Change this integer)
+  const luck = freshUser.stats?.luck || 5;
+  let itemKey = "common_fish";
+  let emoji = "🐟";
+  const roll = Math.random() * 100 + luck / 5;
 ```
 
-### 2. Adding a New Fish Type
-To add a new fish tier (e.g. `legendary_fish`), first define it in `ITEM_DATABASE` inside [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js), and then modify the roll distribution logic in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js).
+#### Explanation
+- `setTimeout(..., 5000)`: Simulates the fishing delay by holding resolution for 5000ms.
+- `freshUser.fishCount++`: Updates the user's fatigue counter.
+- `Math.random() * 100 + luck / 5`: Evaluates the gacha gacha drop roll. User luck is factored in, raising the probability of hitting a high index range.
 
-#### Before
+---
+
+### Step 4: Drop Roll and Delivery
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 5545-5575
+* **Called From**: setTimeout callback
+* **Imported From**: `core/rpg/lootSystem.js`, `core/rpg/inventorySystem.js`
+* **Inputs**: Computed `roll` value
+* **Outputs**: Adds item to database inventory, sends catch status
+
 ```javascript
-// File: core/engine.js (Lines 5557-5565)
-const roll = Math.random() * 100 + luck / 5;
+  if (roll > 98) {
+    itemKey = "mythic_fish";
+    emoji = "🦑";
+  } else if (roll > 85) {
+    itemKey = "rare_fish";
+    emoji = "🐠";
+  }
+  if (Math.random() < 0.05) {
+    itemKey = "infected_fish";
+    emoji = "☣️";
+  }
 
-if (roll > 98) {
-  itemKey = "mythic_fish";
-  emoji = "🦑";
-} else if (roll > 85) {
-  itemKey = "rare_fish";
-  emoji = "🐠";
-}
+  await inventorySystem.addItem(senderJid, itemKey, 1);
+  await economy.saveUser(senderJid);
+
+  const item = lootSystem.getItemInfo(itemKey);
+  return await reply(`🎣 *FISHING SUCCESS!*\n\nYou caught a ${emoji} *${item.name}*!\nRemaining casts before fatigue: *${25 - freshUser.fishCount}*`);
+}, 5000);
 ```
 
-#### After
+#### Explanation
+- `if (roll > 98) ...`: Inspects thresholds to determine whether to award standard, rare, or mythic items.
+- `inventorySystem.addItem(...)`: Adds the resolved fish ID key to the user's bag.
+- `economy.saveUser(...)`: Commits modifications (like modified inventory arrays and updated fatigue count) back to the MongoDB collection.
+- `reply(...)`: Outputs the reward details, fatigue status, and returns the result to WhatsApp.
+
+---
+
+## 4. How to Modify
+To change cooldown limits or adjust rolls, modify the parameters inside `core/engine.js`:
+
 ```javascript
-// File: core/engine.js (Lines 5557-5565)
-const roll = Math.random() * 100 + luck / 5;
-
-if (roll > 99.5) {
-  itemKey = "legendary_fish";
-  emoji = "👑";
-} else if (roll > 96) {
-  itemKey = "mythic_fish";
-  emoji = "🦑";
-} else if (roll > 80) {
-  itemKey = "rare_fish";
-  emoji = "🐠";
-}
+// To adjust limits:
+const MAX_FISH = 50; // Increases attempts allowed per cycle to 50
+const COOLDOWN_MS = 2 * 60 * 60 * 1000; // Increases rest period to 2 hours
 ```
-
-## Common tasks
-
-* **Change the fishing cooldown**: Open [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5504) and adjust `COOLDOWN_MS` to your target duration.
-* **Add a new fish catch**: Insert the item definition in the database at [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L618) and map its probability roll range in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5559).
-* **Edit the fatigue message**: Modify the hardcoded string returned inside the fatigue validation block in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5524).

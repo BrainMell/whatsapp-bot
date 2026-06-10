@@ -1,201 +1,157 @@
 # RPG Subsystem: Economy
 
-## What it is
+## 1. Description
 The Economy Subsystem controls all cash flow, financial operations, peer-to-peer money transfers, daily rewards, bank vaults, and shop purchases. Players earn Zeni through daily check-ins, quests, combat encounters, and mini-games. This currency is held either in the player's immediate wallet or stored in their bank account. The system reads and writes to user data objects in MongoDB, persisting balances via scheduled saves, and processes shop commands using purchase verification gates before deducting funds.
-
-## How it works
-
-**Peer-to-Peer Transfer Operation** — [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L631-L670)
-```javascript
-function transferMoney(fromUserId, toUserId, amount) {
-  const sender = getUser(fromUserId);
-  const receiver = getUser(toUserId);
-  
-  if (!sender || !receiver) {
-    return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
-  }
-  
-  const val = Number(amount);
-  if (isNaN(val) || val <= 0) {
-    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a valid positive number.` };
-  }
-  
-  if (sender.wallet < val) {
-    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
-  }
-  
-  sender.wallet -= val;
-  receiver.wallet += val;
-  
-  logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -val, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, val, receiver.wallet);
-
-  scheduleSave(fromUserId);
-  scheduleSave(toUserId);
-  
-  return {
-    success: true,
-    message: `✅ *TRANSFER SUCCESSFUL!*
- 
-━━━━━━━━━━━━━━━━
-💸 *Sent:* ${getZENI()}${amount.toLocaleString()}
-👤 *To:* @${toUserId.split('@')[0]}
-━━━━━━━━━━━━━━━━
- 
-💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
-    receiver: toUserId,
-    amount: val,
-    wallet: sender.wallet,
-    bank: sender.bank,
-```
-This function validates user registration, parses the transfer amount, check if the sender has enough wallet funds, adjusts wallet fields for both users, logs transactions, and schedules a database write.
 
 ---
 
-**Daily Reward Claims** — [economy.js L779–824](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L779-L824)
+## 2. Hierarchical Execution Tree
+```text
+User sends ".j daily"
+└── core/engine.js
+    └── messages.upsert handler (L4066)
+        └── Command detection (L4558)
+        └── primaryCmd check: if (primaryCmd === "daily") (L4680)
+            └── core/rpg/economy.js
+                └── claimDaily(senderJid)
+                    └── Cooldown checks (lastDaily)
+                    └── user.wallet += DAILY_REWARD
+                    └── scheduleSave(senderJid)
+                    └── reply confirmation to WhatsApp
+```
+
+---
+
+## 3. Step-by-Step Code Execution Flow
+
+### Step 1: Entry Point Trigger
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4066-4074
+* **Called From**: Baileys socket event emitter
+* **Defined In**: `core/engine.js`
+* **Inputs**: `{ messages, type }` payload from WhatsApp
+* **Outputs**: None (passes control to inner map)
+
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  if (type !== "notify" && type !== "append") return;
+  if (isRekeying) return;
+
+  await Promise.all(
+    messages.map(async (m) => {
+      if (!m.message) return;
+```
+
+#### Explanation
+- `sock.ev.on("messages.upsert", ...)`: Registers a listener that fires whenever the bot receives new message notifications.
+- `if (type !== "notify" && type !== "append") return`: Drops status updates or metadata modifications to only process actual incoming messages.
+- `if (isRekeying) return`: Prevents processing when the session encryption keys are refreshing.
+- `messages.map(...)`: Iterates over the batch of received messages to process them in parallel.
+
+---
+
+### Step 2: Command Matching
+* **File Path**: `core/engine.js`
+* **Line Numbers**: 4558-4564
+* **Called From**: Inner message processor loop
+* **Inputs**: Raw message body string `lowerTxt`
+* **Outputs**: `primaryCmd` and `cmdArgs` array
+
+```javascript
+if (lowerTxt.startsWith(currentPrefix)) {
+  const cmdBody = lowerTxt
+    .substring(currentPrefix.length)
+    .trim();
+  const cmdArgs = cmdBody.split(" ");
+  const primaryCmd = cmdArgs[0];
+```
+
+#### Explanation
+- `lowerTxt.startsWith(currentPrefix)`: Checks if the incoming text begins with the configured bot prefix (e.g. `.j`).
+- `lowerTxt.substring(...)`: Strips the prefix from the message.
+- `cmdBody.split(" ")`: Splits the command body by spaces to separate the command name from its arguments.
+- `cmdArgs[0]`: Assigns the first element as `primaryCmd` (e.g. `"daily"`).
+
+---
+
+### Step 3: Command Routing for Daily
+* **File Path**: `core/engine.js`
+* **Line Numbers**: Around 4680
+* **Called From**: Command routing block in `engine.js`
+* **Imported From**: `core/rpg/economy.js`
+* **Inputs**: `sock`, `chatId`, `senderJid`
+* **Outputs**: Promise resolved by `economy.claimDaily`
+
+```javascript
+if (primaryCmd === "daily") {
+  const result = economy.claimDaily(senderJid);
+  return await reply(result.message);
+}
+```
+
+#### Explanation
+- `if (primaryCmd === "daily")`: Matches the daily reward check command.
+- `economy.claimDaily(senderJid)`: Passes execution control to the economy core module, which verifies limits and mutates local user variables.
+- `reply(...)`: Sends back the return status message to WhatsApp.
+
+---
+
+### Step 4: Daily Reward Claim Logic
+* **File Path**: `core/rpg/economy.js`
+* **Line Numbers**: 779-824
+* **Called From**: `core/engine.js`
+* **Inputs**: `(userId)`
+* **Outputs**: `{ success: boolean, message: string }`
+
 ```javascript
 function claimDaily(userId) {
   const user = getUser(userId);
-  if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
-  
+  if (!user) return { success: false, message: "❌ Not registered." };
+
   const now = Date.now();
   const dayInMs = 86400000;
-  
+
   if (now - user.lastDaily < dayInMs) {
     const timeLeft = dayInMs - (now - user.lastDaily);
     const hoursLeft = Math.floor(timeLeft / 3600000);
     const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
-    
+
     return {
       success: false,
-      message: `⏰ *DAILY ALREADY CLAIMED!*
- 
-━━━━━━━━━━━━━━━
-🕐 Come back in:
-   *${hoursLeft}h ${minsLeft}m*
- ━━━━━━━━━━━━━━━
- 
-💡 _Check back tomorrow for your reward!_`
+      message: `⏰ *DAILY ALREADY CLAIMED!*\nCome back in *${hoursLeft}h ${minsLeft}m*.`
     };
   }
-  
+
   user.wallet += DAILY_REWARD;
   user.lastDaily = now;
   user.stats.totalEarned += DAILY_REWARD;
-  
+
   logTransaction(userId, "Daily Reward", DAILY_REWARD, user.wallet);
- 
   scheduleSave(userId);
-  
+
   return {
     success: true,
-    message: `🎁 *DAILY REWARD CLAIMED!*
- 
-━━━━━━━━━━━━━━━
-💰 *Reward:* +${getZENI()}${DAILY_REWARD.toLocaleString()}
-━━━━━━━━━━━━━━━
- 
-💵 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}
- 
-✨ _Come back in 24 hours for another reward!_`
+    message: `🎁 *DAILY REWARD CLAIMED!*\nReward: +${DAILY_REWARD.toLocaleString()}`
   };
 }
 ```
-This handler verifies if the user's daily check-in timestamp cooldown (24 hours) has elapsed. If valid, the system increments the user's wallet, updates the last claimed timestamp, logs the transaction, and schedules database updates.
+
+#### Explanation
+- `getUser(userId)`: Fetches user profile reference from the economy in-memory cache map.
+- `const dayInMs = 86400000`: Defines a 24-hour limit in milliseconds.
+- `if (now - user.lastDaily < dayInMs)`: Compares difference. If less than 24 hours have elapsed, calculates remaining time and yields error status.
+- `user.wallet += DAILY_REWARD`: Adds configuration reward Zeni to user wallet.
+- `scheduleSave(userId)`: Adds user to pending database write queues (avoids concurrent heavy operations).
 
 ---
 
-**Shop Purchase Balance Gate** — [shopCommands.js L166–211](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L166-L211)
+## 4. How to Modify
+To adjust daily check-in rewards, change `DAILY_REWARD` in `core/rpg/economy.js`:
+
 ```javascript
-    // Check balance
-    const balance = economy.getBalance(senderJid);
-    if (balance < item.cost) {
-        await sock.sendMessage(chatId, {
-            text: `❌ Insufficient funds!\n\nNeed: ${getZENI()}${item.cost.toLocaleString()}\nYou have: ${getZENI()}${balance.toLocaleString()}`
-        });
-        return;
-    }
-    
-    // Handle different item types
-    let result;
-    
-    switch (item.type) {
-        case 'CLASS_CHANGE':
-            result = await handleClassChange(senderJid);
-            break;
-        case 'EVOLUTION':
-        case 'ASCENSION':
-            result = await handleConsumable(senderJid, item);
-            break;
-        case 'RESET':
-            result = await handleReset(senderJid);
-            break;
-        case 'STAT_BOOST':
-        case 'STAT_BOOST_PERM':
-            result = await handleStatBoost(senderJid, item);
-            break;
-        case 'EQUIPMENT':
-            result = await handleEquipment(senderJid, item);
-            break;
-        case 'CONSUMABLE':
-        case 'BOOSTER':
-        case 'SPECIAL_KEY':
-            result = await handleConsumable(senderJid, item);
-            break;
-        default:
-            result = { success: false, message: `❌ Unknown item type: ${item.type}` };
-    }
-    
-    if (result.success) {
-        // 💡 BUG FIX: Only deduct money if inventory add was successful
-        economy.removeMoney(senderJid, item.cost);
-        
-        await sock.sendMessage(chatId, {
-            text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`
-```
-This is the core purchase gate. It checks the player's wallet balance against the shop item's value, runs specific item integrations, and deducts the price from the player's wallet via the economy manager only upon purchase success.
-
-## How to modify it
-
-### Tweaking Daily Reward Amount
-To adjust the quantity of Zeni awarded for daily login claims, edit the `DAILY_REWARD` constant in `core/rpg/economy.js`.
-
-**Before (core/rpg/economy.js L16):**
-```javascript
+// BEFORE:
 const DAILY_REWARD = 500;
+
+// AFTER:
+const DAILY_REWARD = 1000; // Raised reward to 1000 Zeni
 ```
-
-**After (core/rpg/economy.js L16):**
-```javascript
-const DAILY_REWARD = 1000; // Increased daily reward amount
-```
-
-### Expanding Class Shop Purchase Restrictions
-To expand the restrictions on specific shop items (like restricting key purchases to multiple lineages), modify the lineage checks in `core/commands/shopCommands.js`.
-
-**Before (core/commands/shopCommands.js L159–164):**
-```javascript
-    if (itemId === 'dragon_key') {
-        const currentClass = economy.getUserClass(senderJid);
-        if (!classSystem.isFighterLineage(currentClass?.id)) {
-            return sock.sendMessage(chatId, { text: `❌ *DRAGON HUNTER LINEAGE REQUIRED*\n\nOnly members of the *Fighter* lineage can purchase this key. Dragonslayers are born from true warriors!` });
-        }
-    }
-```
-
-**After (core/commands/shopCommands.js L159–164):**
-```javascript
-    if (itemId === 'dragon_key') {
-        const currentClass = economy.getUserClass(senderJid);
-        if (!classSystem.isFighterLineage(currentClass?.id) && !classSystem.isMageLineage(currentClass?.id)) { // Allowed Fighters and Mages
-            return sock.sendMessage(chatId, { text: `❌ *DRAGON HUNTER LINEAGE REQUIRED*\n\nOnly members of the *Fighter* or *Mage* lineage can purchase this key.` });
-        }
-    }
-```
-
-## Common tasks
-- **Modify daily check-in rewards** — Change the amount awarded daily to users in [economy.js L16](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L16).
-- **Edit money transfer parameters** — Adjust balance checks and verification messages in [economy.js L631–670](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L631-L670).
-- **Tune daily reward cooldown** — Modify the claiming cooldown duration (default 24 hours) in [economy.js L784](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L784).
-- **Update shop purchase balance checks** — Customize purchase validation messages and requirements in [shopCommands.js L166–173](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L166-L173).
-- **Modify post-purchase money deduction** — Adjust wallet deductions after successful transaction completions in [shopCommands.js L207](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L207).
