@@ -4072,9 +4072,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             messages.map(async (m) => {
               if (!m.message) return;
 
-              // Skip stale backlog messages sent while the bot was offline (older than 45 seconds)
+              // Skip stale backlog messages sent while the bot was offline (older than 180 seconds)
               const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
-              if (msgTime && (Date.now() - msgTime > 45000)) {
+              if (msgTime && (Date.now() - msgTime > 180000)) {
                 console.log(`⏳ [${botConfig.getBotId()}] Skipped stale/backlog message (age: ${Math.floor((Date.now() - msgTime) / 1000)}s) - Check if server/local clock is out of sync!`);
                 return;
               }
