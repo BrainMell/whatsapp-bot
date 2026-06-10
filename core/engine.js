@@ -3536,9 +3536,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         loadMutedUsers();
         loadUserWarnings();
 
+        const authPath = configInstance.getAuthPath();
         const { state, saveCreds } = await useMultiFileAuthState(
-          configInstance.getAuthPath(),
+          authPath,
         );
+        lidResolver.watchAuthPath(authPath);
         const { version } = await fetchLatestBaileysVersion();
         sock = makeWASocket({
           version,
@@ -4033,12 +4035,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   continue;
 
                 // Check if they are admin already
-                const metadata = await getGroupMetadata(chatId);
-                const isAdmin = metadata?.participants.some(
-                  (p) =>
-                    lidResolver.resolveToPhone(p.id, configInstance.getAuthPath()) === lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath()) &&
-                    (p.admin === "admin" || p.admin === "superadmin"),
-                );
+                let isAdmin = false;
+                const cachedEntry = adminSetCache.get(chatId);
+                if (cachedEntry && Date.now() < cachedEntry.expires) {
+                  const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+                  isAdmin = cachedEntry.admins.has(senderPhoneJid) || cachedEntry.admins.has(senderJid);
+                } else {
+                  const metadata = await getGroupMetadata(chatId);
+                  if (metadata) {
+                    const cachedAdminSet = buildAdminCache(chatId, metadata.participants);
+                    const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+                    isAdmin = cachedAdminSet.has(senderPhoneJid) || cachedAdminSet.has(senderJid);
+                  }
+                }
 
                 const result = await debate.addSpectator(
                   sock,
