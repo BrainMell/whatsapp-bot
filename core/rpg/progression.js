@@ -348,6 +348,15 @@ function resetStats(userId) {
 
 function getLeaderboard(type = 'level', limit = 10) {
     const allUsers = Array.from(economy.economyData.values());
+    if (type === 'pvp') {
+        const leaderboard = allUsers.map(u => ({
+            userId: u.userId,
+            pvpWins: u.pvpWins || 0,
+            pvpLosses: u.pvpLosses || 0
+        }));
+        leaderboard.sort((a, b) => (b.pvpWins || 0) - (a.pvpWins || 0));
+        return leaderboard.slice(0, limit);
+    }
     const leaderboard = allUsers.filter(u => u.progression).map(u => ({ userId: u.userId, ...u.progression }));
     const sortField = type === 'level' ? 'level' : 'totalXPEarned';
     leaderboard.sort((a, b) => (b[sortField] || 0) - (a[sortField] || 0));

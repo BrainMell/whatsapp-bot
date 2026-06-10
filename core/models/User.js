@@ -30,6 +30,8 @@ const UserSchema = new mongoose.Schema({
   questsCompleted: { type: Number, default: 0 },
   questsWon: { type: Number, default: 0 },
   questsFailed: { type: Number, default: 0 },
+  pvpWins: { type: Number, default: 0 },
+  pvpLosses: { type: Number, default: 0 },
   
   // Flexible Objects
   inventory: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },

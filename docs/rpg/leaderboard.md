@@ -7,17 +7,17 @@ The `leaderboard` or `lb` command allows players to see the rankings of the top 
 
 ## 2. Hierarchical Execution Tree
 ```text
-User sends ".j leaderboard" or ".j lb"
+User sends ".j leaderboard [level | xp | pvp]" or ".j lb [level | xp | pvp]"
 └── core/engine.js
     └── messages.upsert handler (L4066)
         └── Command detection & prefix check (L4558)
-        └── Match check (L7044-7052)
+        └── Match check (L7043-7062)
             └── core/commands/rpgCommands.js
                 └── displayLeaderboard(sock, chatId, type) (L306)
                     ├── core/rpg/progression.js
                     │   └── getLeaderboard(type, 10) (L349)
                     │       ├── Retrieve all users from economy.economyData cache
-                    │       ├── Filter and sort by 'level' or 'totalXPEarned'
+                    │       ├── Sort by 'level', 'totalXPEarned', or 'pvpWins'
                     │       └── Return top 10 rows
                     ├── Loop top 10 players and query nicknames via economy.getUser()
                     └── sock.sendMessage(chatId, { text: leaderboardText })
@@ -50,8 +50,8 @@ User sends ".j leaderboard" or ".j lb"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7044-L7054)
-* **Line Numbers**: 7044-7054
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7043-L7062)
+* **Line Numbers**: 7043-7062
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
 * **Outputs**: Calls `rpgCommands.displayLeaderboard`
@@ -59,18 +59,37 @@ User sends ".j leaderboard" or ".j lb"
 ```javascript
                   // .j leaderboard - View leaderboard
                   if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} leaderboard` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} lb`
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} leaderboard`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} lb`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} top`,
+                    )
                   ) {
-                    await rpgCommands.displayLeaderboard(sock, chatId, "level");
+                    let type = "level";
+                    const parts = lowerTxt.split(/\s+/);
+                    if (parts.length > 2) {
+                      const arg = parts[2].trim().toLowerCase();
+                      if (arg === "xp") {
+                        type = "xp";
+                      } else if (arg === "pvp") {
+                        type = "pvp";
+                      } else if (arg === "level") {
+                        type = "level";
+                      }
+                    }
+                    await rpgCommands.displayLeaderboard(sock, chatId, type);
                     return;
                   }
 ```
 
 #### Explanation
-- Catches the `.j leaderboard` or `.j lb` command patterns.
-- Invokes `displayLeaderboard` with parameter `"level"`.
+- Catches the `.j leaderboard`, `.j lb`, or `.j top` command patterns.
+- Parses sub-arguments (like `xp` and `pvp`) to select the sorting type, defaulting to `"level"`.
+- Invokes `displayLeaderboard` with the resolved parameter.
 
 ---
 
@@ -91,17 +110,29 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
     }
     
     let msg = `🏆 TOP 10\n\n`;
-    msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
-    
-    for (let i = 0; i < leaderboard.length; i++) { 
-        const player = leaderboard[i];
-        const economyUser = economy.getUser(player.userId);
-        const name = economyUser?.nickname || player.userId.split('@')[0];
-        
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-        msg += `${medal} *${name}*\n   Level ${player.level}`;
-        if (type === 'xp') msg += ` | ${player.totalXPEarned.toLocaleString()} XP`;
-        msg += `\n\n`;
+    if (type === 'pvp') {
+        msg += `⚔️ PvP Leaderboard (Wins / Losses)\n\n`;
+        for (let i = 0; i < leaderboard.length; i++) { 
+            const player = leaderboard[i];
+            const economyUser = economy.getUser(player.userId);
+            const name = economyUser?.nickname || player.userId.split('@')[0];
+            
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            msg += `${medal} *${name}*\n   ⚔️ Wins: \`${player.pvpWins || 0}\` | 💀 Losses: \`${player.pvpLosses || 0}\``;
+            msg += `\n\n`;
+        }
+    } else {
+        msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
+        for (let i = 0; i < leaderboard.length; i++) { 
+            const player = leaderboard[i];
+            const economyUser = economy.getUser(player.userId);
+            const name = economyUser?.nickname || player.userId.split('@')[0];
+            
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            msg += `${medal} *${name}*\n   Level ${player.level}`;
+            if (type === 'xp') msg += ` | ${player.totalXPEarned.toLocaleString()} XP`;
+            msg += `\n\n`;
+        }
     }
     
     await sock.sendMessage(chatId, { text: msg });
@@ -126,6 +157,15 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
 ```javascript
 function getLeaderboard(type = 'level', limit = 10) {
     const allUsers = Array.from(economy.economyData.values());
+    if (type === 'pvp') {
+        const leaderboard = allUsers.map(u => ({
+            userId: u.userId,
+            pvpWins: u.pvpWins || 0,
+            pvpLosses: u.pvpLosses || 0
+        }));
+        leaderboard.sort((a, b) => (b.pvpWins || 0) - (a.pvpWins || 0));
+        return leaderboard.slice(0, limit);
+    }
     const leaderboard = allUsers.filter(u => u.progression).map(u => ({ userId: u.userId, ...u.progression }));
     const sortField = type === 'level' ? 'level' : 'totalXPEarned';
     leaderboard.sort((a, b) => (b[sortField] || 0) - (a[sortField] || 0));
@@ -135,8 +175,8 @@ function getLeaderboard(type = 'level', limit = 10) {
 
 #### Explanation
 1. Retrieves a flat array of all registered users from `economyData` (in-memory Map cache).
-2. Filters out any documents that don't have valid `.progression` data properties initialized.
-3. Sorts records descending based on the requested sort field.
+2. If `type` is `"pvp"`, maps and sorts the array by `pvpWins` descending.
+3. Otherwise, filters out any documents that don't have valid `.progression` data properties initialized and sorts records descending based on `level` or `totalXPEarned`.
 4. Returns the top slice array (length matching the limit argument, default 10).
 
 ---
@@ -144,6 +184,7 @@ function getLeaderboard(type = 'level', limit = 10) {
 ## 4. How to Modify
 - **Increase List Limit**: Change the argument `10` passed to `getLeaderboard` in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L307).
 - **Format Rank Layout**: Customize emojis or spacing directly inside [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L322).
+- **Add Ranking Categories**: Update the `getLeaderboard` function in [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js#L349) to add more types, and update `displayLeaderboard` in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L306) to format them.
 
 
 

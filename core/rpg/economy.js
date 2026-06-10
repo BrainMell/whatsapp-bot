@@ -160,6 +160,8 @@ function registerUser(userId, nickname) {
     questsCompleted: 0,
     questsWon: 0,
     questsFailed: 0,
+    pvpWins: 0,
+    pvpLosses: 0,
     borrowedSkills: [],
     
     // buffs from the shop

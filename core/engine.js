@@ -7043,12 +7043,29 @@ Usage: ${newUsage}/5${warningText}`;
 
                   // .j leaderboard - View leaderboard
                   if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} leaderboard` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} lb` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} top`
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} leaderboard`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} lb`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} top`,
+                    )
                   ) {
-                    await rpgCommands.displayLeaderboard(sock, chatId, "level");
+                    let type = "level";
+                    const parts = lowerTxt.split(/\s+/);
+                    if (parts.length > 2) {
+                      const arg = parts[2].trim().toLowerCase();
+                      if (arg === "xp") {
+                        type = "xp";
+                      } else if (arg === "pvp") {
+                        type = "pvp";
+                      } else if (arg === "level") {
+                        type = "level";
+                      }
+                    }
+                    await rpgCommands.displayLeaderboard(sock, chatId, type);
                     return;
                   }
 

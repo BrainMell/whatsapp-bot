@@ -312,17 +312,29 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
     }
     
     let msg = `🏆 TOP 10\n\n`;
-    msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
-    
-    for (let i = 0; i < leaderboard.length; i++) { 
-        const player = leaderboard[i];
-        const economyUser = economy.getUser(player.userId);
-        const name = economyUser?.nickname || player.userId.split('@')[0];
-        
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-        msg += `${medal} *${name}*\n   Level ${player.level}`;
-        if (type === 'xp') msg += ` | ${player.totalXPEarned.toLocaleString()} XP`;
-        msg += `\n\n`;
+    if (type === 'pvp') {
+        msg += `⚔️ PvP Leaderboard (Wins / Losses)\n\n`;
+        for (let i = 0; i < leaderboard.length; i++) { 
+            const player = leaderboard[i];
+            const economyUser = economy.getUser(player.userId);
+            const name = economyUser?.nickname || player.userId.split('@')[0];
+            
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            msg += `${medal} *${name}*\n   ⚔️ Wins: \`${player.pvpWins || 0}\` | 💀 Losses: \`${player.pvpLosses || 0}\``;
+            msg += `\n\n`;
+        }
+    } else {
+        msg += `📊 Ranking by: ${type === 'level' ? 'Level' : 'Total XP'}\n\n`;
+        for (let i = 0; i < leaderboard.length; i++) { 
+            const player = leaderboard[i];
+            const economyUser = economy.getUser(player.userId);
+            const name = economyUser?.nickname || player.userId.split('@')[0];
+            
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            msg += `${medal} *${name}*\n   Level ${player.level}`;
+            if (type === 'xp') msg += ` | ${player.totalXPEarned.toLocaleString()} XP`;
+            msg += `\n\n`;
+        }
     }
     
     await sock.sendMessage(chatId, { text: msg });

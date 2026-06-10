@@ -12,6 +12,8 @@ const progression = require('./progression');
 const skillTree = require('./skillTree');
 const botConfig = require('../../botConfig');
 const combatImageGenerator = require('./combatImageGenerator');
+const inventorySystem = require('./inventorySystem');
+const lootSystem = require('./lootSystem');
 
 const activeDuels = new Map();  // chatId → duelState
 const duelInvites = new Map();  // chatId → { challenger, target, stake, timestamp }
@@ -188,7 +190,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `———————————\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-        `🏃 \`${botConfig.getPrefix()} combat flee\``;
+        `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return { success: true, duel: duelState, image, message: startMsg };
 }
@@ -337,13 +339,95 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
         
     } else if (action === 'flee') {
-        // Allow fleeing — no reward, no punishment
+        // Player who flees gets penalized, opponent wins.
+        const fleeingJid = currentPlayer.jid;
+        const stayingJid = opponent.jid;
+
+        const fleeingUser = economy.getUser(fleeingJid);
+        const stayingUser = economy.getUser(stayingJid);
+
+        // Calculate and apply Flee Penalties:
+        // 1. XP Loss: 20% of total XP (capped to level minimum)
+        let xpLost = 0;
+        if (fleeingUser && fleeingUser.progression) {
+            const prog = fleeingUser.progression;
+            const minXP = progression.getXPForLevel(prog.level);
+            xpLost = Math.floor((prog.xp || 0) * 0.20);
+            if (xpLost > 0) {
+                const oldXP = prog.xp;
+                prog.xp = Math.max(minXP, prog.xp - xpLost);
+                xpLost = oldXP - prog.xp; // actual XP lost after clamp
+                prog.totalXPEarned = Math.max(0, (prog.totalXPEarned || 0) - xpLost);
+            }
+        }
+
+        // 2. Money Loss: 50% of wallet
+        let moneyLost = 0;
+        if (fleeingUser) {
+            moneyLost = Math.floor((fleeingUser.wallet || 0) * 0.50);
+            if (moneyLost > 0) {
+                economy.removeMoney(fleeingJid, moneyLost, "PvP Flee Penalty");
+            }
+        }
+
+        // 3. Random Item Loss: 1 item from bag
+        let itemLostName = "None (Bag Empty)";
+        const inventory = inventorySystem.getInventory(fleeingJid);
+        const itemKeys = Object.keys(inventory || {}).filter(key => {
+            const val = inventory[key];
+            const qty = typeof val === 'number' ? val : (val?.quantity || 0);
+            return qty > 0;
+        });
+        if (itemKeys.length > 0) {
+            const randomKey = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+            const itemInfo = lootSystem.getItemInfo(randomKey);
+            itemLostName = itemInfo?.name || randomKey;
+            inventorySystem.removeItem(fleeingJid, randomKey, 1);
+        }
+
+        // Update PvP wins/losses
+        if (stayingUser) {
+            stayingUser.pvpWins = (stayingUser.pvpWins || 0) + 1;
+            economy.saveUser(stayingJid);
+        }
+        if (fleeingUser) {
+            fleeingUser.pvpLosses = (fleeingUser.pvpLosses || 0) + 1;
+            economy.saveUser(fleeingJid);
+        }
+
+        // Give the standard win rewards to the staying player
+        const ZENI = botConfig.getCurrency().symbol;
+        let rewardMsg = '';
+        if (duel.stake > 0) {
+            const pot = duel.stake * 2;
+            economy.addMoney(stayingJid, pot);
+            rewardMsg = `💰 Won ${ZENI}${pot.toLocaleString()} (staked pot)`;
+        } else {
+            const goldBonus = Math.floor(150 + (currentPlayer.level * 40));
+            economy.addMoney(stayingJid, goldBonus);
+            rewardMsg = `💰 ${ZENI}${goldBonus.toLocaleString()} prize`;
+        }
+
+        const xpGain = Math.floor(80 + (currentPlayer.level * 15));
+        progression.addXP(stayingJid, xpGain, 'PvP Victory (Opponent Fled)');
+
         activeDuels.delete(chatId);
+
+        let fleeMsg = `🏃 *${currentPlayer.name}* has fled from the duel!\n\n` +
+                      `⚠️ *Flee Penalties Applied to ${currentPlayer.name}:*\n` +
+                      `   ↳ ⭐ XP Lost: \`-${xpLost}\` XP (capped at level minimum)\n` +
+                      `   ↳ 💵 Wallet Lost: \`-${ZENI}${moneyLost.toLocaleString()}\` (50% of wallet)\n` +
+                      `   ↳ 🎒 Item Lost: \`${itemLostName}\` (random item from bag)\n\n` +
+                      `👑 *Winner:* *${opponent.name}* by forfeit!\n` +
+                      `🎁 *Rewards for ${opponent.name}:*\n` +
+                      `   ↳ ${rewardMsg}\n` +
+                      `   ↳ ⭐ +${xpGain} XP`;
+
         return { 
             success: true, 
             finished: true, 
             fled: true,
-            message: `🏃 *${currentPlayer.name}* fled the duel!\n\n_The battle ends with no winner..._` 
+            message: fleeMsg 
         };
     } else {
         return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, or \`flee\`` };
@@ -387,7 +471,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                     `———————————\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
                     `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-                    `🏃 \`${botConfig.getPrefix()} combat flee\``;
+                    `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return {
         success: true,
@@ -481,6 +565,18 @@ async function finishDuel(chatId, duel, winner, loser) {
     }
 
     progression.addXP(winner.jid, xpGain, 'PvP Victory');
+
+    // Update PvP stats
+    const winnerUser = economy.getUser(winner.jid);
+    const loserUser = economy.getUser(loser.jid);
+    if (winnerUser) {
+        winnerUser.pvpWins = (winnerUser.pvpWins || 0) + 1;
+        economy.saveUser(winner.jid);
+    }
+    if (loserUser) {
+        loserUser.pvpLosses = (loserUser.pvpLosses || 0) + 1;
+        economy.saveUser(loser.jid);
+    }
 
     let msg = `🏆 *DUEL RESULT* 🏆\n`;
     msg += `———————————\n`;

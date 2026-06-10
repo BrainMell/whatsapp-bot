@@ -1,7 +1,7 @@
 # PvP Duel Command Flow (`duel` / `challenge` / `pvp`)
 
 ## 1. Description
-The PvP/Duel system allows two registered players to challenge each other to a 1v1 battle in a chat. Players can optionally wage/stake Zeni. Fights are structured in turns, allowing each player to make choices like basic attacks (`attack` / `atk`), abilities/skills (`ability` / `skill`), or items (`item`). It features basic stat dampening/capping to prevent instant one-shots, handles combat turns, resolves stakes, and renders a final summary on completion.
+The PvP/Duel system allows two registered players to challenge each other to a 1v1 battle in a chat. Players can optionally wage/stake Zeni. Fights are structured in turns, allowing each player to make choices like basic attacks (`attack` / `atk`), abilities/skills (`ability` / `skill`), or fleeing (`flee`). Fleeing carries a heavy penalty (losing 20% of XP points capped to level minimum, 50% of wallet Zeni, and a random item in the bag), while the staying player is awarded a victory. It features basic stat dampening/capping to prevent instant one-shots, handles combat turns, resolves stakes, and renders a final summary on completion.
 
 ---
 
@@ -185,6 +185,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 - **PvP Damage Mitigation Caps**: Adjust `PVP_DAMAGE_MULT` (currently 0.8) or `PVP_DEFENSE_CAP` (currently 0.5) constants at [core/rpg/pvpSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/pvpSystem.js#L31-L33).
 - **Modify Challenge Timeout Duration**: Change `CHALLENGE_TIMEOUT` values (currently 120000ms/2 minutes).
 - **Edit Combat Actions Vocabulary**: Add alias overrides to the command parser in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4909).
+- **Adjust Flee Penalties**: Modify XP, wallet, or item deduction formulas inside the `flee` block of `handlePvPAction` in [core/rpg/pvpSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/pvpSystem.js).
 
 
 
