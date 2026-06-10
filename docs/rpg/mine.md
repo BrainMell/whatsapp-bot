@@ -162,7 +162,62 @@ User sends ".j mine shimmering_caves"
 ---
 
 ## 4. How to Modify
-To adjust mining configurations:
-- **Add Mining Locations**: Edit `MINING_LOCATIONS` object definition in `core/rpg/craftingSystem.js`.
-- **Change Mining Level XP Gain**: Edit the formula in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L575).
-- **Adjust Lucky Zeni pouch drop rate**: Change `0.02` (2%) in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L595).
+
+### How to Add a New Mining Location
+To configure a new mining zone with specific level/rank requirements and ore pools:
+1. Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js).
+2. Locate the `MINING_LOCATIONS` dictionary and add your location object:
+   ```javascript
+   'crystal_depths': {
+       name: 'Crystal Depths',
+       id: 'crystal_depths',
+       desc: 'A cavern glowing with rich magical crystalline deposits.',
+       req: { level: 20, rank: 'C', miningLevel: 10 }, // Requirements to enter
+       energyCost: 30, // Energy cost per command run
+       ores: [
+           { id: 'silver_ore', weight: 45, min: 2, max: 4 },
+           { id: 'mana_crystal', weight: 35, min: 1, max: 3 },
+           { id: 'mythril_ore', weight: 20, min: 1, max: 2 }
+       ]
+   }
+   ```
+3. Save changes. The mining system automatically processes the drop weights when players use `.j mine crystal_depths`.
+
+---
+
+### How to Register a New Ore / Adjust Drop Weight Distributions
+If you want to introduce a new mineable resource or balance existing drop rates:
+1. **Register the Ore**:
+   * Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+   * Register the new item in `ITEM_DATABASE` with `type: 'MATERIAL'`:
+     ```javascript
+     'sapphire_gem': { 
+         name: '🔷 Sapphire Gem', 
+         description: 'A beautiful blue gemstone, prized for magic gear crafting.', 
+         rarity: 'RARE', 
+         value: 2000, 
+         type: 'MATERIAL' 
+     }
+     ```
+2. **Add to Mining Ore Pool**:
+   * Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js).
+   * Add the item to the `ores` array of your target location:
+     ```javascript
+     { id: 'sapphire_gem', weight: 15, min: 1, max: 1 }
+     ```
+   * **Note on Weights**: The mining algorithm sums up all weights in a location's ore pool (e.g. `45 + 35 + 20 = 100` or `20 + 40 + 25 + 15 = 100`). The chance for a specific ore dropping on a roll is:
+     $$\text{Drop Chance} = \frac{\text{Ore Weight}}{\text{Total Location Weight}}$$
+     Adjust individual weights to increase/decrease rarity.
+
+---
+
+### How to Adjust System-Wide Mining Metrics
+* **Change Mining Level XP Gain Formula**: Locate the experience calculation inside [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L575):
+  ```javascript
+  // Change base XP or the scaling factor
+  const mineXp = Math.floor(Math.random() * 6) + 5; // e.g. 5-10 mining XP per mine run
+  ```
+* **Adjust Lucky Zeni Pouch Drop Chance**: Locate the check in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L595):
+  ```javascript
+  if (Math.random() < 0.02) { // 0.02 is 2%. Increase to 0.05 for 5%.
+  ```

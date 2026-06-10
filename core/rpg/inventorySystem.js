@@ -762,6 +762,30 @@ function useItem(userId, rawItemId) {
         
         effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
+    else if (itemId === 'holy_water') {
+        const maxHp = sheet.stats.maxHp || sheet.stats.hp;
+        sheet.stats.hp = Math.min(maxHp, (sheet.stats.hp || maxHp) + 100);
+        effectMsg = `💚 Restored **100 HP** and cleansed your status!`;
+    }
+    else if (itemId === 'energy_brew') {
+        const user = economy.getUser(userId);
+        user.energy = Math.min(user.maxEnergy || 100, (user.energy || 0) + 50);
+        effectMsg = `⚡ Restored **50 Energy**!`;
+    }
+    else if (itemId === 'ether') {
+        const user = economy.getUser(userId);
+        user.energy = user.maxEnergy || 100;
+        effectMsg = `⚡ Restored **100% Energy**!`;
+    }
+    else if (itemId === 'rabbit_foot') {
+        const user = economy.getUser(userId);
+        if (!user.statBonuses) user.statBonuses = {};
+        user.statBonuses.luck = (user.statBonuses.luck || 0) + 10;
+        effectMsg = `🍀 *LUCKY CHARM CONSUMED!* (+10 Luck permanently!)`;
+    }
+    else if (itemInfo.effect && (itemInfo.effect.startsWith('buff_') || itemInfo.effect === 'random_major_buff' || itemInfo.effect === 'invincibility' || itemInfo.effect === 'shield_max')) {
+        return { success: false, message: `🎒 *${itemInfo.name}* is a combat-only consumable and can only be used during battle!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate its effects.` };
+    }
     else {
         return { success: false, message: `❌ Item effect not implemented yet.` };
     }

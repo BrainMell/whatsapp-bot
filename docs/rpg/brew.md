@@ -164,9 +164,63 @@ async function performCraft(userId, recipeId, requiredStation = 'BREWING') {
 ---
 
 ## 4. How to Modify
-To adjust alchemy recipes:
-- **Add or Modify Potion Recipes**: Edit the `BREWING_RECIPES` object in `core/rpg/craftingSystem.js`.
-- **Change Consumable Effects**: Edit the potion usage effects mapping in `core/rpg/inventorySystem.js`.
+
+### How to Add a New Brewing/Alchemy Recipe
+To add a new alchemy recipe:
+1. Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js).
+2. Locate the `BREWING_RECIPES` object and append your recipe:
+   ```javascript
+   'stoneskin_brew': {
+       name: 'Stoneskin Brew', 
+       id: 'stoneskin_brew', 
+       category: 'BREWING', // Must be 'BREWING'
+       desc: 'Toughens the skin. (+25 DEF for 4 turns)',
+       ingredients: { 'obsidian_chunk': 1, 'healing_herb': 2, 'mana_dew': 1 },
+       result: { 
+           id: 'stoneskin_brew', 
+           usable: true, 
+           effect: 'buff_def', 
+           effectValue: 25, 
+           duration: 4 
+       }
+   }
+   ```
+3. Register the output item ID (`stoneskin_brew`) in the `ITEM_DATABASE` inside [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js) (see below).
+
+---
+
+### How to Add a New Potion / Handle Potion Effects
+To register a new potion and configure what it does when consumed:
+1. Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+2. Locate `ITEM_DATABASE` and register your potion:
+   ```javascript
+   'stoneskin_brew': { 
+       name: '🧪 Stoneskin Brew', 
+       description: 'Toughens skin, increasing defense during combat.', 
+       rarity: 'RARE', 
+       value: 1500, 
+       type: 'POTION', 
+       usable: true,
+       effect: 'buff_def',
+       effectValue: 25
+   }
+   ```
+3. Open [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js).
+4. Locate the `useItem()` function:
+   * **If usable outside combat** (e.g., healing/mana restore): Add a handler branch:
+     ```javascript
+     else if (itemId === 'stoneskin_brew') {
+         // Custom outside combat handling if needed, or redirect to combat:
+         return { success: false, message: `❌ Stoneskin Brew can only be used during combat to buff your defense!` };
+     }
+     ```
+   * **If usable during combat** (e.g. defense buff): The default checks at the end of `useItem` will automatically block out-of-combat usage and instruct players to use it during battle. You must then implement the status effect handling in the `useCombatItem` logic inside [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js):
+     ```javascript
+     case "buff_def":
+       applyStatusEffect(target, "shield", 3, item.effectValue || 0);
+       resultMsg += `\n🛡️ Buffed ${target.name}'s defense!`;
+       break;
+     ```
 
 
 

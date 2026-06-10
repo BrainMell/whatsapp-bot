@@ -161,9 +161,58 @@ async function performCraft(userId, recipeId, requiredStation = 'COOKING') {
 ---
 
 ## 4. How to Modify
-To adjust cooking recipes:
-- **Add or Modify Food Recipes**: Edit the `COOKING_RECIPES` object in `core/rpg/craftingSystem.js`.
-- **Change Consumable Effects**: Edit the food item usage stats effects mapping in `core/rpg/inventorySystem.js`.
+
+### How to Add a New Cooking Recipe
+To add a new culinary recipe to the bot:
+1. Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js).
+2. Locate the `COOKING_RECIPES` object and add a new recipe definition:
+   ```javascript
+   'spicy_ramen': {
+       name: 'Spicy Ramen', 
+       id: 'spicy_ramen', 
+       category: 'COOKING', // Must be 'COOKING'
+       desc: 'A piping hot bowl of noodles. (+15 ATK & +10 SPD for 5 turns)',
+       ingredients: { 'common_fish': 1, 'healing_herb': 2, 'rabbit_hide': 1 },
+       result: { 
+           id: 'spicy_ramen', 
+           usable: true, 
+           effect: 'buff_atk_spd', // Custom effect string
+           effectValue: 15, 
+           duration: 5 
+       }
+   }
+   ```
+3. Register the output item ID (`spicy_ramen`) in the `ITEM_DATABASE` inside [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js) (see below).
+
+---
+
+### How to Add a New Consumable Food Item
+When creating a new cooked food item, you must register its item stats and define its consumption behavior:
+1. Open [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js).
+2. Locate `ITEM_DATABASE` and register your food item:
+   ```javascript
+   'spicy_ramen': { 
+       name: '🍜 Spicy Ramen', 
+       description: 'Restores HP and temporarily buffs stats.', 
+       rarity: 'RARE', 
+       value: 1200, 
+       type: 'CONSUMABLE', 
+       usable: true,
+       effect: 'buff_atk_spd',
+       effectValue: 15
+   }
+   ```
+3. Open [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js).
+4. Locate the `useItem()` function and add a handler for the food item:
+   * **If usable outside combat** (e.g., healing or energy recovery):
+     ```javascript
+     else if (itemId === 'spicy_ramen') {
+         const maxHp = sheet.stats.maxHp || sheet.stats.hp;
+         sheet.stats.hp = Math.min(maxHp, (sheet.stats.hp || maxHp) + 50); // Restores 50 HP
+         effectMsg = `🍜 You ate the Spicy Ramen! Restored **50 HP**!`;
+     }
+     ```
+   * **If combat-only** (e.g., status buffs), the default helper blocks in `useItem()` will automatically guide the player to use it in battle if you list the effect in the check. You must also implement the combat effect inside [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js) under the `useCombatItem` logic.
 
 
 
