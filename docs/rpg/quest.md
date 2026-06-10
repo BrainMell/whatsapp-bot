@@ -70,7 +70,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -92,7 +92,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4688-L4762) / [L4999-L5006](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4999-L5006)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4688-L4762) / [L4999-L5006](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4999-L5006)
 * **Line Numbers**: 4688-4762 (initiation) & 4999-5006 (vote routing)
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -132,7 +132,7 @@ User command
 ---
 
 ### Step 3: Dungeon Setup & Gates Validation
-* **File Path**: [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L3972-L4064)
+* **File Path**: [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L3972-L4064)
 * **Line Numbers**: 3972-4064
 * **Called From**: `initAdventure()`
 * **Inputs**: `(sock, chatId, groq, mode, solo, rankInput, senderJid, ...)`
@@ -173,7 +173,7 @@ User command
 ---
 
 ### Step 4: Casting Choices and Vote Triggers
-* **File Path**: [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L6059-L6136)
+* **File Path**: [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L6059-L6136)
 * **Line Numbers**: 6059-6136
 * **Called From**: `handleVote()`
 * **Inputs**: `(chatId, jid, vote)`
@@ -213,7 +213,7 @@ User command
 ---
 
 ## 4. How to Modify
-- **Adjust Registration Wait Time**: Modify the `GAME_CONFIG.REGISTRATION_TIME` variable inside [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L20).
+- **Adjust Registration Wait Time**: Modify the `GAME_CONFIG.REGISTRATION_TIME` variable inside [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L20).
 - **Edit Dungeon Rank Difficulties/Encounters**: Modify the `DUNGEON_RANKS` object configuration parameters in `core/rpg/guildAdventure.js`.
 - **Change Class Trial Settings**: Edit `TRIAL` parameters inside `initAdventure()`.
 
@@ -227,7 +227,7 @@ The Boss Raids/Adventure Boss system expands the Quest loop, allowing group part
 
 ## How it works
 
-**Raid Lobby and Party Gathering** — [guildAdventure.js L4169-L4232](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L4169-L4232)
+**Raid Lobby and Party Gathering** — [guildAdventure.js L4169-L4232](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L4169-L4232)
 ```javascript
 const joinAdventure = (chatId, senderJid, senderName) => {
   const state = getGameState(chatId);
@@ -298,7 +298,7 @@ This function handles player registration in the adventure/raid lobby. It retrie
 
 ---
 
-**Boss HP and Phase Transitions** — [guildAdventure.js L3629-L3671](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js#L3629-L3671)
+**Boss HP and Phase Transitions** — [guildAdventure.js L3629-L3671](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L3629-L3671)
 ```javascript
 async function checkBossPhase(sock, boss, chatId) {
   if (!boss.isBoss || !boss.phases) return null;
@@ -348,7 +348,7 @@ This function is run during boss battles to evaluate phase progression. It compu
 
 ---
 
-**Boss Combat Turn Logic** — [bossMechanics.js L1144-L1179](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/bossMechanics.js#L1144-L1179)
+**Boss Combat Turn Logic** — [bossMechanics.js L1144-L1179](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/bossMechanics.js#L1144-L1179)
 ```javascript
     processTurn() {
         this.currentTurn++;

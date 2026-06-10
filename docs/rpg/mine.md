@@ -32,7 +32,7 @@ User sends ".j mine shimmering_caves"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -54,7 +54,7 @@ User sends ".j mine shimmering_caves"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5120-L5130)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5120-L5130)
 * **Line Numbers**: 5120-5130
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `cmdArgs`
@@ -82,7 +82,7 @@ User sends ".j mine shimmering_caves"
 ---
 
 ### Step 3: Location Access and Energy Verification
-* **File Path**: [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L531-L574)
+* **File Path**: [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L531-L574)
 * **Line Numbers**: 531-574
 * **Called From**: `mineOre()`
 * **Inputs**: `(sock, chatId, senderJid, locationId)`
@@ -118,7 +118,7 @@ User sends ".j mine shimmering_caves"
 ---
 
 ### Step 4: Gathering Loot Rolls and Additions
-* **File Path**: [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L585-L616)
+* **File Path**: [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L585-L616)
 * **Line Numbers**: 585-616
 * **Called From**: `mineOre()`
 * **Inputs**: Luck stat and rolls
@@ -164,5 +164,5 @@ User sends ".j mine shimmering_caves"
 ## 4. How to Modify
 To adjust mining configurations:
 - **Add Mining Locations**: Edit `MINING_LOCATIONS` object definition in `core/rpg/craftingSystem.js`.
-- **Change Mining Level XP Gain**: Edit the formula in [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L575).
-- **Adjust Lucky Zeni pouch drop rate**: Change `0.02` (2%) in [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L595).
+- **Change Mining Level XP Gain**: Edit the formula in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L575).
+- **Adjust Lucky Zeni pouch drop rate**: Change `0.02` (2%) in [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L595).

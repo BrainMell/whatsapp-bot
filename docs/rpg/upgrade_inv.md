@@ -31,7 +31,7 @@ User sends ".j upgrade inv" or ".j upgrade inventory"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -53,7 +53,7 @@ User sends ".j upgrade inv" or ".j upgrade inventory"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7114-L7122)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7114-L7122)
 * **Line Numbers**: 7114-7122
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -78,7 +78,7 @@ User sends ".j upgrade inv" or ".j upgrade inventory"
 ---
 
 ### Step 3: Wrapper Dispatch & Response Message
-* **File Path**: [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L372-L386)
+* **File Path**: [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L372-L386)
 * **Line Numbers**: 372-386
 * **Called From**: `upgradeInventory()`
 * **Inputs**: `(sock, chatId, senderJid)`
@@ -110,7 +110,7 @@ async function upgradeInventory(sock, chatId, senderJid) {
 ---
 
 ### Step 4: Core Slot Upgrade Math
-* **File Path**: [core/rpg/inventorySystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L259-L295)
+* **File Path**: [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js#L259-L295)
 * **Line Numbers**: 259-295
 * **Called From**: `inventorySystem.upgradeInventory()`
 * **Inputs**: `(userId)`
@@ -166,6 +166,6 @@ function upgradeInventory(userId) {
 ---
 
 ## 4. How to Modify
-- **Modify Max Slots**: Change the `MAX_SLOTS` constant value (currently 100) inside [core/rpg/inventorySystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js).
-- **Adjust Base Slots & Step Scale**: Edit `BASE_SLOTS` or `SLOTS_PER_UPGRADE` values inside `INVENTORY_CONFIG` inside [core/rpg/inventorySystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/inventorySystem.js#L14).
+- **Modify Max Slots**: Change the `MAX_SLOTS` constant value (currently 100) inside [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js).
+- **Adjust Base Slots & Step Scale**: Edit `BASE_SLOTS` or `SLOTS_PER_UPGRADE` values inside `INVENTORY_CONFIG` inside [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js#L14).
 - **Edit Upgrade Cost Scaling**: Modify `UPGRADE_COST_BASE` or `UPGRADE_COST_SCALING` settings within `INVENTORY_CONFIG`.

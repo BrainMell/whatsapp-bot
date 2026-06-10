@@ -33,7 +33,7 @@ User sends ".g claim 3-04521"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger & Intercept
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4395-L4412)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4395-L4412)
 * **Line Numbers**: 4395-4412
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ lowerTxt, txt, senderJid, chatId, m, ... }`
@@ -67,7 +67,7 @@ User sends ".g claim 3-04521"
 ---
 
 ### Step 2: Extracting Command & Branching
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1778-L1852)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1778-L1852)
 * **Line Numbers**: 1778-1852
 * **Called From**: `handleCommand()`
 * **Inputs**: Intercept variables
@@ -104,7 +104,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 ---
 
 ### Step 3: Validating Spawns & Expiration
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L361-L381)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L361-L381)
 * **Line Numbers**: 361-381
 * **Called From**: `cmdClaim()`
 * **Inputs**: `(args, senderJid, reply, chatId)`
@@ -143,7 +143,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 ---
 
 ### Step 4: Database Registration & Confirmation
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L382-L396)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L382-L396)
 * **Line Numbers**: 382-396
 * **Called From**: `cmdClaim()`
 * **Inputs**: Spawn metadata
@@ -175,5 +175,190 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 ---
 
 ## 4. How to Modify
-- **Modify Claim Window Expiry**: Change the `CLAIM_WINDOW_MS` configuration constant (currently 30 minutes) at [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L57).
+- **Modify Claim Window Expiry**: Change the `CLAIM_WINDOW_MS` configuration constant (currently 30 minutes) at [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L57).
 - **Edit Rarity Threshold Labels**: Change calculation boundaries in `getRarityLabel()` inside `core/rpg/cardSystem.js`.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and manipulate data in a program. They have a name and a value, and can be changed or updated as the program runs.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
+let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
+```
+**How it works here**: The code creates two variables, `cleanTxt` and `lowerTxt`, to store the cleaned and lowercased text.
+**Why it's used**: Variables are used to store the intermediate results of the text cleaning process, making it easier to work with the data.
+**If you change/remove it**: If you remove the variables, the code will not be able to store the cleaned text, and the program will not work as expected. If you change the variable names, you will need to update all references to them in the code.
+
+---
+### Concept 2: String Methods
+String methods are used to manipulate and transform strings. They can be used to replace characters, convert to uppercase or lowercase, and more.
+**General Example**
+```javascript
+let str = 'Hello World';
+console.log(str.toLowerCase()); // outputs: hello world
+```
+**In Our Code**
+```javascript
+const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
+let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
+```
+**How it works here**: The code uses the `replace()` method to remove certain characters from the text, and the `toLowerCase()` method to convert the text to lowercase.
+**Why it's used**: String methods are used to clean and normalize the text, making it easier to work with.
+**If you change/remove it**: If you remove the string methods, the text will not be cleaned or normalized, and the program may not work as expected. If you change the methods, you will need to update the code to handle the new transformations.
+
+---
+### Concept 3: Regular Expressions
+Regular expressions are patterns used to match and manipulate strings. They can be used to search, replace, and validate text.
+**General Example**
+```javascript
+let str = 'Hello World';
+let regex = /World/;
+console.log(str.match(regex)); // outputs: [ 'World', index: 6, input: 'Hello World' ]
+```
+**In Our Code**
+```javascript
+const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
+```
+**How it works here**: The code uses regular expressions to match and replace certain characters in the text.
+**Why it's used**: Regular expressions are used to clean and normalize the text, making it easier to work with.
+**If you change/remove it**: If you remove the regular expressions, the text will not be cleaned or normalized, and the program may not work as expected. If you change the regular expressions, you will need to update the code to handle the new patterns.
+
+---
+### Concept 4: Async/Await
+Async/await is a syntax used to write asynchronous code that is easier to read and maintain. It allows you to write code that waits for a promise to resolve before continuing.
+**General Example**
+```javascript
+async function example() {
+  let data = await fetchData();
+  console.log(data);
+}
+```
+**In Our Code**
+```javascript
+async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
+  // ...
+}
+```
+**How it works here**: The code uses async/await to write asynchronous code that is easier to read and maintain.
+**Why it's used**: Async/await is used to handle the asynchronous nature of the code, making it easier to write and maintain.
+**If you change/remove it**: If you remove the async/await syntax, the code will not be able to handle asynchronous operations, and the program may not work as expected. If you change the syntax, you will need to update the code to handle the new asynchronous operations.
+
+---
+### Concept 5: Object Destructuring
+Object destructuring is a syntax used to extract properties from an object and assign them to variables.
+**General Example**
+```javascript
+let person = { name: 'John', age: 30 };
+let { name, age } = person;
+console.log(name); // outputs: John
+console.log(age); // outputs: 30
+```
+**In Our Code**
+```javascript
+async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
+  // ...
+}
+```
+**How it works here**: The code uses object destructuring to extract properties from the object passed to the `handleCommand` function.
+**Why it's used**: Object destructuring is used to make the code more concise and easier to read.
+**If you change/remove it**: If you remove the object destructuring, the code will need to access the properties using the object notation (e.g. `obj.lowerTxt`), making the code more verbose. If you change the destructuring, you will need to update the code to handle the new properties.
+
+---
+### Concept 6: Switch Statement
+A switch statement is a control structure used to execute different blocks of code based on the value of a variable.
+**General Example**
+```javascript
+let color = 'red';
+switch (color) {
+  case 'red':
+    console.log('The color is red');
+    break;
+  case 'green':
+    console.log('The color is green');
+    break;
+  default:
+    console.log('The color is not recognized');
+}
+```
+**In Our Code**
+```javascript
+switch (cmd) {
+  case 'claim':
+    await cmdClaim(args, senderJid, reply, chatId);
+    return true;
+  // ...
+}
+```
+**How it works here**: The code uses a switch statement to execute different blocks of code based on the value of the `cmd` variable.
+**Why it's used**: The switch statement is used to handle different commands and execute the corresponding code.
+**If you change/remove it**: If you remove the switch statement, the code will need to use a different control structure (e.g. if/else statements) to handle the different commands. If you change the switch statement, you will need to update the code to handle the new commands.
+
+---
+### Concept 7: Try/Catch Block
+A try/catch block is a control structure used to handle errors and exceptions in the code.
+**General Example**
+```javascript
+try {
+  let data = fetchData();
+  console.log(data);
+} catch (error) {
+  console.error(error);
+}
+```
+**In Our Code**
+```javascript
+try {
+  await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
+  // ...
+} catch (err) {
+  console.error('[Claim Error]', err);
+  return reply('❌ Claim failed.');
+}
+```
+**How it works here**: The code uses a try/catch block to handle any errors that may occur when creating a new user card.
+**Why it's used**: The try/catch block is used to handle errors and exceptions, making the code more robust and reliable.
+**If you change/remove it**: If you remove the try/catch block, the code will not be able to handle errors and exceptions, and the program may crash or produce unexpected behavior. If you change the try/catch block, you will need to update the code to handle the new errors and exceptions.
+
+---
+### Concept 8: Database Operations
+Database operations are used to interact with a database, such as creating, reading, updating, and deleting data.
+**General Example**
+```javascript
+let db = require('db');
+db.create({ name: 'John', age: 30 });
+```
+**In Our Code**
+```javascript
+await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
+```
+**How it works here**: The code uses a database operation to create a new user card.
+**Why it's used**: Database operations are used to store and retrieve data, making the program more persistent and reliable.
+**If you change/remove it**: If you remove the database operation, the code will not be able to store or retrieve data, and the program may not work as expected. If you change the database operation, you will need to update the code to handle the new data storage and retrieval.

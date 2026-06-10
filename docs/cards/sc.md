@@ -79,7 +79,7 @@ Sweeper loop interval (L1769)
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger & Intercept
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4400-L4412)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4400-L4412)
 * **Line Numbers**: 4400-4412
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ lowerTxt, txt, senderJid, chatId, m, ... }`
@@ -106,7 +106,7 @@ Sweeper loop interval (L1769)
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1778-L1952)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1778-L1952)
 * **Line Numbers**: 1778-1952
 * **Called From**: `handleCommand()`
 * **Inputs**: Intercept variables
@@ -141,7 +141,7 @@ Sweeper loop interval (L1769)
 ---
 
 ### Step 3: Placing a Bid on a Card (bid)
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1702-L1739)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1702-L1739)
 * **Line Numbers**: 1702-1739
 * **Called From**: `cmdBid()`
 * **Inputs**: `(senderJid, reply, args = [])`
@@ -193,7 +193,7 @@ async function cmdBid(senderJid, reply, args = []) {
 ---
 
 ### Step 4: Finalizing Expired Auctions (Sweeper)
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1742-L1772)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1742-L1772)
 * **Line Numbers**: 1742-1772
 * **Called From**: Sweeper interval loop (every 60s)
 * **Inputs**: Baileys socket reference
@@ -243,6 +243,226 @@ setInterval(() => {
 ---
 
 ## 4. How to Modify
-- **Change Sweeper Interval**: Locate the `setInterval` call at [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1769) and adjust the milliseconds (currently 60000 / 1 minute).
-- **Edit Minimum/Maximum Auction Durations**: Adjust checks inside `cmdAuction()` at [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1675).
+- **Change Sweeper Interval**: Locate the `setInterval` call at [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1769) and adjust the milliseconds (currently 60000 / 1 minute).
+- **Edit Minimum/Maximum Auction Durations**: Adjust checks inside `cmdAuction()` at [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1675).
 - **Adjust Listing Fees / Taxes**: You can introduce tax logic inside `finalizeAuctions` and `cmdBuyCard` before transferring Zeni.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const cardHandled = await cardSystem.handleCommand({
+  lowerTxt,
+  txt,
+  senderJid,
+  chatId,
+  m,
+  economy,
+  isOwner,
+  senderIsAdmin,
+  isMod: overrideUsers.has(senderJid) || isGlobalMod(senderJid),
+});
+```
+**How it works here**: The `cardHandled` variable is used to store the result of the `cardSystem.handleCommand` function.
+**Why it's used**: Variables are used to store values that can be used later in the program.
+**If you change/remove it**: If you remove the `cardHandled` variable, the program will not be able to store the result of the `cardSystem.handleCommand` function, and the program will not work as expected.
+
+---
+### Concept 2: Conditional Statements
+Conditional statements are used to make decisions in a program. They allow the program to execute different blocks of code based on certain conditions.
+**General Example**
+```javascript
+let age = 25;
+if (age > 18) {
+  console.log('You are an adult');
+} else {
+  console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (cardHandled) return;
+```
+**How it works here**: The `if` statement checks the value of the `cardHandled` variable. If it is true, the program returns and stops executing.
+**Why it's used**: Conditional statements are used to make decisions in the program and execute different blocks of code based on certain conditions.
+**If you change/remove it**: If you remove the `if` statement, the program will not be able to make decisions based on the value of the `cardHandled` variable, and the program will not work as expected.
+
+---
+### Concept 3: Switch Statements
+Switch statements are used to execute different blocks of code based on the value of a variable.
+**General Example**
+```javascript
+let color = 'red';
+switch (color) {
+  case 'red':
+    console.log('The color is red');
+    break;
+  case 'blue':
+    console.log('The color is blue');
+    break;
+  default:
+    console.log('The color is not red or blue');
+}
+```
+**In Our Code**
+```javascript
+switch (cmd) {
+  case 'buycard':
+    await cmdBuyCard(senderJid, reply, args);
+    return true;
+  // ...
+}
+```
+**How it works here**: The `switch` statement checks the value of the `cmd` variable and executes the corresponding block of code.
+**Why it's used**: Switch statements are used to execute different blocks of code based on the value of a variable.
+**If you change/remove it**: If you remove the `switch` statement, the program will not be able to execute different blocks of code based on the value of the `cmd` variable, and the program will not work as expected.
+
+---
+### Concept 4: Functions
+Functions are blocks of code that can be executed multiple times from different parts of the program.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+async function cmdBid(senderJid, reply, args = []) {
+  // ...
+}
+```
+**How it works here**: The `cmdBid` function is defined to handle the bid command.
+**Why it's used**: Functions are used to organize code and make it reusable.
+**If you change/remove it**: If you remove the `cmdBid` function, the program will not be able to handle the bid command, and the program will not work as expected.
+
+---
+### Concept 5: Async/Await
+Async/await is a way to write asynchronous code that is easier to read and maintain.
+**General Example**
+```javascript
+async function example() {
+  const data = await fetchData();
+  console.log(data);
+}
+```
+**In Our Code**
+```javascript
+const active = await CardMarket.find({ status: 'active', type: 'auction' }).sort({ auctionEndsAt: 1 });
+```
+**How it works here**: The `await` keyword is used to wait for the `CardMarket.find` function to complete before executing the next line of code.
+**Why it's used**: Async/await is used to write asynchronous code that is easier to read and maintain.
+**If you change/remove it**: If you remove the `await` keyword, the program will not wait for the `CardMarket.find` function to complete, and the program will not work as expected.
+
+---
+### Concept 6: Database Operations
+Database operations are used to interact with a database, such as finding, creating, updating, and deleting data.
+**General Example**
+```javascript
+const mongoose = require('mongoose');
+const User = mongoose.model('User');
+User.find({ name: 'John' }, (err, users) => {
+  console.log(users);
+});
+```
+**In Our Code**
+```javascript
+const active = await CardMarket.find({ status: 'active', type: 'auction' }).sort({ auctionEndsAt: 1 });
+```
+**How it works here**: The `CardMarket.find` function is used to find all documents in the `CardMarket` collection that match the specified criteria.
+**Why it's used**: Database operations are used to interact with a database and perform CRUD (create, read, update, delete) operations.
+**If you change/remove it**: If you remove the `CardMarket.find` function, the program will not be able to find the active auctions, and the program will not work as expected.
+
+---
+### Concept 7: Intervals
+Intervals are used to execute a function at a specified interval.
+**General Example**
+```javascript
+setInterval(() => {
+  console.log('Hello, world!');
+}, 1000); // Execute every 1 second
+```
+**In Our Code**
+```javascript
+setInterval(() => {
+  const inst = Array.from(instances.values())[0];
+  if (inst?.sock_ref) finalizeAuctions(inst.sock_ref);
+}, 60000); // Execute every 1 minute
+```
+**How it works here**: The `setInterval` function is used to execute the `finalizeAuctions` function every 1 minute.
+**Why it's used**: Intervals are used to execute a function at a specified interval, such as to perform maintenance tasks or to update data.
+**If you change/remove it**: If you remove the `setInterval` function, the program will not be able to execute the `finalizeAuctions` function at the specified interval, and the program will not work as expected.
+
+---
+### Concept 8: Parsing Numbers
+Parsing numbers is the process of converting a string to a number.
+**General Example**
+```javascript
+const str = '123';
+const num = parseInt(str);
+console.log(num); // Outputs: 123
+```
+**In Our Code**
+```javascript
+const index = parseInt(args[0]);
+const amount = parseInt(args[1]);
+```
+**How it works here**: The `parseInt` function is used to convert the `args[0]` and `args[1]` strings to numbers.
+**Why it's used**: Parsing numbers is used to convert strings to numbers, which can then be used in mathematical operations.
+**If you change/remove it**: If you remove the `parseInt` function, the program will not be able to convert the `args[0]` and `args[1]` strings to numbers, and the program will not work as expected.
+
+---
+### Concept 9: Error Handling
+Error handling is the process of catching and handling errors that occur in a program.
+**General Example**
+```javascript
+try {
+  const data = await fetchData();
+  console.log(data);
+} catch (err) {
+  console.error(err);
+}
+```
+**In Our Code**
+```javascript
+try {
+  auction.currentBid = amount;
+  auction.highBidderId = senderJid;
+  auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
+  await auction.save();
+} catch (err) {
+  return reply('Failed to place bid.');
+}
+```
+**How it works here**: The `try` block is used to execute the code that may throw an error, and the `catch` block is used to catch and handle any errors that occur.
+**Why it's used**: Error handling is used to catch and handle errors that occur in a program, which can help to prevent the program from crashing and provide a better user experience.
+**If you change/remove it**: If you remove the `try` and `catch` blocks, the program will not be able to catch and handle errors, and the program may crash or behave unexpectedly.

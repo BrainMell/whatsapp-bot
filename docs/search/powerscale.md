@@ -35,7 +35,7 @@ User replies with standalone number "1"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Query Execution and Search
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5286-L5339)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5286-L5339)
 * **Inputs**: Target character string `character`
 * **Outputs**: Returns list of character records matching the query from the VS Battles Wiki search API
 
@@ -68,7 +68,7 @@ async function getPowerScale(characterName, chatId) {
 ---
 
 ### Step 2: Session Interception
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4420-L4432)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4420-L4432)
 * **Inputs**: standalone numeric message `selectedNumber`
 * **Outputs**: Directs matching input to selection handler
 
@@ -85,7 +85,7 @@ if (numOnly) {
 ---
 
 ### Step 3: Statistics Scraping
-* **File Path**: [powerscale.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/powerscale.js#L65-L135)
+* **File Path**: [powerscale.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L65-L135)
 * **Inputs**: `(chatId, selection)`
 * **Outputs**: JSON object consisting of character attributes parsed from the VS Battles Wiki page
 
@@ -112,7 +112,7 @@ async function handlePowerscaleSelection(chatId, selection) {
 ---
 
 ### Step 4: Display Poster and Stats
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4441-L4468)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4441-L4468)
 * **Inputs**: Result payload including `imageUrl` and formatted `message`
 * **Outputs**: Sends image file with stats caption, and updates progression rewards
 
@@ -130,6 +130,6 @@ await awardProgression(senderJid, chatId);
 ---
 
 ## 4. How to Modify
-* **Selection Expiry Timeout**: Modify selection lifetime (currently `5 * 60 * 1000` ms / 5 minutes) in [powerscale.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/powerscale.js#L10).
-* **Displayed Stat Attributes**: Modify which properties are shown or customize their headers in `handlePowerscaleSelection` in [powerscale.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/powerscale.js#L106-L121).
-* **Vessel/Web Scraping Base**: VSB search query and extraction are processed by the scraper service. Edit [goImageService.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js) to configure backend routes.
+* **Selection Expiry Timeout**: Modify selection lifetime (currently `5 * 60 * 1000` ms / 5 minutes) in [powerscale.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L10).
+* **Displayed Stat Attributes**: Modify which properties are shown or customize their headers in `handlePowerscaleSelection` in [powerscale.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L106-L121).
+* **Vessel/Web Scraping Base**: VSB search query and extraction are processed by the scraper service. Edit [goImageService.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js) to configure backend routes.

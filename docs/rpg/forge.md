@@ -32,7 +32,7 @@ User sends ".j forge steel_plate"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -54,7 +54,7 @@ User sends ".j forge steel_plate"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5101-L5111)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5101-L5111)
 * **Line Numbers**: 5101-5111
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `cmdArgs`
@@ -82,7 +82,7 @@ User sends ".j forge steel_plate"
 ---
 
 ### Step 3: Forging Recipe Verification
-* **File Path**: [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L450-L473)
+* **File Path**: [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js#L450-L473)
 * **Line Numbers**: 450-473
 * **Called From**: `performCraft()`
 * **Inputs**: `(userId, recipeId)`
@@ -122,7 +122,7 @@ function canCraft(userId, recipeId) {
 ---
 
 ### Step 4: Blacksmith Forge Execution
-* **File Path**: [core/rpg/craftingSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/craftingSystem.js#L475-L532)
+* **File Path**: [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js#L475-L532)
 * **Line Numbers**: 475-532
 * **Called From**: `performCraft()`
 * **Inputs**: `(userId, recipeId, requiredStation = 'FORGE')`
@@ -169,3 +169,224 @@ async function performCraft(userId, recipeId, requiredStation = 'FORGE') {
 To adjust blacksmithing recipes:
 - **Add or Modify Forging Recipes**: Edit the `FORGE_RECIPES` object in `core/rpg/craftingSystem.js`.
 - **Change Equipment Weapon/Armor Stats**: Edit stats inside `FORGE_RECIPES` result field or modify items configuration inside `core/rpg/lootSystem.js`.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and manipulate data in a program. They are like labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+const item = cmdArgs.slice(1).join(" ");
+```
+**How it works here**: The `item` variable is used to store the value of the `cmdArgs` array sliced from index 1 and joined into a string.
+**Why it's used**: Variables are used to store and reuse values in the program, making the code more readable and efficient.
+**If you change/remove it**: If you remove the `item` variable, the code will throw an error because the `rpgCommands.forgeItem` function expects an `item` parameter. If you change it to a different variable name, the code will still work as long as the new variable is used consistently.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They are denoted by the `=>` symbol.
+**General Example**
+```javascript
+let add = (a, b) => a + b;
+console.log(add(2, 3)); // outputs: 5
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The arrow function is used to define an event listener for the `messages.upsert` event. The function takes an object with `messages` and `type` properties as an argument.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions that can be used as event listeners or callbacks.
+**If you change/remove it**: If you remove the arrow function, the event listener will not be defined, and the code will not respond to the `messages.upsert` event. If you change it to a traditional function definition, the code will still work, but the syntax will be different.
+
+---
+### Concept 3: Event Listeners
+Event listeners are functions that are called when a specific event occurs. They are used to respond to user interactions or other events in the program.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The event listener is used to respond to the `messages.upsert` event, which is triggered when a new message is received.
+**Why it's used**: Event listeners are used to respond to user interactions or other events in the program, allowing the code to react dynamically to changes.
+**If you change/remove it**: If you remove the event listener, the code will not respond to the `messages.upsert` event, and the program will not update accordingly. If you change the event type or the listener function, the code will respond to different events or behave differently.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to execute different blocks of code based on conditions or decisions. They are denoted by the `if` or `switch` keywords.
+**General Example**
+```javascript
+let x = 5;
+if (x > 10) {
+  console.log('x is greater than 10');
+} else {
+  console.log('x is less than or equal to 10');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: The conditional statements are used to check the `type` and `isRekeying` variables and return early if the conditions are not met.
+**Why it's used**: Conditional statements are used to make decisions in the code and execute different blocks of code based on conditions.
+**If you change/remove it**: If you remove the conditional statements, the code will not check the `type` and `isRekeying` variables, and the program may behave incorrectly. If you change the conditions or the code blocks, the program will make different decisions and behave differently.
+
+---
+### Concept 5: Array Methods
+Array methods are used to manipulate and transform arrays. They are denoted by the `map`, `filter`, `reduce`, and other keywords.
+**General Example**
+```javascript
+let numbers = [1, 2, 3, 4, 5];
+let doubleNumbers = numbers.map(x => x * 2);
+console.log(doubleNumbers); // outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The `map` method is used to transform the `messages` array into a new array of promises.
+**Why it's used**: Array methods are used to manipulate and transform arrays, making it easier to work with data in the program.
+**If you change/remove it**: If you remove the `map` method, the code will not transform the `messages` array, and the program will not work as expected. If you change the method or the transformation function, the program will behave differently.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations and callbacks. They are denoted by the `Promise` keyword.
+**General Example**
+```javascript
+let promise = new Promise((resolve, reject) => {
+  // asynchronous operation
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The `Promise.all` method is used to wait for all the promises in the `messages` array to resolve.
+**Why it's used**: Promises are used to handle asynchronous operations and callbacks, making it easier to work with asynchronous code.
+**If you change/remove it**: If you remove the `Promise.all` method, the code will not wait for the promises to resolve, and the program may behave incorrectly. If you change the method or the promises, the program will behave differently.
+
+---
+### Concept 7: Async/Await
+Async/await is a syntax sugar on top of promises that makes it easier to write asynchronous code. It is denoted by the `async` and `await` keywords.
+**General Example**
+```javascript
+async function example() {
+  let result = await promise;
+  console.log(result);
+}
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The `async` keyword is used to define an asynchronous function, and the `await` keyword is used to wait for promises to resolve.
+**Why it's used**: Async/await is used to make asynchronous code easier to read and write, by avoiding the need for callbacks and promise chaining.
+**If you change/remove it**: If you remove the `async` keyword, the code will not be able to use `await` and will throw an error. If you change the `await` keyword, the code will not wait for the promises to resolve, and the program may behave incorrectly.
+
+---
+### Concept 8: Object Destructuring
+Object destructuring is a syntax sugar that allows you to extract properties from an object and assign them to variables. It is denoted by the `{}` syntax.
+**General Example**
+```javascript
+let person = { name: 'John', age: 30 };
+let { name, age } = person;
+console.log(name); // outputs: John
+console.log(age); // outputs: 30
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The object destructuring is used to extract the `messages` and `type` properties from the object passed to the event listener.
+**Why it's used**: Object destructuring is used to make the code more concise and easier to read, by avoiding the need to access properties using the dot notation.
+**If you change/remove it**: If you remove the object destructuring, the code will not be able to access the `messages` and `type` properties, and will throw an error. If you change the property names, the code will access different properties, and the program may behave incorrectly.
+
+---
+### Concept 9: Functions
+Functions are reusable blocks of code that take arguments and return values. They are denoted by the `function` keyword.
+**General Example**
+```javascript
+function add(a, b) {
+  return a + b;
+}
+console.log(add(2, 3)); // outputs: 5
+```
+**In Our Code**
+```javascript
+function canCraft(userId, recipeId) {
+  // ...
+}
+```
+**How it works here**: The `canCraft` function is used to check if a user can craft a recipe.
+**Why it's used**: Functions are used to organize the code into reusable blocks, making it easier to maintain and modify.
+**If you change/remove it**: If you remove the `canCraft` function, the code will not be able to check if a user can craft a recipe, and the program may behave incorrectly. If you change the function signature or implementation, the program will behave differently.
+
+---
+### Concept 10: Loops
+Loops are used to execute a block of code repeatedly. They are denoted by the `for`, `while`, or `do-while` keywords.
+**General Example**
+```javascript
+for (let i = 0; i < 5; i++) {
+  console.log(i);
+}
+```
+**In Our Code**
+```javascript
+for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
+  // ...
+}
+```
+**How it works here**: The `for-of` loop is used to iterate over the `recipe.ingredients` object.
+**Why it's used**: Loops are used to execute a block of code repeatedly, making it easier to work with data in the program.
+**If you change/remove it**: If you remove the loop, the code will not be able to iterate over the `recipe.ingredients` object, and the program may behave incorrectly. If you change the loop type or implementation, the program will behave differently.

@@ -5,7 +5,7 @@ The Social subsystem manages the relationship graph between group chat members. 
 
 ## How it works
 
-**Safe Affection Score Updates** — [socialSystem.js L33-L57](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L33-L57)
+**Safe Affection Score Updates** — [socialSystem.js L33-L57](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L33-L57)
 ```javascript
 function incrementRelationship(user1Jid, user2Jid, delta) {
     if (user1Jid === user2Jid) return; // Can't have relationships with yourself
@@ -37,7 +37,7 @@ This function updates the relationship score symmetrically between two players. 
 
 ---
 
-**Relationship Text Generator** — [socialSystem.js L62-L97](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L62-L97)
+**Relationship Text Generator** — [socialSystem.js L62-L97](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L62-L97)
 ```javascript
 function getRelationshipsText(activeJids, senderJid) {
     if (!activeJids || activeJids.length === 0) return "";
@@ -80,7 +80,7 @@ This function maps a user's active contacts to text descriptors. It filters JIDs
 
 ---
 
-**Safe Relationship Map getter** — [socialSystem.js L3-L11](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L3-L11)
+**Safe Relationship Map getter** — [socialSystem.js L3-L11](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L3-L11)
 ```javascript
 function getRelationshipsMap(user) {
     if (!user.profile) {
@@ -132,7 +132,7 @@ To introduce new descriptive categories for relationships based on point levels,
 ```
 
 ## Common tasks
-- **Change score bounds** — Modify the upper/lower bounds of clamped relationship scores in [socialSystem.js L43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L43) and [socialSystem.js L49](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L49).
-- **Add relationship labels** — Add new conditional blocks to customize the text descriptions of relationships based on score values in [socialSystem.js L83-90](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L83-L90).
-- **Modify dot character escaping** — Customize JID dot escaping to prevent key failures in MongoDB nesting in [socialSystem.js L14](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L14) and [socialSystem.js L22](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L22).
-- **Initialize empty maps** — Adjust how empty profiles and relationship attributes are initialized in [socialSystem.js L3-11](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/socialSystem.js#L3-L11).
+- **Change score bounds** — Modify the upper/lower bounds of clamped relationship scores in [socialSystem.js L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L43) and [socialSystem.js L49](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L49).
+- **Add relationship labels** — Add new conditional blocks to customize the text descriptions of relationships based on score values in [socialSystem.js L83-90](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L83-L90).
+- **Modify dot character escaping** — Customize JID dot escaping to prevent key failures in MongoDB nesting in [socialSystem.js L14](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L14) and [socialSystem.js L22](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L22).
+- **Initialize empty maps** — Adjust how empty profiles and relationship attributes are initialized in [socialSystem.js L3-11](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L3-L11).

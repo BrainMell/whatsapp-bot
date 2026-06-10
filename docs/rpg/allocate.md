@@ -36,7 +36,7 @@ User sends ".j allocate atk 5"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -58,7 +58,7 @@ User sends ".j allocate atk 5"
 ---
 
 ### Step 2: Command Matching
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L146)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L146)
 * **Line Numbers**: Around 146
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -83,7 +83,7 @@ User sends ".j allocate atk 5"
 ---
 
 ### Step 3: Argument Parsing and Usage Guide
-* **File Path**: [core/commands/progressionCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/progressionCommands.js#L360-L382)
+* **File Path**: [core/commands/progressionCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/progressionCommands.js#L360-L382)
 * **Line Numbers**: 360-382
 * **Called From**: `handleAllocateCommand()`
 * **Inputs**: `args` array
@@ -121,7 +121,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
 ---
 
 ### Step 4: Class Tier Scaling and Attributes Mutation
-* **File Path**: [core/rpg/progression.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L300-L329)
+* **File Path**: [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js#L300-L329)
 * **Line Numbers**: 300-329
 * **Called From**: `handleAllocateCommand()`
 * **Inputs**: `(senderJid, stat, amount)`
@@ -173,6 +173,236 @@ function allocateStatPoint(userId, stat, amount = 1) {
 
 ## 4. How to Modify
 To adjust stat allocation rules:
-- **Change Base Stat Values**: Modify the `baseStatValues` object in [core/rpg/progression.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L318).
-- **Change Class Tier Multipliers**: Adjust the multipliers inside [core/rpg/progression.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js#L314-L316).
+- **Change Base Stat Values**: Modify the `baseStatValues` object in [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js#L318).
+- **Change Class Tier Multipliers**: Adjust the multipliers inside [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js#L314-L316).
 - **Reset Stats cost**: If you want to charge players Zeni to reset their allocated stats, edit `resetStats` function in `core/rpg/progression.js`.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const stat = args[0];
+const amount = parseInt(args[1]) || 1;
+```
+**How it works here**: In the code, `stat` and `amount` are variables used to store the values of the first and second arguments passed to the `handleAllocateCommand` function.
+**Why it's used**: Variables are used to store and manipulate data in the program. In this case, they are used to store the stat and amount values.
+**If you change/remove it**: If you remove the variables, the program will not be able to store and manipulate the stat and amount values, and will likely result in errors.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They are defined using the `=>` syntax.
+**General Example**
+```javascript
+let greet = (name) => { console.log(`Hello, ${name}!`); };
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the code, an arrow function is used as an event listener for the `messages.upsert` event. The function is called whenever the event is triggered, and it receives the `messages` and `type` parameters.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions. In this case, it is used to define an event listener.
+**If you change/remove it**: If you remove the arrow function, the event listener will not be defined, and the program will not respond to the `messages.upsert` event.
+
+---
+### Concept 3: Event Listeners
+Event listeners are functions that are called in response to specific events or actions. They are used to handle user interactions, network requests, and other events.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the code, an event listener is used to listen for the `messages.upsert` event. When the event is triggered, the event listener function is called.
+**Why it's used**: Event listeners are used to handle user interactions and other events. In this case, it is used to handle the `messages.upsert` event.
+**If you change/remove it**: If you remove the event listener, the program will not respond to the `messages.upsert` event, and will not be able to handle the event.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to execute different blocks of code based on certain conditions. They are defined using the `if` and `else` keywords.
+**General Example**
+```javascript
+let age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: In the code, conditional statements are used to check the `type` and `isRekeying` variables. If the conditions are not met, the function returns immediately.
+**Why it's used**: Conditional statements are used to execute different blocks of code based on certain conditions. In this case, they are used to filter out certain events.
+**If you change/remove it**: If you remove the conditional statements, the function will not filter out certain events, and may execute unnecessary code.
+
+---
+### Concept 5: Array Methods
+Array methods are used to manipulate and transform arrays. They are defined using the `map`, `filter`, and `reduce` keywords.
+**General Example**
+```javascript
+let numbers = [1, 2, 3, 4, 5];
+let doubledNumbers = numbers.map((num) => num * 2);
+console.log(doubledNumbers); // Outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: In the code, the `map` method is used to transform the `messages` array into an array of promises. The `Promise.all` method is then used to wait for all the promises to resolve.
+**Why it's used**: Array methods are used to manipulate and transform arrays. In this case, they are used to transform the `messages` array into an array of promises.
+**If you change/remove it**: If you remove the array method, the code will not be able to transform the `messages` array, and will not be able to wait for all the promises to resolve.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations. They are defined using the `Promise` keyword.
+**General Example**
+```javascript
+let promise = new Promise((resolve, reject) => {
+  // Asynchronous operation
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // Outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: In the code, promises are used to handle the asynchronous operations of sending messages. The `Promise.all` method is used to wait for all the promises to resolve.
+**Why it's used**: Promises are used to handle asynchronous operations. In this case, they are used to handle the asynchronous operations of sending messages.
+**If you change/remove it**: If you remove the promises, the code will not be able to handle the asynchronous operations of sending messages, and will likely result in errors.
+
+---
+### Concept 7: Async/Await
+Async/await is a syntax sugar on top of promises. It is used to write asynchronous code that is easier to read and maintain.
+**General Example**
+```javascript
+async function example() {
+  let result = await promise;
+  console.log(result);
+}
+```
+**In Our Code**
+```javascript
+async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
+  // ...
+}
+```
+**How it works here**: In the code, async/await is used to define the `handleAllocateCommand` function. The `await` keyword is used to wait for the promises to resolve.
+**Why it's used**: Async/await is used to write asynchronous code that is easier to read and maintain. In this case, it is used to define the `handleAllocateCommand` function.
+**If you change/remove it**: If you remove the async/await syntax, the code will not be able to handle the asynchronous operations, and will likely result in errors.
+
+---
+### Concept 8: Destructuring
+Destructuring is a syntax sugar that allows you to extract values from arrays and objects.
+**General Example**
+```javascript
+let [name, age] = ['John', 25];
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 25
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the code, destructuring is used to extract the `messages` and `type` values from the event object.
+**Why it's used**: Destructuring is used to extract values from arrays and objects. In this case, it is used to extract the `messages` and `type` values from the event object.
+**If you change/remove it**: If you remove the destructuring syntax, the code will not be able to extract the `messages` and `type` values, and will likely result in errors.
+
+---
+### Concept 9: Imports
+Imports are used to import modules and functions from other files.
+**General Example**
+```javascript
+import { example } from './example.js';
+example();
+```
+**In Our Code**
+```javascript
+const classSystem = require('./classSystem');
+```
+**How it works here**: In the code, the `require` function is used to import the `classSystem` module from the `classSystem.js` file.
+**Why it's used**: Imports are used to import modules and functions from other files. In this case, it is used to import the `classSystem` module.
+**If you change/remove it**: If you remove the import statement, the code will not be able to use the `classSystem` module, and will likely result in errors.
+
+---
+### Concept 10: Number Parsing
+Number parsing is used to convert strings to numbers.
+**General Example**
+```javascript
+let num = parseInt('123');
+console.log(num); // Outputs: 123
+```
+**In Our Code**
+```javascript
+const amount = parseInt(args[1]) || 1;
+```
+**How it works here**: In the code, the `parseInt` function is used to convert the `args[1]` string to a number. If the conversion fails, the `||` operator is used to default to 1.
+**Why it's used**: Number parsing is used to convert strings to numbers. In this case, it is used to convert the `args[1]` string to a number.
+**If you change/remove it**: If you remove the number parsing, the code will not be able to convert the `args[1]` string to a number, and will likely result in errors.
+
+---
+### Concept 11: Database Operations
+Database operations are used to interact with a database.
+**General Example**
+```javascript
+let db = require('./db.js');
+db.save('example', { name: 'John' });
+```
+**In Our Code**
+```javascript
+saveProgression(userId);
+```
+**How it works here**: In the code, the `saveProgression` function is used to save the user's progression to the database.
+**Why it's used**: Database operations are used to interact with a database. In this case, it is used to save the user's progression to the database.
+**If you change/remove it**: If you remove the database operation, the code will not be able to save the user's progression, and will likely result in data loss.

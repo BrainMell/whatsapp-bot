@@ -34,7 +34,7 @@ User sends ".j withdraw 500" or ".j with all"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -56,7 +56,7 @@ User sends ".j withdraw 500" or ".j with all"
 ---
 
 ### Step 2: Command Matching and Argument Extraction
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L15012-L15050)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L15012-L15050)
 * **Line Numbers**: 15012-15050
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `txt`
@@ -112,7 +112,7 @@ User sends ".j withdraw 500" or ".j with all"
 ---
 
 ### Step 3: Bank Withdrawal Logic and Gambling Cap Synchronization
-* **File Path**: [core/rpg/economy.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L712-L749)
+* **File Path**: [core/rpg/economy.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/economy.js#L712-L749)
 * **Line Numbers**: 712-749
 * **Called From**: `core/engine.js`
 * **Imported From**: `core/rpg/economy`
@@ -170,7 +170,7 @@ function withdraw(userId, amount) {
 ---
 
 ### Step 4: Rendering Transaction Confirmation Card
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L15053-L15083)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L15053-L15083)
 * **Line Numbers**: 15053-15083
 * **Called From**: `engine.js`
 * **Inputs**: Result transaction payload
@@ -218,9 +218,272 @@ function withdraw(userId, amount) {
 
 ## 5. How to Modify
 To adjust limits or parameters:
-- **Tax Withdrawal Processing (optional)**: You can deduct a bank processing fee (e.g. 2%) when withdrawing in [core/rpg/economy.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L724):
+- **Tax Withdrawal Processing (optional)**: You can deduct a bank processing fee (e.g. 2%) when withdrawing in [core/rpg/economy.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/economy.js#L724):
   ```javascript
   const fee = Math.floor(amount * 0.02);
   user.bank -= amount;
   user.wallet += (amount - fee); // Charges 2% processing fee
   ```
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and manipulate data in a program. They have a name, and you can assign a value to them.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+const args = txt.split(` `);
+let amount = args[2];
+```
+**How it works here**: The code declares a variable `args` and assigns it the result of splitting the `txt` string into an array. Then, it declares another variable `amount` and assigns it the third element of the `args` array.
+**Why it's used**: Variables are used to store the result of the string splitting operation and the amount value, so they can be used later in the code.
+**If you change/remove it**: If you remove the `let amount = args[2];` line, the `amount` variable would not be declared, and the code would throw an error when trying to use it. If you change the value of `args[2]`, the `amount` variable would have a different value.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They have an implicit return statement.
+**General Example**
+```javascript
+const greet = (name) => `Hello, ${name}!`;
+console.log(greet('John')); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code defines an event listener for the `messages.upsert` event, and the event handler is an arrow function that takes an object with `messages` and `type` properties.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions, like event handlers, in a concise way.
+**If you change/remove it**: If you remove the arrow function, the event listener would not be defined, and the code would not respond to the `messages.upsert` event. If you change the arrow function to a traditional function, the code would still work, but it would be less concise.
+
+---
+### Concept 3: Event Listeners
+Event listeners are functions that are called when a specific event occurs. They are used to respond to user interactions, network requests, and other events.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code defines an event listener for the `messages.upsert` event, which is triggered when a new message is received.
+**Why it's used**: Event listeners are used to respond to events, like new messages, and perform actions accordingly.
+**If you change/remove it**: If you remove the event listener, the code would not respond to the `messages.upsert` event, and the message processing logic would not be executed. If you change the event listener to listen for a different event, the code would respond to that event instead.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to execute different blocks of code based on conditions or decisions.
+**General Example**
+```javascript
+const age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: The code checks the `type` variable and returns immediately if it's not `"notify"` or `"append"`. It also checks the `isRekeying` variable and returns immediately if it's true.
+**Why it's used**: Conditional statements are used to make decisions and execute different blocks of code based on conditions.
+**If you change/remove it**: If you remove the conditional statements, the code would not check the `type` and `isRekeying` variables, and it would execute the following code regardless of their values. If you change the conditions, the code would make different decisions and execute different blocks of code.
+
+---
+### Concept 5: Array Methods
+Array methods are used to manipulate and transform arrays.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map((num) => num * 2);
+console.log(doubleNumbers); // outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The code uses the `map()` method to transform the `messages` array into an array of promises, and then uses `Promise.all()` to wait for all the promises to resolve.
+**Why it's used**: Array methods are used to manipulate and transform arrays, like mapping over the `messages` array and creating an array of promises.
+**If you change/remove it**: If you remove the `map()` method, the code would not transform the `messages` array, and it would not create an array of promises. If you change the `map()` method to a different array method, the code would transform the array differently.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations, like network requests or database queries.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // asynchronous operation
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The code uses `Promise.all()` to wait for all the promises in the `messages` array to resolve.
+**Why it's used**: Promises are used to handle asynchronous operations, like waiting for multiple promises to resolve.
+**If you change/remove it**: If you remove the `Promise.all()` method, the code would not wait for all the promises to resolve, and it would continue executing the following code immediately. If you change the `Promise.all()` method to a different promise method, the code would handle the promises differently.
+
+---
+### Concept 7: Async/Await
+Async/await is a syntax sugar on top of promises, making it easier to write asynchronous code.
+**General Example**
+```javascript
+async function example() {
+  const result = await promise;
+  console.log(result);
+}
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code defines an async function as the event handler for the `messages.upsert` event, allowing it to use the `await` keyword to wait for promises to resolve.
+**Why it's used**: Async/await is used to make asynchronous code easier to read and write, by allowing the use of the `await` keyword to wait for promises to resolve.
+**If you change/remove it**: If you remove the `async` keyword, the code would not be able to use the `await` keyword, and it would have to use the `then()` method to handle promises. If you change the `async` function to a traditional function, the code would not be able to use the `await` keyword.
+
+---
+### Concept 8: String Manipulation
+String manipulation is used to transform and manipulate strings.
+**General Example**
+```javascript
+const str = 'Hello, World!';
+const upperCaseStr = str.toUpperCase();
+console.log(upperCaseStr); // outputs: HELLO, WORLD!
+```
+**In Our Code**
+```javascript
+const lowerTxt = txt.toLowerCase();
+```
+**How it works here**: The code uses the `toLowerCase()` method to convert the `txt` string to lowercase.
+**Why it's used**: String manipulation is used to transform and manipulate strings, like converting to lowercase or uppercase.
+**If you change/remove it**: If you remove the `toLowerCase()` method, the code would not convert the `txt` string to lowercase, and it would use the original string. If you change the `toLowerCase()` method to a different string manipulation method, the code would transform the string differently.
+
+---
+### Concept 9: Object Destructuring
+Object destructuring is used to extract properties from an object and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 25 };
+const { name, age } = person;
+console.log(name); // outputs: John
+console.log(age); // outputs: 25
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code uses object destructuring to extract the `messages` and `type` properties from the object passed to the event handler.
+**Why it's used**: Object destructuring is used to extract properties from an object and assign them to variables, making the code more concise and easier to read.
+**If you change/remove it**: If you remove the object destructuring, the code would have to access the properties using the dot notation, like `obj.messages` and `obj.type`. If you change the object destructuring to a different syntax, the code would extract the properties differently.
+
+---
+### Concept 10: Numbers Parsing
+Numbers parsing is used to convert strings to numbers.
+**General Example**
+```javascript
+const str = '123';
+const num = parseInt(str);
+console.log(num); // outputs: 123
+```
+**In Our Code**
+```javascript
+amount = parseInt(amount);
+```
+**How it works here**: The code uses the `parseInt()` function to convert the `amount` string to a number.
+**Why it's used**: Numbers parsing is used to convert strings to numbers, like converting the `amount` string to a number.
+**If you change/remove it**: If you remove the `parseInt()` function, the code would not convert the `amount` string to a number, and it would use the original string. If you change the `parseInt()` function to a different numbers parsing function, the code would convert the string differently.
+
+---
+### Concept 11: Database Operations
+Database operations are used to interact with a database, like storing or retrieving data.
+**General Example**
+```javascript
+const db = require('db');
+db.insert({ name: 'John', age: 25 });
+```
+**In Our Code**
+```javascript
+const user = getUser(userId);
+user.bank -= amount;
+user.wallet += amount;
+```
+**How it works here**: The code interacts with a database, like storing or retrieving user data, and updates the user's bank and wallet balances.
+**Why it's used**: Database operations are used to interact with a database, like storing or retrieving data, and updating the user's balances.
+**If you change/remove it**: If you remove the database operations, the code would not interact with the database, and it would not update the user's balances. If you change the database operations to a different syntax, the code would interact with the database differently.
+
+---
+### Concept 12: Error Handling
+Error handling is used to catch and handle errors that occur during the execution of the code.
+**General Example**
+```javascript
+try {
+  // code that might throw an error
+} catch (error) {
+  console.log(error);
+}
+```
+**In Our Code**
+```javascript
+try {
+  const imgBuf = await goService.generateTransactionCard({
+    // ...
+  });
+  // ...
+} catch (e) {
+  await sock.sendMessage(chatId, {
+    text: BOT_MARKER + result.message,
+  });
+}
+```
+**How it works here**: The code catches any errors that occur during the execution of the `generateTransactionCard()` function and sends a message to the user with the error message.
+**Why it's used**: Error handling is used to catch and handle errors that occur during the execution of the code, providing a better user experience.
+**If you change/remove it**: If you remove the error handling, the code would not catch any errors that occur during the execution of the code, and it would crash or produce unexpected behavior. If you change the error handling to a different syntax, the code would handle errors differently.

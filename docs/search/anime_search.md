@@ -32,7 +32,7 @@ User replies to the search result list with "1"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Initial Keyword Query
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L297-L327)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L297-L327)
 * **Inputs**: Query keyword string (e.g. `Naruto`)
 * **Outputs**: Array of up to 15 matching anime results from the Jikan API
 
@@ -53,7 +53,7 @@ async function handleAnimeSearch(sock, chatId, query, m) {
 ---
 
 ### Step 2: Session Caching
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L335-L358)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L335-L358)
 * **Inputs**: Search results list array and message metadata
 * **Outputs**: Updates global memory maps to remember search context for 5 minutes
 
@@ -76,7 +76,7 @@ setTimeout(() => {
 ---
 
 ### Step 3: Resolving Selection Replies
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4483-L4507)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4483-L4507)
 * **Inputs**: User sends a standalone number message (e.g. `1`) quoting the bot's search list
 * **Outputs**: Retrieves matching index from the cache map
 
@@ -95,7 +95,7 @@ if (quotedId && global[`__${BOT_ID}_anime_search_cache_by_msgid`].has(quotedId))
 ---
 
 ### Step 4: Scraping Streaming Links and Responding
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4509-L4540)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4509-L4540)
 * **Inputs**: Cached result list and index selection
 * **Outputs**: Fetches watch link from Anime Kai, downloads poster image, and replies to user
 
@@ -120,7 +120,7 @@ if (cached && idx >= 1 && idx <= cached.results.length) {
 ---
 
 ## 4. How to Modify
-* **Search Session Timeout**: Modify the cache expiration delay (currently `300000` ms / 5 minutes) in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L354).
-* **Jikan API Rate Limits**: Change the rate-limiting delay between MAL API requests (currently `1000` ms) in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L301).
-* **Anime Kai Watch Link Slugs**: Modify how fallback watch URLs are structured inside `getAnikaiLink` in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L275-L281).
-* **Trending/Airing Display Limit**: Change Jikan limit parameter inside `handleAnimeTrending` (currently `20`) or `handleAnimeAiring` (currently `12`) inside [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L373).
+* **Search Session Timeout**: Modify the cache expiration delay (currently `300000` ms / 5 minutes) in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L354).
+* **Jikan API Rate Limits**: Change the rate-limiting delay between MAL API requests (currently `1000` ms) in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L301).
+* **Anime Kai Watch Link Slugs**: Modify how fallback watch URLs are structured inside `getAnikaiLink` in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L275-L281).
+* **Trending/Airing Display Limit**: Change Jikan limit parameter inside `handleAnimeTrending` (currently `20`) or `handleAnimeAiring` (currently `12`) inside [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L373).

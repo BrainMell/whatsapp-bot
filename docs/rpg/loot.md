@@ -5,7 +5,7 @@ The Loot Subsystem controls the generation and distribution of items and gold wi
 
 ## How it works
 
-**Gold Drop Randomization** — [lootSystem.js L464–492](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L464-L492)
+**Gold Drop Randomization** — [lootSystem.js L464–492](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L464-L492)
 ```javascript
 function generateGoldDrop(encounterType, difficulty = 1.0) {
     let range = GOLD_RANGES.COMMON_ENEMY;
@@ -41,7 +41,7 @@ This function maps the incoming encounter type to its respective gold drop confi
 
 ---
 
-**Party Loot Distribution** — [lootSystem.js L494–558](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L494-L558)
+**Party Loot Distribution** — [lootSystem.js L494–558](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L494-L558)
 ```javascript
 async function distributeLoot(players, encounterType, enemyName = null, difficulty = 1.0, overrideGold = null) {
     const inventorySystem = require('./inventorySystem');
@@ -113,7 +113,7 @@ This controller distributes generated drops and gold to players in a party. It s
 
 ---
 
-**Item Database Query Fallback** — [lootSystem.js L671–679](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L671-L679)
+**Item Database Query Fallback** — [lootSystem.js L671–679](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L671-L679)
 ```javascript
 function getItemInfo(itemId) {
     return ITEM_DATABASE[itemId] || {
@@ -205,8 +205,8 @@ To adjust the drops generated from common enemies, add new entries to the `LOOT_
 ```
 
 ## Common tasks
-- **Modify system rarity weights** — Edit the order and baseline ranks of the game's reward rarities in [lootSystem.js L6–13](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L6-L13).
-- **Edit baseline drop chance formula** — Tune weight calculations and the impact of the rarity boost multiplier in [lootSystem.js L269](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L269).
-- **Adjust gold drop values** — Adjust the numeric arrays representing min and max gold outputs in [lootSystem.js L254–262](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L254-L262).
-- **Alter boss dynamic drops bonus rate** — Adjust boss rarity-scaled chance factors in [lootSystem.js L426](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L426).
-- **Update unknown item default attributes** — Tune safety values returned when an item ID cannot be resolved in the database in [lootSystem.js L671–679](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js#L671-L679).
+- **Modify system rarity weights** — Edit the order and baseline ranks of the game's reward rarities in [lootSystem.js L6–13](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L6-L13).
+- **Edit baseline drop chance formula** — Tune weight calculations and the impact of the rarity boost multiplier in [lootSystem.js L269](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L269).
+- **Adjust gold drop values** — Adjust the numeric arrays representing min and max gold outputs in [lootSystem.js L254–262](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L254-L262).
+- **Alter boss dynamic drops bonus rate** — Adjust boss rarity-scaled chance factors in [lootSystem.js L426](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L426).
+- **Update unknown item default attributes** — Tune safety values returned when an item ID cannot be resolved in the database in [lootSystem.js L671–679](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L671-L679).

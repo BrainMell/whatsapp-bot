@@ -73,7 +73,7 @@ User sends ".j evolve warrior"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -95,7 +95,7 @@ User sends ".j evolve warrior"
 ---
 
 ### Step 2: Command Matching
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4888-L4896)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4888-L4896)
 * **Line Numbers**: 4888-4896
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -120,7 +120,7 @@ User sends ".j evolve warrior"
 ---
 
 ### Step 3: Fetch Learned Skill Tree Groupings
-* **File Path**: [core/commands/skillCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/skillCommands.js#L283-L332)
+* **File Path**: [core/commands/skillCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/skillCommands.js#L283-L332)
 * **Line Numbers**: 283-332
 * **Called From**: `viewAbilities()`
 * **Imported From**: `core/commands/skillCommands`
@@ -161,7 +161,7 @@ User sends ".j evolve warrior"
 ---
 
 ### Step 4: Upgrading a Skill
-* **File Path**: [core/commands/skillCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/skillCommands.js#L140-L228)
+* **File Path**: [core/commands/skillCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/skillCommands.js#L140-L228)
 * **Line Numbers**: 140-228
 * **Called From**: `upgradeSkill()`
 * **Inputs**: `(sock, chatId, senderJid, skillId)`
@@ -205,4 +205,228 @@ User sends ".j evolve warrior"
 To adjust skill tree configurations or evolution criteria:
 - **Change Skill Costs / Damage Multipliers**: Edit files inside `core/rpg/skillTree.js` or `core/rpg/classSystem.js`.
 - **Evolve Milestone Tuning**: Change evolve requirements (such as minimum level or required items) in the classes data inside `core/rpg/classSystem.js`.
-- **Bonus Skill Points Interval**: Change the milestone XP leveling bonuses inside [core/rpg/progression.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/progression.js).
+- **Bonus Skill Points Interval**: Change the milestone XP leveling bonuses inside [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const classId = classSystem.getClassById(classId);
+const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+```
+**How it works here**: Variables are used to store values such as `classId`, `tree`, and `skill` which are then used in the program to perform various operations.
+**Why it's used**: Variables are used to store and reuse values in the program, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change a variable, the program may not work as expected, and you may get errors such as "undefined" or "not declared".
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to write functions in JavaScript. They are defined using the `=>` symbol and can be used as expressions.
+**General Example**
+```javascript
+let sum = (a, b) => a + b;
+console.log(sum(2, 3)); // Outputs: 5
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // code here
+});
+```
+**How it works here**: An arrow function is used as an event listener for the "messages.upsert" event. When the event is triggered, the function is called with the `messages` and `type` parameters.
+**Why it's used**: Arrow functions are used to write concise and readable code. They are also used to define small, one-time use functions.
+**If you change/remove it**: If you remove or change the arrow function, the event listener may not work as expected, and the program may not respond to the event.
+
+---
+### Concept 3: Event Listeners
+Event listeners are used to respond to events such as user interactions, network requests, or changes in the program state.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // code here
+});
+```
+**How it works here**: An event listener is used to respond to the "messages.upsert" event. When the event is triggered, the function is called with the `messages` and `type` parameters.
+**Why it's used**: Event listeners are used to respond to events and perform actions based on user interactions or changes in the program state.
+**If you change/remove it**: If you remove or change the event listener, the program may not respond to the event, and the desired action may not be performed.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to make decisions based on conditions or values.
+**General Example**
+```javascript
+let age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: Conditional statements are used to check the `type` and `isRekeying` values and perform actions based on the conditions.
+**Why it's used**: Conditional statements are used to make decisions and perform actions based on conditions or values.
+**If you change/remove it**: If you remove or change the conditional statement, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 5: Array Methods
+Array methods are used to perform operations on arrays such as mapping, filtering, and reducing.
+**General Example**
+```javascript
+let numbers = [1, 2, 3, 4, 5];
+let doubleNumbers = numbers.map((num) => num * 2);
+console.log(doubleNumbers); // Outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // code here
+  })
+);
+```
+**How it works here**: The `map` method is used to perform an operation on each element of the `messages` array.
+**Why it's used**: Array methods are used to perform operations on arrays and simplify the code.
+**If you change/remove it**: If you remove or change the array method, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations and provide a way to execute code when the operation is complete.
+**General Example**
+```javascript
+let promise = new Promise((resolve, reject) => {
+  // asynchronous operation
+  resolve('Done!');
+});
+promise.then((result) => {
+  console.log(result); // Outputs: Done!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // code here
+  })
+);
+```
+**How it works here**: Promises are used to handle the asynchronous operation of processing the `messages` array.
+**Why it's used**: Promises are used to handle asynchronous operations and provide a way to execute code when the operation is complete.
+**If you change/remove it**: If you remove or change the promise, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 7: Destructuring
+Destructuring is used to extract values from objects and arrays and assign them to variables.
+**General Example**
+```javascript
+let person = { name: 'John', age: 25 };
+let { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 25
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // code here
+});
+```
+**How it works here**: Destructuring is used to extract the `messages` and `type` values from the object and assign them to variables.
+**Why it's used**: Destructuring is used to simplify the code and extract values from objects and arrays.
+**If you change/remove it**: If you remove or change the destructuring, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 8: Object Properties
+Object properties are used to access and manipulate the values of an object.
+**General Example**
+```javascript
+let person = { name: 'John', age: 25 };
+console.log(person.name); // Outputs: John
+person.name = 'Jane';
+console.log(person.name); // Outputs: Jane
+```
+**In Our Code**
+```javascript
+const classData = classSystem.getClassById(classId);
+const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+```
+**How it works here**: Object properties are used to access the `classData` and `tree` values from the `classSystem` and `skillTree` objects.
+**Why it's used**: Object properties are used to access and manipulate the values of an object.
+**If you change/remove it**: If you remove or change the object property, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 9: Loops
+Loops are used to repeat a block of code for a specified number of times.
+**General Example**
+```javascript
+for (let i = 0; i < 5; i++) {
+  console.log(i);
+}
+```
+**In Our Code**
+```javascript
+for (const classId of lineage) {
+  // code here
+}
+```
+**How it works here**: A loop is used to iterate over the `lineage` array and perform an action for each element.
+**Why it's used**: Loops are used to repeat a block of code for a specified number of times.
+**If you change/remove it**: If you remove or change the loop, the program may not work as expected, and the desired action may not be performed.
+
+---
+### Concept 10: Functions
+Functions are used to group a block of code together and reuse it.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+await skillCommands.viewAbilities(
+  sock,
+  chatId,
+  senderJid,
+  senderName,
+);
+```
+**How it works here**: A function is used to perform an action and return a result.
+**Why it's used**: Functions are used to group a block of code together and reuse it.
+**If you change/remove it**: If you remove or change the function, the program may not work as expected, and the desired action may not be performed.

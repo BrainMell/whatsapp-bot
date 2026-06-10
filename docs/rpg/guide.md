@@ -40,7 +40,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -62,7 +62,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L8875-L8931)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L8875-L8931)
 * **Line Numbers**: 8875-8931
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -96,7 +96,7 @@ User command
 ---
 
 ### Step 3: Resolving Topic Content & Sending Output
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L8932-L9112)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L8932-L9112)
 * **Line Numbers**: 8932-9112
 * **Called From**: Parser block inside `engine.js`
 * **Inputs**: `topic` JID parameter string
@@ -128,5 +128,238 @@ User command
 ---
 
 ## 4. How to Modify
-- **Add New Guide Topics**: Add a new `else if (topic === "new_topic")` block inside [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L8934).
-- **Edit World Lore Campaign**: Modify the response text in `showLore` inside [core/rpg/guildAdventure.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/guildAdventure.js).
+- **Add New Guide Topics**: Add a new `else if (topic === "new_topic")` block inside [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L8934).
+- **Edit World Lore Campaign**: Modify the response text in `showLore` inside [core/rpg/guildAdventure.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+let msg = "";
+let isRekeying;
+```
+**How it works here**: In the provided code snippets, variables are used to store messages, flags, and other values. For example, `msg` is used to store the message to be sent, and `isRekeying` is used to track the rekeying status.
+**Why it's used**: Variables are used to store and reuse values in the program, making it easier to manage and modify the code.
+**If you change/remove it**: If you remove the `msg` variable, the code will throw an error when trying to send the message. If you remove the `isRekeying` variable, the code will not be able to track the rekeying status, potentially causing issues with the program's functionality.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They are defined using the `=>` syntax.
+**General Example**
+```javascript
+const greet = (name) => {
+  console.log(`Hello, ${name}!`);
+};
+greet('John'); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the provided code snippets, arrow functions are used as event listeners and as arguments to the `map` method. For example, the arrow function passed to `sock.ev.on` is called when the "messages.upsert" event is triggered.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions that can be used as event listeners or as arguments to other functions.
+**If you change/remove it**: If you remove the arrow function passed to `sock.ev.on`, the code will not be able to listen for the "messages.upsert" event, and the program will not be able to respond to incoming messages.
+
+---
+### Concept 3: Event Listeners
+Event listeners are functions that are called when a specific event occurs. They are used to respond to user interactions, network requests, and other events.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the provided code snippets, event listeners are used to respond to incoming messages and other events. For example, the event listener passed to `sock.ev.on` is called when the "messages.upsert" event is triggered.
+**Why it's used**: Event listeners are used to respond to events and user interactions, allowing the program to react to changes and updates.
+**If you change/remove it**: If you remove the event listener passed to `sock.ev.on`, the code will not be able to respond to incoming messages, and the program will not be able to process and respond to user input.
+
+---
+### Concept 4: Array Methods
+Array methods are functions that can be called on arrays to perform operations such as mapping, filtering, and reducing.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map((num) => num * 2);
+console.log(doubleNumbers); // outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: In the provided code snippets, array methods are used to process and transform data. For example, the `map` method is used to transform the `messages` array into an array of promises.
+**Why it's used**: Array methods are used to perform operations on arrays, making it easier to process and transform data.
+**If you change/remove it**: If you remove the `map` method, the code will not be able to transform the `messages` array, and the program will not be able to process and respond to incoming messages.
+
+---
+### Concept 5: Conditional Statements
+Conditional statements are used to execute different blocks of code based on conditions or decisions.
+**General Example**
+```javascript
+const age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: In the provided code snippets, conditional statements are used to make decisions and execute different blocks of code. For example, the `if` statement checks the `type` variable and returns if it's not "notify" or "append".
+**Why it's used**: Conditional statements are used to make decisions and execute different blocks of code based on conditions or decisions.
+**If you change/remove it**: If you remove the `if` statement, the code will not be able to make decisions and execute different blocks of code, potentially causing issues with the program's functionality.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations and provide a way to execute code when a promise is resolved or rejected.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // ...
+  resolve('Hello, World!');
+});
+promise.then((message) => {
+  console.log(message); // outputs: Hello, World!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: In the provided code snippets, promises are used to handle asynchronous operations and execute code when a promise is resolved or rejected. For example, the `Promise.all` method is used to wait for all the promises in the `messages` array to be resolved.
+**Why it's used**: Promises are used to handle asynchronous operations and provide a way to execute code when a promise is resolved or rejected.
+**If you change/remove it**: If you remove the `Promise.all` method, the code will not be able to wait for all the promises in the `messages` array to be resolved, potentially causing issues with the program's functionality.
+
+---
+### Concept 7: Destructuring
+Destructuring is a way to extract values from objects and arrays and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 25 };
+const { name, age } = person;
+console.log(name); // outputs: John
+console.log(age); // outputs: 25
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the provided code snippets, destructuring is used to extract values from objects and assign them to variables. For example, the `messages` and `type` variables are extracted from the object passed to the event listener.
+**Why it's used**: Destructuring is used to extract values from objects and arrays and assign them to variables, making it easier to access and use the values.
+**If you change/remove it**: If you remove the destructuring, the code will not be able to extract the values from the object, and the program will not be able to access and use the values.
+
+---
+### Concept 8: String Comparison
+String comparison is used to compare two strings and determine if they are equal or not.
+**General Example**
+```javascript
+const str1 = 'hello';
+const str2 = 'hello';
+if (str1 === str2) {
+  console.log('The strings are equal!');
+} else {
+  console.log('The strings are not equal!');
+}
+```
+**In Our Code**
+```javascript
+if (
+  lowerTxt ===
+    `${botConfig.getPrefix().toLowerCase()} rpg guide` ||
+  lowerTxt ===
+    `${botConfig.getPrefix().toLowerCase()} guide` ||
+  lowerTxt ===
+    `${botConfig.getPrefix().toLowerCase()} handbook`
+) {
+  // ...
+}
+```
+**How it works here**: In the provided code snippets, string comparison is used to compare the `lowerTxt` variable with different strings and determine if they are equal or not.
+**Why it's used**: String comparison is used to compare two strings and determine if they are equal or not, making it easier to make decisions and execute different blocks of code.
+**If you change/remove it**: If you remove the string comparison, the code will not be able to determine if the `lowerTxt` variable is equal to the different strings, and the program will not be able to make decisions and execute different blocks of code.
+
+---
+### Concept 9: Template Literals
+Template literals are used to create strings that can contain expressions and variables.
+**General Example**
+```javascript
+const name = 'John';
+const age = 25;
+const str = `My name is ${name} and I am ${age} years old.`;
+console.log(str); // outputs: My name is John and I am 25 years old.
+```
+**In Our Code**
+```javascript
+let msg = `╭───────────────────╮\n  📔 *RPG HANDBOOK* \n╰───────────────────╯\n\n` + ...;
+```
+**How it works here**: In the provided code snippets, template literals are used to create strings that can contain expressions and variables. For example, the `msg` variable is created using a template literal that contains a string with expressions and variables.
+**Why it's used**: Template literals are used to create strings that can contain expressions and variables, making it easier to create and manipulate strings.
+**If you change/remove it**: If you remove the template literal, the code will not be able to create the `msg` variable with the desired string, and the program will not be able to send the message.
+
+---
+### Concept 10: Async/Await
+Async/await is used to write asynchronous code that is easier to read and maintain.
+**General Example**
+```javascript
+async function example() {
+  const data = await fetchData();
+  console.log(data);
+}
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: In the provided code snippets, async/await is used to write asynchronous code that is easier to read and maintain. For example, the event listener passed to `sock.ev.on` is defined as an async function that uses await to wait for the promises to be resolved.
+**Why it's used**: Async/await is used to write asynchronous code that is easier to read and maintain, making it easier to handle asynchronous operations and execute code when a promise is resolved or rejected.
+**If you change/remove it**: If you remove the async/await, the code will not be able to write asynchronous code that is easier to read and maintain, and the program will not be able to handle asynchronous operations and execute code when a promise is resolved or rejected.

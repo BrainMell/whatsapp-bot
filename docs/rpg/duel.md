@@ -62,7 +62,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -84,7 +84,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L13526-L13636)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L13526-L13636)
 * **Line Numbers**: 13526-13636
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -116,7 +116,7 @@ User command
 ---
 
 ### Step 3: Resolving PvP Actions & Turns
-* **File Path**: [core/rpg/pvpSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L219-L260)
+* **File Path**: [core/rpg/pvpSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/pvpSystem.js#L219-L260)
 * **Line Numbers**: 219-260
 * **Called From**: `handlePvPAction()`
 * **Inputs**: `(sock, chatId, senderJid, action, target, m)`
@@ -148,7 +148,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 ---
 
 ### Step 4: Resolving Death & Stakes
-* **File Path**: [core/rpg/pvpSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L425-L450)
+* **File Path**: [core/rpg/pvpSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/pvpSystem.js#L425-L450)
 * **Line Numbers**: 425-450
 * **Called From**: `handlePvPAction()`
 * **Inputs**: Combat damage variables
@@ -182,6 +182,231 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 ---
 
 ## 4. How to Modify
-- **PvP Damage Mitigation Caps**: Adjust `PVP_DAMAGE_MULT` (currently 0.8) or `PVP_DEFENSE_CAP` (currently 0.5) constants at [core/rpg/pvpSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/pvpSystem.js#L31-L33).
+- **PvP Damage Mitigation Caps**: Adjust `PVP_DAMAGE_MULT` (currently 0.8) or `PVP_DEFENSE_CAP` (currently 0.5) constants at [core/rpg/pvpSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/pvpSystem.js#L31-L33).
 - **Modify Challenge Timeout Duration**: Change `CHALLENGE_TIMEOUT` values (currently 120000ms/2 minutes).
-- **Edit Combat Actions Vocabulary**: Add alias overrides to the command parser in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4909).
+- **Edit Combat Actions Vocabulary**: Add alias overrides to the command parser in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4909).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and manipulate data in a program. They have a name, and you can assign a value to them.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const targetUser = getMentionOrReply(m);
+let stake = parseInt(cmdArgs.find((a) => !isNaN(parseInt(a))));
+```
+**How it works here**: In the code, `targetUser` and `stake` are variables used to store the target user and the stake value, respectively.
+**Why it's used**: Variables are used to store and reuse values in the program, making the code more efficient and easier to read.
+**If you change/remove it**: If you remove the `targetUser` variable, the program won't be able to store the target user, and the duel functionality won't work. If you remove the `stake` variable, the program won't be able to store the stake value, and the wager pool calculation won't work.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They are defined using the `=>` syntax.
+**General Example**
+```javascript
+const greet = (name) => {
+  console.log(`Hello, ${name}!`);
+};
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The arrow function is used to define an event listener for the `messages.upsert` event.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions, making the code more concise and easier to read.
+**If you change/remove it**: If you remove the arrow function, the event listener won't be defined, and the program won't be able to handle the `messages.upsert` event.
+
+---
+### Concept 3: Event Listeners
+Event listeners are used to respond to events, such as user interactions or network requests. They are defined using the `on` method.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The event listener is used to respond to the `messages.upsert` event, which is triggered when a new message is received.
+**Why it's used**: Event listeners are used to respond to events, making the program interactive and dynamic.
+**If you change/remove it**: If you remove the event listener, the program won't be able to respond to the `messages.upsert` event, and the duel functionality won't work.
+
+---
+### Concept 4: Array Methods
+Array methods are used to manipulate and transform arrays. Examples include `map`, `find`, and `filter`.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map((num) => num * 2);
+console.log(doubleNumbers); // Outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The `map` method is used to transform the `messages` array into an array of promises.
+**Why it's used**: Array methods are used to manipulate and transform arrays, making the code more concise and efficient.
+**If you change/remove it**: If you remove the `map` method, the program won't be able to transform the `messages` array, and the duel functionality won't work.
+
+---
+### Concept 5: Conditional Statements
+Conditional statements are used to make decisions based on conditions. Examples include `if` and `switch` statements.
+**General Example**
+```javascript
+const age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: The `if` statements are used to check conditions and return early if they are not met.
+**Why it's used**: Conditional statements are used to make decisions based on conditions, making the code more dynamic and interactive.
+**If you change/remove it**: If you remove the `if` statements, the program won't be able to check conditions, and the duel functionality may not work as expected.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations, such as network requests or database queries.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // Asynchronous operation
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // Outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The `Promise.all` method is used to wait for an array of promises to resolve.
+**Why it's used**: Promises are used to handle asynchronous operations, making the code more efficient and scalable.
+**If you change/remove it**: If you remove the `Promise.all` method, the program won't be able to wait for the promises to resolve, and the duel functionality may not work as expected.
+
+---
+### Concept 7: Numbers Parsing
+Numbers parsing is used to convert strings to numbers. Examples include `parseInt` and `parseFloat`.
+**General Example**
+```javascript
+const string = '123';
+const number = parseInt(string);
+console.log(number); // Outputs: 123
+```
+**In Our Code**
+```javascript
+let stake = parseInt(cmdArgs.find((a) => !isNaN(parseInt(a))));
+```
+**How it works here**: The `parseInt` function is used to convert a string to a number.
+**Why it's used**: Numbers parsing is used to convert strings to numbers, making the code more efficient and accurate.
+**If you change/remove it**: If you remove the `parseInt` function, the program won't be able to convert the string to a number, and the stake value won't be calculated correctly.
+
+---
+### Concept 8: Destructuring
+Destructuring is used to extract values from objects or arrays.
+**General Example**
+```javascript
+const person = { name: 'John', age: 25 };
+const { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 25
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The destructuring syntax is used to extract the `messages` and `type` values from the event object.
+**Why it's used**: Destructuring is used to extract values from objects or arrays, making the code more concise and efficient.
+**If you change/remove it**: If you remove the destructuring syntax, the program won't be able to extract the values, and the duel functionality won't work as expected.
+
+---
+### Concept 9: Async/Await
+Async/await is used to handle asynchronous operations, making the code look more synchronous.
+**General Example**
+```javascript
+async function example() {
+  const result = await promise;
+  console.log(result);
+}
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The `await` keyword is used to wait for the promises to resolve.
+**Why it's used**: Async/await is used to handle asynchronous operations, making the code more efficient and easier to read.
+**If you change/remove it**: If you remove the `await` keyword, the program won't be able to wait for the promises to resolve, and the duel functionality may not work as expected.
+
+---
+### Concept 10: Object Properties
+Object properties are used to access and manipulate values in objects.
+**General Example**
+```javascript
+const person = { name: 'John', age: 25 };
+console.log(person.name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const result = pvpSystem.challengePlayer(
+  chatId,
+  senderJid,
+  targetUser,
+  stake || 0,
+);
+```
+**How it works here**: The object properties are used to access and manipulate values in the `pvpSystem` object.
+**Why it's used**: Object properties are used to access and manipulate values in objects, making the code more efficient and accurate.
+**If you change/remove it**: If you remove the object properties, the program won't be able to access and manipulate the values, and the duel functionality won't work as expected.

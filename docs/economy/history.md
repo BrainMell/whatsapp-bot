@@ -24,7 +24,7 @@ User sends ".j history" or ".j bh"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -46,7 +46,7 @@ User sends ".j history" or ".j bh"
 ---
 
 ### Step 2: Command Matching and Registration Validation
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14612-L14625)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14612-L14625)
 * **Line Numbers**: 14612-14625
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -76,7 +76,7 @@ User sends ".j history" or ".j bh"
 ---
 
 ### Step 3: Transaction Log Resolution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14626-L14636) & [core/rpg/economy.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L240-L260)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14626-L14636) & [core/rpg/economy.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/economy.js#L240-L260)
 * **Line Numbers**: 14626-14636 (routing) & 240-260 (transaction helper)
 * **Called From**: `engine.js`
 * **Inputs**: User ID
@@ -103,7 +103,7 @@ User sends ".j history" or ".j bh"
 ---
 
 ### Step 4: Formatting and Parsing Logs
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14638-L14657)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14638-L14657)
 * **Line Numbers**: 14638-14657
 * **Called From**: `engine.js`
 * **Inputs**: `history` array
@@ -142,7 +142,7 @@ User sends ".j history" or ".j bh"
 ---
 
 ### Step 5: Sending Result to User
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14659-L14662)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14659-L14662)
 * **Line Numbers**: 14659-14662
 * **Called From**: `engine.js`
 * **Inputs**: `historyText`
@@ -162,11 +162,11 @@ User sends ".j history" or ".j bh"
 
 ## 4. How to Modify
 To adjust history capacity or display details:
-- **Increase Displayed Count**: Modify the slice parameters in [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14641):
+- **Increase Displayed Count**: Modify the slice parameters in [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14641):
   ```javascript
   const displayHistory = history.slice(0, 20); // Display 20 transactions
   ```
-- **Increase Total Cache Retention (default 50)**: Adjust the memory threshold inside `logTransaction` in [core/rpg/economy.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/economy.js#L256):
+- **Increase Total Cache Retention (default 50)**: Adjust the memory threshold inside `logTransaction` in [core/rpg/economy.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/economy.js#L256):
   ```javascript
   if (user.history.length > 100) { // Keep last 100 entries in MongoDB
     user.history = user.history.slice(0, 100);

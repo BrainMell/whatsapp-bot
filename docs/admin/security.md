@@ -8,7 +8,7 @@ The Security and Spam Controls subsystem intercepts group messages to enforce ch
 
 ## How it works
 
-**Moderation Guard and Admin Bypass** — [`security.js` L11–50](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L11-L50)
+**Moderation Guard and Admin Bypass** — [`security.js` L11–50](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L11-L50)
 
 ```javascript
 // core/utils/security.js L11–50
@@ -57,7 +57,7 @@ This entry point checks if the message was sent in a group chat with the `antili
 
 ---
 
-**Antilink & Status Mention Interceptor** — [`security.js` L102–143](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L102-L143)
+**Antilink & Status Mention Interceptor** — [`security.js` L102–143](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L102-L143)
 
 ```javascript
 // core/utils/security.js L102–143
@@ -109,7 +109,7 @@ The message contents are flattened to raw strings and recursively searched. The 
 
 ---
 
-**Auto Action Penalties** — [`security.js` L149–180](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L149-L180)
+**Auto Action Penalties** — [`security.js` L149–180](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L149-L180)
 
 ```javascript
 // core/utils/security.js L149–180
@@ -180,7 +180,228 @@ if (warningCount >= 5) { ... }
 ## Common tasks
 
 - **Change punishment type (delete/warn/kick)** — Edit the `antilinkAction` field inside group settings documents in MongoDB.
-- **Whitelist a domain** — Add domain bypass checks at [security.js L139](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L139).
-- **Modify status mention detection regex** — Edit the broadcast check conditionals at [security.js L106](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L106).
-- **Configure anti-spam warn threshold** — Edit warning limit conditionals at [security.js L176](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L176).
-- **Add custom warning text** — Modify `warnMsg` at [security.js L174](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/security.js#L174).
+- **Whitelist a domain** — Add domain bypass checks at [security.js L139](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L139).
+- **Modify status mention detection regex** — Edit the broadcast check conditionals at [security.js L106](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L106).
+- **Configure anti-spam warn threshold** — Edit warning limit conditionals at [security.js L176](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L176).
+- **Add custom warning text** — Modify `warnMsg` at [security.js L174](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L174).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const chatId = msg.key.remoteJid;
+const sender = msg.key.participant || msg.key.remoteJid;
+```
+**How it works here**: In the provided code snippets, variables are used to store values such as `chatId` and `sender`. These values are then used throughout the code to make decisions and perform actions.
+**Why it's used**: Variables are used to make the code more readable and maintainable. Instead of repeating the same value multiple times, you can store it in a variable and use the variable name.
+**If you change/remove it**: If you remove the variables, the code will not be able to store and use the values, which will cause errors. If you change the variable names, you will need to update all references to the variable in the code.
+
+---
+### Concept 2: Conditional Statements
+Conditional statements are used to make decisions in a program based on certain conditions. They allow you to execute different blocks of code depending on whether a condition is true or false.
+**General Example**
+```javascript
+let age = 25;
+if (age > 18) {
+  console.log('You are an adult');
+} else {
+  console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (!msg || !msg.message) return;
+if (!chatId.endsWith('@g.us')) return;
+if (linkRegex.test(allText)) {
+  // code to handle link detection
+}
+```
+**How it works here**: In the provided code snippets, conditional statements are used to check conditions such as whether a message exists, whether the chat is a group chat, and whether a link is detected in the message. Based on these conditions, the code executes different blocks of code.
+**Why it's used**: Conditional statements are used to make the code more flexible and dynamic. They allow you to handle different scenarios and make decisions based on changing conditions.
+**If you change/remove it**: If you remove the conditional statements, the code will not be able to make decisions and will execute the same block of code regardless of the conditions. If you change the conditions, you will need to update the code to handle the new conditions.
+
+---
+### Concept 3: Functions
+Functions are reusable blocks of code that perform a specific task. They can take arguments and return values.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null, cachedAdminSet = null) {
+  // code to handle security
+}
+```
+**How it works here**: In the provided code snippets, functions are used to perform tasks such as handling security and sending messages. The `handleSecurity` function takes several arguments and performs a series of tasks to handle security.
+**Why it's used**: Functions are used to make the code more modular and reusable. They allow you to break down complex tasks into smaller, manageable blocks of code.
+**If you change/remove it**: If you remove the functions, the code will not be able to perform the tasks and will cause errors. If you change the function names or arguments, you will need to update all references to the function in the code.
+
+---
+### Concept 4: Imports
+Imports are used to bring in external code or modules into your program. They allow you to use functions, variables, and classes from other files or libraries.
+**General Example**
+```javascript
+const math = require('mathjs');
+console.log(math.add(2, 3)); // Outputs: 5
+```
+**In Our Code**
+```javascript
+const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+const lidResolver = require('./lidResolver');
+const botConfig = require('../botConfig');
+```
+**How it works here**: In the provided code snippets, imports are used to bring in external modules such as `@whiskeysockets/baileys`, `lidResolver`, and `botConfig`. These modules provide functions and variables that are used in the code.
+**Why it's used**: Imports are used to make the code more modular and reusable. They allow you to use external code and libraries without having to duplicate the code.
+**If you change/remove it**: If you remove the imports, the code will not be able to use the external modules and will cause errors. If you change the import statements, you will need to update the code to use the new modules or functions.
+
+---
+### Concept 5: Array Methods
+Array methods are used to perform operations on arrays, such as iterating over the elements, filtering, and mapping.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+numbers.forEach((number) => {
+  console.log(number);
+});
+```
+**In Our Code**
+```javascript
+const mentionedJids = contextInfo.mentionedJid || [];
+if (mentionedJids.some(jid => jid.includes('status@broadcast') || jid.includes('broadcast'))) {
+  violations.push('📢 status mention');
+}
+```
+**How it works here**: In the provided code snippets, array methods such as `some` are used to iterate over the elements of the `mentionedJids` array and check if any of the elements match a certain condition.
+**Why it's used**: Array methods are used to make the code more concise and efficient. They allow you to perform operations on arrays without having to use loops.
+**If you change/remove it**: If you remove the array methods, the code will not be able to perform the operations on the arrays and will cause errors. If you change the array methods, you will need to update the code to use the new methods or functions.
+
+---
+### Concept 6: Regular Expressions
+Regular expressions are used to match patterns in strings. They allow you to search for and validate strings based on certain rules.
+**General Example**
+```javascript
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+console.log(emailRegex.test('john@example.com')); // Outputs: true
+```
+**In Our Code**
+```javascript
+const linkRegex = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|whatsapp\.com\/channel\/)[^\s]{2,}/gi;
+if (linkRegex.test(allText)) {
+  // code to handle link detection
+}
+```
+**How it works here**: In the provided code snippets, regular expressions are used to match patterns in strings, such as links in the `allText` string.
+**Why it's used**: Regular expressions are used to make the code more flexible and powerful. They allow you to search for and validate strings based on complex rules.
+**If you change/remove it**: If you remove the regular expressions, the code will not be able to match patterns in strings and will cause errors. If you change the regular expressions, you will need to update the code to use the new patterns.
+
+---
+### Concept 7: Promises
+Promises are used to handle asynchronous operations, such as network requests or database queries. They allow you to write code that is easier to read and maintain.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // code to perform asynchronous operation
+  resolve('result');
+});
+promise.then((result) => {
+  console.log(result);
+});
+```
+**In Our Code**
+```javascript
+const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
+```
+**How it works here**: In the provided code snippets, promises are used to handle asynchronous operations, such as retrieving group metadata.
+**Why it's used**: Promises are used to make the code more readable and maintainable. They allow you to write code that is easier to understand and debug.
+**If you change/remove it**: If you remove the promises, the code will not be able to handle asynchronous operations and will cause errors. If you change the promises, you will need to update the code to use the new promises or functions.
+
+---
+### Concept 8: Destructuring
+Destructuring is used to extract values from objects or arrays and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 30 };
+const { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 30
+```
+**In Our Code**
+```javascript
+const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+```
+**How it works here**: In the provided code snippets, destructuring is used to extract values from objects, such as the `jidNormalizedUser` function from the `@whiskeysockets/baileys` module.
+**Why it's used**: Destructuring is used to make the code more concise and readable. It allows you to extract values from objects or arrays and assign them to variables in a single line of code.
+**If you change/remove it**: If you remove the destructuring, the code will not be able to extract values from objects or arrays and will cause errors. If you change the destructuring, you will need to update the code to use the new variables or functions.
+
+---
+### Concept 9: Async/Await
+Async/await is used to write asynchronous code that is easier to read and maintain. It allows you to write code that is asynchronous, but looks synchronous.
+**General Example**
+```javascript
+async function example() {
+  const result = await promise;
+  console.log(result);
+}
+```
+**In Our Code**
+```javascript
+handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null, cachedAdminSet = null) {
+  // code to handle security
+}
+```
+**How it works here**: In the provided code snippets, async/await is used to write asynchronous code that is easier to read and maintain. The `handleSecurity` function is an async function that uses await to wait for promises to resolve.
+**Why it's used**: Async/await is used to make the code more readable and maintainable. It allows you to write asynchronous code that is easier to understand and debug.
+**If you change/remove it**: If you remove the async/await, the code will not be able to handle asynchronous operations and will cause errors. If you change the async/await, you will need to update the code to use the new async/await syntax or functions.
+
+---
+### Concept 10: Set Data Structure
+A Set is a data structure that stores unique values. It is used to keep track of unique elements, such as a set of admin users.
+**General Example**
+```javascript
+const adminSet = new Set();
+adminSet.add('john');
+adminSet.add('jane');
+console.log(adminSet.size); // Outputs: 2
+```
+**In Our Code**
+```javascript
+let senderIsAdmin = false;
+if (cachedAdminSet) {
+  senderIsAdmin = cachedAdminSet.has(senderPhone) || cachedAdminSet.has(normalizedSender);
+}
+```
+**How it works here**: In the provided code snippets, a Set is used to store unique admin users. The `cachedAdminSet` is used to check if a user is an admin.
+**Why it's used**: A Set is used to make the code more efficient. It allows you to keep track of unique elements and check if an element exists in constant time.
+**If you change/remove it**: If you remove the Set, the code will not be able to keep track of unique admin users and will cause errors. If you change the Set, you will need to update the code to use the new Set or data structure.

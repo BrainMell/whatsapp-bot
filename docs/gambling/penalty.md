@@ -32,10 +32,10 @@ User sends ".j penalty 1000 left"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
-* **Defined In**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js)
+* **Defined In**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js)
 * **Inputs**: `{ messages, type }` WhatsApp payload
 * **Outputs**: None
 
@@ -55,7 +55,7 @@ User sends ".j penalty 1000 left"
 ---
 
 ### Step 2: Command Matching and Argument Parsing
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L15595-L15611)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L15595-L15611)
 * **Line Numbers**: 15595-15611
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `txt`
@@ -89,10 +89,10 @@ User sends ".j penalty 1000 left"
 ---
 
 ### Step 3: Command Routing
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L15612-L15623)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L15612-L15623)
 * **Line Numbers**: 15612-15623
 * **Called From**: Command routing block in `engine.js`
-* **Imported From**: `const gambling = require("./gambling");` (defined in [core/gambling.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/gambling.js))
+* **Imported From**: `const gambling = require("./gambling");` (defined in [core/gambling.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/gambling.js))
 * **Inputs**: `senderJid`, `amount`, `direction`, `economy`
 * **Outputs**: Sends result message and triggers player progress award
 
@@ -119,7 +119,7 @@ User sends ".j penalty 1000 left"
 ---
 
 ### Step 4: Penalty Evaluation
-* **File Path**: [core/gambling.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/gambling.js#L1686-L1774)
+* **File Path**: [core/gambling.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/gambling.js#L1686-L1774)
 * **Line Numbers**: 1686-1774
 * **Called From**: `core/engine.js`
 * **Inputs**: `(userId, amount, direction, economyModule)`
@@ -157,7 +157,7 @@ function penalty(userId, amount, direction, economyModule) {
 ---
 
 ### Step 5: Payout Calculation, Database Mutations, and Logs
-* **File Path**: [core/gambling.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/gambling.js#L1715-L1773)
+* **File Path**: [core/gambling.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/gambling.js#L1715-L1773)
 * **Line Numbers**: 1715-1773
 * **Called From**: `penalty()` function
 * **Inputs**: `won` status, `amount`, `userDir`, `keeperDir`
@@ -222,7 +222,7 @@ function penalty(userId, amount, direction, economyModule) {
 
 ## 5. How to Modify
 To adjust Penalty multipliers, probability, or layout:
-- **Adjusting multiplier (default 1.4x)**: Change `0.4` (representing 40% profit) in [core/gambling.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/gambling.js#L1716):
+- **Adjusting multiplier (default 1.4x)**: Change `0.4` (representing 40% profit) in [core/gambling.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/gambling.js#L1716):
   ```javascript
   const rawGain = Math.floor(amount * 0.5); // Increase payout profit to 50% (1.5x)
   ```
@@ -230,3 +230,224 @@ To adjust Penalty multipliers, probability, or layout:
   ```javascript
   // Make keeper pick same dir 50% of the time, or custom distribution
   ```
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+const user = economyModule.getUser(userId);
+const { amount, extra: direction } = parseGamblingArgs(txt, ['penalty']);
+```
+**How it works here**: Variables are used to store values such as the user, amount, and direction. These values are then used in the program to make decisions and perform actions.
+**Why it's used**: Variables are used to store and reuse values in a program, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change a variable, the program may not work as expected. For example, if you remove the `user` variable, the program will not be able to get the user's data from the economy module.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They are defined using the `=>` syntax.
+**General Example**
+```javascript
+const greet = (name) => {
+  console.log(`Hello, ${name}!`);
+};
+greet('John'); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: An arrow function is used as an event listener for the `messages.upsert` event. When the event is triggered, the function is called with the event data as an argument.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions that can be used as event listeners or callbacks.
+**If you change/remove it**: If you remove or change the arrow function, the event listener will not work as expected. For example, if you remove the `async` keyword, the function may not work correctly with asynchronous code.
+
+---
+### Concept 3: Event Listeners
+Event listeners are functions that are called when a specific event occurs. They are used to respond to user interactions, network requests, and other events.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: An event listener is used to listen for the `messages.upsert` event. When the event is triggered, the function is called with the event data as an argument.
+**Why it's used**: Event listeners are used to respond to events and perform actions based on user interactions or other events.
+**If you change/remove it**: If you remove or change the event listener, the program will not respond to the event as expected. For example, if you remove the event listener, the program will not process incoming messages.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to make decisions based on conditions or values. They are defined using the `if` and `else` keywords.
+**General Example**
+```javascript
+const age = 25;
+if (age >= 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+```
+**How it works here**: Conditional statements are used to check conditions and make decisions based on the values. If the condition is true, the code inside the `if` block is executed.
+**Why it's used**: Conditional statements are used to make decisions and perform actions based on conditions or values.
+**If you change/remove it**: If you remove or change a conditional statement, the program may not work as expected. For example, if you remove the `if (type !== "notify" && type !== "append")` statement, the program may process messages that are not notifications or appends.
+
+---
+### Concept 5: Array Methods
+Array methods are used to manipulate and interact with arrays. They are defined using the `array.method()` syntax.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map((number) => number * 2);
+console.log(doubleNumbers); // outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  }),
+);
+```
+**How it works here**: The `map()` method is used to iterate over the `messages` array and perform an action on each message.
+**Why it's used**: Array methods are used to manipulate and interact with arrays, making it easier to perform actions on multiple values.
+**If you change/remove it**: If you remove or change an array method, the program may not work as expected. For example, if you remove the `map()` method, the program will not iterate over the `messages` array.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous code and ensure that actions are performed in the correct order. They are defined using the `Promise` constructor.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // asynchronous code
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  }),
+);
+```
+**How it works here**: Promises are used to handle asynchronous code and ensure that actions are performed in the correct order. The `await` keyword is used to wait for the promise to resolve before continuing with the code.
+**Why it's used**: Promises are used to handle asynchronous code and ensure that actions are performed in the correct order, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change a promise, the program may not work as expected. For example, if you remove the `await` keyword, the program may not wait for the promise to resolve before continuing with the code.
+
+---
+### Concept 7: Destructuring
+Destructuring is used to extract values from objects and arrays. It is defined using the `{}` syntax.
+**General Example**
+```javascript
+const person = { name: 'John', age: 25 };
+const { name, age } = person;
+console.log(name); // outputs: John
+console.log(age); // outputs: 25
+```
+**In Our Code**
+```javascript
+const { amount, extra: direction } = parseGamblingArgs(txt, ['penalty']);
+```
+**How it works here**: Destructuring is used to extract values from the `parseGamblingArgs()` function and assign them to variables.
+**Why it's used**: Destructuring is used to extract values from objects and arrays, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change the destructuring, the program may not work as expected. For example, if you remove the `const { amount, extra: direction }` statement, the program will not extract the values from the `parseGamblingArgs()` function.
+
+---
+### Concept 8: Numbers Parsing
+Numbers parsing is used to convert strings to numbers. It is defined using the `parseInt()` or `parseFloat()` functions.
+**General Example**
+```javascript
+const string = '123';
+const number = parseInt(string);
+console.log(number); // outputs: 123
+```
+**In Our Code**
+```javascript
+if (isNaN(amount)) {
+  // ...
+}
+```
+**How it works here**: Numbers parsing is used to check if the `amount` variable is a valid number. If it is not a valid number, the program will execute the code inside the `if` block.
+**Why it's used**: Numbers parsing is used to convert strings to numbers and check if a value is a valid number, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change the numbers parsing, the program may not work as expected. For example, if you remove the `if (isNaN(amount))` statement, the program will not check if the `amount` variable is a valid number.
+
+---
+### Concept 9: Database Operations
+Database operations are used to interact with a database. They are defined using the `database.method()` syntax.
+**General Example**
+```javascript
+const db = require('database');
+db.getUser('John', (err, user) => {
+  console.log(user);
+});
+```
+**In Our Code**
+```javascript
+const user = economyModule.getUser(userId);
+economyModule.logTransaction(userId, "Penalty Won (Refunded/Daily Cap)", 0, user.wallet);
+```
+**How it works here**: Database operations are used to interact with the economy module database. The `getUser()` method is used to get the user's data, and the `logTransaction()` method is used to log a transaction.
+**Why it's used**: Database operations are used to interact with a database, making it easier to store and retrieve data.
+**If you change/remove it**: If you remove or change a database operation, the program may not work as expected. For example, if you remove the `const user = economyModule.getUser(userId)` statement, the program will not get the user's data from the database.
+
+---
+### Concept 10: Functions
+Functions are used to define reusable blocks of code. They are defined using the `function` keyword.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+function penalty(userId, amount, direction, economyModule) {
+  // ...
+}
+```
+**How it works here**: A function is used to define a reusable block of code that can be called with different arguments. The `penalty()` function is used to perform a penalty action.
+**Why it's used**: Functions are used to define reusable blocks of code, making it easier to write and understand the code.
+**If you change/remove it**: If you remove or change a function, the program may not work as expected. For example, if you remove the `penalty()` function, the program will not be able to perform a penalty action.

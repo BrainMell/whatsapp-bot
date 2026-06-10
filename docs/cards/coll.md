@@ -46,7 +46,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger & Intercept
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4400-L4412)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4400-L4412)
 * **Line Numbers**: 4400-4412
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ lowerTxt, txt, senderJid, chatId, m, ... }`
@@ -73,7 +73,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Detail Dispatch
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L497-L533)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L497-L533)
 * **Line Numbers**: 497-533
 * **Called From**: `cmdColl()`
 * **Inputs**: `(senderJid, reply, chatId, args = [])`
@@ -129,7 +129,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 ---
 
 ### Step 3: Collating Collection Overview
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L535-L574)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L535-L574)
 * **Line Numbers**: 535-574
 * **Called From**: `cmdColl()`
 * **Inputs**: User JID
@@ -185,5 +185,247 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 ---
 
 ## 4. How to Modify
-- **Change Highlights Count limit**: Modify the `.slice(0, 15)` parameter in `getTopCards()` inside [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L407).
-- **Alter Sorting Parameters**: Edit the sorting weight object `tierOrder` inside [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L399).
+- **Change Highlights Count limit**: Modify the `.slice(0, 15)` parameter in `getTopCards()` inside [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L407).
+- **Alter Sorting Parameters**: Edit the sorting weight object `tierOrder` inside [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L399).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const cardHandled = await cardSystem.handleCommand({
+  lowerTxt,
+  txt,
+  senderJid,
+  chatId,
+  m,
+  economy,
+  isOwner,
+  senderIsAdmin,
+  isMod: overrideUsers.has(senderJid) || isGlobalMod(senderJid),
+});
+```
+**How it works here**: The `cardHandled` variable is used to store the result of the `cardSystem.handleCommand` function. The `lowerTxt`, `txt`, `senderJid`, `chatId`, `m`, `economy`, `isOwner`, `senderIsAdmin`, and `isMod` variables are used to pass values to the `handleCommand` function.
+**Why it's used**: Variables are used to store and pass values to functions, making the code more readable and maintainable.
+**If you change/remove it**: If you remove the `cardHandled` variable, the code will not be able to store the result of the `handleCommand` function, and the program will not work as expected.
+
+---
+### Concept 2: Async/Await
+Async/await is a way to write asynchronous code that is easier to read and maintain. It allows you to write code that waits for a promise to resolve before continuing.
+**General Example**
+```javascript
+async function example() {
+  const data = await fetchData();
+  console.log(data);
+}
+```
+**In Our Code**
+```javascript
+async function cmdColl(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  const p = P();
+  // ...
+}
+```
+**How it works here**: The `cmdColl` function is defined as an async function, which allows it to use the `await` keyword to wait for promises to resolve. The `getInst` and `P` functions are likely async functions that return promises, and the `await` keyword is used to wait for their results.
+**Why it's used**: Async/await is used to make the code easier to read and maintain, and to avoid using callbacks.
+**If you change/remove it**: If you remove the `async` keyword, the code will not be able to use the `await` keyword, and the program will not work as expected.
+
+---
+### Concept 3: Conditional Statements
+Conditional statements are used to make decisions in a program based on certain conditions. They allow you to execute different blocks of code depending on whether a condition is true or false.
+**General Example**
+```javascript
+if (x > 5) {
+  console.log('x is greater than 5');
+} else {
+  console.log('x is less than or equal to 5');
+}
+```
+**In Our Code**
+```javascript
+if (args.length > 0) {
+  const input = args[0];
+  if (input === '--tier') return cmdCardsTier(senderJid, reply, chatId);
+  // ...
+}
+```
+**How it works here**: The `if` statement is used to check if the `args` array has more than one element. If it does, the code inside the `if` block is executed. The `if` statement is also used to check if the `input` variable is equal to `'--tier'`, and if so, the `cmdCardsTier` function is called.
+**Why it's used**: Conditional statements are used to make decisions in a program and to execute different blocks of code depending on certain conditions.
+**If you change/remove it**: If you remove the `if` statement, the code will not be able to make decisions based on the `args` array, and the program will not work as expected.
+
+---
+### Concept 4: Array Methods
+Array methods are used to perform operations on arrays, such as sorting, filtering, and mapping.
+**General Example**
+```javascript
+const arr = [1, 2, 3, 4, 5];
+const sortedArr = arr.sort((a, b) => a - b);
+console.log(sortedArr); // Outputs: [1, 2, 3, 4, 5]
+```
+**In Our Code**
+```javascript
+const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+```
+**How it works here**: The `sort` method is used to sort the `owned` array in ascending order based on the `createdAt` field.
+**Why it's used**: Array methods are used to perform operations on arrays and to manipulate data.
+**If you change/remove it**: If you remove the `sort` method, the `owned` array will not be sorted, and the program may not work as expected.
+
+---
+### Concept 5: Database Operations
+Database operations are used to interact with a database, such as finding, creating, and updating data.
+**General Example**
+```javascript
+const user = await User.findOne({ username: 'john' });
+console.log(user); // Outputs: the user object
+```
+**In Our Code**
+```javascript
+const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+const uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+```
+**How it works here**: The `find` and `findOne` methods are used to find data in the database. The `find` method returns an array of objects, while the `findOne` method returns a single object.
+**Why it's used**: Database operations are used to interact with a database and to retrieve and manipulate data.
+**If you change/remove it**: If you remove the database operations, the program will not be able to retrieve or manipulate data, and will not work as expected.
+
+---
+### Concept 6: Promises
+Promises are used to handle asynchronous operations, such as database queries or network requests. They allow you to write code that waits for an operation to complete before continuing.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // asynchronous operation
+  resolve('result');
+});
+promise.then((result) => {
+  console.log(result); // Outputs: result
+});
+```
+**In Our Code**
+```javascript
+const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+```
+**How it works here**: The `find` method returns a promise that resolves to an array of objects. The `await` keyword is used to wait for the promise to resolve before continuing.
+**Why it's used**: Promises are used to handle asynchronous operations and to write code that waits for an operation to complete before continuing.
+**If you change/remove it**: If you remove the promise, the code will not be able to wait for the asynchronous operation to complete, and will not work as expected.
+
+---
+### Concept 7: Functions
+Functions are used to group code together and to reuse it. They can take arguments and return values.
+**General Example**
+```javascript
+function add(x, y) {
+  return x + y;
+}
+console.log(add(2, 3)); // Outputs: 5
+```
+**In Our Code**
+```javascript
+async function cmdColl(senderJid, reply, chatId, args = []) {
+  // ...
+}
+```
+**How it works here**: The `cmdColl` function is defined to take four arguments: `senderJid`, `reply`, `chatId`, and `args`. The function is used to handle the `coll` command.
+**Why it's used**: Functions are used to group code together and to reuse it.
+**If you change/remove it**: If you remove the function, the code will not be able to handle the `coll` command, and will not work as expected.
+
+---
+### Concept 8: Error Handling
+Error handling is used to catch and handle errors that occur in a program. It allows you to write code that can recover from errors and continue running.
+**General Example**
+```javascript
+try {
+  // code that may throw an error
+} catch (error) {
+  console.log(error); // Outputs: the error
+}
+```
+**In Our Code**
+```javascript
+try {
+  if (String(card.tier) === '6' || String(card.tier) === 'S') {
+    const gifBuffer = await goService.convertCardImage(card.imageUrl);
+    if (gifBuffer) {
+      return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
+    }
+  }
+  const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
+  return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+} catch (e) { return reply(caption); }
+```
+**How it works here**: The `try` block is used to catch any errors that occur in the code. If an error occurs, the `catch` block is executed, and the error is logged.
+**Why it's used**: Error handling is used to catch and handle errors that occur in a program, and to write code that can recover from errors and continue running.
+**If you change/remove it**: If you remove the error handling, the program will not be able to catch and handle errors, and will crash if an error occurs.
+
+---
+### Concept 9: Object Destructuring
+Object destructuring is used to extract values from an object and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 30 };
+const { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 30
+```
+**In Our Code**
+```javascript
+const { lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod } = {
+  lowerTxt,
+  txt,
+  senderJid,
+  chatId,
+  m,
+  economy,
+  isOwner,
+  senderIsAdmin,
+  isMod: overrideUsers.has(senderJid) || isGlobalMod(senderJid),
+};
+```
+**How it works here**: The object destructuring is used to extract values from an object and assign them to variables.
+**Why it's used**: Object destructuring is used to simplify code and to make it easier to read.
+**If you change/remove it**: If you remove the object destructuring, the code will not be able to extract values from the object, and will not work as expected.
+
+---
+### Concept 10: String Interpolation
+String interpolation is used to insert values into a string.
+**General Example**
+```javascript
+const name = 'John';
+const age = 30;
+console.log(`My name is ${name} and I am ${age} years old.`);
+// Outputs: My name is John and I am 30 years old.
+```
+**In Our Code**
+```javascript
+const caption = buildCardDetailCaption(card, uc, stat, 'Collection', collIndex, ownerName);
+```
+**How it works here**: The string interpolation is used to insert values into a string.
+**Why it's used**: String interpolation is used to simplify code and to make it easier to read.
+**If you change/remove it**: If you remove the string interpolation, the code will not be able to insert values into a string, and will not work as expected.

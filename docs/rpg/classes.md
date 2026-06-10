@@ -40,7 +40,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -62,7 +62,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4849-L4855) / [L6875-L6907](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6875-L6907)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4849-L4855) / [L6875-L6907](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6875-L6907)
 * **Line Numbers**: 4849-4855 (classes) & 6875-6907 (class tree/info)
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt`
@@ -111,7 +111,7 @@ User command
 ---
 
 ### Step 3: Formatting the Evolution Tree
-* **File Path**: [core/commands/classCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/classCommands.js#L87-L137)
+* **File Path**: [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js#L87-L137)
 * **Line Numbers**: 87-137
 * **Called From**: `displayEvolutionTree()`
 * **Inputs**: `(sock, chatId, classId)`
@@ -166,7 +166,7 @@ async function displayEvolutionTree(sock, chatId, classId) {
 ---
 
 ### Step 4: Lineage Walk API
-* **File Path**: [core/rpg/classSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/classSystem.js#L747-L757)
+* **File Path**: [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js#L747-L757)
 * **Line Numbers**: 747-757
 * **Called From**: `classSystem.getLineage()`
 * **Inputs**: `(classId)`
@@ -194,6 +194,247 @@ function getLineage(classId) {
 ---
 
 ## 4. How to Modify
-- **Add Classes**: Modify definitions in `STARTER_CLASSES` or `EVOLVED_CLASSES` arrays inside [core/rpg/classSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/classSystem.js).
+- **Add Classes**: Modify definitions in `STARTER_CLASSES` or `EVOLVED_CLASSES` arrays inside [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js).
 - **Edit Evolution Nodes**: Alter the `evolves_into` array properties in class files.
-- **Modify Tree Formatting**: Customize characters like `└─ ` inside [core/commands/classCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/classCommands.js#L109).
+- **Modify Tree Formatting**: Customize characters like `└─ ` inside [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js#L109).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // outputs: John
+```
+**In Our Code**
+```javascript
+const isRekeying = ...;
+const primaryCmd = ...;
+const lowerTxt = ...;
+```
+**How it works here**: Variables are used to store values such as `isRekeying`, `primaryCmd`, and `lowerTxt` which are then used in conditional statements and function calls.
+**Why it's used**: Variables are used to store and reuse values in the program, making it easier to write and maintain the code.
+**If you change/remove it**: If you remove a variable, the code will throw an error when trying to use it. If you change the value of a variable, it will affect the behavior of the program.
+
+---
+### Concept 2: Conditional Statements
+Conditional statements are used to execute different blocks of code based on certain conditions. They are used to make decisions in the program.
+**General Example**
+```javascript
+let age = 25;
+if (age > 18) {
+  console.log('You are an adult');
+} else {
+  console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (type !== "notify" && type !== "append") return;
+if (isRekeying) return;
+if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} character` || ...);
+```
+**How it works here**: Conditional statements are used to check conditions such as the type of message, whether rekeying is in progress, and the value of `lowerTxt`. Based on these conditions, the program executes different blocks of code.
+**Why it's used**: Conditional statements are used to make decisions in the program and execute different blocks of code based on certain conditions.
+**If you change/remove it**: If you remove a conditional statement, the program will not be able to make decisions based on the condition. If you change the condition, it will affect the behavior of the program.
+
+---
+### Concept 3: Functions
+Functions are reusable blocks of code that perform a specific task. They can take arguments and return values.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+async function displayEvolutionTree(sock, chatId, classId) {
+  ...
+}
+```
+**How it works here**: Functions are used to perform specific tasks such as displaying the evolution tree of a class. The `displayEvolutionTree` function takes arguments `sock`, `chatId`, and `classId` and returns a promise.
+**Why it's used**: Functions are used to organize the code, make it reusable, and perform specific tasks.
+**If you change/remove it**: If you remove a function, the code that calls it will throw an error. If you change the function, it will affect the behavior of the program.
+
+---
+### Concept 4: Array Methods
+Array methods are used to perform operations on arrays such as mapping, filtering, and reducing.
+**General Example**
+```javascript
+let numbers = [1, 2, 3, 4, 5];
+let doubleNumbers = numbers.map(num => num * 2);
+console.log(doubleNumbers); // outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    ...
+  })
+);
+```
+**How it works here**: The `map` method is used to transform the `messages` array into a new array of promises. The `Promise.all` method is then used to wait for all the promises to resolve.
+**Why it's used**: Array methods are used to perform operations on arrays and make the code more concise and efficient.
+**If you change/remove it**: If you remove the `map` method, the code will not be able to transform the `messages` array. If you change the `map` method, it will affect the behavior of the program.
+
+---
+### Concept 5: Promises
+Promises are used to handle asynchronous operations and provide a way to execute code when a promise is resolved or rejected.
+**General Example**
+```javascript
+let promise = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    resolve('Hello, World!');
+  }, 2000);
+});
+promise.then((message) => {
+  console.log(message); // outputs: Hello, World!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    ...
+  })
+);
+```
+**How it works here**: Promises are used to handle asynchronous operations such as sending messages and displaying the evolution tree. The `await` keyword is used to wait for the promises to resolve.
+**Why it's used**: Promises are used to handle asynchronous operations and provide a way to execute code when a promise is resolved or rejected.
+**If you change/remove it**: If you remove the `Promise.all` method, the code will not be able to wait for all the promises to resolve. If you change the `Promise.all` method, it will affect the behavior of the program.
+
+---
+### Concept 6: Async/Await
+Async/await is a syntax sugar on top of promises that makes it easier to write asynchronous code.
+**General Example**
+```javascript
+async function greet() {
+  let message = await new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve('Hello, World!');
+    }, 2000);
+  });
+  console.log(message); // outputs: Hello, World!
+}
+greet();
+```
+**In Our Code**
+```javascript
+async function displayEvolutionTree(sock, chatId, classId) {
+  ...
+}
+```
+**How it works here**: Async/await is used to write asynchronous code that is easier to read and maintain. The `async` keyword is used to define an asynchronous function, and the `await` keyword is used to wait for a promise to resolve.
+**Why it's used**: Async/await is used to make asynchronous code easier to write and maintain.
+**If you change/remove it**: If you remove the `async` keyword, the code will not be able to use the `await` keyword. If you change the `async` keyword, it will affect the behavior of the program.
+
+---
+### Concept 7: Event Listeners
+Event listeners are used to listen for events such as messages, clicks, and keyboard input.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('You clicked the document!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  ...
+});
+```
+**How it works here**: Event listeners are used to listen for events such as messages being updated. The `sock.ev.on` method is used to listen for the `messages.upsert` event.
+**Why it's used**: Event listeners are used to respond to events and perform actions based on user input or other events.
+**If you change/remove it**: If you remove the event listener, the code will not be able to respond to the event. If you change the event listener, it will affect the behavior of the program.
+
+---
+### Concept 8: String Manipulation
+String manipulation is used to perform operations on strings such as concatenation, substring, and replacement.
+**General Example**
+```javascript
+let name = 'John';
+let greeting = 'Hello, ' + name + '!';
+console.log(greeting); // outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+let targetClassId = args[0];
+if (targetClassId.toLowerCase() === "info") {
+  ...
+}
+```
+**How it works here**: String manipulation is used to perform operations on strings such as concatenation and substring. The `toLowerCase` method is used to convert a string to lowercase.
+**Why it's used**: String manipulation is used to perform operations on strings and make the code more efficient.
+**If you change/remove it**: If you remove the string manipulation, the code will not be able to perform operations on strings. If you change the string manipulation, it will affect the behavior of the program.
+
+---
+### Concept 9: Object Properties
+Object properties are used to access and modify the properties of an object.
+**General Example**
+```javascript
+let person = { name: 'John', age: 30 };
+console.log(person.name); // outputs: John
+person.age = 31;
+console.log(person.age); // outputs: 31
+```
+**In Our Code**
+```javascript
+const targetClass = classSystem.getClassById(classId?.toUpperCase());
+```
+**How it works here**: Object properties are used to access and modify the properties of an object. The `getClassById` method is used to access the `classSystem` object and retrieve a class by its ID.
+**Why it's used**: Object properties are used to access and modify the properties of an object and make the code more efficient.
+**If you change/remove it**: If you remove the object property, the code will not be able to access or modify the property. If you change the object property, it will affect the behavior of the program.
+
+---
+### Concept 10: Recursion
+Recursion is a programming technique where a function calls itself repeatedly until it reaches a base case.
+**General Example**
+```javascript
+function factorial(n) {
+  if (n === 0) {
+    return 1;
+  } else {
+    return n * factorial(n - 1);
+  }
+}
+console.log(factorial(5)); // outputs: 120
+```
+**In Our Code**
+```javascript
+function buildTree(cls, depth = 0) {
+  ...
+  if (cls.evolves_into?.length > 0) {
+    for (const evoId of cls.evolves_into) {
+      const evoClass = classes[evoId];
+      if (evoClass) buildTree(evoClass, depth + 1);
+    }
+  }
+}
+```
+**How it works here**: Recursion is used to build the evolution tree of a class. The `buildTree` function calls itself repeatedly until it reaches a base case.
+**Why it's used**: Recursion is used to solve problems that have a recursive structure.
+**If you change/remove it**: If you remove the recursion, the code will not be able to build the evolution tree. If you change the recursion, it will affect the behavior of the program.

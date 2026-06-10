@@ -69,7 +69,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger & Intercept
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4400-L4412)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4400-L4412)
 * **Line Numbers**: 4400-4412
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ lowerTxt, txt, senderJid, chatId, m, ... }`
@@ -96,7 +96,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1778-L1952)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1778-L1952)
 * **Line Numbers**: 1778-1952
 * **Called From**: `handleCommand()`
 * **Inputs**: Intercept variables
@@ -132,7 +132,7 @@ User command
 ---
 
 ### Step 3: Moving Card to Main Deck (t2deck)
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L973-L996)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L973-L996)
 * **Line Numbers**: 973-996
 * **Called From**: `cmdT2Deck()`
 * **Inputs**: `(senderJid, reply, args = [])`
@@ -176,7 +176,7 @@ async function cmdT2Deck(senderJid, reply, args = []) {
 ---
 
 ### Step 4: Swapping Deck Slots
-* **File Path**: [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L1206-L1232)
+* **File Path**: [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L1206-L1232)
 * **Line Numbers**: 1206-1232
 * **Called From**: `cmdSwapCard()`
 * **Inputs**: `(senderJid, reply, args = [])`
@@ -221,6 +221,231 @@ async function cmdSwapCard(senderJid, reply, args = []) {
 ---
 
 ## 4. How to Modify
-- **Modify Deck Size Cap**: Change the `MAIN_DECK_SIZE` configuration constant (currently 12) at [core/rpg/cardSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/cardSystem.js#L58).
+- **Modify Deck Size Cap**: Change the `MAIN_DECK_SIZE` configuration constant (currently 12) at [core/rpg/cardSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/cardSystem.js#L58).
 - **Edit Custom Deck Limit Restrictions**: Locate `cmdCreateDeck()` in `core/rpg/cardSystem.js` to adjust custom deck limits.
 - **Modify Main Deck Rendering Format**: Customize the display labels inside `cmdDeck()` in `core/rpg/cardSystem.js`.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const cardHandled = await cardSystem.handleCommand({
+  lowerTxt,
+  txt,
+  senderJid,
+  chatId,
+  m,
+  economy,
+  isOwner,
+  senderIsAdmin,
+  isMod: overrideUsers.has(senderJid) || isGlobalMod(senderJid),
+});
+```
+**How it works here**: The `cardHandled` variable is used to store the result of the `cardSystem.handleCommand` function.
+**Why it's used**: Variables are used to store values that can be used later in the program.
+**If you change/remove it**: If you remove the `cardHandled` variable, the program will not be able to store the result of the `cardSystem.handleCommand` function, and the program will not be able to check if the card was handled.
+
+---
+### Concept 2: Conditional Statements
+Conditional statements are used to execute different blocks of code based on certain conditions. They are used to make decisions in a program.
+**General Example**
+```javascript
+let age = 25;
+if (age >= 18) {
+  console.log('You are an adult');
+} else {
+  console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (cardHandled) return;
+```
+**How it works here**: The `if` statement checks if the `cardHandled` variable is true. If it is, the function returns immediately.
+**Why it's used**: Conditional statements are used to make decisions in a program and execute different blocks of code based on certain conditions.
+**If you change/remove it**: If you remove the `if` statement, the function will not return immediately if the card is handled, and the program will continue to execute the next lines of code.
+
+---
+### Concept 3: Switch Statements
+Switch statements are used to execute different blocks of code based on the value of a variable. They are used to make decisions in a program.
+**General Example**
+```javascript
+let color = 'red';
+switch (color) {
+  case 'red':
+    console.log('The color is red');
+    break;
+  case 'blue':
+    console.log('The color is blue');
+    break;
+  default:
+    console.log('The color is not red or blue');
+}
+```
+**In Our Code**
+```javascript
+switch (cmd) {
+  case 'deck':
+    await cmdDeck(senderJid, reply, chatId, args);
+    return true;
+  // ...
+}
+```
+**How it works here**: The `switch` statement checks the value of the `cmd` variable and executes the corresponding block of code.
+**Why it's used**: Switch statements are used to make decisions in a program and execute different blocks of code based on the value of a variable.
+**If you change/remove it**: If you remove the `switch` statement, the program will not be able to execute the corresponding block of code based on the value of the `cmd` variable.
+
+---
+### Concept 4: Functions
+Functions are blocks of code that can be executed multiple times from different parts of a program. They are used to organize code and make it reusable.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+async function cmdT2Deck(senderJid, reply, args = []) {
+  // ...
+}
+```
+**How it works here**: The `cmdT2Deck` function is defined to execute a block of code that handles the `t2deck` command.
+**Why it's used**: Functions are used to organize code and make it reusable.
+**If you change/remove it**: If you remove the `cmdT2Deck` function, the program will not be able to handle the `t2deck` command.
+
+---
+### Concept 5: Async/Await
+Async/await is a syntax used to write asynchronous code that is easier to read and maintain. It is used to handle promises and make asynchronous code look synchronous.
+**General Example**
+```javascript
+async function example() {
+  const data = await fetchData();
+  console.log(data);
+}
+```
+**In Our Code**
+```javascript
+const cardHandled = await cardSystem.handleCommand({
+  // ...
+});
+```
+**How it works here**: The `await` keyword is used to wait for the `cardSystem.handleCommand` function to return a promise.
+**Why it's used**: Async/await is used to make asynchronous code look synchronous and easier to read and maintain.
+**If you change/remove it**: If you remove the `await` keyword, the program will not wait for the `cardSystem.handleCommand` function to return a promise, and the program will continue to execute the next lines of code.
+
+---
+### Concept 6: Parsing Numbers
+Parsing numbers is the process of converting a string to a number. It is used to convert user input to a number.
+**General Example**
+```javascript
+const str = '123';
+const num = parseInt(str);
+console.log(num); // Outputs: 123
+```
+**In Our Code**
+```javascript
+const index = parseInt(args[0]);
+```
+**How it works here**: The `parseInt` function is used to convert the `args[0]` string to a number.
+**Why it's used**: Parsing numbers is used to convert user input to a number.
+**If you change/remove it**: If you remove the `parseInt` function, the program will not be able to convert the `args[0]` string to a number, and the program will throw an error.
+
+---
+### Concept 7: Database Operations
+Database operations are used to interact with a database. They are used to store and retrieve data.
+**General Example**
+```javascript
+const user = await User.findOne({ name: 'John' });
+console.log(user);
+```
+**In Our Code**
+```javascript
+const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+```
+**How it works here**: The `UserCard.find` function is used to retrieve a list of user cards from the database.
+**Why it's used**: Database operations are used to store and retrieve data.
+**If you change/remove it**: If you remove the `UserCard.find` function, the program will not be able to retrieve the list of user cards from the database, and the program will throw an error.
+
+---
+### Concept 8: Array Methods
+Array methods are used to manipulate and interact with arrays. They are used to perform operations such as sorting, filtering, and mapping.
+**General Example**
+```javascript
+const arr = [1, 2, 3, 4, 5];
+const sortedArr = arr.sort((a, b) => a - b);
+console.log(sortedArr); // Outputs: [1, 2, 3, 4, 5]
+```
+**In Our Code**
+```javascript
+const usedSlots = deck.map(d => d.mainDeckSlot);
+```
+**How it works here**: The `map` function is used to create a new array with the `mainDeckSlot` values of the `deck` array.
+**Why it's used**: Array methods are used to manipulate and interact with arrays.
+**If you change/remove it**: If you remove the `map` function, the program will not be able to create a new array with the `mainDeckSlot` values, and the program will throw an error.
+
+---
+### Concept 9: Object Properties
+Object properties are used to access and manipulate the properties of an object. They are used to get and set the values of an object.
+**General Example**
+```javascript
+const obj = { name: 'John', age: 30 };
+console.log(obj.name); // Outputs: John
+```
+**In Our Code**
+```javascript
+uc.inMainDeck = true;
+uc.mainDeckSlot = slot;
+```
+**How it works here**: The `inMainDeck` and `mainDeckSlot` properties of the `uc` object are set to `true` and `slot` respectively.
+**Why it's used**: Object properties are used to access and manipulate the properties of an object.
+**If you change/remove it**: If you remove the `inMainDeck` and `mainDeckSlot` properties, the program will not be able to set the values of the `uc` object, and the program will throw an error.
+
+---
+### Concept 10: Error Handling
+Error handling is used to handle and catch errors that occur in a program. It is used to prevent the program from crashing and to provide a better user experience.
+**General Example**
+```javascript
+try {
+  const data = await fetchData();
+  console.log(data);
+} catch (err) {
+  console.error(err);
+}
+```
+**In Our Code**
+```javascript
+if (isNaN(index)) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index>`, `${p} t2deck 1`);
+```
+**How it works here**: The `if` statement checks if the `index` is not a number, and if so, it returns an error message.
+**Why it's used**: Error handling is used to handle and catch errors that occur in a program.
+**If you change/remove it**: If you remove the `if` statement, the program will not be able to handle the error, and the program will throw an error.

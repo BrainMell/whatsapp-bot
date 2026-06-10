@@ -8,7 +8,7 @@ The Admin and Moderation Controls subsystem provides group moderators, global bo
 
 ## How it works
 
-**Group Warnings and Auto-Kick** — [`engine.js` L7952–7989](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7952-L7989)
+**Group Warnings and Auto-Kick** — [`engine.js` L7952–7989](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7952-L7989)
 
 ```javascript
 // core/engine.js L7952–7989
@@ -57,7 +57,7 @@ This snippet handles issuing warning strikes to group members. When a moderator 
 
 ---
 
-**Warning Strike Storage and Resets** — [`engine.js` L995–1017](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L995-L1017)
+**Warning Strike Storage and Resets** — [`engine.js` L995–1017](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L995-L1017)
 
 ```javascript
 // core/engine.js L995–1017
@@ -85,7 +85,7 @@ Warnings are mapped in a key-value format utilizing a combination of `userId` an
 
 ---
 
-**Owner-Only Gating (Moderator & Block Administration)** — [`engine.js` L7233–7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7233-L7257)
+**Owner-Only Gating (Moderator & Block Administration)** — [`engine.js` L7233–7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7233-L7257)
 
 ```javascript
 // core/engine.js L7233–7257
@@ -133,11 +133,187 @@ Insert a new condition checking the `isOwner` flag within the command dispatcher
 
 ## Common tasks
 
-- **Modify warning strike limits** — Change the warning threshold checks at [engine.js L7978](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7978).
-- **Add a global bot moderator** — Edit moderator arrays using `addmod` or `addGlobalMod` in [engine.js L7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7257).
+- **Modify warning strike limits** — Change the warning threshold checks at [engine.js L7978](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7978).
+- **Add a global bot moderator** — Edit moderator arrays using `addmod` or `addGlobalMod` in [engine.js L7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7257).
 - **Remove a global bot moderator** — Use the `delmod` command to strip moderator rights.
 - **Manage user access (block/unblock)** — Use `block @user` or `unblock @user` to toggle command access.
 - **Set card moderators** — Use `cardmod add @user` or `cardmod del @user` to manage card approvals.
-- **Clear a user's warnings** — Call `resetWarnings` as shown in [engine.js L1013](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1013).
+- **Clear a user's warnings** — Call `resetWarnings` as shown in [engine.js L1013](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1013).
 - **Configure commands prefix** — Edit prefix mappings inside `botConfig.js` and reload contexts.
-- **Change database warnings persistence key** — Modify the system key name mapping inside [engine.js L1007](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1007) and Mongoose schemas.
+- **Change database warnings persistence key** — Modify the system key name mapping inside [engine.js L1007](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1007) and Mongoose schemas.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const targetUser = getMentionOrReply(m);
+let reason = txt.replace(new RegExp(`^.*?${botConfig.getPrefix()} warn`, "i"), "").trim();
+```
+**How it works here**: Variables `targetUser` and `reason` are used to store the result of the `getMentionOrReply` function and the trimmed text after removing the command and mention.
+**Why it's used**: Variables are used to store values that need to be used later in the program, making the code more readable and efficient.
+**If you change/remove it**: If you remove the variables, the code will not be able to store the values, and the program will not work as expected. If you change the variable names, you will need to update all references to the variable in the code.
+
+---
+### Concept 2: Conditional Statements
+Conditional statements are used to execute different blocks of code based on certain conditions. They are used to make decisions in a program.
+**General Example**
+```javascript
+let age = 25;
+if (age >= 18) {
+  console.log('You are an adult');
+} else {
+  console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (targetUser) { ... }
+if (warnCount >= 5 && botIsAdmin) { ... }
+if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addmod`)) { ... }
+```
+**How it works here**: Conditional statements are used to check if a target user exists, if the warning count has reached 5, and if the command is to add a moderator.
+**Why it's used**: Conditional statements are used to control the flow of a program, making decisions based on certain conditions.
+**If you change/remove it**: If you remove the conditional statements, the code will not be able to make decisions, and the program will not work as expected. If you change the conditions, the code will execute different blocks of code, potentially changing the program's behavior.
+
+---
+### Concept 3: Functions
+Functions are reusable blocks of code that perform a specific task. They can take arguments and return values.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+function addWarning(userId, groupId, reason) { ... }
+function resetWarnings(userId, groupId) { ... }
+function getMentionOrReply(m) { ... }
+```
+**How it works here**: Functions `addWarning`, `resetWarnings`, and `getMentionOrReply` are used to perform specific tasks, such as adding a warning, resetting warnings, and getting a mention or reply.
+**Why it's used**: Functions are used to organize code, making it more readable and reusable.
+**If you change/remove it**: If you remove a function, the code that calls it will not work as expected. If you change a function, the code that calls it may not work as expected, potentially breaking the program.
+
+---
+### Concept 4: Regular Expressions
+Regular expressions are patterns used to match character combinations in strings. They are used for text searching and manipulation.
+**General Example**
+```javascript
+let text = 'Hello, world!';
+let regex = /world/;
+console.log(text.match(regex)); // Outputs: ['world']
+```
+**In Our Code**
+```javascript
+let reason = txt.replace(new RegExp(`^.*?${botConfig.getPrefix()} warn`, "i"), "").trim();
+reason = reason.replace(new RegExp(`@${targetPhone}`, "g"), "").trim();
+```
+**How it works here**: Regular expressions are used to remove the command and mention from the text, and to remove the target user mention from the reason.
+**Why it's used**: Regular expressions are used to search and manipulate text, making it easier to extract and format data.
+**If you change/remove it**: If you remove the regular expressions, the code will not be able to remove the command and mention, and the reason will not be formatted correctly. If you change the regular expressions, the code may not work as expected, potentially breaking the program.
+
+---
+### Concept 5: String Methods
+String methods are used to manipulate and format strings. They are used to perform tasks such as trimming, replacing, and splitting strings.
+**General Example**
+```javascript
+let text = '   Hello, world!   ';
+console.log(text.trim()); // Outputs: 'Hello, world!'
+```
+**In Our Code**
+```javascript
+let reason = txt.replace(new RegExp(`^.*?${botConfig.getPrefix()} warn`, "i"), "").trim();
+reason = reason.replace(new RegExp(`@${targetPhone}`, "g"), "").trim();
+```
+**How it works here**: String methods `replace` and `trim` are used to remove the command and mention from the text, and to remove the target user mention from the reason.
+**Why it's used**: String methods are used to manipulate and format strings, making it easier to extract and format data.
+**If you change/remove it**: If you remove the string methods, the code will not be able to remove the command and mention, and the reason will not be formatted correctly. If you change the string methods, the code may not work as expected, potentially breaking the program.
+
+---
+### Concept 6: Arrays and Array Methods
+Arrays are collections of values, and array methods are used to manipulate and format arrays. They are used to perform tasks such as pushing, popping, and filtering arrays.
+**General Example**
+```javascript
+let numbers = [1, 2, 3];
+numbers.push(4);
+console.log(numbers); // Outputs: [1, 2, 3, 4]
+```
+**In Our Code**
+```javascript
+userWarnings.get(key).push({ reason, timestamp: Date.now() });
+```
+**How it works here**: Array method `push` is used to add a new warning to the user's warnings array.
+**Why it's used**: Arrays and array methods are used to store and manipulate collections of data, making it easier to extract and format data.
+**If you change/remove it**: If you remove the array methods, the code will not be able to add new warnings to the user's warnings array. If you change the array methods, the code may not work as expected, potentially breaking the program.
+
+---
+### Concept 7: Objects and Object Methods
+Objects are collections of key-value pairs, and object methods are used to manipulate and format objects. They are used to perform tasks such as getting and setting properties.
+**General Example**
+```javascript
+let person = { name: 'John', age: 30 };
+console.log(person.name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const key = userId + "_" + groupId;
+if (!userWarnings.has(key)) {
+  userWarnings.set(key, []);
+}
+```
+**How it works here**: Object methods `has` and `set` are used to check if a key exists in the `userWarnings` object, and to set a new value for the key if it does not exist.
+**Why it's used**: Objects and object methods are used to store and manipulate collections of data, making it easier to extract and format data.
+**If you change/remove it**: If you remove the object methods, the code will not be able to check if a key exists in the `userWarnings` object, and will not be able to set a new value for the key. If you change the object methods, the code may not work as expected, potentially breaking the program.
+
+---
+### Concept 8: Promises and Async/Await
+Promises are used to handle asynchronous operations, and async/await is a syntax sugar on top of promises. They are used to perform tasks such as sending messages and updating group participants.
+**General Example**
+```javascript
+async function sendMessage() {
+  try {
+    await sock.sendMessage(chatId, { text: 'Hello, world!' });
+  } catch (error) {
+    console.error(error);
+  }
+}
+```
+**In Our Code**
+```javascript
+await sock.sendMessage(chatId, {
+  text: BOT_MARKER + `⚠️️ @${targetPhone} has been warned (${warnCount}/5 in THIS group)\n\n*Reason:* ${reason}`,
+  contextInfo: { mentionedJid: [targetUser] },
+});
+```
+**How it works here**: Async/await is used to send a message to the chat, and to update the group participants.
+**Why it's used**: Promises and async/await are used to handle asynchronous operations, making it easier to write and read asynchronous code.
+**If you change/remove it**: If you remove the async/await syntax, the code will not be able to handle asynchronous operations correctly, potentially breaking the program. If you change the async/await syntax, the code may not work as expected, potentially breaking the program.

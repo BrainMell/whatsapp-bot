@@ -9,7 +9,7 @@ The Combat subsystem drives turn-based encounters (PvE and PvP) in the RPG modul
 
 ## How it works
 
-**Payload Creation for Combat Renderer** — [combatImageGenerator.js L13-L48](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L13-L48)
+**Payload Creation for Combat Renderer** — [combatImageGenerator.js L13-L48](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L13-L48)
 ```javascript
 async function generateCombatImage(players, enemies, options = {}) {
     try {
@@ -52,7 +52,7 @@ This function normalizes in-memory player attributes (levels, HP status, energy,
 
 ---
 
-**Enemy AI Turn Resolution** — [performEnemyAction_new.js L1-L43](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/performEnemyAction_new.js#L1-L43)
+**Enemy AI Turn Resolution** — [performEnemyAction_new.js L1-L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L1-L43)
 ```javascript
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
@@ -103,7 +103,7 @@ This function runs the enemy combat turn. It checks if the battle is active, que
 
 ---
 
-**Combat Scene rendering** — [combatIntegration.js L26-L39](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatIntegration.js#L26-L39)
+**Combat Scene rendering** — [combatIntegration.js L26-L39](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L26-L39)
 ```javascript
 async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
@@ -172,7 +172,244 @@ To change the pace of combat actions, modify the delay logic inside `core/rpg/pe
 ```
 
 ## Common tasks
-- **Add custom combat action verbs** — Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatIntegration.js#L84-L91).
-- **Alter enemy AI turn delays** — Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/performEnemyAction_new.js#L6-L8).
-- **Modify normalized player properties payload** — Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L15-L26).
-- **Modify normalized enemy properties payload** — Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/combatImageGenerator.js#L27-L35).
+- **Add custom combat action verbs** — Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L84-L91).
+- **Alter enemy AI turn delays** — Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L6-L8).
+- **Modify normalized player properties payload** — Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L15-L26).
+- **Modify normalized enemy properties payload** — Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L27-L35).
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and hold values in a program. They can be thought of as labeled boxes where you can store a value.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const payload = {
+    players: players.map(p => ({
+        name: String(p.name || 'Unknown'),
+        // ...
+    })),
+    // ...
+};
+```
+**How it works here**: Variables are used to store values such as `payload`, `players`, and `enemies`. These variables are then used to store and manipulate data.
+**Why it's used**: Variables are used to make the code more readable and maintainable. They allow us to give meaningful names to values and use them throughout the program.
+**If you change/remove it**: If you remove the `payload` variable, the code will throw an error because it is used later in the program. If you change the variable name, you will need to update all references to it.
+
+---
+### Concept 2: Functions
+Functions are blocks of code that can be called multiple times from different parts of a program. They are used to perform a specific task.
+**General Example**
+```javascript
+function greet(name) {
+    console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+async function generateCombatImage(players, enemies, options = {}) {
+    // ...
+}
+```
+**How it works here**: Functions are used to define reusable blocks of code, such as `generateCombatImage` and `performEnemyAction`. These functions take in parameters and return values.
+**Why it's used**: Functions are used to make the code more modular and reusable. They allow us to break down a large program into smaller, manageable pieces.
+**If you change/remove it**: If you remove the `generateCombatImage` function, the code will throw an error because it is called later in the program. If you change the function name, you will need to update all references to it.
+
+---
+### Concept 3: Async/Await
+Async/await is a way to write asynchronous code that is easier to read and maintain. It allows us to write code that waits for a promise to resolve before continuing.
+**General Example**
+```javascript
+async function example() {
+    const data = await fetchData();
+    console.log(data);
+}
+```
+**In Our Code**
+```javascript
+async function generateCombatImage(players, enemies, options = {}) {
+    try {
+        const imageBuffer = await goService.generateCombatImage(payload);
+        // ...
+    } catch (error) {
+        // ...
+    }
+}
+```
+**How it works here**: Async/await is used to wait for the `goService.generateCombatImage` promise to resolve before continuing with the rest of the code.
+**Why it's used**: Async/await is used to make the code easier to read and maintain. It allows us to write asynchronous code that is easier to understand and debug.
+**If you change/remove it**: If you remove the `async` keyword, the code will throw an error because it is using `await`. If you change the `await` expression, you will need to update the code to handle the new promise.
+
+---
+### Concept 4: Object Destructuring
+Object destructuring is a way to extract values from an object and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 30 };
+const { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 30
+```
+**In Our Code**
+```javascript
+const state = gameStates.get(sessionKey);
+if (!state || !state.inCombat) return;
+const { chatId } = state;
+```
+**How it works here**: Object destructuring is used to extract the `chatId` value from the `state` object.
+**Why it's used**: Object destructuring is used to make the code more concise and readable. It allows us to extract values from an object without having to use the dot notation.
+**If you change/remove it**: If you remove the object destructuring, you will need to use the dot notation to access the `chatId` value. If you change the variable name, you will need to update all references to it.
+
+---
+### Concept 5: Array Methods
+Array methods are functions that can be called on an array to perform a specific operation.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map(n => n * 2);
+console.log(doubleNumbers); // Outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+const playersToShow = players.filter(p => p.currentHP > 0 || p.justDied);
+```
+**How it works here**: Array methods are used to filter the `players` array and create a new array `playersToShow`.
+**Why it's used**: Array methods are used to make the code more concise and readable. They allow us to perform common operations on arrays without having to use loops.
+**If you change/remove it**: If you remove the array method, you will need to use a loop to perform the same operation. If you change the array method, you will need to update the code to handle the new operation.
+
+---
+### Concept 6: Conditional Statements
+Conditional statements are used to execute different blocks of code based on a condition.
+**General Example**
+```javascript
+const age = 25;
+if (age >= 18) {
+    console.log('You are an adult');
+} else {
+    console.log('You are a minor');
+}
+```
+**In Our Code**
+```javascript
+if (decision.action === 'release_charge') {
+    // ...
+} else {
+    // ...
+}
+```
+**How it works here**: Conditional statements are used to execute different blocks of code based on the `decision.action` value.
+**Why it's used**: Conditional statements are used to make the code more dynamic and responsive to different conditions.
+**If you change/remove it**: If you remove the conditional statement, the code will always execute the same block of code. If you change the condition, you will need to update the code to handle the new condition.
+
+---
+### Concept 7: Promises
+Promises are used to handle asynchronous operations and provide a way to execute code when the operation is complete.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+    // asynchronous operation
+    resolve('Success');
+});
+promise.then(result => console.log(result)); // Outputs: Success
+```
+**In Our Code**
+```javascript
+return new Promise(async (resolve) => {
+    try {
+        // ...
+        resolve();
+    } catch (error) {
+        // ...
+    }
+});
+```
+**How it works here**: Promises are used to handle the asynchronous operation of the `performEnemyAction` function.
+**Why it's used**: Promises are used to make the code more asynchronous and responsive to different conditions.
+**If you change/remove it**: If you remove the promise, the code will not be able to handle the asynchronous operation. If you change the promise, you will need to update the code to handle the new promise.
+
+---
+### Concept 8: Error Handling
+Error handling is used to catch and handle errors that occur during the execution of the code.
+**General Example**
+```javascript
+try {
+    // code that may throw an error
+} catch (error) {
+    console.error(error);
+}
+```
+**In Our Code**
+```javascript
+try {
+    const imageBuffer = await goService.generateCombatImage(payload);
+    // ...
+} catch (error) {
+    console.error('❌ Combat image generation failed:', error.message);
+    return { success: false, error: error.message };
+}
+```
+**How it works here**: Error handling is used to catch and handle errors that occur during the execution of the `generateCombatImage` function.
+**Why it's used**: Error handling is used to make the code more robust and responsive to different conditions.
+**If you change/remove it**: If you remove the error handling, the code will throw an error and stop executing. If you change the error handling, you will need to update the code to handle the new error.
+
+---
+### Concept 9: String Interpolation
+String interpolation is used to insert values into a string.
+**General Example**
+```javascript
+const name = 'John';
+const greeting = `Hello, ${name}!`;
+console.log(greeting); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+try {
+    await sock.sendMessage(chatId, { text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!` });
+} catch (err) {}
+```
+**How it works here**: String interpolation is used to insert the `enemy.name` value into the string.
+**Why it's used**: String interpolation is used to make the code more concise and readable. It allows us to insert values into a string without having to use concatenation.
+**If you change/remove it**: If you remove the string interpolation, you will need to use concatenation to insert the value into the string. If you change the string interpolation, you will need to update the code to handle the new value.
+
+---
+### Concept 10: Regular Expressions
+Regular expressions are used to match patterns in strings.
+**General Example**
+```javascript
+const regex = /hello/i;
+const string = 'Hello World';
+console.log(regex.test(string)); // Outputs: true
+```
+**In Our Code**
+```javascript
+if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
+```
+**How it works here**: Regular expressions are used to match patterns in the `wName` string.
+**Why it's used**: Regular expressions are used to make the code more concise and readable. They allow us to match patterns in strings without having to use multiple `if` statements.
+**If you change/remove it**: If you remove the regular expression, you will need to use multiple `if` statements to match the patterns. If you change the regular expression, you will need to update the code to handle the new pattern.

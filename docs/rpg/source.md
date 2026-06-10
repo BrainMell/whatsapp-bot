@@ -28,7 +28,7 @@ User sends ".j source iron_ore"
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -50,7 +50,7 @@ User sends ".j source iron_ore"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L5075-L5080)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5075-L5080)
 * **Line Numbers**: 5075-5080
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `cmdArgs`
@@ -73,7 +73,7 @@ User sends ".j source iron_ore"
 ---
 
 ### Step 3: Global Database Cross-Referencing
-* **File Path**: [core/commands/rpgCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/rpgCommands.js#L623-L640)
+* **File Path**: [core/commands/rpgCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/rpgCommands.js#L623-L640)
 * **Line Numbers**: 623-640 (and remaining lookup lines)
 * **Called From**: `showItemSource()`
 * **Inputs**: `(sock, chatId, itemId)`

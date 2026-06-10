@@ -141,4 +141,18 @@ The documentation for all bot commands and subsystems is structured into 11 main
 
 ## 🛠️ Development & Contribution
 
-Please refer to the specific module docs under the `docs/` folder before changing formulas, DB collections, or command hooks. All documentation follows a 4-section standard (**What it is**, **How it works**, **How to modify it**, **Common tasks**) to ensure developer efficiency.
+Please refer to the specific module docs under the `docs/` folder before changing formulas, DB collections, or command hooks.
+
+### Documentation Standards & Structure
+To make the project accessible to developers of all skill levels, all command flow documentation in `docs/` adheres to a strict educational layout:
+1. **Quick-Reference Note**: A prominent notice at the very beginning of the document highlighting exactly which files and lines to edit to modify the command behavior or routing.
+2. **What it is / Description**: An explanation of what the command or subsystem does from a player/user perspective.
+3. **How it works (Hierarchical Execution Tree & Step-by-Step Code Flow)**: A step-by-step trace of execution from WhatsApp input down to database calls and network output, complete with source code snippets.
+4. **How to Modify**: Practical examples showing how to change configs, multipliers, or limits.
+5. **Noob Readthrough**: A beginner-friendly breakdown of every code snippet shown in the document. It explains:
+   * **General programming concepts** (e.g., variables, arrow functions, event listeners, promises).
+   * **How they work** in general JavaScript development.
+   * **How they are implemented** in this specific codebase context.
+   * **Why they are used** for this specific feature.
+   * **What would happen** if they were changed or removed.
+

@@ -45,7 +45,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: User Profile Mutation Gateway (`updateUserProfile`)
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L2331)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2331)
 * **Inputs**: User JID and updates object (e.g. `{ nickname: "Name" }` or `{ memory: { category, content } }`)
 * **Outputs**: Returns modified profile object and writes back to MongoDB Mongoose cache
 
@@ -86,7 +86,7 @@ function updateUserProfile(jid, updates = {}) {
 ```
 
 ### Step 2: Ingesting Group Facts (`remembergroup`)
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L14280-L14293)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L14280-L14293)
 * **Inputs**: Chat identifier and fact content string
 * **Outputs**: Saves group-specific memories in the MongoDB `GroupProfile` collection
 

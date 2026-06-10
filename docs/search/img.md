@@ -38,7 +38,7 @@ User sends ".j nsfw tag" / ".j 18+ tag" (Age-restricted)
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Audio Search and Download
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L625-L682)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L625-L682)
 * **Inputs**: Query string (e.g. song name `Starboy`)
 * **Outputs**: Returns raw MP3 audio file with formatted audio player card metadata
 
@@ -77,7 +77,7 @@ async function handleAudioCommand(sock, chatId, query, m) {
 ---
 
 ### Step 2: Pinterest Image Scraping
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L684-L707)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L684-L707)
 * **Inputs**: Pinterest search term (e.g. `Goku`)
 * **Outputs**: Posts up to 5 matching picture links as standard image attachments
 
@@ -96,7 +96,7 @@ async function handleImgCommand(sock, chatId, query, m) {
 ---
 
 ### Step 3: Adult Content Scrapers (NSFW / 18+)
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L709-L757)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L709-L757)
 * **Inputs**: NSFW keyword query tag
 * **Outputs**: Scraping and delivering up to 3 age-restricted images
 
@@ -120,6 +120,6 @@ async function handleImgCommand(sock, chatId, query, m) {
 ---
 
 ## 4. How to Modify
-* **Customize Image / Scraped Limit count**: Modify the slice parameters (currently `5` for Pinterest, and `3` for NSFW/Adult content) inside their respective handlers in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L693).
-* **Audio Download Timeout**: Adjust the axios download timeout duration (currently `60000` ms / 60 seconds) in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L643).
-* **Service Endpoint Mappings**: The internal crawl pathways are handled by `GoImageService` imported from [goImageService.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/utils/goImageService.js). Inspect that file to alter base scrape URLs.
+* **Customize Image / Scraped Limit count**: Modify the slice parameters (currently `5` for Pinterest, and `3` for NSFW/Adult content) inside their respective handlers in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L693).
+* **Audio Download Timeout**: Adjust the axios download timeout duration (currently `60000` ms / 60 seconds) in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L643).
+* **Service Endpoint Mappings**: The internal crawl pathways are handled by `GoImageService` imported from [goImageService.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js). Inspect that file to alter base scrape URLs.

@@ -7,7 +7,7 @@ The Scrapers Subsystem manages bulk data collection and crawling processes. Thes
 
 ## How it works
 
-**Shoob Puppeteer Scraper Setup** — [shoob-scraper.js L8-L26](file:///home/mellow/Desktop/Joker/scrapers/shoob/shoob-scraper.js#L8-L26)
+**Shoob Puppeteer Scraper Setup** — [shoob-scraper.js L8-L26](https://github.com/BrainMell/scrapers/blob/main/shoob/shoob-scraper.js#L8-L26)
 ```javascript
 class ShoobCardScraper {
   constructor(config = {}) {
@@ -16,7 +16,7 @@ class ShoobCardScraper {
     this.tiers = config.tiers || ['1', '2', '3', '4', '5', '6', 'S'];
     
     // We point this to the bot's production cards_data.json as the source of truth!
-    this.botDataPath = '/home/mellow/Desktop/Joker/whatsapp-bot/core/data/cards_data.json';
+    this.botDataPath = path.resolve(__dirname, '../../whatsapp-bot/core/data/cards_data.json');
     
     this.outputFolder = config.outputFolder || path.join(__dirname, 'shoob_cards');
     this.outputFile = path.join(this.outputFolder, 'cards_data.json');
@@ -34,7 +34,7 @@ This constructor configures the card scraper instance. It sets default crawl ran
 
 ---
 
-**Pinterest Meme and Reaction Scraper** — [pinterest-scraper-advanced.js L8-L26](file:///home/mellow/Desktop/Joker/scrapers/pinterest/pinterest-scraper-advanced.js#L8-L26)
+**Pinterest Meme and Reaction Scraper** — [pinterest-scraper-advanced.js L8-L26](https://github.com/BrainMell/scrapers/blob/main/pinterest/pinterest-scraper-advanced.js#L8-L26)
 ```javascript
 class DebuggedMemeScraperFixed {
   constructor(config = {}) {
@@ -61,7 +61,7 @@ This class initializes config options for crawling Pinterest. It specifies thres
 
 ---
 
-**Shoob Card Progress Saver** — [shoob-scraper.js L168-L203](file:///home/mellow/Desktop/Joker/scrapers/shoob/shoob-scraper.js#L168-L203)
+**Shoob Card Progress Saver** — [shoob-scraper.js L168-L203](https://github.com/BrainMell/scrapers/blob/main/shoob/shoob-scraper.js#L168-L203)
 ```javascript
   async saveProgress(forceSync = false) {
     if (this.isSaving) return;
@@ -126,8 +126,8 @@ To modify scraping boundaries or search properties, developers can adjust config
 ```
 
 ## Common tasks
-- **Change Shoob scraper page range** — Limit the page crawl boundary to run smaller batches in [shoob-scraper.js L10-L11](file:///home/mellow/Desktop/Joker/scrapers/shoob/shoob-scraper.js#L10-L11).
-- **Modify the output path for scraped cards** — Change the target destination file path for Shoob data updates in [shoob-scraper.js L15](file:///home/mellow/Desktop/Joker/scrapers/shoob/shoob-scraper.js#L15).
-- **Configure Pinterest image target threshold** — Adjust the maximum crawled assets before stopping the Pinterest runner in [pinterest-scraper-advanced.js L10](file:///home/mellow/Desktop/Joker/scrapers/pinterest/pinterest-scraper-advanced.js#L10).
-- **Change minimum Pinterest image resolution** — Filter out smaller thumbnails by modifying pixel dimensions in [pinterest-scraper-advanced.js L15-L16](file:///home/mellow/Desktop/Joker/scrapers/pinterest/pinterest-scraper-advanced.js#L15-L16).
-- **Modify Shoob tiers collection scope** — Add or remove card tiers from the extraction crawler list in [shoob-scraper.js L12](file:///home/mellow/Desktop/Joker/scrapers/shoob/shoob-scraper.js#L12).
+- **Change Shoob scraper page range** — Limit the page crawl boundary to run smaller batches in [shoob-scraper.js L10-L11](https://github.com/BrainMell/scrapers/blob/main/shoob/shoob-scraper.js#L10-L11).
+- **Modify the output path for scraped cards** — Change the target destination file path for Shoob data updates in [shoob-scraper.js L15](https://github.com/BrainMell/scrapers/blob/main/shoob/shoob-scraper.js#L15).
+- **Configure Pinterest image target threshold** — Adjust the maximum crawled assets before stopping the Pinterest runner in [pinterest-scraper-advanced.js L10](https://github.com/BrainMell/scrapers/blob/main/pinterest/pinterest-scraper-advanced.js#L10).
+- **Change minimum Pinterest image resolution** — Filter out smaller thumbnails by modifying pixel dimensions in [pinterest-scraper-advanced.js L15-L16](https://github.com/BrainMell/scrapers/blob/main/pinterest/pinterest-scraper-advanced.js#L15-L16).
+- **Modify Shoob tiers collection scope** — Add or remove card tiers from the extraction crawler list in [shoob-scraper.js L12](https://github.com/BrainMell/scrapers/blob/main/shoob/shoob-scraper.js#L12).

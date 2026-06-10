@@ -45,7 +45,7 @@ User command
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Entry Point Trigger
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4066)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4066)
 * **Line Numbers**: 4066-4074
 * **Called From**: Baileys socket event emitter
 * **Inputs**: `{ messages, type }` WhatsApp payload
@@ -67,7 +67,7 @@ User command
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L4645-L4686)
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L4645-L4686)
 * **Line Numbers**: 4645-4686
 * **Called From**: Message parser block in `engine.js`
 * **Inputs**: Raw message body string `lowerTxt` and `cmdArgs`
@@ -106,7 +106,7 @@ User command
 ---
 
 ### Step 3: Item Processing & Lineage Gates Verification
-* **File Path**: [core/commands/shopCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L101-L174)
+* **File Path**: [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L101-L174)
 * **Line Numbers**: 101-174
 * **Called From**: `buyItem()`
 * **Inputs**: `(sock, chatId, senderJid, input)`
@@ -154,7 +154,7 @@ User command
 ---
 
 ### Step 4: Invoking Type Handler & Balance Deduction
-* **File Path**: [core/commands/shopCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L175-L215)
+* **File Path**: [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L175-L215)
 * **Line Numbers**: 175-215
 * **Called From**: `buyItem()`
 * **Inputs**: Sender JID, target item metadata
@@ -191,6 +191,6 @@ User command
 ---
 
 ## 4. How to Modify
-- **Add Shop Items**: Modify items inside `ITEM_DATABASE` within [core/rpg/lootSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js) or `CLASS_SHOP_ITEMS` inside [core/rpg/classSystem.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/classSystem.js).
-- **Edit Dragon Key Lineage Limits**: Adjust class permissions in [core/commands/shopCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L161).
-- **Change Shop Categories**: Edit the `categoryInfo` object inside [core/commands/shopCommands.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/commands/shopCommands.js#L49).
+- **Add Shop Items**: Modify items inside `ITEM_DATABASE` within [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js) or `CLASS_SHOP_ITEMS` inside [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js).
+- **Edit Dragon Key Lineage Limits**: Adjust class permissions in [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L161).
+- **Change Shop Categories**: Edit the `categoryInfo` object inside [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L49).

@@ -164,3 +164,259 @@ To adjust the crash probability curves:
   if (targetMultiplier > 2000) { ... } // Raises cap to 2000x
   ```
 Prefixes, limits, and edge properties can be customized directly in the same block.
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+# **Noob Readthrough**
+
+This section is dedicated to complete beginners. If you have never programmed before, this guide will explain the general programming concepts used in the code snippets above, how they work in practice, why we use them in this project, and what happens if you change or remove them.
+
+### Concept 1: Variables
+Variables are used to store and manipulate data in a program. They have a name, and you can assign a value to them.
+**General Example**
+```javascript
+let name = 'John';
+console.log(name); // Outputs: John
+```
+**In Our Code**
+```javascript
+const cmdBody = lowerTxt
+  .substring(currentPrefix.length)
+  .trim();
+```
+**How it works here**: The code assigns the result of trimming and substring operations on `lowerTxt` to a constant variable named `cmdBody`.
+**Why it's used**: Variables are used to store intermediate results and make the code more readable.
+**If you change/remove it**: If you remove this line, the `cmdBody` variable would be undefined, causing errors in subsequent lines of code. If you change it, you would need to adjust the subsequent code to match the new variable name or value.
+
+---
+### Concept 2: Arrow Functions
+Arrow functions are a concise way to define small, single-purpose functions. They have an implicit return statement and can be defined with or without parameters.
+**General Example**
+```javascript
+const greet = (name) => `Hello, ${name}!`;
+console.log(greet('John')); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code defines an event listener for the `messages.upsert` event, and the arrow function is used to handle the event.
+**Why it's used**: Arrow functions are used to define small, single-purpose functions, making the code more concise and readable.
+**If you change/remove it**: If you remove this line, the event listener would not be defined, and the code would not respond to the `messages.upsert` event. If you change it, you would need to adjust the code to match the new function definition.
+
+---
+### Concept 3: Event Listeners
+Event listeners are used to respond to specific events or actions in a program. They are defined with a callback function that is executed when the event occurs.
+**General Example**
+```javascript
+document.addEventListener('click', () => {
+  console.log('Clicked!');
+});
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code defines an event listener for the `messages.upsert` event, and the callback function is executed when the event occurs.
+**Why it's used**: Event listeners are used to respond to specific events or actions in a program, making the code more interactive and dynamic.
+**If you change/remove it**: If you remove this line, the event listener would not be defined, and the code would not respond to the `messages.upsert` event. If you change it, you would need to adjust the code to match the new event or callback function.
+
+---
+### Concept 4: Conditional Statements
+Conditional statements are used to execute different blocks of code based on specific conditions or decisions.
+**General Example**
+```javascript
+if (age > 18) {
+  console.log('You are an adult!');
+} else {
+  console.log('You are a minor!');
+}
+```
+**In Our Code**
+```javascript
+if (primaryCmd === "crash") {
+  // ...
+}
+```
+**How it works here**: The code checks if the `primaryCmd` variable is equal to the string "crash", and if so, executes the code inside the if block.
+**Why it's used**: Conditional statements are used to make decisions and execute different blocks of code based on specific conditions.
+**If you change/remove it**: If you remove this line, the code would not check for the "crash" command, and the corresponding code would not be executed. If you change it, you would need to adjust the code to match the new condition or command.
+
+---
+### Concept 5: Array Methods
+Array methods are used to manipulate and interact with arrays in a program. They can be used to iterate, filter, map, and reduce arrays.
+**General Example**
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+const doubleNumbers = numbers.map((num) => num * 2);
+console.log(doubleNumbers); // Outputs: [2, 4, 6, 8, 10]
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The code uses the `map` method to iterate over the `messages` array and execute an asynchronous function for each message.
+**Why it's used**: Array methods are used to manipulate and interact with arrays in a program, making the code more concise and efficient.
+**If you change/remove it**: If you remove this line, the code would not iterate over the `messages` array, and the corresponding code would not be executed. If you change it, you would need to adjust the code to match the new array method or iteration approach.
+
+---
+### Concept 6: Number Parsing
+Number parsing is used to convert strings or other data types to numbers in a program.
+**General Example**
+```javascript
+const num = parseInt('123', 10);
+console.log(num); // Outputs: 123
+```
+**In Our Code**
+```javascript
+const betAmount = parseInt(cmdArgs[1], 10);
+```
+**How it works here**: The code uses the `parseInt` function to convert the second command argument to an integer.
+**Why it's used**: Number parsing is used to convert strings or other data types to numbers, making it possible to perform mathematical operations.
+**If you change/remove it**: If you remove this line, the `betAmount` variable would be undefined, causing errors in subsequent lines of code. If you change it, you would need to adjust the code to match the new parsing approach or data type.
+
+---
+### Concept 7: String Manipulation
+String manipulation is used to modify and interact with strings in a program. It can be used to extract substrings, trim whitespace, and perform other operations.
+**General Example**
+```javascript
+const str = ' Hello, World! ';
+const trimmedStr = str.trim();
+console.log(trimmedStr); // Outputs: Hello, World!
+```
+**In Our Code**
+```javascript
+const cmdBody = lowerTxt
+  .substring(currentPrefix.length)
+  .trim();
+```
+**How it works here**: The code uses the `substring` and `trim` methods to extract the command body from the input text.
+**Why it's used**: String manipulation is used to modify and interact with strings in a program, making it possible to extract and process relevant information.
+**If you change/remove it**: If you remove this line, the `cmdBody` variable would be undefined, causing errors in subsequent lines of code. If you change it, you would need to adjust the code to match the new string manipulation approach.
+
+---
+### Concept 8: Object Destructuring
+Object destructuring is used to extract properties from objects and assign them to variables.
+**General Example**
+```javascript
+const person = { name: 'John', age: 30 };
+const { name, age } = person;
+console.log(name); // Outputs: John
+console.log(age); // Outputs: 30
+```
+**In Our Code**
+```javascript
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  // ...
+});
+```
+**How it works here**: The code uses object destructuring to extract the `messages` and `type` properties from the event object.
+**Why it's used**: Object destructuring is used to extract properties from objects and assign them to variables, making the code more concise and readable.
+**If you change/remove it**: If you remove this line, the `messages` and `type` variables would be undefined, causing errors in subsequent lines of code. If you change it, you would need to adjust the code to match the new object destructuring approach.
+
+---
+### Concept 9: Promises
+Promises are used to handle asynchronous operations in a program. They can be used to execute code when an operation is complete or failed.
+**General Example**
+```javascript
+const promise = new Promise((resolve, reject) => {
+  // Asynchronous operation
+  resolve('Success!');
+});
+promise.then((result) => {
+  console.log(result); // Outputs: Success!
+});
+```
+**In Our Code**
+```javascript
+await Promise.all(
+  messages.map(async (m) => {
+    // ...
+  })
+);
+```
+**How it works here**: The code uses promises to handle the asynchronous operations of processing each message.
+**Why it's used**: Promises are used to handle asynchronous operations in a program, making it possible to execute code when an operation is complete or failed.
+**If you change/remove it**: If you remove this line, the code would not handle the asynchronous operations, and the program may not work as expected. If you change it, you would need to adjust the code to match the new promise approach or asynchronous operation.
+
+---
+### Concept 10: Functions
+Functions are used to group code together and reuse it in a program. They can take arguments and return values.
+**General Example**
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+}
+greet('John'); // Outputs: Hello, John!
+```
+**In Our Code**
+```javascript
+function crash(userId, amount, multiplierStr, economyModule) {
+  // ...
+}
+```
+**How it works here**: The code defines a function named `crash` that takes four arguments and performs the crash game logic.
+**Why it's used**: Functions are used to group code together and reuse it in a program, making the code more modular and maintainable.
+**If you change/remove it**: If you remove this line, the `crash` function would not be defined, and the code would not be able to perform the crash game logic. If you change it, you would need to adjust the code to match the new function definition or logic.
+
+---
+### Concept 11: Math Operations
+Math operations are used to perform mathematical calculations in a program. They can be used to perform arithmetic, comparison, and other operations.
+**General Example**
+```javascript
+const num1 = 10;
+const num2 = 5;
+const result = num1 + num2;
+console.log(result); // Outputs: 15
+```
+**In Our Code**
+```javascript
+const crashPoint = 1.01 + Math.random() * 0.49;
+```
+**How it works here**: The code uses math operations to generate a random crash point.
+**Why it's used**: Math operations are used to perform mathematical calculations in a program, making it possible to perform simulations, games, and other applications.
+**If you change/remove it**: If you remove this line, the `crashPoint` variable would be undefined, causing errors in subsequent lines of code. If you change it, you would need to adjust the code to match the new math operation or calculation.
+
+---
+### Concept 12: Random Number Generation
+Random number generation is used to generate random numbers in a program. It can be used to simulate chance, uncertainty, and other random events.
+**General Example**
+```javascript
+const rand = Math.random();
+console.log(rand); // Outputs: a random number between 0 and 1
+```
+**In Our Code**
+```javascript
+const rand = Math.random();
+if (rand < 0.03) {
+  crashPoint = 1.00;
+}
+```
+**How it works here**: The code uses random number generation to simulate the chance of an instant crash.
+**Why it's used**: Random number generation is used to simulate chance, uncertainty, and other random events in a program, making it possible to create games, simulations, and other applications.
+**If you change/remove it**: If you remove this line, the code would not simulate the chance of an instant crash, and the game logic would be different. If you change it, you would need to adjust the code to match the new random number generation approach or probability.

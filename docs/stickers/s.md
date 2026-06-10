@@ -45,7 +45,7 @@ User sends ".j tovid" (replying to sticker)
 ## 3. Step-by-Step Code Execution Flow
 
 ### Step 1: Sticker Request Parsing and Flags Extraction
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6206-L6288)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6206-L6288)
 * **Inputs**: Command string `lowerTxt` and message media attachments
 * **Outputs**: Maps formatting flags (`isCircle`, `isBlurBg`, `isSpin`, etc.) and triggers download pipeline
 
@@ -61,7 +61,7 @@ const isSpin = flagPart === "-spin"; // ... maps all remaining flags
 ---
 
 ### Step 2: Media Download and File Writing
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6295-L6334)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6295-L6334)
 * **Inputs**: Quoted message context or main message
 * **Outputs**: Writes media buffer to `./temp` directory
 
@@ -76,7 +76,7 @@ fs.writeFileSync(inputPath, buffer);
 ---
 
 ### Step 3: FFmpeg Transcoding and Complex Filter Graphs
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6336-L6445)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6336-L6445)
 * **Inputs**: Path of downloaded media input file
 * **Outputs**: Compiles and executes FFmpeg command producing standard WebP outputs
 
@@ -103,7 +103,7 @@ fs.writeFileSync(inputPath, buffer);
 ---
 
 ### Step 4: Metadata Overlay and Response Delivery
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6447-L6477)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6447-L6477)
 * **Inputs**: Output WebP file path and custom pack settings from system database
 * **Outputs**: Formats sticker metadata and posts sticker payload to group chat
 
@@ -124,7 +124,7 @@ await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
 ---
 
 ### Step 5: Sticker to Image/Video Reversions
-* **File Path**: [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6657-L6869)
+* **File Path**: [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6657-L6869)
 * **Inputs**: Quoted WebP sticker message
 * **Outputs**: Returns extracted PNG file or H.264 MP4 loop
 
@@ -144,7 +144,7 @@ await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
 ---
 
 ## 4. How to Modify
-* **Customize Global Default Metadata**: Modify the database values using commands `.j setpack <name>` and `.j setauthor <author>`. These settings write to keys `sticker_pack_name_${BOT_ID}` and `sticker_author_name_${BOT_ID}` inside [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6626).
-* **Adjust Output WebP Quality**: Change WebP quality factor (currently `70`) inside [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6460).
-* **Change Video Sticker Duration Limits**: Modify the clip length duration parameter `-t 5` (currently 5 seconds maximum) inside [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6363).
-* **Adjust WebP-to-GIF Conversion Frame-Rate**: Modify `fps=20` to higher/lower values inside `tovid` block in [engine.js](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L6820).
+* **Customize Global Default Metadata**: Modify the database values using commands `.j setpack <name>` and `.j setauthor <author>`. These settings write to keys `sticker_pack_name_${BOT_ID}` and `sticker_author_name_${BOT_ID}` inside [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6626).
+* **Adjust Output WebP Quality**: Change WebP quality factor (currently `70`) inside [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6460).
+* **Change Video Sticker Duration Limits**: Modify the clip length duration parameter `-t 5` (currently 5 seconds maximum) inside [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6363).
+* **Adjust WebP-to-GIF Conversion Frame-Rate**: Modify `fps=20` to higher/lower values inside `tovid` block in [engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L6820).
