@@ -428,13 +428,9 @@ setInterval(() => {
 // active chat window, this triggers a process.exit so Render
 // restarts cleanly instead of staying in zombie state.
 // ============================================================
-const lastUpsertTime = new Map(); // botId -> timestamp
-const ZOMBIE_SILENCE_THRESHOLD = 4 * 60 * 1000; // 4 minutes
-const ZOMBIE_CHECK_INTERVAL = 60 * 1000; // check every minute
-
 // Engine calls this whenever a real (non-stale) message is processed
 function recordUpsert(botId) {
-    lastUpsertTime.set(botId, Date.now());
+    // No-op: Zombie socket detector disabled to prevent false-positive reboots during quiet hours.
 }
 
 module.exports = module.exports || {};
@@ -470,20 +466,6 @@ setInterval(() => {
             }
         } else {
             disconnectedTimestamps.delete(botId);
-        }
-
-        // ── Zombie socket check ──────────────────────────────
-        // Guardian only catches 'disconnected' status bots. But
-        // zombie sockets stay in 'connected' status while dead.
-        // This catches that case: connected + silent = zombie.
-        if (health.status === 'connected' && lastUpsertTime.has(botId)) {
-            const silence = Date.now() - lastUpsertTime.get(botId);
-            if (silence > ZOMBIE_SILENCE_THRESHOLD) {
-                console.error(`🧟 [Guardian] Zombie socket detected on '${health.name}'! Connected but silent for ${Math.floor(silence/1000)}s. Triggering restart...`);
-                needsReboot = true;
-                stuckBotName = health.name;
-                break;
-            }
         }
     }
 

@@ -4090,9 +4090,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (!m.message) return;
 
               // Skip stale backlog messages sent while the bot was offline (older than 180 seconds)
+              // Only apply this check during the first 30 seconds of connection startup to avoid clock drift issues on live messages
               const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
-              if (msgTime && (Date.now() - msgTime > 180000)) {
-                console.log(`⏳ [${botConfig.getBotId()}] Skipped stale/backlog message (age: ${Math.floor((Date.now() - msgTime) / 1000)}s) - Check if server/local clock is out of sync!`);
+              const isStartupGracePeriod = botStartTime && (Date.now() - botStartTime < 30000);
+              if (isStartupGracePeriod && msgTime && (Date.now() - msgTime > 180000)) {
+                console.log(`⏳ [${botConfig.getBotId()}] Skipped stale/backlog message during startup grace period (age: ${Math.floor((Date.now() - msgTime) / 1000)}s)`);
                 return;
               }
 
