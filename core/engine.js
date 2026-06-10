@@ -4279,6 +4279,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   const txt = text ? text.trim() : "";
 
+                  // ── PIPELINE STAGE 2: TEXT PARSED ──────────
+                  const _looksLikeCmd = txt.startsWith('.') || txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase());
+                  if (_looksLikeCmd) {
+                    console.log(`🔍 [Pipeline:2] Text parsed | from=${senderJid.split('@')[0]} | text=${JSON.stringify(txt.slice(0, 80))} | muted=${isMuted(senderJid, chatId)} | isRekeying=${isRekeying}`);
+                  }
+
                   const handlePendingNameReply = async () => {
                     const tempCtx =
                       m.message?.extendedTextMessage?.contextInfo ||
@@ -4418,6 +4424,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
 
                   // ── CARD SYSTEM INTERCEPT ──────────────────
+                  if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
                     lowerTxt, // cleaned, lowercased text
                     txt, // original text
@@ -4430,6 +4437,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     isMod:
                       overrideUsers.has(senderJid) || isGlobalMod(senderJid), // added mod flag
                   });
+                  if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] cardSystem.handleCommand returned: ${cardHandled}`);
                   if (cardHandled) return; // stop further processing if handled by cards
                   // ───────────────────────────────────────────
 
@@ -4583,7 +4591,8 @@ _💡 Reply with another number from your search list!_`.trim();
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
 
-                    // debug log removed from hot path
+                    // ── PIPELINE STAGE 4: CMD ROUTER ───────────
+                    console.log(`⚡ [Pipeline:4] CMD DETECTED | cmd=${JSON.stringify(primaryCmd)} | sender=${senderJid.split('@')[0]} | chat=${chatId.split('@')[0]} | isSelf=${isSelf}`);
 
                     // --- REACTION COMMANDS ---
                     const reaction = REACTIONS.find((r) => r.type === primaryCmd);
