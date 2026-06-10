@@ -4075,6 +4075,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // Skip stale backlog messages sent while the bot was offline (older than 45 seconds)
               const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
               if (msgTime && (Date.now() - msgTime > 45000)) {
+                console.log(`⏳ [${botConfig.getBotId()}] Skipped stale/backlog message (age: ${Math.floor((Date.now() - msgTime) / 1000)}s) - Check if server/local clock is out of sync!`);
                 return;
               }
 
@@ -4129,8 +4130,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.audioMessage;
                   if (!hasRealContent && m.messageStubType) return;
 
-                  // 4. Diagnostic Log (debug only — disabled in production)
-                  // console.log(`📩 [${botConfig.getBotId()}] Msg from ${senderJid}`);
+                  // 4. Diagnostic Log
+                  console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
