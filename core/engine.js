@@ -3167,38 +3167,13 @@ What to do:
 
       // Filter out flags
       const cleanArgs = args.filter((a) => !a.startsWith("-"));
-      
-      // Parse potential page numbers or navigation keywords
-      let pageNum = null;
-      let navDir = null; // 'next' or 'prev'
-      
-      const remainingArgs = [];
-      for (const arg of cleanArgs) {
-        const numMatch = arg.match(/^([1-9][0-9]*)$/);
-        if (numMatch) {
-          pageNum = parseInt(numMatch[1], 10);
-        } else if (arg.toLowerCase() === "next") {
-          navDir = "next";
-        } else if (arg.toLowerCase() === "prev" || arg.toLowerCase() === "back") {
-          navDir = "prev";
-        } else {
-          remainingArgs.push(arg);
-        }
-      }
+      const categoryOrCommandInput = cleanArgs.join(" ").toLowerCase().trim();
 
-      const categoryOrCommandInput = remainingArgs.join(" ").toLowerCase().trim();
-
-      // Retrieve existing session if any
-      let session = senderJid ? menuSessions.get(senderJid) : null;
-
-      // Resolve context: category or main?
+      // Resolve: is it a known category or a known command?
       let targetCategory = null;
       let targetCommand = null;
-      let isAll = false;
 
-      if (categoryOrCommandInput === "all") {
-        isAll = true;
-      } else if (categoryOrCommandInput) {
+      if (categoryOrCommandInput && categoryOrCommandInput !== "all") {
         // Try to match a category
         const matchedCat = Object.keys(COMMAND_REGISTRY).find(
           (k) =>
@@ -3212,7 +3187,9 @@ What to do:
         } else {
           // Try to match a command
           for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-            const match = cmds.find((c) => c.cmd.toLowerCase() === categoryOrCommandInput);
+            const match = cmds.find(
+              (c) => c.cmd.toLowerCase() === categoryOrCommandInput,
+            );
             if (match) {
               targetCommand = match;
               targetCategory = cat;
@@ -3222,23 +3199,8 @@ What to do:
         }
       }
 
-      // 1. SHOW ALL COMMANDS (.j menu all)
-      if (isAll) {
-        let allMsg = GET_BANNER(`✨ ${botName.toUpperCase()}`) + `\n`;
-        allMsg += `*Prefix* ${prefix}\n\n`;
-        for (const [cat, cmds] of Object.entries(COMMAND_REGISTRY)) {
-          const emoji = CATEGORY_EMOJIS[cat] || "◈";
-          allMsg += `${emoji}─── ＊ ${cat} ＊ ───${emoji}\n`;
-          cmds.forEach((c) => {
-            allMsg += `• \`${prefix} ${c.cmd}\`\n`;
-          });
-          allMsg += "\n";
-        }
-        return await sendMenuWithBanner(sock, chatId, allMsg);
-      }
-
-      // 2. COMMAND EXPLAIN MODE (.j menu <command>)
-      if (targetCommand && !showHidden) {
+      // 1. COMMAND EXPLAIN MODE (.j menu <command>)
+      if (targetCommand) {
         const emoji = CATEGORY_EMOJIS[targetCategory] || "✨";
         let explainMsg =
           GET_BANNER(`${emoji} ${botName.toUpperCase()}`) + `\n\n`;
@@ -3255,93 +3217,39 @@ ${targetCategory}`;
         return await sendMenuWithBanner(sock, chatId, explainMsg);
       }
 
-      // 3. CATEGORY MENU WITH PAGINATION
-      if (targetCategory || (session && session.type === "category" && !categoryOrCommandInput)) {
-        const catName = targetCategory || session.category;
-        const cmds = COMMAND_REGISTRY[catName] || [];
-        const visibleCmds = cmds.filter(c => !c.hidden || showHidden);
-        const pageSize = 8;
-        const totalPages = Math.ceil(visibleCmds.length / pageSize) || 1;
-
-        let page = 1;
-        if (pageNum !== null) {
-          page = Math.min(Math.max(pageNum, 1), totalPages);
-        } else if (navDir && session && session.type === "category" && session.category === catName) {
-          const offset = navDir === "next" ? 1 : -1;
-          page = Math.min(Math.max(session.page + offset, 1), totalPages);
-        } else if (session && session.type === "category" && session.category === catName) {
-          page = session.page;
-        }
-
-        // Save session
-        if (senderJid) {
-          menuSessions.set(senderJid, { type: "category", category: catName, page });
-        }
-
-        const startIdx = (page - 1) * pageSize;
-        const endIdx = Math.min(startIdx + pageSize, visibleCmds.length);
-        const slicedCmds = visibleCmds.slice(startIdx, endIdx);
-
-        const emoji = CATEGORY_EMOJIS[catName] || "📂";
-        let catMsg = GET_BANNER(`${emoji} ${catName.toUpperCase()}`) + `\n\n`;
-
-        slicedCmds.forEach((c) => {
+      // 2. CATEGORY DETAIL (.j menu <category>)
+      if (targetCategory) {
+        const cmds = COMMAND_REGISTRY[targetCategory] || [];
+        const visibleCmds = cmds.filter((c) => !c.hidden || showHidden);
+        const emoji = CATEGORY_EMOJIS[targetCategory] || "📂";
+        let catMsg = GET_BANNER(`${emoji} ${targetCategory.toUpperCase()}`) + `\n\n`;
+        visibleCmds.forEach((c) => {
           catMsg += `➤ \`${prefix} ${c.cmd}\` – ${c.desc.split(".")[0]}\n`;
         });
-
-        catMsg += `\n*Page ${page} of ${totalPages}*\n`;
-        catMsg += `➤ Use \`${prefix} menu ${catName} <page>\` to jump.\n`;
-        if (page < totalPages) {
-          catMsg += `➤ Type \`${prefix} menu next\` for page ${page + 1}.\n`;
-        }
-        if (page > 1) {
-          catMsg += `➤ Type \`${prefix} menu prev\` for page ${page - 1}.\n`;
-        }
-        catMsg += `➤ Type \`${prefix} menu\` for main menu.`;
-
+        catMsg += `\n➤ Type \`${prefix} menu\` to go back.`;
         return await sendMenuWithBanner(sock, chatId, catMsg);
       }
 
-      // 4. MAIN CATEGORY SELECTOR (.j menu)
+      // 3. MAIN MENU – all categories at once (.j menu OR .j menu all)
       const categories = Object.keys(COMMAND_REGISTRY);
       const visibleCategories = categories.filter(
         (cat) => cat !== "MODERATOR" || showHidden,
       );
-      const pageSize = 6;
-      const totalPages = Math.ceil(visibleCategories.length / pageSize) || 1;
-
-      let page = 1;
-      if (pageNum !== null) {
-        page = Math.min(Math.max(pageNum, 1), totalPages);
-      } else if (navDir && session && session.type === "main") {
-        const offset = navDir === "next" ? 1 : -1;
-        page = Math.min(Math.max(session.page + offset, 1), totalPages);
-      } else if (session && session.type === "main") {
-        page = session.page;
-      }
-
-      // Save session
-      if (senderJid) {
-        menuSessions.set(senderJid, { type: "main", page });
-      }
-
-      const startIdx = (page - 1) * pageSize;
-      const endIdx = Math.min(startIdx + pageSize, visibleCategories.length);
 
       let mainMsg =
         GET_BANNER(`✨ *${botName.toUpperCase()}*`) +
         `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\n`;
 
       mainMsg += `*Prefix:* ${prefix}\n\n`;
-      mainMsg += `📂 Select a category by typing \`${prefix} menu <name>\`:\n\n`;
+      mainMsg += `📂 *Categories* – type \`${prefix} menu <name>\` to open:\n\n`;
 
-      for (let i = startIdx; i < endIdx; i += 2) {
+      for (let i = 0; i < visibleCategories.length; i += 2) {
         const cat1Name = visibleCategories[i];
         const emoji1 = CATEGORY_EMOJIS[cat1Name] || "📂";
         const cat1 = `\`${emoji1} ${cat1Name}\``.padEnd(18);
 
         let cat2 = "";
-        if (i + 1 < endIdx) {
+        if (i + 1 < visibleCategories.length) {
           const cat2Name = visibleCategories[i + 1];
           const emoji2 = CATEGORY_EMOJIS[cat2Name] || "📂";
           cat2 = `\`${emoji2} ${cat2Name}\``;
@@ -3349,15 +3257,7 @@ ${targetCategory}`;
         mainMsg += `${cat1} ${cat2}\n`;
       }
 
-      mainMsg += `\n*Page ${page} of ${totalPages}*\n`;
-      mainMsg += `➤ Type \`${prefix} menu <CATEGORY>\` to open.\n`;
-      if (page < totalPages) {
-        mainMsg += `➤ Type \`${prefix} menu next\` for page ${page + 1}.\n`;
-      }
-      if (page > 1) {
-        mainMsg += `➤ Type \`${prefix} menu prev\` for page ${page - 1}.\n`;
-      }
-      mainMsg += `➤ Type \`${prefix} menu all\` for all commands.`;
+      mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
 
       return await sendMenuWithBanner(sock, chatId, mainMsg);
     }
