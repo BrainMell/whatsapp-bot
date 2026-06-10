@@ -46,8 +46,6 @@ When adding fields or modifying schemas:
 * **Testing:** Test your commands locally using a private testing group before opening a Pull Request.
 * **Ignored Folders:** Do not remove the ignores for `node_modules`, `temp/`, `tools/`, or `instances/*/auth/`.
 
----
-
 ## 📂 Project Directory Structure
 
 ```bash
@@ -60,14 +58,25 @@ whatsapp-bot/
 │   ├── utils/           # Helper utilities (e.g. commandRegistry.js, goImageService.js)
 │   └── engine.js        # Core message routing and orchestration (root of core)
 ├── docs/                # Comprehensive Developer Documentation
-│   ├── admin/           # Moderation and security rules
-│   ├── chat/            # AI context and chat triggers
+│   ├── admin/           # Admin settings, moderation controls, and command flows
+│   ├── cards/           # Card collectibles commands (claim, collection, decks, lock)
+│   ├── chat/            # AI context engine and topic buffers
 │   ├── config/          # Environment variables catalog
 │   ├── database/        # Mongoose database schema definitions
-│   ├── integrations/    # VSBattles scrapers and Go service APIs
-│   ├── media/           # Stickers and reaction converters
-│   ├── rpg/             # Game features (fishing, guilds, combat)
-│   └── scrapers/        # Pinterest and Shoob card scrapers
+│   ├── economy/         # Economy commands (balance, daily, loans, stocks, register)
+│   ├── fun/             # Fun commands (weather, joke, QR, scavenging fish/hunt)
+│   ├── gambling/        # Gambling commands (blackjack, coinflip, roulette, slots, crash)
+│   ├── games/           # Group games (chess, ludo, debate, tictactoe, wordle)
+│   ├── guilds/          # Guild commands and daily boards
+│   ├── info/            # Information commands (about, support, menu, accept/decline)
+│   ├── integrations/    # Go service APIs and powerscale scraper utils
+│   ├── interactions/    # SFW anime reactions (kiss, hug, pat, wink, slap)
+│   ├── media/           # Stickers overview and reaction converters
+│   ├── progression/     # Progression commands and leveling overview (level, rank)
+│   ├── rpg/             # RPG systems (abilities, crafting, shop, combat board)
+│   ├── scrapers/        # Media scrapers
+│   ├── search/          # Search commands (anime, img, nsfw)
+│   └── stickers/        # Sticker generator commands
 ├── instances/           # Auth credentials and assets per instance
 ├── reactions/           # Message reaction listeners
 ├── index.js             # Entry point bootstrap script
@@ -82,41 +91,31 @@ whatsapp-bot/
 
 All modules, APIs, and systems are documented with code snippets, line references, and modification guides.
 
-### ⚙️ Core Systems
+### ⚙️ Core Engines & Configuration
 * [Central Bot Engine](docs/engine.md) — Event loops, raw packet parser, command routers, and multi-tenant loading.
+* [Context-Aware AI Engine](docs/chat/context_engine.md) — Memory retrieval, summaries, and topic segments.
 * [Environment Configuration](docs/config/env.md) — Thread-safe multi-tenant config proxy, environment catalog.
-
-### 🎮 RPG Subsystems
-* [Combat & Battle Engine](docs/rpg/combat.md) — Visual combat board generation, turn loop tickers, and enemy AI.
-* [Raids & Boss Battles](docs/rpg/raids.md) — Dungeon lobby gathering, HP phase transitions, and boss mechanics.
-* [Player vs Player (PvP)](docs/rpg/pvp.md) — Stakes escrow, basic attacks variance, evasion/crit modifiers.
-* [Quests & Dungeon Loops](docs/rpg/quests.md) — Dungeon voting, solo/group travel, item shop generation.
-* [Investments & Loans](docs/rpg/investments.md) — Fixed deposits, stock market volatility trend updates, and P2P loan debt defaults.
-* [Character Progression](docs/rpg/progression.md) — XP calculations, milestone levels, and attribute points allocation.
-* [Abilities & Skill Trees](docs/rpg/abilities.md) — Skill points upgrades, lineages, class evolution requirements.
-* [Economy & Shops](docs/rpg/economy.md) — Balance management, daily claims, and shop purchase flows.
-* [Inventory & Equipment](docs/rpg/inventory.md) — Item slots mapping, equipment boost logic, and map sizes.
-* [Factions & Guilds](docs/rpg/guilds.md) — Guild creation, treasury contributions, daily upgrades board.
-* [Loot Tables](docs/rpg/loot.md) — Item categories, drop weight calculations, salvage rates.
-* [Casino & Gambling](docs/rpg/gambling.md) — Roulette, blackjack, slots, daily limits, and coinflips.
-* [Cards & Gacha](docs/rpg/cards.md) — Card spawning triggers, deck collection, trade markets.
-* [Fishing System](docs/rpg/fishing.md) — Fatigue scaling, drop pools, and rods upgrades.
-* [Profile Sheets](docs/rpg/profile.md) — User profile maps and dynamic image rendering calls.
-* [Alchemy & Brewing](docs/rpg/alchemy.md) — Consumables recipes, item creations, and cauldron loops.
-* [Crafting System](docs/rpg/crafting.md) — Recipe verification, space validation, and component extraction.
-* [Social Graph](docs/rpg/social.md) — Relationships reciprocal tier increments and AI prompts injection.
-
-### 🛡️ Administration & Moderation
-* [Admin & Commands](docs/admin/commands.md) — Dev/Owner commands, warnings resets, group locks, and wipes.
-* [Security & Spam](docs/admin/security.md) — Link scanner, anti-spam blocklists, and status mentions blocks.
-
-### 🔗 Integrations & Scrapers
-* [AI Context Engine](docs/chat/context_engine.md) — Memory retrieval, summaries, and topic segments.
-* [Media & Stickers](docs/media/stickers.md) — FFmpeg sticker creations, animated conversions, GIFs endpoints.
-* [External APIs & Go Service](docs/integrations/apis.md) — Groq key-rotation, Go Service image payloads, news fetching.
-* [Powerscaling Wiki](docs/integrations/powerscale.md) — VS Battles scrapers, selection triggers, HTML parsers.
-* [Media Scrapers](docs/scrapers/media_scrapers.md) — Shoob card Puppeteer crawler and Pinterest reaction crawlers.
 * [Database Schema](docs/database/schema.md) — MongoDB connections, Mongoose models, and fields catalogs.
+* [External APIs & Go Service](docs/integrations/apis.md) — Groq key-rotation, Go Service image payloads, news fetching.
+
+### 🗂️ Category-based Documentation
+
+The documentation for all bot commands and subsystems is structured into 11 main categories:
+1. **[Admin & Moderation](docs/admin/commands.md)** — Security scans, chat settings, warning resets, and group locks.
+2. **[Card Collectibles](docs/cards/info.md)** — Collection searches, deck editing, marketplace auctions, and card claims.
+3. **[Economy System](docs/economy/economy.md)** — Registrations, balances, bank deposits/withdrawals, P2P loans, and investments.
+4. **[Gambling Minigames](docs/gambling/coinflip.md)** — Blackjack, roulette, coinflip, crash, slots, and session limits.
+5. **[Group Games](docs/games/chess.md)** — 1v1 Chess matches, multiplayer Ludo boards, Tic-Tac-Toe, Wordle, and AI debates.
+6. **[Role Playing Game (RPG)](docs/rpg/guide.md)** — Character stats, abilities upgrades, item crafting, dismantling, cauldons brewing, and shops.
+7. **[Fun & Interactions](docs/fun/fun_commands.md)** — Jokes, trivia, roasts, compatibility calculator, QR codes, and animated anime reactions.
+8. **[Factions & Guilds](docs/guilds/guilds.md)** — Guild creation, treasury contributions, and daily hunting boards.
+9. **[Progression System](docs/progression/progression.md)** — XP calculations, milestone leveling, and attribute points allocation.
+10. **[Search & Scrapers](docs/search/anime_search.md)** — Jikan anime search, powerscale wiki scraper, Google images search, and Rule34/PornPics scrapers.
+11. **[User Profile & AI Memory](docs/user-info/memory.md)** — Personal profiles, nicknames, and group inside joke memory.
+
+---
+
+* [Full Documentation Table of Contents](docs/README.md) — Comprehensive link listing of every single documentation file.
 
 ---
 

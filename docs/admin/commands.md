@@ -85,7 +85,7 @@ Warnings are mapped in a key-value format utilizing a combination of `userId` an
 
 ---
 
-**Owner-Only Gating (Moderator Administration)** — [`engine.js` L7233–7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7233-L7257)
+**Owner-Only Gating (Moderator & Block Administration)** — [`engine.js` L7233–7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7233-L7257)
 
 ```javascript
 // core/engine.js L7233–7257
@@ -101,21 +101,15 @@ if (
         "❌ Only the owner can add global moderators.",
     });
   }
-  const target =
-    getMentionOrReply(m) ||
-    (txt.split(" ")[2]?.includes("@")
-      ? txt.split(" ")[2]
-      : null);
-  if (!target)
-    return await sock.sendMessage(chatId, {
-      text:
-        BOT_MARKER + "❌ Tag someone to add as a moderator.",
-    });
-
+  const target = getMentionOrReply(m);
   addGlobalMod(target);
+}
 ```
 
-This snippet illustrates the owner-only check gating mechanism. The `isOwner` boolean value (derived by comparing the sender's JID to the owner JID defined in `.env` / bot instance configurations) restricts administrative actions like adding global moderators. Non-owners are immediately blocked from executing the command.
+This gating mechanism controls the following administrative commands:
+- **`addmod` / `delmod`**: Add or delete global bot moderators (Owner only).
+- **`block` / `unblock`**: Prevent users from using bot commands, or lift the command block.
+- **`cardmod`**: Add or delete card moderators (Owner only) for approving eshop deck listings.
 
 ---
 
@@ -140,7 +134,10 @@ Insert a new condition checking the `isOwner` flag within the command dispatcher
 ## Common tasks
 
 - **Modify warning strike limits** — Change the warning threshold checks at [engine.js L7978](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7978).
-- **Add a global bot moderator** — Edit moderator arrays using [engine.js L7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7257) (`addGlobalMod`).
+- **Add a global bot moderator** — Edit moderator arrays using `addmod` or `addGlobalMod` in [engine.js L7257](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L7257).
+- **Remove a global bot moderator** — Use the `delmod` command to strip moderator rights.
+- **Manage user access (block/unblock)** — Use `block @user` or `unblock @user` to toggle command access.
+- **Set card moderators** — Use `cardmod add @user` or `cardmod del @user` to manage card approvals.
 - **Clear a user's warnings** — Call `resetWarnings` as shown in [engine.js L1013](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1013).
 - **Configure commands prefix** — Edit prefix mappings inside `botConfig.js` and reload contexts.
 - **Change database warnings persistence key** — Modify the system key name mapping inside [engine.js L1007](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/engine.js#L1007) and Mongoose schemas.
