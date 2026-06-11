@@ -232,26 +232,237 @@ To add a new piece of forgeable gear or item recipe to the bot:
   ```javascript
   const returnChance = 0.40; // 40% of materials returned. Increase to 0.60 for 60% salvage recovery.
   ```
-* **Alter Enhancement Success Probability**: Open [core/rpg/craftingSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/craftingSystem.js) and locate the gear enhancement code block to adjust success rates or stone requirements at higher tiers.
-
-
-
-
-
-
-
-
-
 
 ---
 
+## 5. Complete Crafting Reference Manual
 
+This reference section contains all the data, identifiers, and structures needed to define or modify recipes and items in the RPG engine without reading or searching the codebase.
 
+### 5.1 Crafting Stations & Commands
+The bot separates crafting activities into four distinct categories/stations. Each station requires a specific user command and maps to a matching `category` field in the recipe:
 
+| Station / Command | Command Syntax | Recipe Category | Purpose |
+|:---|:---|:---|:---|
+| **Crafting** | `.j craft <recipe_id>` | `CRAFT` | General items, material refining, conversion, and basic engineering |
+| **Forging** | `.j forge <recipe_id>` | `FORGE` | Blacksmithing for high-end weapons, armor, and combat accessories |
+| **Brewing** | `.j brew <recipe_id>` | `BREWING` | Alchemy station for brewing potions, elixirs, and temporary/permanent stat drinks |
+| **Cooking** | `.j cook <recipe_id>` | `COOKING` | Culinary kitchen for preparing meals that grant short-term stat buffs |
 
+> [!NOTE]
+> When adding a new recipe, make sure the `category` of your recipe matches the station where you want it crafted. For example, a weapon recipe with `category: 'FORGE'` can only be crafted via `.j forge <recipe_id>`.
 
+---
 
+### 5.2 Registered Items & Materials Database
+To use an item either as a recipe **ingredient** or a **result**, it must be registered with a unique ID in the global `ITEM_DATABASE` (located in `core/rpg/lootSystem.js`). Below is the complete catalog of pre-registered items, materials, and equipment.
 
+#### Crafting Materials
+Use these IDs in the `ingredients` or `result` blocks:
+
+| Item ID | Name | Rarity | Value (Zeni) | Description |
+|:---|:---|:---|:---|:---|
+| `iron_shard` | Iron Shard | COMMON | 100 | Metal fragments. |
+| `refined_steel` | Refined Steel | UNCOMMON | 500 | High-quality steel. Tastes like pennies. |
+| `sharp_whetstone` | Sharp Whetstone | UNCOMMON | 300 | Used to sharpen high-end blades. |
+| `mythril_ore` | Mythril Ore | RARE | 1,200 | A rare blue ore. Surprisingly heavy. |
+| `mana_dew` | Mana Dew | RARE | 800 | Basically magic Gatorade. |
+| `mana_crystal` | Mana Crystal | RARE | 1,500 | Concentrated magic. Smells like static. |
+| `tough_leather` | Tough Leather | UNCOMMON | 400 | Thick hide. Smells like wet dog. |
+| `gunpowder` | Volatile Gunpowder | COMMON | 200 | Handle with care. |
+| `fire_shard` | Fire Shard | UNCOMMON | 300 | A small piece of elemental fire. |
+| `fire_essence` | Fire Essence | RARE | 1,000 | A flickering flame. |
+| `ice_shard` | Ice Shard | UNCOMMON | 300 | A small piece of elemental ice. |
+| `lightning_shard` | Lightning Shard | UNCOMMON | 300 | A small piece of elemental lightning. |
+| `spider_silk` | Spider Silk | COMMON | 80 | Strong, sticky silk from giant spiders. |
+| `mystic_thread` | Mystic Thread | EPIC | 3,000 | Glows with its own internal light. |
+| `ancient_wood` | Ancient Wood | EPIC | 2,500 | Petrified wood from a forgotten forest. |
+| `ghost_essence` | Ghost Essence | RARE | 1,500 | Ethereal residue from a restless spirit. |
+| `dark_matter` | Dark Matter | EPIC | 2,500 | Heavier than your student loans. |
+| `void_crystal` | Void Crystal | RARE | 1,200 | Absorbs all surrounding light. |
+| `boss_essence` | Boss Essence | EPIC | 3,000 | A concentrated core of a defeated lord. |
+| `legendary_shard` | Legendary Shard | LEGENDARY | 8,000 | A fragment of an ancient artifact. |
+| `demon_hide` | Demon Hide | RARE | 1,200 | Tough, resilient skin from a demon. |
+| `healing_herb` | Sun-kissed Herb | COMMON | 150 | Natural medicine. |
+| `gold_pile` | Pile of Gold | COMMON | 1 | Glinting Zeni coins. |
+| `minor_enhancement_stone` | Minor Enhancement Stone | COMMON | 1,000 | Boosts gear stats by 5%. |
+| `rare_enhancement_stone` | Rare Enhancement Stone | RARE | 5,000 | Boosts gear stats by 15%. |
+| `legendary_enhancement_stone` | Legendary Enhancement Stone | LEGENDARY | 20,000 | Boosts gear stats by 35%. |
+| `evolution_stone` | Evolution Stone (T2) | RARE | 8,000 | Triggers evolution to T2 class. |
+| `ascension_stone` | Ascension Stone (T3) | EPIC | 50,000 | Triggers ascension to T3 class. |
+
+#### Hunting & Fishing Materials
+| Item ID | Name | Rarity | Value (Zeni) | Description |
+|:---|:---|:---|:---|:---|
+| `common_fish` | Small Bass | COMMON | 150 | A common pond fish. |
+| `rare_fish` | Rainbow Trout | RARE | 800 | A beautifully colored fish. |
+| `mythic_fish` | Void Kraken Tentacle | MYTHIC | 15,000 | A legendary find from the abyss. |
+| `infected_fish` | Corrupted Eel | EPIC | 4,500 | Twisting with hazard energy. |
+| `rabbit_hide` | Rabbit Hide | COMMON | 120 | Soft and common fur. |
+| `deer_antler` | Deer Antlers | UNCOMMON | 600 | Useful for crafting. |
+| `bear_claw` | Bear Claws | RARE | 2,500 | Sharp and dangerous. |
+
+#### Special & Boss Drop Materials
+| Item ID | Name | Rarity | Value (Zeni) | Description |
+|:---|:---|:---|:---|:---|
+| `infected_shard` | Infected Shard | EPIC | 3,000 | Concentrated Hive essence. |
+| `infected_heart` | Pulsing Heart | EPIC | 2,000 | It is still beating... barely. |
+| `rare_gem` | Rare Gem | RARE | 5,000 | A sparkling gemstone of immense value. |
+| `void_essence` | Void Essence | MYTHIC | 25,000 | A swirling mass of nothingness. |
+| `lich_phylactery` | Lich Phylactery | EPIC | 15,000 | Contains the soul of a powerful necromancer. |
+| `dragon_scale` | Dragon Scale | RARE | 3,000 | Nearly indestructible plate from a dragon. |
+| `demon_horn` | Demon Horn | EPIC | 8,000 | Razor sharp and warm to the touch. |
+| `infernal_crown` | Infernal Crown | MYTHIC | 50,000 | A crown forged in the deepest pits of hell. |
+| `golem_core` | Golem Core | RARE | 6,000 | A pulsating heart of stone and magic. |
+| `titan_heart` | Titan Heart | LEGENDARY | 20,000 | The power source of a colossal golem. |
+| `wyrm_fang` | Wyrm Fang | RARE | 4,000 | A lethal tooth from an elder dragon. |
+| `elder_blood` | Elder Blood | LEGENDARY | 15,000 | Pure magic coursing through ancient veins. |
+| `mirror_essence` | Mirror Essence | LEGENDARY | 5,000 | Crystallized dark power. |
+
+#### Weapons, Armor, & Accessories (Base Gear)
+These base items are commonly used as starting templates or upgraded via crafting:
+* **Weapons (`type: 'EQUIPMENT', slot: 'main_hand'`)**:
+  * `rusty_dagger` (Rusted Dagger - Common, 1,000 Zeni)
+  * `iron_sword` (Iron Sword - Uncommon, 5,000 Zeni)
+  * `arcane_wand` (Arcane Wand - Rare, 6,000 Zeni)
+  * `bronze_spear` (Bronze Spear - Common, 1,200 Zeni)
+  * `crystal_staff` (Crystal Staff - Uncommon, 3,000 Zeni)
+  * `greatsword` (Greatsword - Rare, 6,000 Zeni)
+* **Armor (`type: 'EQUIPMENT', slot: 'armor'`)**:
+  * `leather_tunic` (Leather Tunic - Common, 1,600 Zeni)
+  * `chainmail` (Chainmail - Uncommon, 2,500 Zeni)
+  * `iron_plate` (Iron Plate - Uncommon, 4,500 Zeni)
+  * `mage_robe` (Novice Robe - Uncommon, 4,800 Zeni)
+  * `reinforced_plate` (Reinforced Plate - Epic, 24,000 Zeni)
+* **Helmets (`type: 'EQUIPMENT', slot: 'helmet'`)**:
+  * `dragon_helm` (Dragon Helm - Epic, 12,000 Zeni)
+* **Accessories / Rings (`type: 'EQUIPMENT', slot: 'ring'`)**:
+  * `wooden_ring` (Wooden Ring - Common, 500 Zeni)
+  * `iron_ring` (Iron Ring - Uncommon, 2,000 Zeni)
+  * `dragon_seal_ring` (Dragon Seal Ring - Epic, 20,000 Zeni)
+
+> [!TIP]
+> If you create a brand new item to serve as a recipe outcome or ingredient, you must add it to the `ITEM_DATABASE` in [`core/rpg/lootSystem.js`](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/lootSystem.js) with its respective name, description, rarity, value, type, and stats/slot (if equipment).
+
+---
+
+### 5.3 Enums & Constants
+
+#### Item Rarity
+Every item must be assigned one of the following rarity strings:
+`'COMMON'` | `'UNCOMMON'` | `'RARE'` | `'EPIC'` | `'LEGENDARY'` | `'MYTHIC'`
+
+#### Item Type
+Dictates how the item behaves inside inventories and combat:
+* `'MATERIAL'`: Raw resource stackable in bags (e.g. iron_shard).
+* `'EQUIPMENT'`: Wearable combat gear with stats and slot mappings.
+* `'POTION'`: Usable item with consumable recovery or buff effects.
+* `'ITEM'`: General key item or miscellaneous loot.
+
+#### Equipment Slots
+If an item is `'EQUIPMENT'`, it must specify one of these slots to occupy:
+* `main_hand` / `weapon`: Main hand weapons (swords, wands, etc.)
+* `off_hand`: Shields, off-hand daggers, etc.
+* `armor`: Core body armor (plate, robes, garbs)
+* `helmet`: Head protection
+* `boots`: Footwear
+* `gloves`: Handwear
+* `ring`: Accessory rings
+* `amulet`: Necklaces/pendants
+* `cloak`: Back accessories/cloaks
+
+---
+
+### 5.4 Recipe Schema & Supported Fields
+When declaring a recipe in `craftingSystem.js`, it must follow this exact structure:
+
+```javascript
+'recipe_id': {
+    name: 'Steel Sabre',          // String: The display name of the recipe output
+    id: 'steel_sabre',            // String: Unique key (must match the dictionary key)
+    category: 'WEAPON',           // String: Category/Station classification (WEAPON, ARMOR, ACCESSORY, CLOTHING, ENGINEERING, EVOLUTION, CRAFT, BREWING, COOKING)
+    desc: 'A sharp blade...',     // String: Human-readable description printed in '.j recipes'
+    ingredients: {                // Object: Required items and their quantities
+        'iron_sword': 1,
+        'refined_steel': 3,
+        'sharp_whetstone': 1
+    },
+    result: {                     // Object: Output item definition
+        id: 'steel_sabre',        // String: Must match a registered ID in ITEM_DATABASE
+        
+        // Slot and Stats are REQUIRED for EQUIPMENT outcomes:
+        slot: 'weapon',           // String: Equipment slot to occupy
+        stats: {                  // Object: Active modifiers when equipped
+            atk: 25,              // Attack power (flat value)
+            mag: 0,               // Magic power
+            def: 0,               // Defense rating
+            hp: 0,                // Bonus HP
+            spd: 5,               // Speed rating
+            luck: 0,              // Luck rating
+            crit: 0               // Crit chance % (e.g., 15 for 15% crit rate)
+        },
+
+        // Usable and Effect fields are for CONSUMABLE/POTION/ENGINEERING outcomes:
+        usable: true,             // Boolean: True if consumable via '.j use <item_id>'
+        effect: 'aoe_damage',     // String: Effect action keyword (see list below)
+        effectValue: 150,         // Number: Numerical strength of the effect (HP healed, DMG dealt, etc.)
+        duration: 3,              // Number: Duration in turns for buffs/debuffs
+        cureStatus: true          // Boolean: Set true to cleanse negative status effects
+
+        // Type is for EVOLUTION/ASCENSION/STAT_BOOST outcomes:
+        type: 'EVOLUTION',        // String: Set to 'EVOLUTION', 'ASCENSION', or 'STAT_BOOST'
+        boost: {                  // Object: For STAT_BOOST permanent drinks
+            stat: 'luck',         // String: Stat to permanently increase
+            value: 10             // Number: Stat increase amount
+        }
+    }
+}
+```
+
+#### Supported Consumable Effects (`result.effect`)
+If creating a recipe that yields a usable potion, food, or bomb, you can assign one of the following effect behaviors:
+* `heal`: Restores HP (can scale by fraction e.g. 0.35 for 35% HP, or flat values like 250).
+* `restore_energy`: Restores combat energy.
+* `cure_status`: Cleanses negative status debuffs.
+* `cleanse_heal`: Cleanses debuffs and heals a flat amount.
+* `revive`: Resurrects a dead party member with a percentage of max HP.
+* `flee`: Escapes standard combat encounters.
+* `buff_atk` / `buff_def` / `buff_spd` / `buff_luck` / `buff_mag` / `buff_all`: Grants stat percentage increases for a number of turns.
+* `shield_max`: Grants a temporary shield absorbing incoming damage.
+* `invincibility`: Renders the user immune to all damage for 1 turn.
+* `aoe_damage` / `aoe_debuff_damage` / `aoe_slow_damage`: Deals explosive area damage to all enemies, with optional debuffs.
+* `evasion_buff`: Boosts party evasion rate.
+* `random_major_buff`: Triggers a random high-tier status enhancement.
+
+---
+
+### 5.5 Mining Locations Configuration
+Since crafting relies heavily on mined ores, you can modify or add mining locations inside `MINING_LOCATIONS` in `craftingSystem.js`.
+
+| Location ID | Name | Req. Level | Req. Rank | Req. Mining Level | Energy Cost | Available Ores (IDs & weights) |
+|:---|:---|:---|:---|:---|:---|:---|
+| `shimmering_caves` | Shimmering Caves | 1 | F | 1 | 15 | `iron_shard` (60), `silver_ore` (30), `gold_ore` (10) |
+| `deep_vein_shafts` | Deep Vein Shafts | 15 | D | 5 | 25 | `silver_ore` (40), `gold_ore` (30), `mythril_ore` (20), `obsidian_chunk` (10) |
+| `volcanic_hollow` | Volcanic Hollow | 30 | B | 15 | 40 | `gold_ore` (20), `obsidian_chunk` (40), `diamond_shard` (25), `fire_shard` (15) |
+| `void_fissure` | Void Fissure | 50 | S | 30 | 60 | `mana_crystal` (40), `dark_matter` (30), `mythril_ore` (20), `legendary_shard` (10) |
+
+#### Mining Location Schema
+To register a new mining site, add it to `MINING_LOCATIONS` using this template:
+```javascript
+'location_id': {
+    name: 'Location Name',
+    id: 'location_id',
+    desc: 'Description of the mine.',
+    req: { level: 10, rank: 'E', miningLevel: 2 }, // Unlock requirements
+    energyCost: 20,                              // Energy consumed per mining action
+    ores: [                                      // Array of potential drops
+        { id: 'iron_shard', weight: 70, min: 1, max: 3 }, // weight out of 100 total
+        { id: 'gold_ore', weight: 30, min: 1, max: 1 }
+    ]
+}
+```
+
+---
 
 # **Noob Readthrough**
 
