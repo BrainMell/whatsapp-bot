@@ -2333,7 +2333,8 @@ const SKILL_TREES = {
                         isAscended: true,
                         energyCost: [100, 90, 80],
                         cooldown: 10,
-                        damageMultiplier: [7.0, 8.0, 9.0],
+                        // Balance 5.1: capped from [7, 8, 9] to prevent one-shots
+                        damageMultiplier: [4.0, 5.0, 6.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Unleash total warfare upon all enemies.',
@@ -3512,7 +3513,8 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 130, 110],
                         cooldown: 10,
-                        damageMultiplier: [20.0, 25.0, 30.0],
+                        // Balance 5.1: capped from [20, 25, 30] to prevent one-shots
+                        damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'Create singularity consuming all',
@@ -4843,16 +4845,21 @@ function getSkillEffect(skill, level) {
         if (skill.targeting === 'CHAIN') {
             type = 'aoe';
             targets = skill.chainTargets;
-        } else if (skill.targeting && skill.targeting.includes('AOE')) {
+        } else if (skill.targeting === 'CLEAVE') {
+            // Bug 3 fix: CLEAVE hits exactly 2 enemies, not all.
             type = 'aoe';
+            targets = 2;
+        } else if (skill.targeting && (skill.targeting.includes('AOE') || skill.targeting === 'ALL_ENEMIES')) {
+            type = 'aoe';
+            // Bug 4: do NOT set targets here so getTargets uses opponentSide.length (actual living enemies)
         } else if (skill.damageMultiplier) {
             type = 'damage';
         }
 
         const effect = {
-            type: (skill.targeting === 'AOE' || skill.targeting === 'AOE_LARGE' || skill.targeting === 'CHAIN') ? 'aoe' : type,
+            type: (skill.targeting === 'AOE' || skill.targeting === 'AOE_LARGE' || skill.targeting === 'CHAIN' || skill.targeting === 'ALL_ENEMIES') ? 'aoe' : type,
             damageType: (skill.damageType === 'MAGICAL' || skill.damageType === 'magic') ? 'magic' : 'physical',
-            targets: (skill.targeting === 'CHAIN') ? (skill.chainTargets || 3) : targets,
+            targets: targets, // undefined for ALL_ENEMIES → getTargets caps to living count
             multiplier: getVal(skill.damageMultiplier) || 0,
             cost: getVal(skill.energyCost) || 0,
             goldCost: getVal(skill.goldCost) || 0,

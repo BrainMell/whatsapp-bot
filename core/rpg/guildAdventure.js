@@ -2846,8 +2846,11 @@ async function processCombatTurn(sock, sessionKey) {
       let ticks = 0;
       const maxTicks = 1000;
 
+      // Bug 1 fix: accumulate ALL gauges each tick, then pick the actor
+      // with the highest gauge >= 100 (prevents speed-monopoly via break).
       while (!activeActor && ticks < maxTicks) {
         ticks++;
+        // Increment every living combatant's gauge this tick
         for (const c of state.turnOrder) {
           if (c.stats.hp <= 0) continue;
 
@@ -2862,9 +2865,14 @@ async function processCombatTurn(sock, sessionKey) {
             speed *= 0.8;
 
           c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
-          if (c.actionGauge >= 100) {
+        }
+        // After all gauges are incremented, pick the one with the highest gauge
+        let bestGauge = 99; // Must exceed 100 threshold
+        for (const c of state.turnOrder) {
+          if (c.stats.hp <= 0) continue;
+          if (c.actionGauge > bestGauge) {
+            bestGauge = c.actionGauge;
             activeActor = c;
-            break;
           }
         }
       }
@@ -5555,20 +5563,45 @@ async function applyAbilityEffect(
         }
       }
 
-      let baseDamage;
       const lvl = player.level || 1;
+      const damageTypeStr = effect.damageType === "magic" ? "magic" : "physical";
+      const baseStat = effect.damageType === "magic"
+        ? (player.stats.mag || player.stats.atk || lvl * 10)
+        : (player.stats.atk || lvl * 8);
+      const mult = Number(effect.multiplier) || 1.0;
+      // Bug 2 fix: compute raw power then route through calculateDamage() for
+      // proper DEF mitigation, buffs, status modifiers, rank bonuses, variance.
+      const rawPower = Math.floor(baseStat * mult);
+      const dmgResult = calculateDamage(player, target, rawPower, damageTypeStr, damageTypeStr.toUpperCase(), chatId);
 
-      if (effect.damageType === "magic") {
-        baseDamage = player.stats.mag || player.stats.atk || lvl * 10;
-      } else {
-        baseDamage = player.stats.atk || lvl * 8;
+      // Check dragon-seal block
+      if (dmgResult.noDamageReason) {
+        msg += `${dmgResult.noDamageReason}\n`;
+        continue;
       }
 
-      // Apply multiplier (fallback to 1.0)
-      const mult = Number(effect.multiplier) || 1.0;
-      let damage = Math.floor(baseDamage * mult);
+      // Evasion check
+      if (dmgResult.wasEvaded) {
+        const targetIcon2 = target.isEnemy ? target.icon : target.class?.icon || "👤";
+        msg += `💨 ${targetIcon2} ${target.name} *evades* the attack!\n`;
+        continue;
+      }
+      let damage = dmgResult.damage;
+      let isCrit = dmgResult.isCrit || false;
 
-      // Ignore defense
+      // Extra crit override (guaranteedCrit / critBonus)
+      if (effect.guaranteedCrit && !isCrit) {
+        isCrit = true;
+        damage = Math.floor(damage * 2.0);
+      } else if (effect.critBonus && !isCrit) {
+        const extraCrit = effect.critBonus;
+        if (Math.random() * 100 < extraCrit) {
+          isCrit = true;
+          damage = Math.floor(damage * 2.0);
+        }
+      }
+
+      // Ignore defense bonus (adds back a % of DEF as bonus damage)
       if (effect.ignoreDefense) {
         const defReduction = Math.floor(
           target.stats.def * (effect.ignoreDefense / 100),
@@ -5576,25 +5609,16 @@ async function applyAbilityEffect(
         damage += defReduction;
       }
 
-      // Crit chance
-      let isCrit = false;
-      let critChance = player.stats.crit || 5;
-      if (effect.critBonus) critChance += effect.critBonus;
-      if (effect.guaranteedCrit) critChance = 100;
-
-      if (Math.random() * 100 < critChance) {
-        isCrit = true;
-        damage = Math.floor(damage * 2.0);
-      }
-
       // Execute mechanics
       if (effect.type === "execute") {
         const hpPercent = (target.stats.hp / target.stats.maxHp) * 100;
         if (hpPercent <= effect.threshold) {
-          damage = Math.floor(damage * 2.5); // Massive damage on low HP
+          damage = Math.floor(damage * 2.5);
           msg += `⚡ *EXECUTE THRESHOLD!* ⚡\n`;
         }
       }
+
+      damage = Math.max(1, Math.floor(damage));
 
       // Apply damage
       target.stats.hp -= damage;
@@ -5697,11 +5721,26 @@ async function applyAbilityEffect(
         }
       }
 
-      let baseDamage =
-        effect.damageType === "magic" ? player.stats.mag : player.stats.atk;
-      let damage = Math.floor(baseDamage * effect.multiplier);
+      // Bug 2 fix (AOE block): route through calculateDamage() for DEF mitigation.
+      const aoeDmgTypeStr = effect.damageType === "magic" ? "magic" : "physical";
+      const aoeBaseStat = effect.damageType === "magic" ? player.stats.mag : player.stats.atk;
+      const aoeRawPower = Math.floor((aoeBaseStat || 0) * (effect.multiplier || 1.0));
+      const aoeDmgResult = calculateDamage(player, target, aoeRawPower, aoeDmgTypeStr, aoeDmgTypeStr.toUpperCase(), chatId);
 
-      // Ignore defense
+      if (aoeDmgResult.noDamageReason) {
+        msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
+        continue;
+      }
+
+      // Evasion check
+      if (aoeDmgResult.wasEvaded) {
+        msg += `💨 ${target.name} *evades* the AOE!\n`;
+        continue;
+      }
+      let damage = aoeDmgResult.damage;
+      const isCrit = aoeDmgResult.isCrit || false;
+
+      // Ignore defense bonus
       if (effect.ignoreDefense) {
         const defReduction = Math.floor(
           target.stats.def * (effect.ignoreDefense / 100),
@@ -5709,15 +5748,7 @@ async function applyAbilityEffect(
         damage += defReduction;
       }
 
-      // Crit calculation
-      let isCrit = false;
-      let critChance = player.stats.crit || 5;
-      if (effect.critBonus) critChance += effect.critBonus;
-
-      if (Math.random() * 100 < critChance) {
-        isCrit = true;
-        damage = Math.floor(damage * 2.0);
-      }
+      damage = Math.max(1, Math.floor(damage));
 
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
@@ -6158,7 +6189,10 @@ function getTargets(attacker, effect, targetIndex, chatId) {
     targeting === "ALL_ENEMIES" ||
     targeting === "CHAIN"
   ) {
-    return opponentSide.slice(0, effect.targets || 99);
+    // Bug 4 fix: cap to actual living opponents — never use a hardcoded 99 fallback
+    // that would hit non-existent enemies. effect.targets undefined = hit all living.
+    const maxTargets = (effect.targets != null) ? effect.targets : opponentSide.length;
+    return opponentSide.slice(0, maxTargets);
   }
 
   const index = parseInt(targetIndex);
