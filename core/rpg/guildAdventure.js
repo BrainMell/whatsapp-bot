@@ -2309,7 +2309,15 @@ function processStatusEffects(entity) {
       effect.effect === "damage_over_time" ||
       template.effect === "damage_over_time"
     ) {
-      const damage = Math.floor(value);
+      let damage = Math.floor(value);
+      // DoTs intentionally bypass DEF (persistent burn/poison) but should
+      // respect damage-reduction stat and vulnerability/shield status modifiers.
+      const dr = Number(entity.stats.dmgReduction) || 0;
+      if (dr > 0) damage = Math.floor(damage * (1 - dr / 100));
+      const entityEffects = entity.statusEffects || [];
+      if (entityEffects.some((e) => e.type === "vulnerability")) damage = Math.floor(damage * 1.3);
+      if (entityEffects.some((e) => e.type === "shield")) damage = Math.floor(damage * 0.5);
+      damage = Math.max(1, damage);
       entity.stats.hp -= damage;
       messages.push(
         `🩸 *${name.toUpperCase()} TICK:* ${icon} ${entity.name} takes **${damage}** damage!`,
