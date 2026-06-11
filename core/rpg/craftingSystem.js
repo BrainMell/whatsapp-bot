@@ -1158,45 +1158,69 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "amulet"
         }
     },
-    "value_60000_zeni": {
-        "name": "Value: 60,000 Zeni",
+    "void_core_amulet": {
+        "name": "Void Core Amulet",
         "category": "ACCESSORY",
-        "id": "value_60000_zeni",
-        "desc": "Recipe: 1 Void Essence, 6 Mana Crystal, 4 Mystic Thread",
-        "ingredients": {},
+        "id": "void_core_amulet",
+        "desc": "A dangerous relic containing a miniature singularity. It warps the air around your chest. (+250 HP, +70 MAG, +10 SPD)",
+        "ingredients": {
+            "void_essence": 1,
+            "mana_crystal": 6,
+            "mystic_thread": 4
+        },
         "result": {
-            "id": "value_60000_zeni",
-            "stats": {},
+            "id": "void_core_amulet",
+            "stats": {
+                "hp": 250,
+                "mag": 70,
+                "spd": 10
+            },
             "slot": "amulet"
         }
     },
-    "value_64000_zeni": {
-        "name": "Value: 64,000 Zeni",
+    "necklace_of_the_void_empress": {
+        "name": "Necklace of the Void Empress",
         "category": "ACCESSORY",
-        "id": "value_64000_zeni",
-        "desc": "Recipe: 1 Void Essence, 1 Mirror Essence, 4 Mana Crystal",
-        "ingredients": {},
+        "id": "necklace_of_the_void_empress",
+        "desc": "A breathtaking necklace made from crystallized nothingness. It grants immense magical fortitude. (+400 HP, +50 MAG, +12 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "mirror_essence": 1,
+            "mana_crystal": 4
+        },
         "result": {
-            "id": "value_64000_zeni",
-            "stats": {},
+            "id": "necklace_of_the_void_empress",
+            "stats": {
+                "hp": 400,
+                "mag": 50,
+                "crit": 12
+            },
             "slot": "amulet"
         }
     },
-    "value_63000_zeni": {
-        "name": "Value: 63,000 Zeni",
+    "voidstar_choker": {
+        "name": "Void-Star Choker",
         "category": "ACCESSORY",
-        "id": "value_63000_zeni",
-        "desc": "Recipe: 1 Void Essence, 4 Dark Matter, 4 Mystic Thread",
-        "ingredients": {},
+        "id": "voidstar_choker",
+        "desc": "A heavy choker containing a literal fragment of a dead cosmic body. (+200 HP, +80 MAG, +10 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "dark_matter": 4,
+            "mystic_thread": 4
+        },
         "result": {
-            "id": "value_63000_zeni",
-            "stats": {},
+            "id": "voidstar_choker",
+            "stats": {
+                "hp": 200,
+                "mag": 80,
+                "crit": 10
+            },
             "slot": "amulet"
         }
     },
     "veil_of_the_void": {
         "name": "Veil of the Void",
-        "category": "ACCESSORY",
+        "category": "CLOTHING",
         "id": "veil_of_the_void",
         "desc": "A shifting, dark cloak that absorbs all surrounding light, making the wearer nearly invisible. (+50 DEF, +40 SPD, +20 CRIT)",
         "ingredients": {
@@ -1211,12 +1235,12 @@ Object.assign(CRAFTING_RECIPES, {
                 "spd": 40,
                 "crit": 20
             },
-            "slot": "amulet"
+            "slot": "cloak"
         }
     },
     "shroud_of_eternal_night": {
         "name": "Shroud of Eternal Night",
-        "category": "ACCESSORY",
+        "category": "CLOTHING",
         "id": "shroud_of_eternal_night",
         "desc": "A flowing cloak that completely dampens the sound of your movements and absorbs incoming spell light. (+40 DEF, +50 SPD, +15 LCK)",
         "ingredients": {
@@ -1231,30 +1255,46 @@ Object.assign(CRAFTING_RECIPES, {
                 "spd": 50,
                 "luck": 15
             },
-            "slot": "amulet"
-        }
-    },
-    "value_55000_zeni": {
-        "name": "Value: 55,000 Zeni",
-        "category": "CLOTHING",
-        "id": "value_55000_zeni",
-        "desc": "Recipe: 1 Void Essence, 2 Mirror Essence, 6 Spider Silk",
-        "ingredients": {},
-        "result": {
-            "id": "value_55000_zeni",
-            "stats": {},
             "slot": "cloak"
         }
     },
-    "value_54000_zeni": {
-        "name": "Value: 54,000 Zeni",
+    "cloak_of_shifting_realities": {
+        "name": "Cloak of Shifting Realities",
         "category": "CLOTHING",
-        "id": "value_54000_zeni",
-        "desc": "Recipe: 1 Void Essence, 2 Infected Heart, 6 Spider Silk",
-        "ingredients": {},
+        "id": "cloak_of_shifting_realities",
+        "desc": "A cloak that constantly flickers between physical and ethereal planes, dodging stray projectiles. (+45 DEF, +35 SPD, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "mirror_essence": 2,
+            "spider_silk": 6
+        },
         "result": {
-            "id": "value_54000_zeni",
-            "stats": {},
+            "id": "cloak_of_shifting_realities",
+            "stats": {
+                "def": 45,
+                "spd": 35,
+                "luck": 15
+            },
+            "slot": "cloak"
+        }
+    },
+    "mantlet_of_chaos": {
+        "name": "Mantlet of Chaos",
+        "category": "CLOTHING",
+        "id": "mantlet_of_chaos",
+        "desc": "A chaotic, shifting cloak that makes the wearer completely immune to critical hits. (+60 DEF, +20 HP, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "infected_heart": 2,
+            "spider_silk": 6
+        },
+        "result": {
+            "id": "mantlet_of_chaos",
+            "stats": {
+                "def": 60,
+                "hp": 20,
+                "luck": 15
+            },
             "slot": "cloak"
         }
     },
@@ -1629,15 +1669,23 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "gloves"
         }
     },
-    "value_33000_zeni": {
-        "name": "Value: 33,000 Zeni",
+    "gloves_of_the_ruined_kingdom": {
+        "name": "Gloves of the Ruined Kingdom",
         "category": "ARMOR",
-        "id": "value_33000_zeni",
-        "desc": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Tough Leather",
-        "ingredients": {},
+        "id": "gloves_of_the_ruined_kingdom",
+        "desc": "Ancient gauntlets that hum with remnant artifact power, greatly augmenting magical accuracy. (+30 MAG, +15 SPD, +12 LCK)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "mystic_thread": 4,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_33000_zeni",
-            "stats": {},
+            "id": "gloves_of_the_ruined_kingdom",
+            "stats": {
+                "mag": 30,
+                "spd": 15,
+                "luck": 12
+            },
             "slot": "gloves"
         }
     },
@@ -1657,7 +1705,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 35,
                 "spd": 30
             },
-            "slot": "gloves"
+            "slot": "boots"
         }
     },
     "titanstomp_sabatons": {
@@ -1677,7 +1725,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "spd": -10,
                 "hp": 100
             },
-            "slot": "gloves"
+            "slot": "boots"
         }
     },
     "striders_of_the_titan": {
@@ -1697,24 +1745,32 @@ Object.assign(CRAFTING_RECIPES, {
                 "atk": 10,
                 "hp": 50
             },
-            "slot": "gloves"
+            "slot": "boots"
         }
     },
-    "value_32000_zeni": {
-        "name": "Value: 32,000 Zeni",
+    "boots_of_eternal_blood": {
+        "name": "Boots of Eternal Blood",
         "category": "ARMOR",
-        "id": "value_32000_zeni",
-        "desc": "Recipe: 1 Elder Blood, 4 Tough Leather, 4 Spider Silk",
-        "ingredients": {},
+        "id": "boots_of_eternal_blood",
+        "desc": "Dark leather boots that absorb spilled life force to boost the user's movement speed mid-combat. (+30 DEF, +35 SPD, +100 HP)",
+        "ingredients": {
+            "elder_blood": 1,
+            "tough_leather": 4,
+            "spider_silk": 4
+        },
         "result": {
-            "id": "value_32000_zeni",
-            "stats": {},
+            "id": "boots_of_eternal_blood",
+            "stats": {
+                "def": 30,
+                "spd": 35,
+                "hp": 100
+            },
             "slot": "boots"
         }
     },
     "signet_of_the_ancestors": {
         "name": "Signet of the Ancestors",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "signet_of_the_ancestors",
         "desc": "A ring housing a fragment of an ancient artifact. It hums with historical power. (+20 ATK, +20 MAG, +12 LCK)",
         "ingredients": {
@@ -1729,12 +1785,12 @@ Object.assign(CRAFTING_RECIPES, {
                 "mag": 20,
                 "luck": 12
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "ancient_artifact_loop": {
         "name": "Ancient Artifact Loop",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "ancient_artifact_loop",
         "desc": "A ring crafted from an actual fragment of an ancient artifact. Its history hums with power. (+25 ATK, +15 LCK)",
         "ingredients": {
@@ -1748,30 +1804,45 @@ Object.assign(CRAFTING_RECIPES, {
                 "atk": 25,
                 "luck": 15
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
-    "value_36000_zeni": {
-        "name": "Value: 36,000 Zeni",
+    "legendary_chrono_ring": {
+        "name": "Legendary Chrono Ring",
         "category": "ACCESSORY",
-        "id": "value_36000_zeni",
-        "desc": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Mana Crystal",
-        "ingredients": {},
+        "id": "legendary_chrono_ring",
+        "desc": "A ring built around an ancient artifact shard that alters local time loops slightly. (+15 SPD, +25 LCK, +10 CRIT)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "rare_gem": 2,
+            "gold_pile": 10
+        },
         "result": {
-            "id": "value_36000_zeni",
-            "stats": {},
-            "slot": "amulet"
+            "id": "legendary_chrono_ring",
+            "stats": {
+                "spd": 15,
+                "luck": 25,
+                "crit": 10
+            },
+            "slot": "ring"
         }
     },
-    "value_34000_zeni": {
-        "name": "Value: 34,000 Zeni",
+    "titanium_band": {
+        "name": "Titanium Band",
         "category": "ACCESSORY",
-        "id": "value_34000_zeni",
-        "desc": "Recipe: 1 Titan Heart, 1 Rare Gem, 20 Pile of Gold",
-        "ingredients": {},
+        "id": "titanium_band",
+        "desc": "A thick, unyielding ring that significantly hardens the user's bone structure against impact. (+25 DEF, +100 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "rare_gem": 1,
+            "gold_pile": 20
+        },
         "result": {
-            "id": "value_34000_zeni",
-            "stats": {},
+            "id": "titanium_band",
+            "stats": {
+                "def": 25,
+                "hp": 100
+            },
             "slot": "ring"
         }
     },
@@ -1792,7 +1863,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 40,
                 "luck": 15
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "talisman_of_eldritch_blood": {
@@ -1812,7 +1883,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "mag": 45,
                 "luck": 10
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "pendant_of_the_dragon_eye": {
@@ -1831,54 +1902,104 @@ Object.assign(CRAFTING_RECIPES, {
                 "atk": 30,
                 "crit": 15
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
-    "value_28000_zeni": {
-        "name": "Value: 28,000 Zeni",
-        "category": "CLOTHING",
-        "id": "value_28000_zeni",
-        "desc": "Recipe: 1 Mirror Essence, 2 Dark Matter, 5 Spider Silk",
-        "ingredients": {},
+    "amulet_of_the_broken_era": {
+        "name": "Amulet of the Broken Era",
+        "category": "ACCESSORY",
+        "id": "amulet_of_the_broken_era",
+        "desc": "A fragment of an ancient artifact bound together by glowing thread. Highly unstable but incredibly lucky. (+20 MAG, +35 LCK)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "mystic_thread": 4,
+            "mana_crystal": 2
+        },
         "result": {
-            "id": "value_28000_zeni",
-            "stats": {},
+            "id": "amulet_of_the_broken_era",
+            "stats": {
+                "mag": 20,
+                "luck": 35
+            },
+            "slot": "amulet"
+        }
+    },
+    "mirrorwarp_cloak": {
+        "name": "Mirror-Warp Cloak",
+        "category": "CLOTHING",
+        "id": "mirrorwarp_cloak",
+        "desc": "A sleek cloak infused with crystallized dark power that slightly blurs your physical location. (+30 DEF, +25 SPD, +10 CRIT)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "dark_matter": 2,
+            "spider_silk": 5
+        },
+        "result": {
+            "id": "mirrorwarp_cloak",
+            "stats": {
+                "def": 30,
+                "spd": 25,
+                "crit": 10
+            },
             "slot": "cloak"
         }
     },
-    "value_29000_zeni": {
-        "name": "Value: 29,000 Zeni",
+    "mirrorimage_shroud": {
+        "name": "Mirror-Image Shroud",
         "category": "CLOTHING",
-        "id": "value_29000_zeni",
-        "desc": "Recipe: 1 Mirror Essence, 3 Dark Matter, 4 Spider Silk",
-        "ingredients": {},
+        "id": "mirrorimage_shroud",
+        "desc": "A cloak made of dark power that leaves visual afterimages when sprinting. (+25 DEF, +35 SPD, +12 CRIT)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "dark_matter": 3,
+            "spider_silk": 4
+        },
         "result": {
-            "id": "value_29000_zeni",
-            "stats": {},
+            "id": "mirrorimage_shroud",
+            "stats": {
+                "def": 25,
+                "spd": 35,
+                "crit": 12
+            },
             "slot": "cloak"
         }
     },
-    "value_30000_zeni": {
-        "name": "Value: 30,000 Zeni",
+    "cloak_of_the_phantom": {
+        "name": "Cloak of the Phantom",
         "category": "CLOTHING",
-        "id": "value_30000_zeni",
-        "desc": "Recipe: 1 Mirror Essence, 4 Dark Matter, 5 Spider Silk",
-        "ingredients": {},
+        "id": "cloak_of_the_phantom",
+        "desc": "A sleek cloak made of dark matter that lets you pass fluidly through crowded combat fields. (+30 DEF, +40 SPD)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "dark_matter": 4,
+            "spider_silk": 5
+        },
         "result": {
-            "id": "value_30000_zeni",
-            "stats": {},
+            "id": "cloak_of_the_phantom",
+            "stats": {
+                "def": 30,
+                "spd": 40
+            },
             "slot": "cloak"
         }
     },
-    "value_31000_zeni": {
-        "name": "Value: 31,000 Zeni",
+    "dragonwing_cloak": {
+        "name": "Dragon-Wing Cloak",
         "category": "CLOTHING",
-        "id": "value_31000_zeni",
-        "desc": "Recipe: 3 Dragon Scale, 1 Elder Blood, 5 Spider Silk",
-        "ingredients": {},
+        "id": "dragonwing_cloak",
+        "desc": "A massive cloak forged from dragon membranes that allows the wearer to glide seamlessly through the air. (+40 DEF, +25 SPD, +10 LCK)",
+        "ingredients": {
+            "dragon_scale": 3,
+            "elder_blood": 1,
+            "spider_silk": 5
+        },
         "result": {
-            "id": "value_31000_zeni",
-            "stats": {},
+            "id": "dragonwing_cloak",
+            "stats": {
+                "def": 40,
+                "spd": 25,
+                "luck": 10
+            },
             "slot": "cloak"
         }
     },
@@ -2272,57 +2393,86 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "gloves"
         }
     },
-    "value_14000_zeni": {
-        "name": "Value: 14,000 Zeni",
+    "petrified_forest_boots": {
+        "name": "Petrified Forest Boots",
         "category": "ARMOR",
-        "id": "value_14000_zeni",
-        "desc": "Recipe: 3 Ancient Wood, 2 Tough Leather",
-        "ingredients": {},
+        "id": "petrified_forest_boots",
+        "desc": "Heavy boots made from petrified wood from a forgotten forest. Firmly roots your stance. (+35 DEF, +50 HP)",
+        "ingredients": {
+            "ancient_wood": 3,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_14000_zeni",
-            "stats": {},
+            "id": "petrified_forest_boots",
+            "stats": {
+                "def": 35,
+                "hp": 50
+            },
             "slot": "boots"
         }
     },
-    "value_15000_zeni": {
-        "name": "Value: 15,000 Zeni",
-        "category": "CLOTHING",
-        "id": "value_15000_zeni",
-        "desc": "Recipe: 3 Ghost Essence, 5 Spider Silk, 1 Mystic Thread",
-        "ingredients": {},
+    "treads_of_the_forgotten_forest": {
+        "name": "Treads of the Forgotten Forest",
+        "category": "ARMOR",
+        "id": "treads_of_the_forgotten_forest",
+        "desc": "Heavy boots made of petrified ancient wood. Practically immune to mud or slowing fields. (+45 DEF, +50 HP)",
+        "ingredients": {
+            "ancient_wood": 2,
+            "tough_leather": 3,
+            "iron_shard": 2
+        },
         "result": {
-            "id": "value_15000_zeni",
-            "stats": {},
-            "slot": "cloak"
+            "id": "treads_of_the_forgotten_forest",
+            "stats": {
+                "def": 45,
+                "hp": 50
+            },
+            "slot": "boots"
         }
     },
-    "value_15500_zeni": {
-        "name": "Value: 15,500 Zeni",
-        "category": "CLOTHING",
-        "id": "value_15500_zeni",
-        "desc": "Recipe: 4 Mystic Thread, 6 Spider Silk",
-        "ingredients": {},
+    "shocking_treads": {
+        "name": "Shocking Treads",
+        "category": "ARMOR",
+        "id": "shocking_treads",
+        "desc": "Electric boots crafted from corrupted eel hides. They spark violently when you dash. (+25 DEF, +35 SPD, +5 CRIT)",
+        "ingredients": {
+            "infected_fish": 1,
+            "lightning_shard": 2,
+            "tough_leather": 4
+        },
         "result": {
-            "id": "value_15500_zeni",
-            "stats": {},
-            "slot": "cloak"
+            "id": "shocking_treads",
+            "stats": {
+                "def": 25,
+                "spd": 35,
+                "crit": 5
+            },
+            "slot": "boots"
         }
     },
-    "value_14500_zeni": {
-        "name": "Value: 14,500 Zeni",
-        "category": "CLOTHING",
-        "id": "value_14500_zeni",
-        "desc": "Recipe: 2 Infected Shard, 6 Spider Silk, 1 Tough Leather",
-        "ingredients": {},
+    "hivespore_sabatons": {
+        "name": "Hive-Spore Sabatons",
+        "category": "ARMOR",
+        "id": "hivespore_sabatons",
+        "desc": "Plated boots covered in hive residue that slow down any melee enemies standing near you. (+35 DEF, +15 SPD, +50 HP)",
+        "ingredients": {
+            "infected_shard": 2,
+            "refined_steel": 3,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_14500_zeni",
-            "stats": {},
-            "slot": "cloak"
+            "id": "hivespore_sabatons",
+            "stats": {
+                "def": 35,
+                "spd": 15,
+                "hp": 50
+            },
+            "slot": "boots"
         }
     },
     "hivecore_band": {
         "name": "Hive-Core Band",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "hivecore_band",
         "desc": "A ring made from a pulsing, corrupted heart. It’s still beating... barely. (+10 ATK, +12 CRIT, +8 LCK)",
         "ingredients": {
@@ -2337,12 +2487,12 @@ Object.assign(CRAFTING_RECIPES, {
                 "crit": 12,
                 "luck": 8
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "pulsing_heart_loop": {
         "name": "Pulsing Heart Loop",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "pulsing_heart_loop",
         "desc": "A disturbing ring housing a tiny pulsing heart. It keeps your blood pumping at peak efficiency. (+120 HP, +8 CRIT)",
         "ingredients": {
@@ -2356,12 +2506,12 @@ Object.assign(CRAFTING_RECIPES, {
                 "hp": 120,
                 "crit": 8
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "lichs_signet": {
         "name": "Lich's Signet",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "lichs_signet",
         "desc": "A cold iron ring linked to a necromancer’s core, boosting dark magic capabilities. (+35 MAG, +5 CRIT)",
         "ingredients": {
@@ -2375,12 +2525,12 @@ Object.assign(CRAFTING_RECIPES, {
                 "mag": 35,
                 "crit": 5
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "ethereal_band": {
         "name": "Ethereal Band",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "ethereal_band",
         "desc": "A ring made of solid mystic light that slightly uncouples your finger from physical physics. (+15 MAG, +20 LCK)",
         "ingredients": {
@@ -2394,7 +2544,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "mag": 15,
                 "luck": 20
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "crownjewel_choker": {
@@ -2436,28 +2586,119 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "amulet"
         }
     },
-    "value_16500_zeni": {
-        "name": "Value: 16,500 Zeni",
+    "amulet_of_the_hive_mind": {
+        "name": "Amulet of the Hive Mind",
         "category": "ACCESSORY",
-        "id": "value_16500_zeni",
-        "desc": "Recipe: 1 Infected Shard, 1 Pulsing Heart, 4 Spider Silk",
-        "ingredients": {},
+        "id": "amulet_of_the_hive_mind",
+        "desc": "A pulsing insectoid charm that links your senses to the battlefield, preventing ambushes. (+100 HP, +15 SPD, +12 LCK)",
+        "ingredients": {
+            "infected_shard": 1,
+            "infected_heart": 1,
+            "spider_silk": 4
+        },
         "result": {
-            "id": "value_16500_zeni",
-            "stats": {},
+            "id": "amulet_of_the_hive_mind",
+            "stats": {
+                "hp": 100,
+                "spd": 15,
+                "luck": 12
+            },
             "slot": "amulet"
         }
     },
-    "value_18000_zeni": {
-        "name": "Value: 18,000 Zeni",
+    "phylactery_pendant": {
+        "name": "Phylactery Pendant",
         "category": "ACCESSORY",
-        "id": "value_18000_zeni",
-        "desc": "Recipe: 1 Lich Phylactery, 3 Mana Crystal, 2 Mystic Thread",
-        "ingredients": {},
+        "id": "phylactery_pendant",
+        "desc": "A dark gemstone necklace holding remnants of a necromancer's magical focus. (+100 HP, +40 MAG)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "mana_crystal": 3,
+            "mystic_thread": 2
+        },
         "result": {
-            "id": "value_18000_zeni",
-            "stats": {},
+            "id": "phylactery_pendant",
+            "stats": {
+                "hp": 100,
+                "mag": 40
+            },
             "slot": "amulet"
+        }
+    },
+    "cloak_of_dark_matter": {
+        "name": "Cloak of Dark Matter",
+        "category": "CLOTHING",
+        "id": "cloak_of_dark_matter",
+        "desc": "Heavier than your student loans, but it shields you brilliantly from dark magic. (+40 DEF, +10 MAG)",
+        "ingredients": {
+            "dark_matter": 4,
+            "spider_silk": 6
+        },
+        "result": {
+            "id": "cloak_of_dark_matter",
+            "stats": {
+                "def": 40,
+                "mag": 10
+            },
+            "slot": "cloak"
+        }
+    },
+    "cloak_of_the_hive": {
+        "name": "Cloak of the Hive",
+        "category": "CLOTHING",
+        "id": "cloak_of_the_hive",
+        "desc": "A cloak dripping with concentrated Hive essence. It leaves a faint trail of slowing spores. (+35 DEF, +10 SPD)",
+        "ingredients": {
+            "infected_shard": 2,
+            "spider_silk": 6,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "cloak_of_the_hive",
+            "stats": {
+                "def": 35,
+                "spd": 10
+            },
+            "slot": "cloak"
+        }
+    },
+    "spook_shroud": {
+        "name": "Spook Shroud",
+        "category": "CLOTHING",
+        "id": "spook_shroud",
+        "desc": "A cloak made from ethereal residue that causes the wearer to drift smoothly over obstacles. (+30 DEF, +25 SPD, +10 MAG)",
+        "ingredients": {
+            "ghost_essence": 3,
+            "spider_silk": 5,
+            "mystic_thread": 1
+        },
+        "result": {
+            "id": "spook_shroud",
+            "stats": {
+                "def": 30,
+                "spd": 25,
+                "mag": 10
+            },
+            "slot": "cloak"
+        }
+    },
+    "weavers_cloak": {
+        "name": "Weaver's Cloak",
+        "category": "CLOTHING",
+        "id": "weavers_cloak",
+        "desc": "An elegant cloak woven from pure mystic thread that glows with its own internal light. (+25 DEF, +20 SPD, +15 MAG)",
+        "ingredients": {
+            "mystic_thread": 4,
+            "spider_silk": 6
+        },
+        "result": {
+            "id": "weavers_cloak",
+            "stats": {
+                "def": 25,
+                "spd": 20,
+                "mag": 15
+            },
+            "slot": "cloak"
         }
     },
     "golem_fist_smasher": {
@@ -2662,15 +2903,22 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "armor"
         }
     },
-    "value_11200_zeni": {
-        "name": "Value: 11,200 Zeni",
+    "plate_armor_of_the_flame": {
+        "name": "Plate Armor of the Flame",
         "category": "ARMOR",
-        "id": "value_11200_zeni",
-        "desc": "Recipe: 2 Fire Essence, 6 Refined Steel, 2 Tough Leather",
-        "ingredients": {},
+        "id": "plate_armor_of_the_flame",
+        "desc": "Heavy metal armor insulated with flickering fire essence to guard against winter chills. (+60 DEF, +50 HP)",
+        "ingredients": {
+            "fire_essence": 2,
+            "refined_steel": 6,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_11200_zeni",
-            "stats": {},
+            "id": "plate_armor_of_the_flame",
+            "stats": {
+                "def": 60,
+                "hp": 50
+            },
             "slot": "armor"
         }
     },
@@ -2689,7 +2937,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 15,
                 "mag": 25
             },
-            "slot": "armor"
+            "slot": "helmet"
         }
     },
     "circlet_of_static": {
@@ -2707,7 +2955,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 15,
                 "mag": 30
             },
-            "slot": "armor"
+            "slot": "helmet"
         }
     },
     "helm_of_fire_essence": {
@@ -2727,7 +2975,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "atk": 15,
                 "crit": 5
             },
-            "slot": "armor"
+            "slot": "helmet"
         }
     },
     "mask_of_concentrated_magic": {
@@ -2745,54 +2993,82 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 20,
                 "mag": 25
             },
-            "slot": "armor"
+            "slot": "helmet"
         }
     },
-    "value_6500_zeni": {
-        "name": "Value: 6,500 Zeni",
-        "category": "CLOTHING",
-        "id": "value_6500_zeni",
-        "desc": "Recipe: 2 Fire Essence, 2 Fire Shard, 4 Spider Silk",
-        "ingredients": {},
-        "result": {
-            "id": "value_6500_zeni",
-            "stats": {},
-            "slot": "cloak"
-        }
-    },
-    "value_6800_zeni": {
-        "name": "Value: 6,800 Zeni",
+    "spellweave_gloves": {
+        "name": "Spell-Weave Gloves",
         "category": "ARMOR",
-        "id": "value_6800_zeni",
-        "desc": "Recipe: 2 Mana Crystal, 3 Mana Dew, 2 Tough Leather",
-        "ingredients": {},
+        "id": "spellweave_gloves",
+        "desc": "Gloves insulated with concentrated magic to stabilize high-tier casting. (+15 MAG, +10 SPD)",
+        "ingredients": {
+            "mana_crystal": 2,
+            "mana_dew": 2,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_6800_zeni",
-            "stats": {},
+            "id": "spellweave_gloves",
+            "stats": {
+                "mag": 15,
+                "spd": 10
+            },
             "slot": "gloves"
         }
     },
-    "value_7000_zeni": {
-        "name": "Value: 7,000 Zeni",
+    "manacharged_bracers": {
+        "name": "Mana-Charged Bracers",
         "category": "ARMOR",
-        "id": "value_7000_zeni",
-        "desc": "Recipe: 2 Demon Hide, 3 Tough Leather, 2 Iron Shard",
-        "ingredients": {},
+        "id": "manacharged_bracers",
+        "desc": "Leather gauntlets embedded with mana dew to stabilize spell casting during rapid motion. (+20 MAG, +10 SPD)",
+        "ingredients": {
+            "mana_crystal": 2,
+            "mana_dew": 3,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_7000_zeni",
-            "stats": {},
+            "id": "manacharged_bracers",
+            "stats": {
+                "mag": 20,
+                "spd": 10
+            },
             "slot": "gloves"
         }
     },
-    "value_6900_zeni": {
-        "name": "Value: 6,900 Zeni",
+    "demon_grip_gauntlets": {
+        "name": "Demon Grip Gauntlets",
         "category": "ARMOR",
-        "id": "value_6900_zeni",
-        "desc": "Recipe: 3 Ice Shard, 3 Tough Leather, 2 Spider Silk",
-        "ingredients": {},
+        "id": "demon_grip_gauntlets",
+        "desc": "Heavy leather gloves tailored from demon skin, ensuring a resilient grip on heavy weapons. (+25 ATK, +10 DEF)",
+        "ingredients": {
+            "demon_hide": 2,
+            "tough_leather": 3,
+            "iron_shard": 2
+        },
         "result": {
-            "id": "value_6900_zeni",
-            "stats": {},
+            "id": "demon_grip_gauntlets",
+            "stats": {
+                "atk": 25,
+                "def": 10
+            },
+            "slot": "gloves"
+        }
+    },
+    "insulated_ice_grips": {
+        "name": "Insulated Ice Grips",
+        "category": "ARMOR",
+        "id": "insulated_ice_grips",
+        "desc": "Cold-resistant gloves forged with small pieces of elemental ice to freeze targets upon hitting. (+20 ATK, +15 MAG)",
+        "ingredients": {
+            "ice_shard": 3,
+            "tough_leather": 3,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "insulated_ice_grips",
+            "stats": {
+                "atk": 20,
+                "mag": 15
+            },
             "slot": "gloves"
         }
     },
@@ -2812,48 +3088,70 @@ Object.assign(CRAFTING_RECIPES, {
                 "def": 20,
                 "atk": 15
             },
-            "slot": "gloves"
-        }
-    },
-    "value_7200_zeni": {
-        "name": "Value: 7,200 Zeni",
-        "category": "ARMOR",
-        "id": "value_7200_zeni",
-        "desc": "Recipe: 2 Bear Claws, 2 Tough Leather, 2 Iron Shard",
-        "ingredients": {},
-        "result": {
-            "id": "value_7200_zeni",
-            "stats": {},
             "slot": "boots"
         }
     },
-    "value_7400_zeni": {
-        "name": "Value: 7,400 Zeni",
+    "bear_claw_boots": {
+        "name": "Bear Claw Boots",
         "category": "ARMOR",
-        "id": "value_7400_zeni",
-        "desc": "Recipe: 3 Lightning Shard, 3 Iron Shard, 2 Tough Leather",
-        "ingredients": {},
+        "id": "bear_claw_boots",
+        "desc": "Leather travel boots fixed with sharp, dangerous bear claws along the rim. (+20 DEF, +12 ATK, +5 CRIT)",
+        "ingredients": {
+            "bear_claw": 2,
+            "tough_leather": 2,
+            "iron_shard": 2
+        },
         "result": {
-            "id": "value_7400_zeni",
-            "stats": {},
+            "id": "bear_claw_boots",
+            "stats": {
+                "def": 20,
+                "atk": 12,
+                "crit": 5
+            },
             "slot": "boots"
         }
     },
-    "value_7600_zeni": {
-        "name": "Value: 7,600 Zeni",
+    "sabatons_of_static": {
+        "name": "Sabatons of Static",
         "category": "ARMOR",
-        "id": "value_7600_zeni",
-        "desc": "Recipe: 3 Mythril Ore, 2 Tough Leather, 4 Spider Silk",
-        "ingredients": {},
+        "id": "sabatons_of_static",
+        "desc": "Plated boots carrying small pieces of elemental lightning, giving you a faster sprint step. (+20 DEF, +25 SPD)",
+        "ingredients": {
+            "lightning_shard": 3,
+            "iron_shard": 3,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_7600_zeni",
-            "stats": {},
+            "id": "sabatons_of_static",
+            "stats": {
+                "def": 20,
+                "spd": 25
+            },
+            "slot": "boots"
+        }
+    },
+    "mythrilplated_greaves": {
+        "name": "Mythril-Plated Greaves",
+        "category": "ARMOR",
+        "id": "mythrilplated_greaves",
+        "desc": "Beautiful blue-tinted boots that make your footsteps incredibly light but firmly grounded. (+30 DEF, +15 SPD)",
+        "ingredients": {
+            "mythril_ore": 3,
+            "tough_leather": 2,
+            "spider_silk": 4
+        },
+        "result": {
+            "id": "mythrilplated_greaves",
+            "stats": {
+                "def": 30,
+                "spd": 15
+            },
             "slot": "boots"
         }
     },
     "rainbow_hoop": {
         "name": "Rainbow Hoop",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "rainbow_hoop",
         "desc": "A beautifully colored ring that sparkles with immense value, granting high good fortune. (+15 LCK, +5 CRIT)",
         "ingredients": {
@@ -2867,42 +3165,61 @@ Object.assign(CRAFTING_RECIPES, {
                 "luck": 15,
                 "crit": 5
             },
-            "slot": "boots"
-        }
-    },
-    "value_8200_zeni": {
-        "name": "Value: 8,200 Zeni",
-        "category": "ACCESSORY",
-        "id": "value_8200_zeni",
-        "desc": "Recipe: 1 Rainbow Trout, 1 Rare Gem, 10 Pile of Gold",
-        "ingredients": {},
-        "result": {
-            "id": "value_8200_zeni",
-            "stats": {},
             "slot": "ring"
         }
     },
-    "value_8000_zeni": {
-        "name": "Value: 8,000 Zeni",
+    "glinting_trout_ring": {
+        "name": "Glinting Trout Ring",
         "category": "ACCESSORY",
-        "id": "value_8000_zeni",
-        "desc": "Recipe: 1 Rare Gem, 50 Pile of Gold",
-        "ingredients": {},
+        "id": "glinting_trout_ring",
+        "desc": "A ring carved from rare fish components, sparkling with immense value and luck. (+20 LCK)",
+        "ingredients": {
+            "rare_fish": 1,
+            "rare_gem": 1,
+            "gold_pile": 10
+        },
         "result": {
-            "id": "value_8000_zeni",
-            "stats": {},
+            "id": "glinting_trout_ring",
+            "stats": {
+                "luck": 20
+            },
             "slot": "ring"
         }
     },
-    "value_8500_zeni": {
-        "name": "Value: 8,500 Zeni",
+    "sparkling_gem_band": {
+        "name": "Sparkling Gem Band",
         "category": "ACCESSORY",
-        "id": "value_8500_zeni",
-        "desc": "Recipe: 1 Golem Core, 20 Pile of Gold, 2 Iron Shard",
-        "ingredients": {},
+        "id": "sparkling_gem_band",
+        "desc": "A sparkling gemstone ring of immense value. Merchants look at you with deep respect. (+10 MAG, +15 LCK)",
+        "ingredients": {
+            "rare_gem": 1,
+            "gold_pile": 50
+        },
         "result": {
-            "id": "value_8500_zeni",
-            "stats": {},
+            "id": "sparkling_gem_band",
+            "stats": {
+                "mag": 10,
+                "luck": 15
+            },
+            "slot": "ring"
+        }
+    },
+    "golem_core_signet": {
+        "name": "Golem Core Signet",
+        "category": "ACCESSORY",
+        "id": "golem_core_signet",
+        "desc": "A bulky ring that funnels a pulsing heart of stone magic into your defense rating. (+20 DEF, +40 HP)",
+        "ingredients": {
+            "golem_core": 1,
+            "gold_pile": 20,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "golem_core_signet",
+            "stats": {
+                "def": 20,
+                "hp": 40
+            },
             "slot": "ring"
         }
     },
@@ -2921,54 +3238,138 @@ Object.assign(CRAFTING_RECIPES, {
                 "hp": 50,
                 "mag": 20
             },
-            "slot": "ring"
-        }
-    },
-    "value_6400_zeni": {
-        "name": "Value: 6,400 Zeni",
-        "category": "CLOTHING",
-        "id": "value_6400_zeni",
-        "desc": "Recipe: 3 Lightning Shard, 6 Spider Silk",
-        "ingredients": {},
-        "result": {
-            "id": "value_6400_zeni",
-            "stats": {},
-            "slot": "cloak"
-        }
-    },
-    "value_6200_zeni": {
-        "name": "Value: 6,200 Zeni",
-        "category": "CLOTHING",
-        "id": "value_6200_zeni",
-        "desc": "Recipe: 3 Fire Essence, 4 Spider Silk",
-        "ingredients": {},
-        "result": {
-            "id": "value_6200_zeni",
-            "stats": {},
-            "slot": "cloak"
-        }
-    },
-    "value_6000_zeni": {
-        "name": "Value: 6,000 Zeni",
-        "category": "ACCESSORY",
-        "id": "value_6000_zeni",
-        "desc": "Recipe: 1 Rainbow Trout, 4 Spider Silk, 1 Mana Dew",
-        "ingredients": {},
-        "result": {
-            "id": "value_6000_zeni",
-            "stats": {},
             "slot": "amulet"
         }
     },
-    "value_6300_zeni": {
-        "name": "Value: 6,300 Zeni",
-        "category": "CLOTHING",
-        "id": "value_6300_zeni",
-        "desc": "Recipe: 3 Ice Shard, 5 Spider Silk, 1 Mana Crystal",
-        "ingredients": {},
+    "amulet_of_magic_gatorade": {
+        "name": "Amulet of Magic Gatorade",
+        "category": "ACCESSORY",
+        "id": "amulet_of_magic_gatorade",
+        "desc": "A small crystal flask filled with basically magic Gatorade that steadily refreshes your mind. (+40 HP, +25 MAG)",
+        "ingredients": {
+            "mana_dew": 3,
+            "spider_silk": 4,
+            "mana_crystal": 1
+        },
         "result": {
-            "id": "value_6300_zeni",
-            "stats": {},
+            "id": "amulet_of_magic_gatorade",
+            "stats": {
+                "hp": 40,
+                "mag": 25
+            },
+            "slot": "amulet"
+        }
+    },
+    "dewdrop_necklace": {
+        "name": "Dewdrop Necklace",
+        "category": "ACCESSORY",
+        "id": "dewdrop_necklace",
+        "desc": "A necklace holding pure magic dew. It keeps your physical stamina exceptionally stable. (+80 HP, +15 MAG)",
+        "ingredients": {
+            "mana_dew": 4,
+            "spider_silk": 3,
+            "mana_crystal": 1
+        },
+        "result": {
+            "id": "dewdrop_necklace",
+            "stats": {
+                "hp": 80,
+                "mag": 15
+            },
+            "slot": "amulet"
+        }
+    },
+    "troutscale_medallion": {
+        "name": "Trout-Scale Medallion",
+        "category": "ACCESSORY",
+        "id": "troutscale_medallion",
+        "desc": "A colorful medallion crafted from a beautifully colored rainbow trout, boosting your organic luck. (+50 HP, +18 LCK)",
+        "ingredients": {
+            "rare_fish": 1,
+            "spider_silk": 4,
+            "mana_dew": 1
+        },
+        "result": {
+            "id": "troutscale_medallion",
+            "stats": {
+                "hp": 50,
+                "luck": 18
+            },
+            "slot": "amulet"
+        }
+    },
+    "fireflicker_cloak": {
+        "name": "Fire-Flicker Cloak",
+        "category": "CLOTHING",
+        "id": "fireflicker_cloak",
+        "desc": "A cloak hosting a flickering flame that keeps the wearer warm and deters ice attacks. (+15 DEF, +15 ATK)",
+        "ingredients": {
+            "fire_essence": 3,
+            "spider_silk": 4
+        },
+        "result": {
+            "id": "fireflicker_cloak",
+            "stats": {
+                "def": 15,
+                "atk": 15
+            },
+            "slot": "cloak"
+        }
+    },
+    "flickering_flame_cape": {
+        "name": "Flickering Flame Cape",
+        "category": "CLOTHING",
+        "id": "flickering_flame_cape",
+        "desc": "A bright cape containing a flickering flame that shields the user from freezing conditions. (+20 DEF, +10 ATK)",
+        "ingredients": {
+            "fire_essence": 2,
+            "fire_shard": 2,
+            "spider_silk": 4
+        },
+        "result": {
+            "id": "flickering_flame_cape",
+            "stats": {
+                "def": 20,
+                "atk": 10
+            },
+            "slot": "cloak"
+        }
+    },
+    "glacial_shawl": {
+        "name": "Glacial Shawl",
+        "category": "CLOTHING",
+        "id": "glacial_shawl",
+        "desc": "A pale cloak lined with ice shards that slows down nearby aggressive fire hazards. (+25 DEF, +10 MAG)",
+        "ingredients": {
+            "ice_shard": 3,
+            "spider_silk": 5,
+            "mana_crystal": 1
+        },
+        "result": {
+            "id": "glacial_shawl",
+            "stats": {
+                "def": 25,
+                "mag": 10
+            },
+            "slot": "cloak"
+        }
+    },
+    "static_shock_cape": {
+        "name": "Static Shock Cape",
+        "category": "CLOTHING",
+        "id": "static_shock_cape",
+        "desc": "A crackling cape made from elemental lightning components, accelerating your base movement speed. (+15 DEF, +20 SPD, +5 CRIT)",
+        "ingredients": {
+            "lightning_shard": 3,
+            "spider_silk": 6
+        },
+        "result": {
+            "id": "static_shock_cape",
+            "stats": {
+                "def": 15,
+                "spd": 20,
+                "crit": 5
+            },
             "slot": "cloak"
         }
     },
@@ -3309,69 +3710,100 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "gloves"
         }
     },
-    "value_520_zeni": {
-        "name": "Value: 520 Zeni",
+    "trappers_thick_gloves": {
+        "name": "Trapper's Thick Gloves",
         "category": "ARMOR",
-        "id": "value_520_zeni",
-        "desc": "Recipe: 3 Tough Leather, 2 Spider Silk",
-        "ingredients": {},
+        "id": "trappers_thick_gloves",
+        "desc": "Thick, coarse gloves made from tough leather, built for handling wild creatures safely. (+8 DEF)",
+        "ingredients": {
+            "tough_leather": 3,
+            "spider_silk": 2
+        },
         "result": {
-            "id": "value_520_zeni",
-            "stats": {},
+            "id": "trappers_thick_gloves",
+            "stats": {
+                "def": 8
+            },
             "slot": "gloves"
         }
     },
-    "value_650_zeni": {
-        "name": "Value: 650 Zeni",
+    "mudstained_boots": {
+        "name": "Mud-Stained Boots",
         "category": "ARMOR",
-        "id": "value_650_zeni",
-        "desc": "Recipe: 3 Rabbit Hide, 1 Tough Leather",
-        "ingredients": {},
+        "id": "mudstained_boots",
+        "desc": "Sturdy, common leather footwear designed to withstand long journeys through marshlands. (+8 DEF, +5 SPD)",
+        "ingredients": {
+            "rabbit_hide": 3,
+            "tough_leather": 1
+        },
         "result": {
-            "id": "value_650_zeni",
-            "stats": {},
+            "id": "mudstained_boots",
+            "stats": {
+                "def": 8,
+                "spd": 5
+            },
             "slot": "boots"
         }
     },
-    "value_600_zeni": {
-        "name": "Value: 600 Zeni",
+    "travelers_leather_boots": {
+        "name": "Traveler's Leather Boots",
         "category": "ARMOR",
-        "id": "value_600_zeni",
-        "desc": "Recipe: 2 Rabbit Hide, 2 Tough Leather",
-        "ingredients": {},
+        "id": "travelers_leather_boots",
+        "desc": "Sturdy, common leather boots meant for walking along dusty dirt roads. (+6 DEF, +6 SPD)",
+        "ingredients": {
+            "rabbit_hide": 2,
+            "tough_leather": 2
+        },
         "result": {
-            "id": "value_600_zeni",
-            "stats": {},
+            "id": "travelers_leather_boots",
+            "stats": {
+                "def": 6,
+                "spd": 6
+            },
             "slot": "boots"
         }
     },
-    "value_620_zeni": {
-        "name": "Value: 620 Zeni",
+    "heavy_marching_boots": {
+        "name": "Heavy Marching Boots",
         "category": "ARMOR",
-        "id": "value_620_zeni",
-        "desc": "Recipe: 2 Iron Shard, 2 Rabbit Hide, 1 Tough Leather",
-        "ingredients": {},
+        "id": "heavy_marching_boots",
+        "desc": "Thick leather boots with basic iron soles that resist minor stepping hazards. (+10 DEF, +2 SPD)",
+        "ingredients": {
+            "iron_shard": 2,
+            "rabbit_hide": 2,
+            "tough_leather": 1
+        },
         "result": {
-            "id": "value_620_zeni",
-            "stats": {},
+            "id": "heavy_marching_boots",
+            "stats": {
+                "def": 10,
+                "spd": 2
+            },
             "slot": "boots"
         }
     },
-    "value_640_zeni": {
-        "name": "Value: 640 Zeni",
+    "furlined_soft_boots": {
+        "name": "Fur-Lined Soft Boots",
         "category": "ARMOR",
-        "id": "value_640_zeni",
-        "desc": "Recipe: 3 Rabbit Hide, 1 Tough Leather, 2 Spider Silk",
-        "ingredients": {},
+        "id": "furlined_soft_boots",
+        "desc": "Exceptionally comfortable leather footwear lined inside with warm rabbit fur. (+5 DEF, +8 SPD)",
+        "ingredients": {
+            "rabbit_hide": 3,
+            "tough_leather": 1,
+            "spider_silk": 2
+        },
         "result": {
-            "id": "value_640_zeni",
-            "stats": {},
+            "id": "furlined_soft_boots",
+            "stats": {
+                "def": 5,
+                "spd": 8
+            },
             "slot": "boots"
         }
     },
     "copper_band": {
         "name": "Copper Band",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "copper_band",
         "desc": "A cheap, glinting ring made from melted Zeni coins. Offers a tiny bit of luck. (+3 LCK)",
         "ingredients": {
@@ -3383,12 +3815,12 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "luck": 3
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "melted_zeni_loop": {
         "name": "Melted Zeni Loop",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "melted_zeni_loop",
         "desc": "A simple ring hammered together out of glinting Zeni coins. Gives minor luck. (+4 LCK)",
         "ingredients": {
@@ -3400,12 +3832,12 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "luck": 4
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
     "scrapiron_band": {
         "name": "Scrap-Iron Band",
-        "category": "ARMOR",
+        "category": "ACCESSORY",
         "id": "scrapiron_band",
         "desc": "A crude, heavy iron ring that provides a tiny bump to your overall physical defense. (+3 DEF)",
         "ingredients": {
@@ -3417,18 +3849,23 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "def": 3
             },
-            "slot": "boots"
+            "slot": "ring"
         }
     },
-    "value_390_zeni": {
-        "name": "Value: 390 Zeni",
+    "lucky_fishbone_ring": {
+        "name": "Lucky Fish-Bone Ring",
         "category": "ACCESSORY",
-        "id": "value_390_zeni",
-        "desc": "Recipe: 1 Small Bass, 20 Pile of Gold",
-        "ingredients": {},
+        "id": "lucky_fishbone_ring",
+        "desc": "A simple ring made from pond fish bones that provides a tiny bit of fortune. (+5 LCK)",
+        "ingredients": {
+            "common_fish": 1,
+            "gold_pile": 20
+        },
         "result": {
-            "id": "value_390_zeni",
-            "stats": {},
+            "id": "lucky_fishbone_ring",
+            "stats": {
+                "luck": 5
+            },
             "slot": "ring"
         }
     },
@@ -3446,7 +3883,7 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "hp": 25
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "sunkissed_herb_satchel": {
@@ -3463,7 +3900,7 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "hp": 20
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "pondbass_charm": {
@@ -3481,7 +3918,7 @@ Object.assign(CRAFTING_RECIPES, {
                 "hp": 15,
                 "spd": 2
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "herbalists_choker": {
@@ -3498,7 +3935,7 @@ Object.assign(CRAFTING_RECIPES, {
             "stats": {
                 "hp": 30
             },
-            "slot": "ring"
+            "slot": "amulet"
         }
     },
     "ragged_travelers_shawl": {
@@ -3535,27 +3972,38 @@ Object.assign(CRAFTING_RECIPES, {
             "slot": "cloak"
         }
     },
-    "value_440_zeni": {
-        "name": "Value: 440 Zeni",
+    "hunters_camo_cloak": {
+        "name": "Hunter's Camo Cloak",
         "category": "CLOTHING",
-        "id": "value_440_zeni",
-        "desc": "Recipe: 3 Rabbit Hide, 4 Spider Silk",
-        "ingredients": {},
+        "id": "hunters_camo_cloak",
+        "desc": "A basic brown cloak built from rabbit fur that helps you blend into standard forests. (+5 DEF, +3 LCK)",
+        "ingredients": {
+            "rabbit_hide": 3,
+            "spider_silk": 4
+        },
         "result": {
-            "id": "value_440_zeni",
-            "stats": {},
+            "id": "hunters_camo_cloak",
+            "stats": {
+                "def": 5,
+                "luck": 3
+            },
             "slot": "cloak"
         }
     },
-    "value_460_zeni": {
-        "name": "Value: 460 Zeni",
+    "thick_leather_mantle": {
+        "name": "Thick Leather Mantle",
         "category": "CLOTHING",
-        "id": "value_460_zeni",
-        "desc": "Recipe: 4 Tough Leather, 2 Spider Silk",
-        "ingredients": {},
+        "id": "thick_leather_mantle",
+        "desc": "A heavy leather shoulder cape that protects the wearer from simple slashing cuts. (+8 DEF)",
+        "ingredients": {
+            "tough_leather": 4,
+            "spider_silk": 2
+        },
         "result": {
-            "id": "value_460_zeni",
-            "stats": {},
+            "id": "thick_leather_mantle",
+            "stats": {
+                "def": 8
+            },
             "slot": "cloak"
         }
     }
