@@ -248,19 +248,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'smoke_screen', usable: true, effect: 'evasion_buff' }
     },
 
-    // --- EVOLUTION ---
-    'evolution_stone': {
-        name: 'Evolution Stone (T2)', category: 'EVOLUTION', id: 'evolution_stone',
-        desc: 'Used to evolve from Starter to Evolved class.',
-        ingredients: { 'mana_crystal': 5, 'boss_essence': 1, 'rare_gem': 2 },
-        result: { id: 'evolution_stone', type: 'EVOLUTION' }
-    },
-    'ascension_stone': {
-        name: 'Ascension Stone (T3)', category: 'EVOLUTION', id: 'ascension_stone',
-        desc: 'Used to ascend from Evolved to Ascended class.',
-        ingredients: { 'legendary_shard': 1, 'void_crystal': 3, 'boss_essence': 5 },
-        result: { id: 'ascension_stone', type: 'ASCENSION' }
-    },
+
 
     // --- MATERIAL CONVERSION ---
     'refined_steel_conv': {
@@ -535,7 +523,8 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
     return { 
         success: true, 
-        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}` 
+        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}`,
+        recipe
     };
 }
 

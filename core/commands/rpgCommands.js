@@ -614,8 +614,46 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
     
     // Normal crafting execution
     const result = await craftingSystem.performCraft(senderJid, input.toLowerCase(), categoryFilter);
-    if (result.success) await sock.sendMessage(chatId, { text: result.message });
-    else await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
+    if (result.success) {
+        try {
+            const recipe = result.recipe;
+            const economyUser = economy.getUser(senderJid) || {};
+            const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+            const nickname = economyUser.nickname || senderJid.split('@')[0];
+            const currency = getCurrency();
+            
+            const cardType = categoryFilter === 'BREWING' ? 'BREW' : (categoryFilter === 'COOKING' ? 'COOK' : (categoryFilter === 'FORGE' ? 'FORGE' : 'CRAFT'));
+            
+            const imgBuf = await goService.generateTransactionCard({
+                nickname: nickname,
+                type: cardType,
+                amount: 1,
+                newWallet: economyUser.wallet || 0,
+                newBank: economyUser.bank || 0,
+                zeniSymbol: currency.symbol || 'Z',
+                pfpUrl: pfpUrl,
+                itemName: recipe?.name || input,
+                item: recipe?.name || input,
+                details: `Crafted: ${recipe?.name || input}`,
+                description: recipe?.name || input
+            });
+
+            if (imgBuf) {
+                await sock.sendMessage(chatId, { 
+                    image: imgBuf, 
+                    caption: result.message 
+                });
+            } else {
+                throw new Error("No image buffer returned");
+            }
+        } catch (e) {
+            console.error("Failed to generate crafting image card:", e.message);
+            // Fallback to text message
+            await sock.sendMessage(chatId, { text: result.message });
+        }
+    } else {
+        await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
+    }
 }
 async function cookItem(sock, chatId, senderJid, recipeId) { return craftItem(sock, chatId, senderJid, recipeId, 'COOKING'); }
 async function brewItem(sock, chatId, senderJid, recipeId) { return craftItem(sock, chatId, senderJid, recipeId, 'BREWING'); }
