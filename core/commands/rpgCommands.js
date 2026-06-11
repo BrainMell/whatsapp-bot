@@ -531,28 +531,55 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
     const baseTitle = titleMap[categoryFilter] || categoryFilter;
-    const searchSuffix = searchQuery ? ` (Search: "${searchQuery}")` : "";
-    let msg = `${baseTitle}${searchSuffix}\n(Page ${currentPage}/${totalPages})\n\n`;
+    
+    let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+    msg += `   ${baseTitle}\n`;
+    msg += `   (Page ${currentPage} of ${totalPages})\n`;
+    msg += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+    
+    if (searchQuery) msg += `🔍 *Search:* _"${searchQuery}"_\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
+
+    const rarityEmojis = {
+        'MYTHIC': '🌌',
+        'LEGENDARY': '👑',
+        'EPIC': '🔮',
+        'RARE': '🔷',
+        'UNCOMMON': '🟢',
+        'COMMON': '⚪'
+    };
 
     pageItems.forEach(r => { 
         const info = lootSystem.getItemInfo(r.id) || {};
-        const lvlStr = info.reqLevel !== undefined ? ` _[Req Lvl: ${info.reqLevel}]_` : "";
-        msg += `• *${r.name}* (\`${r.id}\`)${lvlStr}\n  📝 ${r.desc}\n`;
+        const slotIcon = getSlotIcon(info.slot);
+        const rarityEmoji = rarityEmojis[info.rarity] || '⚪';
+        const lvlStr = info.reqLevel !== undefined ? `⭐ *Lvl:* \`${info.reqLevel}\`` : `⭐ *Lvl:* \`1\``;
+        
+        msg += `╭──────────────────────────\n`;
+        msg += `│ ${slotIcon} *${r.name.toUpperCase()}* (\`${r.id}\`)\n`;
+        msg += `│ 💎 *Rarity:* ${rarityEmoji} _${info.rarity || 'COMMON'}_  |  ${lvlStr}\n`;
+        msg += `│ 📜 _${r.desc}_\n`;
+        
         const ingredients = Object.entries(r.ingredients).map(([id, qty]) => { 
             const ingInfo = lootSystem.getItemInfo(id);
-            return `${qty}x ${ingInfo.name}`;
+            const ingSlotIcon = ingInfo.slot ? getSlotIcon(ingInfo.slot) + ' ' : '';
+            return `${qty}x ${ingSlotIcon}${ingInfo.name}`;
         }).join(', ');
-        msg += `  📦 Req: ${ingredients}\n\n`;
+        
+        msg += `│ 📦 *Requires:* ${ingredients}\n`;
+        msg += `╰──────────────────────────\n\n`;
     });
 
     const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
+    
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     if (searchQuery) {
-        msg += `━━━━━━━━━━━━━\n💡 *NAVIGATE:* \`${getPrefix()} ${cmdName} search ${searchQuery} <page>\`\n`;
+        msg += `💡 *Page:* \`${getPrefix()} ${cmdName} search ${searchQuery} <page>\`\n`;
     } else {
-        msg += `━━━━━━━━━━━━━\n💡 *NAVIGATE:* \`${getPrefix()} ${cmdName} <page>\`\n`;
+        msg += `💡 *Page:* \`${getPrefix()} ${cmdName} <page>\`\n`;
     }
-    msg += `💡 *HOW TO CREATE:* \`${getPrefix()} ${cmdName} <id>\`\n📌 Example: \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\``;
+    msg += `🔨 *Craft:* \`${getPrefix()} ${cmdName} <id>\`\n`;
+    msg += `📌 *Example:* \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\``;
     await sock.sendMessage(chatId, { text: msg });
 }
 
