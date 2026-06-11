@@ -29,6 +29,119 @@ function resolveJid(jid) {
     }
 }
 
+function getBuffIcon(buffType) {
+    const icons = {
+        atk: "⚔️",
+        attack: "⚔️",
+        def: "🛡️",
+        defense: "🛡️",
+        spd: "💨",
+        speed: "💨",
+        mag: "✨",
+        magic: "✨",
+        evasion: "💫",
+        shield: "🔷",
+        crit: "🎯",
+        luck: "🍀",
+    };
+    return icons[buffType] || "✨";
+}
+
+function getDebuffIcon(debuffType) {
+    const icons = {
+        vulnerability: "💀",
+        blind: "🌫️",
+        slow: "🐌",
+        weak: "😵",
+        curse: "🔮",
+        poison: "🧪",
+        burn: "🔥",
+        bleed: "🩸",
+        stun: "💫",
+        freeze: "❄️",
+        sleep: "💤",
+    };
+    return icons[debuffType] || "💀";
+}
+
+function applyBuff(player, type, value, duration) {
+    if (!player.buffs) player.buffs = [];
+    player.buffs.push({
+        type,
+        value,
+        duration,
+        icon: getBuffIcon(type)
+    });
+}
+
+function applyStatusEffect(player, type, duration, value) {
+    if (!player.statusEffects) player.statusEffects = [];
+    player.statusEffects.push({
+        type,
+        duration,
+        value,
+        icon: getDebuffIcon(type)
+    });
+}
+
+function getEffectiveStats(player) {
+    const stats = { ...player.stats };
+    
+    // Apply buffs from player.buffs
+    if (player.buffs) {
+        for (const buff of player.buffs) {
+            const statName = buff.type;
+            if (statName === 'all') {
+                stats.atk = (stats.atk || 0) + buff.value;
+                stats.def = (stats.def || 0) + buff.value;
+                stats.spd = (stats.spd || 0) + buff.value;
+            } else if (statName) {
+                stats[statName] = (stats[statName] || 0) + buff.value;
+            }
+        }
+    }
+    
+    // Apply status effect multipliers
+    if (player.statusEffects) {
+        for (const effect of player.statusEffects) {
+            if (effect.type === 'shield') {
+                stats.def = Math.floor((stats.def || 0) * 1.5);
+            }
+            if (effect.type === 'vulnerability') {
+                stats.def = Math.floor((stats.def || 0) * 0.7);
+            }
+            if (effect.type === 'curse' || effect.type === 'weak') {
+                stats.def = Math.floor((stats.def || 0) * 0.8);
+                stats.atk = Math.floor((stats.atk || 0) * 0.8);
+            }
+            if (effect.type === 'slow') {
+                stats.spd = Math.floor((stats.spd || 0) * 0.8);
+            }
+        }
+    }
+    
+    return stats;
+}
+
+function getPlayerEffectsString(player) {
+    let effectsStr = '';
+    const icons = [];
+    if (player.buffs && player.buffs.length > 0) {
+        for (const buff of player.buffs) {
+            icons.push(buff.icon || getBuffIcon(buff.type));
+        }
+    }
+    if (player.statusEffects && player.statusEffects.length > 0) {
+        for (const effect of player.statusEffects) {
+            icons.push(effect.icon || getDebuffIcon(effect.type));
+        }
+    }
+    if (icons.length > 0) {
+        effectsStr = ' [' + icons.join('') + ']';
+    }
+    return effectsStr;
+}
+
 // ─── PvP Balance Constants ────────────────────
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
 const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
@@ -211,6 +324,7 @@ function buildDuelPlayer(jid, userData, stats, idx) {
         class: classData,
         spriteIndex: userData.spriteIndex || idx,
         statusEffects: [],
+        buffs: [],
         cooldowns: {},
     };
 }
@@ -265,6 +379,18 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
     }
 
+    // Tick buffs
+    if (currentPlayer.buffs && currentPlayer.buffs.length > 0) {
+        for (let i = currentPlayer.buffs.length - 1; i >= 0; i--) {
+            const buff = currentPlayer.buffs[i];
+            buff.duration--;
+            if (buff.duration <= 0) {
+                currentPlayer.buffs.splice(i, 1);
+                statusLog.push(`✨ *${buff.type.toUpperCase()}* buff has worn off.`);
+            }
+        }
+    }
+
     if (currentPlayer.hp <= 0) {
         currentPlayer.hp = 0;
         const statusMsg = statusLog.join('\n');
@@ -295,8 +421,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         let roundMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
                         `———————————\n` +
                         `${statusMsg}\n\n` +
-                        `🔴 *${currentPlayer.name}*: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
-                        `🔵 *${opponent.name}*: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
+                        `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
+                        `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
                         `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
                         `———————————\n` +
                         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
@@ -364,61 +490,104 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         const cooldownVal = effect?.cooldown !== undefined ? effect.cooldown : ability.cooldown;
         if (cooldownVal) currentPlayer.cooldowns[ability.id] = cooldownVal;
 
+        let hasResolved = false;
+        const attackerStats = getEffectiveStats(currentPlayer);
+        const defenderStats = getEffectiveStats(opponent);
+
         if (effect?.type === 'damage' || effect?.type === 'aoe' || effect?.type === 'damage_dot' || effect?.type === 'multi_hit' || effect?.type === 'damage_heal') {
-            const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
+            const statBase = (effect.damageType === 'magic' ? attackerStats.mag : attackerStats.atk) || attackerStats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * PVP_ABILITY_MULT);
             // Partial defense mitigation
-            const defReduction = Math.min(opponent.stats.def * 0.2, damage * PVP_DEFENSE_CAP);
+            const defReduction = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
             damage = Math.max(20, Math.floor(damage - defReduction));
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
-            
-            if (effect.type === 'damage_dot' && effect.dot) {
-                if (!opponent.statusEffects) opponent.statusEffects = [];
-                opponent.statusEffects.push({ type: effect.dot, duration: effect.dotDuration || 2, dotDamage: effect.dotDamage || 10 });
-                actionResult += `\n🔥 *${effect.dot.toUpperCase()}* applied for ${effect.dotDuration || 2} turns!`;
-            }
-            if (effect.type === 'damage_heal') {
-                const healVal = Math.floor(damage * (effect.healPercent || 30) / 100);
-                currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healVal);
-                actionResult += `\n💚 Healed self for *${healVal}* HP!`;
-            }
         } else if (effect?.type === 'execute') {
             const hpPercent = (opponent.hp / opponent.maxHp) * 100;
             const mult = hpPercent <= (effect.threshold || 30) ? 2.5 : 1.0;
-            const statBase = (effect.damageType === 'magic' ? currentPlayer.stats.mag : currentPlayer.stats.atk) || currentPlayer.stats.atk;
+            const statBase = (effect.damageType === 'magic' ? attackerStats.mag : attackerStats.atk) || attackerStats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * mult * PVP_ABILITY_MULT);
-            const defReduction = Math.min(opponent.stats.def * 0.2, damage * PVP_DEFENSE_CAP);
+            const defReduction = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
             damage = Math.max(20, Math.floor(damage - defReduction));
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
             if (mult > 1.0) {
                 actionResult += `\n⚡ *EXECUTE THRESHOLD TRIGGERED!* ⚡`;
             }
-        } else if (effect?.type === 'heal' || effect?.type === 'heal_team' || effect?.type === 'heal_self') {
-            healing = Math.floor(effect.value || 80);
-            currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healing);
-            actionResult = `💚 *${currentPlayer.name}* used *${ability.name}*!\nRestored *${healing}* HP! (${currentPlayer.hp}/${currentPlayer.maxHp})`;
-            
-        } else if (effect?.type === 'buff_self') {
-            const statName = effect.buffType || 'atk';
-            const buffVal = Math.floor((effect.value || 20) * 0.5); // Half buffs in PvP
-            currentPlayer.stats[statName] = (currentPlayer.stats[statName] || 0) + buffVal;
-            actionResult = `✨ *${currentPlayer.name}* used *${ability.name}*!\n📈 +${buffVal} ${statName.toUpperCase()} for ${effect.duration || 2} turns!`;
-            
         } else if (effect?.type === 'damage_cc') {
-            const statBase = currentPlayer.stats.atk;
+            const statBase = attackerStats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.0) * PVP_ABILITY_MULT);
-            damage = Math.max(15, damage - Math.floor(opponent.stats.def * 0.15));
+            damage = Math.max(15, damage - Math.floor(defenderStats.def * 0.15));
             opponent.hp -= damage;
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 *${damage}* damage`;
-            if (Math.random() * 100 < (effect.ccChance || 30)) {
-                if (!opponent.statusEffects) opponent.statusEffects = [];
-                opponent.statusEffects.push({ type: effect.cc, duration: effect.ccDuration || 1 });
-                actionResult += ` + *${effect.cc?.toUpperCase()}* applied!`;
-            }
         } else {
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!`;
+        }
+
+        // Process resolved effects
+        if (effect?.resolvedEffects && Object.keys(effect.resolvedEffects).length > 0) {
+            hasResolved = true;
+            for (const [effId, effData] of Object.entries(effect.resolvedEffects)) {
+                if (effId === 'heal' || effId === 'heal_team' || effId === 'heal_self') {
+                    const healVal = effData.value || 80;
+                    const healAmt = Math.min(healVal, currentPlayer.maxHp - currentPlayer.hp);
+                    currentPlayer.hp += healAmt;
+                    actionResult += `\n💚 Restored *${healAmt}* HP! (${currentPlayer.hp}/${currentPlayer.maxHp})`;
+                }
+                else if (effId === 'buff_self' || effId === 'buff_team' || effId === 'buff_target' || effId === 'shield' || effId === 'evasion' || effId === 'critBuff') {
+                    const rawStat = effData.stat || (effId === 'shield' ? 'defense' : effId === 'critBuff' ? 'crit' : effId === 'evasion' ? 'evasion' : 'atk');
+                    const statName = rawStat === 'attack' ? 'atk' : rawStat === 'defense' ? 'def' : rawStat === 'speed' ? 'spd' : rawStat === 'magic' ? 'mag' : rawStat;
+                    const buffVal = Math.floor((effData.value || 20) * 0.5); // Half buffs in PvP
+                    applyBuff(currentPlayer, statName, buffVal, effData.duration || 2);
+                    actionResult += `\n✨ +${buffVal} ${statName.toUpperCase()} for ${effData.duration || 2} turns!`;
+                }
+                else if (effId === 'stun' || effId === 'freeze' || effId === 'sleep' || effId === 'charm' || effId === 'cc') {
+                    const chance = effData.chance || 100;
+                    if (Math.random() * 100 < chance) {
+                        applyStatusEffect(opponent, effId, effData.duration || 1);
+                        actionResult += `\n💫 *${effId.toUpperCase()}* applied to *${opponent.name}* for ${effData.duration || 1} turn!`;
+                    }
+                }
+                else if (effId === 'dot' || effId === 'burn' || effId === 'poison' || effId === 'bleed') {
+                    applyStatusEffect(opponent, effId, effData.duration || 3, effData.value || 10);
+                    actionResult += `\n🔥 *${effId.toUpperCase()}* applied to *${opponent.name}* for ${effData.duration || 3} turns!`;
+                }
+                else if (effId === 'haste') {
+                    const buffVal = Math.floor((effData.value || 20) * 0.5);
+                    applyBuff(currentPlayer, 'spd', buffVal, effData.duration || 3);
+                    actionResult += `\n⚡ Haste applied! +${buffVal} SPD for ${effData.duration || 3} turns!`;
+                }
+            }
+        }
+
+        // Fallbacks for legacy/flattened root effects
+        if (!hasResolved) {
+            if (effect?.type === 'damage_dot' && effect.dot) {
+                applyStatusEffect(opponent, effect.dot, effect.dotDuration || 2, effect.dotDamage || 10);
+                actionResult += `\n🔥 *${effect.dot.toUpperCase()}* applied to *${opponent.name}* for ${effect.dotDuration || 2} turns!`;
+            }
+            if (effect?.type === 'damage_heal') {
+                const healVal = Math.floor(damage * (effect.healPercent || 30) / 100);
+                currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healVal);
+                actionResult += `\n💚 Healed self for *${healVal}* HP!`;
+            }
+            if (effect?.type === 'heal' || effect?.type === 'heal_team' || effect?.type === 'heal_self') {
+                healing = Math.floor(effect.value || 80);
+                currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healing);
+                actionResult += `\n💚 Restored *${healing}* HP! (${currentPlayer.hp}/${currentPlayer.maxHp})`;
+            }
+            if (effect?.type === 'buff_self') {
+                const statName = effect.buffType || 'atk';
+                const buffVal = Math.floor((effect.value || 20) * 0.5); // Half buffs in PvP
+                applyBuff(currentPlayer, statName, buffVal, effect.duration || 2);
+                actionResult += `\n✨ +${buffVal} ${statName.toUpperCase()} for ${effect.duration || 2} turns!`;
+            }
+            if (effect?.type === 'damage_cc') {
+                if (Math.random() * 100 < (effect.ccChance || 30)) {
+                    applyStatusEffect(opponent, effect.cc, effect.ccDuration || 1);
+                    actionResult += ` + *${effect.cc?.toUpperCase()}* applied!`;
+                }
+            }
         }
         
     } else if (action === 'flee') {
@@ -622,35 +791,44 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                 itemTarget.energy = Math.min(itemTarget.maxEnergy, itemTarget.energy + enAmt);
                 actionResult += `\n⚡ Restored *${enAmt}* energy! (${Math.round(enVal * 100)}%)`;
                 break;
-            case "buff_atk":
-                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + Math.floor((item.effectValue || 20) * 0.5);
-                actionResult += `\n💪 Buffed attack!`;
+            case "buff_atk": {
+                const buffVal = Math.floor((item.effectValue || 20) * 0.5);
+                applyBuff(itemTarget, 'atk', buffVal, item.duration || 3);
+                actionResult += `\n💪 Buffed attack! (+${buffVal} ATK)`;
                 break;
-            case "buff_def":
-                itemTarget.stats.def = (itemTarget.stats.def || 0) + Math.floor((item.effectValue || 20) * 0.5);
-                actionResult += `\n🛡️ Buffed defense!`;
+            }
+            case "buff_def": {
+                const buffVal = Math.floor((item.effectValue || 20) * 0.5);
+                applyBuff(itemTarget, 'def', buffVal, item.duration || 3);
+                actionResult += `\n🛡️ Buffed defense! (+${buffVal} DEF)`;
                 break;
-            case "buff_spd":
-                itemTarget.stats.spd = (itemTarget.stats.spd || 0) + Math.floor((item.effectValue || 20) * 0.5);
-                actionResult += `\n⚡ Buffed speed!`;
+            }
+            case "buff_spd": {
+                const buffVal = Math.floor((item.effectValue || 20) * 0.5);
+                applyBuff(itemTarget, 'spd', buffVal, item.duration || 3);
+                actionResult += `\n⚡ Buffed speed! (+${buffVal} SPD)`;
                 break;
-            case "buff_luck":
-                itemTarget.stats.luck = (itemTarget.stats.luck || 0) + Math.floor((item.effectValue || 20) * 0.5);
-                actionResult += `\n🍀 Buffed luck!`;
+            }
+            case "buff_luck": {
+                const buffVal = Math.floor((item.effectValue || 20) * 0.5);
+                applyBuff(itemTarget, 'luck', buffVal, item.duration || 3);
+                actionResult += `\n🍀 Buffed luck! (+${buffVal} LUCK)`;
                 break;
-            case "buff_all":
-                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + 10;
-                itemTarget.stats.def = (itemTarget.stats.def || 0) + 10;
-                itemTarget.stats.spd = (itemTarget.stats.spd || 0) + 10;
-                actionResult += `\n✨ Overflowing with power! (+All Stats)`;
+            }
+            case "buff_all": {
+                applyBuff(itemTarget, 'atk', 10, item.duration || 3);
+                applyBuff(itemTarget, 'def', 10, item.duration || 3);
+                applyBuff(itemTarget, 'spd', 10, item.duration || 3);
+                actionResult += `\n✨ Overflowing with power! (+10 to All Stats)`;
                 break;
-            case "buff_all_damage":
-                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + 20;
-                actionResult += `\n💥 Enters a BERSERKER RAGE! (+Damage)`;
+            }
+            case "buff_all_damage": {
+                applyBuff(itemTarget, 'atk', 20, item.duration || 3);
+                actionResult += `\n💥 Enters a BERSERKER RAGE! (+20 ATK)`;
                 break;
+            }
             case "shield_max":
-                if (!itemTarget.statusEffects) itemTarget.statusEffects = [];
-                itemTarget.statusEffects.push({ type: 'shield', duration: 5, value: 100 });
+                applyStatusEffect(itemTarget, 'shield', 5, 100);
                 actionResult += `\n🛡️ Encased in a massive energy barrier!`;
                 break;
             case "damage_aoe":
@@ -725,8 +903,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     let statusMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
                     `———————————\n` +
                     `${actionResult}\n\n` +
-                    `🔴 *${currentPlayer.name}*: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
-                    `🔵 *${opponent.name}*: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
+                    `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
+                    `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
                     `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
                     `———————————\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
@@ -748,20 +926,23 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 // ==========================================
 
 function resolveBasicAttack(attacker, defender) {
+    const attackerStats = getEffectiveStats(attacker);
+    const defenderStats = getEffectiveStats(defender);
+
     // Evasion check
-    if (Math.random() * 100 < (defender.stats.evasion || 0)) {
+    if (Math.random() * 100 < (defenderStats.evasion || 0)) {
         return { damage: 0, isCrit: false, missed: true };
     }
 
-    let damage = Math.floor(attacker.stats.atk * (0.85 + Math.random() * 0.3) * PVP_DAMAGE_MULT);
+    let damage = Math.floor(attackerStats.atk * (0.85 + Math.random() * 0.3) * PVP_DAMAGE_MULT);
     
     // Crit
-    const isCrit = Math.random() * 100 < (attacker.stats.crit || 5);
+    const isCrit = Math.random() * 100 < (attackerStats.crit || 5);
     if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
 
     // Defense reduction (capped)
     const defReduction = Math.min(
-        Math.floor(defender.stats.def * 0.25),
+        Math.floor(defenderStats.def * 0.25),
         Math.floor(damage * PVP_DEFENSE_CAP)
     );
     damage = Math.max(15, damage - defReduction);

@@ -487,9 +487,29 @@ function getSlotIcon(slot) {
 // 🛠️ CRAFTING & BREWING COMMANDS 
 // ========================================== 
 
-async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') { 
+async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', searchQuery = null) { 
     let recipes = Object.values(craftingSystem.getRecipes());
-    if (categoryFilter) recipes = recipes.filter(r => r.category === categoryFilter);
+    
+    const STATION_CATEGORIES = {
+        'FORGE': ['WEAPON', 'ARMOR'],
+        'BREWING': ['BREWING'],
+        'COOKING': ['COOKING'],
+        'CRAFT': ['CRAFT', 'ACCESSORY', 'CLOTHING', 'ENGINEERING', 'EVOLUTION']
+    };
+
+    if (categoryFilter) {
+        const allowedCategories = STATION_CATEGORIES[categoryFilter] || [];
+        recipes = recipes.filter(r => allowedCategories.includes(r.category));
+    }
+
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase().trim();
+        recipes = recipes.filter(r => 
+            r.name.toLowerCase().includes(query) || 
+            r.id.toLowerCase().includes(query) ||
+            (r.desc && r.desc.toLowerCase().includes(query))
+        );
+    }
 
     const itemsPerPage = 6;
     const totalPages = Math.ceil(recipes.length / itemsPerPage) || 1;
@@ -498,8 +518,10 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') 
     const pageItems = recipes.slice(startIdx, startIdx + itemsPerPage);
 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
-    let msg = `${(titleMap[categoryFilter] || categoryFilter).slice(0,10).padEnd(10)}\n(Page ${currentPage}/${totalPages})\n\n`;
-    if (pageItems.length === 0) msg += `_No recipes found in this category._\n\n`;
+    const baseTitle = titleMap[categoryFilter] || categoryFilter;
+    const searchSuffix = searchQuery ? ` (Search: "${searchQuery}")` : "";
+    let msg = `${baseTitle}${searchSuffix}\n(Page ${currentPage}/${totalPages})\n\n`;
+    if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
 
     pageItems.forEach(r => { 
         msg += `• *${r.name}* (\`${r.id}\`)\n  📝 ${r.desc}\n`;
@@ -511,13 +533,45 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT') 
     });
 
     const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
-    msg += `━━━━━━━━━━━━━\n💡 *HOW TO CREATE:*\nType: \`${getPrefix()} ${cmdName} <id>\`\n📌 Example: \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\``;
+    if (searchQuery) {
+        msg += `━━━━━━━━━━━━━\n💡 *NAVIGATE:* \`${getPrefix()} ${cmdName} search ${searchQuery} <page>\`\n`;
+    } else {
+        msg += `━━━━━━━━━━━━━\n💡 *NAVIGATE:* \`${getPrefix()} ${cmdName} <page>\`\n`;
+    }
+    msg += `💡 *HOW TO CREATE:* \`${getPrefix()} ${cmdName} <id>\`\n📌 Example: \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\``;
     await sock.sendMessage(chatId, { text: msg });
 }
 
 async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') {
-    if (!recipeId) return displayRecipes(sock, chatId, 1, categoryFilter);
-    const result = await craftingSystem.performCraft(senderJid, recipeId.toLowerCase(), categoryFilter);
+    if (!recipeId || recipeId.trim() === '') {
+        return displayRecipes(sock, chatId, 1, categoryFilter);
+    }
+    
+    const input = recipeId.trim();
+    
+    // Check if input is pagination page number
+    if (/^\d+$/.test(input)) {
+        return displayRecipes(sock, chatId, parseInt(input), categoryFilter);
+    }
+    
+    // Check if input is search
+    const searchMatch = input.match(/^search\s+(.+)$/i);
+    if (searchMatch) {
+        const queryStr = searchMatch[1].trim();
+        const parts = queryStr.split(/\s+/);
+        let page = 1;
+        let searchQuery = queryStr;
+        
+        const lastPart = parts[parts.length - 1];
+        if (/^\d+$/.test(lastPart) && parts.length > 1) {
+            page = parseInt(lastPart);
+            searchQuery = parts.slice(0, -1).join(" ");
+        }
+        return displayRecipes(sock, chatId, page, categoryFilter, searchQuery);
+    }
+    
+    // Normal crafting execution
+    const result = await craftingSystem.performCraft(senderJid, input.toLowerCase(), categoryFilter);
     if (result.success) await sock.sendMessage(chatId, { text: result.message });
     else await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
 }

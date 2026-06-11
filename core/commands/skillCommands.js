@@ -295,6 +295,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     
     // Collect ALL learned skills, grouped by class origin
     const abilityGroups = [];
+    const seen = new Set();
     
     for (const classId of lineage) {
         const classData = classSystem.getClassById(classId);
@@ -305,7 +306,8 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         for (const [, treeData] of Object.entries(tree.trees)) {
             for (const [skillId, skill] of Object.entries(treeData.skills)) {
                 const lvl = (user.skills || {})[skillId] || 0;
-                if (lvl > 0) {
+                if (lvl > 0 && !seen.has(skillId)) {
+                    seen.add(skillId);
                     const getVal = (val, l) => Array.isArray(val) ? val[Math.min(l - 1, val.length - 1)] : val;
                     const cost = skill.cost !== undefined ? skill.cost : (getVal(skill.energyCost, lvl) || 0);
                     const effect = skillTree.getSkillEffect(skill, lvl);

@@ -452,6 +452,7 @@ function canCraft(userId, recipeId) {
     if (!recipe) return { canCraft: false, reason: 'Recipe not found.' };
 
     const inventory = inventorySystem.getInventory(userId);
+    if (!inventory) return { canCraft: false, reason: 'Inventory not found. Please register first!' };
     const missing = [];
 
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
@@ -480,11 +481,18 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const resultItem = recipe.result;
 
     // Enforce Station Type
-    if (recipe.category !== requiredStation) {
+    const STATION_CATEGORIES = {
+        'FORGE': ['WEAPON', 'ARMOR'],
+        'BREWING': ['BREWING'],
+        'COOKING': ['COOKING'],
+        'CRAFT': ['CRAFT', 'ACCESSORY', 'CLOTHING', 'ENGINEERING', 'EVOLUTION']
+    };
+    const allowedCategories = STATION_CATEGORIES[requiredStation] || [];
+    if (!allowedCategories.includes(recipe.category)) {
         let stationName = "General Crafting Table";
         if (recipe.category === 'BREWING') stationName = "Laboratory";
         if (recipe.category === 'COOKING') stationName = "Kitchen";
-        if (recipe.category === 'FORGE') stationName = "Blacksmith Forge";
+        if (recipe.category === 'WEAPON' || recipe.category === 'ARMOR') stationName = "Blacksmith Forge";
         
         return { success: false, message: `❌ This recipe requires a **${stationName}**!` };
     }
@@ -569,6 +577,2989 @@ async function dismantleItem(userId, itemId) {
 
     return { success: true, message: msg };
 }
+
+
+// --- PROGRAMMATICALLY ADDED EXTRAPOLATED RECIPES ---
+Object.assign(CRAFTING_RECIPES, {
+    "void_kraken_harpoon": {
+        "name": "Void Kraken Harpoon",
+        "category": "WEAPON",
+        "id": "void_kraken_harpoon",
+        "desc": "A terrifying weapon forged from an abyssal tentacle. It twists reality with every swing. (+110 ATK, +30 MAG, +15 CRIT)",
+        "ingredients": {
+            "mythic_fish": 4,
+            "void_essence": 2,
+            "mystic_thread": 5
+        },
+        "result": {
+            "id": "void_kraken_harpoon",
+            "stats": {
+                "atk": 110,
+                "mag": 30,
+                "crit": 15
+            },
+            "slot": "weapon"
+        }
+    },
+    "void_kraken_cleaver": {
+        "name": "Void Kraken Cleaver",
+        "category": "WEAPON",
+        "id": "void_kraken_cleaver",
+        "desc": "A colossal, heavy blade that looks like a frozen piece of the deep abyss. It slices through space itself. (+105 ATK, +20 MAG, +15 CRIT)",
+        "ingredients": {
+            "mythic_fish": 4,
+            "void_essence": 1,
+            "refined_steel": 8
+        },
+        "result": {
+            "id": "void_kraken_cleaver",
+            "stats": {
+                "atk": 105,
+                "mag": 20,
+                "crit": 15
+            },
+            "slot": "weapon"
+        }
+    },
+    "hellfire_greatmaul": {
+        "name": "Hellfire Greatmaul",
+        "category": "WEAPON",
+        "id": "hellfire_greatmaul",
+        "desc": "A massive hammer forged from active sulfur cores. Every impact triggers a tiny elemental explosion. (+120 ATK, +25 MAG, +10 CRIT)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "dragon_scale": 4,
+            "fire_essence": 8
+        },
+        "result": {
+            "id": "hellfire_greatmaul",
+            "stats": {
+                "atk": 120,
+                "mag": 25,
+                "crit": 10
+            },
+            "slot": "weapon"
+        }
+    },
+    "worldender_lance": {
+        "name": "World-Ender Lance",
+        "category": "WEAPON",
+        "id": "worldender_lance",
+        "desc": "A legendary weapon that combines hellfire power with the raw physical weight of abyssal parts. (+115 ATK, +40 MAG, +12 CRIT)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "mythic_fish": 2,
+            "refined_steel": 5
+        },
+        "result": {
+            "id": "worldender_lance",
+            "stats": {
+                "atk": 115,
+                "mag": 40,
+                "crit": 12
+            },
+            "slot": "weapon"
+        }
+    },
+    "aegis_of_the_abyss": {
+        "name": "Aegis of the Abyss",
+        "category": "ARMOR",
+        "id": "aegis_of_the_abyss",
+        "desc": "A shield that feels entirely weightless but swallows incoming attacks whole. (+120 DEF, +400 HP, +10 LCK)",
+        "ingredients": {
+            "void_essence": 2,
+            "void_crystal": 5,
+            "refined_steel": 10
+        },
+        "result": {
+            "id": "aegis_of_the_abyss",
+            "stats": {
+                "def": 120,
+                "hp": 400,
+                "luck": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "abyssal_bulwark": {
+        "name": "Abyssal Bulwark",
+        "category": "ARMOR",
+        "id": "abyssal_bulwark",
+        "desc": "A shield forged from compressed void energy. It acts like a gravitational anomaly, pulling threats away from allies. (+115 DEF, +450 HP, +10 LCK)",
+        "ingredients": {
+            "void_essence": 2,
+            "void_crystal": 6,
+            "ancient_wood": 8
+        },
+        "result": {
+            "id": "abyssal_bulwark",
+            "stats": {
+                "def": 115,
+                "hp": 450,
+                "luck": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "mirror_shield_of_tartarus": {
+        "name": "Mirror Shield of Tartarus",
+        "category": "ARMOR",
+        "id": "mirror_shield_of_tartarus",
+        "desc": "A pristine, terrifying shield that visually distorts distance, making your exact stance impossible to read. (+130 DEF, +350 HP, +15 CRIT)",
+        "ingredients": {
+            "void_essence": 2,
+            "mirror_essence": 2,
+            "refined_steel": 6
+        },
+        "result": {
+            "id": "mirror_shield_of_tartarus",
+            "stats": {
+                "def": 130,
+                "hp": 350,
+                "crit": 15
+            },
+            "slot": "off_hand"
+        }
+    },
+    "aegis_of_eternal_fire": {
+        "name": "Aegis of Eternal Fire",
+        "category": "ARMOR",
+        "id": "aegis_of_eternal_fire",
+        "desc": "A massive shield crafted from molten dragon scrap and hellfire energy. Melt weapons that strike it. (+125 DEF, +300 HP, +15 ATK)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "dragon_scale": 4,
+            "refined_steel": 6
+        },
+        "result": {
+            "id": "aegis_of_eternal_fire",
+            "stats": {
+                "def": 125,
+                "hp": 300,
+                "atk": 15
+            },
+            "slot": "off_hand"
+        }
+    },
+    "chrono_weaver_vestments": {
+        "name": "Chrono Weaver Vestments",
+        "category": "ARMOR",
+        "id": "chrono_weaver_vestments",
+        "desc": "Woven from divine silk and infused with eternal fires. Time seems to slow around the wearer. (+85 DEF, +250 HP, +25 SPD)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "spider_silk": 15,
+            "fire_essence": 5
+        },
+        "result": {
+            "id": "chrono_weaver_vestments",
+            "stats": {
+                "def": 85,
+                "hp": 250,
+                "spd": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "voidstrand_robes": {
+        "name": "Void-Strand Robes",
+        "category": "ARMOR",
+        "id": "voidstrand_robes",
+        "desc": "Robes woven seamlessly from mystic thread and void energy, causing the wearer's physical form to appear blurry and untargetable. (+75 DEF, +200 HP, +40 MAG, +15 SPD)",
+        "ingredients": {
+            "void_essence": 1,
+            "mystic_thread": 10,
+            "void_crystal": 4
+        },
+        "result": {
+            "id": "voidstrand_robes",
+            "stats": {
+                "def": 75,
+                "hp": 200,
+                "mag": 40,
+                "spd": 15
+            },
+            "slot": "armor"
+        }
+    },
+    "eelskin_hazard_suit": {
+        "name": "Eel-Skin Hazard Suit",
+        "category": "ARMOR",
+        "id": "eelskin_hazard_suit",
+        "desc": "High-tech magic gear constructed from corrupted eel hides. It constantly cycles electrical current. (+90 DEF, +300 HP, +30 SPD)",
+        "ingredients": {
+            "void_essence": 2,
+            "infected_fish": 3,
+            "lightning_shard": 5
+        },
+        "result": {
+            "id": "eelskin_hazard_suit",
+            "stats": {
+                "def": 90,
+                "hp": 300,
+                "spd": 30
+            },
+            "slot": "armor"
+        }
+    },
+    "abyssal_carapace": {
+        "name": "Abyssal Carapace",
+        "category": "ARMOR",
+        "id": "abyssal_carapace",
+        "desc": "Heavy armor constructed from the outer shell of deep-sea entities. Completely unyielding. (+110 DEF, +400 HP)",
+        "ingredients": {
+            "mythic_fish": 2,
+            "void_essence": 1,
+            "tough_leather": 10
+        },
+        "result": {
+            "id": "abyssal_carapace",
+            "stats": {
+                "def": 110,
+                "hp": 400
+            },
+            "slot": "armor"
+        }
+    },
+    "crown_of_hellfire": {
+        "name": "Crown of Hellfire",
+        "category": "ARMOR",
+        "id": "crown_of_hellfire",
+        "desc": "A blazing crown that marks you as a lord of destruction. Your spells burn hotter. (+40 DEF, +80 MAG, +20 CRIT)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "fire_essence": 5,
+            "dark_matter": 2
+        },
+        "result": {
+            "id": "crown_of_hellfire",
+            "stats": {
+                "def": 40,
+                "mag": 80,
+                "crit": 20
+            },
+            "slot": "helmet"
+        }
+    },
+    "gaze_of_the_abyss": {
+        "name": "Gaze of the Abyss",
+        "category": "ARMOR",
+        "id": "gaze_of_the_abyss",
+        "desc": "A hollow mask that replaces the wearer’s eyes with tiny, glowing portals to the void. (+35 DEF, +75 MAG, +25 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "dark_matter": 4,
+            "mana_crystal": 5
+        },
+        "result": {
+            "id": "gaze_of_the_abyss",
+            "stats": {
+                "def": 35,
+                "mag": 75,
+                "crit": 25
+            },
+            "slot": "helmet"
+        }
+    },
+    "crown_of_the_abyssal_sovereign": {
+        "name": "Crown of the Abyssal Sovereign",
+        "category": "ARMOR",
+        "id": "crown_of_the_abyssal_sovereign",
+        "desc": "A crown that makes your voice echo with cosmic authority, driving fear into enemies. (+45 DEF, +60 MAG, +20 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "lich_phylactery": 2,
+            "mystic_thread": 5
+        },
+        "result": {
+            "id": "crown_of_the_abyssal_sovereign",
+            "stats": {
+                "def": 45,
+                "mag": 60,
+                "luck": 20
+            },
+            "slot": "helmet"
+        }
+    },
+    "visor_of_the_void_walker": {
+        "name": "Visor of the Void Walker",
+        "category": "ARMOR",
+        "id": "visor_of_the_void_walker",
+        "desc": "A sleek helmet that filters out magical blinding light, allowing perfect sight in total darkness. (+50 DEF, +40 SPD, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "void_crystal": 2,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "visor_of_the_void_walker",
+            "stats": {
+                "def": 50,
+                "spd": 40,
+                "luck": 15
+            },
+            "slot": "helmet"
+        }
+    },
+    "voidtouched_grips": {
+        "name": "Void-Touched Grips",
+        "category": "ARMOR",
+        "id": "voidtouched_grips",
+        "desc": "These gloves cause your hands to phase slightly out of the physical plane, maximizing striking speed. (+30 ATK, +35 SPD, +12 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "ghost_essence": 4,
+            "tough_leather": 5
+        },
+        "result": {
+            "id": "voidtouched_grips",
+            "stats": {
+                "atk": 30,
+                "spd": 35,
+                "crit": 12
+            },
+            "slot": "gloves"
+        }
+    },
+    "abyssal_grasp": {
+        "name": "Abyssal Grasp",
+        "category": "ARMOR",
+        "id": "abyssal_grasp",
+        "desc": "Gauntlets that channel raw void energy into your fingertips, leaving trails of black static with every gesture. (+45 ATK, +25 MAG, +20 SPD)",
+        "ingredients": {
+            "void_essence": 1,
+            "dark_matter": 3,
+            "tough_leather": 6
+        },
+        "result": {
+            "id": "abyssal_grasp",
+            "stats": {
+                "atk": 45,
+                "mag": 25,
+                "spd": 20
+            },
+            "slot": "gloves"
+        }
+    },
+    "eelspike_gauntlets": {
+        "name": "Eel-Spike Gauntlets",
+        "category": "ARMOR",
+        "id": "eelspike_gauntlets",
+        "desc": "Gloves covered in tiny, static-conducting scales that shock anything they touch. (+35 ATK, +30 SPD, +18 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "infected_fish": 2,
+            "lightning_shard": 4
+        },
+        "result": {
+            "id": "eelspike_gauntlets",
+            "stats": {
+                "atk": 35,
+                "spd": 30,
+                "crit": 18
+            },
+            "slot": "gloves"
+        }
+    },
+    "touch_of_retribution": {
+        "name": "Touch of Retribution",
+        "category": "ARMOR",
+        "id": "touch_of_retribution",
+        "desc": "Gloves that store kinetic energy from incoming hits and release it on your next attack. (+40 ATK, +25 DEF, +12 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "golem_core": 2,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "touch_of_retribution",
+            "stats": {
+                "atk": 40,
+                "def": 25,
+                "crit": 12
+            },
+            "slot": "gloves"
+        }
+    },
+    "abyssal_treads": {
+        "name": "Abyssal Treads",
+        "category": "ARMOR",
+        "id": "abyssal_treads",
+        "desc": "Boots that leave a trail of fading stars. You walk through hazard zones unaffected. (+35 DEF, +45 SPD, +15 LCK)",
+        "ingredients": {
+            "mythic_fish": 2,
+            "void_crystal": 2,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "abyssal_treads",
+            "stats": {
+                "def": 35,
+                "spd": 45,
+                "luck": 15
+            },
+            "slot": "boots"
+        }
+    },
+    "void_step_sabatons": {
+        "name": "Void Step Sabatons",
+        "category": "ARMOR",
+        "id": "void_step_sabatons",
+        "desc": "Heavy greaves that ignore gravity, allowing the wearer to step cleanly across hazardous terrain without touching it. (+45 DEF, +40 SPD, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "mythic_fish": 3,
+            "ancient_wood": 2
+        },
+        "result": {
+            "id": "void_step_sabatons",
+            "stats": {
+                "def": 45,
+                "spd": 40,
+                "luck": 15
+            },
+            "slot": "boots"
+        }
+    },
+    "infernal_greaves": {
+        "name": "Infernal Greaves",
+        "category": "ARMOR",
+        "id": "infernal_greaves",
+        "desc": "Heavy plated boots that burn red hot, melting ice hazards instantly beneath your feet. (+55 DEF, +25 SPD, +15 ATK)",
+        "ingredients": {
+            "infernal_crown": 1,
+            "dragon_scale": 3,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "infernal_greaves",
+            "stats": {
+                "def": 55,
+                "spd": 25,
+                "atk": 15
+            },
+            "slot": "boots"
+        }
+    },
+    "treads_of_the_damned": {
+        "name": "Treads of the Damned",
+        "category": "ARMOR",
+        "id": "treads_of_the_damned",
+        "desc": "Boots that allow the user to run across walls and vertical surfaces by locking onto kinetic lines. (+40 DEF, +45 SPD)",
+        "ingredients": {
+            "void_essence": 1,
+            "ghost_essence": 4,
+            "tough_leather": 3
+        },
+        "result": {
+            "id": "treads_of_the_damned",
+            "stats": {
+                "def": 40,
+                "spd": 45
+            },
+            "slot": "boots"
+        }
+    },
+    "loop_of_forever": {
+        "name": "Loop of Forever",
+        "category": "ACCESSORY",
+        "id": "loop_of_forever",
+        "desc": "A cosmic band that pulls stray probability toward the wearer, ensuring flawless fortune. (+25 MAG, +30 LCK, +15 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "rare_gem": 3,
+            "gold_pile": 5
+        },
+        "result": {
+            "id": "loop_of_forever",
+            "stats": {
+                "mag": 25,
+                "luck": 30,
+                "crit": 15
+            },
+            "slot": "ring"
+        }
+    },
+    "entropy_loop": {
+        "name": "Entropy Loop",
+        "category": "ACCESSORY",
+        "id": "entropy_loop",
+        "desc": "A dark, shifting ring that turns the bearer's misfortune into destructive critical strikes. (+20 MAG, +25 LCK, +22 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "rare_gem": 2,
+            "ghost_essence": 4
+        },
+        "result": {
+            "id": "entropy_loop",
+            "stats": {
+                "mag": 20,
+                "luck": 25,
+                "crit": 22
+            },
+            "slot": "ring"
+        }
+    },
+    "singularity_band": {
+        "name": "Singularity Band",
+        "category": "ACCESSORY",
+        "id": "singularity_band",
+        "desc": "A gravity-manipulating ring that pulls nearby stray items and gold coins straight into your inventory. (+15 DEF, +40 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "rare_gem": 2,
+            "gold_pile": 100
+        },
+        "result": {
+            "id": "singularity_band",
+            "stats": {
+                "def": 15,
+                "luck": 40
+            },
+            "slot": "ring"
+        }
+    },
+    "band_of_cosmic_fortune": {
+        "name": "Band of Cosmic Fortune",
+        "category": "ACCESSORY",
+        "id": "band_of_cosmic_fortune",
+        "desc": "A beautiful band that aligns the stars in your favor, maximizing reward drops. (+20 MAG, +45 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "rare_gem": 3,
+            "gold_pile": 50
+        },
+        "result": {
+            "id": "band_of_cosmic_fortune",
+            "stats": {
+                "mag": 20,
+                "luck": 45
+            },
+            "slot": "ring"
+        }
+    },
+    "heart_of_the_cosmos": {
+        "name": "Heart of the Cosmos",
+        "category": "ACCESSORY",
+        "id": "heart_of_the_cosmos",
+        "desc": "A swirling mass of nothingness contained inside a silver casing. It beats in sync with your pulse. (+300 HP, +60 MAG, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "mana_crystal": 5,
+            "mystic_thread": 2
+        },
+        "result": {
+            "id": "heart_of_the_cosmos",
+            "stats": {
+                "hp": 300,
+                "mag": 60,
+                "luck": 15
+            },
+            "slot": "amulet"
+        }
+    },
+    "value_60000_zeni": {
+        "name": "Value: 60,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_60000_zeni",
+        "desc": "Recipe: 1 Void Essence, 6 Mana Crystal, 4 Mystic Thread",
+        "ingredients": {},
+        "result": {
+            "id": "value_60000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "value_64000_zeni": {
+        "name": "Value: 64,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_64000_zeni",
+        "desc": "Recipe: 1 Void Essence, 1 Mirror Essence, 4 Mana Crystal",
+        "ingredients": {},
+        "result": {
+            "id": "value_64000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "value_63000_zeni": {
+        "name": "Value: 63,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_63000_zeni",
+        "desc": "Recipe: 1 Void Essence, 4 Dark Matter, 4 Mystic Thread",
+        "ingredients": {},
+        "result": {
+            "id": "value_63000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "veil_of_the_void": {
+        "name": "Veil of the Void",
+        "category": "ACCESSORY",
+        "id": "veil_of_the_void",
+        "desc": "A shifting, dark cloak that absorbs all surrounding light, making the wearer nearly invisible. (+50 DEF, +40 SPD, +20 CRIT)",
+        "ingredients": {
+            "void_essence": 1,
+            "dark_matter": 4,
+            "spider_silk": 8
+        },
+        "result": {
+            "id": "veil_of_the_void",
+            "stats": {
+                "def": 50,
+                "spd": 40,
+                "crit": 20
+            },
+            "slot": "amulet"
+        }
+    },
+    "shroud_of_eternal_night": {
+        "name": "Shroud of Eternal Night",
+        "category": "ACCESSORY",
+        "id": "shroud_of_eternal_night",
+        "desc": "A flowing cloak that completely dampens the sound of your movements and absorbs incoming spell light. (+40 DEF, +50 SPD, +15 LCK)",
+        "ingredients": {
+            "void_essence": 1,
+            "dark_matter": 3,
+            "spider_silk": 12
+        },
+        "result": {
+            "id": "shroud_of_eternal_night",
+            "stats": {
+                "def": 40,
+                "spd": 50,
+                "luck": 15
+            },
+            "slot": "amulet"
+        }
+    },
+    "value_55000_zeni": {
+        "name": "Value: 55,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_55000_zeni",
+        "desc": "Recipe: 1 Void Essence, 2 Mirror Essence, 6 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_55000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_54000_zeni": {
+        "name": "Value: 54,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_54000_zeni",
+        "desc": "Recipe: 1 Void Essence, 2 Infected Heart, 6 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_54000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "wyrmtail_greatsword": {
+        "name": "Wyrmtail Greatsword",
+        "category": "WEAPON",
+        "id": "wyrmtail_greatsword",
+        "desc": "A massive sword crafted from elder dragon components. Pure magic courses through its heavy edge. (+75 ATK, +20 MAG, +10 CRIT)",
+        "ingredients": {
+            "elder_blood": 2,
+            "wyrm_fang": 2,
+            "refined_steel": 5
+        },
+        "result": {
+            "id": "wyrmtail_greatsword",
+            "stats": {
+                "atk": 75,
+                "mag": 20,
+                "crit": 10
+            },
+            "slot": "weapon"
+        }
+    },
+    "titanbone_halberd": {
+        "name": "Titan-Bone Halberd",
+        "category": "WEAPON",
+        "id": "titanbone_halberd",
+        "desc": "A massive polearm that vibrates with the internal power source of a colossal titan. (+80 ATK, +20 DEF)",
+        "ingredients": {
+            "titan_heart": 1,
+            "refined_steel": 6,
+            "ancient_wood": 2
+        },
+        "result": {
+            "id": "titanbone_halberd",
+            "stats": {
+                "atk": 80,
+                "def": 20
+            },
+            "slot": "weapon"
+        }
+    },
+    "dragonfang_claymore": {
+        "name": "Dragon-Fang Claymore",
+        "category": "WEAPON",
+        "id": "dragonfang_claymore",
+        "desc": "A jagged two-handed sword carved entirely from an elder dragon’s tooth. (+85 ATK, +12 CRIT)",
+        "ingredients": {
+            "wyrm_fang": 2,
+            "elder_blood": 1,
+            "refined_steel": 4
+        },
+        "result": {
+            "id": "dragonfang_claymore",
+            "stats": {
+                "atk": 85,
+                "crit": 12
+            },
+            "slot": "weapon"
+        }
+    },
+    "mirroredged_rapier": {
+        "name": "Mirror-Edged Rapier",
+        "category": "WEAPON",
+        "id": "mirroredged_rapier",
+        "desc": "A lightning-fast sword made of crystallized dark power. Its blade looks completely invisible from certain angles. (+65 ATK, +30 SPD, +15 CRIT)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "wyrm_fang": 1,
+            "refined_steel": 4
+        },
+        "result": {
+            "id": "mirroredged_rapier",
+            "stats": {
+                "atk": 65,
+                "spd": 30,
+                "crit": 15
+            },
+            "slot": "weapon"
+        }
+    },
+    "colossal_titan_shield": {
+        "name": "Colossal Titan Shield",
+        "category": "ARMOR",
+        "id": "colossal_titan_shield",
+        "desc": "A towering slab of pure magic rock. It acts as the ultimate power source of defense. (+90 DEF, +250 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "refined_steel": 8,
+            "ancient_wood": 4
+        },
+        "result": {
+            "id": "colossal_titan_shield",
+            "stats": {
+                "def": 90,
+                "hp": 250
+            },
+            "slot": "off_hand"
+        }
+    },
+    "dragonscale_kite_shield": {
+        "name": "Dragon-Scale Kite Shield",
+        "category": "ARMOR",
+        "id": "dragonscale_kite_shield",
+        "desc": "A lightweight but incredibly durable shield built from overlapping, pristine dragon scales. (+95 DEF, +150 HP)",
+        "ingredients": {
+            "dragon_scale": 5,
+            "refined_steel": 4
+        },
+        "result": {
+            "id": "dragonscale_kite_shield",
+            "stats": {
+                "def": 95,
+                "hp": 150
+            },
+            "slot": "off_hand"
+        }
+    },
+    "mirror_buckler": {
+        "name": "Mirror Buckler",
+        "category": "ARMOR",
+        "id": "mirror_buckler",
+        "desc": "A small shield coated with crystallized dark power that can deflect magical beams. (+75 DEF, +20 SPD, +8 LCK)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "refined_steel": 4,
+            "ghost_essence": 2
+        },
+        "result": {
+            "id": "mirror_buckler",
+            "stats": {
+                "def": 75,
+                "spd": 20,
+                "luck": 8
+            },
+            "slot": "off_hand"
+        }
+    },
+    "aegis_of_the_golem_king": {
+        "name": "Aegis of the Golem King",
+        "category": "ARMOR",
+        "id": "aegis_of_the_golem_king",
+        "desc": "A massive slab of enchanted stone that emits a minor defensive shockwave when hit. (+90 DEF, +200 HP, +10 MAG)",
+        "ingredients": {
+            "titan_heart": 1,
+            "golem_core": 2,
+            "iron_shard": 5
+        },
+        "result": {
+            "id": "aegis_of_the_golem_king",
+            "stats": {
+                "def": 90,
+                "hp": 200,
+                "mag": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "dragon_scale_mail": {
+        "name": "Dragon Scale Mail",
+        "category": "ARMOR",
+        "id": "dragon_scale_mail",
+        "desc": "Heavy armor made from nearly indestructible plates. Imbued with blood magic for longevity. (+75 DEF, +200 HP, +10 LCK)",
+        "ingredients": {
+            "elder_blood": 1,
+            "dragon_scale": 4,
+            "tough_leather": 5
+        },
+        "result": {
+            "id": "dragon_scale_mail",
+            "stats": {
+                "def": 75,
+                "hp": 200,
+                "luck": 10
+            },
+            "slot": "armor"
+        }
+    },
+    "garb_of_the_elder_mage": {
+        "name": "Garb of the Elder Mage",
+        "category": "ARMOR",
+        "id": "garb_of_the_elder_mage",
+        "desc": "Robes soaked in pure dragon blood. The fabrics store mana effortlessly. (+50 DEF, +65 MAG, +15 SPD)",
+        "ingredients": {
+            "elder_blood": 1,
+            "mystic_thread": 8,
+            "mana_crystal": 2
+        },
+        "result": {
+            "id": "garb_of_the_elder_mage",
+            "stats": {
+                "def": 50,
+                "mag": 65,
+                "spd": 15
+            },
+            "slot": "armor"
+        }
+    },
+    "titanium_fortified_carapace": {
+        "name": "Titanium Fortified Carapace",
+        "category": "ARMOR",
+        "id": "titanium_fortified_carapace",
+        "desc": "Unbelievably heavy armor reinforced with the power source of a colossal golem. (+100 DEF, +250 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "refined_steel": 10,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "titanium_fortified_carapace",
+            "stats": {
+                "def": 100,
+                "hp": 250
+            },
+            "slot": "armor"
+        }
+    },
+    "scale_coat_of_eternity": {
+        "name": "Scale Coat of Eternity",
+        "category": "ARMOR",
+        "id": "scale_coat_of_eternity",
+        "desc": "A coat made from near-indestructible dragon plates, tailored for high-level agility. (+70 DEF, +150 HP, +20 SPD)",
+        "ingredients": {
+            "dragon_scale": 4,
+            "elder_blood": 1,
+            "spider_silk": 6
+        },
+        "result": {
+            "id": "scale_coat_of_eternity",
+            "stats": {
+                "def": 70,
+                "hp": 150,
+                "spd": 20
+            },
+            "slot": "armor"
+        }
+    },
+    "great_wyrm_helm": {
+        "name": "Great Wyrm Helm",
+        "category": "ARMOR",
+        "id": "great_wyrm_helm",
+        "desc": "A fearsome helmet crafted from a dragon’s skull. Its presence alone terrifies lesser foes. (+45 DEF, +25 ATK, +8 CRIT)",
+        "ingredients": {
+            "wyrm_fang": 1,
+            "dragon_scale": 3,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "great_wyrm_helm",
+            "stats": {
+                "def": 45,
+                "atk": 25,
+                "crit": 8
+            },
+            "slot": "helmet"
+        }
+    },
+    "helm_of_ancient_blood": {
+        "name": "Helm of Ancient Blood",
+        "category": "ARMOR",
+        "id": "helm_of_ancient_blood",
+        "desc": "A terrifying helm infused with legendary blood. It grants the wearer heightened hunting instincts. (+40 DEF, +30 ATK, +10 CRIT)",
+        "ingredients": {
+            "elder_blood": 1,
+            "tough_leather": 4,
+            "sharp_whetstone": 2
+        },
+        "result": {
+            "id": "helm_of_ancient_blood",
+            "stats": {
+                "def": 40,
+                "atk": 30,
+                "crit": 10
+            },
+            "slot": "helmet"
+        }
+    },
+    "crown_of_the_dragon_lord": {
+        "name": "Crown of the Dragon Lord",
+        "category": "ARMOR",
+        "id": "crown_of_the_dragon_lord",
+        "desc": "A crown crafted from the hardened horns and blood of dragons, boosting presence and command. (+45 DEF, +30 MAG, +12 LCK)",
+        "ingredients": {
+            "elder_blood": 1,
+            "dragon_scale": 2,
+            "ancient_wood": 2
+        },
+        "result": {
+            "id": "crown_of_the_dragon_lord",
+            "stats": {
+                "def": 45,
+                "mag": 30,
+                "luck": 12
+            },
+            "slot": "helmet"
+        }
+    },
+    "gaze_of_the_titan": {
+        "name": "Gaze of the Titan",
+        "category": "ARMOR",
+        "id": "gaze_of_the_titan",
+        "desc": "A full-face iron helm powered internally by stone magic, sharpening defensive reactions. (+55 DEF, +80 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "refined_steel": 4,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "gaze_of_the_titan",
+            "stats": {
+                "def": 55,
+                "hp": 80
+            },
+            "slot": "helmet"
+        }
+    },
+    "titan_fist_gauntlets": {
+        "name": "Titan Fist Gauntlets",
+        "category": "ARMOR",
+        "id": "titan_fist_gauntlets",
+        "desc": "Heavy gauntlets that channel the raw strength of a colossal golem into every punch. (+40 ATK, +30 DEF)",
+        "ingredients": {
+            "titan_heart": 1,
+            "refined_steel": 4,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "titan_fist_gauntlets",
+            "stats": {
+                "atk": 40,
+                "def": 30
+            },
+            "slot": "gloves"
+        }
+    },
+    "wyrmscale_grips": {
+        "name": "Wyrmscale Grips",
+        "category": "ARMOR",
+        "id": "wyrmscale_grips",
+        "desc": "Reinforced gloves that prevent weapons from slipping and increase physical attack speed. (+35 ATK, +20 SPD, +8 CRIT)",
+        "ingredients": {
+            "wyrm_fang": 2,
+            "tough_leather": 4,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "wyrmscale_grips",
+            "stats": {
+                "atk": 35,
+                "spd": 20,
+                "crit": 8
+            },
+            "slot": "gloves"
+        }
+    },
+    "bloodsoaked_claws": {
+        "name": "Blood-Soaked Claws",
+        "category": "ARMOR",
+        "id": "bloodsoaked_claws",
+        "desc": "Vicious leather gauntlets tipped with dragon scale fragments that tear through enemy defense. (+40 ATK, +10 CRIT)",
+        "ingredients": {
+            "elder_blood": 1,
+            "dragon_scale": 2,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "bloodsoaked_claws",
+            "stats": {
+                "atk": 40,
+                "crit": 10
+            },
+            "slot": "gloves"
+        }
+    },
+    "value_33000_zeni": {
+        "name": "Value: 33,000 Zeni",
+        "category": "ARMOR",
+        "id": "value_33000_zeni",
+        "desc": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_33000_zeni",
+            "stats": {},
+            "slot": "gloves"
+        }
+    },
+    "striders_of_the_dragon": {
+        "name": "Striders of the Dragon",
+        "category": "ARMOR",
+        "id": "striders_of_the_dragon",
+        "desc": "Swift boots forged with dragon scales, allowing the wearer to sprint through fire unscathed. (+35 DEF, +30 SPD)",
+        "ingredients": {
+            "dragon_scale": 2,
+            "tough_leather": 4,
+            "fire_essence": 2
+        },
+        "result": {
+            "id": "striders_of_the_dragon",
+            "stats": {
+                "def": 35,
+                "spd": 30
+            },
+            "slot": "gloves"
+        }
+    },
+    "titanstomp_sabatons": {
+        "name": "Titan-Stomp Sabatons",
+        "category": "ARMOR",
+        "id": "titanstomp_sabatons",
+        "desc": "Incredibly heavy boots. Every step leaves a shallow crater, giving incredible stability. (+65 DEF, -10 SPD, +100 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "iron_shard": 4,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "titanstomp_sabatons",
+            "stats": {
+                "def": 65,
+                "spd": -10,
+                "hp": 100
+            },
+            "slot": "gloves"
+        }
+    },
+    "striders_of_the_titan": {
+        "name": "Striders of the Titan",
+        "category": "ARMOR",
+        "id": "striders_of_the_titan",
+        "desc": "Heavy plated boots that make the wearer immune to knockback effects. (+55 DEF, +10 ATK, +50 HP)",
+        "ingredients": {
+            "titan_heart": 1,
+            "ancient_wood": 2,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "striders_of_the_titan",
+            "stats": {
+                "def": 55,
+                "atk": 10,
+                "hp": 50
+            },
+            "slot": "gloves"
+        }
+    },
+    "value_32000_zeni": {
+        "name": "Value: 32,000 Zeni",
+        "category": "ARMOR",
+        "id": "value_32000_zeni",
+        "desc": "Recipe: 1 Elder Blood, 4 Tough Leather, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_32000_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "signet_of_the_ancestors": {
+        "name": "Signet of the Ancestors",
+        "category": "ARMOR",
+        "id": "signet_of_the_ancestors",
+        "desc": "A ring housing a fragment of an ancient artifact. It hums with historical power. (+20 ATK, +20 MAG, +12 LCK)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "rare_gem": 2,
+            "gold_pile": 10
+        },
+        "result": {
+            "id": "signet_of_the_ancestors",
+            "stats": {
+                "atk": 20,
+                "mag": 20,
+                "luck": 12
+            },
+            "slot": "boots"
+        }
+    },
+    "ancient_artifact_loop": {
+        "name": "Ancient Artifact Loop",
+        "category": "ARMOR",
+        "id": "ancient_artifact_loop",
+        "desc": "A ring crafted from an actual fragment of an ancient artifact. Its history hums with power. (+25 ATK, +15 LCK)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "rare_gem": 2,
+            "gold_pile": 5
+        },
+        "result": {
+            "id": "ancient_artifact_loop",
+            "stats": {
+                "atk": 25,
+                "luck": 15
+            },
+            "slot": "boots"
+        }
+    },
+    "value_36000_zeni": {
+        "name": "Value: 36,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_36000_zeni",
+        "desc": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Mana Crystal",
+        "ingredients": {},
+        "result": {
+            "id": "value_36000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "value_34000_zeni": {
+        "name": "Value: 34,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_34000_zeni",
+        "desc": "Recipe: 1 Titan Heart, 1 Rare Gem, 20 Pile of Gold",
+        "ingredients": {},
+        "result": {
+            "id": "value_34000_zeni",
+            "stats": {},
+            "slot": "ring"
+        }
+    },
+    "pendant_of_eternity": {
+        "name": "Pendant of Eternity",
+        "category": "ACCESSORY",
+        "id": "pendant_of_eternity",
+        "desc": "A beautiful necklace centered around an ancient artifact shard. It bolsters the wearer’s life force. (+150 HP, +40 DEF, +15 LCK)",
+        "ingredients": {
+            "legendary_shard": 1,
+            "mana_crystal": 3,
+            "mystic_thread": 4
+        },
+        "result": {
+            "id": "pendant_of_eternity",
+            "stats": {
+                "hp": 150,
+                "def": 40,
+                "luck": 15
+            },
+            "slot": "ring"
+        }
+    },
+    "talisman_of_eldritch_blood": {
+        "name": "Talisman of Eldritch Blood",
+        "category": "ACCESSORY",
+        "id": "talisman_of_eldritch_blood",
+        "desc": "A vial of pure magic coursing through ancient veins, worn as a pendant. (+150 HP, +45 MAG, +10 LCK)",
+        "ingredients": {
+            "elder_blood": 1,
+            "mana_crystal": 4,
+            "mystic_thread": 2
+        },
+        "result": {
+            "id": "talisman_of_eldritch_blood",
+            "stats": {
+                "hp": 150,
+                "mag": 45,
+                "luck": 10
+            },
+            "slot": "ring"
+        }
+    },
+    "pendant_of_the_dragon_eye": {
+        "name": "Pendant of the Dragon Eye",
+        "category": "ACCESSORY",
+        "id": "pendant_of_the_dragon_eye",
+        "desc": "A piercing red jewel amulet that reveals structural weaknesses in high-tier targets. (+30 ATK, +15 CRIT)",
+        "ingredients": {
+            "elder_blood": 1,
+            "rare_gem": 1,
+            "mystic_thread": 4
+        },
+        "result": {
+            "id": "pendant_of_the_dragon_eye",
+            "stats": {
+                "atk": 30,
+                "crit": 15
+            },
+            "slot": "ring"
+        }
+    },
+    "value_28000_zeni": {
+        "name": "Value: 28,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_28000_zeni",
+        "desc": "Recipe: 1 Mirror Essence, 2 Dark Matter, 5 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_28000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_29000_zeni": {
+        "name": "Value: 29,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_29000_zeni",
+        "desc": "Recipe: 1 Mirror Essence, 3 Dark Matter, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_29000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_30000_zeni": {
+        "name": "Value: 30,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_30000_zeni",
+        "desc": "Recipe: 1 Mirror Essence, 4 Dark Matter, 5 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_30000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_31000_zeni": {
+        "name": "Value: 31,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_31000_zeni",
+        "desc": "Recipe: 3 Dragon Scale, 1 Elder Blood, 5 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_31000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "necrotic_carver": {
+        "name": "Necrotic Carver",
+        "category": "WEAPON",
+        "id": "necrotic_carver",
+        "desc": "A jagged blade containing the soul of a powerful necromancer. It hungers for life force. (+50 ATK, +30 MAG)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "ghost_essence": 2,
+            "refined_steel": 3
+        },
+        "result": {
+            "id": "necrotic_carver",
+            "stats": {
+                "atk": 50,
+                "mag": 30
+            },
+            "slot": "weapon"
+        }
+    },
+    "lichs_bone_wand": {
+        "name": "Lich's Bone Wand",
+        "category": "WEAPON",
+        "id": "lichs_bone_wand",
+        "desc": "A sinister wand harboring the soul of a powerful necromancer. Spells cast feel chilling. (+15 ATK, +60 MAG)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "mana_crystal": 4,
+            "ancient_wood": 2
+        },
+        "result": {
+            "id": "lichs_bone_wand",
+            "stats": {
+                "atk": 15,
+                "mag": 60
+            },
+            "slot": "weapon"
+        }
+    },
+    "infected_hive_needle": {
+        "name": "Infected Hive Needle",
+        "category": "WEAPON",
+        "id": "infected_hive_needle",
+        "desc": "A thin, lethal rapier forged from concentrated Hive crystals. Leaves debilitating wounds. (+45 ATK, +25 SPD, +10 CRIT)",
+        "ingredients": {
+            "infected_shard": 2,
+            "refined_steel": 4,
+            "mystic_thread": 2
+        },
+        "result": {
+            "id": "infected_hive_needle",
+            "stats": {
+                "atk": 45,
+                "spd": 25,
+                "crit": 10
+            },
+            "slot": "weapon"
+        }
+    },
+    "dark_matter_greatsword": {
+        "name": "Dark Matter Greatsword",
+        "category": "WEAPON",
+        "id": "dark_matter_greatsword",
+        "desc": "A blade forged from matter heavier than your student loans. Every swing carries immense kinetic energy. (+65 ATK, -5 SPD)",
+        "ingredients": {
+            "dark_matter": 3,
+            "refined_steel": 4,
+            "sharp_whetstone": 1
+        },
+        "result": {
+            "id": "dark_matter_greatsword",
+            "stats": {
+                "atk": 65,
+                "spd": -5
+            },
+            "slot": "weapon"
+        }
+    },
+    "cursed_mirror_buckler": {
+        "name": "Cursed Mirror Buckler",
+        "category": "ARMOR",
+        "id": "cursed_mirror_buckler",
+        "desc": "A small shield made of hardened dark glass. It occasionally reflects spell damage. (+45 DEF, +10 LCK)",
+        "ingredients": {
+            "mirror_essence": 1,
+            "iron_shard": 3,
+            "ghost_essence": 2
+        },
+        "result": {
+            "id": "cursed_mirror_buckler",
+            "stats": {
+                "def": 45,
+                "luck": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "spiked_eel_buckler": {
+        "name": "Spiked Eel Buckler",
+        "category": "ARMOR",
+        "id": "spiked_eel_buckler",
+        "desc": "A small shield made from electric eel bones that shocks attackers on successful blocks. (+40 DEF, +15 SPD)",
+        "ingredients": {
+            "infected_fish": 1,
+            "lightning_shard": 3,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "spiked_eel_buckler",
+            "stats": {
+                "def": 40,
+                "spd": 15
+            },
+            "slot": "off_hand"
+        }
+    },
+    "phylactery_aegis": {
+        "name": "Phylactery Aegis",
+        "category": "ARMOR",
+        "id": "phylactery_aegis",
+        "desc": "A dark relic shield that stores the souls of fallen enemies to boost its defensive barrier. (+55 DEF, +100 HP, +10 MAG)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "iron_shard": 4,
+            "ghost_essence": 2
+        },
+        "result": {
+            "id": "phylactery_aegis",
+            "stats": {
+                "def": 55,
+                "hp": 100,
+                "mag": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "shield_of_restless_souls": {
+        "name": "Shield of Restless Souls",
+        "category": "ARMOR",
+        "id": "shield_of_restless_souls",
+        "desc": "A frightening shield made of woven ancient wood and trapped ethereal residue. (+50 DEF, +80 HP)",
+        "ingredients": {
+            "ancient_wood": 2,
+            "ghost_essence": 2,
+            "iron_shard": 3
+        },
+        "result": {
+            "id": "shield_of_restless_souls",
+            "stats": {
+                "def": 50,
+                "hp": 80
+            },
+            "slot": "off_hand"
+        }
+    },
+    "corrupted_eel_carapace": {
+        "name": "Corrupted Eel Carapace",
+        "category": "ARMOR",
+        "id": "corrupted_eel_carapace",
+        "desc": "Light armor crafted from an eel twisting with hazard energy. Shockingly durable. (+50 DEF, +100 HP, +15 SPD)",
+        "ingredients": {
+            "infected_fish": 2,
+            "spider_silk": 5,
+            "lightning_shard": 2
+        },
+        "result": {
+            "id": "corrupted_eel_carapace",
+            "stats": {
+                "def": 50,
+                "hp": 100,
+                "spd": 15
+            },
+            "slot": "armor"
+        }
+    },
+    "lichskin_vestments": {
+        "name": "Lich-Skin Vestments",
+        "category": "ARMOR",
+        "id": "lichskin_vestments",
+        "desc": "Ethereal robes woven with spirit residue. Physical attacks pass right through the loose fibers. (+45 DEF, +80 HP, +25 MAG)",
+        "ingredients": {
+            "ghost_essence": 3,
+            "mystic_thread": 5,
+            "dark_matter": 2
+        },
+        "result": {
+            "id": "lichskin_vestments",
+            "stats": {
+                "def": 45,
+                "hp": 80,
+                "mag": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "carapace_of_the_corrupted_eel": {
+        "name": "Carapace of the Corrupted Eel",
+        "category": "ARMOR",
+        "id": "carapace_of_the_corrupted_eel",
+        "desc": "Sleek armor made from an eel twisting with hazard energy. Highly resistant to elements. (+55 DEF, +120 HP, +10 SPD)",
+        "ingredients": {
+            "infected_fish": 2,
+            "tough_leather": 4,
+            "lightning_shard": 2
+        },
+        "result": {
+            "id": "carapace_of_the_corrupted_eel",
+            "stats": {
+                "def": 55,
+                "hp": 120,
+                "spd": 10
+            },
+            "slot": "armor"
+        }
+    },
+    "hivecore_plate": {
+        "name": "Hive-Core Plate",
+        "category": "ARMOR",
+        "id": "hivecore_plate",
+        "desc": "Heavy plate armor centered around a pulsing, corrupted heart. It regenerates minor damage over time. (+65 DEF, +150 HP)",
+        "ingredients": {
+            "infected_heart": 1,
+            "infected_shard": 2,
+            "refined_steel": 5
+        },
+        "result": {
+            "id": "hivecore_plate",
+            "stats": {
+                "def": 65,
+                "hp": 150
+            },
+            "slot": "armor"
+        }
+    },
+    "hood_of_the_restless": {
+        "name": "Hood of the Restless",
+        "category": "ARMOR",
+        "id": "hood_of_the_restless",
+        "desc": "A dark, tattered hood radiating an ethereal residue. It sharpens your focus. (+20 DEF, +35 MAG, +8 CRIT)",
+        "ingredients": {
+            "ghost_essence": 3,
+            "dark_matter": 2,
+            "mystic_thread": 4
+        },
+        "result": {
+            "id": "hood_of_the_restless",
+            "stats": {
+                "def": 20,
+                "mag": 35,
+                "crit": 8
+            },
+            "slot": "helmet"
+        }
+    },
+    "crown_of_restless_spirits": {
+        "name": "Crown of Restless Spirits",
+        "category": "ARMOR",
+        "id": "crown_of_restless_spirits",
+        "desc": "A circlet wrapped in a swirling chill. It lets you hear threats right before they strike. (+20 DEF, +30 MAG, +10 LCK)",
+        "ingredients": {
+            "ghost_essence": 2,
+            "dark_matter": 2,
+            "mana_crystal": 2
+        },
+        "result": {
+            "id": "crown_of_restless_spirits",
+            "stats": {
+                "def": 20,
+                "mag": 30,
+                "luck": 10
+            },
+            "slot": "helmet"
+        }
+    },
+    "gloom_hood": {
+        "name": "Gloom Hood",
+        "category": "ARMOR",
+        "id": "gloom_hood",
+        "desc": "A dark hood that is visually heavier than your student loans. It hides your face in absolute shadow. (+25 DEF, +20 MAG, +12 LCK)",
+        "ingredients": {
+            "dark_matter": 2,
+            "spider_silk": 4,
+            "ghost_essence": 2
+        },
+        "result": {
+            "id": "gloom_hood",
+            "stats": {
+                "def": 25,
+                "mag": 20,
+                "luck": 12
+            },
+            "slot": "helmet"
+        }
+    },
+    "visor_of_the_necromancer": {
+        "name": "Visor of the Necromancer",
+        "category": "ARMOR",
+        "id": "visor_of_the_necromancer",
+        "desc": "A cold iron helm that lets you see the remaining life points of your targets perfectly. (+30 DEF, +20 MAG, +10 CRIT)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "iron_shard": 3,
+            "mana_crystal": 2
+        },
+        "result": {
+            "id": "visor_of_the_necromancer",
+            "stats": {
+                "def": 30,
+                "mag": 20,
+                "crit": 10
+            },
+            "slot": "helmet"
+        }
+    },
+    "hivemind_mitts": {
+        "name": "Hive-Mind Mitts",
+        "category": "ARMOR",
+        "id": "hivemind_mitts",
+        "desc": "Gloves coated in concentrated Hive essence. They twitch with a life of their own, speeding up your attacks. (+20 ATK, +20 SPD)",
+        "ingredients": {
+            "infected_shard": 2,
+            "tough_leather": 3,
+            "spider_silk": 4
+        },
+        "result": {
+            "id": "hivemind_mitts",
+            "stats": {
+                "atk": 20,
+                "spd": 20
+            },
+            "slot": "gloves"
+        }
+    },
+    "graveside_wraps": {
+        "name": "Graveside Wraps",
+        "category": "ARMOR",
+        "id": "graveside_wraps",
+        "desc": "Tattered hand wraps that carry an ethereal residue, making weapon swings completely silent. (+20 ATK, +20 SPD, +8 CRIT)",
+        "ingredients": {
+            "ghost_essence": 2,
+            "spider_silk": 4,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "graveside_wraps",
+            "stats": {
+                "atk": 20,
+                "spd": 20,
+                "crit": 8
+            },
+            "slot": "gloves"
+        }
+    },
+    "grips_of_the_forgotten": {
+        "name": "Grips of the Forgotten",
+        "category": "ARMOR",
+        "id": "grips_of_the_forgotten",
+        "desc": "Gauntlets fashioned from petrified ancient wood, offering incredible crushing grip power. (+30 ATK, +15 DEF)",
+        "ingredients": {
+            "ancient_wood": 2,
+            "tough_leather": 4,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "grips_of_the_forgotten",
+            "stats": {
+                "atk": 30,
+                "def": 15
+            },
+            "slot": "gloves"
+        }
+    },
+    "dark_matter_gauntlets": {
+        "name": "Dark Matter Gauntlets",
+        "category": "ARMOR",
+        "id": "dark_matter_gauntlets",
+        "desc": "Heavy gloves that increase the impact weight of your standard physical strikes. (+35 ATK, +15 DEF)",
+        "ingredients": {
+            "dark_matter": 2,
+            "tough_leather": 4,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "dark_matter_gauntlets",
+            "stats": {
+                "atk": 35,
+                "def": 15
+            },
+            "slot": "gloves"
+        }
+    },
+    "value_14000_zeni": {
+        "name": "Value: 14,000 Zeni",
+        "category": "ARMOR",
+        "id": "value_14000_zeni",
+        "desc": "Recipe: 3 Ancient Wood, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_14000_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_15000_zeni": {
+        "name": "Value: 15,000 Zeni",
+        "category": "CLOTHING",
+        "id": "value_15000_zeni",
+        "desc": "Recipe: 3 Ghost Essence, 5 Spider Silk, 1 Mystic Thread",
+        "ingredients": {},
+        "result": {
+            "id": "value_15000_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_15500_zeni": {
+        "name": "Value: 15,500 Zeni",
+        "category": "CLOTHING",
+        "id": "value_15500_zeni",
+        "desc": "Recipe: 4 Mystic Thread, 6 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_15500_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_14500_zeni": {
+        "name": "Value: 14,500 Zeni",
+        "category": "CLOTHING",
+        "id": "value_14500_zeni",
+        "desc": "Recipe: 2 Infected Shard, 6 Spider Silk, 1 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_14500_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "hivecore_band": {
+        "name": "Hive-Core Band",
+        "category": "ARMOR",
+        "id": "hivecore_band",
+        "desc": "A ring made from a pulsing, corrupted heart. It’s still beating... barely. (+10 ATK, +12 CRIT, +8 LCK)",
+        "ingredients": {
+            "infected_heart": 1,
+            "rare_gem": 1,
+            "gold_pile": 50
+        },
+        "result": {
+            "id": "hivecore_band",
+            "stats": {
+                "atk": 10,
+                "crit": 12,
+                "luck": 8
+            },
+            "slot": "boots"
+        }
+    },
+    "pulsing_heart_loop": {
+        "name": "Pulsing Heart Loop",
+        "category": "ARMOR",
+        "id": "pulsing_heart_loop",
+        "desc": "A disturbing ring housing a tiny pulsing heart. It keeps your blood pumping at peak efficiency. (+120 HP, +8 CRIT)",
+        "ingredients": {
+            "infected_heart": 1,
+            "rare_gem": 1,
+            "gold_pile": 10
+        },
+        "result": {
+            "id": "pulsing_heart_loop",
+            "stats": {
+                "hp": 120,
+                "crit": 8
+            },
+            "slot": "boots"
+        }
+    },
+    "lichs_signet": {
+        "name": "Lich's Signet",
+        "category": "ARMOR",
+        "id": "lichs_signet",
+        "desc": "A cold iron ring linked to a necromancer’s core, boosting dark magic capabilities. (+35 MAG, +5 CRIT)",
+        "ingredients": {
+            "lich_phylactery": 1,
+            "rare_gem": 1,
+            "gold_pile": 50
+        },
+        "result": {
+            "id": "lichs_signet",
+            "stats": {
+                "mag": 35,
+                "crit": 5
+            },
+            "slot": "boots"
+        }
+    },
+    "ethereal_band": {
+        "name": "Ethereal Band",
+        "category": "ARMOR",
+        "id": "ethereal_band",
+        "desc": "A ring made of solid mystic light that slightly uncouples your finger from physical physics. (+15 MAG, +20 LCK)",
+        "ingredients": {
+            "mystic_thread": 2,
+            "rare_gem": 1,
+            "gold_pile": 20
+        },
+        "result": {
+            "id": "ethereal_band",
+            "stats": {
+                "mag": 15,
+                "luck": 20
+            },
+            "slot": "boots"
+        }
+    },
+    "crownjewel_choker": {
+        "name": "Crown-Jewel Choker",
+        "category": "ACCESSORY",
+        "id": "crownjewel_choker",
+        "desc": "A necklace threaded with mystic light. It casts a protective barrier around the neck. (+80 HP, +25 DEF, +12 MAG)",
+        "ingredients": {
+            "mystic_thread": 3,
+            "rare_gem": 2,
+            "mana_crystal": 4
+        },
+        "result": {
+            "id": "crownjewel_choker",
+            "stats": {
+                "hp": 80,
+                "def": 25,
+                "mag": 12
+            },
+            "slot": "amulet"
+        }
+    },
+    "choker_of_mystic_light": {
+        "name": "Choker of Mystic Light",
+        "category": "ACCESSORY",
+        "id": "choker_of_mystic_light",
+        "desc": "A beautiful necklace that glows with its own internal light, completely shielding your mind. (+30 MAG, +15 LCK)",
+        "ingredients": {
+            "mystic_thread": 2,
+            "rare_gem": 2,
+            "mana_crystal": 2
+        },
+        "result": {
+            "id": "choker_of_mystic_light",
+            "stats": {
+                "mag": 30,
+                "luck": 15
+            },
+            "slot": "amulet"
+        }
+    },
+    "value_16500_zeni": {
+        "name": "Value: 16,500 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_16500_zeni",
+        "desc": "Recipe: 1 Infected Shard, 1 Pulsing Heart, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_16500_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "value_18000_zeni": {
+        "name": "Value: 18,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_18000_zeni",
+        "desc": "Recipe: 1 Lich Phylactery, 3 Mana Crystal, 2 Mystic Thread",
+        "ingredients": {},
+        "result": {
+            "id": "value_18000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "golem_fist_smasher": {
+        "name": "Golem Fist Smasher",
+        "category": "WEAPON",
+        "id": "golem_fist_smasher",
+        "desc": "A mace utilizing a pulsating heart of stone and magic as its head. (+40 ATK)",
+        "ingredients": {
+            "golem_core": 1,
+            "refined_steel": 4
+        },
+        "result": {
+            "id": "golem_fist_smasher",
+            "stats": {
+                "atk": 40
+            },
+            "slot": "weapon"
+        }
+    },
+    "golemcore_mace": {
+        "name": "Golem-Core Mace",
+        "category": "WEAPON",
+        "id": "golemcore_mace",
+        "desc": "A heavy mace fueled by a pulsating heart of stone and magic, dealing heavy blunt damage. (+45 ATK)",
+        "ingredients": {
+            "golem_core": 1,
+            "iron_shard": 5,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "golemcore_mace",
+            "stats": {
+                "atk": 45
+            },
+            "slot": "weapon"
+        }
+    },
+    "elemental_ice_brand": {
+        "name": "Elemental Ice Brand",
+        "category": "WEAPON",
+        "id": "elemental_ice_brand",
+        "desc": "A freezing blade embedded with small pieces of elemental ice. (+35 ATK, +10 MAG)",
+        "ingredients": {
+            "ice_shard": 4,
+            "refined_steel": 3,
+            "sharp_whetstone": 1
+        },
+        "result": {
+            "id": "elemental_ice_brand",
+            "stats": {
+                "atk": 35,
+                "mag": 10
+            },
+            "slot": "weapon"
+        }
+    },
+    "lightning_shocksaber": {
+        "name": "Lightning Shock-Saber",
+        "category": "WEAPON",
+        "id": "lightning_shocksaber",
+        "desc": "A rapid sword packed with small pieces of elemental lightning, ensuring swift critical strikes. (+30 ATK, +15 SPD, +8 CRIT)",
+        "ingredients": {
+            "lightning_shard": 4,
+            "refined_steel": 3,
+            "sharp_whetstone": 1
+        },
+        "result": {
+            "id": "lightning_shocksaber",
+            "stats": {
+                "atk": 30,
+                "spd": 15,
+                "crit": 8
+            },
+            "slot": "weapon"
+        }
+    },
+    "mythril_wall": {
+        "name": "Mythril Wall",
+        "category": "ARMOR",
+        "id": "mythril_wall",
+        "desc": "A brilliant blue kite shield that is surprisingly heavy but entirely unyielding. (+50 DEF)",
+        "ingredients": {
+            "mythril_ore": 5,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "mythril_wall",
+            "stats": {
+                "def": 50
+            },
+            "slot": "off_hand"
+        }
+    },
+    "mythril_shield": {
+        "name": "Mythril Shield",
+        "category": "ARMOR",
+        "id": "mythril_shield",
+        "desc": "A gorgeous, brilliant blue shield that easily deflects standard magical and physical impacts. (+55 DEF)",
+        "ingredients": {
+            "mythril_ore": 4,
+            "iron_shard": 3
+        },
+        "result": {
+            "id": "mythril_shield",
+            "stats": {
+                "def": 55
+            },
+            "slot": "off_hand"
+        }
+    },
+    "golem_stone_bastion": {
+        "name": "Golem Stone Bastion",
+        "category": "ARMOR",
+        "id": "golem_stone_bastion",
+        "desc": "A heavy shield centered around a golem core. It is unyielding against crushing physical blows. (+65 DEF, +50 HP)",
+        "ingredients": {
+            "golem_core": 1,
+            "refined_steel": 4,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "golem_stone_bastion",
+            "stats": {
+                "def": 65,
+                "hp": 50
+            },
+            "slot": "off_hand"
+        }
+    },
+    "demonhide_target_shield": {
+        "name": "Demon-Hide Target Shield",
+        "category": "ARMOR",
+        "id": "demonhide_target_shield",
+        "desc": "A small, nimble shield layered with tough, resilient skin from a demon. (+45 DEF, +10 SPD)",
+        "ingredients": {
+            "demon_hide": 3,
+            "iron_shard": 2,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "demonhide_target_shield",
+            "stats": {
+                "def": 45,
+                "spd": 10
+            },
+            "slot": "off_hand"
+        }
+    },
+    "demon_scale_tunic": {
+        "name": "Demon Scale Tunic",
+        "category": "ARMOR",
+        "id": "demon_scale_tunic",
+        "desc": "A resilient tunic fashioned from tough demon skin. (+40 DEF, +80 HP)",
+        "ingredients": {
+            "demon_hide": 4,
+            "tough_leather": 3
+        },
+        "result": {
+            "id": "demon_scale_tunic",
+            "stats": {
+                "def": 40,
+                "hp": 80
+            },
+            "slot": "armor"
+        }
+    },
+    "demon_skin_vest": {
+        "name": "Demon Skin Vest",
+        "category": "ARMOR",
+        "id": "demon_skin_vest",
+        "desc": "A tough, resilient vest made of demon hide. It provides natural magic resistance. (+45 DEF, +60 HP)",
+        "ingredients": {
+            "demon_hide": 3,
+            "tough_leather": 4
+        },
+        "result": {
+            "id": "demon_skin_vest",
+            "stats": {
+                "def": 45,
+                "hp": 60
+            },
+            "slot": "armor"
+        }
+    },
+    "mythril_chainshirt": {
+        "name": "Mythril Chainshirt",
+        "category": "ARMOR",
+        "id": "mythril_chainshirt",
+        "desc": "Lightweight chain armor forged from pure mythril ore. Surprisingly heavy but covers well. (+50 DEF, +40 HP, +10 SPD)",
+        "ingredients": {
+            "mythril_ore": 5,
+            "spider_silk": 4,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "mythril_chainshirt",
+            "stats": {
+                "def": 50,
+                "hp": 40,
+                "spd": 10
+            },
+            "slot": "armor"
+        }
+    },
+    "value_11200_zeni": {
+        "name": "Value: 11,200 Zeni",
+        "category": "ARMOR",
+        "id": "value_11200_zeni",
+        "desc": "Recipe: 2 Fire Essence, 6 Refined Steel, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_11200_zeni",
+            "stats": {},
+            "slot": "armor"
+        }
+    },
+    "crown_of_static": {
+        "name": "Crown of Static",
+        "category": "ARMOR",
+        "id": "crown_of_static",
+        "desc": "A circlet crafted from concentrated magic. It smells like static electricity. (+15 DEF, +25 MAG)",
+        "ingredients": {
+            "mana_crystal": 3,
+            "lightning_shard": 2
+        },
+        "result": {
+            "id": "crown_of_static",
+            "stats": {
+                "def": 15,
+                "mag": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "circlet_of_static": {
+        "name": "Circlet of Static",
+        "category": "ARMOR",
+        "id": "circlet_of_static",
+        "desc": "A shiny circlet made from concentrated magic crystals. It continuously smells like static. (+15 DEF, +30 MAG)",
+        "ingredients": {
+            "mana_crystal": 2,
+            "lightning_shard": 2
+        },
+        "result": {
+            "id": "circlet_of_static",
+            "stats": {
+                "def": 15,
+                "mag": 30
+            },
+            "slot": "armor"
+        }
+    },
+    "helm_of_fire_essence": {
+        "name": "Helm of Fire Essence",
+        "category": "ARMOR",
+        "id": "helm_of_fire_essence",
+        "desc": "A glowing iron helm hosting a flickering flame that sharpens your battle senses. (+25 DEF, +15 ATK, +5 CRIT)",
+        "ingredients": {
+            "fire_essence": 2,
+            "iron_shard": 3,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "helm_of_fire_essence",
+            "stats": {
+                "def": 25,
+                "atk": 15,
+                "crit": 5
+            },
+            "slot": "armor"
+        }
+    },
+    "mask_of_concentrated_magic": {
+        "name": "Mask of Concentrated Magic",
+        "category": "ARMOR",
+        "id": "mask_of_concentrated_magic",
+        "desc": "A complete iron mask containing a concentrated magic core that constantly smells like static. (+20 DEF, +25 MAG)",
+        "ingredients": {
+            "mana_crystal": 2,
+            "iron_shard": 4
+        },
+        "result": {
+            "id": "mask_of_concentrated_magic",
+            "stats": {
+                "def": 20,
+                "mag": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "value_6500_zeni": {
+        "name": "Value: 6,500 Zeni",
+        "category": "CLOTHING",
+        "id": "value_6500_zeni",
+        "desc": "Recipe: 2 Fire Essence, 2 Fire Shard, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_6500_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_6800_zeni": {
+        "name": "Value: 6,800 Zeni",
+        "category": "ARMOR",
+        "id": "value_6800_zeni",
+        "desc": "Recipe: 2 Mana Crystal, 3 Mana Dew, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_6800_zeni",
+            "stats": {},
+            "slot": "gloves"
+        }
+    },
+    "value_7000_zeni": {
+        "name": "Value: 7,000 Zeni",
+        "category": "ARMOR",
+        "id": "value_7000_zeni",
+        "desc": "Recipe: 2 Demon Hide, 3 Tough Leather, 2 Iron Shard",
+        "ingredients": {},
+        "result": {
+            "id": "value_7000_zeni",
+            "stats": {},
+            "slot": "gloves"
+        }
+    },
+    "value_6900_zeni": {
+        "name": "Value: 6,900 Zeni",
+        "category": "ARMOR",
+        "id": "value_6900_zeni",
+        "desc": "Recipe: 3 Ice Shard, 3 Tough Leather, 2 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_6900_zeni",
+            "stats": {},
+            "slot": "gloves"
+        }
+    },
+    "bear_claw_sabatons": {
+        "name": "Bear Claw Sabatons",
+        "category": "ARMOR",
+        "id": "bear_claw_sabatons",
+        "desc": "Heavy iron boots tipped with sharp, dangerous bear claws for lethal kick attacks. (+20 DEF, +15 ATK)",
+        "ingredients": {
+            "bear_claw": 2,
+            "iron_shard": 3,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "bear_claw_sabatons",
+            "stats": {
+                "def": 20,
+                "atk": 15
+            },
+            "slot": "gloves"
+        }
+    },
+    "value_7200_zeni": {
+        "name": "Value: 7,200 Zeni",
+        "category": "ARMOR",
+        "id": "value_7200_zeni",
+        "desc": "Recipe: 2 Bear Claws, 2 Tough Leather, 2 Iron Shard",
+        "ingredients": {},
+        "result": {
+            "id": "value_7200_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_7400_zeni": {
+        "name": "Value: 7,400 Zeni",
+        "category": "ARMOR",
+        "id": "value_7400_zeni",
+        "desc": "Recipe: 3 Lightning Shard, 3 Iron Shard, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_7400_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_7600_zeni": {
+        "name": "Value: 7,600 Zeni",
+        "category": "ARMOR",
+        "id": "value_7600_zeni",
+        "desc": "Recipe: 3 Mythril Ore, 2 Tough Leather, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_7600_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "rainbow_hoop": {
+        "name": "Rainbow Hoop",
+        "category": "ARMOR",
+        "id": "rainbow_hoop",
+        "desc": "A beautifully colored ring that sparkles with immense value, granting high good fortune. (+15 LCK, +5 CRIT)",
+        "ingredients": {
+            "rare_fish": 1,
+            "rare_gem": 1,
+            "gold_pile": 20
+        },
+        "result": {
+            "id": "rainbow_hoop",
+            "stats": {
+                "luck": 15,
+                "crit": 5
+            },
+            "slot": "boots"
+        }
+    },
+    "value_8200_zeni": {
+        "name": "Value: 8,200 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_8200_zeni",
+        "desc": "Recipe: 1 Rainbow Trout, 1 Rare Gem, 10 Pile of Gold",
+        "ingredients": {},
+        "result": {
+            "id": "value_8200_zeni",
+            "stats": {},
+            "slot": "ring"
+        }
+    },
+    "value_8000_zeni": {
+        "name": "Value: 8,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_8000_zeni",
+        "desc": "Recipe: 1 Rare Gem, 50 Pile of Gold",
+        "ingredients": {},
+        "result": {
+            "id": "value_8000_zeni",
+            "stats": {},
+            "slot": "ring"
+        }
+    },
+    "value_8500_zeni": {
+        "name": "Value: 8,500 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_8500_zeni",
+        "desc": "Recipe: 1 Golem Core, 20 Pile of Gold, 2 Iron Shard",
+        "ingredients": {},
+        "result": {
+            "id": "value_8500_zeni",
+            "stats": {},
+            "slot": "ring"
+        }
+    },
+    "talisman_of_flowing_mana": {
+        "name": "Talisman of Flowing Mana",
+        "category": "ACCESSORY",
+        "id": "talisman_of_flowing_mana",
+        "desc": "A simple charm containing magic Gatorade that constantly refreshes your magical energy. (+50 HP, +20 MAG)",
+        "ingredients": {
+            "mana_dew": 4,
+            "mystic_thread": 2
+        },
+        "result": {
+            "id": "talisman_of_flowing_mana",
+            "stats": {
+                "hp": 50,
+                "mag": 20
+            },
+            "slot": "ring"
+        }
+    },
+    "value_6400_zeni": {
+        "name": "Value: 6,400 Zeni",
+        "category": "CLOTHING",
+        "id": "value_6400_zeni",
+        "desc": "Recipe: 3 Lightning Shard, 6 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_6400_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_6200_zeni": {
+        "name": "Value: 6,200 Zeni",
+        "category": "CLOTHING",
+        "id": "value_6200_zeni",
+        "desc": "Recipe: 3 Fire Essence, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_6200_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_6000_zeni": {
+        "name": "Value: 6,000 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_6000_zeni",
+        "desc": "Recipe: 1 Rainbow Trout, 4 Spider Silk, 1 Mana Dew",
+        "ingredients": {},
+        "result": {
+            "id": "value_6000_zeni",
+            "stats": {},
+            "slot": "amulet"
+        }
+    },
+    "value_6300_zeni": {
+        "name": "Value: 6,300 Zeni",
+        "category": "CLOTHING",
+        "id": "value_6300_zeni",
+        "desc": "Recipe: 3 Ice Shard, 5 Spider Silk, 1 Mana Crystal",
+        "ingredients": {},
+        "result": {
+            "id": "value_6300_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "sharpened_iron_cleaver": {
+        "name": "Sharpened Iron Cleaver",
+        "category": "WEAPON",
+        "id": "sharpened_iron_cleaver",
+        "desc": "A basic cleaver built from standard metal fragments. Gets the job done. (+15 ATK)",
+        "ingredients": {
+            "iron_shard": 6,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "sharpened_iron_cleaver",
+            "stats": {
+                "atk": 15
+            },
+            "slot": "weapon"
+        }
+    },
+    "scrap_metal_dagger": {
+        "name": "Scrap Metal Dagger",
+        "category": "WEAPON",
+        "id": "scrap_metal_dagger",
+        "desc": "A quick dagger put together from crude metal fragments. Gets the job done easily. (+12 ATK, +5 SPD)",
+        "ingredients": {
+            "iron_shard": 4,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "scrap_metal_dagger",
+            "stats": {
+                "atk": 12,
+                "spd": 5
+            },
+            "slot": "weapon"
+        }
+    },
+    "antlertipped_spear": {
+        "name": "Antler-Tipped Spear",
+        "category": "WEAPON",
+        "id": "antlertipped_spear",
+        "desc": "A basic wooden spear tipped with deer antlers, useful for mid-range hunting strikes. (+16 ATK)",
+        "ingredients": {
+            "deer_antler": 2,
+            "iron_shard": 3,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "antlertipped_spear",
+            "stats": {
+                "atk": 16
+            },
+            "slot": "weapon"
+        }
+    },
+    "heavy_iron_spikemaul": {
+        "name": "Heavy Iron Spikemaul",
+        "category": "WEAPON",
+        "id": "heavy_iron_spikemaul",
+        "desc": "A heavy club driven full of metal fragments. It is slow but breaks armor easily. (+22 ATK, -3 SPD)",
+        "ingredients": {
+            "iron_shard": 7,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "heavy_iron_spikemaul",
+            "stats": {
+                "atk": 22,
+                "spd": -3
+            },
+            "slot": "weapon"
+        }
+    },
+    "reinforcement_platter": {
+        "name": "Reinforcement Platter",
+        "category": "ARMOR",
+        "id": "reinforcement_platter",
+        "desc": "A makeshift shield made from scrap iron shards layered together. (+18 DEF)",
+        "ingredients": {
+            "iron_shard": 5,
+            "gunpowder": 1
+        },
+        "result": {
+            "id": "reinforcement_platter",
+            "stats": {
+                "def": 18
+            },
+            "slot": "off_hand"
+        }
+    },
+    "wooden_buckler": {
+        "name": "Wooden Buckler",
+        "category": "ARMOR",
+        "id": "wooden_buckler",
+        "desc": "A crude shield made from deer antlers and scrap leather. Good for basic blocking. (+15 DEF)",
+        "ingredients": {
+            "deer_antler": 2,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "wooden_buckler",
+            "stats": {
+                "def": 15
+            },
+            "slot": "off_hand"
+        }
+    },
+    "iron_scaffold_shield": {
+        "name": "Iron Scaffold Shield",
+        "category": "ARMOR",
+        "id": "iron_scaffold_shield",
+        "desc": "A heavy square shield made completely out of compiled metal fragments. (+22 DEF)",
+        "ingredients": {
+            "iron_shard": 6,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "iron_scaffold_shield",
+            "stats": {
+                "def": 22
+            },
+            "slot": "off_hand"
+        }
+    },
+    "scrap_platter_target": {
+        "name": "Scrap Platter Target",
+        "category": "ARMOR",
+        "id": "scrap_platter_target",
+        "desc": "A tiny round buckler fashioned from a single large piece of scrap iron. (+14 DEF, +4 SPD)",
+        "ingredients": {
+            "iron_shard": 3,
+            "spider_silk": 2,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "scrap_platter_target",
+            "stats": {
+                "def": 14,
+                "spd": 4
+            },
+            "slot": "off_hand"
+        }
+    },
+    "hunters_jerkin": {
+        "name": "Hunter's Jerkin",
+        "category": "ARMOR",
+        "id": "hunters_jerkin",
+        "desc": "Standard leather armor crafted from soft and common rabbit fur. (+15 DEF, +30 HP)",
+        "ingredients": {
+            "rabbit_hide": 5,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "hunters_jerkin",
+            "stats": {
+                "def": 15,
+                "hp": 30
+            },
+            "slot": "armor"
+        }
+    },
+    "rabbitfur_tunic": {
+        "name": "Rabbit-Fur Tunic",
+        "category": "ARMOR",
+        "id": "rabbitfur_tunic",
+        "desc": "Soft and common fur sewn into a basic tunic. Keeps you comfortable and protected. (+12 DEF, +25 HP)",
+        "ingredients": {
+            "rabbit_hide": 4,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "rabbitfur_tunic",
+            "stats": {
+                "def": 12,
+                "hp": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "antlerribbed_jerkin": {
+        "name": "Antler-Ribbed Jerkin",
+        "category": "ARMOR",
+        "id": "antlerribbed_jerkin",
+        "desc": "Common leather armor reinforced across the ribs with sturdy deer antlers. (+18 DEF, +20 HP)",
+        "ingredients": {
+            "deer_antler": 2,
+            "rabbit_hide": 3,
+            "tough_leather": 2
+        },
+        "result": {
+            "id": "antlerribbed_jerkin",
+            "stats": {
+                "def": 18,
+                "hp": 20
+            },
+            "slot": "armor"
+        }
+    },
+    "heavy_scaffold_vest": {
+        "name": "Heavy Scaffold Vest",
+        "category": "ARMOR",
+        "id": "heavy_scaffold_vest",
+        "desc": "Coarse leather armor lined entirely with iron shards for reliable frontline protection. (+25 DEF)",
+        "ingredients": {
+            "iron_shard": 5,
+            "tough_leather": 3
+        },
+        "result": {
+            "id": "heavy_scaffold_vest",
+            "stats": {
+                "def": 25
+            },
+            "slot": "armor"
+        }
+    },
+    "scrappers_cap": {
+        "name": "Scrapper's Cap",
+        "category": "ARMOR",
+        "id": "scrappers_cap",
+        "desc": "A basic leather cap reinforced with tiny iron filings. Better than nothing. (+8 DEF)",
+        "ingredients": {
+            "rabbit_hide": 2,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "scrappers_cap",
+            "stats": {
+                "def": 8
+            },
+            "slot": "helmet"
+        }
+    },
+    "scrappers_leather_helm": {
+        "name": "Scrapper's Leather Helm",
+        "category": "ARMOR",
+        "id": "scrappers_leather_helm",
+        "desc": "A basic leather hat reinforced with small metal fragments along the brow line. (+7 DEF)",
+        "ingredients": {
+            "rabbit_hide": 2,
+            "iron_shard": 2
+        },
+        "result": {
+            "id": "scrappers_leather_helm",
+            "stats": {
+                "def": 7
+            },
+            "slot": "helmet"
+        }
+    },
+    "furlined_cap": {
+        "name": "Fur-Lined Cap",
+        "category": "ARMOR",
+        "id": "furlined_cap",
+        "desc": "A very soft cap made entirely from rabbit fur, protecting your head from simple bumps. (+6 DEF, +10 HP)",
+        "ingredients": {
+            "rabbit_hide": 3,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "furlined_cap",
+            "stats": {
+                "def": 6,
+                "hp": 10
+            },
+            "slot": "helmet"
+        }
+    },
+    "antler_crown_cap": {
+        "name": "Antler Crown Cap",
+        "category": "ARMOR",
+        "id": "antler_crown_cap",
+        "desc": "A basic leather cap with small deer antlers fixed to the sides to deflect downward strikes. (+9 DEF)",
+        "ingredients": {
+            "deer_antler": 2,
+            "rabbit_hide": 2
+        },
+        "result": {
+            "id": "antler_crown_cap",
+            "stats": {
+                "def": 9
+            },
+            "slot": "helmet"
+        }
+    },
+    "trappers_mitts": {
+        "name": "Trapper's Mitts",
+        "category": "ARMOR",
+        "id": "trappers_mitts",
+        "desc": "Simple, coarse gloves woven from sticky giant spider silk. Good for handling rough items. (+5 DEF, +5 SPD)",
+        "ingredients": {
+            "spider_silk": 4,
+            "rabbit_hide": 1
+        },
+        "result": {
+            "id": "trappers_mitts",
+            "stats": {
+                "def": 5,
+                "spd": 5
+            },
+            "slot": "gloves"
+        }
+    },
+    "sticky_silk_wraps": {
+        "name": "Sticky Silk Wraps",
+        "category": "ARMOR",
+        "id": "sticky_silk_wraps",
+        "desc": "Simple gloves woven from strong, sticky silk from giant spiders. Grants good grip strength. (+4 DEF, +6 SPD)",
+        "ingredients": {
+            "spider_silk": 4,
+            "rabbit_hide": 1
+        },
+        "result": {
+            "id": "sticky_silk_wraps",
+            "stats": {
+                "def": 4,
+                "spd": 6
+            },
+            "slot": "gloves"
+        }
+    },
+    "ironfisted_mitts": {
+        "name": "Iron-Fisted Mitts",
+        "category": "ARMOR",
+        "id": "ironfisted_mitts",
+        "desc": "Coarse gloves layered with flat metal fragments across the knuckles to enhance punches. (+6 ATK, +4 DEF)",
+        "ingredients": {
+            "iron_shard": 3,
+            "rabbit_hide": 2,
+            "tough_leather": 1
+        },
+        "result": {
+            "id": "ironfisted_mitts",
+            "stats": {
+                "atk": 6,
+                "def": 4
+            },
+            "slot": "gloves"
+        }
+    },
+    "value_520_zeni": {
+        "name": "Value: 520 Zeni",
+        "category": "ARMOR",
+        "id": "value_520_zeni",
+        "desc": "Recipe: 3 Tough Leather, 2 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_520_zeni",
+            "stats": {},
+            "slot": "gloves"
+        }
+    },
+    "value_650_zeni": {
+        "name": "Value: 650 Zeni",
+        "category": "ARMOR",
+        "id": "value_650_zeni",
+        "desc": "Recipe: 3 Rabbit Hide, 1 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_650_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_600_zeni": {
+        "name": "Value: 600 Zeni",
+        "category": "ARMOR",
+        "id": "value_600_zeni",
+        "desc": "Recipe: 2 Rabbit Hide, 2 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_600_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_620_zeni": {
+        "name": "Value: 620 Zeni",
+        "category": "ARMOR",
+        "id": "value_620_zeni",
+        "desc": "Recipe: 2 Iron Shard, 2 Rabbit Hide, 1 Tough Leather",
+        "ingredients": {},
+        "result": {
+            "id": "value_620_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "value_640_zeni": {
+        "name": "Value: 640 Zeni",
+        "category": "ARMOR",
+        "id": "value_640_zeni",
+        "desc": "Recipe: 3 Rabbit Hide, 1 Tough Leather, 2 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_640_zeni",
+            "stats": {},
+            "slot": "boots"
+        }
+    },
+    "copper_band": {
+        "name": "Copper Band",
+        "category": "ARMOR",
+        "id": "copper_band",
+        "desc": "A cheap, glinting ring made from melted Zeni coins. Offers a tiny bit of luck. (+3 LCK)",
+        "ingredients": {
+            "gold_pile": 50,
+            "iron_shard": 1
+        },
+        "result": {
+            "id": "copper_band",
+            "stats": {
+                "luck": 3
+            },
+            "slot": "boots"
+        }
+    },
+    "melted_zeni_loop": {
+        "name": "Melted Zeni Loop",
+        "category": "ARMOR",
+        "id": "melted_zeni_loop",
+        "desc": "A simple ring hammered together out of glinting Zeni coins. Gives minor luck. (+4 LCK)",
+        "ingredients": {
+            "gold_pile": 40,
+            "iron_shard": 1
+        },
+        "result": {
+            "id": "melted_zeni_loop",
+            "stats": {
+                "luck": 4
+            },
+            "slot": "boots"
+        }
+    },
+    "scrapiron_band": {
+        "name": "Scrap-Iron Band",
+        "category": "ARMOR",
+        "id": "scrapiron_band",
+        "desc": "A crude, heavy iron ring that provides a tiny bump to your overall physical defense. (+3 DEF)",
+        "ingredients": {
+            "iron_shard": 4,
+            "gold_pile": 10
+        },
+        "result": {
+            "id": "scrapiron_band",
+            "stats": {
+                "def": 3
+            },
+            "slot": "boots"
+        }
+    },
+    "value_390_zeni": {
+        "name": "Value: 390 Zeni",
+        "category": "ACCESSORY",
+        "id": "value_390_zeni",
+        "desc": "Recipe: 1 Small Bass, 20 Pile of Gold",
+        "ingredients": {},
+        "result": {
+            "id": "value_390_zeni",
+            "stats": {},
+            "slot": "ring"
+        }
+    },
+    "herbalists_charm": {
+        "name": "Herbalist's Charm",
+        "category": "ACCESSORY",
+        "id": "herbalists_charm",
+        "desc": "A small satchel filled with sun-kissed herbs. Smells great and gently mends small wounds. (+25 HP)",
+        "ingredients": {
+            "healing_herb": 3,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "herbalists_charm",
+            "stats": {
+                "hp": 25
+            },
+            "slot": "ring"
+        }
+    },
+    "sunkissed_herb_satchel": {
+        "name": "Sun-Kissed Herb Satchel",
+        "category": "ACCESSORY",
+        "id": "sunkissed_herb_satchel",
+        "desc": "Natural medicine herbs kept in a necklace pouch, slowly mending your minor scratches. (+20 HP)",
+        "ingredients": {
+            "healing_herb": 2,
+            "spider_silk": 3
+        },
+        "result": {
+            "id": "sunkissed_herb_satchel",
+            "stats": {
+                "hp": 20
+            },
+            "slot": "ring"
+        }
+    },
+    "pondbass_charm": {
+        "name": "Pond-Bass Charm",
+        "category": "ACCESSORY",
+        "id": "pondbass_charm",
+        "desc": "A dried common pond fish worn on a string, somehow providing a slight boost to stamina. (+15 HP, +2 SPD)",
+        "ingredients": {
+            "common_fish": 1,
+            "spider_silk": 3
+        },
+        "result": {
+            "id": "pondbass_charm",
+            "stats": {
+                "hp": 15,
+                "spd": 2
+            },
+            "slot": "ring"
+        }
+    },
+    "herbalists_choker": {
+        "name": "Herbalist's Choker",
+        "category": "ACCESSORY",
+        "id": "herbalists_choker",
+        "desc": "A string necklace holding sun-kissed herbs that clears minor poisons or toxins. (+30 HP)",
+        "ingredients": {
+            "healing_herb": 3,
+            "spider_silk": 2
+        },
+        "result": {
+            "id": "herbalists_choker",
+            "stats": {
+                "hp": 30
+            },
+            "slot": "ring"
+        }
+    },
+    "ragged_travelers_shawl": {
+        "name": "Ragged Traveler’s Shawl",
+        "category": "CLOTHING",
+        "id": "ragged_travelers_shawl",
+        "desc": "A tattered cloak that offers minor protection from the elements. (+5 DEF)",
+        "ingredients": {
+            "spider_silk": 6,
+            "rabbit_hide": 1
+        },
+        "result": {
+            "id": "ragged_travelers_shawl",
+            "stats": {
+                "def": 5
+            },
+            "slot": "cloak"
+        }
+    },
+    "tattered_rag_shawl": {
+        "name": "Tattered Rag Shawl",
+        "category": "CLOTHING",
+        "id": "tattered_rag_shawl",
+        "desc": "A tattered traveler's cloak that offers very basic shelter against sudden downpours. (+4 DEF)",
+        "ingredients": {
+            "spider_silk": 5,
+            "rabbit_hide": 1
+        },
+        "result": {
+            "id": "tattered_rag_shawl",
+            "stats": {
+                "def": 4
+            },
+            "slot": "cloak"
+        }
+    },
+    "value_440_zeni": {
+        "name": "Value: 440 Zeni",
+        "category": "CLOTHING",
+        "id": "value_440_zeni",
+        "desc": "Recipe: 3 Rabbit Hide, 4 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_440_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    },
+    "value_460_zeni": {
+        "name": "Value: 460 Zeni",
+        "category": "CLOTHING",
+        "id": "value_460_zeni",
+        "desc": "Recipe: 4 Tough Leather, 2 Spider Silk",
+        "ingredients": {},
+        "result": {
+            "id": "value_460_zeni",
+            "stats": {},
+            "slot": "cloak"
+        }
+    }
+});
 
 // ========================================== 
 // 📤 EXPORTS

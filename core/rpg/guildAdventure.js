@@ -2110,6 +2110,36 @@ function calculateDamage(
       ? Number(target.stats.def) || 0
       : (Number(target.stats.mag) || 0) * 0.5;
 
+  // Apply attack buffs from attacker.buffs
+  let attackBuffPercent = 0;
+  if (attacker.buffs) {
+    for (const buff of attacker.buffs) {
+      if (buff.type === 'attack') {
+        attackBuffPercent += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        attackBuffPercent += (buff.value || 0);
+      }
+    }
+  }
+  if (attackBuffPercent > 0) {
+    damage *= (1 + attackBuffPercent / 100);
+  }
+
+  // Apply defense buffs from target.buffs
+  let defenseBuffPercent = 0;
+  if (target.buffs) {
+    for (const buff of target.buffs) {
+      if (buff.type === 'defense') {
+        defenseBuffPercent += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        defenseBuffPercent += (buff.value || 0);
+      }
+    }
+  }
+  if (defenseBuffPercent > 0) {
+    def *= (1 + defenseBuffPercent / 100);
+  }
+
   // 💡 STATUS EFFECT MODIFIERS (Defense)
   const targetEffects = target.statusEffects || [];
   if (targetEffects.some((e) => e.type === "shield")) def *= 1.5;
@@ -2314,6 +2344,20 @@ function processStatusEffects(entity) {
     if (effect.duration <= 0) {
       entity.statusEffects.splice(i, 1);
       messages.push(`✨ *EXPIRED:* ${entity.name}'s **${name}** has worn off.`);
+    }
+  }
+
+  // Tick down buffs
+  if (entity.buffs && entity.buffs.length > 0) {
+    for (let i = entity.buffs.length - 1; i >= 0; i--) {
+      const buff = entity.buffs[i];
+      buff.duration--;
+      if (buff.duration <= 0) {
+        const buffName = buff.type.charAt(0).toUpperCase() + buff.type.slice(1);
+        const icon = buff.icon || "✨";
+        messages.push(`✨ *EXPIRED:* ${entity.name}'s **${buffName} Buff** (${icon}) has worn off.`);
+        entity.buffs.splice(i, 1);
+      }
     }
   }
 
@@ -5359,30 +5403,31 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     };
   }
 
-  // Get all learned abilities from ALL class trees (to support basic techniques from previous classes)
+  // Get all learned abilities from lineage (to match PvP order and de-duplicate)
   const learnedAbilities = [];
-
-  for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
-    for (const [treeName, treeData] of Object.entries(classData.trees)) {
+  const classSystem = require('./classSystem');
+  const lineage = classSystem.getLineage(userClass.id);
+  const seen = new Set();
+  
+  for (const cId of lineage) {
+    const tree = skillTree.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees)) {
       for (const [skillId, skill] of Object.entries(treeData.skills)) {
         const level = user.skills[skillId] || 0;
-
-        // Only add if learned and not already in the list
-        if (level > 0 && !learnedAbilities.some((a) => a.id === skillId)) {
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
           const getVal = (val, lvl) =>
             Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
           const energyCost = skill.cost || getVal(skill.energyCost, level) || 0;
 
-          if (energyCost > 0) {
-            // Only active abilities for combat
-            learnedAbilities.push({
-              ...skill,
-              id: skillId,
-              level,
-              cost: energyCost,
-              skillLevel: level,
-            });
-          }
+          learnedAbilities.push({
+            ...skill,
+            id: skillId,
+            level,
+            cost: energyCost,
+            skillLevel: level,
+          });
         }
       }
     }
@@ -5391,19 +5436,23 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   if (learnedAbilities.length === 0) {
     return {
       success: false,
-      message: `${player.name} has no combat abilities!`,
+      message: `${player.name} has no abilities learned!`,
     };
   }
 
   // Get all mirrored abilities
   if (user.borrowedSkills && user.borrowedSkills.length > 0) {
     user.borrowedSkills.forEach((s) => {
-      learnedAbilities.push({
-        ...s,
-        skillLevel: 1,
-        cost: Math.floor(s.cost * 1.5), // 50% more energy for mirrored
-        isMirrored: true,
-      });
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        learnedAbilities.push({
+          ...s,
+          level: 1,
+          skillLevel: 1,
+          cost: Math.floor((s.cost || s.energyCost || 0) * 1.5), // 50% more energy for mirrored
+          isMirrored: true,
+        });
+      }
     });
   }
 
@@ -5415,6 +5464,14 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     return {
       success: false,
       message: `Invalid ability! Use \`${botConfig.getPrefix()} abilities\` to see your abilities.`,
+    };
+  }
+
+  // Check if passive
+  if (ability.cost === 0) {
+    return {
+      success: false,
+      message: `❌ *${ability.name}* is a passive ability and cannot be manually activated!`,
     };
   }
 
@@ -5747,230 +5804,335 @@ async function applyAbilityEffect(
     }
   }
 
-  // HEALING ABILITIES
-  // HEALING ABILITIES
-  if (effect.type === "heal" || effect.type.includes("heal")) {
-    const target = getHealTarget(player, targetIndex, chatId);
-    if (target) {
-      const hMult = getHealMult(chatId);
-      const healAmount = Math.min(
-        Math.floor(effect.value * hMult),
-        target.stats.maxHp - target.stats.hp,
-      );
-      target.stats.hp += healAmount;
-      target.currentHP = target.stats.hp;
-      totalHealing += healAmount;
+  // 🧪 PROCESS RESOLVED EFFECTS (Structured multiple effects support)
+  if (effect.resolvedEffects) {
+    for (const [effId, effData] of Object.entries(effect.resolvedEffects)) {
+      if (effId === "heal") {
+        const target = getHealTarget(player, targetIndex, chatId);
+        if (target) {
+          const hMult = getHealMult(chatId);
+          const healAmount = Math.min(
+            Math.floor(effData.value * hMult),
+            target.stats.maxHp - target.stats.hp,
+          );
+          target.stats.hp += healAmount;
+          target.currentHP = target.stats.hp;
+          totalHealing += healAmount;
 
-      const targetIcon = target.class?.icon || "👤";
-      msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
-      if (!player.isEnemy && player.combatStats) {
-        player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
+          const targetIcon = target.class?.icon || "👤";
+          msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
+        }
+      }
+      else if (effId === "heal_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        const hMult = getHealMult(chatId);
+        for (const ally of friendlySide) {
+          const healAmount = Math.min(
+            Math.floor(effData.value * hMult),
+            (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp,
+          );
+          ally.stats.hp += healAmount;
+          ally.currentHP = ally.stats.hp;
+          totalHealing += healAmount;
+
+          const allyIcon = ally.isEnemy ? ally.icon : ally.class?.icon || "👤";
+          msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? " (Reduced)" : ""}\n`;
+        }
+      }
+      else if (effId === "buff_self") {
+        applyBuff(player, effData.stat, effData.value, effData.duration);
+        msg += `✨ ${player.name} gains +${effData.value}% ${effData.stat}!\n`;
+      }
+      else if (effId === "buff_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, effData.stat, effData.value, effData.duration);
+        }
+        msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effData.value}% ${effData.stat} for ${effData.duration} turns!\n`;
+      }
+      else if (effId === "buff_target") {
+        const target = getHealTarget(player, targetIndex, chatId);
+        if (target) {
+          applyBuff(target, effData.stat, effData.value, effData.duration);
+          msg += `✨ ${target.name} gains +${effData.value}% ${effData.stat}!\n`;
+        }
+      }
+      else if (effId === "debuff_target") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        const target = targets[0];
+        if (target) {
+          applyDebuff(target, effData.stat, effData.value, effData.duration);
+          msg += `💀 ${target.name} receives -${effData.value}% ${effData.stat}!\n`;
+        }
+      }
+      else if (effId === "debuff_enemies") {
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        for (const target of opponentSide) {
+          applyDebuff(target, effData.stat, effData.value, effData.duration);
+        }
+        msg += `💀 All enemies receive -${effData.value}% ${effData.stat}!\n`;
+      }
+      else if (effId === "stun" || effId === "freeze" || effId === "sleep") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        for (const target of targets) {
+          if (Math.random() * 100 < (effData.chance || 100)) {
+            applyStatusEffect(target, effId, effData.duration || 1);
+            msg += `💫 ${target.name} is ${effId.toUpperCase()}NED for ${effData.duration || 1} turn(s)!\n`;
+          }
+        }
+      }
+      else if (effId === "haste") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        for (const target of targets) {
+          applyStatusEffect(target, "haste", effData.duration || 3, effData.value || 30);
+          msg += `⚡ ${target.name} gains Haste!\n`;
+        }
+      }
+      else if (effId === "haste_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyStatusEffect(ally, "haste", effData.duration || 3, effData.value || 30);
+        }
+        msg += `⚡ Friendly team gains Haste!\n`;
       }
     }
-  }
-
-  // TEAM HEAL
-  if (effect.type === "heal_team") {
-    const friendlySide = player.isEnemy
-      ? state.enemies.filter((e) => e.stats.hp > 0)
-      : state.players.filter((p) => !p.isDead);
-    const hMult = getHealMult(chatId);
-    for (const ally of friendlySide) {
-      const healAmount = Math.min(
-        Math.floor(effect.value * hMult),
-        (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp,
-      );
-      ally.stats.hp += healAmount;
-      ally.currentHP = ally.stats.hp;
-      totalHealing += healAmount;
-
-      const allyIcon = ally.isEnemy ? ally.icon : ally.class?.icon || "👤";
-      msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? " (Reduced)" : ""}\n`;
+    if (!player.isEnemy) {
+      player.combatStats.healed = (player.combatStats.healed || 0) + totalHealing;
     }
-    if (!player.isEnemy)
-      player.combatStats.healed =
-        (player.combatStats.healed || 0) + totalHealing;
-  }
+  } else {
+    // HEALING ABILITIES
+    if (effect.type === "heal" || effect.type.includes("heal")) {
+      const target = getHealTarget(player, targetIndex, chatId);
+      if (target) {
+        const hMult = getHealMult(chatId);
+        const healAmount = Math.min(
+          Math.floor(effect.value * hMult),
+          target.stats.maxHp - target.stats.hp,
+        );
+        target.stats.hp += healAmount;
+        target.currentHP = target.stats.hp;
+        totalHealing += healAmount;
 
-  // BUFF ABILITIES
-  if (effect.type.includes("buff")) {
-    if (effect.type === "buff_self") {
-      if (effect.buffType) {
-        applyBuff(player, effect.buffType, effect.value, effect.duration);
-        msg += `✨ ${player.name} gains +${effect.value}% ${effect.buffType}!\n`;
+        const targetIcon = target.class?.icon || "👤";
+        msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
+        if (!player.isEnemy && player.combatStats) {
+          player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
+        }
       }
-      // Handle specific self buffs (Mirror Image etc)
-      if (effect.evasion) {
-        applyBuff(
-          player,
-          "evasion",
-          effect.evasion,
-          effect.evasionDuration || 2,
-        );
-        msg += `✨ ${player.name} gains Evasion!\n`;
-      }
-      if (effect.critBuff) {
-        applyBuff(
-          player,
-          "crit",
-          effect.critBuff,
-          effect.critBuffDuration || 2,
-        );
-        msg += `✨ ${player.name} gains Crit Chance!\n`;
-      }
-    } else if (effect.type === "buff_team") {
+    }
+
+    // TEAM HEAL
+    if (effect.type === "heal_team") {
       const friendlySide = player.isEnemy
         ? state.enemies.filter((e) => e.stats.hp > 0)
         : state.players.filter((p) => !p.isDead);
+      const hMult = getHealMult(chatId);
       for (const ally of friendlySide) {
-        applyBuff(ally, effect.buffType, effect.value, effect.duration);
+        const healAmount = Math.min(
+          Math.floor(effect.value * hMult),
+          (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp,
+        );
+        ally.stats.hp += healAmount;
+        ally.currentHP = ally.stats.hp;
+        totalHealing += healAmount;
+
+        const allyIcon = ally.isEnemy ? ally.icon : ally.class?.icon || "👤";
+        msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? " (Reduced)" : ""}\n`;
       }
-      msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;
-    } else if (effect.type === "buff_target") {
-      const target = getHealTarget(player, targetIndex, chatId);
-      if (target) {
-        applyBuff(target, effect.buffType, effect.value, effect.duration);
-        msg += `✨ ${target.name} gains +${effect.value}% ${effect.buffType}!\n`;
+      if (!player.isEnemy)
+        player.combatStats.healed =
+          (player.combatStats.healed || 0) + totalHealing;
+    }
+
+    // BUFF ABILITIES
+    if (effect.type.includes("buff")) {
+      if (effect.type === "buff_self") {
+        if (effect.buffType) {
+          applyBuff(player, effect.buffType, effect.value, effect.duration);
+          msg += `✨ ${player.name} gains +${effect.value}% ${effect.buffType}!\n`;
+        }
+        // Handle specific self buffs (Mirror Image etc)
+        if (effect.evasion) {
+          applyBuff(
+            player,
+            "evasion",
+            effect.evasion,
+            effect.evasionDuration || 2,
+          );
+          msg += `✨ ${player.name} gains Evasion!\n`;
+        }
+        if (effect.critBuff) {
+          applyBuff(
+            player,
+            "crit",
+            effect.critBuff,
+            effect.critBuffDuration || 2,
+          );
+          msg += `✨ ${player.name} gains Crit Chance!\n`;
+        }
+      } else if (effect.type === "buff_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, effect.buffType, effect.value, effect.duration);
+        }
+        msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;
+      } else if (effect.type === "buff_target") {
+        const target = getHealTarget(player, targetIndex, chatId);
+        if (target) {
+          applyBuff(target, effect.buffType, effect.value, effect.duration);
+          msg += `✨ ${target.name} gains +${effect.value}% ${effect.buffType}!\n`;
+        }
       }
     }
-  }
 
-  // DEBUFF ABILITIES
-  if (effect.type.includes("debuff")) {
-    if (effect.type === "debuff_target") {
+    // DEBUFF ABILITIES
+    if (effect.type.includes("debuff")) {
+      if (effect.type === "debuff_target") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        const target = targets[0];
+        if (target) {
+          applyDebuff(target, effect.debuffType, effect.value, effect.duration);
+          msg += `💀 ${target.name} receives -${effect.value}% ${effect.debuffType}!\n`;
+        }
+      } else if (effect.type === "debuff_enemies") {
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        for (const target of opponentSide) {
+          applyDebuff(target, effect.debuffType, effect.value, effect.duration);
+        }
+        msg += `💀 All enemies receive -${effect.value}% ${effect.debuffType}!\n`;
+      }
+    }
+
+    // REVIVE
+    if (effect.type === "revive") {
+      const deadFriendly = player.isEnemy
+        ? state.enemies.filter((e) => e.stats.hp <= 0)
+        : state.players.filter((p) => p.isDead);
+      if (deadFriendly.length > 0) {
+        const target = deadFriendly[0];
+        target.isDead = false;
+        target.stats.hp = Math.floor(
+          (target.stats.maxHp || target.stats.hp) *
+            ((effect.hpPercent || 50) / 100),
+        );
+        target.currentHP = target.stats.hp;
+        msg += `👼 ${target.name} has been resurrected with ${target.stats.hp} HP!\n`;
+        if (!player.isEnemy)
+          player.combatStats.healed =
+            (player.combatStats.healed || 0) + target.stats.hp;
+      } else {
+        msg += `(No fallen allies to revive)\n`;
+      }
+    }
+
+    // MULTI-HIT
+    if (effect.type === "multi_hit") {
       const targets = getTargets(player, effect, targetIndex, chatId);
       const target = targets[0];
       if (target) {
-        applyDebuff(target, effect.debuffType, effect.value, effect.duration);
-        msg += `💀 ${target.name} receives -${effect.value}% ${effect.debuffType}!\n`;
-      }
-    } else if (effect.type === "debuff_enemies") {
-      const opponentSide = player.isEnemy
-        ? state.players.filter((p) => !p.isDead)
-        : state.enemies.filter((e) => e.stats.hp > 0);
-      for (const target of opponentSide) {
-        applyDebuff(target, effect.debuffType, effect.value, effect.duration);
-      }
-      msg += `💀 All enemies receive -${effect.value}% ${effect.debuffType}!\n`;
-    }
-  }
+        let totalMultiDamage = 0;
+        const baseStat =
+          effect.damageType === "magic"
+            ? player.stats.mag || 10
+            : player.stats.atk || 10;
+        const dType = effect.damageType === "magic" ? "magic" : "physical";
+        const element = effect.element || "PHYSICAL";
 
-  // REVIVE
-  if (effect.type === "revive") {
-    const deadFriendly = player.isEnemy
-      ? state.enemies.filter((e) => e.stats.hp <= 0)
-      : state.players.filter((p) => p.isDead);
-    if (deadFriendly.length > 0) {
-      const target = deadFriendly[0];
-      target.isDead = false;
-      target.stats.hp = Math.floor(
-        (target.stats.maxHp || target.stats.hp) *
-          ((effect.hpPercent || 50) / 100),
-      );
-      target.currentHP = target.stats.hp;
-      msg += `👼 ${target.name} has been resurrected with ${target.stats.hp} HP!\n`;
-      if (!player.isEnemy)
-        player.combatStats.healed =
-          (player.combatStats.healed || 0) + target.stats.hp;
-    } else {
-      msg += `(No fallen allies to revive)\n`;
-    }
-  }
-  // MULTI-HIT
-  if (effect.type === "multi_hit") {
-    const targets = getTargets(player, effect, targetIndex, chatId);
-    const target = targets[0];
-    if (target) {
-      let totalMultiDamage = 0;
-      const baseStat =
-        effect.damageType === "magic"
-          ? player.stats.mag || 10
-          : player.stats.atk || 10;
-      const dType = effect.damageType === "magic" ? "magic" : "physical";
-      const element = effect.element || "PHYSICAL";
+        for (let i = 0; i < effect.hits; i++) {
+          const { damage, isCrit, wasEvaded } = calculateDamage(
+            player,
+            target,
+            baseStat * effect.multiplier,
+            dType,
+            element,
+            chatId,
+          );
+          if (!wasEvaded) {
+            target.stats.hp -= damage;
+            totalMultiDamage += damage;
+          }
+        }
+        target.currentHP = Math.max(0, target.stats.hp);
 
-      for (let i = 0; i < effect.hits; i++) {
-        const { damage, isCrit, wasEvaded } = calculateDamage(
-          player,
-          target,
-          baseStat * effect.multiplier,
-          dType,
-          element,
-          chatId,
-        );
-        if (!wasEvaded) {
-          target.stats.hp -= damage;
-          totalMultiDamage += damage;
+        if (target.stats.hp > 0 && target.isBoss) {
+          await checkBossPhase(sock, target, chatId);
+        }
+
+        if (target.stats.hp <= 0) {
+          target.justDied = true;
+        }
+        msg += `⚡ Hit ${effect.hits} times for ${totalMultiDamage} total damage!\n`;
+        player.combatStats.damageDealt =
+          (player.combatStats.damageDealt || 0) + totalMultiDamage;
+
+        if (target.stats.hp <= 0) {
+          msg += `💀 ${target.name} defeated!\n`;
+          target.isDead = true;
+          target.currentHP = 0;
+
+          // 💡 CRITICAL FIX: Check if combat should end immediately
+          if (await checkCombatEnd(sock, state, sessionKey))
+            return { applied: true, msg };
         }
       }
-      target.currentHP = Math.max(0, target.stats.hp);
-
-      if (target.stats.hp > 0 && target.isBoss) {
-        await checkBossPhase(sock, target, chatId);
-      }
-
-      if (target.stats.hp <= 0) {
-        target.justDied = true;
-      }
-      msg += `⚡ Hit ${effect.hits} times for ${totalMultiDamage} total damage!\n`;
-      player.combatStats.damageDealt =
-        (player.combatStats.damageDealt || 0) + totalMultiDamage;
-
-      if (target.stats.hp <= 0) {
-        msg += `💀 ${target.name} defeated!\n`;
-        target.isDead = true;
-        target.currentHP = 0;
-
-        // 💡 CRITICAL FIX: Check if combat should end immediately
-        if (await checkCombatEnd(sock, state, sessionKey))
-          return { applied: true, msg };
-      }
     }
-  }
 
-  // 🧪 NEW FORMAT SUPPORT (effects object)
-  if (effect.effects) {
-    for (const [effType, effData] of Object.entries(effect.effects)) {
-      const dur = effData.duration || 3;
-      const val = Array.isArray(effData.value)
-        ? effData.value[
-            Math.min((player.level || 1) - 1, effData.value.length - 1)
-          ]
-        : effData.value || 0;
+    // 🧪 NEW FORMAT SUPPORT (effects object)
+    if (effect.effects) {
+      for (const [effType, effData] of Object.entries(effect.effects)) {
+        const dur = effData.duration || 3;
+        const val = Array.isArray(effData.value)
+          ? effData.value[
+              Math.min((player.level || 1) - 1, effData.value.length - 1)
+            ]
+          : effData.value || 0;
 
-      const opponentSide = player.isEnemy
-        ? state.players.filter((p) => !p.isDead)
-        : state.enemies.filter((e) => e.stats.hp > 0);
-      const friendlySide = player.isEnemy
-        ? state.enemies.filter((e) => e.stats.hp > 0)
-        : state.players.filter((p) => !p.isDead);
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
 
-      // Determine targets based on the skill's overall targeting
-      let targets = [];
-      const targeting = (effect.targeting || "").toUpperCase();
-      if (
-        targeting.includes("AOE") ||
-        targeting === "ALL_ENEMIES" ||
-        targeting === "CHAIN"
-      ) {
-        targets = opponentSide;
-      } else if (targeting === "TEAM" || targeting === "ALL_ALLIES") {
-        targets = friendlySide;
-      } else if (targeting === "SELF") {
-        targets = [player];
-      } else {
-        targets = [getHealTarget(player, targetIndex, chatId)];
-      }
+        // Determine targets based on the skill's overall targeting
+        let targets = [];
+        const targeting = (effect.targeting || "").toUpperCase();
+        if (
+          targeting.includes("AOE") ||
+          targeting === "ALL_ENEMIES" ||
+          targeting === "CHAIN"
+        ) {
+          targets = opponentSide;
+        } else if (targeting === "TEAM" || targeting === "ALL_ALLIES") {
+          targets = friendlySide;
+        } else if (targeting === "SELF") {
+          targets = [player];
+        } else {
+          targets = [getHealTarget(player, targetIndex, chatId)];
+        }
 
-      for (const target of targets) {
-        const statusResult = applyStatusEffect(
-          target,
-          effType,
-          dur,
-          val,
-          player.name,
-        );
-        if (statusResult.synergyMsg) msg += `\n✨ ${statusResult.synergyMsg}`;
+        for (const target of targets) {
+          const statusResult = applyStatusEffect(
+            target,
+            effType,
+            dur,
+            val,
+            player.name,
+          );
+          if (statusResult.synergyMsg) msg += `\n✨ ${statusResult.synergyMsg}`;
+        }
       }
     }
   }

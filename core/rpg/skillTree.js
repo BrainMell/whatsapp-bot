@@ -4864,10 +4864,18 @@ function getSkillEffect(skill, level) {
 
         // Flatten nested effects for the existing engine
         if (skill.effects) {
+            effect.resolvedEffects = {};
             for (const [effId, effData] of Object.entries(skill.effects)) {
                 const val = getVal(effData.value);
                 const dur = getVal(effData.duration);
                 const chance = getVal(effData.chance);
+
+                effect.resolvedEffects[effId] = {
+                    stat: effData.stat,
+                    value: val,
+                    duration: dur,
+                    chance: chance
+                };
 
                 // Map common effects to existing engine properties
                 if (effId === 'stun' || effId === 'freeze' || effId === 'sleep' || effId === 'charm') {
@@ -4889,7 +4897,7 @@ function getSkillEffect(skill, level) {
                     effect.duration = dur || 2;
                 } else if (effId === 'heal' || effId === 'heal_team') {
                     if (effect.type === 'none') effect.type = effId;
-                    effect.value = val;
+                    effect.healValue = val;
                 } else if (effId === 'evasion' || effId === 'critBuff') {
                     // Specific handling for Mirror Image etc
                     if (effect.type === 'none') effect.type = 'buff_self';
@@ -4900,6 +4908,9 @@ function getSkillEffect(skill, level) {
                     effect[effId] = val;
                     if (dur) effect[effId + 'Duration'] = dur;
                 }
+            }
+            if (effect.healValue !== undefined && effect.value === undefined) {
+                effect.value = effect.healValue;
             }
         }
 

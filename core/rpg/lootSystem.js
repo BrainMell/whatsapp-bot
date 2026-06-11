@@ -688,6 +688,2159 @@ function getItemInfo(itemId) {
     };
 }
 
+
+// --- PROGRAMMATICALLY ADDED EXTRAPOLATED ITEMS ---
+Object.assign(ITEM_DATABASE, {
+    "void_kraken_harpoon": {
+        "name": "Void Kraken Harpoon",
+        "description": "A terrifying weapon forged from an abyssal tentacle. It twists reality with every swing. (+110 ATK, +30 MAG, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 95000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 110,
+            "mag": 30,
+            "crit": 15
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "void_kraken_cleaver": {
+        "name": "Void Kraken Cleaver",
+        "description": "A colossal, heavy blade that looks like a frozen piece of the deep abyss. It slices through space itself. (+105 ATK, +20 MAG, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 92000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 105,
+            "mag": 20,
+            "crit": 15
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "hellfire_greatmaul": {
+        "name": "Hellfire Greatmaul",
+        "description": "A massive hammer forged from active sulfur cores. Every impact triggers a tiny elemental explosion. (+120 ATK, +25 MAG, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 96000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 120,
+            "mag": 25,
+            "crit": 10
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "worldender_lance": {
+        "name": "World-Ender Lance",
+        "description": "A legendary weapon that combines hellfire power with the raw physical weight of abyssal parts. (+115 ATK, +40 MAG, +12 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 98000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 115,
+            "mag": 40,
+            "crit": 12
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "aegis_of_the_abyss": {
+        "name": "Aegis of the Abyss",
+        "description": "A shield that feels entirely weightless but swallows incoming attacks whole. (+120 DEF, +400 HP, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 80000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 120,
+            "hp": 400,
+            "luck": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "abyssal_bulwark": {
+        "name": "Abyssal Bulwark",
+        "description": "A shield forged from compressed void energy. It acts like a gravitational anomaly, pulling threats away from allies. (+115 DEF, +450 HP, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 82000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 115,
+            "hp": 450,
+            "luck": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "mirror_shield_of_tartarus": {
+        "name": "Mirror Shield of Tartarus",
+        "description": "A pristine, terrifying shield that visually distorts distance, making your exact stance impossible to read. (+130 DEF, +350 HP, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 84000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 130,
+            "hp": 350,
+            "crit": 15
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "aegis_of_eternal_fire": {
+        "name": "Aegis of Eternal Fire",
+        "description": "A massive shield crafted from molten dragon scrap and hellfire energy. Melt weapons that strike it. (+125 DEF, +300 HP, +15 ATK)",
+        "rarity": "MYTHIC",
+        "value": 81000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 125,
+            "hp": 300,
+            "atk": 15
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "chrono_weaver_vestments": {
+        "name": "Chrono Weaver Vestments",
+        "description": "Woven from divine silk and infused with eternal fires. Time seems to slow around the wearer. (+85 DEF, +250 HP, +25 SPD)",
+        "rarity": "MYTHIC",
+        "value": 75000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 85,
+            "hp": 250,
+            "spd": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "voidstrand_robes": {
+        "name": "Void-Strand Robes",
+        "description": "Robes woven seamlessly from mystic thread and void energy, causing the wearer's physical form to appear blurry and untargetable. (+75 DEF, +200 HP, +40 MAG, +15 SPD)",
+        "rarity": "MYTHIC",
+        "value": 74000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 75,
+            "hp": 200,
+            "mag": 40,
+            "spd": 15
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "eelskin_hazard_suit": {
+        "name": "Eel-Skin Hazard Suit",
+        "description": "High-tech magic gear constructed from corrupted eel hides. It constantly cycles electrical current. (+90 DEF, +300 HP, +30 SPD)",
+        "rarity": "MYTHIC",
+        "value": 76000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 90,
+            "hp": 300,
+            "spd": 30
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "abyssal_carapace": {
+        "name": "Abyssal Carapace",
+        "description": "Heavy armor constructed from the outer shell of deep-sea entities. Completely unyielding. (+110 DEF, +400 HP)",
+        "rarity": "MYTHIC",
+        "value": 78000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 110,
+            "hp": 400
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "crown_of_hellfire": {
+        "name": "Crown of Hellfire",
+        "description": "A blazing crown that marks you as a lord of destruction. Your spells burn hotter. (+40 DEF, +80 MAG, +20 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 65000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "mag": 80,
+            "crit": 20
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "gaze_of_the_abyss": {
+        "name": "Gaze of the Abyss",
+        "description": "A hollow mask that replaces the wearer’s eyes with tiny, glowing portals to the void. (+35 DEF, +75 MAG, +25 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 62000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 35,
+            "mag": 75,
+            "crit": 25
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "crown_of_the_abyssal_sovereign": {
+        "name": "Crown of the Abyssal Sovereign",
+        "description": "A crown that makes your voice echo with cosmic authority, driving fear into enemies. (+45 DEF, +60 MAG, +20 LCK)",
+        "rarity": "MYTHIC",
+        "value": 66000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "mag": 60,
+            "luck": 20
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "visor_of_the_void_walker": {
+        "name": "Visor of the Void Walker",
+        "description": "A sleek helmet that filters out magical blinding light, allowing perfect sight in total darkness. (+50 DEF, +40 SPD, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 63000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "spd": 40,
+            "luck": 15
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "voidtouched_grips": {
+        "name": "Void-Touched Grips",
+        "description": "These gloves cause your hands to phase slightly out of the physical plane, maximizing striking speed. (+30 ATK, +35 SPD, +12 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 55000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 30,
+            "spd": 35,
+            "crit": 12
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "abyssal_grasp": {
+        "name": "Abyssal Grasp",
+        "description": "Gauntlets that channel raw void energy into your fingertips, leaving trails of black static with every gesture. (+45 ATK, +25 MAG, +20 SPD)",
+        "rarity": "MYTHIC",
+        "value": 54000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 45,
+            "mag": 25,
+            "spd": 20
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "eelspike_gauntlets": {
+        "name": "Eel-Spike Gauntlets",
+        "description": "Gloves covered in tiny, static-conducting scales that shock anything they touch. (+35 ATK, +30 SPD, +18 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 57000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 35,
+            "spd": 30,
+            "crit": 18
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "touch_of_retribution": {
+        "name": "Touch of Retribution",
+        "description": "Gloves that store kinetic energy from incoming hits and release it on your next attack. (+40 ATK, +25 DEF, +12 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 56000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 40,
+            "def": 25,
+            "crit": 12
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "abyssal_treads": {
+        "name": "Abyssal Treads",
+        "description": "Boots that leave a trail of fading stars. You walk through hazard zones unaffected. (+35 DEF, +45 SPD, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 58000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 35,
+            "spd": 45,
+            "luck": 15
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "void_step_sabatons": {
+        "name": "Void Step Sabatons",
+        "description": "Heavy greaves that ignore gravity, allowing the wearer to step cleanly across hazardous terrain without touching it. (+45 DEF, +40 SPD, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 56000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "spd": 40,
+            "luck": 15
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "infernal_greaves": {
+        "name": "Infernal Greaves",
+        "description": "Heavy plated boots that burn red hot, melting ice hazards instantly beneath your feet. (+55 DEF, +25 SPD, +15 ATK)",
+        "rarity": "MYTHIC",
+        "value": 59000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55,
+            "spd": 25,
+            "atk": 15
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "treads_of_the_damned": {
+        "name": "Treads of the Damned",
+        "description": "Boots that allow the user to run across walls and vertical surfaces by locking onto kinetic lines. (+40 DEF, +45 SPD)",
+        "rarity": "MYTHIC",
+        "value": 57000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "spd": 45
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "loop_of_forever": {
+        "name": "Loop of Forever",
+        "description": "A cosmic band that pulls stray probability toward the wearer, ensuring flawless fortune. (+25 MAG, +30 LCK, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 60000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 25,
+            "luck": 30,
+            "crit": 15
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "entropy_loop": {
+        "name": "Entropy Loop",
+        "description": "A dark, shifting ring that turns the bearer's misfortune into destructive critical strikes. (+20 MAG, +25 LCK, +22 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 58000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 20,
+            "luck": 25,
+            "crit": 22
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "singularity_band": {
+        "name": "Singularity Band",
+        "description": "A gravity-manipulating ring that pulls nearby stray items and gold coins straight into your inventory. (+15 DEF, +40 LCK)",
+        "rarity": "MYTHIC",
+        "value": 61000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 15,
+            "luck": 40
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "band_of_cosmic_fortune": {
+        "name": "Band of Cosmic Fortune",
+        "description": "A beautiful band that aligns the stars in your favor, maximizing reward drops. (+20 MAG, +45 LCK)",
+        "rarity": "MYTHIC",
+        "value": 62000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 20,
+            "luck": 45
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "heart_of_the_cosmos": {
+        "name": "Heart of the Cosmos",
+        "description": "A swirling mass of nothingness contained inside a silver casing. It beats in sync with your pulse. (+300 HP, +60 MAG, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 62000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 300,
+            "mag": 60,
+            "luck": 15
+        },
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_60000_zeni": {
+        "name": "Value: 60,000 Zeni",
+        "description": "Recipe: 1 Void Essence, 6 Mana Crystal, 4 Mystic Thread",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_64000_zeni": {
+        "name": "Value: 64,000 Zeni",
+        "description": "Recipe: 1 Void Essence, 1 Mirror Essence, 4 Mana Crystal",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_63000_zeni": {
+        "name": "Value: 63,000 Zeni",
+        "description": "Recipe: 1 Void Essence, 4 Dark Matter, 4 Mystic Thread",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "veil_of_the_void": {
+        "name": "Veil of the Void",
+        "description": "A shifting, dark cloak that absorbs all surrounding light, making the wearer nearly invisible. (+50 DEF, +40 SPD, +20 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 52000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "spd": 40,
+            "crit": 20
+        },
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "shroud_of_eternal_night": {
+        "name": "Shroud of Eternal Night",
+        "description": "A flowing cloak that completely dampens the sound of your movements and absorbs incoming spell light. (+40 DEF, +50 SPD, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 53000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "spd": 50,
+            "luck": 15
+        },
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_55000_zeni": {
+        "name": "Value: 55,000 Zeni",
+        "description": "Recipe: 1 Void Essence, 2 Mirror Essence, 6 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_54000_zeni": {
+        "name": "Value: 54,000 Zeni",
+        "description": "Recipe: 1 Void Essence, 2 Infected Heart, 6 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "wyrmtail_greatsword": {
+        "name": "Wyrmtail Greatsword",
+        "description": "A massive sword crafted from elder dragon components. Pure magic courses through its heavy edge. (+75 ATK, +20 MAG, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 45000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 75,
+            "mag": 20,
+            "crit": 10
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "titanbone_halberd": {
+        "name": "Titan-Bone Halberd",
+        "description": "A massive polearm that vibrates with the internal power source of a colossal titan. (+80 ATK, +20 DEF)",
+        "rarity": "MYTHIC",
+        "value": 44000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 80,
+            "def": 20
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "dragonfang_claymore": {
+        "name": "Dragon-Fang Claymore",
+        "description": "A jagged two-handed sword carved entirely from an elder dragon’s tooth. (+85 ATK, +12 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 46000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 85,
+            "crit": 12
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "mirroredged_rapier": {
+        "name": "Mirror-Edged Rapier",
+        "description": "A lightning-fast sword made of crystallized dark power. Its blade looks completely invisible from certain angles. (+65 ATK, +30 SPD, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 43000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 65,
+            "spd": 30,
+            "crit": 15
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "colossal_titan_shield": {
+        "name": "Colossal Titan Shield",
+        "description": "A towering slab of pure magic rock. It acts as the ultimate power source of defense. (+90 DEF, +250 HP)",
+        "rarity": "MYTHIC",
+        "value": 38000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 90,
+            "hp": 250
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "dragonscale_kite_shield": {
+        "name": "Dragon-Scale Kite Shield",
+        "description": "A lightweight but incredibly durable shield built from overlapping, pristine dragon scales. (+95 DEF, +150 HP)",
+        "rarity": "MYTHIC",
+        "value": 39000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 95,
+            "hp": 150
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "mirror_buckler": {
+        "name": "Mirror Buckler",
+        "description": "A small shield coated with crystallized dark power that can deflect magical beams. (+75 DEF, +20 SPD, +8 LCK)",
+        "rarity": "MYTHIC",
+        "value": 37000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 75,
+            "spd": 20,
+            "luck": 8
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "aegis_of_the_golem_king": {
+        "name": "Aegis of the Golem King",
+        "description": "A massive slab of enchanted stone that emits a minor defensive shockwave when hit. (+90 DEF, +200 HP, +10 MAG)",
+        "rarity": "MYTHIC",
+        "value": 38000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 90,
+            "hp": 200,
+            "mag": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "dragon_scale_mail": {
+        "name": "Dragon Scale Mail",
+        "description": "Heavy armor made from nearly indestructible plates. Imbued with blood magic for longevity. (+75 DEF, +200 HP, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 42000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 75,
+            "hp": 200,
+            "luck": 10
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "garb_of_the_elder_mage": {
+        "name": "Garb of the Elder Mage",
+        "description": "Robes soaked in pure dragon blood. The fabrics store mana effortlessly. (+50 DEF, +65 MAG, +15 SPD)",
+        "rarity": "MYTHIC",
+        "value": 41000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "mag": 65,
+            "spd": 15
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "titanium_fortified_carapace": {
+        "name": "Titanium Fortified Carapace",
+        "description": "Unbelievably heavy armor reinforced with the power source of a colossal golem. (+100 DEF, +250 HP)",
+        "rarity": "MYTHIC",
+        "value": 43000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 100,
+            "hp": 250
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "scale_coat_of_eternity": {
+        "name": "Scale Coat of Eternity",
+        "description": "A coat made from near-indestructible dragon plates, tailored for high-level agility. (+70 DEF, +150 HP, +20 SPD)",
+        "rarity": "MYTHIC",
+        "value": 42000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 70,
+            "hp": 150,
+            "spd": 20
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "great_wyrm_helm": {
+        "name": "Great Wyrm Helm",
+        "description": "A fearsome helmet crafted from a dragon’s skull. Its presence alone terrifies lesser foes. (+45 DEF, +25 ATK, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 32000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "atk": 25,
+            "crit": 8
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "helm_of_ancient_blood": {
+        "name": "Helm of Ancient Blood",
+        "description": "A terrifying helm infused with legendary blood. It grants the wearer heightened hunting instincts. (+40 DEF, +30 ATK, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 34000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "atk": 30,
+            "crit": 10
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "crown_of_the_dragon_lord": {
+        "name": "Crown of the Dragon Lord",
+        "description": "A crown crafted from the hardened horns and blood of dragons, boosting presence and command. (+45 DEF, +30 MAG, +12 LCK)",
+        "rarity": "MYTHIC",
+        "value": 35000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "mag": 30,
+            "luck": 12
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "gaze_of_the_titan": {
+        "name": "Gaze of the Titan",
+        "description": "A full-face iron helm powered internally by stone magic, sharpening defensive reactions. (+55 DEF, +80 HP)",
+        "rarity": "MYTHIC",
+        "value": 33000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55,
+            "hp": 80
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "titan_fist_gauntlets": {
+        "name": "Titan Fist Gauntlets",
+        "description": "Heavy gauntlets that channel the raw strength of a colossal golem into every punch. (+40 ATK, +30 DEF)",
+        "rarity": "MYTHIC",
+        "value": 34000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 40,
+            "def": 30
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "wyrmscale_grips": {
+        "name": "Wyrmscale Grips",
+        "description": "Reinforced gloves that prevent weapons from slipping and increase physical attack speed. (+35 ATK, +20 SPD, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 32000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 35,
+            "spd": 20,
+            "crit": 8
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "bloodsoaked_claws": {
+        "name": "Blood-Soaked Claws",
+        "description": "Vicious leather gauntlets tipped with dragon scale fragments that tear through enemy defense. (+40 ATK, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 31000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 40,
+            "crit": 10
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_33000_zeni": {
+        "name": "Value: 33,000 Zeni",
+        "description": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "striders_of_the_dragon": {
+        "name": "Striders of the Dragon",
+        "description": "Swift boots forged with dragon scales, allowing the wearer to sprint through fire unscathed. (+35 DEF, +30 SPD)",
+        "rarity": "MYTHIC",
+        "value": 31000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 35,
+            "spd": 30
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "titanstomp_sabatons": {
+        "name": "Titan-Stomp Sabatons",
+        "description": "Incredibly heavy boots. Every step leaves a shallow crater, giving incredible stability. (+65 DEF, -10 SPD, +100 HP)",
+        "rarity": "MYTHIC",
+        "value": 33000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 65,
+            "spd": -10,
+            "hp": 100
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "striders_of_the_titan": {
+        "name": "Striders of the Titan",
+        "description": "Heavy plated boots that make the wearer immune to knockback effects. (+55 DEF, +10 ATK, +50 HP)",
+        "rarity": "MYTHIC",
+        "value": 32000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55,
+            "atk": 10,
+            "hp": 50
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_32000_zeni": {
+        "name": "Value: 32,000 Zeni",
+        "description": "Recipe: 1 Elder Blood, 4 Tough Leather, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "signet_of_the_ancestors": {
+        "name": "Signet of the Ancestors",
+        "description": "A ring housing a fragment of an ancient artifact. It hums with historical power. (+20 ATK, +20 MAG, +12 LCK)",
+        "rarity": "MYTHIC",
+        "value": 36000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 20,
+            "mag": 20,
+            "luck": 12
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "ancient_artifact_loop": {
+        "name": "Ancient Artifact Loop",
+        "description": "A ring crafted from an actual fragment of an ancient artifact. Its history hums with power. (+25 ATK, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 35000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 25,
+            "luck": 15
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_36000_zeni": {
+        "name": "Value: 36,000 Zeni",
+        "description": "Recipe: 1 Legendary Shard, 4 Mystic Thread, 2 Mana Crystal",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_34000_zeni": {
+        "name": "Value: 34,000 Zeni",
+        "description": "Recipe: 1 Titan Heart, 1 Rare Gem, 20 Pile of Gold",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "pendant_of_eternity": {
+        "name": "Pendant of Eternity",
+        "description": "A beautiful necklace centered around an ancient artifact shard. It bolsters the wearer’s life force. (+150 HP, +40 DEF, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 35000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 150,
+            "def": 40,
+            "luck": 15
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "talisman_of_eldritch_blood": {
+        "name": "Talisman of Eldritch Blood",
+        "description": "A vial of pure magic coursing through ancient veins, worn as a pendant. (+150 HP, +45 MAG, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 37000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 150,
+            "mag": 45,
+            "luck": 10
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "pendant_of_the_dragon_eye": {
+        "name": "Pendant of the Dragon Eye",
+        "description": "A piercing red jewel amulet that reveals structural weaknesses in high-tier targets. (+30 ATK, +15 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 34000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 30,
+            "crit": 15
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "value_28000_zeni": {
+        "name": "Value: 28,000 Zeni",
+        "description": "Recipe: 1 Mirror Essence, 2 Dark Matter, 5 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_29000_zeni": {
+        "name": "Value: 29,000 Zeni",
+        "description": "Recipe: 1 Mirror Essence, 3 Dark Matter, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_30000_zeni": {
+        "name": "Value: 30,000 Zeni",
+        "description": "Recipe: 1 Mirror Essence, 4 Dark Matter, 5 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_31000_zeni": {
+        "name": "Value: 31,000 Zeni",
+        "description": "Recipe: 3 Dragon Scale, 1 Elder Blood, 5 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "necrotic_carver": {
+        "name": "Necrotic Carver",
+        "description": "A jagged blade containing the soul of a powerful necromancer. It hungers for life force. (+50 ATK, +30 MAG)",
+        "rarity": "MYTHIC",
+        "value": 24000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 50,
+            "mag": 30
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "lichs_bone_wand": {
+        "name": "Lich's Bone Wand",
+        "description": "A sinister wand harboring the soul of a powerful necromancer. Spells cast feel chilling. (+15 ATK, +60 MAG)",
+        "rarity": "MYTHIC",
+        "value": 22000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 15,
+            "mag": 60
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "infected_hive_needle": {
+        "name": "Infected Hive Needle",
+        "description": "A thin, lethal rapier forged from concentrated Hive crystals. Leaves debilitating wounds. (+45 ATK, +25 SPD, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 23000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 45,
+            "spd": 25,
+            "crit": 10
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "dark_matter_greatsword": {
+        "name": "Dark Matter Greatsword",
+        "description": "A blade forged from matter heavier than your student loans. Every swing carries immense kinetic energy. (+65 ATK, -5 SPD)",
+        "rarity": "MYTHIC",
+        "value": 24000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 65,
+            "spd": -5
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "cursed_mirror_buckler": {
+        "name": "Cursed Mirror Buckler",
+        "description": "A small shield made of hardened dark glass. It occasionally reflects spell damage. (+45 DEF, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 18000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "luck": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "spiked_eel_buckler": {
+        "name": "Spiked Eel Buckler",
+        "description": "A small shield made from electric eel bones that shocks attackers on successful blocks. (+40 DEF, +15 SPD)",
+        "rarity": "MYTHIC",
+        "value": 17500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "spd": 15
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "phylactery_aegis": {
+        "name": "Phylactery Aegis",
+        "description": "A dark relic shield that stores the souls of fallen enemies to boost its defensive barrier. (+55 DEF, +100 HP, +10 MAG)",
+        "rarity": "MYTHIC",
+        "value": 19000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55,
+            "hp": 100,
+            "mag": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "shield_of_restless_souls": {
+        "name": "Shield of Restless Souls",
+        "description": "A frightening shield made of woven ancient wood and trapped ethereal residue. (+50 DEF, +80 HP)",
+        "rarity": "MYTHIC",
+        "value": 18000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "hp": 80
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "corrupted_eel_carapace": {
+        "name": "Corrupted Eel Carapace",
+        "description": "Light armor crafted from an eel twisting with hazard energy. Shockingly durable. (+50 DEF, +100 HP, +15 SPD)",
+        "rarity": "MYTHIC",
+        "value": 22000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "hp": 100,
+            "spd": 15
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "lichskin_vestments": {
+        "name": "Lich-Skin Vestments",
+        "description": "Ethereal robes woven with spirit residue. Physical attacks pass right through the loose fibers. (+45 DEF, +80 HP, +25 MAG)",
+        "rarity": "MYTHIC",
+        "value": 21000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "hp": 80,
+            "mag": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "carapace_of_the_corrupted_eel": {
+        "name": "Carapace of the Corrupted Eel",
+        "description": "Sleek armor made from an eel twisting with hazard energy. Highly resistant to elements. (+55 DEF, +120 HP, +10 SPD)",
+        "rarity": "MYTHIC",
+        "value": 22500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55,
+            "hp": 120,
+            "spd": 10
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "hivecore_plate": {
+        "name": "Hive-Core Plate",
+        "description": "Heavy plate armor centered around a pulsing, corrupted heart. It regenerates minor damage over time. (+65 DEF, +150 HP)",
+        "rarity": "MYTHIC",
+        "value": 23000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 65,
+            "hp": 150
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "hood_of_the_restless": {
+        "name": "Hood of the Restless",
+        "description": "A dark, tattered hood radiating an ethereal residue. It sharpens your focus. (+20 DEF, +35 MAG, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 16000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 20,
+            "mag": 35,
+            "crit": 8
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "crown_of_restless_spirits": {
+        "name": "Crown of Restless Spirits",
+        "description": "A circlet wrapped in a swirling chill. It lets you hear threats right before they strike. (+20 DEF, +30 MAG, +10 LCK)",
+        "rarity": "MYTHIC",
+        "value": 15500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 20,
+            "mag": 30,
+            "luck": 10
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "gloom_hood": {
+        "name": "Gloom Hood",
+        "description": "A dark hood that is visually heavier than your student loans. It hides your face in absolute shadow. (+25 DEF, +20 MAG, +12 LCK)",
+        "rarity": "MYTHIC",
+        "value": 16000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 25,
+            "mag": 20,
+            "luck": 12
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "visor_of_the_necromancer": {
+        "name": "Visor of the Necromancer",
+        "description": "A cold iron helm that lets you see the remaining life points of your targets perfectly. (+30 DEF, +20 MAG, +10 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 16500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 30,
+            "mag": 20,
+            "crit": 10
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "hivemind_mitts": {
+        "name": "Hive-Mind Mitts",
+        "description": "Gloves coated in concentrated Hive essence. They twitch with a life of their own, speeding up your attacks. (+20 ATK, +20 SPD)",
+        "rarity": "MYTHIC",
+        "value": 15500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 20,
+            "spd": 20
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "graveside_wraps": {
+        "name": "Graveside Wraps",
+        "description": "Tattered hand wraps that carry an ethereal residue, making weapon swings completely silent. (+20 ATK, +20 SPD, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 14000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 20,
+            "spd": 20,
+            "crit": 8
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "grips_of_the_forgotten": {
+        "name": "Grips of the Forgotten",
+        "description": "Gauntlets fashioned from petrified ancient wood, offering incredible crushing grip power. (+30 ATK, +15 DEF)",
+        "rarity": "MYTHIC",
+        "value": 14500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 30,
+            "def": 15
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "dark_matter_gauntlets": {
+        "name": "Dark Matter Gauntlets",
+        "description": "Heavy gloves that increase the impact weight of your standard physical strikes. (+35 ATK, +15 DEF)",
+        "rarity": "MYTHIC",
+        "value": 15000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 35,
+            "def": 15
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_14000_zeni": {
+        "name": "Value: 14,000 Zeni",
+        "description": "Recipe: 3 Ancient Wood, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_15000_zeni": {
+        "name": "Value: 15,000 Zeni",
+        "description": "Recipe: 3 Ghost Essence, 5 Spider Silk, 1 Mystic Thread",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_15500_zeni": {
+        "name": "Value: 15,500 Zeni",
+        "description": "Recipe: 4 Mystic Thread, 6 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_14500_zeni": {
+        "name": "Value: 14,500 Zeni",
+        "description": "Recipe: 2 Infected Shard, 6 Spider Silk, 1 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "hivecore_band": {
+        "name": "Hive-Core Band",
+        "description": "A ring made from a pulsing, corrupted heart. It’s still beating... barely. (+10 ATK, +12 CRIT, +8 LCK)",
+        "rarity": "MYTHIC",
+        "value": 19000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 10,
+            "crit": 12,
+            "luck": 8
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "pulsing_heart_loop": {
+        "name": "Pulsing Heart Loop",
+        "description": "A disturbing ring housing a tiny pulsing heart. It keeps your blood pumping at peak efficiency. (+120 HP, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 18500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 120,
+            "crit": 8
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "lichs_signet": {
+        "name": "Lich's Signet",
+        "description": "A cold iron ring linked to a necromancer’s core, boosting dark magic capabilities. (+35 MAG, +5 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 17500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 35,
+            "crit": 5
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "ethereal_band": {
+        "name": "Ethereal Band",
+        "description": "A ring made of solid mystic light that slightly uncouples your finger from physical physics. (+15 MAG, +20 LCK)",
+        "rarity": "MYTHIC",
+        "value": 17000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 15,
+            "luck": 20
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "crownjewel_choker": {
+        "name": "Crown-Jewel Choker",
+        "description": "A necklace threaded with mystic light. It casts a protective barrier around the neck. (+80 HP, +25 DEF, +12 MAG)",
+        "rarity": "MYTHIC",
+        "value": 17500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 80,
+            "def": 25,
+            "mag": 12
+        },
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "choker_of_mystic_light": {
+        "name": "Choker of Mystic Light",
+        "description": "A beautiful necklace that glows with its own internal light, completely shielding your mind. (+30 MAG, +15 LCK)",
+        "rarity": "MYTHIC",
+        "value": 16000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "mag": 30,
+            "luck": 15
+        },
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_16500_zeni": {
+        "name": "Value: 16,500 Zeni",
+        "description": "Recipe: 1 Infected Shard, 1 Pulsing Heart, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_18000_zeni": {
+        "name": "Value: 18,000 Zeni",
+        "description": "Recipe: 1 Lich Phylactery, 3 Mana Crystal, 2 Mystic Thread",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "golem_fist_smasher": {
+        "name": "Golem Fist Smasher",
+        "description": "A mace utilizing a pulsating heart of stone and magic as its head. (+40 ATK)",
+        "rarity": "MYTHIC",
+        "value": 11500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 40
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "golemcore_mace": {
+        "name": "Golem-Core Mace",
+        "description": "A heavy mace fueled by a pulsating heart of stone and magic, dealing heavy blunt damage. (+45 ATK)",
+        "rarity": "MYTHIC",
+        "value": 11000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 45
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "elemental_ice_brand": {
+        "name": "Elemental Ice Brand",
+        "description": "A freezing blade embedded with small pieces of elemental ice. (+35 ATK, +10 MAG)",
+        "rarity": "MYTHIC",
+        "value": 10500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 35,
+            "mag": 10
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "lightning_shocksaber": {
+        "name": "Lightning Shock-Saber",
+        "description": "A rapid sword packed with small pieces of elemental lightning, ensuring swift critical strikes. (+30 ATK, +15 SPD, +8 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 10800,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 30,
+            "spd": 15,
+            "crit": 8
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "mythril_wall": {
+        "name": "Mythril Wall",
+        "description": "A brilliant blue kite shield that is surprisingly heavy but entirely unyielding. (+50 DEF)",
+        "rarity": "MYTHIC",
+        "value": 9800,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "mythril_shield": {
+        "name": "Mythril Shield",
+        "description": "A gorgeous, brilliant blue shield that easily deflects standard magical and physical impacts. (+55 DEF)",
+        "rarity": "MYTHIC",
+        "value": 9500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 55
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "golem_stone_bastion": {
+        "name": "Golem Stone Bastion",
+        "description": "A heavy shield centered around a golem core. It is unyielding against crushing physical blows. (+65 DEF, +50 HP)",
+        "rarity": "MYTHIC",
+        "value": 11500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 65,
+            "hp": 50
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "demonhide_target_shield": {
+        "name": "Demon-Hide Target Shield",
+        "description": "A small, nimble shield layered with tough, resilient skin from a demon. (+45 DEF, +10 SPD)",
+        "rarity": "MYTHIC",
+        "value": 9200,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "spd": 10
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "demon_scale_tunic": {
+        "name": "Demon Scale Tunic",
+        "description": "A resilient tunic fashioned from tough demon skin. (+40 DEF, +80 HP)",
+        "rarity": "MYTHIC",
+        "value": 10500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 40,
+            "hp": 80
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "demon_skin_vest": {
+        "name": "Demon Skin Vest",
+        "description": "A tough, resilient vest made of demon hide. It provides natural magic resistance. (+45 DEF, +60 HP)",
+        "rarity": "MYTHIC",
+        "value": 10000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 45,
+            "hp": 60
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "mythril_chainshirt": {
+        "name": "Mythril Chainshirt",
+        "description": "Lightweight chain armor forged from pure mythril ore. Surprisingly heavy but covers well. (+50 DEF, +40 HP, +10 SPD)",
+        "rarity": "MYTHIC",
+        "value": 11000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 50,
+            "hp": 40,
+            "spd": 10
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "value_11200_zeni": {
+        "name": "Value: 11,200 Zeni",
+        "description": "Recipe: 2 Fire Essence, 6 Refined Steel, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "crown_of_static": {
+        "name": "Crown of Static",
+        "description": "A circlet crafted from concentrated magic. It smells like static electricity. (+15 DEF, +25 MAG)",
+        "rarity": "MYTHIC",
+        "value": 7800,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 15,
+            "mag": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "circlet_of_static": {
+        "name": "Circlet of Static",
+        "description": "A shiny circlet made from concentrated magic crystals. It continuously smells like static. (+15 DEF, +30 MAG)",
+        "rarity": "MYTHIC",
+        "value": 7500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 15,
+            "mag": 30
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "helm_of_fire_essence": {
+        "name": "Helm of Fire Essence",
+        "description": "A glowing iron helm hosting a flickering flame that sharpens your battle senses. (+25 DEF, +15 ATK, +5 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 8000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 25,
+            "atk": 15,
+            "crit": 5
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "mask_of_concentrated_magic": {
+        "name": "Mask of Concentrated Magic",
+        "description": "A complete iron mask containing a concentrated magic core that constantly smells like static. (+20 DEF, +25 MAG)",
+        "rarity": "MYTHIC",
+        "value": 7800,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 20,
+            "mag": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "value_6500_zeni": {
+        "name": "Value: 6,500 Zeni",
+        "description": "Recipe: 2 Fire Essence, 2 Fire Shard, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_6800_zeni": {
+        "name": "Value: 6,800 Zeni",
+        "description": "Recipe: 2 Mana Crystal, 3 Mana Dew, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_7000_zeni": {
+        "name": "Value: 7,000 Zeni",
+        "description": "Recipe: 2 Demon Hide, 3 Tough Leather, 2 Iron Shard",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_6900_zeni": {
+        "name": "Value: 6,900 Zeni",
+        "description": "Recipe: 3 Ice Shard, 3 Tough Leather, 2 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "bear_claw_sabatons": {
+        "name": "Bear Claw Sabatons",
+        "description": "Heavy iron boots tipped with sharp, dangerous bear claws for lethal kick attacks. (+20 DEF, +15 ATK)",
+        "rarity": "MYTHIC",
+        "value": 7000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 20,
+            "atk": 15
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_7200_zeni": {
+        "name": "Value: 7,200 Zeni",
+        "description": "Recipe: 2 Bear Claws, 2 Tough Leather, 2 Iron Shard",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_7400_zeni": {
+        "name": "Value: 7,400 Zeni",
+        "description": "Recipe: 3 Lightning Shard, 3 Iron Shard, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_7600_zeni": {
+        "name": "Value: 7,600 Zeni",
+        "description": "Recipe: 3 Mythril Ore, 2 Tough Leather, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "rainbow_hoop": {
+        "name": "Rainbow Hoop",
+        "description": "A beautifully colored ring that sparkles with immense value, granting high good fortune. (+15 LCK, +5 CRIT)",
+        "rarity": "MYTHIC",
+        "value": 8500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "luck": 15,
+            "crit": 5
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_8200_zeni": {
+        "name": "Value: 8,200 Zeni",
+        "description": "Recipe: 1 Rainbow Trout, 1 Rare Gem, 10 Pile of Gold",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "value_8000_zeni": {
+        "name": "Value: 8,000 Zeni",
+        "description": "Recipe: 1 Rare Gem, 50 Pile of Gold",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "value_8500_zeni": {
+        "name": "Value: 8,500 Zeni",
+        "description": "Recipe: 1 Golem Core, 20 Pile of Gold, 2 Iron Shard",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "talisman_of_flowing_mana": {
+        "name": "Talisman of Flowing Mana",
+        "description": "A simple charm containing magic Gatorade that constantly refreshes your magical energy. (+50 HP, +20 MAG)",
+        "rarity": "MYTHIC",
+        "value": 6000,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 50,
+            "mag": 20
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "value_6400_zeni": {
+        "name": "Value: 6,400 Zeni",
+        "description": "Recipe: 3 Lightning Shard, 6 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_6200_zeni": {
+        "name": "Value: 6,200 Zeni",
+        "description": "Recipe: 3 Fire Essence, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_6000_zeni": {
+        "name": "Value: 6,000 Zeni",
+        "description": "Recipe: 1 Rainbow Trout, 4 Spider Silk, 1 Mana Dew",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "amulet",
+        "reqLevel": 50
+    },
+    "value_6300_zeni": {
+        "name": "Value: 6,300 Zeni",
+        "description": "Recipe: 3 Ice Shard, 5 Spider Silk, 1 Mana Crystal",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "sharpened_iron_cleaver": {
+        "name": "Sharpened Iron Cleaver",
+        "description": "A basic cleaver built from standard metal fragments. Gets the job done. (+15 ATK)",
+        "rarity": "MYTHIC",
+        "value": 1200,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 15
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "scrap_metal_dagger": {
+        "name": "Scrap Metal Dagger",
+        "description": "A quick dagger put together from crude metal fragments. Gets the job done easily. (+12 ATK, +5 SPD)",
+        "rarity": "MYTHIC",
+        "value": 1100,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 12,
+            "spd": 5
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "antlertipped_spear": {
+        "name": "Antler-Tipped Spear",
+        "description": "A basic wooden spear tipped with deer antlers, useful for mid-range hunting strikes. (+16 ATK)",
+        "rarity": "MYTHIC",
+        "value": 1250,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 16
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "heavy_iron_spikemaul": {
+        "name": "Heavy Iron Spikemaul",
+        "description": "A heavy club driven full of metal fragments. It is slow but breaks armor easily. (+22 ATK, -3 SPD)",
+        "rarity": "MYTHIC",
+        "value": 1300,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 22,
+            "spd": -3
+        },
+        "slot": "main_hand",
+        "reqLevel": 50
+    },
+    "reinforcement_platter": {
+        "name": "Reinforcement Platter",
+        "description": "A makeshift shield made from scrap iron shards layered together. (+18 DEF)",
+        "rarity": "MYTHIC",
+        "value": 950,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 18
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "wooden_buckler": {
+        "name": "Wooden Buckler",
+        "description": "A crude shield made from deer antlers and scrap leather. Good for basic blocking. (+15 DEF)",
+        "rarity": "MYTHIC",
+        "value": 850,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 15
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "iron_scaffold_shield": {
+        "name": "Iron Scaffold Shield",
+        "description": "A heavy square shield made completely out of compiled metal fragments. (+22 DEF)",
+        "rarity": "MYTHIC",
+        "value": 900,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 22
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "scrap_platter_target": {
+        "name": "Scrap Platter Target",
+        "description": "A tiny round buckler fashioned from a single large piece of scrap iron. (+14 DEF, +4 SPD)",
+        "rarity": "MYTHIC",
+        "value": 880,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 14,
+            "spd": 4
+        },
+        "slot": "off_hand",
+        "reqLevel": 50
+    },
+    "hunters_jerkin": {
+        "name": "Hunter's Jerkin",
+        "description": "Standard leather armor crafted from soft and common rabbit fur. (+15 DEF, +30 HP)",
+        "rarity": "MYTHIC",
+        "value": 1100,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 15,
+            "hp": 30
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "rabbitfur_tunic": {
+        "name": "Rabbit-Fur Tunic",
+        "description": "Soft and common fur sewn into a basic tunic. Keeps you comfortable and protected. (+12 DEF, +25 HP)",
+        "rarity": "MYTHIC",
+        "value": 1050,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 12,
+            "hp": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "antlerribbed_jerkin": {
+        "name": "Antler-Ribbed Jerkin",
+        "description": "Common leather armor reinforced across the ribs with sturdy deer antlers. (+18 DEF, +20 HP)",
+        "rarity": "MYTHIC",
+        "value": 1150,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 18,
+            "hp": 20
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "heavy_scaffold_vest": {
+        "name": "Heavy Scaffold Vest",
+        "description": "Coarse leather armor lined entirely with iron shards for reliable frontline protection. (+25 DEF)",
+        "rarity": "MYTHIC",
+        "value": 1200,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 25
+        },
+        "slot": "armor",
+        "reqLevel": 50
+    },
+    "scrappers_cap": {
+        "name": "Scrapper's Cap",
+        "description": "A basic leather cap reinforced with tiny iron filings. Better than nothing. (+8 DEF)",
+        "rarity": "MYTHIC",
+        "value": 600,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 8
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "scrappers_leather_helm": {
+        "name": "Scrapper's Leather Helm",
+        "description": "A basic leather hat reinforced with small metal fragments along the brow line. (+7 DEF)",
+        "rarity": "MYTHIC",
+        "value": 550,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 7
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "furlined_cap": {
+        "name": "Fur-Lined Cap",
+        "description": "A very soft cap made entirely from rabbit fur, protecting your head from simple bumps. (+6 DEF, +10 HP)",
+        "rarity": "MYTHIC",
+        "value": 580,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 6,
+            "hp": 10
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "antler_crown_cap": {
+        "name": "Antler Crown Cap",
+        "description": "A basic leather cap with small deer antlers fixed to the sides to deflect downward strikes. (+9 DEF)",
+        "rarity": "MYTHIC",
+        "value": 600,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 9
+        },
+        "slot": "helmet",
+        "reqLevel": 50
+    },
+    "trappers_mitts": {
+        "name": "Trapper's Mitts",
+        "description": "Simple, coarse gloves woven from sticky giant spider silk. Good for handling rough items. (+5 DEF, +5 SPD)",
+        "rarity": "MYTHIC",
+        "value": 550,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 5,
+            "spd": 5
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "sticky_silk_wraps": {
+        "name": "Sticky Silk Wraps",
+        "description": "Simple gloves woven from strong, sticky silk from giant spiders. Grants good grip strength. (+4 DEF, +6 SPD)",
+        "rarity": "MYTHIC",
+        "value": 500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 4,
+            "spd": 6
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "ironfisted_mitts": {
+        "name": "Iron-Fisted Mitts",
+        "description": "Coarse gloves layered with flat metal fragments across the knuckles to enhance punches. (+6 ATK, +4 DEF)",
+        "rarity": "MYTHIC",
+        "value": 550,
+        "type": "EQUIPMENT",
+        "stats": {
+            "atk": 6,
+            "def": 4
+        },
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_520_zeni": {
+        "name": "Value: 520 Zeni",
+        "description": "Recipe: 3 Tough Leather, 2 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "gloves",
+        "reqLevel": 50
+    },
+    "value_650_zeni": {
+        "name": "Value: 650 Zeni",
+        "description": "Recipe: 3 Rabbit Hide, 1 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_600_zeni": {
+        "name": "Value: 600 Zeni",
+        "description": "Recipe: 2 Rabbit Hide, 2 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_620_zeni": {
+        "name": "Value: 620 Zeni",
+        "description": "Recipe: 2 Iron Shard, 2 Rabbit Hide, 1 Tough Leather",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_640_zeni": {
+        "name": "Value: 640 Zeni",
+        "description": "Recipe: 3 Rabbit Hide, 1 Tough Leather, 2 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "copper_band": {
+        "name": "Copper Band",
+        "description": "A cheap, glinting ring made from melted Zeni coins. Offers a tiny bit of luck. (+3 LCK)",
+        "rarity": "MYTHIC",
+        "value": 400,
+        "type": "EQUIPMENT",
+        "stats": {
+            "luck": 3
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "melted_zeni_loop": {
+        "name": "Melted Zeni Loop",
+        "description": "A simple ring hammered together out of glinting Zeni coins. Gives minor luck. (+4 LCK)",
+        "rarity": "MYTHIC",
+        "value": 350,
+        "type": "EQUIPMENT",
+        "stats": {
+            "luck": 4
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "scrapiron_band": {
+        "name": "Scrap-Iron Band",
+        "description": "A crude, heavy iron ring that provides a tiny bump to your overall physical defense. (+3 DEF)",
+        "rarity": "MYTHIC",
+        "value": 380,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 3
+        },
+        "slot": "boots",
+        "reqLevel": 50
+    },
+    "value_390_zeni": {
+        "name": "Value: 390 Zeni",
+        "description": "Recipe: 1 Small Bass, 20 Pile of Gold",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "herbalists_charm": {
+        "name": "Herbalist's Charm",
+        "description": "A small satchel filled with sun-kissed herbs. Smells great and gently mends small wounds. (+25 HP)",
+        "rarity": "MYTHIC",
+        "value": 500,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 25
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "sunkissed_herb_satchel": {
+        "name": "Sun-Kissed Herb Satchel",
+        "description": "Natural medicine herbs kept in a necklace pouch, slowly mending your minor scratches. (+20 HP)",
+        "rarity": "MYTHIC",
+        "value": 480,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 20
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "pondbass_charm": {
+        "name": "Pond-Bass Charm",
+        "description": "A dried common pond fish worn on a string, somehow providing a slight boost to stamina. (+15 HP, +2 SPD)",
+        "rarity": "MYTHIC",
+        "value": 450,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 15,
+            "spd": 2
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "herbalists_choker": {
+        "name": "Herbalist's Choker",
+        "description": "A string necklace holding sun-kissed herbs that clears minor poisons or toxins. (+30 HP)",
+        "rarity": "MYTHIC",
+        "value": 490,
+        "type": "EQUIPMENT",
+        "stats": {
+            "hp": 30
+        },
+        "slot": "ring",
+        "reqLevel": 50
+    },
+    "ragged_travelers_shawl": {
+        "name": "Ragged Traveler’s Shawl",
+        "description": "A tattered cloak that offers minor protection from the elements. (+5 DEF)",
+        "rarity": "MYTHIC",
+        "value": 450,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 5
+        },
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "tattered_rag_shawl": {
+        "name": "Tattered Rag Shawl",
+        "description": "A tattered traveler's cloak that offers very basic shelter against sudden downpours. (+4 DEF)",
+        "rarity": "MYTHIC",
+        "value": 420,
+        "type": "EQUIPMENT",
+        "stats": {
+            "def": 4
+        },
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_440_zeni": {
+        "name": "Value: 440 Zeni",
+        "description": "Recipe: 3 Rabbit Hide, 4 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    },
+    "value_460_zeni": {
+        "name": "Value: 460 Zeni",
+        "description": "Recipe: 4 Tough Leather, 2 Spider Silk",
+        "rarity": "MYTHIC",
+        "value": 1000,
+        "type": "EQUIPMENT",
+        "stats": {},
+        "slot": "cloak",
+        "reqLevel": 50
+    }
+});
+
 // ==========================================
 // 📤 EXPORTS
 // ==========================================
