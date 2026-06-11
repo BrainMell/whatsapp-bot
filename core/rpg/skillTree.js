@@ -2333,8 +2333,7 @@ const SKILL_TREES = {
                         isAscended: true,
                         energyCost: [100, 90, 80],
                         cooldown: 10,
-                        // Balance 5.1: capped from [7, 8, 9] to prevent one-shots
-                        damageMultiplier: [4.0, 5.0, 6.0],
+                        damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Unleash total warfare upon all enemies.',
@@ -3513,8 +3512,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 130, 110],
                         cooldown: 10,
-                        // Balance 5.1: capped from [20, 25, 30] to prevent one-shots
-                        damageMultiplier: [8.0, 10.0, 12.0],
+                        damageMultiplier: [20.0, 25.0, 30.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'Create singularity consuming all',

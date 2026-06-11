@@ -670,7 +670,10 @@ const ITEM_DATABASE = {
     'phoenix_down':    { name: 'Phoenix Down', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 3500, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
     'phoenix_feather': { name: 'Phoenix Feather', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 3500, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
     'smoke_bomb':      { name: 'Smoke Bomb', description: 'Allows escape from combat (80% chance).', rarity: 'COMMON', value: 500, type: 'POTION', usable: true, effect: 'flee', chance: 80 },
-    'bomb':            { name: 'Bomb', description: 'Deals 80 area damage to all enemies.', rarity: 'UNCOMMON', value: 1000, type: 'POTION', usable: true, effect: 'damage_aoe', value_dmg: 80 },
+    'bomb':            { name: 'Bomb', description: 'Deals 80 area damage to all enemies.', rarity: 'UNCOMMON', value: 2500, type: 'POTION', usable: true, effect: 'damage_aoe', value_dmg: 80 },
+    'fire_bomb':       { name: 'Fire Bomb', description: 'Deals 150 fire damage to all enemies.', rarity: 'RARE', value: 3500, type: 'POTION', usable: true, effect: 'aoe_damage', effectValue: 150 },
+    'void_grenade':    { name: 'Void Grenade', description: 'Deals 300 damage and reduces enemy DEF.', rarity: 'RARE', value: 8000, type: 'POTION', usable: true, effect: 'aoe_debuff_damage', effectValue: 300 },
+    'cursed_bomb':     { name: 'Cursed Bomb', description: 'Deals 200 damage and slows all enemies.', rarity: 'RARE', value: 5000, type: 'POTION', usable: true, effect: 'aoe_slow_damage', effectValue: 200 },
     'bandage': { name: 'Bandage', description: 'Simple cloth used to wrap wounds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
     
     // --- SPECIALS ---

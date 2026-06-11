@@ -1112,7 +1112,7 @@ const CONSUMABLES = {
   },
   bomb: {
     name: "Bomb",
-    cost: 1000,
+    cost: 2500,
     effect: "damage_aoe",
     value: 80,
     desc: "Deals 80 area damage to all enemies.",
@@ -1120,7 +1120,7 @@ const CONSUMABLES = {
   },
   abyssal_detonator: {
     name: "Abyssal Detonator",
-    cost: 50000,
+    cost: 150000,
     effect: "percent_hp_damage",
     effectValue: 0.25,
     desc: "Deals 25% of target MAX HP as true damage.",
