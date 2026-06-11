@@ -511,6 +511,18 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         );
     }
 
+    // Sort by level requirement (lowest level first), with alphabetical name fallback for stable sorting
+    recipes.sort((a, b) => {
+        const aInfo = lootSystem.getItemInfo(a.id) || {};
+        const bInfo = lootSystem.getItemInfo(b.id) || {};
+        const aLvl = aInfo.reqLevel !== undefined ? aInfo.reqLevel : 0;
+        const bLvl = bInfo.reqLevel !== undefined ? bInfo.reqLevel : 0;
+        if (aLvl === bLvl) {
+            return a.name.localeCompare(b.name);
+        }
+        return aLvl - bLvl;
+    });
+
     const itemsPerPage = 6;
     const totalPages = Math.ceil(recipes.length / itemsPerPage) || 1;
     const currentPage = Math.max(1, Math.min(page, totalPages));
@@ -524,10 +536,12 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
 
     pageItems.forEach(r => { 
-        msg += `• *${r.name}* (\`${r.id}\`)\n  📝 ${r.desc}\n`;
+        const info = lootSystem.getItemInfo(r.id) || {};
+        const lvlStr = info.reqLevel !== undefined ? ` _[Req Lvl: ${info.reqLevel}]_` : "";
+        msg += `• *${r.name}* (\`${r.id}\`)${lvlStr}\n  📝 ${r.desc}\n`;
         const ingredients = Object.entries(r.ingredients).map(([id, qty]) => { 
-            const info = lootSystem.getItemInfo(id);
-            return `${qty}x ${info.name}`;
+            const ingInfo = lootSystem.getItemInfo(id);
+            return `${qty}x ${ingInfo.name}`;
         }).join(', ');
         msg += `  📦 Req: ${ingredients}\n\n`;
     });
