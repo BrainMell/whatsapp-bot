@@ -363,3 +363,41 @@ sock.ev.on("messages.upsert", async ({ messages, type }) => {
 **How it works here**: In the provided code snippets, async/await is used to write asynchronous code that is easier to read and maintain. For example, the event listener passed to `sock.ev.on` is defined as an async function that uses await to wait for the promises to be resolved.
 **Why it's used**: Async/await is used to write asynchronous code that is easier to read and maintain, making it easier to handle asynchronous operations and execute code when a promise is resolved or rejected.
 **If you change/remove it**: If you remove the async/await, the code will not be able to write asynchronous code that is easier to read and maintain, and the program will not be able to handle asynchronous operations and execute code when a promise is resolved or rejected.
+
+---
+
+## 5. Reference Manual
+
+> All guide topics and command routing below are configured directly in `core/engine.js`. A contributor should never need to look up source code routes to know what guide topics are supported or what text is returned for each.
+
+### 5.1 Guide Command Syntax
+* **Primary Command**: `.j guide` or `.j handbook` (displays the handbook directory).
+* **Topic Routing**: `.j guide <topic>` or `.j handbook <topic>` (displays the specific help message).
+* **Lore Command**: `.j lore` (directs to campaign back-story).
+
+### 5.2 Supported Guide Topics Catalog
+The table below lists all valid topic keys, their descriptions, and the exact messages returned:
+
+| Topic Key | Display Title | Description / Content Summary |
+|:---|:---|:---|
+| `combat` | ⚔️ COMBAT MECHANICS | Covers SPD initiative, resting to restore Energy (+15), damage types (Physical/Magical/True), enemy telegraph warning hits, and party synergy. |
+| `stats` | 📊 ATTRIBUTES & STATS | Explains primary attributes: HP, Energy, ATK (Physical), MAG (Magical & healing), DEF, SPD, and LUCK. |
+| `classes` | 🎭 EVOLUTION TIERS & REQS | Summarizes Starter, Evolved (Lv.10+, 3 Quests, 5k Zeni, T2 stone), and Ascended (Lv.30+, 15 Quests, 50k Zeni, T3 stone) requirements and path routing. |
+| `fighter` | 🔴 FIGHTER EVOLUTIONS | Details Fighter paths (Warrior/Warlord, Berserker/Doomslayer, Paladin/Templar, Dragonslayer/Dragon God) and their role as the frontline vanguard. |
+| `scout` | 🟢 SCOUT EVOLUTIONS | Details Scout paths (Rogue/Nightblade, Monk/Zenmaster, Samurai/Shogun, Ninja/Kage) and their role as high-speed strikers. |
+| `mage` | 🔵 APPRENTICE EVOLUTIONS | Details Apprentice paths (Mage/Archmage, Warlock/Voidwalker, Necromancer/Lich, Elementalist/Avatar, Chronomancer/Timelord, Reaper/Death Lord) and their magic role. |
+| `support` | 🟡 ACOLYTE EVOLUTIONS | Details Acolyte paths (Cleric/Saint, Bard/Virtuoso, Merchant/Tycoon, Artificer/Grand Inventor, God Hand/Divine Fist, Druid/Archdruid) and their healing/buffing role. |
+| `dragons` | 🐲 DRAGONSLAYER LEGACY | Details the step-by-step questline to unlock Dragonslayer (Tier 2) and Dragon God (Tier 3), including buying Dragon Seal Ring (20k Zeni) and key (15k Zeni). |
+| `monsters` | 👹 MONSTER ARCHETYPES | Outlines monster roles (Guardians/Tanks, Ravagers/Brutes, Acolytes/Casters, Stalkers/Assassins). |
+| `lore` | 📜 WORLD LORE: THE DIVINE SPARK | Explains the backstory of the Divine Architect, Primordial Chaos, and the Infected. |
+| `mastery` | 💎 PROFESSION MASTERY | Discusses Masterwork items (10% chance at high Crafting levels to get +20% stats), mining nodes, and dismantling gear. |
+| `advanced` | 🚀 ADVANCED MECHANICS | Details Hardcore Mode XP loss, party synergy benefits, dynamic titles, and marriage systems. |
+| `items` | 🎒 EQUIPMENT & LOOT | Explains gear rarity tiers (Common ➔ Uncommon ➔ Rare ➔ Epic ➔ Legendary ➔ Mythic), slots, and the material pouch. |
+| `work` | ⚒️ PROFESSIONS GUIDE | Outlines Mining, Crafting, Brewing, and Stamina (Energy) consumption. |
+| `guilds` | 🏰 GUILD SYSTEM | Explains guild creation, guild archetypes (Adventurer, Merchant, Research), and benefits. |
+| `raids` | 👹 DUNGEONS & RAIDS | Distinguishes between Solo, Dungeons (3-player), Raids (World Bosses), and secret dungeons. |
+| `special` | ✨ SPECIAL DUNGEONS | Outlines secret dungeons such as the Dragon's Lair, keys required, and unique rewards. |
+| `pvp` | 🏟️ PVP & DUELS | Covers arena duels, stakes/wagers, and seasonal leaderboards. |
+| `economy` | 💰 ECONOMY & INVESTMENTS | Explains Zeni currency, Stock Market/Bank investments, material market price changes, and loans. |
+| `ranks` | ⭐ ADVENTURER PROGRESSION | Explains letter grades (F to SSS), milestone unlocks, and level-up points. |
+| `commands` | 📜 COMMAND LIST | Lists commands by category (Basic, Action, Social, Growth, Misc). |

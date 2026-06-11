@@ -390,3 +390,119 @@ for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
 **How it works here**: The `for-of` loop is used to iterate over the `recipe.ingredients` object.
 **Why it's used**: Loops are used to execute a block of code repeatedly, making it easier to work with data in the program.
 **If you change/remove it**: If you remove the loop, the code will not be able to iterate over the `recipe.ingredients` object, and the program may behave incorrectly. If you change the loop type or implementation, the program will behave differently.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `CRAFTING_RECIPES` in `core/rpg/craftingSystem.js`. A contributor should never need to open that file to know what can be forged or what materials are required.
+
+---
+
+### All Forge (Blacksmith) Recipes
+
+The forge command uses the `blacksmith` station. Use `.j forge <item_id>`:
+
+#### Weapons
+| Item ID | Display Name |
+|---|---|
+| `steel_sabre` | Steel Sabre |
+| `mythril_staff` | Mythril Staff |
+| `inferno_blade` | Inferno Blade |
+| `volt_dagger` | Volt Dagger |
+| `dragonslayer_spear` | Dragonslayer Spear |
+| `shadow_dagger` | Shadow Dagger |
+| `warhammer` | Warhammer |
+| `death_scythe` | Death Scythe |
+| `chrono_blade` | Chrono Blade |
+| `golden_cane` | Golden Cane |
+| `multi_tool` | Multi-Tool |
+| `greataxe` | Greataxe |
+| `elemental_wand` | Elemental Wand |
+| `storm_bow` | Storm Bow |
+
+#### Armour & Accessories
+| Item ID | Display Name |
+|---|---|
+| `reinforced_plate` | Reinforced Plate |
+| `stealth_garb` | Stealth Garb |
+| `holy_raiment` | Holy Raiment |
+| `dragon_plate` | Dragon Plate |
+| `archmage_robes` | Archmage Robes |
+| `iron_helm` | Iron Helm |
+| `wizard_hat` | Wizard Hat |
+| `assassin_hood` | Assassin Hood |
+| `leather_boots` | Leather Boots |
+| `winged_sandals` | Winged Sandals |
+| `health_pendant` | Health Pendant |
+| `power_ring` | Power Ring |
+| `glacier_guard` | Glacier Guard |
+| `obsidian_shield` | Obsidian Shield |
+| `titan_gauntlets` | Titan Gauntlets |
+| `silk_cloak` | Silk Cloak |
+| `ghost_pendant` | Ghost Pendant |
+| `vampiric_ring` | Vampiric Ring |
+| `wind_boots` | Wind Boots |
+
+#### Consumables (Crafted at Blacksmith / Workshop)
+| Item ID | Display Name |
+|---|---|
+| `fire_bomb` | Fire Bomb |
+| `void_grenade` | Void Grenade |
+| `cursed_bomb` | Cursed Bomb |
+| `smoke_screen` | Smoke Screen |
+
+#### Material Conversions
+| Item ID | Description |
+|---|---|
+| `refined_steel_conv` | Converts base ore → Refined Steel |
+| `mythril_ore_conv` | Converts base ore → Mythril Ore |
+| `mana_crystal_conv` | Converts base material → Mana Crystal |
+| `dark_matter_conv` | Converts materials → Dark Matter |
+| `legendary_shard_conv` | Converts materials → Legendary Shard |
+| `evolution_stone` | Crafts an Evolution Stone (T2) |
+| `ascension_stone` | Crafts an Ascension Stone (T3) |
+
+---
+
+### Forge Recipe Schema
+
+To add a new forge recipe to `CRAFTING_RECIPES` in `core/rpg/craftingSystem.js`:
+
+```javascript
+'recipe_item_id': {
+    name: 'Display Name',
+    result: 'item_id_produced',   // ID of the item created (must exist in ITEM_DATABASE)
+    quantity: 1,                   // How many are produced
+    station: 'blacksmith',         // Must be 'blacksmith' for forge command
+    ingredients: [
+        { id: 'refined_steel', quantity: 5 },
+        { id: 'mana_crystal', quantity: 2 }
+    ],
+    description: 'Brief description shown in recipe list.'
+}
+```
+
+---
+
+### Key Crafting Material IDs for Forging
+
+| Item ID | Name | Primary Source |
+|---|---|---|
+| `refined_steel` | Refined Steel | Mine / enemy drop |
+| `mythril_ore` | Mythril Ore | Mine / elite / boss drop |
+| `mana_crystal` | Mana Crystal | Mine / elite drop |
+| `dark_matter` | Dark Matter | Boss drop |
+| `boss_essence` | Boss Essence | Boss drop |
+| `dragon_blood` | Dragon Blood | Boss drop |
+| `dragon_scale` | Dragon Scale | Dragon boss |
+| `demon_horn` | Demon Horn | Demon Lord boss |
+| `ancient_wood` | Ancient Wood | Boss drop |
+| `mystic_thread` | Mystic Thread | Boss drop |
+| `legendary_shard` | Legendary Shard | Boss drop |
+| `void_crystal` | Void Crystal | Crafting / alchemy |
+| `void_essence` | Void Essence | Void Horror (MYTHIC) |
+| `fire_shard` | Fire Shard | Elite drop |
+| `ice_shard` | Ice Shard | Elite drop |
+| `lightning_shard` | Lightning Shard | Elite drop |
+| `rare_gem` | Rare Gem | Treasure / boss drop |

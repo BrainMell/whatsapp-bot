@@ -408,3 +408,101 @@ if (!inventory.isEmpty && inventory.items[index]) targetItemId = inventory.items
 **How it works here**: The code is using database operations to interact with the inventory system, such as accessing and updating inventory data.
 **Why it's used**: Database operations are used to store and manage data, and provide a way to interact with the data.
 **If you change/remove it**: If you remove this database operation, the program will not be able to interact with the inventory system, and the dismantle command will not work as expected.
+
+---
+
+## 5. Reference Manual
+
+> Everything below is extracted directly from `core/rpg/craftingSystem.js` and `core/rpg/lootSystem.js`. A contributor should never need to open those files to understand what can be dismantled or what materials are returned.
+
+---
+
+### Dismantle Yield Formula
+
+Dismantle recovers **40%** of each ingredient quantity from the item's crafting recipe, minimum 1 per ingredient type.
+
+```
+returned_qty = Math.max(1, Math.floor(recipe_ingredient_qty × 0.4))
+```
+
+**Example**: A recipe requiring `refined_steel ×5` returns `Math.max(1, floor(5 × 0.4)) = 2` refined steel on dismantle.
+
+> Only items with a matching entry in `CRAFTING_RECIPES` can be dismantled. Items obtained from drops, mining, or cooking that have no crafting recipe **cannot** be dismantled.
+
+---
+
+### Dismantlable Item IDs
+
+These items are registered in `CRAFTING_RECIPES` and support dismantle.
+
+#### Weapons
+| Item ID | Display Name |
+|---|---|
+| `rusty_dagger` | Rusted Dagger |
+| `iron_sword` | Iron Sword |
+| `steel_sabre` | Steel Sabre |
+| `arcane_wand` | Arcane Wand |
+| `mythril_staff` | Mythril Staff |
+| `greatsword` | Greatsword |
+| `crystal_staff` | Crystal Staff |
+| `bronze_spear` | Bronze Spear |
+| `dragon_fang_dagger` | Dragon-Fang Dagger |
+
+#### Armour
+| Item ID | Display Name |
+|---|---|
+| `leather_tunic` | Leather Tunic |
+| `iron_plate` | Iron Plate |
+| `mage_robe` | Novice Robe |
+| `chainmail` | Chainmail |
+| `reinforced_plate` | Reinforced Plate |
+| `dragon_scale_armor` | Dragon-Scale Plate |
+
+#### Accessories
+| Item ID | Display Name |
+|---|---|
+| `wooden_ring` | Wooden Ring |
+| `iron_ring` | Iron Ring |
+| `dragon_seal_ring` | Dragon Seal Ring |
+| `dragon_helm` | Dragon Helm |
+
+---
+
+### All Material / Ingredient IDs
+
+These `MATERIAL` type items are the ingredients returned by dismantle:
+
+| Item ID | Name | Primary Source |
+|---|---|---|
+| `refined_steel` | Refined Steel | Mine / enemy drop |
+| `sharp_whetstone` | Sharp Whetstone | Elite enemy drop |
+| `mythril_ore` | Mythril Ore | Mine / elite / boss drop |
+| `mana_crystal` | Mana Crystal | Mine / elite drop |
+| `tough_leather` | Tough Leather | Enemy drop |
+| `gunpowder` | Gunpowder | Enemy drop |
+| `fire_essence` | Fire Essence | Crafting / alchemy |
+| `dark_matter` | Dark Matter | Boss drop |
+| `healing_herb` | Healing Herb | Enemy drop |
+| `mana_dew` | Mana Dew | Boss drop |
+| `dragon_blood` | Dragon Blood | Boss drop |
+| `iron_shard` | Iron Shard | Enemy drop |
+| `void_crystal` | Void Crystal | Crafting / alchemy |
+| `boss_essence` | Boss Essence | Boss drop |
+| `legendary_shard` | Legendary Shard | Boss drop |
+| `spider_silk` | Spider Silk | Enemy drop |
+| `fire_shard` | Fire Shard | Elite drop |
+| `ice_shard` | Ice Shard | Elite drop |
+| `lightning_shard` | Lightning Shard | Elite drop |
+| `demon_hide` | Demon Hide | Elite drop |
+| `ghost_essence` | Ghost Essence | Elite drop |
+| `ancient_wood` | Ancient Wood | Boss drop |
+| `mystic_thread` | Mystic Thread | Boss drop |
+| `minor_enhancement_stone` | Minor Enhancement Stone | Enemy drop |
+| `rare_enhancement_stone` | Rare Enhancement Stone | Elite drop |
+| `legendary_enhancement_stone` | Legendary Enhancement Stone | Boss drop |
+| `dragon_scale` | Dragon Scale | Dragon boss drop |
+| `demon_horn` | Demon Horn | Demon Lord boss drop |
+| `golem_core` | Golem Core | Ancient Golem boss drop |
+| `wyrm_fang` | Wyrm Fang | Elder Wyrm boss drop |
+| `rare_gem` | Rare Gem | Treasure / boss drop |
+| `void_essence` | Void Essence | Void Horror boss (MYTHIC) |

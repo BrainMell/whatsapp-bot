@@ -960,10 +960,13 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.mana = 200;
     scaled.maxMana = 200;
     
-    scaled.xpReward = Math.floor(boss.xpReward * (1 + (rankIndex * 0.3)));
+    const xpRewardBase = boss.xpReward !== undefined ? boss.xpReward : 1000;
+    const goldRewardBase = boss.goldReward !== undefined ? boss.goldReward : [100, 200];
+
+    scaled.xpReward = Math.floor(xpRewardBase * (1 + (rankIndex * 0.3)));
     scaled.goldReward = [
-        Math.floor(boss.goldReward[0] * (1 + (rankIndex * 0.2))),
-        Math.floor(boss.goldReward[1] * (1 + (rankIndex * 0.2)))
+        Math.floor(goldRewardBase[0] * (1 + (rankIndex * 0.2))),
+        Math.floor(goldRewardBase[1] * (1 + (rankIndex * 0.2)))
     ];
     
     scaled.statusEffects = [];

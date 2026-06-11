@@ -216,15 +216,177 @@ To adjust skill tree configurations or evolution criteria:
 
 
 
+
+
 ---
 
+## 5. Complete Ability System Reference Manual
 
+This reference section explains the structure, properties, and configuration options used to define or modify ability nodes and skill trees in the RPG engine without reading implementation files.
 
+### 5.1 Skill Tree & Tree Node Structures
+All skill trees are registered inside `SKILL_TREES` in [`core/rpg/skillTree.js`](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/skillTree.js) using the class ID as the top-level key. Each tree contains one or more sub-stance trees (e.g. OFFENSE, DEFENSE) containing individual skills.
 
+#### Class Skill Tree Template
+```javascript
+CLASS_ID: {
+    name: 'Class Name',             // String: Readable class name
+    icon: '🔮',                     // String: Class icon/emoji
+    skillPointsPerLevel: 1,         // Number: Skill points awarded on level-up
+    trees: {
+        SUB_TREE_ID: {              // Dictionary: Group of related skills (e.g. OFFENSE)
+            name: 'Stance Name',
+            icon: '⚔️',
+            color: '🔴',
+            skills: {
+                skill_id: {          // Dictionary Key: Matches the ID of the skill
+                    id: 'skill_id',  // String: Unique skill identifier
+                    name: 'Skill Name', // String: Display name
+                    tier: 1,         // Number: Tier rank requirement (usually 1 to 3)
+                    maxLevel: 5,     // Number: Max ranks players can invest (usually 3 or 5)
+                    cost: 10,        // Number/Array/Function: Energy cost to activate in combat
+                    cooldown: 1,     // Number/Array/Function: Cooldown in combat turns
+                    desc: 'A description', // String: Description printed in '.j abilities'
+                    requires: null,  // Object: predecessor skill levels required e.g. { previous_skill: 3 }
+                    effect: (level) => ({ ... }) // Function: Returns the combat effect payload (see below)
+                }
+            }
+        }
+    }
+}
+```
 
+---
 
+### 5.2 Supported Skill Effect Types (`effect(level)`)
+The `effect(level)` callback returns an object detailing how combat calculations handle the ability. Below are the supported action type structures:
 
+#### 1. Single-Target Damage (`type: 'damage'`)
+Deals damage to one selected opponent.
+```javascript
+effect: (level) => ({
+    type: 'damage',
+    multiplier: 1.2 + (level * 0.1), // Float: scales base attack stat (e.g. 1.2× + 10% per rank)
+    damageType: 'physical' | 'magic' | 'holy', // String: elemental classification
+    animation: '⚔️💥'               // String: Emojis displayed during battle
+})
+```
 
+#### 2. Area of Effect Damage (`type: 'aoe'`)
+Deals damage split across multiple target enemies.
+```javascript
+effect: (level) => ({
+    type: 'aoe',
+    multiplier: 1.0 + (level * 0.15),
+    targets: Math.min(2 + Math.floor(level / 2), 4), // Number: maximum target count
+    damageType: 'physical' | 'magic',
+    animation: '⚔️🌀'
+})
+```
+
+#### 3. Execution Strike (`type: 'execute'`)
+High-damage finisher targeting enemies below a health percentage threshold.
+```javascript
+effect: (level) => ({
+    type: 'execute',
+    multiplier: 2.0 + (level * 0.5),
+    threshold: 30 + (level * 5),    // Number: triggers execution check when enemy HP < % threshold
+    damageType: 'physical',
+    animation: '⚔️💀'
+})
+```
+
+#### 4. Self Buff (`type: 'buff_self'`)
+Applies temporary stat increases to the caster.
+```javascript
+effect: (level) => ({
+    type: 'buff_self',
+    buffType: 'defense' | 'attack' | 'speed' | 'luck' | 'magic', // String: targeted stat
+    value: 15 + (level * 5),         // Number: percentage increase (e.g. 15% + 5% per rank)
+    duration: 2,                     // Number: turns the buff remains active
+    animation: '🛡️✨'
+})
+```
+
+#### 5. Team Buff (`type: 'buff_team'`)
+Applies temporary stat enhancements to all active members of the quest party.
+```javascript
+effect: (level) => ({
+    type: 'buff_team',
+    buffType: 'attack' | 'defense' | 'speed' | 'all',
+    value: 10 + (level * 3),
+    duration: 3,
+    animation: '🎸✨'
+})
+```
+
+#### 6. Single-Target Heal (`type: 'heal'`)
+Restores health to the caster or a selected ally.
+```javascript
+effect: (level) => ({
+    type: 'heal',
+    multiplier: 1.5 + (level * 0.2), // Float: healing scaling (based on MAG stat)
+    animation: '💚✨'
+})
+```
+
+#### 7. Party Heal (`type: 'heal_team'`)
+Heals all active party members simultaneously.
+```javascript
+effect: (level) => ({
+    type: 'heal_team',
+    multiplier: 1.0 + (level * 0.15),
+    animation: '💖✨'
+})
+```
+
+#### 8. Ally Resurrection (`type: 'revive'`)
+Brings a fallen teammate back to life.
+```javascript
+effect: (level) => ({
+    type: 'revive',
+    hpPercent: 20 + (level * 10),    // Number: percentage HP restored to revived ally
+    animation: '🪶✨'
+})
+```
+
+#### 9. Status Inflicting Damage (`type: 'damage_cc'`)
+Deals damage with a probability to inflict a crowd control status.
+```javascript
+effect: (level) => ({
+    type: 'damage_cc',
+    multiplier: 1.1 + (level * 0.1),
+    damageType: 'physical',
+    ccType: 'stun' | 'freeze' | 'paralyze' | 'sleep',
+    chance: 20 + (level * 10),      // Number: probability percentage (e.g. 20% + 10% per rank)
+    duration: 1,
+    animation: '⚡💥'
+})
+```
+
+#### 10. Damage over Time (`type: 'damage_dot'`)
+Inflicts an elemental ailment dealing ticks of damage each turn.
+```javascript
+effect: (level) => ({
+    type: 'damage_dot',
+    multiplier: 0.5 + (level * 0.1),
+    damageType: 'fire' | 'poison' | 'bleed',
+    duration: 3,
+    animation: '🔥'
+})
+```
+
+#### 11. Passive Ability (`type: 'passive'`)
+Grants constant permanent modifiers/perks (does not need active casting).
+```javascript
+effect: (level) => ({
+    type: 'passive',
+    stat: 'speed' | 'defense' | 'attack' | 'crit_chance',
+    value: 5 + (level * 2),          // Number: passive percentage increase
+})
+```
+
+---
 
 # **Noob Readthrough**
 

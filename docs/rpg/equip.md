@@ -462,3 +462,128 @@ const itemInfo = lootSystem.getItemInfo(result.equipped);
 **How it works here**: Database operations are used to interact with the inventory system and loot system databases.
 **Why it's used**: Database operations are used to store and retrieve data in a persistent way.
 **If you change/remove it**: If you remove the database operations, the code will not be able to interact with the databases, and the program may behave incorrectly. If you change the database operations to use a different database or storage mechanism, the code will use the new mechanism instead.
+
+---
+
+## 5. Reference Manual
+
+> Everything below is extracted directly from `core/rpg/inventorySystem.js` and `core/rpg/lootSystem.js`. A contributor should never need to search those files to equip or add equipment items.
+
+---
+
+### Equipment Slots
+
+These are the **only valid slot names** accepted by the equip/unequip system (defined in `inventorySystem.getEquipment()`).
+
+| Slot Key | Description | Alias |
+|---|---|---|
+| `main_hand` | Primary weapon | `weapon` (legacy, auto-migrated) |
+| `off_hand` | Secondary weapon / shield | — |
+| `armor` | Body armour | — |
+| `helmet` | Head slot | — |
+| `boots` | Feet slot | — |
+| `ring` | Accessory ring | — |
+| `amulet` | Neck accessory | — |
+| `cloak` | Back slot | — |
+| `gloves` | Hand slot | — |
+
+> **Two-handed weapons**: When a two-handed weapon is equipped in `main_hand`, `off_hand` is automatically cleared.
+
+---
+
+### All Equipment Items (ITEM_DATABASE)
+
+Items with `type: 'EQUIPMENT'` can be equipped. The `slot` field determines which equipment slot they occupy.
+
+#### Weapons — `slot: main_hand`
+
+| Item ID | Name | Rarity | Value |
+|---|---|---|---|
+| `rusty_dagger` | Rusted Dagger | COMMON | 1,000 |
+| `bronze_spear` | Bronze Spear | COMMON | 1,200 |
+| `crystal_staff` | Crystal Staff | UNCOMMON | 3,000 |
+| `iron_sword` | Iron Sword | UNCOMMON | 5,000 |
+| `arcane_wand` | Arcane Wand | RARE | 6,000 |
+| `greatsword` | Greatsword | RARE | 6,000 |
+| `steel_sabre` | Steel Sabre | RARE | 16,000 |
+| `dragon_fang_dagger` | Dragon-Fang Dagger | EPIC | 22,000 |
+| `mythril_staff` | Mythril Staff | EPIC | 30,000 |
+
+#### Armour — `slot: armor`
+
+| Item ID | Name | Rarity | Value |
+|---|---|---|---|
+| `leather_tunic` | Leather Tunic | COMMON | 1,600 |
+| `chainmail` | Chainmail | UNCOMMON | 2,500 |
+| `iron_plate` | Iron Plate | UNCOMMON | 4,500 |
+| `mage_robe` | Novice Robe | UNCOMMON | 4,800 |
+| `reinforced_plate` | Reinforced Plate | EPIC | 24,000 |
+| `dragon_scale_armor` | Dragon-Scale Plate | LEGENDARY | 45,000 |
+
+#### Helmets — `slot: helmet`
+
+| Item ID | Name | Rarity | Value |
+|---|---|---|---|
+| `dragon_helm` | Dragon Helm | EPIC | 12,000 |
+
+#### Rings — `slot: ring`
+
+| Item ID | Name | Rarity | Value |
+|---|---|---|---|
+| `wooden_ring` | Wooden Ring | COMMON | 500 |
+| `iron_ring` | Iron Ring | UNCOMMON | 2,000 |
+| `dragon_seal_ring` | Dragon Seal Ring | EPIC | 20,000 |
+
+---
+
+### Item Rarities
+
+| Rarity | Icon | Sell Multiplier | Drop Chance |
+|---|---|---|---|
+| `COMMON` | ⚪ | ×0.6 | 60% |
+| `UNCOMMON` | 🟢 | ×0.7 | 25% |
+| `RARE` | 🔵 | ×0.8 | 10% |
+| `EPIC` | 🔴 | ×0.9 | 4% |
+| `LEGENDARY` | 🟡 | ×1.0 | 1% |
+| `MYTHIC` | 🟣 | ×1.2 | 0.1% |
+
+---
+
+### Equipment Item Schema
+
+When adding a new equipable item to `ITEM_DATABASE` in `core/rpg/lootSystem.js`:
+
+```javascript
+'item_id': {
+    name: '🗡️ Display Name',       // Shown in inventory / shop
+    description: 'Flavour text.',   // Tooltip description
+    rarity: 'RARE',                 // COMMON | UNCOMMON | RARE | EPIC | LEGENDARY | MYTHIC
+    value: 6000,                    // Base sell price in Zeni
+    type: 'EQUIPMENT',              // Must be 'EQUIPMENT' to be equippable
+    slot: 'main_hand',              // See slot table above
+    stats: {
+        attack: 25,                 // Flat stat bonuses applied while equipped
+        defense: 0,
+        speed: 5,
+        magic: 0,
+        luck: 0
+    }
+}
+```
+
+> **Supported stat keys**: `attack`, `defense`, `speed`, `magic`, `luck`. Any omitted stat defaults to 0.
+
+---
+
+### Inventory Configuration Constants
+
+Defined in `INVENTORY_CONFIG` in `core/rpg/inventorySystem.js`:
+
+| Constant | Value | Description |
+|---|---|---|
+| `BASE_SLOTS` | 20 | Starting inventory size for new players |
+| `MAX_SLOTS` | 100 | Hard cap on inventory size |
+| `SLOTS_PER_UPGRADE` | 5 | Slots added per `.j upgrade inv` purchase |
+| `UPGRADE_COST_BASE` | 1,000 Zeni | Base price for the first upgrade |
+| `UPGRADE_COST_SCALING` | ×1.5 | Exponential multiplier per additional upgrade |
+

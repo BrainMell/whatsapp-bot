@@ -391,3 +391,73 @@ let captionMsg = `👤 *Character:* ${cardData.nickname}\n` + // ...
 **How it works here**: The string interpolation syntax is used to embed the `cardData.nickname` expression inside the string literal.
 **Why it's used**: String interpolation is used to make the code more concise and easier to read.
 **If you change/remove it**: If you remove the string interpolation syntax, the code would have to use concatenation or other methods to build the string, making the code more verbose. If you change the expression inside the string literal, the code would embed a different value.
+
+---
+
+## 5. Reference Manual
+
+> All formulas and configurations below are extracted directly from `core/rpg/progression.js` and `core/rpg/classSystem.js`. Contributors should never need to open those files to understand character scaling, stats calculation, or leveling formulas.
+
+### 5.1 Progression Schema
+In the database, a user's RPG progression is stored under the `progression` object with the following fields:
+* `xp` (Number): Current experience points.
+* `level` (Number): Current character level (capped at 100).
+* `gp` (Number): Current Guild Points (for adventurer rank upgrades).
+* `totalGP` (Number): Lifetime Guild Points earned.
+* `statPoints` (Number): Unspent stat points available for allocation.
+* `allocatedStats` (Object): Map of stats increased through manual point allocation (`hp`, `atk`, `def`, `mag`, `spd`, `luck`, `crit`).
+* `allocatedStatPoints` (Object): Map of points spent per stat (used to calculate refunds on stat reset).
+* `totalXPEarned` (Number): Lifetime experience points earned.
+* `totalLevelsGained` (Number): Lifetime level-ups achieved.
+
+### 5.2 XP Requirements & Leveling Curve
+The experience required to reach a specific level is calculated cumulatively using early-level overrides and a scaling factor:
+
+* **Level Cap**: 100
+* **Early Level Overrides** (Flat cumulative XP required):
+  * Level 1: 0 XP
+  * Level 2: 80 XP
+  * Level 3: 200 XP
+  * Level 4: 400 XP
+  * Level 5: 700 XP
+* **Base formula (Levels 6 to 100)**:
+  `totalXP = 700 + sum(level 5 to current_level - 1) { Math.floor(250 * Math.pow(1.18, i - 1)) * Milestone_Multiplier }`
+* **Milestone Multipliers**:
+  * Levels 10+: 1.2
+  * Levels 25+: 1.3
+  * Levels 50+: 1.5
+  * Levels 75+: 1.8
+
+* **XP Sources**:
+  * Quest encounter base XP: 100 XP
+  * Boss fight multiplier: 3.0x (300 XP)
+  * Quest completion bonus: 300 XP
+
+### 5.3 Stat Allocation & Scaling
+When players spend stat points, the value gained per point scales based on their class tier:
+
+* **Stat Points per Level**: 5 points
+* **Milestone Bonus Points**: Level 10 (+10), Level 25 (+20), Level 50 (+40), Level 75 (+60), Level 100 (+100)
+* **Tier Multipliers**:
+  * **Starter Class**: 1.0x
+  * **Evolved Class**: 2.0x
+  * **Ascended Class**: 4.0x
+
+* **Base Stat Value per Point**:
+  | Stat | Base Gained per Point | Gained (Starter) | Gained (Evolved) | Gained (Ascended) |
+  |---|---|---|---|---|
+  | HP | 15 | 15 | 30 | 60 |
+  | ATK | 3 | 3 | 6 | 12 |
+  | DEF | 2 | 2 | 4 | 8 |
+  | MAG | 3 | 3 | 6 | 12 |
+  | SPD | 2 | 2 | 4 | 8 |
+  | LUCK | 2 | 2 | 4 | 8 |
+  | CRIT | 1 | 1 | 2 | 4 |
+
+### 5.4 Derived Stats Formulas
+Derived combat stats are computed dynamically from base stats:
+* **Max HP**: Same as `hp` stat.
+* **Max Energy**: `100 + ((level - 1) * 15) + Math.floor(mag * 3)`
+* **Evasion**: `Math.min(45, spd * 0.12)` (Capped at 45%)
+* **Damage Reduction**: `Math.min(80, def * 0.55)` (Capped at 80%)
+* **Rare Drop Rate**: `luck * 0.06` (%)

@@ -437,3 +437,84 @@ function canCraft(userId, recipeId) {
 **How it works here**: The code defines a function named `canCraft` that takes two arguments, `userId` and `recipeId`, and returns an object with a `canCraft` property.
 **Why it's used**: Functions are used to define reusable blocks of code, which makes the code more concise and easier to read.
 **If you change/remove it**: If you remove the function, the code will not define the `canCraft` function, and the program will not work as expected. If you change the function signature, the code will not work as expected.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `BREWING_RECIPES` in `core/rpg/craftingSystem.js`. A contributor should never need to open that file to know what can be brewed or what ingredients are needed.
+
+---
+
+### All Brewing Recipes
+
+Use `.j brew <item_id>` to craft these at an Alchemy Laboratory:
+
+| Item ID | Output Name | Station | Ingredients |
+|---|---|---|---|
+| `mega_potion` | Mega Potion | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `elixir_of_power` | Elixir of Power | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `liquid_courage` | Liquid Courage | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `energy_brew` | Energy Brew | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `holy_water` | Holy Water | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `rabbit_foot` | Rabbit's Foot | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `chaos_elixir` | Chaos Elixir | alchemy | See craftingSystem.js BREWING_RECIPES |
+| `fortress_potion` | Fortress Potion | alchemy | See craftingSystem.js BREWING_RECIPES |
+
+> Use `.j craft` (no arguments) or `.j brew` to see the live recipe list including current ingredient requirements.
+
+---
+
+### Brewable Item Schema
+
+To add a new brew recipe to `BREWING_RECIPES` in `core/rpg/craftingSystem.js`:
+
+```javascript
+'recipe_item_id': {
+    name: 'Display Name',
+    result: 'item_id_produced',   // ID of the item created
+    quantity: 1,                   // How many are produced
+    station: 'alchemy',            // Must be 'alchemy' for brew command
+    ingredients: [
+        { id: 'healing_herb', quantity: 2 },
+        { id: 'mana_crystal', quantity: 1 }
+    ],
+    description: 'Brief description shown in recipe list.'
+}
+```
+
+---
+
+### All Ingredient / Material IDs for Brewing
+
+| Item ID | Name | Primary Source |
+|---|---|---|
+| `healing_herb` | Healing Herb | Enemy drop (COMMON_ENEMY) |
+| `mana_crystal` | Mana Crystal | Mine / Elite enemy |
+| `mana_dew` | Mana Dew | Boss drop |
+| `fire_essence` | Fire Essence | Crafting / alchemy output |
+| `fire_shard` | Fire Shard | Elite enemy drop |
+| `ice_shard` | Ice Shard | Elite enemy drop |
+| `lightning_shard` | Lightning Shard | Elite enemy drop |
+| `ghost_essence` | Ghost Essence | Elite enemy drop |
+| `dark_matter` | Dark Matter | Boss drop |
+| `boss_essence` | Boss Essence | Boss drop |
+| `rare_gem` | Rare Gem | Treasure / boss drop |
+| `void_crystal` | Void Crystal | Crafting / alchemy |
+| `dragon_blood` | Dragon Blood | Boss drop |
+| `spider_silk` | Spider Silk | Enemy drop |
+
+---
+
+### Potion Effect Types
+
+| Effect ID | Description |
+|---|---|
+| `heal` | Restores HP |
+| `regen` | Applies regeneration over time |
+| `restore_energy` | Restores stamina/energy |
+| `cure_status` | Removes a status condition |
+| `revive` | Revives a dead player |
+| `stat_boost` | Temporarily raises a stat |
+| `flee` | Allows escaping combat |
+| `damage_aoe` | Deals area damage (offensive consumable) |

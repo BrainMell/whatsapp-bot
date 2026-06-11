@@ -391,3 +391,66 @@ const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
 **How it works here**: Math operations are used to perform calculations such as calculating the total number of pages.
 **Why it's used**: Math operations are used to perform mathematical calculations, making it possible to perform complex operations.
 **If you change/remove it**: If you remove or change a math operation, the code that relies on it will break, resulting in errors or unexpected behavior.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted from `core/rpg/inventorySystem.js` and `core/rpg/lootSystem.js`. A contributor should never need to open those files to understand inventory limits or item types.
+
+---
+
+### Inventory Configuration
+
+Defined in `INVENTORY_CONFIG` in `core/rpg/inventorySystem.js`:
+
+| Constant | Value | Description |
+|---|---|---|
+| `BASE_SLOTS` | 20 | Starting inventory size for new players |
+| `MAX_SLOTS` | 100 | Hard cap — cannot be upgraded beyond this |
+| `SLOTS_PER_UPGRADE` | 5 | Slots added per `.j upgrade inv` |
+| `UPGRADE_COST_BASE` | 1,000 Zeni | Cost of the first inventory upgrade |
+| `UPGRADE_COST_SCALING` | ×1.5 | Exponential multiplier per subsequent upgrade |
+| Items per page | 12 | Items displayed per page in `.j bag` |
+
+---
+
+### Item Rarities (Sort Order)
+
+Inventory is sorted from highest rarity to lowest:
+
+| Rarity | Icon | Sell Multiplier | Drop Weight |
+|---|---|---|---|
+| `MYTHIC` | 🟣 | ×1.2 | 0.1% |
+| `LEGENDARY` | 🟡 | ×1.0 | 1% |
+| `EPIC` | 🔴 | ×0.9 | 4% |
+| `RARE` | 🔵 | ×0.8 | 10% |
+| `UNCOMMON` | 🟢 | ×0.7 | 25% |
+| `COMMON` | ⚪ | ×0.6 | 60% |
+
+---
+
+### Item Types
+
+| Type | Description | Can Equip | Can Dismantle |
+|---|---|---|---|
+| `EQUIPMENT` | Weapons, armour, accessories | ✅ | ✅ (if craftable) |
+| `POTION` | Consumable healing/buff items | ❌ | ❌ |
+| `MATERIAL` | Crafting ingredients and ores | ❌ | ❌ |
+| `ITEM` | Special items, keys, tickets | ❌ | ❌ |
+
+---
+
+### All Item IDs by Type
+
+#### EQUIPMENT (Equippable)
+`rusty_dagger`, `iron_sword`, `arcane_wand`, `steel_sabre`, `mythril_staff`, `dragon_fang_dagger`, `bronze_spear`, `chainmail`, `crystal_staff`, `greatsword`, `dragon_helm`, `leather_tunic`, `iron_plate`, `mage_robe`, `reinforced_plate`, `dragon_scale_armor`, `wooden_ring`, `iron_ring`, `dragon_seal_ring`
+
+#### POTION (Consumables)
+`minor_hp_potion`, `minor_potion`, `health_potion`, `hp_potion`, `major_potion`, `mega_potion`, `elixir`, `remedy`, `regen_salve`, `mana_potion`, `energy_drink`, `ether`, `phoenix_down`, `phoenix_feather`, `smoke_bomb`, `bomb`
+
+#### MATERIAL (Crafting Ingredients)
+`refined_steel`, `sharp_whetstone`, `mythril_ore`, `mana_crystal`, `tough_leather`, `gunpowder`, `fire_essence`, `dark_matter`, `healing_herb`, `mana_dew`, `dragon_blood`, `iron_shard`, `void_crystal`, `boss_essence`, `legendary_shard`, `spider_silk`, `fire_shard`, `ice_shard`, `lightning_shard`, `demon_hide`, `ghost_essence`, `ancient_wood`, `mystic_thread`, `minor_enhancement_stone`, `rare_enhancement_stone`, `legendary_enhancement_stone`, `evolution_stone`, `ascension_stone`, `dragon_scale`, `demon_horn`, `golem_core`, `wyrm_fang`, `rare_gem`, `void_essence`, `bandage`, `mirror_essence`
+
+#### ITEM (Special)
+`dragon_key`, `wisdom_tome`, `skill_scroll`, `merchant_token`, `rare_item_ticket`, `discount_coupon`, `essence_mirror`

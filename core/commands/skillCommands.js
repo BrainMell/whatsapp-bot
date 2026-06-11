@@ -589,7 +589,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         await sock.sendMessage(chatId, { text: trialMsg });
 
         setTimeout(async () => {
-            await guildAdventure.initAdventure(
+            const result = await guildAdventure.initAdventure(
                 sock, 
                 chatId, 
                 null, // No Groq required for trials
@@ -605,6 +605,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     cost: chosen.evolutionCost
                 }
             );
+            if (result && result.msg) {
+                await sock.sendMessage(chatId, { text: result.msg });
+            }
         }, 5000);
         
         return;

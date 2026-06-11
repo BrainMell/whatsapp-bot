@@ -435,3 +435,57 @@ The `BossFightManager` manages the active boss encounter turn loop. It increment
 
 ---
 
+
+---
+
+## 5. Reference Manual
+
+> All dungeon ranks, environmental modifiers, and session timeouts below are extracted directly from `core/rpg/guildAdventure.js`. A contributor should never need to open that file to understand dungeon rank requirements, boss assignments, or environment effects.
+
+### 5.1 Dungeon Ranks Configuration
+Dungeons scale in size, difficulty, and rewards according to their letter Rank:
+
+| Rank ID | Name | Encounters | Min Mobs | Max Mobs | Difficulty Mult | Default Boss | XP Multiplier |
+|---|---|---|---|---|---|---|---|
+| `F` | F-Rank | 3 | 1 | 2 | 0.8x | `INFECTED_COLOSSUS` | 0.8x |
+| `E` | E-Rank | 4 | 2 | 4 | 1.2x | `CORRUPTED_GUARDIAN` | 1.2x |
+| `D` | D-Rank | 7 | 2 | 4 | 2.0x | `ELEMENTAL_ARCHON` | 2.0x |
+| `C` | C-Rank | 7 | 2 | 5 | 3.5x | `MUTATION_PRIME` | 3.5x |
+| `B` | B-Rank | 8 | 3 | 5 | 6.0x | `VOID_CORRUPTED` | 6.0x |
+| `A` | A-Rank | 9 | 3 | 6 | 10.0x | `PRIMORDIAL_CHAOS` | 10.0x |
+| `S` | S-Rank | 10 | 4 | 6 | 18.0x | `PRIMORDIAL_CHAOS` | 18.0x |
+| `SS` | SS-Rank | 11 | 4 | 7 | 35.0x | `PRIMORDIAL_CHAOS` | 35.0x |
+| `SSS` | SSS-Rank | 13 | 5 | 8 | 75.0x | `PRIMORDIAL_CHAOS` | 75.0x |
+| `DRAGON` | Dragon’s Lair | 5 | 2 | 3 | 5.0x | `ANCIENT_DRAGON_BOSS` | 5.0x (Special) |
+| `TRIAL` | Class Trial | 1 | 1 | 1 | 1.5x | *Dynamic* | 2.0x (Special) |
+
+---
+
+### 5.2 Dungeon Environments & Modifiers
+Each dungeon is randomly assigned a themed environment that enforces combat penalties on players and grants bonuses to enemies:
+
+| Environment ID | Name | Asset Background | Player Modifier Effect | Enemy Passive Bonus |
+|---|---|---|---|---|
+| `DRAGON_LAIR` | Dragon’s Lair | `env10.png` | **Dragon Fear**: -10% ATK | **Draconic Scales**: +20% DEF |
+| `FIRE_CAVE` | Fire Cave | `env1.png` | **Heat Exhaustion**: -5% Max HP per turn | **Hellfire**: +10% Fire Damage |
+| `ICE_CAVE` | Ice Cave | `env2.png` | **Frostbite**: -10% Speed | **Glacial Shield**: +20% DEF |
+| `TOXIC_CAVE` | Toxic Cave | `env3.png` | **Toxic Mist**: -30% Healing received | **Plague Touch**: +5 Poison DoT |
+| `VOID_DIMENSION` | Void Dimension | `env4.png` | **Time Dilation**: Random turn order | **Phase Step**: 10% teleport chance |
+| `SCI_FI_CITY` | Sci-Fi City | `env5.png` | **Cover System**: DEF boost | **High Ground**: +1 Attack Range |
+| `DEMON_CASTLE` | Demon Castle | `env6.png` | **Cursed Ground**: Healing reduced to 50% | **Abyssal Power**: +20% Magic Damage |
+| `DESERT` | Desert | `env7.png` | **Sandstorm**: -15% Accuracy | **Heatstroke**: +10% Player Skill Energy cost |
+| `INFECTED_AFTERLIFE`| Infected Afterlife| `env8.png` | **Corruption**: Player dmg taken builds up | **Undead Rise**: 10% resurrection chance |
+| `PRE_INFECTED_AFTERLIFE`| Pre-Infected Afterlife| `env9.png`| **Purity Aura**: Cleanses player debuffs | **Holy Ground**: +50% healing effectiveness |
+| `SIMPLE_FOREST` | Simple Forest | `env10.png`| **Dense Foliage**: Line-of-sight block | **Camouflage**: +15% Evasion |
+
+---
+
+### 5.3 Session Limits & Timeouts
+* **Party Sizes**: Minimum 2 players, Maximum 6 players (for multiplayer instances).
+* **Registration Time**: 120 seconds (`120000` ms) for group members to type `.j join`.
+* **Shop Break Time**: 90 seconds (`90000` ms) to browse and buy from merchant checkpoints.
+* **Crossroads Voting Time**: 60 seconds (`60000` ms) to vote on crossroads options.
+* **Player Combat Turn**: 10 minutes (`600000` ms) maximum duration before automatic timeout.
+* **Break / Narration Delay**: 10 seconds (`10000` ms) between combat waves.
+* **Enemy Action Speed**: 5 seconds (`5000` ms) delay.
+* **Hardcore Mode XP Multiplier**: 2.5x penalty.

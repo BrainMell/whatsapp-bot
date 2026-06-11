@@ -434,3 +434,75 @@ for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
 **How it works here**: The `for-of` loop is used to iterate over the `recipe.ingredients` object. The loop iterates over the key-value pairs of the object, and the `ingId` and `qty` variables are assigned the values of the key and value, respectively.
 **Why it's used**: Loops are used to execute a block of code repeatedly for a specified number of times. In this case, the `for-of` loop is used to iterate over the `recipe.ingredients` object and check if the user has the required ingredients to craft a recipe.
 **If you change/remove it**: If you remove the `for-of` loop, the code will not be able to iterate over the `recipe.ingredients` object, and the program will not be able to check if the user has the required ingredients to craft a recipe.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `COOKING_RECIPES` in `core/rpg/craftingSystem.js`. A contributor should never need to open that file to know what can be cooked or what food ingredients are needed.
+
+---
+
+### All Cooking Recipes
+
+Use `.j cook <item_id>` at a Kitchen station:
+
+| Item ID | Output Name | Station |
+|---|---|---|
+| `grilled_meat` | Grilled Meat | kitchen |
+| `mana_stew` | Mana Stew | kitchen |
+| `speed_soup` | Speed Soup | kitchen |
+| `lucky_salad` | Lucky Salad | kitchen |
+
+> Use `.j cook` (no arguments) to see the live recipe list with current ingredient requirements.
+
+---
+
+### Cooking Recipe Schema
+
+To add a new cooking recipe to `COOKING_RECIPES` in `core/rpg/craftingSystem.js`:
+
+```javascript
+'recipe_item_id': {
+    name: 'Display Name',
+    result: 'item_id_produced',   // ID of the item created
+    quantity: 1,                   // How many are produced
+    station: 'kitchen',            // Must be 'kitchen' for cook command
+    ingredients: [
+        { id: 'common_fish', quantity: 2 },
+        { id: 'healing_herb', quantity: 1 }
+    ],
+    description: 'Brief description shown in recipe list.'
+}
+```
+
+---
+
+### All Food Ingredient IDs
+
+| Item ID | Name | Source |
+|---|---|---|
+| `common_fish` | Common Fish | Fishing / loot |
+| `rare_fish` | Rare Fish | Fishing / loot |
+| `mythic_fish` | Mythic Fish | Fishing / loot |
+| `infected_fish` | Infected Fish | Fishing / special encounters |
+| `rabbit_hide` | Rabbit Hide | Hunting / loot |
+| `deer_antler` | Deer Antler | Hunting / loot |
+| `bear_claw` | Bear Claw | Hunting / loot |
+| `healing_herb` | Healing Herb | Enemy drop / shop |
+| `mana_dew` | Mana Dew | Boss drop |
+
+---
+
+### Food Item Stat Buff Types
+
+Cooked food can grant temporary stat boosts. Supported stat keys for `effect.stats`:
+
+| Stat Key | Description |
+|---|---|
+| `attack` | Boosts physical damage |
+| `defense` | Reduces damage taken |
+| `speed` | Increases turn priority / dodge |
+| `magic` | Boosts magical damage |
+| `luck` | Improves drop rates and crit chance |
+| `hp` | Increases max HP temporarily |

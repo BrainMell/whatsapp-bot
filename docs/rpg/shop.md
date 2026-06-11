@@ -194,3 +194,109 @@ User command
 - **Add Shop Items**: Modify items inside `ITEM_DATABASE` within [core/rpg/lootSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js) or `CLASS_SHOP_ITEMS` inside [core/rpg/classSystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/classSystem.js).
 - **Edit Dragon Key Lineage Limits**: Adjust class permissions in [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L161).
 - **Change Shop Categories**: Edit the `categoryInfo` object inside [core/commands/shopCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/shopCommands.js#L49).
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `core/rpg/classSystem.js` and `core/rpg/lootSystem.js`. A contributor should never need to open those files to add or modify shop items.
+
+---
+
+### Shop Categories
+
+| Category Keyword | Description |
+|---|---|
+| `all` | Displays all purchasable items |
+| `equipment` | Weapons, armour, accessories |
+| `consumables` | Potions and single-use items |
+| `class` | Class evolution, change, and reset items |
+| `special` | Gated/rare items (e.g. dragon_key) |
+
+**Usage**: `.j shop equipment`, `.j shop class`, `.j shop all`
+
+---
+
+### CLASS_SHOP_ITEMS (from `classSystem.js`)
+
+These items are available in the shop and drive class progression:
+
+| Item ID | Name | Cost | Type | Effect |
+|---|---|---|---|---|
+| `class_change_ticket` | Class Change Ticket | 400 Zeni | CLASS_CHANGE | Rerolls starter class to a random one |
+| `evolution_stone` | Evolution Stone (T2) | 8,000 Zeni | EVOLUTION | Evolves Starter → Evolved class |
+| `ascension_stone` | Ascension Stone (T3) | 50,000 Zeni | ASCENSION | Ascends Evolved → Ascended class |
+| `skill_reset` | Skill Reset Scroll | 1,000 Zeni | RESET | Refunds all invested skill points |
+
+---
+
+### Special-Gated Items
+
+| Item ID | Name | Gate Requirement |
+|---|---|---|
+| `dragon_key` | Dragon Key | Fighter class lineage only |
+
+---
+
+### Purchasable Equipment Items (from `lootSystem.ITEM_DATABASE`)
+
+Items with `type: 'EQUIPMENT'` available via shop:
+
+| Item ID | Name | Rarity | Value (sell price) |
+|---|---|---|---|
+| `rusty_dagger` | Rusted Dagger | COMMON | 1,000 |
+| `bronze_spear` | Bronze Spear | COMMON | 1,200 |
+| `leather_tunic` | Leather Tunic | COMMON | 1,600 |
+| `wooden_ring` | Wooden Ring | COMMON | 500 |
+| `crystal_staff` | Crystal Staff | UNCOMMON | 3,000 |
+| `iron_sword` | Iron Sword | UNCOMMON | 5,000 |
+| `chainmail` | Chainmail | UNCOMMON | 2,500 |
+| `iron_plate` | Iron Plate | UNCOMMON | 4,500 |
+| `mage_robe` | Novice Robe | UNCOMMON | 4,800 |
+| `iron_ring` | Iron Ring | UNCOMMON | 2,000 |
+| `arcane_wand` | Arcane Wand | RARE | 6,000 |
+| `greatsword` | Greatsword | RARE | 6,000 |
+| `steel_sabre` | Steel Sabre | RARE | 16,000 |
+
+---
+
+### Consumable / Potion Items (from `lootSystem.ITEM_DATABASE`)
+
+| Item ID | Name | Value | Effect |
+|---|---|---|---|
+| `minor_hp_potion` | Minor HP Potion | 200 | heal |
+| `minor_potion` | Minor Health Potion | 280 | heal |
+| `health_potion` | Health Potion | 700 | heal |
+| `hp_potion` | Health Potion (alt) | 700 | heal |
+| `major_potion` | Major Health Potion | 1,680 | heal |
+| `mega_potion` | Mega Potion | 1,680 | heal |
+| `elixir` | Full Restore Elixir | 4,200 | heal |
+| `remedy` | Remedy | 500 | cure_status |
+| `regen_salve` | Regeneration Salve | 1,120 | regen |
+| `mana_potion` | Mana Potion | 400 | restore_energy |
+| `energy_drink` | Energy Drink | 400 | restore_energy |
+| `ether` | Ether | 1,000 | restore_energy |
+| `phoenix_down` | Phoenix Down | 3,500 | revive |
+| `phoenix_feather` | Phoenix Feather | 3,500 | revive |
+| `smoke_bomb` | Smoke Bomb | 500 | flee |
+| `bomb` | Bomb | 1,000 | damage_aoe |
+
+---
+
+### How to Add a New Shop Item
+
+To add a new item to the shop, register it in `ITEM_DATABASE` in `core/rpg/lootSystem.js`:
+
+```javascript
+'my_new_item': {
+    name: '✨ My New Item',
+    description: 'What this item does.',
+    rarity: 'UNCOMMON',   // COMMON | UNCOMMON | RARE | EPIC | LEGENDARY | MYTHIC
+    value: 2000,          // Base sell price in Zeni
+    type: 'EQUIPMENT',    // EQUIPMENT | POTION | MATERIAL | ITEM
+    slot: 'main_hand',    // Required only for EQUIPMENT items
+    stats: { attack: 10, defense: 0, speed: 0, magic: 0, luck: 0 }
+}
+```
+
+> Class-exclusive shop items (class change, evolution, ascension, reset) are defined in `CLASS_SHOP_ITEMS` in `core/rpg/classSystem.js` instead.

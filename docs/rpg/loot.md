@@ -210,3 +210,130 @@ To adjust the drops generated from common enemies, add new entries to the `LOOT_
 - **Adjust gold drop values** — Adjust the numeric arrays representing min and max gold outputs in [lootSystem.js L254–262](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L254-L262).
 - **Alter boss dynamic drops bonus rate** — Adjust boss rarity-scaled chance factors in [lootSystem.js L426](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L426).
 - **Update unknown item default attributes** — Tune safety values returned when an item ID cannot be resolved in the database in [lootSystem.js L671–679](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/lootSystem.js#L671-L679).
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `core/rpg/lootSystem.js`. A contributor should never need to open that file to understand loot tables, encounter types, boss IDs, or gold ranges.
+
+---
+
+### Encounter Types
+
+These are the valid `encounterType` values used by `generateGoldDrop()` and `distributeLoot()`:
+
+| Encounter Type | Gold Range | Drop Chance | Description |
+|---|---|---|---|
+| `COMMON_ENEMY` | 10–30 Zeni | 45% | Standard combat encounter |
+| `ELITE_ENEMY` | 50–100 Zeni | 75% | Elite/miniboss combat |
+| `BOSS` | 200–500 Zeni | 100% | Boss fight |
+| `TREASURE` | 100–300 Zeni | 100% | Treasure chest |
+| `TRAP_SUCCESS` | 20–50 Zeni | 60% | Trap survived |
+| `PUZZLE_SUCCESS` (PUZZLE_REWARD) | 50–150 Zeni | 80% | Puzzle solved |
+| `MERCHANT_BONUS` (MERCHANT_GIFT) | 50–200 Zeni | 30% | Merchant gift |
+
+---
+
+### Loot Tables — Item Pools
+
+#### COMMON_ENEMY (45% drop chance)
+| Item ID | Weight | Qty Range |
+|---|---|---|
+| `minor_hp_potion` | 30 | 1–2 |
+| `healing_herb` | 25 | 1–3 |
+| `bandage` | 20 | 1–2 |
+| `iron_shard` | 15 | 1–3 |
+| `refined_steel` | 10 | 1–1 |
+| `tough_leather` | 10 | 1–1 |
+| `gunpowder` | 10 | 1–2 |
+| `spider_silk` | 10 | 1–2 |
+| `minor_enhancement_stone` | 5 | 1–1 |
+| `equipment_piece` | 5 | 1–1 |
+| `bronze_spear` | 5 | 1–1 |
+| `chainmail` | 5 | 1–1 |
+
+#### ELITE_ENEMY (75% drop chance)
+| Item ID | Weight | Qty Range |
+|---|---|---|
+| `hp_potion` | 20 | 1–2 |
+| `equipment_piece` | 15+5 | 1–1 |
+| `refined_steel` | 15 | 2–4 |
+| `mana_crystal` | 15 | 1–1 |
+| `demon_hide` | 10 | 1–1 |
+| `ghost_essence` | 10 | 1–1 |
+| `mythril_ore` | 10 | 1–2 |
+| `remedy` | 12 | 1–1 |
+| `sharp_whetstone` | 10 | 1–1 |
+| `fire_shard` | 8 | 1–1 |
+| `ice_shard` | 8 | 1–1 |
+| `lightning_shard` | 8 | 1–1 |
+| `rare_enhancement_stone` | 8 | 1–1 |
+| `crystal_staff` | 5 | 1–1 |
+| `greatsword` | 5 | 1–1 |
+| `bronze_spear` | 5 | 1–1 |
+| `chainmail` | 5 | 1–1 |
+
+#### BOSS (100% drop chance)
+| Item ID | Weight | Qty Range |
+|---|---|---|
+| `mega_potion` | 20 | 2–3 |
+| `ancient_wood` | 15 | 1–2 |
+| `mystic_thread` | 15 | 2–4 |
+| `boss_essence` | 15 | 1–2 |
+| `mythril_ore` | 15 | 3–6 |
+| `mana_dew` | 12 | 1–2 |
+| `dark_matter` | 10 | 1–1 |
+| `legendary_enhancement_stone` | 10 | 1–1 |
+| `dragon_blood` | 8 | 1–1 |
+| `legendary_shard` | 5+5 | 1–1 |
+| `dragon_helm` | 5 | 1–1 |
+
+---
+
+### Boss-Specific Drop Tables (BOSS_DROPS)
+
+| Boss ID | Guaranteed Drop | Special Drop (Chance) |
+|---|---|---|
+| `INFECTED_COLOSSUS` | `bandage` ×2–4 (COMMON) | `leather_tunic` 30% (COMMON) |
+| `CORRUPTED_GUARDIAN` | `hp_potion` ×1–2 (UNCOMMON) | `iron_sword` 25% (UNCOMMON) |
+| `ELEMENTAL_ARCHON` | `mega_potion` ×1 (RARE) | `arcane_wand` 20% (RARE) |
+| `VOID_CORRUPTED` | `legendary_shard` ×1 (EPIC) | `reinforced_plate` 30% (EPIC) |
+| `PRIMORDIAL_CHAOS` | `void_essence` ×1 (MYTHIC) | `essence_mirror` 15% (LEGENDARY) |
+| `LICH` | — | `mirror_essence` 30% (LEGENDARY), `lich_phylactery` 15% (EPIC) |
+| `DRAGON` | `dragon_scale` ×2–4 (RARE) | `dragon_heart` 20% (LEGENDARY) |
+| `DEMON_LORD` | `demon_horn` ×1–2 (EPIC) | `infernal_crown` 25% (MYTHIC) |
+| `ANCIENT_GOLEM` | `golem_core` ×1 (RARE) | `titan_heart` 15% (LEGENDARY) |
+| `VOID_HORROR` | `void_essence` ×1 (MYTHIC) | `void_essence` 10% (MYTHIC) |
+| `ELDER_WYRM` | `wyrm_fang` ×2–3 (RARE) | `elder_blood` 20% (LEGENDARY) |
+
+---
+
+### Item Rarities
+
+| Rarity | Icon | Weight Order |
+|---|---|---|
+| `COMMON` | ⚪ | 0 |
+| `UNCOMMON` | 🟢 | 1 |
+| `RARE` | 🔵 | 2 |
+| `EPIC` | 🔴 | 3 |
+| `LEGENDARY` | 🟡 | 4 |
+| `MYTHIC` | 🟣 | 5 |
+
+---
+
+### Adding a New Item to a Loot Table
+
+1. Register the item in `ITEM_DATABASE` in `core/rpg/lootSystem.js`.
+2. Add it to the desired loot table's `items` array:
+```javascript
+{ id: 'my_new_item', weight: 10, quantity: [1, 2] }
+```
+3. Adjust surrounding weights so total weights remain balanced.
+4. Optionally add it to `BOSS_DROPS` for a specific boss:
+```javascript
+BOSS_DROPS['MY_BOSS'] = {
+    guaranteed: [{ id: 'my_item', quantity: [1, 1], rarity: 'EPIC' }],
+    special: [{ id: 'rare_drop', dropChance: 15, quantity: 1, rarity: 'LEGENDARY', announcement: '🌟 Rare drop message!' }]
+};
+```

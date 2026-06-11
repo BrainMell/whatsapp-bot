@@ -325,3 +325,17 @@ if (
 **How it works here**: The string comparison is used to check if the `lowerTxt` string matches one of the two possible commands.
 **Why it's used**: String comparison is used to compare two strings and determine if they are equal or not, making it possible to implement command handling.
 **If you change/remove it**: If you remove the string comparison, the program would not be able to determine if the `lowerTxt` string matches one of the commands, and the command handling would not work as expected.
+
+---
+
+## 5. Reference Manual
+
+> All sprite ranges, commands, and requirements below are extracted directly from `core/engine.js`. A contributor should never need to look up those files to understand sprite reset limits or execution.
+
+### 5.1 Sprite Reroll Rules & Constraints
+* **Commands Supported**: `.j reset sprite` or `.j sprite reset`
+* **Registration Constraint**: Player JID must be registered using `.j register` before rerolling.
+* **Cost**: 0 Zeni (rerolling is completely free and has no cooldown).
+* **Sprite Index Range**: `0` to `99` (exactly 100 possible sprite configurations).
+* **Formula**: `user.spriteIndex = Math.floor(Math.random() * 100)`
+* **Application**: The rerolled sprite will automatically display on the combat board during their next dungeon quest or duel.

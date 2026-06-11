@@ -413,3 +413,94 @@ if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
 **How it works here**: Regular expressions are used to match patterns in the `wName` string.
 **Why it's used**: Regular expressions are used to make the code more concise and readable. They allow us to match patterns in strings without having to use multiple `if` statements.
 **If you change/remove it**: If you remove the regular expression, you will need to use multiple `if` statements to match the patterns. If you change the regular expression, you will need to update the code to handle the new pattern.
+
+---
+
+## 5. Reference Manual
+
+> All scaling formulas, status effects, and boss mechanics below are extracted directly from `core/rpg/classEncounters.js`, `core/rpg/guildAdventure.js`, and `core/rpg/bossMechanics.js`. A contributor should never need to open those files to understand how combat stats are scaled, what status effects exist, or how boss phases function.
+
+### 5.1 Dynamic Scaling Formulas
+
+All enemies are scaled dynamically to match the player party size, character levels, and dungeon difficulty:
+
+#### Standard Enemy Scaling (`scaleEnemyStats`)
+* **Party Size Factor**: `1 + (partySize - 1) * 0.20` (+20% HP/ATK/MAG/DEF per extra player in the party).
+* **Difficulty Scaling** (Rank Index = difficulty multiplier):
+  * **Damage (ATK/MAG/DEF)**: `1 + (RankIndex * 0.12)` (+12% per difficulty rank index).
+  * **Defense**: `1 + (RankIndex * 0.08)` (+8% per difficulty rank index).
+  * **HP**: `1 + (RankIndex * 0.15)` (+15% per difficulty rank index).
+  * **Speed**: `1 + (RankIndex * 0.10)` (+10% base speed per difficulty rank index).
+* **Elite Scaling**: If the enemy ID contains `ELITE`, `KING`, `BOSS` or matches special elites, they gain:
+  * `+25%` HP
+  * `+20%` Speed
+* **Rubber-Banding Speed Blending**:
+  * Base target speed: Average player speed.
+  * Archetype overrides:
+    * `STALKER` / `ASSASSIN`: `averagePlayerSpeed * 1.5`
+    * `TANK` / `BRUTE`: `averagePlayerSpeed * 0.95`
+  * Level adjustments:
+    * Level > 50: Speed is multiplied by `0.98` (-2%).
+    * Level < 15: Speed is multiplied by `1.30` (+30%).
+  * final scaled speed = `Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6))`
+
+#### Boss scaling (`scaleBossStats`)
+* **Party Size Factor**: `1 + (partySize - 1) * 0.20`.
+* **Difficulty Scaling** (Rank Index):
+  * **Damage (ATK/MAG)**: `1 + (RankIndex * 0.15)` (+15% per difficulty rank index).
+  * **Defense**: `1 + (RankIndex * 0.10)` (+10% per difficulty rank index).
+  * **HP**: `1 + (RankIndex * 0.30)` (+30% per difficulty rank index).
+  * **Speed**: `1 + (RankIndex * 0.08)` (+8% base speed per difficulty rank index).
+* **Rubber-Banding Speed Blending**:
+  * Target speed = `averagePlayerSpeed * 1.05`
+  * Level adjustment: Level > 60 reduces target speed by 5% (multiplied by `0.95`).
+  * final scaled speed = `Math.floor((baseSpeed * 0.5) + (targetSpeed * 0.5))`
+
+---
+
+### 5.2 Status Effects Catalog
+
+These status effects can be applied to players or enemies during combat turns:
+
+| ID | Name | Icon | Type / Effect | Default Values |
+|---|---|---|---|---|
+| `poison` | Poison | 🧪 | Damage over time | 10 per turn |
+| `burn` | Burn | 🔥 | Damage over time | 15 per turn |
+| `bleed` | Bleed | 🩸 | Damage over time | 12 per turn |
+| `shock` | Shock | ⚡ | Damage over time | 15 per turn |
+| `regen` | Regeneration | 💚 | Heal over time | 10 per turn |
+| `freeze` | Freeze | ❄️ | Skip turn | Duration: 1 turn |
+| `stun` | Stun | 💫 | Skip turn | Duration: 1 turn |
+| `sleep` | Sleep | 😴 | Skip turn | Wakes up on damage |
+| `root` | Root | 🌿 | Cannot move | Can still attack |
+| `silence` | Silence | 🤐 | Cannot cast | Lock abilities |
+| `slow` | Slow | 🐌 | Reduce speed | -50% speed |
+| `haste` | Haste | ⚡ | Increase speed | +30% speed |
+| `curse` | Curse | 💀 | Reduce stats | -20% stats |
+| `weak` | Weakened | 😵 | Reduce stats | -20% stats |
+| `vulnerability` | Vulnerable | 💔 | Reduce defense | -30% defense |
+| `shield` | Shield | 🛡️ | Absorb damage | 50 points flat |
+| `blessing` | Blessing | ✨ | Increase stats | +20% stats |
+| `berserk` | Berserk | 😡 | Increase dmg | +50% damage / -30% defense |
+| `taunt` | Taunted | 😠 | Force target | Must attack the taunter |
+| `charm` | Charmed | 💖 | Change side | Duration: 2 turns |
+| `wet` | Wet | 💧 | Primer | Element synergy primer |
+| `oil` | Oiled | 🛢️ | Primer | Element synergy primer |
+| `brittle` | Brittle | ❄️💔 | Damage amp | +50% physical damage taken |
+
+---
+
+### 5.3 Boss Mechanics Framework
+
+Boss encounters operate under advanced mechanics tracked by `BossPhaseManager` and `BossFightManager`:
+
+* **Multi-Phase Transitions**: Triggers automatically at configured boss HP percentages:
+  * Triggers transition to phase index `i` if `bossHP <= phase[i].threshold`.
+  * Phase changes update active `boss.abilities` list and trigger custom phase messages.
+* **Phase Effects**:
+  * `stat_boost`: Additive stat growth (e.g., `boss.stats[stat] += Math.floor(baseStat * value / 100)`).
+  * `heal`: Heals boss by a flat amount or percentage of max HP.
+  * `summon`: Spawns add monsters to support the boss.
+* **Enrage Mechanics**:
+  * **Hard Enrage**: Instant death trigger if turn count exceeds `boss.enrageTimer`.
+  * **Soft Enrage**: Stacking stat growth (`boss.stats[effect.stat] += effect.value`) per turn after the turn threshold `boss.softEnrage.turnThreshold` is met.

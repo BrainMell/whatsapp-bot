@@ -482,3 +482,25 @@ return leaderboard.slice(0, limit);
 **How it works here**: The `slice` method is used to extract a subset of elements from the `leaderboard` array, starting from the first element and ending at the `limit` index.
 **Why it's used**: Slicing is used to extract a subset of elements from an array, making it easier to work with data.
 **If you change/remove it**: If you remove the slicing, the program will not be able to extract a subset of elements from the `leaderboard` array, and the code will not work as expected.
+
+---
+
+## 5. Reference Manual
+
+> All leaderboard categories, sorting fields, and limits below are extracted directly from `core/rpg/progression.js` and `core/commands/rpgCommands.js`. A contributor should never need to check those source files to understand leaderboard configuration or sorting criteria.
+
+### 5.1 Supported Leaderboard Types
+Players can view the top rankings by specifying the type:
+* **Command**: `.j leaderboard [type]` or `.j lb [type]`
+* **Default type**: `level` (if no type is specified)
+
+| Type Parameter | Sorted Field | Source Data Location | Description |
+|---|---|---|---|
+| `level` | `level` | `user.progression.level` | Ranks players by their current RPG character level (descending). |
+| `xp` | `totalXPEarned` | `user.progression.totalXPEarned` | Ranks players by their total accumulated experience points across all levels (descending). |
+| `pvp` | `pvpWins` | `user.pvpWins` | Ranks players by their total PvP wins (descending). Displays win/loss records. |
+
+### 5.2 Limit & Formatting Configuration
+* **Limit**: The leaderboard displays the **top 10** registered players in the in-memory cache.
+* **Tie-Breaker**: Sort orders rely on the Javascript `.sort()` algorithm. If values are equal, the order matches their insertion or iteration index in the cache map.
+* **Cache Reference**: Leaderboard retrieves records directly from `economy.economyData` cache in-memory.

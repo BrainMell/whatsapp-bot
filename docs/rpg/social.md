@@ -136,3 +136,70 @@ To introduce new descriptive categories for relationships based on point levels,
 - **Add relationship labels** — Add new conditional blocks to customize the text descriptions of relationships based on score values in [socialSystem.js L83-90](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L83-L90).
 - **Modify dot character escaping** — Customize JID dot escaping to prevent key failures in MongoDB nesting in [socialSystem.js L14](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L14) and [socialSystem.js L22](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L22).
 - **Initialize empty maps** — Adjust how empty profiles and relationship attributes are initialized in [socialSystem.js L3-11](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/socialSystem.js#L3-L11).
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `core/rpg/socialSystem.js`. A contributor should never need to open that file to understand relationship tiers or scoring bounds.
+
+---
+
+### Relationship Score Bounds
+
+| Bound | Value | Description |
+|---|---|---|
+| Minimum | `-100` | Absolute floor (Sworn Enemy) |
+| Maximum | `100` | Absolute ceiling (Best Friend) |
+| Neutral | `0` | Default starting value; not shown in AI prompts |
+
+Scores are clamped to `[-100, 100]` on every update via `Math.max(-100, Math.min(100, score + delta))`.
+
+---
+
+### Relationship Tiers
+
+| Score Range | Label | Displayed in AI Prompt |
+|---|---|---|
+| `80` to `100` | Best Friend / Loyal Companion | ✅ |
+| `50` to `79` | Close Friend | ✅ |
+| `20` to `49` | Friendly Acquaintance | ✅ |
+| `-19` to `19` | Neutral Acquaintance | ❌ (skipped to save tokens) |
+| `-20` to `-49` | Distrusted Associate | ✅ |
+| `-50` to `-79` | Bitter Rival | ✅ |
+| `-80` to `-100` | Sworn Enemy / Arch-Nemesis | ✅ |
+
+---
+
+### Storage Location
+
+Relationship scores are stored in each user's MongoDB document at:
+
+```
+user.profile.relationships[otherJid] = score  // Number from -100 to 100
+```
+
+The `socialSystem.getRelationshipsMap()` utility safely initialises `user.profile` and `user.profile.relationships` if they don't exist.
+
+---
+
+### How Scores Change
+
+Scores are updated by calling `incrementRelationship(user1Jid, user2Jid, delta)`:
+- Updates are **reciprocal** — both users' scores change by the same `delta`.
+- Changes are written back to MongoDB via `economy.scheduleSave()`.
+
+---
+
+### Adding a New Relationship Tier
+
+To add a new tier, insert a new conditional in `getRelationshipsText()` in `core/rpg/socialSystem.js`:
+
+```javascript
+// Example: Adding a "Soulmate" tier at 95+
+if (score >= 95) relationshipLabel = "Soulmate / Destiny Partner";
+else if (score >= 80) relationshipLabel = "Best Friend / Loyal Companion";
+// ... rest of tiers
+```
+
+Tiers must be checked from highest to lowest score so the first match wins.

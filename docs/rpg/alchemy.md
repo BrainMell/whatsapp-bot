@@ -451,3 +451,94 @@ const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
 **How it works here**: In the provided code, database operations are used to interact with the inventory system and perform CRUD operations. The `hasInventorySpace` method is used to check if the user has enough inventory space, the `removeItem` method is used to deduct ingredients, and the `addItem` method is used to add the brewed item to the user's inventory.
 **Why it's used**: Database operations are used to interact with the database and perform CRUD operations. In this case, database operations are used to manage the user's inventory and perform brewing logic.
 **If you change/remove it**: If you remove the database operations, the inventory system will not work correctly. If you change the database operations, you will need to update the code to handle the new logic correctly.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `BREWING_RECIPES` in `core/rpg/craftingSystem.js`. Alchemy and Brew share the same recipe system — both use `station: 'alchemy'`.
+
+---
+
+### Alchemy vs. Brew
+
+| Command | Station | Recipe Source |
+|---|---|---|
+| `.j brew` | alchemy | `BREWING_RECIPES` in `craftingSystem.js` |
+| `.j alchemy` | alchemy | Same — `BREWING_RECIPES` |
+
+Both commands are aliases for the same station. The recipe IDs are identical between both.
+
+---
+
+### All Alchemy Recipes
+
+| Item ID | Output Name | Station |
+|---|---|---|
+| `mega_potion` | Mega Potion | alchemy |
+| `elixir_of_power` | Elixir of Power | alchemy |
+| `liquid_courage` | Liquid Courage | alchemy |
+| `energy_brew` | Energy Brew | alchemy |
+| `holy_water` | Holy Water | alchemy |
+| `rabbit_foot` | Rabbit's Foot | alchemy |
+| `chaos_elixir` | Chaos Elixir | alchemy |
+| `fortress_potion` | Fortress Potion | alchemy |
+
+> Use `.j brew` (no arguments) to list all recipes with live ingredient requirements.
+
+---
+
+### Alchemy Recipe Schema
+
+To add a new alchemy recipe to `BREWING_RECIPES` in `core/rpg/craftingSystem.js`:
+
+```javascript
+'output_item_id': {
+    name: 'Display Name',
+    result: 'output_item_id',      // Must match key
+    quantity: 1,
+    station: 'alchemy',            // Required — links to brew/alchemy commands
+    ingredients: [
+        { id: 'healing_herb', quantity: 3 },
+        { id: 'mana_crystal', quantity: 1 }
+    ],
+    description: 'What this concoction does.'
+}
+```
+
+---
+
+### Potion Effect Types
+
+| Effect Type | Description |
+|---|---|
+| `heal` | Restores HP |
+| `regen` | Applies HP regeneration over multiple turns |
+| `restore_energy` | Restores stamina/energy |
+| `cure_status` | Removes a negative status condition |
+| `revive` | Revives a fallen party member |
+| `stat_boost` | Grants a temporary stat bonus |
+| `flee` | Allows escaping combat |
+| `damage_aoe` | Deals area damage (offensive consumable) |
+
+---
+
+### Key Alchemy Ingredient IDs
+
+| Item ID | Name | Source |
+|---|---|---|
+| `healing_herb` | Healing Herb | Enemy drop (COMMON_ENEMY) |
+| `mana_crystal` | Mana Crystal | Mine / elite drop |
+| `mana_dew` | Mana Dew | Boss drop |
+| `fire_essence` | Fire Essence | Crafting / alchemy output |
+| `fire_shard` | Fire Shard | Elite enemy drop |
+| `ice_shard` | Ice Shard | Elite enemy drop |
+| `lightning_shard` | Lightning Shard | Elite enemy drop |
+| `ghost_essence` | Ghost Essence | Elite enemy drop |
+| `dark_matter` | Dark Matter | Boss drop |
+| `boss_essence` | Boss Essence | Boss drop |
+| `rare_gem` | Rare Gem | Treasure / boss drop |
+| `void_crystal` | Void Crystal | Crafting / alchemy |
+| `dragon_blood` | Dragon Blood | Boss drop |
+| `spider_silk` | Spider Silk | Enemy drop |
+| `bandage` | Bandage | Enemy drop / shop |

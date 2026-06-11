@@ -113,3 +113,52 @@ async function showItemSource(sock, chatId, itemId) {
 To adjust item tracking:
 - **Configure Item IDs / Names**: Modify items database in `core/rpg/lootSystem.js`.
 - **Add Crafting recipes**: Edit recipes inside `core/rpg/craftingSystem.js` to automatically index new item sources.
+
+---
+
+## 5. Reference Manual
+
+> All values below are aggregated from `core/rpg/lootSystem.js`, `core/rpg/craftingSystem.js`, and `core/rpg/inventorySystem.js`. The `.j source` command cross-references all three systems automatically.
+
+---
+
+### Item Source Categories
+
+The `source` command classifies every item into one or more of these source categories:
+
+| Category | Description | Where Configured |
+|---|---|---|
+| **Mining** | Obtainable from `.j mine` locations | `MINING_LOCATIONS[].ores[]` in `craftingSystem.js` |
+| **Monster Drops** | Dropped from enemies and bosses | `LOOT_TABLES` and `BOSS_DROPS` in `lootSystem.js` |
+| **Craftable** | Produced via `.j craft`, `.j brew`, `.j cook`, or `.j forge` | `CRAFTING_RECIPES`, `BREWING_RECIPES`, `COOKING_RECIPES` in `craftingSystem.js` |
+
+---
+
+### All Item IDs by Source
+
+#### Mining (obtainable from `.j mine`)
+`iron_shard`, `refined_steel`, `sharp_whetstone`, `mana_crystal`, `mythril_ore`, `fire_shard`, `ice_shard`, `lightning_shard`, `rare_gem`, `dark_matter`, `void_crystal`, `legendary_shard`
+
+#### Enemy Drops (COMMON_ENEMY loot table)
+`minor_hp_potion`, `healing_herb`, `bandage`, `iron_shard`, `refined_steel`, `tough_leather`, `gunpowder`, `spider_silk`, `minor_enhancement_stone`, `bronze_spear`, `chainmail`
+
+#### Elite Enemy Drops (ELITE_ENEMY loot table)
+`hp_potion`, `remedy`, `refined_steel`, `mana_crystal`, `sharp_whetstone`, `fire_shard`, `ice_shard`, `lightning_shard`, `demon_hide`, `ghost_essence`, `mythril_ore`, `rare_enhancement_stone`, `crystal_staff`, `greatsword`
+
+#### Boss Drops (BOSS loot table + BOSS_DROPS)
+`mega_potion`, `mythril_ore`, `mana_dew`, `dark_matter`, `dragon_blood`, `ancient_wood`, `mystic_thread`, `boss_essence`, `legendary_enhancement_stone`, `legendary_shard`, `dragon_helm`, `dragon_scale`, `demon_horn`, `golem_core`, `wyrm_fang`, `void_essence`, `mirror_essence`, `lich_phylactery`, `dragon_heart`, `infernal_crown`, `titan_heart`, `elder_blood`
+
+#### Special Boss IDs (for BOSS_DROPS lookup)
+`INFECTED_COLOSSUS`, `CORRUPTED_GUARDIAN`, `ELEMENTAL_ARCHON`, `VOID_CORRUPTED`, `PRIMORDIAL_CHAOS`, `LICH`, `DRAGON`, `DEMON_LORD`, `ANCIENT_GOLEM`, `VOID_HORROR`, `ELDER_WYRM`
+
+---
+
+### How to Make an Item Discoverable via `.j source`
+
+An item appears in `.j source` output automatically as long as it is registered in at least one of:
+- `ITEM_DATABASE` in `lootSystem.js`
+- `LOOT_TABLES` or `BOSS_DROPS` in `lootSystem.js`
+- `MINING_LOCATIONS[].ores[]` in `craftingSystem.js`
+- `CRAFTING_RECIPES`, `BREWING_RECIPES`, or `COOKING_RECIPES` in `craftingSystem.js`
+
+No additional registration is required in `rpgCommands.js`.

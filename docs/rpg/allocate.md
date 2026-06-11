@@ -406,3 +406,102 @@ saveProgression(userId);
 **How it works here**: In the code, the `saveProgression` function is used to save the user's progression to the database.
 **Why it's used**: Database operations are used to interact with a database. In this case, it is used to save the user's progression to the database.
 **If you change/remove it**: If you remove the database operation, the code will not be able to save the user's progression, and will likely result in data loss.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `core/rpg/progression.js`. A contributor should never need to open that file to understand allocatable stats or stat point economy.
+
+---
+
+### Allocatable Stat Keys
+
+These are the only valid stat identifiers for `.j allocate <stat> <points>`:
+
+| Stat Key | Description | Effect |
+|---|---|---|
+| `hp` | Health Points | Increases max HP |
+| `atk` | Attack | Increases physical damage |
+| `def` | Defense | Reduces physical damage received |
+| `mag` | Magic | Increases magical damage output |
+| `spd` | Speed | Improves turn order, dodge chance |
+| `luck` | Luck | Improves drop rates, crit bonus |
+| `crit` | Critical Hit Rate | Increases chance of dealing double damage |
+
+---
+
+### Stat Points Economy
+
+| Source | Points Gained |
+|---|---|
+| Per level-up | **5 stat points** |
+| Level 10 milestone | +10 bonus stat points |
+| Level 25 milestone | +20 bonus stat points |
+| Level 50 milestone | +40 bonus stat points |
+| Level 75 milestone | +60 bonus stat points |
+| Level 100 milestone | +100 bonus stat points |
+
+---
+
+### Base Stat Growth Per Level
+
+Every level-up grants automatic stat growth **before** allocated points, scaling every 15 levels:
+
+```
+factor = 1 + floor(level / 15)
+hp_growth  = 15 × factor  (per level)
+atk_growth = 2.5 × factor
+def_growth = 2.0 × factor
+mag_growth = 2.5 × factor
+spd_growth = 1.5 × factor
+luck_growth= 1.2 × factor
+crit_growth= 0.6 × factor
+```
+
+This growth is then multiplied by the class's **stat modifier** (see below).
+
+---
+
+### Class Stat Modifiers
+
+Each class multiplies base growth by these factors:
+
+| Class | HP | ATK | DEF | MAG | SPD | LUCK | CRIT |
+|---|---|---|---|---|---|---|---|
+| `FIGHTER` | ×1.5 | ×1.3 | ×1.2 | ×0.5 | ×1.0 | ×1.0 | ×1.0 |
+| `SCOUT` | ×0.9 | ×1.1 | ×0.8 | ×0.6 | ×1.5 | ×1.3 | ×1.5 |
+| `APPRENTICE` | ×0.7 | ×0.6 | ×0.7 | ×1.6 | ×1.0 | ×1.1 | ×1.0 |
+| `ACOLYTE` | ×1.0 | ×0.8 | ×1.0 | ×1.3 | ×1.0 | ×1.2 | ×0.8 |
+| `WARRIOR` | ×1.7 | ×1.4 | ×1.5 | ×0.4 | ×0.8 | ×1.0 | ×0.9 |
+| `BERSERKER` | ×1.8 | ×1.6 | ×1.0 | ×0.3 | ×1.1 | ×0.9 | ×1.4 |
+| `PALADIN` | ×1.6 | ×1.2 | ×1.7 | ×1.1 | ×0.7 | ×1.1 | ×0.7 |
+| `ROGUE` | ×1.0 | ×1.8 | ×0.5 | ×0.3 | ×2.0 | ×1.5 | ×2.5 |
+| `MONK` | ×1.2 | ×1.4 | ×0.8 | ×0.6 | ×1.8 | ×1.0 | ×1.5 |
+| `MAGE` | ×0.6 | ×0.5 | ×0.6 | ×1.8 | ×1.0 | ×1.2 | ×1.1 |
+| `WARLOCK` | ×0.7 | ×0.6 | ×0.7 | ×1.7 | ×1.1 | ×1.0 | ×1.2 |
+| `ELEMENTALIST` | ×0.8 | ×0.7 | ×0.8 | ×1.6 | ×1.2 | ×1.1 | ×1.0 |
+| `CLERIC` | ×1.2 | ×0.7 | ×1.1 | ×1.4 | ×1.0 | ×1.3 | ×0.8 |
+| `DRUID` | ×1.1 | ×1.0 | ×1.0 | ×1.3 | ×1.1 | ×1.2 | ×0.9 |
+| `NECROMANCER` | ×0.9 | ×0.8 | ×0.9 | ×1.5 | ×0.9 | ×1.0 | ×1.3 |
+| `MERCHANT` | ×1.0 | ×1.0 | ×1.0 | ×1.0 | ×1.0 | ×2.0 | ×1.0 |
+| `DRAGONSLAYER` | ×1.7 | ×1.8 | ×1.4 | ×0.6 | ×1.0 | ×1.2 | ×1.5 |
+| `SAMURAI` | ×1.2 | ×1.7 | ×1.0 | ×0.4 | ×1.4 | ×1.2 | ×1.8 |
+| `NINJA` | ×0.9 | ×1.6 | ×0.7 | ×1.0 | ×2.2 | ×1.4 | ×2.0 |
+| `BARD` | ×1.1 | ×0.8 | ×0.9 | ×1.2 | ×1.3 | ×1.8 | ×1.0 |
+| `ARCHMAGE` | ×1.0 | ×0.8 | ×1.2 | ×2.2 | ×1.2 | ×1.5 | ×1.5 |
+| `WARLORD` | ×2.0 | ×1.6 | ×2.0 | ×0.5 | ×0.9 | ×1.2 | ×1.2 |
+| `DOOMSLAYER` | ×2.2 | ×2.0 | ×1.2 | ×0.4 | ×1.2 | ×1.0 | ×1.8 |
+| `NIGHTBLADE` | ×1.2 | ×2.0 | ×0.8 | ×0.8 | ×2.5 | ×1.8 | ×2.8 |
+| `TYCOON` | ×1.5 | ×1.5 | ×1.5 | ×1.5 | ×1.5 | ×3.5 | ×1.5 |
+| `DRAGON_GOD` | ×2.5 | ×2.2 | ×2.2 | ×1.5 | ×1.5 | ×1.8 | ×1.8 |
+| `KAGE` | ×1.4 | ×2.2 | ×1.0 | ×1.2 | ×2.8 | ×2.0 | ×3.0 |
+
+---
+
+### How to Reset Allocated Stats
+
+Allocated stats can be refunded by purchasing a **Skill Reset Scroll** from the shop:
+- **Command**: `.j buy skill_reset`
+- **Cost**: 1,000 Zeni
+- **Effect**: All invested `allocatedStats` are set to 0 and `statPoints` are fully refunded.

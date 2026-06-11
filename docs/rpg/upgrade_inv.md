@@ -169,3 +169,62 @@ function upgradeInventory(userId) {
 - **Modify Max Slots**: Change the `MAX_SLOTS` constant value (currently 100) inside [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js).
 - **Adjust Base Slots & Step Scale**: Edit `BASE_SLOTS` or `SLOTS_PER_UPGRADE` values inside `INVENTORY_CONFIG` inside [core/rpg/inventorySystem.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/inventorySystem.js#L14).
 - **Edit Upgrade Cost Scaling**: Modify `UPGRADE_COST_BASE` or `UPGRADE_COST_SCALING` settings within `INVENTORY_CONFIG`.
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `INVENTORY_CONFIG` in `core/rpg/inventorySystem.js`. A contributor should never need to open that file to understand upgrade costs or slot limits.
+
+---
+
+### Inventory Upgrade Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| `BASE_SLOTS` | 20 | Starting slot count for new players |
+| `MAX_SLOTS` | 100 | Maximum slots — upgrade is rejected once reached |
+| `SLOTS_PER_UPGRADE` | 5 | Slots added per successful `.j upgrade inv` |
+| `UPGRADE_COST_BASE` | 1,000 Zeni | Cost of the very first upgrade |
+| `UPGRADE_COST_SCALING` | ×1.5 | Exponential multiplier applied per upgrade already purchased |
+
+---
+
+### Upgrade Cost Table
+
+Cost for each successive upgrade (calculated via `cost_base × scaling^upgradeCount`):
+
+| Upgrade # | Slots After | Zeni Cost |
+|---|---|---|
+| 1st | 25 | 1,000 |
+| 2nd | 30 | 1,500 |
+| 3rd | 35 | 2,250 |
+| 4th | 40 | 3,375 |
+| 5th | 45 | 5,063 |
+| 6th | 50 | 7,594 |
+| 7th | 55 | 11,391 |
+| 8th | 60 | 17,086 |
+| 9th | 65 | 25,629 |
+| 10th | 70 | 38,443 |
+| 11th | 75 | 57,665 |
+| 12th | 80 | 86,498 |
+| 13th | 85 | 129,746 |
+| 14th | 90 | 194,619 |
+| 15th | 95 | 291,929 |
+| 16th | 100 (MAX) | 437,893 |
+
+---
+
+### How to Modify Upgrade Parameters
+
+All constants live in `INVENTORY_CONFIG` at the top of `core/rpg/inventorySystem.js`:
+
+```javascript
+const INVENTORY_CONFIG = {
+    BASE_SLOTS: 20,           // Change starting size here
+    MAX_SLOTS: 100,           // Change hard cap here
+    SLOTS_PER_UPGRADE: 5,     // Change slots per upgrade here
+    UPGRADE_COST_BASE: 1000,  // Change first upgrade cost here
+    UPGRADE_COST_SCALING: 1.5 // Change exponential cost growth here
+};
+```

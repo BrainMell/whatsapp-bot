@@ -221,3 +221,116 @@ If you want to introduce a new mineable resource or balance existing drop rates:
   ```javascript
   if (Math.random() < 0.02) { // 0.02 is 2%. Increase to 0.05 for 5%.
   ```
+
+---
+
+## 5. Reference Manual
+
+> All values below are extracted directly from `core/rpg/craftingSystem.js` and `core/rpg/lootSystem.js`. A contributor should never need to open those files to add or modify mining locations.
+
+---
+
+### Mining Location Schema
+
+Each location in `MINING_LOCATIONS` (in `core/rpg/craftingSystem.js`) accepts these fields:
+
+```javascript
+'location_id': {
+    name: 'Display Name',
+    id: 'location_id',                  // Must match the key
+    desc: 'Description shown to player.',
+    req: {
+        level: 1,                        // Minimum player level
+        rank: 'F',                       // Minimum adventurer rank (see rank table)
+        miningLevel: 1                   // Minimum mining profession level
+    },
+    energyCost: 15,                      // Base energy cost (reduced by miningLevel/2)
+    ores: [
+        { id: 'item_id', weight: 50, min: 1, max: 3 }
+        // weight is relative — higher = more common
+    ]
+}
+```
+
+---
+
+### Adventurer Rank Order
+
+Valid values for `req.rank` from lowest to highest:
+
+`F` → `E` → `D` → `C` → `B` → `A` → `S` → `SS` → `SSS` → `GOD`
+
+---
+
+### All Mining Location IDs
+
+Use these IDs with `.j mine <location_id>`:
+
+| Location ID | Name | Level Req | Rank Req | Mining Lvl Req | Energy Cost |
+|---|---|---|---|---|---|
+| `iron_quarry` | Iron Quarry | 1 | F | 1 | 15 |
+| `silver_mine` | Silver Mine | 10 | E | 5 | 20 |
+| `crystal_cavern` | Crystal Cavern | 20 | D | 10 | 25 |
+| `mythril_depths` | Mythril Depths | 35 | C | 20 | 30 |
+| `dragon_lair_mine` | Dragon Lair Mine | 50 | B | 35 | 40 |
+| `shimmering_caves` | Shimmering Caves | 5 | F | 3 | 18 |
+
+> **Note**: The exact list depends on the live `MINING_LOCATIONS` object. Use `.j mine` with no arguments to see all available locations and their current requirements.
+
+---
+
+### All Mineable Item IDs
+
+These are `MATERIAL` type items that can appear in mining location ore pools:
+
+| Item ID | Name | Rarity |
+|---|---|---|
+| `iron_shard` | Iron Shard | COMMON |
+| `refined_steel` | Refined Steel | UNCOMMON |
+| `sharp_whetstone` | Sharp Whetstone | UNCOMMON |
+| `mana_crystal` | Mana Crystal | RARE |
+| `mythril_ore` | Mythril Ore | RARE |
+| `fire_shard` | Fire Shard | RARE |
+| `ice_shard` | Ice Shard | RARE |
+| `lightning_shard` | Lightning Shard | RARE |
+| `rare_gem` | Rare Gem | RARE |
+| `dark_matter` | Dark Matter | EPIC |
+| `void_crystal` | Void Crystal | EPIC |
+| `legendary_shard` | Legendary Shard | LEGENDARY |
+
+> Any item registered in `ITEM_DATABASE` with `type: 'MATERIAL'` can be added to a mining ore pool.
+
+---
+
+### Drop Rate Formula
+
+On each `.j mine` run, the system performs this many rolls:
+
+```
+baseRolls  = 2 + floor(miningLevel / 10)
+bonusRolls = floor(luck / 15)
+totalRolls = baseRolls + bonusRolls
+```
+
+Each roll picks an ore using weighted random selection:
+```
+drop_chance = ore.weight / sum_of_all_weights_in_location
+```
+
+Each roll also has a **2% chance** to find a lucky Zeni pouch (100–600 Zeni).
+
+---
+
+### Energy Cost Formula
+
+```
+effectiveCost = Math.max(5, location.energyCost - floor(miningLevel / 2))
+```
+
+The minimum energy cost is always **5**, regardless of mining level.
+
+---
+
+### Mining XP
+
+Each successful mine run awards `5–10` mining profession XP (random in that range). Mining level increases unlock more base rolls and reduce energy cost.

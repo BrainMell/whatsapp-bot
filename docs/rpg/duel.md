@@ -411,3 +411,34 @@ const result = pvpSystem.challengePlayer(
 **How it works here**: The object properties are used to access and manipulate values in the `pvpSystem` object.
 **Why it's used**: Object properties are used to access and manipulate values in objects, making the code more efficient and accurate.
 **If you change/remove it**: If you remove the object properties, the program won't be able to access and manipulate the values, and the duel functionality won't work as expected.
+
+---
+
+## 5. Reference Manual
+
+> All PvP balance multipliers, timeouts, victory rewards, and flee penalty values below are extracted directly from `core/rpg/pvpSystem.js`. A contributor should never need to open that file to understand PvP system limits or rewards configuration.
+
+### 5.1 PvP Balance Constants
+To keep duels fair and dynamic, standard stats are capped or scaled inside a PvP context:
+* **Basic Attack Multiplier (`PVP_DAMAGE_MULT`)**: `0.80` (Basic attacks deal 80% of their PvE damage).
+* **Ability Multiplier (`PVP_ABILITY_MULT`)**: `0.45` (Skills and abilities deal 45% of their PvE damage).
+* **Defense Mitigation Cap (`PVP_DEFENSE_CAP`)**: `0.50` (Maximum 50% damage reduction from DEF in PvP, preventing players from being immortal).
+* **Crit Damage Multiplier (`PVP_CRIT_MULT`)**: `1.5x` (Critical strikes deal 1.5x normal damage).
+* **Energy Regen (`PVP_ENERGY_REGEN`)**: `20` energy restored per player turn.
+* **Challenge Acceptance Expiry (`CHALLENGE_TIMEOUT`)**: 2 minutes (`120000` ms) to accept a challenge invite.
+* **Duel Activity Expiry (`PVP_TIMEOUT_MS`)**: 5 minutes (`300000` ms) of inactivity before a duel is automatically deleted.
+
+### 5.2 Victory Rewards
+The staying/surviving player receives the following rewards on victory:
+* **XP Gain**: `Math.floor(80 + (loser.level * 15))` XP.
+* **Currency Prize**:
+  * **Staked Duel**: Recovers the total staked pot (`stake * 2`).
+  * **Unstaked Duel**: `Math.floor(150 + (loser.level * 40))` Zeni.
+* **PvP Record**: Winner gains `+1 pvpWins`, Loser gains `+1 pvpLosses`.
+
+### 5.3 Flee Penalty Values
+Fleeing from a duel carries heavy penalties applied instantly to the fleeing player:
+* **XP Penalty**: Loss of `20%` of their total XP. This XP deduction is clamped so the player's XP does not fall below the minimum required for their current level (cannot lose levels from fleeing).
+* **Wallet Penalty**: Loss of `50%` of all Zeni currently in their wallet.
+* **Bag Penalty**: Loss of exactly `1` random item from their inventory bag (if bag is not empty).
+* **Win/Loss Record**: Fleeing player gets `+1 pvpLosses`, and the opponent is awarded `+1 pvpWins` along with standard victory rewards.
