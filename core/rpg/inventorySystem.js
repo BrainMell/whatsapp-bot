@@ -717,10 +717,13 @@ function useItem(userId, rawItemId) {
     let consumed = true;
 
     if (itemId === 'hp_potion' || itemId === 'minor_hp_potion' || itemId === 'mega_potion') {
+        const user = economy.getUser(userId);
         const maxHp = sheet.stats.maxHp || sheet.stats.hp;
         const healPct = itemInfo.effectValue || 0.15;
         const heal = Math.floor(maxHp * healPct);
-        sheet.stats.hp = Math.min(maxHp, (sheet.stats.hp || maxHp) + heal);
+        if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+        user.stats.maxHp = maxHp;
+        user.stats.hp = Math.min(maxHp, (user.stats.hp || maxHp) + heal);
         effectMsg = `💚 Restored *${heal} HP*! (${Math.round(healPct * 100)}%)`;
     } 
     else if (itemId === 'energy_drink') {
@@ -763,8 +766,11 @@ function useItem(userId, rawItemId) {
         effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
     else if (itemId === 'holy_water') {
+        const user = economy.getUser(userId);
         const maxHp = sheet.stats.maxHp || sheet.stats.hp;
-        sheet.stats.hp = Math.min(maxHp, (sheet.stats.hp || maxHp) + 100);
+        if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+        user.stats.maxHp = maxHp;
+        user.stats.hp = Math.min(maxHp, (user.stats.hp || maxHp) + 100);
         effectMsg = `💚 Restored **100 HP** and cleansed your status!`;
     }
     else if (itemId === 'energy_brew') {

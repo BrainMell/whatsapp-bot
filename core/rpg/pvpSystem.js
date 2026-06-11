@@ -190,6 +190,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `———————————\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+        `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
         `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return { success: true, duel: duelState, image, message: startMsg };
@@ -228,6 +229,88 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     
     if (currentPlayer.jid !== resolvedSender) {
         return { success: false, message: `⏳ It's not your turn! Waiting on *${currentPlayer.name}*...` };
+    }
+
+    // Tick current player's status effects at the beginning of their turn
+    let statusLog = [];
+    let skipTurn = false;
+    
+    if (currentPlayer.statusEffects && currentPlayer.statusEffects.length > 0) {
+        for (let i = currentPlayer.statusEffects.length - 1; i >= 0; i--) {
+            const effect = currentPlayer.statusEffects[i];
+            
+            // Damage over time: poison, burn, bleed
+            if (effect.type === 'poison' || effect.type === 'burn' || effect.type === 'bleed') {
+                const dmg = effect.dotDamage || (effect.type === 'poison' ? 10 : effect.type === 'burn' ? 15 : 12);
+                currentPlayer.hp = Math.max(0, currentPlayer.hp - dmg);
+                statusLog.push(`🩸 *${effect.type.toUpperCase()}* dealt *${dmg}* damage to *${currentPlayer.name}*!`);
+            }
+            // Regen
+            else if (effect.type === 'regen') {
+                const heal = effect.value || 15;
+                currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + heal);
+                statusLog.push(`💚 *REGEN* healed *${currentPlayer.name}* for *${heal}* HP!`);
+            }
+            // Stun / Freeze / Sleep
+            else if (effect.type === 'stun' || effect.type === 'freeze' || effect.type === 'sleep') {
+                skipTurn = true;
+                statusLog.push(`💫 *${effect.type.toUpperCase()}* active! *${currentPlayer.name}*'s turn is skipped!`);
+            }
+            
+            effect.duration--;
+            if (effect.duration <= 0) {
+                currentPlayer.statusEffects.splice(i, 1);
+                statusLog.push(`✨ *${effect.type.toUpperCase()}* has worn off.`);
+            }
+        }
+    }
+
+    if (currentPlayer.hp <= 0) {
+        currentPlayer.hp = 0;
+        const statusMsg = statusLog.join('\n');
+        const result = await finishDuel(chatId, duel, opponent, currentPlayer);
+        activeDuels.delete(chatId);
+        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + result };
+    }
+
+    if (skipTurn) {
+        // Tick cooldowns
+        for (const [skillId, cd] of Object.entries(currentPlayer.cooldowns)) {
+            currentPlayer.cooldowns[skillId] = cd - 1;
+            if (currentPlayer.cooldowns[skillId] <= 0) delete currentPlayer.cooldowns[skillId];
+        }
+        
+        // Advance turn
+        duel.turn = 1 - duel.turn;
+        if (duel.turn === 0) duel.round++;
+        duel.lastAction = Date.now();
+        
+        // Energy regen
+        currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
+        
+        const nextPlayer = duel.players[duel.turn];
+        const imageResult = await generateDuelImage(duel);
+        
+        const statusMsg = statusLog.join('\n');
+        let roundMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
+                        `———————————\n` +
+                        `${statusMsg}\n\n` +
+                        `🔴 *${currentPlayer.name}*: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
+                        `🔵 *${opponent.name}*: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
+                        `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
+                        `———————————\n` +
+                        `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
+                        `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+                        `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
+                        `🏃 \`${botConfig.getPrefix()} combat flee\``;
+
+        return {
+            success: true,
+            finished: false,
+            message: roundMsg,
+            image: imageResult,
+            mentions: [nextPlayer.jid],
+        };
     }
 
     let actionResult = '';
@@ -429,14 +512,191 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             fled: true,
             message: fleeMsg 
         };
+    } else if (action === 'item') {
+        const inventory = inventorySystem.formatInventory(currentPlayer.jid);
+        if (inventory.isEmpty) {
+            return { success: false, message: '❌ Your combat bag is empty!' };
+        }
+        
+        const { CONSUMABLES } = require('./guildAdventure');
+        const usableItems = inventory.items.filter((item) => {
+            const info = lootSystem.getItemInfo(item.id);
+            return (info && info.usable) || !!CONSUMABLES[item.id];
+        });
+        
+        if (usableItems.length === 0) {
+            return { success: false, message: '❌ You have no usable items in your bag!' };
+        }
+        
+        if (!target || target.trim() === '') {
+            // List usable combat items (does not consume turn)
+            let msg = `🎒 *${currentPlayer.name}'s COMBAT BAG* 🎒\n━━━━━━━━━━━━━━━━\n`;
+            usableItems.forEach((item, i) => {
+                const info = lootSystem.getItemInfo(item.id);
+                msg += `*${i + 1}.* ${info.name} x${item.quantity}\n_${info.description || ''}_\n\n`;
+            });
+            msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
+            return { success: true, message: msg };
+        }
+        
+        const itemIndex = parseInt(target) - 1;
+        if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= usableItems.length) {
+            return { success: false, message: `❌ Invalid item number! Type \`${botConfig.getPrefix()} combat item\` to see all usable items.` };
+        }
+        
+        const selectedItem = usableItems[itemIndex];
+        const itemKey = selectedItem.id;
+        const itemInfo = lootSystem.getItemInfo(itemKey);
+        const shopInfo = CONSUMABLES[itemKey] || {};
+        const item = {
+            ...itemInfo,
+            ...shopInfo,
+            usable: (itemInfo && itemInfo.usable) || !!shopInfo
+        };
+        
+        if (!item || !item.usable) {
+            return { success: false, message: '❌ This item is not usable in combat!' };
+        }
+        
+        // Remove 1 item
+        inventorySystem.removeItem(currentPlayer.jid, itemKey, 1);
+        
+        actionResult = `🎒 *${currentPlayer.name}* used *${item.name}*!`;
+        
+        const isNegative = [
+            "damage_aoe",
+            "aoe_damage",
+            "aoe_debuff_damage",
+            "apply_poison",
+            "freeze_enemy",
+            "percent_hp_damage"
+        ].includes(item.effect);
+        
+        const itemTarget = isNegative ? opponent : currentPlayer;
+        
+        switch (item.effect) {
+            case "heal":
+                const healVal = item.effectValue || 0.35;
+                const healAmt = Math.floor(itemTarget.maxHp * healVal);
+                const actualHeal = Math.min(healAmt, itemTarget.maxHp - itemTarget.hp);
+                itemTarget.hp += actualHeal;
+                actionResult += `\n💖 Restored *${actualHeal}* HP! (${Math.round(healVal * 100)}%)`;
+                
+                if (itemKey === "elixir" || item.cureStatus) {
+                    if (itemTarget.statusEffects && itemTarget.statusEffects.length > 0) {
+                        const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                        const beforeCount = itemTarget.statusEffects.length;
+                        itemTarget.statusEffects = itemTarget.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                        const clearedCount = beforeCount - itemTarget.statusEffects.length;
+                        if (clearedCount > 0) {
+                            actionResult += `\n✨ Cured *${clearedCount}* status effects!`;
+                        }
+                    }
+                }
+                break;
+            case "cure_status":
+                if (itemTarget.statusEffects && itemTarget.statusEffects.length > 0) {
+                    const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                    const beforeCount = itemTarget.statusEffects.length;
+                    itemTarget.statusEffects = itemTarget.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                    const clearedCount = beforeCount - itemTarget.statusEffects.length;
+                    if (clearedCount > 0) {
+                        actionResult += `\n✨ Cured *${clearedCount}* status effects!`;
+                    } else {
+                        actionResult += `\n(No negative status effects to cure)`;
+                    }
+                } else {
+                    actionResult += `\n(No negative status effects to cure)`;
+                }
+                break;
+            case "regen":
+                const regVal = item.effectValue || 0.1;
+                const regAmt = Math.floor(itemTarget.maxHp * regVal);
+                if (!itemTarget.statusEffects) itemTarget.statusEffects = [];
+                itemTarget.statusEffects.push({ type: 'regen', duration: item.duration || 3, value: regAmt });
+                actionResult += `\n🧴 Applied regeneration! (+${regAmt} HP/turn)`;
+                break;
+            case "restore_energy":
+                const enVal = item.effectValue || 0.4;
+                const enAmt = Math.floor(itemTarget.maxEnergy * enVal);
+                itemTarget.energy = Math.min(itemTarget.maxEnergy, itemTarget.energy + enAmt);
+                actionResult += `\n⚡ Restored *${enAmt}* energy! (${Math.round(enVal * 100)}%)`;
+                break;
+            case "buff_atk":
+                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + Math.floor((item.effectValue || 20) * 0.5);
+                actionResult += `\n💪 Buffed attack!`;
+                break;
+            case "buff_def":
+                itemTarget.stats.def = (itemTarget.stats.def || 0) + Math.floor((item.effectValue || 20) * 0.5);
+                actionResult += `\n🛡️ Buffed defense!`;
+                break;
+            case "buff_spd":
+                itemTarget.stats.spd = (itemTarget.stats.spd || 0) + Math.floor((item.effectValue || 20) * 0.5);
+                actionResult += `\n⚡ Buffed speed!`;
+                break;
+            case "buff_luck":
+                itemTarget.stats.luck = (itemTarget.stats.luck || 0) + Math.floor((item.effectValue || 20) * 0.5);
+                actionResult += `\n🍀 Buffed luck!`;
+                break;
+            case "buff_all":
+                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + 10;
+                itemTarget.stats.def = (itemTarget.stats.def || 0) + 10;
+                itemTarget.stats.spd = (itemTarget.stats.spd || 0) + 10;
+                actionResult += `\n✨ Overflowing with power! (+All Stats)`;
+                break;
+            case "buff_all_damage":
+                itemTarget.stats.atk = (itemTarget.stats.atk || 0) + 20;
+                actionResult += `\n💥 Enters a BERSERKER RAGE! (+Damage)`;
+                break;
+            case "shield_max":
+                if (!itemTarget.statusEffects) itemTarget.statusEffects = [];
+                itemTarget.statusEffects.push({ type: 'shield', duration: 5, value: 100 });
+                actionResult += `\n🛡️ Encased in a massive energy barrier!`;
+                break;
+            case "damage_aoe":
+            case "aoe_damage":
+            case "aoe_debuff_damage":
+                const dmg = item.effectValue || 80;
+                itemTarget.hp = Math.max(0, itemTarget.hp - dmg);
+                actionResult += `\n💥 Deals *${dmg}* damage to *${itemTarget.name}*!`;
+                if (item.effect === "aoe_debuff_damage") {
+                    if (!itemTarget.statusEffects) itemTarget.statusEffects = [];
+                    itemTarget.statusEffects.push({ type: 'vulnerability', duration: 3, value: 20 });
+                    actionResult += ` and weakened them!`;
+                }
+                break;
+            case "percent_hp_damage":
+                const finalDmg = Math.floor(itemTarget.maxHp * (item.effectValue || 0.25));
+                itemTarget.hp = Math.max(0, itemTarget.hp - finalDmg);
+                actionResult += `\n💥 Deals *${finalDmg}* TRUE damage to *${itemTarget.name}*!`;
+                break;
+            case "flee":
+                actionResult += `\n💨 Used smoke bomb! Escape from PvP is not allowed this way (use regular flee).`;
+                break;
+            default:
+                actionResult += `\n(Item effect activated)`;
+        }
     } else {
-        return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, or \`flee\`` };
+        return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, \`item\`, or \`flee\`` };
+    }
+
+    if (statusLog.length > 0) {
+        actionResult = statusLog.join('\n') + '\n\n' + actionResult;
     }
 
     // ── Check for win ─────────────────────────────
-    if (opponent.hp <= 0) {
-        opponent.hp = 0;
-        const result = await finishDuel(chatId, duel, currentPlayer, opponent);
+    if (opponent.hp <= 0 || currentPlayer.hp <= 0) {
+        let winner = currentPlayer;
+        let loser = opponent;
+        if (currentPlayer.hp <= 0 && opponent.hp > 0) {
+            winner = opponent;
+            loser = currentPlayer;
+        } else if (currentPlayer.hp <= 0 && opponent.hp <= 0) {
+            winner = opponent;
+            loser = currentPlayer;
+        }
+        loser.hp = 0;
+        const result = await finishDuel(chatId, duel, winner, loser);
         activeDuels.delete(chatId);
         return { success: true, finished: true, message: actionResult + '\n\n' + result };
     }
@@ -471,6 +731,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                     `———————————\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
                     `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+                    `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
                     `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return {

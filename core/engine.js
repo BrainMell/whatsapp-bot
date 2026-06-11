@@ -4940,12 +4940,13 @@ _💡 Reply with another number from your search list!_`.trim();
                         let pvpAction = action;
                         if (pvpAction === "atk") pvpAction = "attack";
                         if (pvpAction === "skill") pvpAction = "ability";
+                        if (pvpAction === "use") pvpAction = "item";
 
                         if (!pvpAction) {
                           return await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `❌ Usage: \`${botConfig.getPrefix()} combat <attack | ability <n> | flee>\``,
+                              `❌ Usage: \`${botConfig.getPrefix()} combat <attack | ability <n> | item | flee>\``,
                           });
                         }
 

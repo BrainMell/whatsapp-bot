@@ -619,6 +619,12 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
     
     const oldClassName = currentClass?.name || 'Unknown';
+
+    // Calculate HP ratio before changing class to scale it properly
+    const oldMaxHp = progression.getBaseStats(senderJid, user.class).hp;
+    const currentHp = user.stats?.hp || oldMaxHp;
+    const ratio = Math.min(1, currentHp / oldMaxHp);
+
     user.class = chosen.id;
 
     // 💡 BUG FIX: Update actual User base stats in the database
@@ -628,6 +634,11 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     // Re-initialize base stats to the new class's defaults
     // (Progression.getBaseStats will combine these with level scaling)
     Object.assign(user.stats, chosen.stats);
+
+    // Scale current and max HP based on level growth
+    const newMaxHp = progression.getBaseStats(senderJid, chosen.id).hp;
+    user.stats.hp = Math.round(newMaxHp * ratio);
+    user.stats.maxHp = newMaxHp;
 
     // PRESERVE SKILLS: Do not wipe user.skills
     if (!user.skills) user.skills = {};

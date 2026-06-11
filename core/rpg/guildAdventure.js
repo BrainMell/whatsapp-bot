@@ -5014,6 +5014,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
     if (user && nextClass) {
       const oldClassName =
         classSystem.getClassById(user.class)?.name || "Unknown";
+
+      // Calculate HP ratio before changing class to scale it properly
+      const oldMaxHp = progression.getBaseStats(player.jid, user.class).hp;
+      const currentHp = user.stats?.hp || oldMaxHp;
+      const ratio = Math.min(1, currentHp / oldMaxHp);
+
       user.class = trialData.targetClass;
 
       // Deduct cost and stone here if not already handled
@@ -5028,6 +5034,11 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // Update actual User base stats in the database
       if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
       Object.assign(user.stats, nextClass.stats);
+
+      // Scale current and max HP based on level growth
+      const newMaxHp = progression.getBaseStats(player.jid, nextClass.id).hp;
+      user.stats.hp = Math.round(newMaxHp * ratio);
+      user.stats.maxHp = newMaxHp;
 
       // Preserve skills structure
       if (!user.skills) user.skills = {};
