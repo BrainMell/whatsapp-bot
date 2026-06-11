@@ -245,15 +245,94 @@ To add a brand new playable starter class or advanced evolution:
 
 
 
+
+
 ---
 
+## 5. Complete Class & Adventurer Rank Reference Manual
 
+This reference section outlines all playable classes, stats, roles, passives, and progression gates configured in the RPG engine, as well as the adventurer ranks database.
 
+### 5.1 Playable Classes Catalog
+All playable character classes are defined in [`core/rpg/classSystem.js`](file:///home/mellow/Desktop/Joker/whatsapp-bot/core/rpg/classSystem.js). They are structured in 3 distinct tiers: Starter, Evolved, and Ascended.
 
+#### Tier 1: Starter Classes
+Starter classes have no requirements or unlock costs and act as the roots of the evolution tree:
 
+| Class ID | Icon / Name | Role | Base Stats (hp, atk, def, mag, spd, luck, crit) | Evolves Into (Evolved Class IDs) |
+|:---|:---|:---|:---|:---|
+| `FIGHTER` | ⚔️ Fighter | TANK | `120, 12, 10, 4, 8, 6, 8%` | `WARRIOR`, `BERSERKER`, `PALADIN`, `DRAGONSLAYER` |
+| `SCOUT` | 🗡️ Scout | DPS | `90, 10, 5, 3, 16, 14, 18%` | `ROGUE`, `MONK`, `SAMURAI`, `NINJA` |
+| `APPRENTICE` | 🔮 Apprentice | MAGIC_DPS | `80, 5, 4, 18, 9, 8, 10%` | `MAGE`, `WARLOCK`, `ELEMENTALIST`, `NECROMANCER`, `CHRONOMANCER` |
+| `ACOLYTE` | ✨ Acolyte | SUPPORT | `100, 6, 8, 14, 10, 12, 6%` | `CLERIC`, `DRUID`, `MERCHANT`, `BARD`, `ARTIFICER` |
 
+#### Tier 2: Evolved Classes
+Evolved classes are unlocked by using an **Evolution Stone (T2)**. Requirements are gated by: Level, Quests Completed, and defeating a specific solo **Trial Boss**:
 
+| Class ID | Icon / Name | Evolved From | Role | Base Stats | Passive Name & Description | Requirements |
+|:---|:---|:---|:---|:---|:---|:---|
+| `WARRIOR` | ⚔️ Warrior | `FIGHTER` | TANK | `220, 18, 22, 2, 5, 5, 5%` | **Tenacity**: Regen 3% max HP every 2 turns. | Level 15, 15 Quests, trialBoss: `INFECTED_COLOSSUS` |
+| `BERSERKER` | 🪓 Berserker | `FIGHTER` | TANK | `220, 18, 12, 1, 6, 4, 15%` | **Bloodlust**: CRIT increases by 1% per 5% HP missing. | Level 15, 15 Quests, trialBoss: `MUTATION_PRIME` |
+| `PALADIN` | 🛡️ Paladin | `FIGHTER` | TANK | `180, 10, 22, 8, 4, 10, 5%` | **Divine Shield**: -10% dmg taken; -50% from Undead. | Level 15, 15 Quests, trialBoss: `CORRUPTED_GUARDIAN` |
+| `DRAGONSLAYER` | 🐲⚔️ Dragonslayer | `FIGHTER` | TANK | `190, 16, 15, 4, 8, 8, 12%` | **Dragon Bane**: 3× damage to Dragons. Immune to fire DoT. | Level 40, 30 Quests, 150k Zeni, trialBoss: `ELDER_FLAME` |
+| `ROGUE` | 🗡️ Rogue | `SCOUT` | DPS | `100, 18, 5, 3, 20, 15, 25%` | **Shadow Step**: Evasion +15%. | Level 15, 15 Quests, trialBoss: `SHADOW_STALKER` |
+| `MONK` | 🥋 Monk | `SCOUT` | DPS | `120, 14, 8, 6, 18, 10, 15%` | **Inner Focus**: +10% Accuracy, +10% Speed. | Level 15, 15 Quests, trialBoss: `IRON_BODY_GRANDMASTER` |
+| `SAMURAI` | ⚔️🌸 Samurai | `SCOUT` | DPS | `130, 17, 9, 4, 16, 11, 20%` | **Bushido**: +20% ATK after standing still for 1 turn. | Level 15, 15 Quests, trialBoss: `ANCIENT_WURM` |
+| `NINJA` | 🥷 Ninja | `SCOUT` | DPS | `95, 16, 4, 5, 22, 16, 28%` | **Opening Strike**: First attack is a guaranteed CRIT. | Level 15, 15 Quests, trialBoss: `SHADOW_LORD` |
+| `MAGE` | 🔮 Mage | `APPRENTICE` | MAGIC_DPS | `110, 8, 8, 35, 12, 12, 8%` | **Arcane Well**: Regenerates 10 Energy per turn. | Level 15, 15 Quests, trialBoss: `ARCANE_SENTINEL` |
+| `WARLOCK` | 👹 Warlock | `APPRENTICE` | MAGIC_DPS | `100, 7, 6, 26, 8, 10, 12%` | **Soul Siphon**: Heals for 8% of magic damage dealt. | Level 15, 15 Quests, trialBoss: `SOUL_EATER` |
+| `ELEMENTALIST` | 🌊 Elementalist | `APPRENTICE` | MAGIC_DPS | `95, 7, 6, 28, 10, 11, 13%` | **Elemental Harmony**: Elemental dmg +15%. | Level 15, 15 Quests, trialBoss: `ELEMENTAL_PRIMORDIAL` |
+| `NECROMANCER` | 💀 Necromancer | `APPRENTICE` | MAGIC_DPS | `92, 6, 5, 27, 8, 9, 11%` | **Death's Apprentice**: Summons have +30% stats. | Level 15, 15 Quests, trialBoss: `GRAVEYARD_LORD` |
+| `CHRONOMANCER` | ⏳ Chronomancer | `APPRENTICE` | MAGIC_DPS | `88, 6, 6, 28, 14, 13, 12%` | **Temporal Flow**: Cooldowns reduced by 1. | Level 15, 15 Quests, trialBoss: `CHRONOS_WARDEN` |
+| `CLERIC` | ✨🙏 Cleric | `ACOLYTE` | SUPPORT | `110, 7, 9, 20, 9, 13, 7%` | **Divine Grace**: Healing spells are 25% stronger. | Level 15, 15 Quests, trialBoss: `CORRUPTED_GUARDIAN` |
+| `DRUID` | 🌿 Druid | `ACOLYTE` | SUPPORT | `115, 8, 10, 18, 11, 12, 8%` | **Wild Shape**: Can transform each combat. | Level 15, 15 Quests, trialBoss: `FOREST_ANCESTOR` |
+| `MERCHANT` | 💰 Merchant | `ACOLYTE` | SUPPORT | `105, 7, 8, 12, 10, 25, 9%` | **Market Advantage**: Earn 50% more Zeni. | Level 15, 15 Quests, trialBoss: `GOLDEN_GOLEM` |
+| `BARD` | 🎸 Bard | `ACOLYTE` | SUPPORT | `100, 8, 7, 16, 12, 14, 10%` | **Inspiring Song**: Party members gain +10% stats. | Level 15, 15 Quests, trialBoss: `SOUND_REAPER` |
+| `ARTIFICER` | 🔧 Artificer | `ACOLYTE` | SUPPORT | `108, 9, 9, 15, 11, 11, 11%` | **Overclocked**: Summons deal 40% more damage. | Level 15, 15 Quests, trialBoss: `CLOCKWORK_TITAN` |
 
+#### Tier 3: Ascended Classes
+Ascended classes require an **Ascension Stone (T3)** and **100,000+ Zeni** to unlock, as well as specific kill counts or achievements:
+
+| Class ID | Icon / Name | Evolved From | Role | Base Stats | Passive Name & Description | Requirements |
+|:---|:---|:---|:---|:---|:---|:---|
+| `WARLORD` | 🎖️ Warlord | `WARRIOR` | TANK | `550, 28, 48, 5, 12, 10, 12%` | **Iron Command**: Party takes -15% dmg in multiplayer. | Level 50, 100 Quests, 100 Victories, 100k gold, trialBoss: `VOID_CORRUPTED` |
+| `DOOMSLAYER` | 🔥🪓 Doomslayer | `BERSERKER` | TANK | `600, 55, 25, 2, 18, 5, 30%` | **Hell-Walker**: +2% dmg per 1% HP missing. No cap. | Level 50, 100 Quests, 500 Kills, 100k gold, trialBoss: `DEMON_LORD` |
+| `TEMPLAR` | ⛪ Templar | `PALADIN` | TANK | `460, 22, 52, 30, 10, 20, 12%` | **Holy Retribution**: Reflect 20% damage taken as holy damage. | Level 50, 100 Quests, 200 Undead Kills, 100k gold, trialBoss: `PRIMORDIAL_CHAOS` |
+| `DRAGON_GOD` | 🐲👑 Dragon God | `DRAGONSLAYER` | TANK | `550, 45, 40, 35, 15, 25, 20%` | **Dragon Heart**: Status immune. Reduces dmg taken by 50%. | Level 75, 200 Quests, 200 Dragons Killed, 500k gold, trialBoss: `LEVIATHAN` |
+| `NIGHTBLADE` | 🌑🗡️ Nightblade | `ROGUE` | DPS | `250, 42, 12, 15, 50, 35, 45%` | **Assassin's Mark**: 10% chance to deal 10× damage on attack. | Level 50, 100 Quests, 100k gold, trialBoss: `VOID_ASSASSIN` |
+| `ZENMASTER` | 🧘 Zenmaster | `MONK` | DPS | `350, 38, 22, 35, 45, 25, 30%` | **Perfect Form**: Immune to stun. | Level 50, 100 Quests, 100k gold, trialBoss: `ETERNAL_DRAGON` |
+| `SHOGUN` | 🏯⚔️ Shogun | `SAMURAI` | DPS | `320, 50, 28, 15, 25, 20, 35%` | **Commander's Will**: Party deals +20% physical damage. | Level 50, 100 Quests, 100k gold, trialBoss: `VOID_TITAN` |
+| `KAGE` | 🌑🥷 Kage | `NINJA` | DPS | `220, 52, 15, 20, 55, 30, 50%` | **Absolute Stealth**: 50% base Evasion. | Level 50, 100 Quests, 100k gold, trialBoss: `PRIMORDIAL_EVIL` |
+| `ARCHMAGE` | 🧙‍♂️✨ Archmage | `MAGE` | MAGIC_DPS | `200, 12, 18, 75, 22, 22, 22%` | **Infinity Flow**: Energy costs reduced by 50%. | Level 50, 100 Quests, 100k gold, trialBoss: `LICH_KING` |
+| `VOIDWALKER` | 🌑🧙 Voidwalker | `WARLOCK` | MAGIC_DPS | `300, 18, 25, 65, 18, 15, 18%` | **Abyssal Aura**: Enemies ATK/DEF reduced by 15%. | Level 50, 100 Quests, 100k gold, trialBoss: `ABYSSAL_WHISPER` |
+| `AVATAR` | 🌊🔥⚡🌍 Avatar | `ELEMENTALIST` | MAGIC_DPS | `250, 20, 22, 70, 28, 25, 25%` | **Elemental Avatar**: Match enemy elemental weakness automatically. | Level 50, 100 Quests, 100k gold, trialBoss: `PRIME_ELEMENT` |
+| `LICH` | 💀👑 Lich | `NECROMANCER` | MAGIC_DPS | `300, 15, 25, 68, 20, 18, 20%` | **Phylactery**: Revives once per quest at 50% HP. | Level 50, 100 Quests, 100k gold, trialBoss: `VOID_NECROMANCER` |
+| `TIMELORD` | ⏳👑 Time Lord | `CHRONOMANCER` | MAGIC_DPS | `240, 15, 20, 72, 60, 30, 25%` | **Temporal Mastery**: Takes 2 actions per turn. | Level 50, 100 Quests, 100k gold, trialBoss: `TIME_EATER` |
+| `SAINT` | 😇 Saint | `CLERIC` | SUPPORT | `350, 22, 40, 65, 22, 35, 18%` | **Sainthood**: All healing spells output doubled. | Level 50, 100 Quests, 100k gold, trialBoss: `SERAPHIM_PRIME` |
+| `ARCHDRUID` | 🌳👑 Archdruid | `DRUID` | SUPPORT | `400, 28, 38, 60, 28, 30, 22%` | **Nature's Wrath**: Regenerate 3% max HP per turn. | Level 50, 100 Quests, 100k gold, trialBoss: `GAIA_SENTINEL` |
+| `TYCOON` | 💰👑 Tycoon | `MERCHANT` | SUPPORT | `300, 25, 30, 40, 25, 100, 30%` | **Infinite Capital**: Earns Zeni each turn in combat. | Level 50, 100 Quests, 500k gold earned, 200k gold, trialBoss: `TREASURE_HOARDER` |
+| `VIRTUOSO` | 🎻✨ Virtuoso | `BARD` | SUPPORT | `280, 18, 20, 55, 30, 40, 25%` | **Grand Finale**: Can revive fallen allies. | Level 50, 100 Quests, 100k gold, trialBoss: `MAESTRO_OF_VOID` |
+| `GRAND_INVENTOR` | 🦾⚙️ Grand Inventor | `ARTIFICER` | SUPPORT | `320, 25, 35, 35, 22, 25, 20%` | **Master Craftsman**: Doubles crafting outputs. | Level 50, 100 Quests, 100k gold, trialBoss: `MECH_GOD` |
+
+---
+
+### 5.2 Adventurer Rank Database
+The Rank Progression is mapped in `classSystem.js` under `ADVENTURER_RANKS`. Upgrades require a minimum player Level, Quests Completed, and **Guild Points (GP)**:
+
+| Rank ID | Icon / Name | Minimum Level | Quests Req. | GP Req. | Benefit (Quest Reward Bonus) |
+|:---|:---|:---|:---|:---|:---|
+| `F` | 🔰 F-Rank | 1 | 0 | 0 | +0% Zeni/Drop rewards |
+| `E` | 🥉 E-Rank | 10 | 10 | 50 | +5% Zeni/Drop rewards |
+| `D` | 🥈 D-Rank | 20 | 25 | 150 | +10% Zeni/Drop rewards |
+| `C` | 🥇 C-Rank | 30 | 50 | 400 | +15% Zeni/Drop rewards |
+| `B` | 💎 B-Rank | 40 | 80 | 800 | +20% Zeni/Drop rewards |
+| `A` | 💠 A-Rank | 50 | 120 | 1,500 | +30% Zeni/Drop rewards |
+| `S` | ⭐ S-Rank | 60 | 180 | 3,000 | +40% Zeni/Drop rewards |
+| `SS` | 🌟 SS-Rank | 75 | 250 | 6,000 | +60% Zeni/Drop rewards |
+| `SSS` | ✨ SSS-Rank | 90 | 500 | 12,000 | +100% Zeni/Drop rewards |
+| `GOD` | ♾️ GOD-Rank | 100 | 1,000 | 25,000 | +200% Zeni/Drop rewards |
+
+---
 
 # **Noob Readthrough**
 
