@@ -130,6 +130,17 @@ const DUNGEON_RANKS = {
     xpMult: 5.0,
     isSpecial: true,
   },
+  // ⚔️ Class Evolution Trial — boss-only single-encounter dungeon
+  TRIAL: {
+    name: "Class Trial",
+    encounters: 1,
+    minMobs: 1,
+    maxMobs: 1,
+    difficulty: 1.5,
+    boss: null,          // Boss is determined dynamically by trialData.trialBoss
+    xpMult: 2.0,
+    isSpecial: true,
+  },
 };
 
 const DUNGEON_ENVIRONMENTS = {
@@ -965,6 +976,8 @@ const CLASSES = {
 
 const CONSUMABLES = {
   // HEALING
+  // 💡 Prices here are synced with the regular shop (lootSystem.js item values)
+  // so items cost the same in both the pre-quest shop and the main shop.
   minor_potion: {
     name: "Minor Health Potion",
     cost: 280,
@@ -1000,7 +1013,7 @@ const CONSUMABLES = {
   },
   remedy: {
     name: "Remedy",
-    cost: 500,
+    cost: 500,   // ✅ Matches lootSystem value: 500
     effect: "cure_status",
     desc: "Cures all negative status effects (stun, poison, burn, freeze, etc.).",
     icon: "🌱",
@@ -1026,7 +1039,7 @@ const CONSUMABLES = {
   },
   ether: {
     name: "Ether",
-    cost: 1000,
+    cost: 1000,  // ✅ Authoritative price from pre-quest store
     effect: "restore_energy",
     effectValue: 1.0,
     desc: "Fully restores Energy. Pure arcane energy in a bottle.",
@@ -1117,7 +1130,7 @@ const CONSUMABLES = {
   // BUNDLES
   bundle_pack: {
     name: "Explorer Pack",
-    cost: 1680,
+    cost: 1400,  // ✅ Updated to match sum of contents: health_potion(700) + mana_potion(400) + minor_potion(280) = 1380, rounded to 1400
     effect: "bundle",
     items: ["health_potion", "mana_potion", "minor_potion"],
     desc: "A bundle containing a Health Potion, Energy Elixir, and Minor Potion.",
@@ -4006,9 +4019,14 @@ const initAdventure = async (
   let rankData = DUNGEON_RANKS[upperRank];
 
   if (mode === "TRIAL" && trialData) {
-    // Special rank for trials
+    // ⚔️ Scale trial difficulty based on evolution tier:
+    // T2 Evolution trials (STARTER → EVOLVED): difficulty 1.5 — moderate challenge
+    // T3 Ascension trials (EVOLVED → ASCENDED): difficulty 4.0 — boss-level threat
+    const targetClass = classSystem.getClassById(trialData.targetClass);
+    const isAscensionTrial = targetClass?.tier === 'ASCENDED';
+    const trialDifficulty = isAscensionTrial ? 4.0 : 1.5;
     upperRank = "TRIAL";
-    rankData = { name: "Class Trial", difficulty: 1.5, encounters: 1 };
+    rankData = { name: isAscensionTrial ? "Ascension Trial" : "Evolution Trial", difficulty: trialDifficulty, encounters: 1, minMobs: 1, maxMobs: 1, xpMult: isAscensionTrial ? 5.0 : 2.0, isSpecial: true };
   } else if (!rankData) {
     return {
       success: false,
@@ -4304,13 +4322,24 @@ async function startJourney(sock, sessionKey) {
     p.level = progression.getLevel(p.jid);
   });
 
-  // Shopping phase - Instant for solo
-  const shopDelay = state.solo ? 0 : 1000;
-  setTimeout(() => {
-    openShop(sock, sessionKey).catch((e) =>
-      console.error("[Quest] openShop timer error:", e?.message || e),
-    );
-  }, shopDelay);
+  // Shopping phase - Skip entirely for TRIAL mode (solo boss fight, no prep needed)
+  // Instant for solo, 1s delay for group
+  if (state.mode === "TRIAL") {
+    // For class trials, skip shopping and go straight to the boss fight
+    setTimeout(() => {
+      state.phase = "PLAYING";
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] Trial nextStage error:", e?.message || e),
+      );
+    }, 0);
+  } else {
+    const shopDelay = state.solo ? 0 : 1000;
+    setTimeout(() => {
+      openShop(sock, sessionKey).catch((e) =>
+        console.error("[Quest] openShop timer error:", e?.message || e),
+      );
+    }, shopDelay);
+  }
 
   // 💡 HIVE MIND WHISPERS (5% chance)
   if (Math.random() < 0.05) {
@@ -4492,7 +4521,8 @@ async function nextStage(sock, groq, sessionKey) {
     }
 
     // ... (rest of standard encounter logic)
-    const rankData = DUNGEON_RANKS[state.dungeonRank] || {};
+    // 💡 TRIAL mode uses a virtual rank entry — guard against missing rankData
+    const rankData = DUNGEON_RANKS[state.dungeonRank] || { name: "Class Trial", difficulty: 1.5, encounters: 1, minMobs: 1, maxMobs: 1, xpMult: 2.0 };
     const isLowRank = ["F", "E", "D"].includes(state.dungeonRank);
     const isBossEncounter =
       state.mode === "TRIAL" || (state.encounter === state.maxEncounters && rankData.boss);

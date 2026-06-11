@@ -654,13 +654,23 @@ const ITEM_DATABASE = {
     'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'Pierce draconic hide. (+10 ATK)', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', stats: { atk: 10 }, slot: 'ring', reqLevel: 20 },
 
     // --- POTIONS & CONSUMABLES ---
+    // 💡 Prices here are synced from the pre-quest shop (CONSUMABLES in guildAdventure.js, which is the authoritative source)
     'minor_hp_potion': { name: 'Minor HP Potion', description: 'Restores ~15% HP.', rarity: 'COMMON', value: 200, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.15 },
-    'hp_potion': { name: 'Health Potion', description: 'Restores ~30% HP.', rarity: 'UNCOMMON', value: 600, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.30 },
-    'mega_potion': { name: 'Mega Potion', description: 'Restores ~60% HP.', rarity: 'RARE', value: 2500, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.60 },
-    'energy_drink': { name: 'Energy Drink', description: 'Restores 30% Energy.', rarity: 'UNCOMMON', value: 1200, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 0.30 },
-    'ether': { name: 'Ether', description: 'Fully restores Energy.', rarity: 'RARE', value: 15000, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 1.0 },
-    'phoenix_feather': { name: 'Phoenix Feather', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 5000, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
-    'remedy': { name: 'Remedy', description: 'Cures all negative status effects.', rarity: 'UNCOMMON', value: 500, type: 'POTION', usable: true, effect: 'cure_status' },
+    'minor_potion':    { name: 'Minor Health Potion', description: 'Restores 15% of Max HP.', rarity: 'COMMON', value: 280, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.15 },
+    'health_potion':   { name: 'Health Potion', description: 'Restores 35% of Max HP.', rarity: 'UNCOMMON', value: 700, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.35 },
+    'hp_potion':       { name: 'Health Potion (alt)', description: 'Restores ~30% HP.', rarity: 'UNCOMMON', value: 700, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.30 },
+    'major_potion':    { name: 'Major Health Potion', description: 'Restores 60% of Max HP.', rarity: 'RARE', value: 1680, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.60 },
+    'mega_potion':     { name: 'Mega Potion', description: 'Restores ~60% HP.', rarity: 'RARE', value: 1680, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.60 },
+    'elixir':          { name: 'Full Restore Elixir', description: 'Fully restores HP and cures status effects.', rarity: 'EPIC', value: 4200, type: 'POTION', usable: true, effect: 'heal', effectValue: 1.0, cureStatus: true },
+    'remedy':          { name: 'Remedy', description: 'Cures all negative status effects.', rarity: 'UNCOMMON', value: 500, type: 'POTION', usable: true, effect: 'cure_status' },
+    'regen_salve':     { name: 'Regeneration Salve', description: 'Heals 10% Max HP per turn for 3 turns.', rarity: 'UNCOMMON', value: 1120, type: 'POTION', usable: true, effect: 'regen', effectValue: 0.1, duration: 3 },
+    'mana_potion':     { name: 'Mana Potion', description: 'Restores 40% of Max Energy.', rarity: 'UNCOMMON', value: 400, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 0.40 },
+    'energy_drink':    { name: 'Energy Drink', description: 'Restores 30% Energy.', rarity: 'UNCOMMON', value: 400, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 0.30 },
+    'ether':           { name: 'Ether', description: 'Fully restores Energy.', rarity: 'RARE', value: 1000, type: 'POTION', usable: true, effect: 'restore_energy', effectValue: 1.0 },
+    'phoenix_down':    { name: 'Phoenix Down', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 3500, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
+    'phoenix_feather': { name: 'Phoenix Feather', description: 'Revives a fallen ally with 50% HP.', rarity: 'RARE', value: 3500, type: 'POTION', usable: true, effect: 'revive', effectValue: 0.5 },
+    'smoke_bomb':      { name: 'Smoke Bomb', description: 'Allows escape from combat (80% chance).', rarity: 'COMMON', value: 500, type: 'POTION', usable: true, effect: 'flee', chance: 80 },
+    'bomb':            { name: 'Bomb', description: 'Deals 80 area damage to all enemies.', rarity: 'UNCOMMON', value: 1000, type: 'POTION', usable: true, effect: 'damage_aoe', value_dmg: 80 },
     'bandage': { name: 'Bandage', description: 'Simple cloth used to wrap wounds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
     
     // --- SPECIALS ---
