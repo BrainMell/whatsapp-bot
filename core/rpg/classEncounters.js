@@ -841,10 +841,11 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') || (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
 
     // Base Stat Scaling
-    // Balance 5.2: switch HP from linear (+15%/rank) to exponential (1.20^rankIndex)
-    // so SS/SSS rank enemies are meaningfully tankier against high-multiplier ultimates.
-    const hpExpMult = Math.pow(1.20, rankIndex);
-    scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * hpExpMult);
+    // Balance 5.3: switch HP from exponential (which exploded SSS-rank mobs to trillions of HP)
+    // to quadratic scaling: 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005)
+    // This gives a 44x multiplier at SSS rank (75.0) and 14x at SS rank (35.0), keeping them tanky but beatable.
+    const hpMult = 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005);
+    scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * hpMult);
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
     scaled.stats.maxHp = scaled.stats.hp; // Store max HP for UI and tracking
 
