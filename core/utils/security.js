@@ -21,36 +21,6 @@ module.exports = {
             const settings = groupSettings.get(chatId);
             if (!settings || !settings.antilink) return;
 
-            // Get group metadata (prefer cached)
-            const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
-            if (!groupMetadata) return;
-
-            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-            const lidResolver = require('./lidResolver');
-            const botConfig = require('../../botConfig');
-            const authPath = botConfig.getAuthPath();
-
-            const normalizedSender = jidNormalizedUser(sender);
-            const senderPhone = lidResolver.resolveToPhone(normalizedSender, authPath);
-            const resolvedSender = lidResolver.resolveLidToPhone(normalizedSender, authPath);
-
-            // O(1) admin check using pre-built Set from engine.js (avoids loop over 1k participants)
-            let senderIsAdmin = false;
-            if (cachedAdminSet) {
-                senderIsAdmin = cachedAdminSet.has(senderPhone) || cachedAdminSet.has(normalizedSender);
-            } else {
-                // Fallback: linear scan (only if Set wasn't passed in)
-                senderIsAdmin = groupMetadata.participants.some(
-                    p => {
-                        const normalizedParticipant = jidNormalizedUser(p.id);
-                        return lidResolver.resolveToPhone(normalizedParticipant, authPath) === senderPhone && (p.admin === 'admin' || p.admin === 'superadmin');
-                    }
-                );
-            }
-
-            // Admins are exempt
-            if (senderIsAdmin) return;
-
             const violations = [];
             
             // 🎯 1. DIRECT STATUS MENTION (Baileys specific)
@@ -142,17 +112,49 @@ module.exports = {
                 else violations.push('🔗 link');
             }
 
+            // If no violations detected, exit immediately (no network or database calls needed!)
+            if (violations.length === 0) return;
+
+            // Get group metadata (prefer cached)
+            const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
+            if (!groupMetadata) return;
+
+            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+            const lidResolver = require('./lidResolver');
+            const botConfig = require('../../botConfig');
+            const authPath = botConfig.getAuthPath();
+
+            const normalizedSender = jidNormalizedUser(sender);
+            const senderPhone = lidResolver.resolveToPhone(normalizedSender, authPath);
+            const resolvedSender = lidResolver.resolveLidToPhone(normalizedSender, authPath);
+
+            // O(1) admin check using pre-built Set from engine.js (avoids loop over 1k participants)
+            let senderIsAdmin = false;
+            if (cachedAdminSet) {
+                senderIsAdmin = cachedAdminSet.has(senderPhone) || cachedAdminSet.has(normalizedSender);
+            } else {
+                // Fallback: linear scan (only if Set wasn't passed in)
+                senderIsAdmin = groupMetadata.participants.some(
+                    p => {
+                        const normalizedParticipant = jidNormalizedUser(p.id);
+                        return lidResolver.resolveToPhone(normalizedParticipant, authPath) === senderPhone && (p.admin === 'admin' || p.admin === 'superadmin');
+                    }
+                );
+            }
+
+            // Admins are exempt
+            if (senderIsAdmin) return;
+
             // ============================================
             // ACTION PHASE
             // ============================================
             
-            if (violations.length > 0) {
-                const violationType = [...new Set(violations)].join(', ');
-                const userName = resolvedSender.split('@')[0];
-                const action = settings.antilinkAction || 'delete';
+            const violationType = [...new Set(violations)].join(', ');
+            const userName = resolvedSender.split('@')[0];
+            const action = settings.antilinkAction || 'delete';
 
-                // Delete first
-                try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
+            // Delete first
+            try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
 
                 // Warn/Kick logic
                 let warningCount = 0;
@@ -177,7 +179,6 @@ module.exports = {
                         setTimeout(() => sock.groupParticipantsUpdate(chatId, [participantJid], 'remove').catch(() => {}), 2000);
                     }
                 }
-            }
         } catch (err) {
             console.error('[Security Error]', err.message);
         }
