@@ -592,8 +592,8 @@ const ITEM_DATABASE = {
     'minor_enhancement_stone': { name: 'Minor Enhancement Stone', description: 'Boosts gear stats by 5%.', rarity: 'COMMON', value: 1000, type: 'MATERIAL' },
     'rare_enhancement_stone': { name: 'Rare Enhancement Stone', description: 'Boosts gear stats by 15%.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
     'legendary_enhancement_stone': { name: 'Legendary Enhancement Stone', description: 'Boosts gear stats by 35%.', rarity: 'LEGENDARY', value: 20000, type: 'MATERIAL' },
-    'evolution_stone': { name: 'Evolution Stone (T2)', description: 'Triggers evolution to T2 class.', rarity: 'RARE', value: 8000, type: 'MATERIAL' },
-    'ascension_stone': { name: 'Ascension Stone (T3)', description: 'Triggers ascension to T3 class.', rarity: 'EPIC', value: 50000, type: 'MATERIAL' },
+    'evolution_stone': { name: 'Evolution Stone (T2)', description: 'Triggers evolution to T2 class.', rarity: 'RARE', value: 8000, type: 'MATERIAL', reqLevel: 15 },
+    'ascension_stone': { name: 'Ascension Stone (T3)', description: 'Triggers ascension to T3 class.', rarity: 'EPIC', value: 50000, type: 'MATERIAL', reqLevel: 50 },
 
     // --- KEY ITEMS ---
     'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000, type: 'ITEM' },

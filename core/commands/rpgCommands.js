@@ -511,12 +511,18 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         );
     }
 
-    // Sort by level requirement (lowest level first), with alphabetical name fallback for stable sorting
+    // Sort: items without reqLevel first (alphabetically), then items with reqLevel (lowest first)
     recipes.sort((a, b) => {
         const aInfo = lootSystem.getItemInfo(a.id) || {};
         const bInfo = lootSystem.getItemInfo(b.id) || {};
-        const aLvl = aInfo.reqLevel !== undefined ? aInfo.reqLevel : 0;
-        const bLvl = bInfo.reqLevel !== undefined ? bInfo.reqLevel : 0;
+        const aLvl = aInfo.reqLevel;
+        const bLvl = bInfo.reqLevel;
+        
+        if (aLvl === undefined && bLvl === undefined) {
+            return a.name.localeCompare(b.name);
+        }
+        if (aLvl === undefined) return -1;
+        if (bLvl === undefined) return 1;
         if (aLvl === bLvl) {
             return a.name.localeCompare(b.name);
         }
@@ -532,10 +538,8 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
     const baseTitle = titleMap[categoryFilter] || categoryFilter;
     
-    let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-    msg += `   ${baseTitle}\n`;
-    msg += `   (Page ${currentPage} of ${totalPages})\n`;
-    msg += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+    let msg = `⚒️ *${baseTitle.toUpperCase()}* (Page ${currentPage}/${totalPages})\n`;
+    msg += `────────────────────\n`;
     
     if (searchQuery) msg += `🔍 *Search:* _"${searchQuery}"_\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
@@ -553,12 +557,10 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         const info = lootSystem.getItemInfo(r.id) || {};
         const slotIcon = getSlotIcon(info.slot);
         const rarityEmoji = rarityEmojis[info.rarity] || '⚪';
-        const lvlStr = info.reqLevel !== undefined ? `⭐ *Lvl:* \`${info.reqLevel}\`` : `⭐ *Lvl:* \`1\``;
+        const lvlStr = info.reqLevel !== undefined ? ` [Lvl: ${info.reqLevel}]` : "";
         
-        msg += `╭──────────────────────────\n`;
-        msg += `│ ${slotIcon} *${r.name.toUpperCase()}* (\`${r.id}\`)\n`;
-        msg += `│ 💎 *Rarity:* ${rarityEmoji} _${info.rarity || 'COMMON'}_  |  ${lvlStr}\n`;
-        msg += `│ 📜 _${r.desc}_\n`;
+        msg += `\n${slotIcon} *${r.name}* (\`${r.id}\`) ${rarityEmoji}${lvlStr}\n`;
+        msg += `📝 _${r.desc || info.description || ''}_\n`;
         
         const ingredients = Object.entries(r.ingredients).map(([id, qty]) => { 
             const ingInfo = lootSystem.getItemInfo(id);
@@ -566,13 +568,12 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
             return `${qty}x ${ingSlotIcon}${ingInfo.name}`;
         }).join(', ');
         
-        msg += `│ 📦 *Requires:* ${ingredients}\n`;
-        msg += `╰──────────────────────────\n\n`;
+        msg += `🛠️ *Req:* ${ingredients}\n`;
     });
 
     const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
     
-    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `────────────────────\n`;
     if (searchQuery) {
         msg += `💡 *Page:* \`${getPrefix()} ${cmdName} search ${searchQuery} <page>\`\n`;
     } else {
