@@ -186,7 +186,7 @@ async function startBot(configInstance) {
   let reconnectTimer;
   let botStarting = false;
   let isNewLogin = false;
-  let isRekeying = false;
+  let isRekeying = true;
   let botStartTime;
   const msgRetryCounterCache = new NodeCache({ stdTTL: 300 }); // 5 min TTL
   const groupMetadataCache = new NodeCache({ stdTTL: 300 });
