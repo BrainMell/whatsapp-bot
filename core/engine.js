@@ -18158,6 +18158,7 @@ _(Or reply to their message)_
           console.log("📈 Stock prices updated.");
         }, 1800000);
       } catch (err) {
+        isRekeying = false;
         console.error(`❌ [${BOT_ID}] initSocket failed:`, err.message);
         botStarting = false;
 
