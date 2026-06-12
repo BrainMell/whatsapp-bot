@@ -56,13 +56,60 @@ const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const { parseHTML } = require("linkedom");
 
+// Instance-bound sets map (botId -> Set)
+const blockedUsersByBot = new Map();
+const globalModsByBot = new Map();
+const overrideUsersByBot = new Map();
+const busyUsersByBot = new Map();
+
+function createInstanceBoundSet(map) {
+  return {
+    add(val) {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      map.get(botId).add(val);
+      return this;
+    },
+    delete(val) {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      return map.get(botId).delete(val);
+    },
+    has(val) {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      return map.get(botId).has(val);
+    },
+    get size() {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      return map.get(botId).size;
+    },
+    clear() {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      map.get(botId).clear();
+    },
+    [Symbol.iterator]() {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      return map.get(botId)[Symbol.iterator]();
+    },
+    forEach(callback, thisArg) {
+      const botId = botConfig.getBotId();
+      if (!map.has(botId)) map.set(botId, new Set());
+      map.get(botId).forEach(callback, thisArg);
+    }
+  };
+}
+
 // can't use any bot commands
-const blockedUsers = new Set();
-const globalMods = new Set();
-const overrideUsers = new Set();
+const blockedUsers = createInstanceBoundSet(blockedUsersByBot);
+const globalMods = createInstanceBoundSet(globalModsByBot);
+const overrideUsers = createInstanceBoundSet(overrideUsersByBot);
 
 // Concurrency lock – prevents double-spend from firing two money commands at once
-const busyUsers = new Set();
+const busyUsers = createInstanceBoundSet(busyUsersByBot);
 
 function resolveLidToPhone(jid, authPath) {
   return lidResolver.resolveLidToPhone(jid, authPath);
@@ -1776,10 +1823,6 @@ What to do:
       process.env.FFMPEG_PATH ||
       (process.platform === "win32" ? "ffmpeg" : "ffmpeg");
     const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
-
-    // can't use any bot commands
-    const blockedUsers = new Set();
-    const globalMods = new Set();
 
     // --- Auth check ---
 
