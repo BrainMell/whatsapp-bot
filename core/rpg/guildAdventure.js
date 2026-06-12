@@ -97,7 +97,7 @@ const DUNGEON_RANKS = {
     difficulty: 35.0,
     boss: "PRIMORDIAL_CHAOS",
     pool: 5,
-    xpMult: 18.0,
+    xpMult: 50.0,
   },
   SS: {
     name: "SS-Rank",
@@ -107,7 +107,7 @@ const DUNGEON_RANKS = {
     difficulty: 75.0,
     boss: "PRIMORDIAL_CHAOS",
     pool: 5,
-    xpMult: 35.0,
+    xpMult: 70.0,
   },
   SSS: {
     name: "SSS-Rank",
@@ -117,7 +117,7 @@ const DUNGEON_RANKS = {
     difficulty: 80.0,
     boss: "PRIMORDIAL_CHAOS",
     pool: 5,
-    xpMult: 75.0,
+    xpMult: 100.0,
   },
   DRAGON: {
     name: "Dragon’s Lair",

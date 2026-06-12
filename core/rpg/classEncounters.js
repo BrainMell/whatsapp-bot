@@ -830,7 +830,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // Damage scaling: +12% per rank
     const dmgMult = 1 + (rankIndex * 2.0);
     // Speed scaling: +10% per rank (base)
-    const spdMult = 1 + (rankIndex * 0.10);
+    const spdMult = 1 + (rankIndex * 2.0);
     // Party scaling: +20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
     
@@ -844,7 +844,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // Balance 5.3: switch HP from exponential (which exploded SSS-rank mobs to trillions of HP)
     // to quadratic scaling: 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005)
     // This gives a 44x multiplier at SSS rank (75.0) and 14x at SS rank (35.0), keeping them tanky but beatable.
-    const hpMult = 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005);
+    const hpMult = 1 + (rankIndex * 0.90) + (rankIndex * rankIndex * 0.05);
     scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * hpMult);
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
     scaled.stats.maxHp = scaled.stats.hp; // Store max HP for UI and tracking
