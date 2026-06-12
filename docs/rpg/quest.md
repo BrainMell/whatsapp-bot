@@ -449,15 +449,15 @@ Dungeons scale in size, difficulty, and rewards according to their letter Rank:
 |---|---|---|---|---|---|---|---|
 | `F` | F-Rank | 3 | 1 | 2 | 0.8x | `INFECTED_COLOSSUS` | 0.8x |
 | `E` | E-Rank | 4 | 2 | 4 | 1.2x | `CORRUPTED_GUARDIAN` | 1.2x |
-| `D` | D-Rank | 7 | 2 | 4 | 2.0x | `ELEMENTAL_ARCHON` | 2.0x |
-| `C` | C-Rank | 7 | 2 | 5 | 3.5x | `MUTATION_PRIME` | 3.5x |
-| `B` | B-Rank | 8 | 3 | 5 | 6.0x | `VOID_CORRUPTED` | 6.0x |
-| `A` | A-Rank | 9 | 3 | 6 | 10.0x | `PRIMORDIAL_CHAOS` | 10.0x |
-| `S` | S-Rank | 10 | 4 | 6 | 18.0x | `PRIMORDIAL_CHAOS` | 18.0x |
-| `SS` | SS-Rank | 11 | 4 | 7 | 35.0x | `PRIMORDIAL_CHAOS` | 35.0x |
-| `SSS` | SSS-Rank | 13 | 5 | 8 | 75.0x | `PRIMORDIAL_CHAOS` | 75.0x |
-| `DRAGON` | Dragon’s Lair | 5 | 2 | 3 | 5.0x | `ANCIENT_DRAGON_BOSS` | 5.0x (Special) |
-| `TRIAL` | Class Trial | 1 | 1 | 1 | 1.5x | *Dynamic* | 2.0x (Special) |
+| `D` | D-Rank | 7 | 2 | 4 | 3.0x | `ELEMENTAL_ARCHON` | 2.0x |
+| `C` | C-Rank | 7 | 2 | 5 | 5.0x | `MUTATION_PRIME` | 3.5x |
+| `B` | B-Rank | 8 | 3 | 5 | 10.0x | `VOID_CORRUPTED` | 6.0x |
+| `A` | A-Rank | 9 | 3 | 6 | 18.0x | `PRIMORDIAL_CHAOS` | 10.0x |
+| `S` | S-Rank | 10 | 4 | 6 | 35.0x | `PRIMORDIAL_CHAOS` | 18.0x |
+| `SS` | SS-Rank | 11 | 4 | 7 | 75.0x | `PRIMORDIAL_CHAOS` | 35.0x |
+| `SSS` | SSS-Rank | 13 | 5 | 8 | 80.0x | `PRIMORDIAL_CHAOS` | 75.0x |
+| `DRAGON` | Dragon’s Lair | 5 | 2 | 3 | 10.0x | `ANCIENT_DRAGON_BOSS` | 5.0x (Special) |
+| `TRIAL` | Class Trial | 1 | 1 | 1 | 3.5x | *Dynamic* | 2.0x (Special) |
 
 ---
 
