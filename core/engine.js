@@ -3521,34 +3521,40 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       if (botStarting) return;
       botStarting = true;
       try {
-        // Load mods and blocked users at startup
-        await loadGlobalMods();
-        await loadBlockedUsers();
-
-        // We are already inside a storage.run context from startBot()
-        await Promise.all([
-          system.loadSystemData(),
-          economy.loadEconomy(),
-          guilds.loadGuilds(),
-          guilds.loadChallenges(),
-          loans.loadLoans(),
-          lidResolver.loadLidMappings(),
-        ]);
-
-        // Chess must be loaded after system data is ready
-        chess.loadActiveGames();
-
-        loadEnabledChats();
-        loadGroupSettings();
-        loadSupportUsage();
-        loadMutedUsers();
-        loadUserWarnings();
-
         const authPath = configInstance.getAuthPath();
-        const { state, saveCreds } = await useMultiFileAuthState(
-          authPath,
-        );
+        const { state, saveCreds } = await useMultiFileAuthState(authPath);
         lidResolver.watchAuthPath(authPath);
+
+        // ⚡ FAST QR PATH: if this is a fresh login (no registered identity),
+        // skip all heavy data loading and go straight to the socket so the
+        // QR code appears immediately. Data is loaded once the connection opens.
+        const isFreshLogin = !state.creds?.me;
+        if (!isFreshLogin) {
+          // Existing session — load everything before connecting (normal path)
+          await loadGlobalMods();
+          await loadBlockedUsers();
+
+          await Promise.all([
+            system.loadSystemData(),
+            economy.loadEconomy(),
+            guilds.loadGuilds(),
+            guilds.loadChallenges(),
+            loans.loadLoans(),
+            lidResolver.loadLidMappings(),
+          ]);
+
+          // Chess must be loaded after system data is ready
+          chess.loadActiveGames();
+
+          loadEnabledChats();
+          loadGroupSettings();
+          loadSupportUsage();
+          loadMutedUsers();
+          loadUserWarnings();
+        } else {
+          console.log(`🔑 [${BOT_ID}] No existing session — showing QR immediately. Data will load after login.`);
+        }
+
         const { version } = await fetchLatestBaileysVersion();
         sock = makeWASocket({
           version,
@@ -3602,6 +3608,29 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
               // Give the WS a moment to settle, then flush any queued outbound messages.
               setTimeout(() => sendQueue.kick(), 1500);
+
+              // ⚡ DEFERRED DATA LOAD: if we skipped loading on startup (fresh QR login),
+              // load all data now that the session is established.
+              if (isFreshLogin) {
+                console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
+                await loadGlobalMods();
+                await loadBlockedUsers();
+                await Promise.all([
+                  system.loadSystemData(),
+                  economy.loadEconomy(),
+                  guilds.loadGuilds(),
+                  guilds.loadChallenges(),
+                  loans.loadLoans(),
+                  lidResolver.loadLidMappings(),
+                ]);
+                chess.loadActiveGames();
+                loadEnabledChats();
+                loadGroupSettings();
+                loadSupportUsage();
+                loadMutedUsers();
+                loadUserWarnings();
+                console.log(`✅ [${BOT_ID}] Data loaded. Bot is fully ready.`);
+              }
 
               // --- SYNC BOT IDENTITY TO WHATSAPP (Only on fresh login) ---
               if (isNewLogin) {
