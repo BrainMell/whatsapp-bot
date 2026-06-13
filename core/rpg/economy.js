@@ -1296,6 +1296,32 @@ function getPunishmentStatus(userId) {
   }
   return { blocked: false };
 }
+
+async function syncUserFromDB(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  const cachedUser = economyData.get(resolvedId);
+  if (cachedUser && cachedUser.registered === true) {
+    return;
+  }
+
+  try {
+    const user = await User.findOne({ userId: resolvedId }).lean();
+    if (user) {
+      if (user.inventory && user.inventory instanceof Map) {
+          user.inventory = Object.fromEntries(user.inventory);
+      }
+      if (user.skills && user.skills instanceof Map) {
+          user.skills = Object.fromEntries(user.skills);
+      }
+      if (user.portfolio && user.portfolio instanceof Map) {
+          user.portfolio = Object.fromEntries(user.portfolio);
+      }
+      economyData.set(resolvedId, user);
+    }
+  } catch (err) {
+    console.error("Error syncing user from DB:", err.message);
+  }
+}
 //========================================
 
 module.exports = {
@@ -1305,6 +1331,7 @@ module.exports = {
   
   isRegistered,
   registerUser,
+  syncUserFromDB,
   
   loadEconomy,
   saveUser,

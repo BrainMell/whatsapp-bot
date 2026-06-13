@@ -4203,6 +4203,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     ? jidNormalizedUser(sock.authState.creds.me.lid)
                     : null;
 
+                  // Sync user registration status from DB if missing in memory cache
+                  await economy.syncUserFromDB(senderJid);
+
                   // 2. Resolve Sender Identity
                   const user = economy.getUser(senderJid);
                   const userProfile =
