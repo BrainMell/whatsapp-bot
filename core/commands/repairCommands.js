@@ -226,7 +226,76 @@ async function inspectItem(sock, chatId, userId, target) {
     const itemInfo = lootSystem.getItemInfo(item.id);
     const rarity = (item.rarity || itemInfo.rarity || 'COMMON').toUpperCase();
     const rarityInfo = inventorySystem.ITEM_RARITY[rarity] || { name: rarity, icon: '⚪' };
+    const maxDur = item.maxDurability || 100;
+    const curDur = item.durability !== undefined ? item.durability : maxDur;
+    const isEquippedItem = isEquipped && item.durability !== undefined;
+    const stats = item.stats || itemInfo.stats || {};
     
+    // Try rendering image card via Go Service profile card endpoint
+    try {
+        const GoImageService = require('../utils/goImageService');
+        const goService = new GoImageService();
+        
+        const cardData = {
+            nickname: item.name || itemInfo.name || item.id,
+            whatsappName: "Item Inspect",
+            level: item.levelReq || itemInfo.levelReq || 1,
+            xp: Math.ceil(curDur),
+            xpNeeded: maxDur,
+            gp: itemInfo.value || item.value || 0,
+            rank: rarity,
+            class: `${rarity} ${itemInfo.type}`,
+            classIcon: itemInfo.type === 'WEAPON' ? '⚔️' : '🛡️',
+            title: slotName ? `Slot: ${slotName.toUpperCase().replace('_', ' ')}` : "In Storage (Bag)",
+            guildName: itemInfo.description || "No description available.",
+            wallet: isEquippedItem ? durabilitySystem.getRepairCost(item) : 0,
+            bank: itemInfo.value || item.value || 0,
+            zeniSymbol: getZENI(),
+            questsWon: 0,
+            gamesWon: 0,
+            messageCount: 0,
+            pfpUrl: "",
+            statPoints: 0,
+            
+            // Map stats to character stats
+            hp: stats.hp || 0,
+            atk: stats.atk || 0,
+            def: stats.def || 0,
+            mag: stats.mag || 0,
+            spd: stats.spd || 0,
+            luck: stats.luck || 0,
+            crit: stats.crit || 0,
+            evasion: stats.evasion || 0,
+            
+            equipHp: 0, equipAtk: 0, equipDef: 0, equipMag: 0, equipSpd: 0, equipLuck: 0,
+            gearMainHand: "None", gearOffHand: "None", gearArmor: "None", gearHelmet: "None",
+            gearBoots: "None", gearRing: "None", gearAmulet: "None", gearCloak: "None", gearGloves: "None"
+        };
+        
+        const buffer = await goService.generateProfileCard(cardData);
+        if (buffer) {
+            let caption = `🔎 *ITEM INSPECTION* 🔎\n━━━━━━━━━━━━━━━━━━━━\n`;
+            caption += `${rarityInfo.icon} *${cardData.nickname}*\n`;
+            caption += `Type: *${cardData.class}*\n`;
+            caption += `Condition: ⚙️ *${cardData.xp}/${cardData.xpNeeded}* (${Math.round(cardData.xp/cardData.xpNeeded*100)}%)\n`;
+            if (isEquippedItem) {
+                caption += `💰 Repair Cost: ${getZENI()}${cardData.wallet.toLocaleString()}\n`;
+                if (item.durabilityTraits && item.durabilityTraits.length > 0) {
+                    caption += `🧬 Traits: *${item.durabilityTraits.join(', ')}*\n`;
+                }
+            } else {
+                caption += `💰 Value: ${getZENI()}${cardData.bank.toLocaleString()}\n`;
+            }
+            caption += `\n📝 _${cardData.guildName}_\n━━━━━━━━━━━━━━━━━━━━`;
+            
+            await sock.sendMessage(chatId, { image: buffer, caption });
+            return;
+        }
+    } catch (err) {
+        console.error("Failed to generate inspect card image:", err.message);
+    }
+    
+    // Fallback to text message
     let msg = `🔎 *ITEM INSPECTION* 🔎\n━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `${rarityInfo.icon} *${item.name || itemInfo.name || item.id}*\n`;
     msg += `Rarity: *${rarityInfo.name}*\n`;
@@ -238,7 +307,6 @@ async function inspectItem(sock, chatId, userId, target) {
     }
     
     msg += `\n*STATS:*\n`;
-    const stats = item.stats || itemInfo.stats || {};
     let statLines = '';
     for (const [stat, val] of Object.entries(stats)) {
         if (val) statLines += `• ${stat.toUpperCase()}: +${val}\n`;
@@ -246,9 +314,7 @@ async function inspectItem(sock, chatId, userId, target) {
     msg += statLines || '• No stat bonuses\n';
     
     msg += `\n*CONDITION & VALUE:*\n`;
-    if (isEquipped && item.durability !== undefined) {
-        const maxDur = item.maxDurability || 100;
-        const curDur = item.durability;
+    if (isEquippedItem) {
         const repairCost = durabilitySystem.getRepairCost(item);
         msg += `⚙️ Durability: ${Math.ceil(curDur)}/${maxDur}\n`;
         if (item.durabilityTraits && item.durabilityTraits.length > 0) {

@@ -60,6 +60,36 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `🛡️ DEF: ${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''}  |  🔮 MAG: ${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
                 captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
                 captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
+                
+                // Add Gear and Durability info to image caption
+                captionMsg += `\n*GEAR:*\n`;
+                const captionEquipped = [];
+                if (equipment) {
+                    for (const [slot, item] of Object.entries(equipment)) { 
+                        if (item) { 
+                            const itemInfo = lootSystem.getItemInfo(item.id);
+                            if (itemInfo) {
+                                let durStr = '';
+                                if (item.durability !== undefined && item.maxDurability !== undefined) {
+                                    const pct = Math.max(0, Math.min(100, Math.round((item.durability / item.maxDurability) * 100)));
+                                    let block = '🟩';
+                                    if (pct <= 20) block = '🟥';
+                                    else if (pct <= 50) block = '🟨';
+                                    const filled = Math.max(0, Math.min(5, Math.round(pct / 20)));
+                                    durStr = ` (${block.repeat(filled)}${'⬜'.repeat(5 - filled)} ${pct}%)`;
+                                }
+                                const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                                captionEquipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${durStr}`);
+                            }
+                        }
+                    }
+                }
+                if (captionEquipped.length > 0) { 
+                    captionMsg += captionEquipped.join('\n') + '\n';
+                } else { 
+                    captionMsg += `_None equipped_\n`;
+                }
+
                 if (cardData.statPoints > 0) {
                     captionMsg += `\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.`;
                 }
@@ -110,12 +140,24 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         for (const [slot, item] of Object.entries(equipment)) { 
             if (item) { 
                 const itemInfo = lootSystem.getItemInfo(item.id);
-                if (itemInfo) equipped.push(`${getSlotIcon(slot)} ${itemInfo.name}`);
+                if (itemInfo) {
+                    let durStr = '';
+                    if (item.durability !== undefined && item.maxDurability !== undefined) {
+                        const pct = Math.max(0, Math.min(100, Math.round((item.durability / item.maxDurability) * 100)));
+                        let block = '🟩';
+                        if (pct <= 20) block = '🟥';
+                        else if (pct <= 50) block = '🟨';
+                        const filled = Math.max(0, Math.min(5, Math.round(pct / 20)));
+                        durStr = ` (${block.repeat(filled)}${'⬜'.repeat(5 - filled)} ${pct}%)`;
+                    }
+                    const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    equipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${durStr}`);
+                }
             }
         }
     }
     if (equipped.length > 0) { 
-        msg += equipped.join(' | ') + '\n';
+        msg += equipped.join('\n') + '\n';
     } else { 
         msg += `_None equipped_\n`;
     }
