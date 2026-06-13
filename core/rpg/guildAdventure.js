@@ -2158,10 +2158,11 @@ function calculateDamage(
     damage *= 0.8;
 
   // 💡 DAMAGE REDUCTION (Secondary Stat)
+  // Flat defense mitigation occurs before percentage damage reduction
+  damage -= def * 0.5;
+
   const dr = Number(target.stats.dmgReduction) || 0;
   damage = damage * (1 - dr / 100);
-
-  damage -= def * 0.5;
 
   // Random variance (±10%)
   const variance = 0.9 + Math.random() * 0.2;

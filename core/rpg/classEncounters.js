@@ -871,10 +871,16 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
     scaled.stats.maxHp = scaled.stats.hp; // Store max HP for UI and tracking
 
+    // Scale base stats by player average level to match player progression growth
+    const levelScale = 1 + (avgLevel - 1) * 0.045;
+    const baseAtk = (enemy.stats.atk || 0) * levelScale;
+    const baseMag = (enemy.stats.mag || 0) * levelScale;
+    const baseDef = (enemy.stats.def || 0) * levelScale;
+
     // Apply Damage Scaling (ATK/MAG/DEF)
-    scaled.stats.atk = Math.floor((enemy.stats.atk || 0) * partyFactor * dmgMult);
-    scaled.stats.mag = Math.floor((enemy.stats.mag || 0) * partyFactor * dmgMult);
-    scaled.stats.def = Math.floor((enemy.stats.def || 0) * partyFactor * dmgMult);
+    scaled.stats.atk = Math.floor(baseAtk * partyFactor * dmgMult);
+    scaled.stats.mag = Math.floor(baseMag * partyFactor * dmgMult);
+    scaled.stats.def = Math.floor(baseDef * partyFactor * dmgMult);
     
     // Apply Speed Scaling with Rubber-Banding Logic
     // "High level player -> Mob slower. Low level player -> Mob faster."
@@ -922,7 +928,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
 
     // Defense scaling (linear)
-    scaled.stats.def = Math.floor(enemy.stats.def * partyFactor * (1 + (rankIndex * 0.08)));
+    scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.08)));
 
     // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
