@@ -2231,6 +2231,19 @@ function calculateDamage(
     return { damage: 0, isCrit: false, wasEvaded: true };
   }
 
+  // 💡 SS+ DUNGEON ENEMY MINIMUM DAMAGE FLOOR
+  // Enemies in SS/SSS dungeons must always deal at least 3% of target's max HP per hit,
+  // regardless of how high the player's DEF/dmgReduction is.
+  if (attacker.isEnemy && !target.isEnemy) {
+    const dungeonRankOfAttacker = attacker.dungeonRank || attacker.rank || null;
+    const highRankSet = ['SS', 'SSS'];
+    if (highRankSet.includes(dungeonRankOfAttacker)) {
+      const targetMaxHp = target.stats.maxHp || target.stats.hp;
+      const minDmg = Math.floor(targetMaxHp * 0.03);
+      if (damage < minDmg) damage = minDmg;
+    }
+  }
+
   return {
     damage: Math.max(1, Math.floor(damage)),
     isCrit,
@@ -2725,6 +2738,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 
   // Restore catalog enemies
   state.enemies = encounter.enemies;
+  // Stamp dungeon rank on each enemy so calculateDamage can apply SS+ damage floor
+  state.enemies.forEach(e => { e.rank = state.dungeonRank; });
   state.currentEncounterType = encounter.type || "COMBAT";
 
   state.combatRound = 0;
@@ -5748,8 +5763,17 @@ async function applyAbilityEffect(
         }
     }
     const targets = getTargets(player, effect, targetIndex, chatId);
-    for (const target of targets) {
+    for (let _tIdx = 0; _tIdx < targets.length; _tIdx++) {
+      const target = targets[_tIdx];
       if (target.stats.hp <= 0) continue;
+
+      // 💡 AOE CRIT DIMINISHING RETURNS: each successive hit in one cast loses 15% crit chance
+      // so full-wave crits require 70%+ crit to be common, not 50%.
+      const _critPenalty = _tIdx * 15;
+      const _originalCrit = player.stats.crit;
+      if (_tIdx > 0 && _critPenalty > 0) {
+        player.stats.crit = Math.max(0, (_originalCrit || 0) - _critPenalty);
+      }
 
       // 💡 DRAGON SEAL RING REQUIREMENT
       if (
@@ -5783,6 +5807,8 @@ async function applyAbilityEffect(
       // proper DEF mitigation, buffs, status modifiers, rank bonuses, variance.
       const rawPower = Math.floor(baseStat * mult);
       const dmgResult = calculateDamage(player, target, rawPower, damageTypeStr, damageTypeStr.toUpperCase(), chatId);
+      // Restore crit stat after the AOE crit penalty was applied for this hit
+      if (_tIdx > 0) player.stats.crit = _originalCrit;
 
       // Check dragon-seal block
       if (dmgResult.noDamageReason) {

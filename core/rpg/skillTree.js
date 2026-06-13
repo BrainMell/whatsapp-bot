@@ -2504,7 +2504,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 135, 120],
                         cooldown: 12,
-                        damageMultiplier: [15.0, 20.0, 30.0],
+                        damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'The ultimate elemental collapse.',
@@ -3001,7 +3001,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 130, 110],
                         cooldown: 12,
-                        damageMultiplier: [12.0, 16.0, 22.0],
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 16.0, 22.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         effects: {
@@ -3098,7 +3098,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [120, 110, 100],
                         cooldown: 10,
-                        damageMultiplier: [10.0, 14.0, 20.0],
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Unleash a wave of temporal paradoxes that ravage all enemies.',
@@ -3290,7 +3290,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [120, 110, 100],
                         cooldown: 10,
-                        damageMultiplier: [12.0, 15.0, 18.0],
+                        damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] — nerfed AOE ult w/ root
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
@@ -3387,7 +3387,7 @@ const SKILL_TREES = {
                         energyCost: [50, 45, 40],
                         goldCost: [5000, 10000, 20000],
                         cooldown: 8,
-                        damageMultiplier: [15.0, 25.0, 40.0],
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [15.0, 25.0, 40.0] — nerfed TRUE dmg AOE ult
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
                         description: 'Rain down heavy gold coins, dealing massive true damage.',
@@ -3512,7 +3512,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 130, 110],
                         cooldown: 10,
-                        damageMultiplier: [20.0, 25.0, 30.0],
+                        damageMultiplier: [3.5, 4.0, 5.0], // was [20.0, 25.0, 30.0] — nerfed ALL_ENEMIES TRUE ult
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'Create singularity consuming all',
@@ -3640,7 +3640,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [120, 110, 100],
                         cooldown: 10,
-                        damageMultiplier: [18.0, 22.0, 25.0],
+                        damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] — nerfed ALL targets ult (stays higher, single-ish)
                         damageType: 'MAGICAL',
                         targeting: 'ALL',
                         description: 'Erase all from existence',
@@ -3966,7 +3966,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [0, 0, 0],
                         cooldown: 10,
-                        damageMultiplier: [15.0, 18.0, 20.0],
+                        damageMultiplier: [6.0, 7.0, 8.0], // was [15.0, 18.0, 20.0] — nerfed TRUE ALL ult
                         damageType: 'TRUE',
                         targeting: 'ALL',
                         description: 'Transcend mortality achieving oneness.',
@@ -4075,7 +4075,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [110, 100, 90],
                         cooldown: 9,
-                        damageMultiplier: [12.0, 15.0, 18.0],
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] — nerfed AOE physical ult
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
                         description: 'An ultimate strike that decimates all enemies in your wake.',
@@ -4347,7 +4347,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [150, 130, 110],
                         cooldown: 12,
-                        damageMultiplier: [20.0, 25.0, 35.0],
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] — nerfed AOE large ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Call down a devastating laser from space.',

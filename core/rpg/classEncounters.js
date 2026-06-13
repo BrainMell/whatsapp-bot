@@ -263,6 +263,28 @@ const INFECTED_POOLS = {
                 xpReward: 310,
                 goldReward: [62, 105],
                 element: 'ice'
+            },
+            {
+                id: 'RUNIC_BREAKER',
+                name: 'Runic Breaker',
+                icon: '🔮❄️',
+                desc: 'A frost-bound warrior that absorbs and reflects magical energy',
+                stats: { hp: 380, atk: 50, def: 20, mag: 30, spd: 17, luck: 14, crit: 16 },
+                archetype: 'SPELLBREAKER',
+                xpReward: 330,
+                goldReward: [65, 110],
+                element: 'ice'
+            },
+            {
+                id: 'FROST_PHALANX',
+                name: 'Frost Phalanx',
+                icon: '❄️🛡️',
+                desc: 'Ice-armored soldiers who fight in coordinated formations',
+                stats: { hp: 360, atk: 55, def: 28, mag: 8, spd: 13, luck: 12, crit: 14 },
+                archetype: 'PHALANX',
+                xpReward: 295,
+                goldReward: [58, 98],
+                element: 'ice'
             }
         ],
         
@@ -273,7 +295,7 @@ const INFECTED_POOLS = {
                 icon: '❄️👑',
                 desc: 'Ancient infected encased in ancient ice',
                 stats: { hp: 900, atk: 80, def: 35, mag: 20, spd: 15, luck: 16, crit: 20 },
-                archetype: 'TANK',
+                archetype: 'COLOSSUS',
                 skills: ['Absolute Zero', 'Ice Age', 'Frozen Domain'],
                 xpReward: 750,
                 goldReward: [160, 280],
@@ -297,7 +319,7 @@ const INFECTED_POOLS = {
                 icon: '🌋',
                 desc: 'Infected with molten lavas flowing through veins',
                 stats: { hp: 1200, atk: 34, def: 20, mag: 14, spd: 18, luck: 14, crit: 20 },
-                archetype: 'BRUTE',
+                archetype: 'BERSERKER_MOB',
                 skills: ['Lava Burst', 'Molten Armor'],
                 xpReward: 400,
                 goldReward: [80, 135],
@@ -314,6 +336,28 @@ const INFECTED_POOLS = {
                 xpReward: 430,
                 goldReward: [85, 145],
                 element: 'fire'
+            },
+            {
+                id: 'EMBER_SPELLBREAKER',
+                name: 'Ember Spellbreaker',
+                icon: '🔥🔮',
+                desc: 'Flame-wreathed mage hunter that silences and disrupts casters',
+                stats: { hp: 1050, atk: 32, def: 22, mag: 28, spd: 25, luck: 16, crit: 22 },
+                archetype: 'SPELLBREAKER',
+                xpReward: 445,
+                goldReward: [88, 150],
+                element: 'fire'
+            },
+            {
+                id: 'INFERNO_NEMESIS',
+                name: 'Inferno Nemesis',
+                icon: '🔥👁️',
+                desc: 'An adaptive fire entity that mirrors and counters fighter strategies',
+                stats: { hp: 1150, atk: 36, def: 19, mag: 22, spd: 24, luck: 17, crit: 21 },
+                archetype: 'NEMESIS',
+                xpReward: 460,
+                goldReward: [90, 155],
+                element: 'fire'
             }
         ],
         
@@ -322,9 +366,9 @@ const INFECTED_POOLS = {
                 id: 'PHOENIX_CORRUPTED',
                 name: 'Corrupted Phoenix',
                 icon: '🔥🦅',
-                desc: 'Fallen phoenix consumed by corruption',
+                desc: 'Fallen phoenix consumed by corruption — it adapts and rises harder',
                 stats: { hp: 3200, atk: 42, def: 28, mag: 25, spd: 30, luck: 20, crit: 28 },
-                archetype: 'MAGE',
+                archetype: 'NEMESIS',
                 skills: ['Phoenix Dive', 'Rebirth', 'Solar Flare'],
                 xpReward: 1100,
                 goldReward: [240, 420],
@@ -346,9 +390,9 @@ const INFECTED_POOLS = {
                 id: 'ABYSSAL_HORROR',
                 name: 'Abyssal Horror',
                 icon: '🐙',
-                desc: 'Deep sea infected with tentacles',
+                desc: 'Deep sea infected with tentacles — siphons energy and silences',
                 stats: { hp: 1800, atk: 36, def: 22, mag: 20, spd: 20, luck: 18, crit: 22 },
-                archetype: 'STALKER',
+                archetype: 'SPELLBREAKER',
                 skills: ['Tentacle Lash', 'Pressure Crush'],
                 xpReward: 520,
                 goldReward: [105, 170],
@@ -357,13 +401,35 @@ const INFECTED_POOLS = {
             {
                 id: 'TSUNAMI_WALKER',
                 name: 'Tsunami Walker',
-                icon: 'waves',
+                icon: '🌊',
                 desc: 'Infected that commands tidal waves',
                 stats: { hp: 1700, atk: 40, def: 20, mag: 22, spd: 24, luck: 20, crit: 24 },
                 archetype: 'MAGE',
                 skills: ['Tidal Fury', 'Deluge'],
                 xpReward: 550,
                 goldReward: [112, 185],
+                element: 'water'
+            },
+            {
+                id: 'VOID_TIDE',
+                name: 'Void Tide',
+                icon: '🌑🌊',
+                desc: 'A deep-sea entity that phases between dimensions, nearly impossible to target consistently',
+                stats: { hp: 1600, atk: 38, def: 18, mag: 24, spd: 28, luck: 22, crit: 26 },
+                archetype: 'VOID_WALKER',
+                xpReward: 560,
+                goldReward: [115, 190],
+                element: 'water'
+            },
+            {
+                id: 'TIDAL_PHALANX',
+                name: 'Tidal Phalanx',
+                icon: '🌊🛡️',
+                desc: 'Armored sea warriors who fight in tight formation, buffing each other and enraging at ally deaths',
+                stats: { hp: 1750, atk: 42, def: 28, mag: 12, spd: 18, luck: 19, crit: 20 },
+                archetype: 'PHALANX',
+                xpReward: 535,
+                goldReward: [108, 175],
                 element: 'water'
             }
         ],
@@ -373,9 +439,9 @@ const INFECTED_POOLS = {
                 id: 'KRAKEN_SPAWN',
                 name: 'Kraken Spawn',
                 icon: '🐙👑',
-                desc: 'Offspring of the ancient kraken',
+                desc: 'Offspring of the ancient kraken — immovable and reflects physical damage',
                 stats: { hp: 4500, atk: 44, def: 30, mag: 28, spd: 26, luck: 22, crit: 26 },
-                archetype: 'BRUTE',
+                archetype: 'COLOSSUS',
                 skills: ['Whirlpool Vortex', 'Ink Cloud', 'Crush'],
                 xpReward: 1400,
                 goldReward: [360, 580],
@@ -397,9 +463,9 @@ const INFECTED_POOLS = {
                 id: 'OBSIDIAN_JUGGERNAUT',
                 name: 'Obsidian Juggernaut',
                 icon: '🪨',
-                desc: 'Infected armored in obsidian',
+                desc: 'Infected armored in obsidian — CC-immune and reflects physical strikes',
                 stats: { hp: 2800, atk: 38, def: 45, mag: 15, spd: 12, luck: 16, crit: 18 },
-                archetype: 'TANK',
+                archetype: 'COLOSSUS',
                 skills: ['Obsidian Slam', 'Lava Shield'],
                 xpReward: 700,
                 goldReward: [140, 230],
@@ -409,12 +475,34 @@ const INFECTED_POOLS = {
                 id: 'DIAMOND_SENTINEL',
                 name: 'Diamond Sentinel',
                 icon: '💎',
-                desc: 'Infected crystalized into diamond',
+                desc: 'Crystal-armored sentinel with coordination tactics and formation buffs',
                 stats: { hp: 2500, atk: 42, def: 40, mag: 18, spd: 16, luck: 18, crit: 22 },
-                archetype: 'TANK',
+                archetype: 'PHALANX',
                 skills: ['Diamond Barrage', 'Crystal Fortress'],
                 xpReward: 730,
                 goldReward: [145, 240],
+                element: 'earth'
+            },
+            {
+                id: 'STONE_NEMESIS',
+                name: 'Stone Nemesis',
+                icon: '🪨👁️',
+                desc: 'An ancient stone construct that adapts to how you fight it — the longer the fight, the harder it counters',
+                stats: { hp: 2600, atk: 44, def: 35, mag: 20, spd: 14, luck: 18, crit: 20 },
+                archetype: 'NEMESIS',
+                xpReward: 720,
+                goldReward: [142, 235],
+                element: 'earth'
+            },
+            {
+                id: 'VOID_SEEKER',
+                name: 'Void Seeker',
+                icon: '🌑🪨',
+                desc: 'A shadow-phase hunter that materializes from stone — phases through attacks',
+                stats: { hp: 2300, atk: 46, def: 30, mag: 22, spd: 20, luck: 20, crit: 24 },
+                archetype: 'VOID_WALKER',
+                xpReward: 740,
+                goldReward: [148, 242],
                 element: 'earth'
             }
         ],
@@ -424,9 +512,9 @@ const INFECTED_POOLS = {
                 id: 'MOUNTAIN_COLOSSUS',
                 name: 'Mountain Colossus',
                 icon: '⛰️',
-                desc: 'Living mountain infected of immense size',
+                desc: 'Living mountain of immense size — immune to CC, reflects hits, breaks down over phases',
                 stats: { hp: 8000, atk: 46, def: 60, mag: 20, spd: 10, luck: 20, crit: 15 },
-                archetype: 'BRUTE',
+                archetype: 'COLOSSUS',
                 skills: ['Avalanche', 'Mountain Crusher', 'Earthquake'],
                 xpReward: 1700,
                 goldReward: [420, 680],
@@ -448,9 +536,9 @@ const INFECTED_POOLS = {
                 id: 'FLESH_ABOMINATION',
                 name: 'Flesh Abomination',
                 icon: '🧬',
-                desc: 'Horrifically mutated infected',
+                desc: 'Horrifically mutated infected — a berserker that gets deadlier as it takes damage',
                 stats: { hp: 4500, atk: 45, def: 30, mag: 22, spd: 20, luck: 18, crit: 24 },
-                archetype: 'BRUTE',
+                archetype: 'BERSERKER_MOB',
                 skills: ['Toxic Spray', 'Mutation Burst'],
                 xpReward: 900,
                 goldReward: [185, 295],
@@ -460,12 +548,34 @@ const INFECTED_POOLS = {
                 id: 'CHIMERA_BEAST',
                 name: 'Chimera Beast',
                 icon: '🧬',
-                desc: 'Multi-headed mutated infected',
+                desc: 'Multi-headed mutated infected — adapts its attacks to counter your strategy',
                 stats: { hp: 4200, atk: 50, def: 28, mag: 20, spd: 24, luck: 20, crit: 28 },
-                archetype: 'BRUTE',
+                archetype: 'NEMESIS',
                 skills: ['Triple Strike', 'Regenerate'],
                 xpReward: 950,
                 goldReward: [195, 310],
+                element: 'chaos'
+            },
+            {
+                id: 'SHADOW_STALKER_MUTANT',
+                name: 'Shadow Stalker Mutant',
+                icon: '🧬👤',
+                desc: 'A phase-shifting mutation that blinks in and out of reality — nearly impossible to predict',
+                stats: { hp: 4000, atk: 52, def: 24, mag: 26, spd: 28, luck: 22, crit: 30 },
+                archetype: 'VOID_WALKER',
+                xpReward: 960,
+                goldReward: [198, 315],
+                element: 'chaos'
+            },
+            {
+                id: 'RUNE_EATER',
+                name: 'Rune Eater',
+                icon: '🧬🔮',
+                desc: 'A mutation that feeds on magic — silences heavy casters and drains their energy reserves',
+                stats: { hp: 4100, atk: 42, def: 32, mag: 35, spd: 22, luck: 20, crit: 26 },
+                archetype: 'SPELLBREAKER',
+                xpReward: 940,
+                goldReward: [192, 305],
                 element: 'chaos'
             }
         ],
@@ -475,9 +585,9 @@ const INFECTED_POOLS = {
                 id: 'PERFECT_MUTATION',
                 name: 'Perfect Mutation',
                 icon: '🧬👑',
-                desc: 'Infected evolved to perfection',
+                desc: 'Infected evolved to perfection — adapts to every strategy, has no weakness',
                 stats: { hp: 12000, atk: 55, def: 38, mag: 30, spd: 28, luck: 24, crit: 32 },
-                archetype: 'BRUTE',
+                archetype: 'NEMESIS',
                 skills: ['Adaptive Strike', 'Evolution', 'Bio Hazard'],
                 xpReward: 2200,
                 goldReward: [520, 840],
@@ -499,9 +609,9 @@ const INFECTED_POOLS = {
                 id: 'FROST_FLAME_WARDEN',
                 name: 'Frost-Flame Warden',
                 icon: '❄️🔥',
-                desc: 'Infected controlling ice and fire',
+                desc: 'Hybrid mage that drains mana and silences before unleashing elemental chaos',
                 stats: { hp: 5500, atk: 48, def: 35, mag: 35, spd: 25, luck: 22, crit: 26 },
-                archetype: 'MAGE',
+                archetype: 'SPELLBREAKER',
                 skills: ['Thermal Shock', 'Elemental Fusion'],
                 xpReward: 1100,
                 goldReward: [230, 380],
@@ -511,12 +621,34 @@ const INFECTED_POOLS = {
                 id: 'STORM_EARTH_TITAN',
                 name: 'Storm-Earth Titan',
                 icon: '⚡🪨',
-                desc: 'Infected merging lightning and stone',
+                desc: 'Massive hybrid titan immune to CC, reflects hits, strikes with seismic force',
                 stats: { hp: 6000, atk: 52, def: 40, mag: 32, spd: 22, luck: 20, crit: 24 },
-                archetype: 'TANK',
+                archetype: 'COLOSSUS',
                 skills: ['Thunder Quake', 'Static Armor'],
                 xpReward: 1150,
                 goldReward: [240, 400],
+                element: 'hybrid'
+            },
+            {
+                id: 'VOID_PREDATOR',
+                name: 'Void Predator',
+                icon: '🌑🌈',
+                desc: 'A void-infused hunter that phases through reality and strikes from unexpected angles',
+                stats: { hp: 5200, atk: 55, def: 30, mag: 38, spd: 30, luck: 24, crit: 28 },
+                archetype: 'VOID_WALKER',
+                xpReward: 1120,
+                goldReward: [235, 388],
+                element: 'hybrid'
+            },
+            {
+                id: 'PHALANX_SOVEREIGN',
+                name: 'Phalanx Sovereign',
+                icon: '🌈🛡️',
+                desc: 'Commander of the Hybrid Phalanx — enrages when allies die, buffs the entire formation',
+                stats: { hp: 5800, atk: 50, def: 42, mag: 28, spd: 20, luck: 21, crit: 22 },
+                archetype: 'PHALANX',
+                xpReward: 1130,
+                goldReward: [238, 394],
                 element: 'hybrid'
             }
         ],
@@ -526,9 +658,9 @@ const INFECTED_POOLS = {
                 id: 'ELEMENTAL_SOVEREIGN',
                 name: 'Elemental Sovereign',
                 icon: '🌈👑',
-                desc: 'Master of all elements',
+                desc: 'Master of all elements — adapts, counters, overwhelms. Every strategy has a flaw against this.',
                 stats: { hp: 15000, atk: 58, def: 45, mag: 50, spd: 30, luck: 28, crit: 30 },
-                archetype: 'MAGE',
+                archetype: 'NEMESIS',
                 skills: ['Elemental Chaos', 'Prismatic Blast', 'Omni-Shield'],
                 xpReward: 2800,
                 goldReward: [640, 1000],
@@ -550,9 +682,9 @@ const INFECTED_POOLS = {
                 id: 'INFERNAL_OVERLORD',
                 name: 'Infernal Overlord',
                 icon: '🔥👹',
-                desc: 'Elite fire infected commander',
+                desc: 'Elite fire infected berserker — escalates with every hit taken, impossible to ignore',
                 stats: { hp: 8000, atk: 60, def: 42, mag: 45, spd: 32, luck: 26, crit: 34 },
-                archetype: 'BRUTE',
+                archetype: 'BERSERKER_MOB',
                 skills: ['Apocalypse Flame', 'Inferno Domain'],
                 xpReward: 1400,
                 goldReward: [280, 460],
@@ -562,12 +694,34 @@ const INFECTED_POOLS = {
                 id: 'STAR_EATER',
                 name: 'Star Eater',
                 icon: '☀️🔥',
-                desc: 'Infected that consumes stars',
+                desc: 'Feeds on magical energy — silences, drains, and punishes mages with reflected power',
                 stats: { hp: 7500, atk: 65, def: 40, mag: 48, spd: 35, luck: 28, crit: 36 },
-                archetype: 'MAGE',
+                archetype: 'SPELLBREAKER',
                 skills: ['Solar Destruction', 'Supernova'],
                 xpReward: 1500,
                 goldReward: [300, 490],
+                element: 'fire'
+            },
+            {
+                id: 'ETERNAL_NEMESIS',
+                name: 'Eternal Nemesis',
+                icon: '🔥👁️',
+                desc: 'The ultimate adaptive predator — studies your every move and counters with precision',
+                stats: { hp: 7800, atk: 62, def: 44, mag: 50, spd: 33, luck: 28, crit: 35 },
+                archetype: 'NEMESIS',
+                xpReward: 1480,
+                goldReward: [295, 480],
+                element: 'fire'
+            },
+            {
+                id: 'VOID_FLAME',
+                name: 'Void Flame',
+                icon: '🌑🔥',
+                desc: 'A fire entity that exists partially in the void — phases unpredictably, strikes from anywhere',
+                stats: { hp: 7200, atk: 63, def: 38, mag: 52, spd: 38, luck: 30, crit: 38 },
+                archetype: 'VOID_WALKER',
+                xpReward: 1520,
+                goldReward: [305, 498],
                 element: 'fire'
             }
         ],
@@ -577,9 +731,9 @@ const INFECTED_POOLS = {
                 id: 'PRIMORDIAL_FLAME',
                 name: 'Primordial Flame',
                 icon: '🔥💫',
-                desc: 'The first flame, source of all fire',
+                desc: 'The first flame, source of all fire — CC-immune, reflects all physical hits, phases when below 50%',
                 stats: { hp: 20000, atk: 70, def: 50, mag: 60, spd: 35, luck: 30, crit: 40 },
-                archetype: 'MAGE',
+                archetype: 'COLOSSUS',
                 skills: ['Genesis Fire', 'Heat Death', 'Eternal Burn'],
                 xpReward: 3500,
                 goldReward: [800, 1300],
@@ -843,92 +997,86 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
 
 function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10) {
     const scaled = { ...enemy };
-    
-    // 💡 NEW SCALING FORMULA (from notes.md)
-    // RankIndex is based on difficulty multiplier passed from guildAdventure
-    // Formula: Stat * (1 + RankIndex * Multiplier)
-    const rankIndex = difficulty; 
-    
-    // Damage scaling: +12% per rank
-    const dmgMult = 1 + (rankIndex * 0.12);
-    // Speed scaling: +10% per rank (base)
-    const spdMult = 1 + (rankIndex * 0.10);
-    // Party scaling: +20% per extra player
-    const partyFactor = 1 + ((partySize - 1) * 0.20);
-    
-    scaled.stats = { ...enemy.stats };
-    
-    // Check if it's an ELITE enemy (determined by ID or property)
-    // notes.md: +25% HP, +20% speed, NO raw damage buff
-    const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') || (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
+    const rankIndex = difficulty;
 
-    // Base Stat Scaling
-    // Balance 5.3: switch HP from exponential (which exploded SSS-rank mobs to trillions of HP)
-    // to quadratic scaling: 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005)
-    // This gives a 44x multiplier at SSS rank (75.0) and 14x at SS rank (35.0), keeping them tanky but beatable.
-    const hpMult = 1 + (rankIndex * 0.20) + (rankIndex * rankIndex * 0.005);
+    // =========================================================
+    // 🎯 PER-RANK BALANCED SCALING — Target: ~60% player WR
+    // =========================================================
+    // Rank difficulty values from guildAdventure:
+    //   F=0.5, E=1.0, D=3.0, C=5.5, B=10.0, A=18.0, S=35.0
+    //
+    // Formula breakpoints (tested to ~60% solo WR):
+    //   F/E  (0.5-1.0):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline — unchanged)
+    //   D    (~3.0):     dmgF=0.14, hpF=0.18, hpQ=0.003
+    //   C    (~5.5):     dmgF=0.18, hpF=0.22, hpQ=0.004
+    //   B    (~10.0):    dmgF=0.22, hpF=0.28, hpQ=0.006
+    //   A    (~18.0):    dmgF=0.26, hpF=0.34, hpQ=0.008
+    //   S    (~35.0):    dmgF=0.30, hpF=0.40, hpQ=0.010
+    // =========================================================
+
+    let dmgFactor, hpFactor, hpQuadFactor;
+    if (rankIndex <= 1.0) {
+        // F / E rank — baseline, no changes
+        dmgFactor = 0.08; hpFactor = 0.12; hpQuadFactor = 0.002;
+    } else if (rankIndex <= 4.0) {
+        // D rank
+        dmgFactor = 0.14; hpFactor = 0.18; hpQuadFactor = 0.003;
+    } else if (rankIndex <= 7.0) {
+        // C rank
+        dmgFactor = 0.18; hpFactor = 0.22; hpQuadFactor = 0.004;
+    } else if (rankIndex <= 13.0) {
+        // B rank
+        dmgFactor = 0.22; hpFactor = 0.28; hpQuadFactor = 0.006;
+    } else if (rankIndex <= 25.0) {
+        // A rank
+        dmgFactor = 0.26; hpFactor = 0.34; hpQuadFactor = 0.008;
+    } else {
+        // S rank and above
+        dmgFactor = 0.30; hpFactor = 0.40; hpQuadFactor = 0.010;
+    }
+
+    const dmgMult = 1 + (rankIndex * dmgFactor);
+    const spdMult = 1 + (rankIndex * 0.10);
+    const partyFactor = 1 + ((partySize - 1) * 0.20);
+
+    scaled.stats = { ...enemy.stats };
+
+    // Check if it's an ELITE enemy
+    const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') ||
+        (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
+
+    // HP scaling with quadratic component for higher ranks
+    const hpMult = 1 + (rankIndex * hpFactor) + (rankIndex * rankIndex * hpQuadFactor);
     scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * hpMult);
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
-    scaled.stats.maxHp = scaled.stats.hp; // Store max HP for UI and tracking
+    scaled.stats.maxHp = scaled.stats.hp;
 
-    // Scale base stats by player average level to match player progression growth
+    // Scale base stats by player average level
     const levelScale = 1 + (avgLevel - 1) * 0.045;
     const baseAtk = (enemy.stats.atk || 0) * levelScale;
     const baseMag = (enemy.stats.mag || 0) * levelScale;
     const baseDef = (enemy.stats.def || 0) * levelScale;
 
-    // Apply Damage Scaling (ATK/MAG/DEF)
+    // ATK/MAG scale with dmgMult; DEF scales independently (slightly lower)
     scaled.stats.atk = Math.floor(baseAtk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(baseMag * partyFactor * dmgMult);
-    scaled.stats.def = Math.floor(baseDef * partyFactor * dmgMult);
-    
-    // Apply Speed Scaling with Rubber-Banding Logic
-    // "High level player -> Mob slower. Low level player -> Mob faster."
-    // This implies mobs try to match player speed but deviate based on level gap.
-    
+
+    // Speed: blend between base scaling and player speed (rubber-band)
     let baseSpeed = Math.floor((enemy.stats.spd || 10) * partyFactor * spdMult);
     if (isElite) baseSpeed = Math.floor(baseSpeed * 1.20);
-    
-    // Rubber Banding:
-    // If player is much faster than mob's base level range, slow mob down? 
-    // Or if player level is high relative to mob tier?
-    // Let's implement relative speed scaling:
-    // Mob Speed = Base * (1 +/- (LevelGap * 0.01))
-    
-    // Actually, user said: "if its high then the mob should be slower of its really lo then the mob shpuld be faster"
-    // This sounds like: 
-    // Player Level > Enemy Level Pool -> Enemy Speed Penalty (Easier to outspeed)
-    // Player Level < Enemy Level Pool -> Enemy Speed Bonus (Harder to outspeed)
-    
-    // But we are generating enemy FROM level pool, so levels are roughly matched.
-    // Let's use the average speed directly.
-    
-    // Dynamic Speed: Mix of Mob Base Speed and Player Average Speed
-    // Weighted towards Mob Base, but pulls towards Player Speed.
-    // If Player Speed is HIGH (e.g. 100), and Mob Base is 50. 
-    // "if its high then the mob should be slower" -> This implies relative turn frequency.
-    // If player is fast, they should feel fast. So mob should NOT scale up fully to match.
-    // But if player is slow, mob should be faster.
-    
-    // Let's implement a randomized relative speed:
-    // Mob Speed = (Player Speed * 0.8) + (Random -10% to +10%)
-    // This ensures mob is usually slightly slower than player (allowing player initiative), 
-    // unless it's a "Fast" archetype.
-    
+
     let targetSpeed = avgPlayerSpeed;
-    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN') targetSpeed *= 1.5; // Faster mobs
-    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE') targetSpeed *= 0.95; // Slower mobs
-    
-    // Apply the "High Level = Slower Mob" logic
-    // If Average Level > 50, reduce mob speed multiplier by 10%
-    if (avgLevel > 50) targetSpeed *= 0.98;
-    if (avgLevel < 15) targetSpeed *= 1.3; // Low level -> mobs are scary fast
-    
-    // Blend with base calculation (Favor player matching more)
+    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN' || enemy.archetype === 'VOID_WALKER') targetSpeed *= 1.4;
+    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE' || enemy.archetype === 'COLOSSUS') targetSpeed *= 0.92;
+    if (enemy.archetype === 'BERSERKER_MOB') targetSpeed *= 1.2;
+    if (enemy.archetype === 'SPELLBREAKER') targetSpeed *= 1.1;
+    if (avgLevel > 50) targetSpeed *= 0.97;
+    if (avgLevel < 15) targetSpeed *= 1.3;
+
     scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
 
-    // Defense scaling (linear)
-    scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.08)));
+    // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
+    scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.07)));
 
     // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;

@@ -291,7 +291,7 @@ function getBaseStats(userId, classId) {
     baseStats.maxHp = baseStats.hp;
     baseStats.maxEnergy = 100 + (levelsGained * 15) + (Math.floor(baseStats.mag * 3));
     baseStats.evasion = Math.min(45, (baseStats.spd * 0.12)); // Increased evasion cap
-    baseStats.dmgReduction = Math.min(80, (baseStats.def * 0.55)); // Increased DR cap
+    baseStats.dmgReduction = Math.min(65, (baseStats.def * 0.55)); // Cap reduced from 80 → 65 to stop DEF over-stacking making enemies irrelevant
     baseStats.rareDropRate = (baseStats.luck * 0.06);
     
     return baseStats;
@@ -313,10 +313,32 @@ function allocateStatPoint(userId, stat, amount = 1) {
     
     let tierMultiplier = 1.0;
     if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
-    if (classData?.tier === 'ASCENDED') tierMultiplier = 4.0; // Massive leap
+    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0; // Balanced — was 4.0, halved to prevent stat explosion
     
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
-    const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
+    
+    // Soft cap: after 20 points invested in a single stat, each additional point
+    // is worth only half. This discourages pure min-maxing without blocking it.
+    const pointsAlreadyInStat = (user.allocatedStatPoints?.[s] || 0);
+    const SOFT_CAP = 20;
+    let effectiveMult = tierMultiplier;
+    if (pointsAlreadyInStat >= SOFT_CAP) {
+        effectiveMult = tierMultiplier * 0.5; // half-value after soft cap
+    } else if (pointsAlreadyInStat + amount > SOFT_CAP) {
+        // Partial: some points land below cap, some above
+        const below = SOFT_CAP - pointsAlreadyInStat;
+        const above = amount - below;
+        const belowGain = Math.floor(baseStatValues[s] * tierMultiplier * below);
+        const aboveGain = Math.floor(baseStatValues[s] * tierMultiplier * 0.5 * above);
+        const gainedValue = belowGain + aboveGain;
+        if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
+        user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
+        user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
+        user.statPoints -= amount;
+        saveProgression(userId);
+        return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
+    }
+    const gainedValue = Math.floor(baseStatValues[s] * effectiveMult * amount);
     
     // Track points spent per stat so resetStats can refund correctly
     if (!user.allocatedStatPoints) user.allocatedStatPoints = {};

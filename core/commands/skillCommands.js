@@ -187,6 +187,44 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         return;
     }
     
+    // 🏆 RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
+    // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
+    const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+    const userRank = user.adventurerRank || 'F';
+    const userRankIdx = RANK_ORDER.indexOf(userRank);
+    const skillTier = targetSkill.tier || 1;
+    const isAscendedSkill = targetSkill.isAscended === true;
+    
+    if ((skillTier >= 4 || isAscendedSkill) && userRankIdx < RANK_ORDER.indexOf('A')) {
+        if (currentLevel === 0) {
+            // Block initial unlock
+            await sock.sendMessage(chatId, {
+                text: `🔒 *${targetSkill.name}* is a Tier 4 Ascended skill.\n\n⚠️ *Rank Required:* A rank or higher\n📊 *Your Rank:* ${userRank}\n\nReach A rank through dungeon progression to unlock this skill.`
+            });
+            return;
+        } else {
+            // Grace period: already unlocked, warn but allow use — block further upgrades
+            await sock.sendMessage(chatId, {
+                text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it — but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
+            });
+            return;
+        }
+    }
+    
+    if (skillTier >= 3 && userRankIdx < RANK_ORDER.indexOf('B')) {
+        if (currentLevel === 0) {
+            await sock.sendMessage(chatId, {
+                text: `🔒 *${targetSkill.name}* is a Tier 3 skill.\n\n⚠️ *Rank Required:* B rank or higher\n📊 *Your Rank:* ${userRank}\n\nComplete B-rank dungeons to unlock Tier 3 skills.`
+            });
+            return;
+        } else {
+            await sock.sendMessage(chatId, {
+                text: `⚠️ *${targetSkill.name}* is a Tier 3 skill.\n\nYou unlocked it before the rank system was enforced — upgrades are locked until you reach *B rank*.\n\n📊 *Your Rank:* ${userRank} (need B)`
+            });
+            return;
+        }
+    }
+    
     let cost = 1;
     if (targetSkill.skillPointCost && targetSkill.skillPointCost[currentLevel] !== undefined) {
         cost = targetSkill.skillPointCost[currentLevel];

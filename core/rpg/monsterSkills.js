@@ -1,8 +1,10 @@
 // ============================================
-// 👹 MONSTER SKILL SYSTEM
+// 👹 MONSTER SKILL SYSTEM — ENHANCED v2.0
 // ============================================
 // Each archetype has a distinct combat identity.
 // AI logic tries to match the fantasy of each type.
+// New mechanics: spell absorption, mana burn, formation
+// synergy, adaptive counters, damage reflection, etc.
 // ============================================
 
 const MONSTER_ARCHETYPES = {
@@ -42,7 +44,14 @@ const MONSTER_ARCHETYPES = {
                 type: 'aoe',
                 effect: (lvl) => ({ type: 'aoe', damageType: 'physical', multiplier: 2.2 + (lvl * 0.1), cc: 'stun', ccDuration: 1, ccChance: 30 + lvl }),
                 msg: 'shatters the bedrock, unleashing a surging wave of jagged stone spikes!'
-            }
+            },
+            // NEW: Damage reflection shell
+            thornwall: {
+                id: 'thornwall', name: 'Thornwall', levelReq: 15, cost: 35,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'reflect', value: 20 + lvl * 2, duration: 2 }),
+                msg: 'erupts in a crackling barrier of jagged spikes — hit me and bleed!'
+            },
         },
     },
 
@@ -82,7 +91,14 @@ const MONSTER_ARCHETYPES = {
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'physical', multiplier: 3.5 + (lvl * 0.15), ignoreDefense: 40 }),
                 msg: 'focuses all their brutal strength into a singular, devastating strike that ignores defense!'
-            }
+            },
+            // NEW: Punish players who stack buffs heavily
+            shatter_will: {
+                id: 'shatter_will', name: 'Shatter Will', levelReq: 20, cost: 35,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'all', value: 30 + lvl * 2, duration: 3, clearBuffs: true }),
+                msg: 'howls with primal fury — strips all buffs and crushes their will to fight!'
+            },
         },
     },
 
@@ -122,7 +138,14 @@ const MONSTER_ARCHETYPES = {
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'physical', multiplier: 2.8 + (lvl * 0.12), guaranteedCrit: true }),
                 msg: 'blurs out of existence and strikes from behind with lethal precision!'
-            }
+            },
+            // NEW: Drain energy to punish skill-spamming players
+            energy_siphon: {
+                id: 'energy_siphon', name: 'Energy Siphon', levelReq: 18, cost: 20,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'energy', value: 30 + lvl * 3, duration: 1, drainEnergy: true }),
+                msg: 'plunges their hand into the target\'s aura, ripping away their energy reserves!'
+            },
         },
     },
 
@@ -169,7 +192,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'aoe',
                 effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 2.5 + (lvl * 0.12), cc: 'freeze', ccDuration: 1, ccChance: 40 }),
                 msg: 'summons a collapsing vortex of dark energy, crushing and freezing all targets!'
-            }
+            },
         },
     },
 
@@ -216,7 +239,7 @@ const MONSTER_ARCHETYPES = {
                     }
                 }),
                 msg: 'releases a burst of dark light, burning the target and cursing their resolve!'
-            }
+            },
         },
     },
 
@@ -249,6 +272,260 @@ const MONSTER_ARCHETYPES = {
             },
         },
     },
+
+    // ─── SPELLBREAKER: Silences, drains, counters casters ─────────────────
+    // Designed to punish heavy magic/AOE strategies like Singularity/Meteor spam
+
+    SPELLBREAKER: {
+        name: 'Spellbreaker',
+        ai: 'COUNTERMAGE',
+        skills: {
+            arcane_silence: {
+                id: 'arcane_silence', name: 'Arcane Silence', levelReq: 1, cost: 25,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'silence', value: 0, duration: 2, silenceTarget: true }),
+                msg: 'seals their arcane channels — no spells can be cast!'
+            },
+            mana_drain: {
+                id: 'mana_drain', name: 'Mana Drain', levelReq: 5, cost: 20,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'energy', value: 0, duration: 1, drainEnergy: true, drainAmount: 40 + lvl * 3 }),
+                msg: 'tears the magical energy straight from their grasp!'
+            },
+            spell_absorption: {
+                id: 'spell_absorption', name: 'Spell Absorption', levelReq: 8, cost: 35,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'spellAbsorb', value: 60 + lvl * 5, duration: 2, spellAbsorb: true }),
+                msg: 'erects a crystalline field that absorbs incoming spell damage!'
+            },
+            runic_punishment: {
+                id: 'runic_punishment', name: 'Runic Punishment', levelReq: 12, cost: 40,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 2.0 + lvl * 0.08, scaledByTargetMana: true }),
+                msg: 'reads their energy signature and fires back with a resonant bolt — the more mana you have, the harder this hits!'
+            },
+            counterspell: {
+                id: 'counterspell', name: 'Counterspell', levelReq: 1, cost: 30,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 1.5 + lvl * 0.06, cc: 'stun', ccDuration: 1, ccChance: 50, interruptCharge: true }),
+                msg: 'senses an incoming spell and blasts it apart at the source — stunned!'
+            },
+            arcane_feedback: {
+                id: 'arcane_feedback', name: 'Arcane Feedback', levelReq: 18, cost: 45,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 1.8 + lvl * 0.07, cc: 'slow', ccDuration: 2, ccChance: 70 }),
+                msg: 'floods the arena with dissonant arcane feedback — overwhelming everyone\'s senses!'
+            },
+        },
+    },
+
+    // ─── PHALANX: Formation combat synergies ──────────────────────────────
+    // Members buff each other; killing one triggers enrage in others
+
+    PHALANX: {
+        name: 'Phalanx Soldier',
+        ai: 'FORMATION',
+        skills: {
+            shield_wall: {
+                id: 'shield_wall', name: 'Shield Wall', levelReq: 1, cost: 25,
+                type: 'buff_team',
+                effect: (lvl) => ({ type: 'buff_team', buffType: 'defense', value: 25 + lvl * 4, duration: 3 }),
+                msg: 'locks shields with their brothers — they form an impenetrable wall!'
+            },
+            coordinated_strike: {
+                id: 'coordinated_strike', name: 'Coordinated Strike', levelReq: 5, cost: 30,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', multiplier: 1.4 + lvl * 0.06, bonusPerAlly: 0.3 }),
+                msg: 'signals their comrades to attack in perfect unison!'
+            },
+            vengeance_oath: {
+                id: 'vengeance_oath', name: 'Vengeance Oath', levelReq: 8, cost: 0,
+                type: 'buff_self',
+                condition: (hpPct, targetHpPct, allies) => allies && allies.some(a => a.isDead || a.currentHP <= 0),
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 60 + lvl * 5, duration: 999, triggered_by_death: true }),
+                msg: 'lets out a battle cry over their fallen comrade — a terrifying killing intent fills the air!'
+            },
+            spear_volley: {
+                id: 'spear_volley', name: 'Spear Volley', levelReq: 10, cost: 35,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'physical', multiplier: 1.2 + lvl * 0.05, cc: 'slow', ccDuration: 1, ccChance: 40 }),
+                msg: 'launches a devastating volley of synchronized spear throws!'
+            },
+            last_stand: {
+                id: 'last_stand', name: 'Last Stand', levelReq: 15, cost: 0,
+                type: 'buff_self',
+                condition: (hpPct) => hpPct < 0.25,
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'all', value: 45 + lvl * 3, duration: 3 }),
+                msg: 'plants their feet and roars — they will not fall without a fight!'
+            },
+        },
+    },
+
+    // ─── NEMESIS: Adapts to the player's dominant strategy ────────────────
+    // Learns what type of damage the player is dealing most and resists it
+
+    NEMESIS: {
+        name: 'Nemesis',
+        ai: 'ADAPTIVE',
+        skills: {
+            null_field: {
+                id: 'null_field', name: 'Null Field', levelReq: 1, cost: 30,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'dmgReduction', value: 20 + lvl * 3, duration: 3, adaptiveResist: true }),
+                msg: 'analyzes the threat and sculpts a null-field that dampens incoming attacks!'
+            },
+            mirror_strike: {
+                id: 'mirror_strike', name: 'Mirror Strike', levelReq: 5, cost: 35,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', multiplier: 1.6 + lvl * 0.07, mirrorDamageType: true }),
+                msg: 'copies the player\'s fighting style and turns it against them!'
+            },
+            void_anchor: {
+                id: 'void_anchor', name: 'Void Anchor', levelReq: 8, cost: 40,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'slow', value: 0, duration: 2, cc: 'slow', ccDuration: 2, ccChance: 90 }),
+                msg: 'tears a void anchor beneath them — no escape, no tricks, just survival!'
+            },
+            nemesis_form: {
+                id: 'nemesis_form', name: 'Nemesis Form', levelReq: 12, cost: 0,
+                type: 'buff_self',
+                condition: (hpPct) => hpPct < 0.6,
+                isPhaseChange: true,
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'all', value: 35 + lvl * 3, duration: 999 }),
+                msg: '⚠️ *ADAPTING!* It has studied your patterns and evolved — this fight just changed!'
+            },
+            fate_seal: {
+                id: 'fate_seal', name: 'Fate Seal', levelReq: 18, cost: 50,
+                type: 'debuff_target',
+                effect: (lvl) => ({ type: 'debuff_target', debuffType: 'cooldownExtend', value: 2, duration: 2, extendCooldowns: true }),
+                msg: 'seals the target\'s fate — their abilities recoil and slam their cooldowns back!'
+            },
+        },
+    },
+
+    // ─── BERSERKER_MOB: Enemy version of player berserker fantasy ─────────
+    // Fast, unpredictable, gets stronger as it takes damage
+
+    BERSERKER_MOB: {
+        name: 'Berserker',
+        ai: 'FRENZY',
+        skills: {
+            reckless_charge: {
+                id: 'reckless_charge', name: 'Reckless Charge', levelReq: 1, cost: 20,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', multiplier: 2.0 + lvl * 0.09, selfDamage: 0.05 }),
+                msg: 'hurls themselves forward with suicidal force, ignoring the damage to themselves!'
+            },
+            bloodlust: {
+                id: 'bloodlust', name: 'Bloodlust', levelReq: 5, cost: 0,
+                type: 'buff_self',
+                condition: (hpPct) => hpPct < 0.7,
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 15 + lvl * 2, duration: 4 }),
+                msg: 'wounds awaken something ancient — their eyes go red!'
+            },
+            frenzy_cleave: {
+                id: 'frenzy_cleave', name: 'Frenzy Cleave', levelReq: 8, cost: 30,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'physical', multiplier: 1.5 + lvl * 0.07, cc: 'stun', ccDuration: 1, ccChance: 20 + lvl }),
+                msg: 'erupts in a storm of wild, uncontrolled strikes that hit everything!'
+            },
+            war_cry: {
+                id: 'war_cry', name: 'War Cry', levelReq: 10, cost: 25,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'spd', value: 30 + lvl * 3, duration: 3 }),
+                msg: 'bellows a war cry that surges their blood — they move faster, strike harder!'
+            },
+            death_or_glory: {
+                id: 'death_or_glory', name: 'Death or Glory', levelReq: 15, cost: 0,
+                type: 'attack',
+                condition: (hpPct) => hpPct < 0.3,
+                effect: (lvl) => ({ type: 'attack', damageType: 'physical', multiplier: 4.5 + lvl * 0.15, ignoreDefense: 60 }),
+                msg: 'at death\'s door, explodes into a final, desperate strike!'
+            },
+        },
+    },
+
+    // ─── VOID_WALKER: Phasing, evasion, position swaps ────────────────────
+    // Hard to pin down; punishes players who rely on single-target focus
+
+    VOID_WALKER: {
+        name: 'Void Walker',
+        ai: 'EVASIVE',
+        skills: {
+            phase_step: {
+                id: 'phase_step', name: 'Phase Step', levelReq: 1, cost: 20,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'evasion', value: 35 + lvl * 3, duration: 2 }),
+                msg: 'blinks between dimensions — strikes pass through them like smoke!'
+            },
+            void_lash: {
+                id: 'void_lash', name: 'Void Lash', levelReq: 5, cost: 28,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 1.8 + lvl * 0.07, element: 'VOID', ignoreDefense: 20 }),
+                msg: 'reaches through the void and strikes from an impossible angle — ignoring armor!'
+            },
+            shadow_mimic: {
+                id: 'shadow_mimic', name: 'Shadow Mimic', levelReq: 8, cost: 35,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'dmgReduction', value: 30 + lvl * 3, duration: 2 }),
+                msg: 'fractures into shadow copies — which one is real?'
+            },
+            entropy_blast: {
+                id: 'entropy_blast', name: 'Entropy Blast', levelReq: 12, cost: 45,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 2.2 + lvl * 0.09, element: 'VOID', cc: 'slow', ccDuration: 2, ccChance: 55 }),
+                msg: 'tears a rift in reality, blasting all nearby enemies with entropic energy!'
+            },
+            void_collapse: {
+                id: 'void_collapse', name: 'Void Collapse', levelReq: 18, cost: 60,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 3.8 + lvl * 0.12, element: 'VOID', cc: 'stun', ccDuration: 2, ccChance: 45 }),
+                msg: 'collapses a pocket of void energy directly on a target — time stops for a moment!'
+            },
+        },
+    },
+
+    // ─── COLOSSUS: Reflects damage, immune to crowd control ───────────────
+    // Brute force is counter-productive; players must adapt their strategy
+
+    COLOSSUS: {
+        name: 'Colossus',
+        ai: 'IMMOVABLE',
+        skills: {
+            iron_rebuke: {
+                id: 'iron_rebuke', name: 'Iron Rebuke', levelReq: 1, cost: 30,
+                type: 'buff_self',
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'reflect', value: 25 + lvl * 3, duration: 3 }),
+                msg: 'hardens to an extreme — physical strikes are partially reflected back!'
+            },
+            titan_stomp: {
+                id: 'titan_stomp', name: 'Titan Stomp', levelReq: 5, cost: 35,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'physical', multiplier: 2.8 + lvl * 0.1, cc: 'stun', ccDuration: 2, ccChance: 40 }),
+                msg: 'brings their titanic foot down, sending shockwaves in all directions!'
+            },
+            immovable: {
+                id: 'immovable', name: 'Immovable', levelReq: 8, cost: 0,
+                type: 'buff_self',
+                condition: (hpPct) => hpPct < 0.8,
+                effect: (lvl) => ({ type: 'buff_self', buffType: 'ccImmune', value: 1, duration: 2, ccImmune: true }),
+                msg: 'plunges their fist into the ground — rooted, unshakeable, immovable!'
+            },
+            world_break: {
+                id: 'world_break', name: 'World Break', levelReq: 12, cost: 50,
+                type: 'attack',
+                effect: (lvl) => ({ type: 'attack', damageType: 'physical', multiplier: 4.0 + lvl * 0.13, ignoreDefense: 50 }),
+                msg: 'gathers all momentum and delivers a strike that warps the air — this can\'t be blocked!'
+            },
+            seismic_slam: {
+                id: 'seismic_slam', name: 'Seismic Slam', levelReq: 18, cost: 55,
+                type: 'aoe',
+                effect: (lvl) => ({ type: 'aoe', damageType: 'physical', multiplier: 3.2 + lvl * 0.11, cc: 'stun', ccDuration: 1, ccChance: 60 }),
+                msg: 'slams with enough force to crack the earth itself!'
+            },
+        },
+    },
+
 };
 
 // ==========================================
@@ -269,7 +546,7 @@ function evaluateAction(enemy, players, allies = []) {
     const archetype = MONSTER_ARCHETYPES[enemy.archetype] || MONSTER_ARCHETYPES.BRUTE;
     const aiType = archetype.ai || 'AGGRESSIVE';
     const skills = getSkillsForMonster(enemy.archetype, enemy.level || 1);
-    
+
     const hpPct = enemy.currentHP / Math.max(1, enemy.maxHP);
 
     // Filter to usable skills (off cooldown, have mana)
@@ -285,20 +562,226 @@ function evaluateAction(enemy, players, allies = []) {
     // Default target: random live player
     let defaultTarget = livePlayers[Math.floor(Math.random() * livePlayers.length)];
 
+    // ── COUNTERMAGE (SPELLBREAKER) AI ────────────────
+    if (aiType === 'COUNTERMAGE') {
+        // Priority 1: Silence the player if they have high energy (ready to cast)
+        const highEnergyTarget = livePlayers.reduce((best, p) => {
+            const en = p.stats?.energy || 0;
+            const maxEn = p.stats?.maxEnergy || 100;
+            return (en / maxEn) > ((best.stats?.energy || 0) / (best.stats?.maxEnergy || 100)) ? p : best;
+        }, livePlayers[0]);
+        const silenceSkill = available.find(s => s.id === 'arcane_silence');
+        const highEnergyRatio = (highEnergyTarget.stats?.energy || 0) / Math.max(1, highEnergyTarget.stats?.maxEnergy || 100);
+        if (silenceSkill && highEnergyRatio > 0.6 && Math.random() > 0.35) {
+            return { action: 'skill', skill: silenceSkill, target: highEnergyTarget };
+        }
+
+        // Priority 2: Spell Absorption shield when HP > 60%
+        const absorbSkill = available.find(s => s.id === 'spell_absorption');
+        if (absorbSkill && hpPct > 0.4 && !enemy.statusEffects?.some(e => e.type === 'spellAbsorb') && Math.random() > 0.4) {
+            return { action: 'skill', skill: absorbSkill, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 3: Mana Drain the highest-energy target
+        const manaDrainSkill = available.find(s => s.id === 'mana_drain');
+        if (manaDrainSkill && Math.random() > 0.45) {
+            return { action: 'skill', skill: manaDrainSkill, target: highEnergyTarget };
+        }
+
+        // Priority 4: Runic Punishment (scales with their mana)
+        const runicSkill = available.find(s => s.id === 'runic_punishment');
+        if (runicSkill && Math.random() > 0.4) {
+            return { action: 'skill', skill: runicSkill, target: defaultTarget };
+        }
+
+        // Priority 5: Arcane Feedback AoE
+        const feedbackSkill = available.find(s => s.id === 'arcane_feedback');
+        if (feedbackSkill && Math.random() > 0.5) {
+            return { action: 'skill', skill: feedbackSkill, target: defaultTarget };
+        }
+
+        // Counterspell as fallback
+        const counterSkill = available.find(s => s.id === 'counterspell');
+        if (counterSkill) return { action: 'skill', skill: counterSkill, target: defaultTarget };
+    }
+
+    // ── FORMATION (PHALANX) AI ────────────────────────
+    if (aiType === 'FORMATION') {
+        const liveAllies = allies.filter(a => !a.isDead && a.currentHP > 0);
+        const deadAlly = allies.find(a => a.isDead || a.currentHP <= 0);
+
+        // Priority 1: Vengeance Oath if an ally just died
+        const vengeanceSkill = available.find(s => s.id === 'vengeance_oath');
+        if (vengeanceSkill && deadAlly) {
+            return { action: 'skill', skill: vengeanceSkill, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 2: Last Stand if critical HP
+        const lastStandSkill = available.find(s => s.id === 'last_stand');
+        if (lastStandSkill && hpPct < 0.25 && Math.random() > 0.3) {
+            return { action: 'skill', skill: lastStandSkill, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 3: Shield Wall when allies present
+        const shieldWall = available.find(s => s.id === 'shield_wall');
+        if (shieldWall && liveAllies.length >= 2 && !enemy.statusEffects?.some(e => e.type === 'defense') && Math.random() > 0.4) {
+            return { action: 'skill', skill: shieldWall, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 4: Spear Volley AoE
+        const spearVolley = available.find(s => s.id === 'spear_volley');
+        if (spearVolley && Math.random() > 0.45) {
+            return { action: 'skill', skill: spearVolley, target: livePlayers[0] };
+        }
+
+        // Priority 5: Coordinated Strike with ally bonus
+        const coordStrike = available.find(s => s.id === 'coordinated_strike');
+        if (coordStrike && Math.random() > 0.35) {
+            return { action: 'skill', skill: coordStrike, target: defaultTarget };
+        }
+
+        return { action: 'attack', target: defaultTarget };
+    }
+
+    // ── ADAPTIVE (NEMESIS) AI ─────────────────────────
+    if (aiType === 'ADAPTIVE') {
+        // Priority 1: Phase change when triggered
+        const nemesisForm = available.find(s => s.id === 'nemesis_form');
+        if (nemesisForm && hpPct < 0.6 && !enemy.hasPhaseShifted) {
+            enemy.hasPhaseShifted = true;
+            return { action: 'skill', skill: nemesisForm, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 2: Fate Seal to punish skill usage
+        const fateSkill = available.find(s => s.id === 'fate_seal');
+        if (fateSkill && Math.random() > 0.45) {
+            return { action: 'skill', skill: fateSkill, target: defaultTarget };
+        }
+
+        // Priority 3: Null Field to adapt resist
+        const nullField = available.find(s => s.id === 'null_field');
+        if (nullField && !enemy.statusEffects?.some(e => e.type === 'dmgReduction') && Math.random() > 0.4) {
+            return { action: 'skill', skill: nullField, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 4: Void Anchor to slow
+        const voidAnchor = available.find(s => s.id === 'void_anchor');
+        if (voidAnchor && Math.random() > 0.5) {
+            return { action: 'skill', skill: voidAnchor, target: defaultTarget };
+        }
+
+        // Mirror Strike
+        const mirrorStrike = available.find(s => s.id === 'mirror_strike');
+        if (mirrorStrike) return { action: 'skill', skill: mirrorStrike, target: defaultTarget };
+    }
+
+    // ── FRENZY (BERSERKER_MOB) AI ─────────────────────
+    if (aiType === 'FRENZY') {
+        // Death or Glory at critical HP
+        const dogSkill = available.find(s => s.id === 'death_or_glory');
+        if (dogSkill && hpPct < 0.3) {
+            return { action: 'skill', skill: dogSkill, target: defaultTarget };
+        }
+
+        // War Cry for speed
+        const warCry = available.find(s => s.id === 'war_cry');
+        if (warCry && !enemy.statusEffects?.some(e => e.type === 'spd') && Math.random() > 0.5) {
+            return { action: 'skill', skill: warCry, target: enemy, targetType: 'self' };
+        }
+
+        // Bloodlust when wounded
+        const bloodlust = available.find(s => s.id === 'bloodlust');
+        if (bloodlust && hpPct < 0.7 && Math.random() > 0.4) {
+            return { action: 'skill', skill: bloodlust, target: enemy, targetType: 'self' };
+        }
+
+        // Frenzy Cleave AoE
+        const frenzySkill = available.find(s => s.id === 'frenzy_cleave');
+        if (frenzySkill && Math.random() > 0.35) {
+            return { action: 'skill', skill: frenzySkill, target: livePlayers[0] };
+        }
+
+        // Reckless Charge
+        const chargeSkill = available.find(s => s.id === 'reckless_charge');
+        if (chargeSkill) return { action: 'skill', skill: chargeSkill, target: defaultTarget };
+    }
+
+    // ── EVASIVE (VOID_WALKER) AI ──────────────────────
+    if (aiType === 'EVASIVE') {
+        // Void Collapse signature move
+        const voidCollapse = available.find(s => s.id === 'void_collapse');
+        if (voidCollapse && hpPct < 0.5 && Math.random() > 0.4) {
+            return { action: 'skill', skill: voidCollapse, target: defaultTarget };
+        }
+
+        // Phase Step before combat
+        const phaseStep = available.find(s => s.id === 'phase_step');
+        if (phaseStep && !enemy.statusEffects?.some(e => e.type === 'evasion') && Math.random() > 0.45) {
+            return { action: 'skill', skill: phaseStep, target: enemy, targetType: 'self' };
+        }
+
+        // Shadow Mimic for dmg reduction
+        const shadowMimic = available.find(s => s.id === 'shadow_mimic');
+        if (shadowMimic && hpPct < 0.6 && Math.random() > 0.4) {
+            return { action: 'skill', skill: shadowMimic, target: enemy, targetType: 'self' };
+        }
+
+        // Entropy Blast AoE
+        const entropyBlast = available.find(s => s.id === 'entropy_blast');
+        if (entropyBlast && Math.random() > 0.5) {
+            return { action: 'skill', skill: entropyBlast, target: livePlayers[0] };
+        }
+
+        // Void Lash single target
+        const voidLash = available.find(s => s.id === 'void_lash');
+        if (voidLash) return { action: 'skill', skill: voidLash, target: defaultTarget };
+    }
+
+    // ── IMMOVABLE (COLOSSUS) AI ───────────────────────
+    if (aiType === 'IMMOVABLE') {
+        // Immovable CC immunity when HP drops
+        const immovableSkill = available.find(s => s.id === 'immovable');
+        if (immovableSkill && hpPct < 0.8 && !enemy.statusEffects?.some(e => e.type === 'ccImmune') && Math.random() > 0.4) {
+            return { action: 'skill', skill: immovableSkill, target: enemy, targetType: 'self' };
+        }
+
+        // Iron Rebuke reflect
+        const rebukeSkill = available.find(s => s.id === 'iron_rebuke');
+        if (rebukeSkill && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.35) {
+            return { action: 'skill', skill: rebukeSkill, target: enemy, targetType: 'self' };
+        }
+
+        // World Break at high HP to punish over-aggression
+        const worldBreak = available.find(s => s.id === 'world_break');
+        if (worldBreak && Math.random() > 0.4) {
+            return { action: 'skill', skill: worldBreak, target: defaultTarget };
+        }
+
+        // Seismic Slam AoE
+        const seismicSlam = available.find(s => s.id === 'seismic_slam');
+        if (seismicSlam && Math.random() > 0.45) {
+            return { action: 'skill', skill: seismicSlam, target: livePlayers[0] };
+        }
+
+        // Titan Stomp
+        const titanStomp = available.find(s => s.id === 'titan_stomp');
+        if (titanStomp) return { action: 'skill', skill: titanStomp, target: livePlayers[0] };
+    }
+
     // ── HEALER AI ──────────────────────────────────
     if (aiType === 'HEALER') {
         // Priority 1: Revive dead allies
         const deadAlly = allies.find(a => a.isDead || a.currentHP <= 0);
         const reviveSkill = available.find(s => s.type === 'revive');
         if (deadAlly && reviveSkill) return { action: 'skill', skill: reviveSkill, target: deadAlly, targetType: 'ally' };
-        
+
         // Priority 2: Heal lowest HP ally
         const lowHpAlly = allies.filter(a => !a.isDead).sort((a, b) => (a.currentHP / a.maxHP) - (b.currentHP / b.maxHP))[0];
         const healSkill = available.find(s => s.type === 'heal');
         if (lowHpAlly && healSkill && (lowHpAlly.currentHP / lowHpAlly.maxHP) < 0.6) {
             return { action: 'skill', skill: healSkill, target: lowHpAlly, targetType: 'ally' };
         }
-        
+
         // Priority 3: Buff team
         const buffSkill = available.find(s => s.type === 'buff_team');
         if (buffSkill && Math.random() > 0.5) return { action: 'skill', skill: buffSkill, target: enemy, targetType: 'self' };
@@ -316,33 +799,42 @@ function evaluateAction(enemy, players, allies = []) {
         const dyingTarget = livePlayers.find(p => (p.currentHP / (p.maxHp || p.stats?.maxHp || 1)) < 0.3);
         const executeSkill = available.find(s => s.id === 'execute');
         if (dyingTarget && executeSkill) return { action: 'skill', skill: executeSkill, target: dyingTarget };
-        
-        // Mark then poison the weakest target
+
+        // Energy Siphon to drain active casters
+        const siphonSkill = available.find(s => s.id === 'energy_siphon');
+        const highEnTarget = livePlayers.reduce((best, p) => {
+            const en = p.stats?.energy || 0;
+            return en > (best.stats?.energy || 0) ? p : best;
+        }, livePlayers[0]);
+        if (siphonSkill && (highEnTarget.stats?.energy || 0) > 50 && Math.random() > 0.4) {
+            return { action: 'skill', skill: siphonSkill, target: highEnTarget };
+        }
+
+        // Shadow strike
         const weakTarget = livePlayers.reduce((prev, curr) => {
             const pRatio = prev.currentHP / (prev.maxHp || prev.stats?.maxHp || 1);
             const cRatio = curr.currentHP / (curr.maxHp || curr.stats?.maxHp || 1);
             return pRatio < cRatio ? prev : curr;
         });
 
-        // Shadow strike
         const shadowStrike = available.find(s => s.id === 'shadow_strike');
         if (shadowStrike && Math.random() > 0.3) {
             return { action: 'skill', skill: shadowStrike, target: weakTarget };
         }
-        
+
         const markSkill = available.find(s => s.id === 'mark');
         if (markSkill && !weakTarget.statusEffects?.some(e => e.type === 'marked')) {
             return { action: 'skill', skill: markSkill, target: weakTarget };
         }
-        
+
         const poisonSkill = available.find(s => s.id === 'poison');
         if (poisonSkill && !weakTarget.statusEffects?.some(e => e.type === 'poison')) {
             return { action: 'skill', skill: poisonSkill, target: weakTarget };
         }
-        
+
         const backstab = available.find(s => s.id === 'backstab');
         if (backstab) return { action: 'skill', skill: backstab, target: weakTarget };
-        
+
         return { action: 'attack', target: weakTarget };
     }
 
@@ -355,24 +847,30 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: tauntSkill, target: defaultTarget };
         }
 
-        // Priority 2: Rupture if multiple players
+        // Priority 2: Thornwall reflect when low HP
+        const thornwall = available.find(s => s.id === 'thornwall');
+        if (thornwall && hpPct < 0.5 && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.35) {
+            return { action: 'skill', skill: thornwall, target: enemy, targetType: 'self' };
+        }
+
+        // Priority 3: Rupture if multiple players
         const earthRupture = available.find(s => s.id === 'earth_rupture');
         if (earthRupture && livePlayers.length >= 2 && Math.random() > 0.3) {
             return { action: 'skill', skill: earthRupture, target: defaultTarget };
         }
-        
-        // Priority 3: Harden when below 65% HP
+
+        // Priority 4: Harden when below 65% HP
         const hardenSkill = available.find(s => s.id === 'harden');
         if (hardenSkill && hpPct < 0.65 && Math.random() > 0.4) {
             return { action: 'skill', skill: hardenSkill, target: enemy, targetType: 'self' };
         }
-        
+
         // Rally allies when possible
         const rallySkill = available.find(s => s.id === 'rally');
         if (rallySkill && allies.length > 0 && Math.random() > 0.6) {
             return { action: 'skill', skill: rallySkill, target: enemy, targetType: 'self' };
         }
-        
+
         // Attack highest-threat target
         const strongestPlayer = livePlayers.reduce((prev, curr) => prev.currentHP > curr.currentHP ? prev : curr);
         return { action: 'attack', target: strongestPlayer };
@@ -391,17 +889,17 @@ function evaluateAction(enemy, players, allies = []) {
         if (abyssalVoid && livePlayers.length >= 2 && Math.random() > 0.3) {
             return { action: 'skill', skill: abyssalVoid, target: defaultTarget };
         }
-        
+
         // Curse for debuffs early
         const curseSkill = available.find(s => s.id === 'curse');
         if (curseSkill && !livePlayers[0].statusEffects?.some(e => e.type === 'debuff_all') && Math.random() > 0.5) {
             return { action: 'skill', skill: curseSkill, target: defaultTarget };
         }
-        
+
         // AoE if multiple targets
         const aoeSkill = available.find(s => s.type === 'aoe');
         if (livePlayers.length >= 2 && aoeSkill) return { action: 'skill', skill: aoeSkill, target: livePlayers[0] };
-        
+
         // Standard damage spell
         const damageSkill = available.find(s => s.type === 'attack');
         if (damageSkill) return { action: 'skill', skill: damageSkill, target: defaultTarget };
@@ -409,6 +907,13 @@ function evaluateAction(enemy, players, allies = []) {
 
     // ── AGGRESSIVE (BRUTE) AI ──────────────────────
     if (aiType === 'AGGRESSIVE') {
+        // Shatter Will to strip player buffs
+        const shatterWill = available.find(s => s.id === 'shatter_will');
+        const playerWithBuffs = livePlayers.find(p => p.buffs && p.buffs.length > 0);
+        if (shatterWill && playerWithBuffs && Math.random() > 0.4) {
+            return { action: 'skill', skill: shatterWill, target: playerWithBuffs };
+        }
+
         const obliterate = available.find(s => s.id === 'obliterate');
         if (obliterate && Math.random() > 0.3) {
             return { action: 'skill', skill: obliterate, target: defaultTarget };
@@ -435,17 +940,17 @@ function evaluateAction(enemy, players, allies = []) {
             enemy.hasPhaseShifted = true;
             return { action: 'skill', skill: phaseShift, target: enemy, targetType: 'self' };
         }
-        
+
         // Charge ultimate at low HP — id is 'ultimate' in BOSS archetype
         const ultimateSkill = available.find(s => s.id === 'ultimate' || s.chargeTime);
         if (ultimateSkill && hpPct < 0.3 && Math.random() > 0.4) {
             return { action: 'skill', skill: ultimateSkill, target: livePlayers[0] };
         }
-        
+
         // AoE slam — id is 'slam' in BOSS archetype
         const slamSkill = available.find(s => s.id === 'slam' || s.type === 'aoe');
         if (slamSkill && Math.random() > 0.4) return { action: 'skill', skill: slamSkill, target: livePlayers[0] };
-        
+
         // Fallback: use any available offensive skill
         const offSkill = available.find(s => ['attack', 'magic', 'aoe', 'damage_cc'].includes(s.type));
         if (offSkill) return { action: 'skill', skill: offSkill, target: defaultTarget };
@@ -459,7 +964,7 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill, target: defaultTarget };
         }
     }
-    
+
     return { action: 'attack', target: defaultTarget };
 }
 
@@ -476,7 +981,7 @@ function getRandomTarget(players) {
 function getSkillsForMonster(archetype, level) {
     const arch = MONSTER_ARCHETYPES[archetype];
     if (!arch) return [];
-    
+
     return Object.entries(arch.skills)
         .filter(([, s]) => !s.isFollowUp && level >= s.levelReq)
         .map(([id, s]) => ({
