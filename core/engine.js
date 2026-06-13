@@ -3310,6 +3310,7 @@ ${targetCategory}`;
       }
 
       mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
+      mainMsg += `\n\n💡 *Tip:* Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`;
 
       return await sendMenuWithBanner(sock, chatId, mainMsg);
     }
@@ -5192,6 +5193,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `📊 \`${currentPrefix} guide stats\` - Stats & Attributes\n`;
                         msg += `🎭 \`${currentPrefix} guide classes\` - Evolution Tiers\n`;
                         msg += `👹 \`${currentPrefix} guide monsters\` - Monster Archetypes\n`;
+                        msg += `⚙️ \`${currentPrefix} guide repair\` - Durability & Repairs\n`;
                         msg += `📜 \`${currentPrefix} guide lore\` - World History & Background\n`;
                         msg += `🎒 \`${currentPrefix} guide items\` - Loot, Gear & Rarity\n`;
                         msg += `⚒️ \`${currentPrefix} guide work\` - Mining & Crafting\n`;
@@ -9077,6 +9079,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       msg += `🔵 \`${botConfig.getPrefix()} guide mage\` - Mage, Warlock, Necromancer...\n`;
                       msg += `🟡 \`${botConfig.getPrefix()} guide support\` - Cleric, Bard, Merchant...\n`;
                       msg += `👹 \`${botConfig.getPrefix()} guide monsters\` - Monster Archetypes\n`;
+                      msg += `⚙️ \`${botConfig.getPrefix()} guide repair\` - Durability & Repairs\n`;
                       msg += `📜 \`${botConfig.getPrefix()} guide lore\` - World History & Background\n`;
                       msg += `💎 \`${botConfig.getPrefix()} guide mastery\` - Masterworks & Professions\n`;
                       msg += `🚀 \`${botConfig.getPrefix()} guide advanced\` - Hardcore, Synergy & Titles\n`;
@@ -9277,6 +9280,16 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg += `• *Rank:* Your letter grade (F to SSS). Higher ranks = Better loot.\n`;
                         msg += `• *Milestones:* Certain features only unlock at higher ranks.\n`;
                         msg += `• *Stats:* Every level up grants points to spend or auto-assign to your core stats.`;
+                      } else if (topic === "repair" || topic === "durability") {
+                        msg = `⚙️ *DURABILITY & REPAIRS*\n\n`;
+                        msg += `• *Durability:* Equipped gear has a condition rating (from 0 to max). Stacked inventory items do not have durability.\n`;
+                        msg += `• *Wear:* Weapons lose durability when attacking; armor loses durability when hit. Optimal class-weapon synergies reduce wear by 50%.\n`;
+                        msg += `• *Stat Tiers:* \n`;
+                        msg += `  - 100%-40%: Full gear stats.\n`;
+                        msg += `  - 39%-1%: 40% stat reduction.\n`;
+                        msg += `  - 0%: 💔 *[BROKEN]* - 0% stats!\n`;
+                        msg += `• *Repair:* Use \`${botConfig.getPrefix()} blacksmith\` to view status, or \`${botConfig.getPrefix()} repair <slot/index/all>\` to fix gear with Zeni.\n`;
+                        msg += `• *Repair Kits:* Brew consumable kits and apply in the field with \`${botConfig.getPrefix()} use <kit_id/index> <slot>\`.\n`;
                       } else if (topic === "commands") {
                         msg = `📜 *COMMAND LIST*\n\n`;
                         msg += `• *Basic:* \`register\`, \`profile\`, \`stats\`, \`bal\`\n`;

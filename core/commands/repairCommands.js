@@ -184,8 +184,8 @@ async function inspectItem(sock, chatId, userId, target) {
     
     const inventory = inventorySystem.formatInventory(userId);
     const equipment = inventorySystem.getEquipment(userId);
-    const lootSystem = require('../lootSystem');
-    const weaponSynergy = require('../weaponSynergy');
+    const lootSystem = require('../rpg/lootSystem');
+    const weaponSynergy = require('../rpg/weaponSynergy');
     
     let item = null;
     let isEquipped = false;

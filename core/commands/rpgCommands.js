@@ -813,8 +813,8 @@ async function useItem(sock, chatId, senderJid, target) {
             const info = lootSystem.getItemInfo(k);
             return info.type === 'POTION' || info.type === 'CONSUMABLE';
         });
-        let tip = consumables.length > 0 ? `Items you can use: ${consumables.join(', ')}` : "You don't have any usable consumables.";
-        let msg = `🧪 USE ITEM\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
+        let tip = consumables.length > 0 ? `Items you can use: ${consumables.join(', ')}` : `You don't have any usable consumables. (Use \`${getPrefix()}use repair_kit_basic <slot>\` to repair gear in the field!)`;
+        let msg = `🧪 USE ITEM\n\n*Usage:* \`${getPrefix()}use <#bag_index> [slot]\`\n*Example:* \`${getPrefix()}use 1 main_hand\`\n\n💡 *Tip:* _${tip}_`;
         return await sock.sendMessage(chatId, { text: msg });
     }
     const parts = target.toLowerCase().trim().split(/\s+/);
