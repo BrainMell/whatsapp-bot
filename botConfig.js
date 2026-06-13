@@ -39,6 +39,7 @@ class BotConfig {
   getCurrency() { return this.config.currency; }
   getSymbol() { return this.config.symbol; }
   getContentDescription() { return this.config.contentDescription; }
+  getSiblings() { return Array.isArray(this.config.siblings) ? this.config.siblings : []; }
   getAssetPath(subPath = '') { 
     const sharedFiles = ['scores.png', 'zeni.png', 'placeholder.png'];
     if (sharedFiles.includes(subPath)) {
@@ -76,5 +77,6 @@ module.exports = {
   getStickerPath: (p) => storage.getStore()?.getStickerPath(p),
   getAuthPath: () => storage.getStore()?.getAuthPath(),
   getDataPath: (p) => storage.getStore()?.getDataPath(p),
-  getRPGAssetPath: (p) => storage.getStore()?.getRPGAssetPath(p)
+  getRPGAssetPath: (p) => storage.getStore()?.getRPGAssetPath(p),
+  getSiblings: () => (storage.getStore()?.getSiblings() || [])
 };

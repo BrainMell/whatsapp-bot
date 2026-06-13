@@ -18066,11 +18066,28 @@ _(Or reply to their message)_
                     const user = economy.getOrCreateUser(senderJid);
                     const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
                     if (isNameUnknown) {
-                      await reply(`Yo! I don't know your name yet. What should I call you?`);
-                      pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
-                      return;
+                      // --- Sibling Bot Detection: skip name-ask for known peer bots ---
+                      const siblings = botConfig.getSiblings().map(s => s.toLowerCase());
+                      const senderPushName = (m.pushName || "").trim();
+                      const isSiblingBot = senderPushName && siblings.includes(senderPushName.toLowerCase());
+                      if (isSiblingBot) {
+                        // Auto-register this sibling with their known name + friend relationship
+                        user.nickname = senderPushName;
+                        if (!user.profile) user.profile = {};
+                        user.profile.nickname = senderPushName;
+                        user.profile.whatsappName = senderPushName;
+                        if (!user.profile.relationships) user.profile.relationships = {};
+                        user.profile.relationships[botConfig.getBotName()] = "friend";
+                        economy.scheduleSave(senderJid);
+                        // Don't return — let the conversation continue naturally
+                      } else {
+                        await reply(`Yo! I don't know your name yet. What should I call you?`);
+                        pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
+                        return;
+                      }
                     }
                   }
+
 
                   const prompt = txt
                     .replace(new RegExp(`${botConfig.getPrefix()}`, "gi"), "")
