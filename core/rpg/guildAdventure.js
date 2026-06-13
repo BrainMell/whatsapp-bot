@@ -5556,7 +5556,9 @@ async function applyAbilityEffect(
     state.sessionKey ||
     (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
   const icon = player.class?.icon || "👤";
-  let msg = `${icon} ${player.name} uses ${ability.animation} *${ability.name}*!\n\n`;
+  const animation = ability.animation || effect?.animation || "";
+  const animStr = animation ? `${animation} ` : "";
+  let msg = `${icon} ${player.name} uses ${animStr}*${ability.name}*!\n\n`;
   let totalDamage = 0;
   let totalHealing = 0;
 
