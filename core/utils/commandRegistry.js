@@ -120,7 +120,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'allocate', desc: 'Spend stat points to increase your power.', usage: 'allocate <stat> <n>' },
     { cmd: 'leaderboard', desc: 'RPG Level Leaderboard.', usage: 'leaderboard' },
     { cmd: 'lb', desc: 'Alias for leaderboard.', usage: 'lb' },
-    { cmd: 'upgrade inv', desc: 'Expand your inventory slot capacity.', usage: 'upgrade inv' },
+    { cmd: 'upgrade inv', desc: 'Expand your inventory slot capacity. (Aliases: upgrade bag, expand bag, enhance bag, bag upgrade)', usage: 'upgrade inv' },
     { cmd: 'classes', desc: 'View the class tree and evolution paths.', usage: 'classes' },
     { cmd: 'guild board', desc: 'View your guild\'s daily monster hunting board.', usage: 'guild board' },
     { cmd: 'quest', desc: 'Start a group quest adventure.', usage: 'quest [Rank]' },

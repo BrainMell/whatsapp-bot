@@ -4902,9 +4902,13 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j enhance <#bag_index>
+                    // .j enhance <#bag_index> / .j enhance bag
                     if (primaryCmd === "enhance") {
                       const input = cmdArgs[1];
+                      if (input && ["bag", "inv", "inventory"].includes(input.toLowerCase())) {
+                        await rpgCommands.upgradeInventory(sock, chatId, senderJid);
+                        return;
+                      }
                       await rpgCommands.enhanceItem(
                         sock,
                         chatId,
@@ -7255,12 +7259,22 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .j upgrade inv - Upgrade inventory
+                  // .j upgrade inv / bag / inventory - Upgrade inventory
+                  const normalizedCmd = lowerTxt.replace(/\s+/g, " ").trim();
+                  const pfx = botConfig.getPrefix().toLowerCase();
                   if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} upgrade inv` ||
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} upgrade inventory`
+                    normalizedCmd === `${pfx} upgrade inv` ||
+                    normalizedCmd === `${pfx} upgrade inventory` ||
+                    normalizedCmd === `${pfx} upgrade bag` ||
+                    normalizedCmd === `${pfx} expand inv` ||
+                    normalizedCmd === `${pfx} expand inventory` ||
+                    normalizedCmd === `${pfx} expand bag` ||
+                    normalizedCmd === `${pfx} enhance inv` ||
+                    normalizedCmd === `${pfx} enhance inventory` ||
+                    normalizedCmd === `${pfx} enhance bag` ||
+                    normalizedCmd === `${pfx} bag upgrade` ||
+                    normalizedCmd === `${pfx} inv upgrade` ||
+                    normalizedCmd === `${pfx} inventory upgrade`
                   ) {
                     await rpgCommands.upgradeInventory(sock, chatId, senderJid);
                     return;
