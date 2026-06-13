@@ -830,4 +830,264 @@ async function enhanceItem(sock, chatId, senderJid, input) {
     await sock.sendMessage(chatId, { text: result.message });
 }
 
-module.exports = { displayCharacterSheet, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem };
+// ==========================================
+// 🛠️ CUSTOM CRAFTING & RECIPES SYSTEM (.g craft)
+// ==========================================
+
+const CRAFTING_RECIPES = [
+    {
+        id: "rusty_dagger",
+        name: "Rusted Dagger",
+        description: "A simple blade. (+5 ATK)",
+        levelReq: 1,
+        ingredients: [
+            { itemId: "iron_shard", qty: 2 }
+        ],
+        output: { itemId: "rusty_dagger", qty: 1 }
+    },
+    {
+        id: "iron_sword",
+        name: "Iron Sword",
+        description: "A sturdy iron blade. (+12 ATK)",
+        levelReq: 5,
+        ingredients: [
+            { itemId: "iron_shard", qty: 3 },
+            { itemId: "tough_leather", qty: 1 }
+        ],
+        output: { itemId: "iron_sword", qty: 1 }
+    },
+    {
+        id: "steel_sabre",
+        name: "Steel Sabre",
+        description: "Sharp and finely forged. (+25 ATK, +5 SPD)",
+        levelReq: 10,
+        ingredients: [
+            { itemId: "iron_sword", qty: 1 },
+            { itemId: "refined_steel", qty: 3 },
+            { itemId: "sharp_whetstone", qty: 1 }
+        ],
+        output: { itemId: "steel_sabre", qty: 1 }
+    },
+    {
+        id: "mythril_staff",
+        name: "Mythril Staff",
+        description: "Amplifies resonance. (+45 MAG, +15 HP)",
+        levelReq: 20,
+        ingredients: [
+            { itemId: "arcane_wand", qty: 1 },
+            { itemId: "mythril_ore", qty: 5 },
+            { itemId: "mana_crystal", qty: 2 }
+        ],
+        output: { itemId: "mythril_staff", qty: 1 }
+    },
+    {
+        id: "chainmail",
+        name: "Chainmail",
+        description: "Interlinked metal rings. (+12 DEF)",
+        levelReq: 4,
+        ingredients: [
+            { itemId: "iron_shard", qty: 5 },
+            { itemId: "tough_leather", qty: 2 }
+        ],
+        output: { itemId: "chainmail", qty: 1 }
+    },
+    {
+        id: "iron_plate",
+        name: "Iron Plate",
+        description: "Sturdy iron protection. (+15 DEF)",
+        levelReq: 5,
+        ingredients: [
+            { itemId: "refined_steel", qty: 4 },
+            { itemId: "tough_leather", qty: 2 }
+        ],
+        output: { itemId: "iron_plate", qty: 1 }
+    },
+    {
+        id: "reinforced_plate",
+        name: "Reinforced Plate",
+        description: "Impenetrable steel plating. (+45 DEF, +50 HP)",
+        levelReq: 15,
+        ingredients: [
+            { itemId: "iron_plate", qty: 1 },
+            { itemId: "refined_steel", qty: 6 },
+            { itemId: "demon_hide", qty: 2 }
+        ],
+        output: { itemId: "reinforced_plate", qty: 1 }
+    },
+    {
+        id: "dragon_scale_armor",
+        name: "Dragon-Scale Plate",
+        description: "Forged from dragon scales. (+85 DEF, +150 HP)",
+        levelReq: 30,
+        ingredients: [
+            { itemId: "reinforced_plate", qty: 1 },
+            { itemId: "dragon_blood", qty: 2 },
+            { itemId: "demon_hide", qty: 5 }
+        ],
+        output: { itemId: "dragon_scale_armor", qty: 1 }
+    }
+];
+
+async function handleCraftCommand(sock, chatId, senderJid, args) {
+    const prefix = getPrefix();
+    
+    // Check registration first
+    const economyUser = economy.getUser(senderJid);
+    if (!economyUser) {
+        await sock.sendMessage(chatId, {
+            text: `❌ *ERROR*: You must be registered to craft items. Register using \`${prefix} register <nickname>\`.`
+        });
+        return;
+    }
+    
+    const playerLevel = economyUser.progression?.level || 1;
+    
+    // Get inventory
+    const inventoryData = inventorySystem.formatInventory(senderJid) || {};
+    const inventoryItems = inventoryData.isEmpty ? [] : (inventoryData.items || []);
+    
+    // Map of itemId to quantity
+    const playerInventory = {};
+    for (const item of inventoryItems) {
+        if (item && item.id) {
+            playerInventory[item.id] = (playerInventory[item.id] || 0) + (item.quantity || 0);
+        }
+    }
+    
+    // Parse arguments
+    let parsedArgs = [];
+    if (Array.isArray(args)) {
+        parsedArgs = args;
+    } else if (typeof args === 'string') {
+        parsedArgs = args.trim().split(/\s+/).filter(Boolean);
+    }
+    
+    if (parsedArgs.length === 0 || parsedArgs[0].trim() === "") {
+        // No args: get inventory, filter by both conditions (levelReq & ingredients), and render list
+        const craftableRecipes = CRAFTING_RECIPES.filter(recipe => {
+            // 1. Level Requirement
+            if (playerLevel < recipe.levelReq) {
+                return false;
+            }
+
+            // 2. Ingredient Availability
+            for (const ing of recipe.ingredients) {
+                const hasQty = playerInventory[ing.itemId] || 0;
+                if (hasQty < ing.qty) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+        
+        let msg = `━━━━━━━━━━━━━━━━\n`;
+        msg += `⚒️ *CRAFTABLE ITEMS* \n`;
+        msg += `┗━━━━━━━━━━━━━━━━\n\n`;
+        msg += `👤 *Player Level:* _${playerLevel}_\n\n`;
+
+        if (craftableRecipes.length === 0) {
+            msg += `_You cannot craft or use any items right now._\n`;
+        } else {
+            craftableRecipes.forEach(recipe => {
+                const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
+                const rarityEmojis = {
+                    'MYTHIC': '🌌',
+                    'LEGENDARY': '👑',
+                    'EPIC': '🔮',
+                    'RARE': '🔷',
+                    'UNCOMMON': '🟢',
+                    'COMMON': '⚪'
+                };
+                const rarityEmoji = rarityEmojis[outputInfo.rarity] || '⚪';
+
+                msg += `✨ *${recipe.name}* (\`${recipe.id}\`) ${rarityEmoji}\n`;
+                msg += `📝 _${recipe.description || outputInfo.description || ''}_\n`;
+                msg += `⭐ *Req Level:* ${recipe.levelReq}\n`;
+                
+                const ingredientsStr = recipe.ingredients.map(ing => {
+                    const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+                    return `${ing.qty}x ${ingInfo.name || ing.itemId}`;
+                }).join(', ');
+
+                msg += `🛠️ *Ingredients:* ${ingredientsStr}\n`;
+                msg += `🎁 *Yield:* ${recipe.output.qty}x ${outputInfo.name || recipe.output.itemId}\n\n`;
+            });
+            
+            msg += `💡 *To craft an item:* \`${prefix} craft <id>\` (e.g., \`${prefix} craft iron_sword\`)`;
+        }
+        msg += `\n━━━━━━━━━━━━━━━━`;
+        
+        await sock.sendMessage(chatId, { text: msg });
+        return;
+    }
+    
+    // args has recipe ID
+    const recipeId = parsedArgs[0].trim().toLowerCase();
+    const recipe = CRAFTING_RECIPES.find(r => r.id.toLowerCase() === recipeId);
+    
+    if (!recipe) {
+        await sock.sendMessage(chatId, {
+            text: `❌ *ERROR*: Recipe for \`${recipeId}\` not found.`
+        });
+        return;
+    }
+    
+    // Check level req
+    if (playerLevel < recipe.levelReq) {
+        await sock.sendMessage(chatId, {
+            text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nLevel requirement not met.\nReq: Level *${recipe.levelReq}*\nYour Level: *${playerLevel}*`
+        });
+        return;
+    }
+    
+    // Check ingredients
+    const missingIngredients = [];
+    for (const ing of recipe.ingredients) {
+        const hasQty = playerInventory[ing.itemId] || 0;
+        if (hasQty < ing.qty) {
+            const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+            missingIngredients.push(`${ing.qty - hasQty}x ${ingInfo.name || ing.itemId}`);
+        }
+    }
+    
+    if (missingIngredients.length > 0) {
+        await sock.sendMessage(chatId, {
+            text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nMissing ingredients:\n_` + missingIngredients.join('\n') + `_`
+        });
+        return;
+    }
+    
+    // Check space
+    if (!inventorySystem.hasInventorySpace(senderJid, 1, recipe.output.itemId)) {
+        await sock.sendMessage(chatId, {
+            text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nYour inventory is full! Sell some items or upgrade your bag size first.`
+        });
+        return;
+    }
+    
+    // Deduct ingredients
+    for (const ing of recipe.ingredients) {
+        inventorySystem.removeItem(senderJid, ing.itemId, ing.qty);
+    }
+    
+    // Add output
+    await inventorySystem.addItem(senderJid, recipe.output.itemId, recipe.output.qty);
+    
+    const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
+    let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
+    confirmMsg += `━━━━━━━━━━━━━━━━\n`;
+    confirmMsg += `🔨 Forged *${recipe.name}*\n\n`;
+    confirmMsg += `➖ *Used:* \n`;
+    recipe.ingredients.forEach(ing => {
+        const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+        confirmMsg += `  • ${ing.qty}x ${ingInfo.name || ing.itemId}\n`;
+    });
+    confirmMsg += `\n➕ *Received:* \n`;
+    confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
+    confirmMsg += `━━━━━━━━━━━━━━━━`;
+    
+    await sock.sendMessage(chatId, { text: confirmMsg });
+}
+
+module.exports = { displayCharacterSheet, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };

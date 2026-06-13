@@ -5186,13 +5186,35 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j craft
                     if (primaryCmd === "craft") {
-                      const item = cmdArgs.slice(1).join(" ");
-                      await rpgCommands.craftItem(
-                        sock,
-                        chatId,
-                        senderJid,
-                        item,
-                      );
+                      const args = cmdArgs.slice(1);
+                      const firstArg = args[0] ? args[0].toLowerCase().trim() : "";
+                      
+                      if (firstArg === "--ava" || firstArg === "--available") {
+                        await rpgCommands.handleCraftCommand(
+                          sock,
+                          chatId,
+                          senderJid,
+                          []
+                        );
+                      } else {
+                        const isNewRecipe = args.length > 0 && rpgCommands.CRAFTING_RECIPES.some(r => r.id.toLowerCase() === firstArg);
+                        if (isNewRecipe) {
+                          await rpgCommands.handleCraftCommand(
+                            sock,
+                            chatId,
+                            senderJid,
+                            args
+                          );
+                        } else {
+                          const item = cmdArgs.slice(1).join(" ");
+                          await rpgCommands.craftItem(
+                            sock,
+                            chatId,
+                            senderJid,
+                            item
+                          );
+                        }
+                      }
                       return;
                     }
 
