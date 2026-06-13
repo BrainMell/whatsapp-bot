@@ -1074,20 +1074,65 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     // Add output
     await inventorySystem.addItem(senderJid, recipe.output.itemId, recipe.output.qty);
     
-    const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
-    let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
-    confirmMsg += `━━━━━━━━━━━━━━━━\n`;
-    confirmMsg += `🔨 Forged *${recipe.name}*\n\n`;
-    confirmMsg += `➖ *Used:* \n`;
-    recipe.ingredients.forEach(ing => {
-        const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
-        confirmMsg += `  • ${ing.qty}x ${ingInfo.name || ing.itemId}\n`;
-    });
-    confirmMsg += `\n➕ *Received:* \n`;
-    confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
-    confirmMsg += `━━━━━━━━━━━━━━━━`;
-    
-    await sock.sendMessage(chatId, { text: confirmMsg });
+    // Generate transaction card image if possible
+    try {
+        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+        const nickname = economyUser.nickname || senderJid.split('@')[0];
+        const currency = getCurrency();
+        
+        const imgBuf = await goService.generateTransactionCard({
+            nickname: nickname,
+            type: 'CRAFT',
+            amount: recipe.output.qty,
+            newWallet: economyUser.wallet || 0,
+            newBank: economyUser.bank || 0,
+            zeniSymbol: currency.symbol || 'Z',
+            pfpUrl: pfpUrl,
+            itemName: recipe.name,
+            item: recipe.name,
+            details: `Crafted: ${recipe.name}`,
+            description: recipe.description || `Crafted ${recipe.name}`
+        });
+
+        // Confirmation text message
+        const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
+        let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
+        confirmMsg += `━━━━━━━━━━━━━━━━\n`;
+        confirmMsg += `🔨 Forged *${recipe.name}*\n\n`;
+        confirmMsg += `➖ *Used:* \n`;
+        recipe.ingredients.forEach(ing => {
+            const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+            confirmMsg += `  • ${ing.qty}x ${ingInfo.name || ing.itemId}\n`;
+        });
+        confirmMsg += `\n➕ *Received:* \n`;
+        confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
+        confirmMsg += `━━━━━━━━━━━━━━━━`;
+
+        if (imgBuf) {
+            await sock.sendMessage(chatId, { 
+                image: imgBuf, 
+                caption: confirmMsg 
+            });
+        } else {
+            throw new Error("No image buffer returned");
+        }
+    } catch (e) {
+        console.error("Failed to generate crafting image card:", e.message);
+        // Fallback to text message
+        const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
+        let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
+        confirmMsg += `━━━━━━━━━━━━━━━━\n`;
+        confirmMsg += `🔨 Forged *${recipe.name}*\n\n`;
+        confirmMsg += `➖ *Used:* \n`;
+        recipe.ingredients.forEach(ing => {
+            const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+            confirmMsg += `  • ${ing.qty}x ${ingInfo.name || ing.itemId}\n`;
+        });
+        confirmMsg += `\n➕ *Received:* \n`;
+        confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
+        confirmMsg += `━━━━━━━━━━━━━━━━`;
+        await sock.sendMessage(chatId, { text: confirmMsg });
+    }
 }
 
 module.exports = { displayCharacterSheet, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
