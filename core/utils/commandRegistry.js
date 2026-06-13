@@ -113,7 +113,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'shop', desc: 'Browse the shop for items and equipment.', usage: 'shop [category]' },
     { cmd: 'reset sprite', desc: 'Reroll your character sprite appearance.', usage: 'reset sprite' },
     { cmd: 'recipes', desc: 'View available crafting recipes.', usage: 'recipes [page]' },
-    { cmd: 'craft', desc: 'Create equipment using materials.', usage: 'craft <id>' },
+    { cmd: 'craft', desc: 'Create equipment using materials. Use --ava flag to show only available/usable items.', usage: 'craft <id> | craft --ava' },
     { cmd: 'brew', desc: 'Create potions and consumables.', usage: 'brew <id>' },
     { cmd: 'mine', desc: 'Go on a mining expedition for ores.', usage: 'mine' },
     { cmd: 'source', desc: 'Find out where to get a specific item.', usage: 'source <id>' },

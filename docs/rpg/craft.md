@@ -1,7 +1,7 @@
 # Craft Command Flow (`craft`, `recipes`)
 
 ## 1. Description
-The Craft command allows players to create weapons, armor, tools, and accessories by combining raw ingredients and materials found in their inventory. Listing recipes is done via `recipes`, and crafting is done via `craft <recipe_id>`.
+The Craft command allows players to create weapons, armor, tools, and accessories by combining raw ingredients and materials found in their inventory. Listing recipes is done via `recipes`, and crafting is done via `craft <recipe_id>`. Players can also view only the items they can currently craft and use right now by typing `craft --ava` or `craft --available`.
 
 ---
 
@@ -22,24 +22,40 @@ User sends ".j recipes"
             └── sock.sendMessage(chatId, { text: msg }) (L503)
 ```
 
+### Listing Available-Only Recipes
+```text
+User sends ".j craft --ava"
+└── core/engine.js
+    └── messages.upsert handler (L4066)
+        └── primaryCmd check: if (primaryCmd === "craft") (L5188)
+            └── check if argument is "--ava" or "--available"
+                └── core/commands/rpgCommands.js
+                    └── handleCraftCommand(sock, chatId, senderJid, []) (L703)
+                        └── get player level (economy.getUser)
+                        └── get inventory (inventorySystem.formatInventory)
+                        └── Filter recipes (level requirement & ingredients availability)
+                        └── sock.sendMessage(chatId, { text: listMsg })
+```
+
 ### Crafting an Item
 ```text
 User sends ".j craft iron_sword"
 └── core/engine.js
     └── messages.upsert handler (L4066)
-        └── primaryCmd check: if (primaryCmd === "craft") (L8835)
-            └── core/commands/rpgCommands.js
-                └── craftItem(sock, chatId, senderJid, recipeId, 'CRAFT') (L506)
-                    └── core/rpg/craftingSystem.js
-                        └── performCraft(senderJid, recipeId, 'CRAFT') (L475)
-                            └── canCraft(senderJid, recipeId) (L450)
-                                └── Verify user has all required ingredients in inventory
-                            └── Enforce category station matching ('CRAFT')
-                            └── Check space: inventorySystem.hasInventorySpace() (L493)
-                            └── Remove ingredients: inventorySystem.removeItem() (L499)
-                            └── Add result: inventorySystem.addItem() (L503)
-                            └── Update Guild Board progress (CRAFT task) (L523)
-            └── sock.sendMessage(chatId, { text: result.message }) (L509)
+        └── primaryCmd check: if (primaryCmd === "craft") (L5188)
+            └── check if argument matches an ID in the new CRAFTING_RECIPES list
+                └── YES: core/commands/rpgCommands.js
+                    └── handleCraftCommand(sock, chatId, senderJid, ["iron_sword"]) (L703)
+                        └── Verify user level >= recipe levelReq
+                        └── Verify user has all required ingredients
+                        └── Verify inventory has space
+                        └── Remove ingredients: inventorySystem.removeItem()
+                        └── Add result: inventorySystem.addItem()
+                        └── sock.sendMessage(chatId, { text: confirmMsg })
+                └── NO (Fallback): core/commands/rpgCommands.js
+                    └── craftItem(sock, chatId, senderJid, recipeId, 'CRAFT')
+                        └── core/rpg/craftingSystem.js
+                            └── performCraft(senderJid, recipeId, 'CRAFT')
 ```
 
 ---
@@ -69,28 +85,53 @@ User sends ".j craft iron_sword"
 ---
 
 ### Step 2: Command Matching and Route Execution
-* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L8834-L8844)
-* **Line Numbers**: 8834-8844
+* **File Path**: [core/engine.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L5187)
+* **Line Numbers**: 5187-5217
 * **Called From**: Message parser block in `engine.js`
-* **Inputs**: Raw message body string `lowerTxt` and `txt`
-* **Outputs**: Redirects execution to `rpgCommands.craftItem`
+* **Inputs**: Parsed command arguments array `cmdArgs`
+* **Outputs**: Redirects to `handleCraftCommand` (for `--ava` or new custom recipes) or `craftItem` (fallback/catalog)
 
 ```javascript
-// `${botConfig.getPrefix().toLowerCase()}` craft <id>
-if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} craft` || lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} craft `)) {
-    const recipeId = txt.split(' ').slice(2).join(' ').trim();
-    if (!recipeId) {
-        return await sendUsage(sock, chatId, BOT_MARKER, '🛠️ CRAFT', 'craft <recipe_id>', 'craft iron_sword', "Create equipment from materials.");
+// .j craft
+if (primaryCmd === "craft") {
+  const args = cmdArgs.slice(1);
+  const firstArg = args[0] ? args[0].toLowerCase().trim() : "";
+  
+  if (firstArg === "--ava" || firstArg === "--available") {
+    await rpgCommands.handleCraftCommand(
+      sock,
+      chatId,
+      senderJid,
+      []
+    );
+  } else {
+    const isNewRecipe = args.length > 0 && rpgCommands.CRAFTING_RECIPES.some(r => r.id.toLowerCase() === firstArg);
+    if (isNewRecipe) {
+      await rpgCommands.handleCraftCommand(
+        sock,
+        chatId,
+        senderJid,
+        args
+      );
+    } else {
+      const item = cmdArgs.slice(1).join(" ");
+      await rpgCommands.craftItem(
+        sock,
+        chatId,
+        senderJid,
+        item
+      );
     }
-    await rpgCommands.craftItem(sock, chatId, senderJid, recipeId);
-    return;
+  }
+  return;
 }
 ```
 
 #### Explanation
 - Captures the `.j craft` command.
-- Extracts the recipe identifier parameters. If none are typed, displays the usage helper and exits.
-- Invokes `rpgCommands.craftItem` with the category set to `'CRAFT'`.
+- Evaluates whether the argument is the available-only flag (`--ava` or `--available`).
+- Evaluates if the argument matches a custom recipe in the new level-required `CRAFTING_RECIPES` table.
+- Routes to the corresponding new `handleCraftCommand` or falls back to the original `craftItem` logic.
 
 ---
 
