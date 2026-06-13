@@ -403,6 +403,8 @@ async function equipItem(userId, itemId, slot) {
     let isCompatible = false;
     if (itemSlot === 'main_hand' || itemSlot === 'weapon') {
         isCompatible = (cleanTargetSlot === 'main_hand' || cleanTargetSlot === 'off_hand');
+    } else if (itemSlot === 'off_hand' || itemSlot === 'offhand') {
+        isCompatible = (cleanTargetSlot === 'off_hand');
     } else if (itemSlot === 'armor') {
         isCompatible = (cleanTargetSlot === 'armor');
     } else if (itemSlot === 'helmet') {
