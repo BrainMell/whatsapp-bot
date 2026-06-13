@@ -3575,6 +3575,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             state.players.indexOf(target),
             chatId,
           );
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
 
           turnInfo.action.name = followUpSkill.name;
           turnInfo.target = target;
@@ -3635,6 +3639,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             : state.players.indexOf(target);
 
         await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+        if (await checkCombatEnd(sock, state, sessionKey)) {
+          resolve();
+          return;
+        }
 
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
@@ -3676,6 +3684,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
 
         if (target.stats.hp <= 0) {
           await handleDeath(sock, target, sessionKey, enemy.name);
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
           resultMsg += `\n💀 ${target.name} has fallen!`;
         }
       }
