@@ -150,21 +150,21 @@ module.exports = {
             // ============================================
             
             const violationType = [...new Set(violations)].join(', ');
-            const userName = resolvedSender.split('@')[0];
             const action = settings.antilinkAction || 'delete';
 
             // Delete first
             try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
+
+                const participantJid = groupMetadata.participants.find(
+                    p => lidResolver.resolveToPhone(jidNormalizedUser(p.id), authPath) === senderPhone
+                )?.id || normalizedSender;
+                const userName = participantJid.split('@')[0];
 
                 // Warn/Kick logic
                 let warningCount = 0;
                 if (addWarning && getWarningCount) {
                     warningCount = addWarning(resolvedSender, chatId, `Antilink violation: ${violationType}`);
                 }
-
-                const participantJid = groupMetadata.participants.find(
-                    p => lidResolver.resolveToPhone(jidNormalizedUser(p.id), authPath) === senderPhone
-                )?.id || normalizedSender;
 
                 if (action === 'kick') {
                     const kickMsg = `*🚨 ANTILINK VIOLATION 🚨*\n\n*User:* @${userName}\n*Type:* ${violationType}\n*Action:* REMOVED`;
