@@ -2180,14 +2180,31 @@ function calculateDamage(
   // Critical hit
   let isCrit = false;
   if (Math.random() * 100 < (Number(attacker.stats.crit) || 0)) {
-    damage *= 1.5;
-    isCrit = true;
+    const targetCloak = target.equipment?.cloak?.id || target.equipment?.cloak;
+    if (targetCloak === "mantlet_of_chaos") {
+      isCrit = false;
+    } else {
+      let critMult = 1.5;
+      const ringId = attacker.equipment?.ring?.id || attacker.equipment?.ring;
+      if (ringId === "loop_of_forever" || ringId === "entropy_loop") {
+        critMult = 2.0; // Double crit damage multiplier
+      }
+      damage *= critMult;
+      isCrit = true;
+    }
   }
 
   damage = Math.max(0, Math.floor(damage));
 
   // 💡 EVASION CHECK (Secondary Stat)
   let evasionChance = Number(target.stats.evasion) || 0;
+
+  // 💡 EQUIPMENT EVASION MODIFIERS
+  const targetArmor = target.equipment?.armor?.id || target.equipment?.armor;
+  const targetCloak = target.equipment?.cloak?.id || target.equipment?.cloak;
+  if (targetArmor === "voidstrand_robes") evasionChance += 15;
+  if (targetCloak === "veil_of_the_void") evasionChance += 10;
+  if (targetCloak === "cloak_of_shifting_realities") evasionChance += 10;
 
   // 🌍 WEATHER: Foggy (-15% Accuracy = +15% Evasion)
   const hours = new Date().getHours();
@@ -2916,6 +2933,20 @@ async function processCombatTurn(sock, sessionKey) {
       }
 
       const statusMessages = processStatusEffects(activeActor);
+
+      // Start of Turn Equipment Triggers
+      if (activeActor && !activeActor.isEnemy) {
+        const armorId = activeActor.equipment?.armor?.id || activeActor.equipment?.armor;
+        if (armorId === "chrono_weaver_vestments") {
+          if (Math.random() < 0.20) {
+            const hasHasteAlready = (activeActor.statusEffects || []).some(e => e.type === "haste");
+            if (!hasHasteAlready) {
+              applyStatusEffect(activeActor, "haste", 2, 30);
+              statusMessages.push(`⏳ *Chrono Slip:* Time warping around ${activeActor.name} grants Haste!`);
+            }
+          }
+        }
+      }
       if (state.environment?.id === "FIRE_CAVE") {
         const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
         activeActor.stats.hp -= heatDmg;
@@ -3167,6 +3198,80 @@ async function performAction(sock, player, action, sessionKey) {
         resolvedTarget.combatStats.damageTaken += damage;
 
         resultMsg += `${isCrit ? "💥 CRITICAL! " : ""}Strikes ${resolvedTarget.icon} ${resolvedTarget.name} for *${damage}* damage!`;
+
+        // ⚔️ Weapon & Equipment Passive Triggers on Hit
+        const weaponId = player.equipment?.main_hand?.id || player.equipment?.main_hand;
+        const glovesId = player.equipment?.gloves?.id || player.equipment?.gloves;
+
+        if (weaponId === "void_kraken_harpoon" || weaponId === "void_kraken_cleaver") {
+          if (Math.random() < 0.25) {
+            applyStatusEffect(resolvedTarget, "curse", 3, 20);
+            resultMsg += `\n🌌 *Void Kraken Reality Warp:* ${resolvedTarget.name} is cursed by the abyss! (-20% stats)`;
+          }
+        } else if (weaponId === "hellfire_greatmaul") {
+          if (Math.random() < 0.30) {
+            applyStatusEffect(resolvedTarget, "burn", 3, 15);
+            resultMsg += `\n🔥 *Hellfire Impact:* Sulfur explodes, setting ${resolvedTarget.name} on fire!`;
+          }
+        } else if (weaponId === "worldender_lance") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(resolvedTarget, "burn", 2, 15);
+            applyStatusEffect(resolvedTarget, "slow", 2, 50);
+            resultMsg += `\n☄️ *World-Ender Cataclysm:* ${resolvedTarget.name} is set on fire and slowed!`;
+          }
+        } else if (weaponId === "dragonfang_claymore" || weaponId === "dragon_fang_dagger" || weaponId === "wyrmtail_greatsword") {
+          if (isCrit || Math.random() < 0.30) {
+            applyStatusEffect(resolvedTarget, "bleed", 3, 12);
+            resultMsg += `\n🩸 *Dragon-Fang Rip:* The jagged edge causes ${resolvedTarget.name} to bleed!`;
+          }
+        } else if (weaponId === "mirroredged_rapier") {
+          if (Math.random() < 0.25) {
+            const extraDmg = Math.max(1, Math.floor(damage * 0.5));
+            resolvedTarget.stats.hp -= extraDmg;
+            resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
+            player.combatStats.damageDealt += extraDmg;
+            resultMsg += `\n⚡ *Mirror Double Strike:* An invisible second strike deals *${extraDmg}* extra damage!`;
+            if (resolvedTarget.stats.hp <= 0) resolvedTarget.justDied = true;
+          }
+        } else if (weaponId === "rusty_dagger") {
+          if (Math.random() < 0.10) {
+            applyStatusEffect(resolvedTarget, "bleed", 1, 5);
+            resultMsg += `\n🩸 *Rusty Scratch:* ${resolvedTarget.name} starts bleeding slightly!`;
+          }
+        } else if (weaponId === "iron_sword") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "bleed", 2, 8);
+            resultMsg += `\n🩸 *Laceration:* ${resolvedTarget.name} is bleeding!`;
+          }
+        } else if (weaponId === "steel_sabre") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(player, "haste", 2, 30);
+            resultMsg += `\n⚡ *Sabre Flow:* Player gains Haste! (+30% Speed)`;
+          }
+        } else if (weaponId === "crystal_staff" || weaponId === "arcane_wand") {
+          if (Math.random() < 0.20) {
+            player.stats.energy = Math.min(player.stats.maxEnergy, (player.stats.energy || 0) + 15);
+            resultMsg += `\n✨ *Mana Siphon:* Restored 15 energy!`;
+          }
+        } else if (weaponId === "greatsword") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "stun", 1);
+            resultMsg += `\n💫 *Heavy Impact:* ${resolvedTarget.name} is stunned!`;
+          }
+        }
+
+        // Glove status effects
+        if (glovesId === "voidtouched_grips") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "slow", 2, 30);
+            resultMsg += `\n🌌 *Void Phase:* ${resolvedTarget.name} is slowed by abyssal cold!`;
+          }
+        } else if (glovesId === "eelspike_gauntlets") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "stun", 1);
+            resultMsg += `\n⚡ *Eel-Spike Shock:* Static discharges, stunning ${resolvedTarget.name}!`;
+          }
+        }
 
         turnInfo.action = { name: "Basic Attack" };
         turnInfo.target = resolvedTarget;
@@ -3681,6 +3786,51 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? " (CRIT!)" : ""}`;
         turnInfo.damage = damage;
         turnInfo.target = target;
+
+        // 🛡️ Player Equipment Passive Triggers on Hit (Defensive)
+        const targetArmor = target.equipment?.armor?.id || target.equipment?.armor;
+        const targetShield = target.equipment?.off_hand?.id || target.equipment?.off_hand;
+        const targetHelm = target.equipment?.helmet?.id || target.equipment?.helmet;
+
+        if (targetShield === "aegis_of_the_abyss" || targetShield === "abyssal_bulwark" || targetShield === "mirror_shield_of_tartarus") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(target, "shield", 1, 50);
+            resultMsg += `\n🛡️ *Aegis Core Pulse:* ${target.name} absorbs energy into a Shield! (+50 Shield)`;
+          }
+        } else if (targetShield === "colossal_titan_shield" || targetShield === "dragonscale_kite_shield" || targetShield === "aegis_of_the_golem_king") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(target, "shield", 1, 35);
+            resultMsg += `\n🛡️ *Titan Shielding:* ${target.name} gains a Shield! (+35 Shield)`;
+          }
+        } else if (targetShield === "aegis_of_eternal_fire") {
+          if (Math.random() < 0.25) {
+            applyStatusEffect(enemy, "burn", 2, 15);
+            resultMsg += `\n🔥 *Melting Shield:* Heat radiating from Aegis of Eternal Fire sets *${enemy.name}* on fire!`;
+          }
+        }
+
+        if (targetArmor === "eelskin_hazard_suit") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(enemy, "stun", 1);
+            resultMsg += `\n⚡ *Static Discharge:* Electrical current cycles into *${enemy.name}*, stunning them!`;
+          }
+        } else if (targetArmor === "dragon_scale_armor" || targetArmor === "dragon_scale_mail") {
+          if (Math.random() < 0.20) {
+            const healAmt = Math.floor(damage * 0.25);
+            if (healAmt > 0) {
+              target.stats.hp = Math.min(target.stats.maxHp, target.stats.hp + healAmt);
+              target.currentHP = target.stats.hp;
+              resultMsg += `\n🩸 *Draconic Retribution:* Dragon scales convert kinetic energy, healing ${target.name} for *${healAmt}* HP!`;
+            }
+          }
+        }
+
+        if (targetHelm === "dragon_helm" || targetHelm === "great_wyrm_helm" || targetHelm === "helm_of_ancient_blood") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(enemy, "weak", 2, 20);
+            resultMsg += `\n😱 *Dragon Fear:* The terrifying helm weakens *${enemy.name}*!`;
+          }
+        }
 
         if (target.stats.hp <= 0) {
           await handleDeath(sock, target, sessionKey, enemy.name);
@@ -4374,6 +4524,8 @@ async function startJourney(sock, sessionKey) {
     const baseStats = progression.getBaseStats(p.jid, classId);
     const equipStats = inventorySystem.getEquipmentStats(p.jid);
     const level = progression.getLevel(p.jid);
+
+    p.equipment = inventorySystem.getEquipment(p.jid) || {};
 
     p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
     p.stats.maxHp = p.stats.hp;
