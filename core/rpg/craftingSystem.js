@@ -284,6 +284,24 @@ const CRAFTING_RECIPES = {
 };
 
 const BREWING_RECIPES = {
+    'repair_kit_basic': {
+        name: 'Basic Repair Kit', id: 'repair_kit_basic', category: 'BREWING',
+        desc: 'Restores +25 durability to one equipped item.',
+        ingredients: { 'iron_shard': 3, 'bandage': 2 },
+        result: { id: 'repair_kit_basic', usable: true }
+    },
+    'repair_kit_advanced': {
+        name: 'Advanced Repair Kit', id: 'repair_kit_advanced', category: 'BREWING',
+        desc: 'Restores +60 durability to one equipped item.',
+        ingredients: { 'refined_steel': 3, 'sharp_whetstone': 1 },
+        result: { id: 'repair_kit_advanced', usable: true }
+    },
+    'repair_kit_master': {
+        name: 'Master Repair Kit', id: 'repair_kit_master', category: 'BREWING',
+        desc: 'Fully restores durability to one equipped item.',
+        ingredients: { 'mythril_ore': 3, 'rare_enhancement_stone': 1 },
+        result: { id: 'repair_kit_master', usable: true }
+    },
     'mega_potion': {
         name: 'Mega Health Potion', id: 'mega_potion', category: 'BREWING',
         desc: 'A powerful brew that restores 250 HP.',

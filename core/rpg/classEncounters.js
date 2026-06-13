@@ -828,9 +828,9 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     const rankIndex = difficulty; 
     
     // Damage scaling: +12% per rank
-    const dmgMult = 1 + (rankIndex * 2.0);
+    const dmgMult = 1 + (rankIndex * 0.12);
     // Speed scaling: +10% per rank (base)
-    const spdMult = 1 + (rankIndex * 3.0);
+    const spdMult = 1 + (rankIndex * 0.10);
     // Party scaling: +20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
     

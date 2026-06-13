@@ -408,6 +408,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     if (!itemId) { 
         let msg = `━━━━━━━━━━━━━\n🛡️ EQUIPMENT \n┗━━━━━━━━━━━━━\n\n`;
         const slots = Object.values(inventorySystem.EQUIPMENT_SLOTS);
+        const durabilitySystem = require('../rpg/durabilitySystem');
         
         slots.forEach(slotName => { 
             const item = equipment[slotName];
@@ -415,7 +416,11 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
             const title = slotName.charAt(0).toUpperCase() + slotName.slice(1);
             if (item) { 
                 const itemInfo = lootSystem.getItemInfo(item.id);
-                msg += `${icon} *${title}*: ${itemInfo.name}\n   🆔 ID: \`${item.id}\`\n\n`;
+                const maxDur = item.maxDurability || 100;
+                const curDur = item.durability !== undefined ? item.durability : maxDur;
+                const durStr = `⚙️ ${Math.ceil(curDur)}/${maxDur}`;
+                const brokenStr = durabilitySystem.isBroken(item) ? " 💔 *[BROKEN]*" : "";
+                msg += `${icon} *${title}*: ${itemInfo.name}${brokenStr}\n   Condition: ${durStr}\n   🆔 ID: \`${item.id}\`\n\n`;
             } else { 
                 msg += `${icon} *${title}*: _Empty_\n\n`;
             }
@@ -442,7 +447,12 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     }
     
     const itemInfo = lootSystem.getItemInfo(result.equipped);
-    await sock.sendMessage(chatId, { text: `✅ Equipped ${itemInfo.name} to *${result.slot}* slot!` });
+    const updatedEquipment = inventorySystem.getEquipment(senderJid);
+    const equippedInstance = updatedEquipment[result.slot];
+    const durStr = equippedInstance && equippedInstance.durability !== undefined
+        ? ` (⚙️ ${equippedInstance.durability}/${equippedInstance.maxDurability})`
+        : "";
+    await sock.sendMessage(chatId, { text: `✅ Equipped *${itemInfo.name}* to *${result.slot}* slot!${durStr}` });
 }
 
 async function unequipItem(sock, chatId, senderJid, slot) { 
@@ -807,13 +817,17 @@ async function useItem(sock, chatId, senderJid, target) {
         let msg = `🧪 USE ITEM\n\n*Usage:* \`${getPrefix()}use <#bag_index>\`\n*Example:* \`${getPrefix()}use 1\`\n\n💡 *Tip:* _${tip}_`;
         return await sock.sendMessage(chatId, { text: msg });
     }
-    let itemId = target.toLowerCase().trim().replace(/ /g, '_');
-    if (!isNaN(target)) {
+    const parts = target.toLowerCase().trim().split(/\s+/);
+    const itemInput = parts[0];
+    const targetSlot = parts[1] || null;
+
+    let itemId = itemInput.replace(/ /g, '_');
+    if (!isNaN(itemInput)) {
         const invData = inventorySystem.formatInventory(senderJid);
-        const item = invData.items[parseInt(target) - 1];
+        const item = invData.items[parseInt(itemInput) - 1];
         if (item) itemId = item.id;
     }
-    const result = inventorySystem.useItem(senderJid, itemId);
+    const result = inventorySystem.useItem(senderJid, itemId, targetSlot);
     if (result.success) await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
     else await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
 }

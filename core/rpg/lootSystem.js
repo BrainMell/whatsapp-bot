@@ -675,6 +675,9 @@ const ITEM_DATABASE = {
     'void_grenade':    { name: 'Void Grenade', description: 'Deals 300 damage and reduces enemy DEF.', rarity: 'RARE', value: 8000, type: 'POTION', usable: true, effect: 'aoe_debuff_damage', effectValue: 300 },
     'cursed_bomb':     { name: 'Cursed Bomb', description: 'Deals 200 damage and slows all enemies.', rarity: 'RARE', value: 5000, type: 'POTION', usable: true, effect: 'aoe_slow_damage', effectValue: 200 },
     'bandage': { name: 'Bandage', description: 'Simple cloth used to wrap wounds.', rarity: 'COMMON', value: 50, type: 'MATERIAL' },
+    'repair_kit_basic': { name: 'Basic Repair Kit', description: 'Restores +25 durability to one equipped item.', rarity: 'COMMON', value: 400, type: 'CONSUMABLE', usable: true },
+    'repair_kit_advanced': { name: 'Advanced Repair Kit', description: 'Restores +60 durability to one equipped item.', rarity: 'UNCOMMON', value: 1200, type: 'CONSUMABLE', usable: true },
+    'repair_kit_master': { name: 'Master Repair Kit', description: 'Fully restores durability to one equipped item.', rarity: 'RARE', value: 3000, type: 'CONSUMABLE', usable: true },
     
     // --- SPECIALS ---
     'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },

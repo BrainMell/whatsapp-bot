@@ -3185,6 +3185,15 @@ async function performAction(sock, player, action, sessionKey) {
         resolvedTarget.stats.hp -= damage;
         resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
 
+        const durabilitySystem = require('./durabilitySystem');
+        durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
+        if (player.equipment?.off_hand) {
+            const offHandInfo = lootSystem.getItemInfo(player.equipment.off_hand.id);
+            if (offHandInfo && offHandInfo.type === 'EQUIPMENT' && (offHandInfo.slot === 'weapon' || offHandInfo.slot === 'main_hand' || offHandInfo.slot === 'off_hand')) {
+                durabilitySystem.applyWear(player, 'off_hand', { combatHistory: state.combatHistory });
+            }
+        }
+
         if (resolvedTarget.stats.hp > 0 && resolvedTarget.isBoss) {
           await checkBossPhase(sock, resolvedTarget, state.chatId);
         }
@@ -3783,6 +3792,9 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       } else {
         target.stats.hp -= damage;
         target.currentHP = Math.max(0, target.stats.hp);
+
+        const durabilitySystem = require('./durabilitySystem');
+        durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
         resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? " (CRIT!)" : ""}`;
         turnInfo.damage = damage;
         turnInfo.target = target;
@@ -4781,6 +4793,11 @@ async function processBranchChoice(sock, type, sessionKey) {
 async function executeEncounter(sock, groq, encounterType, sessionKey) {
   const state = getGameState(sessionKey);
   if (!state) return;
+
+  const durabilitySystem = require('./durabilitySystem');
+  for (const player of state.players) {
+      durabilitySystem.applySelfRepair(player);
+  }
   const rankData = DUNGEON_RANKS[state.dungeonRank];
   let encounter;
 
@@ -5718,6 +5735,17 @@ async function applyAbilityEffect(
   const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "multi_hit", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
   const isDamageType = damageKeywords.some((t) => effect.type && effect.type.includes(t));
   if (isDamageType && !effect.type.includes("heal_team")) {
+    if (!player.isEnemy) {
+        const durabilitySystem = require('./durabilitySystem');
+        durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
+        if (player.equipment?.off_hand) {
+            const lootSystem = require('./lootSystem');
+            const offHandInfo = lootSystem.getItemInfo(player.equipment.off_hand.id);
+            if (offHandInfo && offHandInfo.type === 'EQUIPMENT' && (offHandInfo.slot === 'weapon' || offHandInfo.slot === 'main_hand' || offHandInfo.slot === 'off_hand')) {
+                durabilitySystem.applyWear(player, 'off_hand', { combatHistory: state.combatHistory });
+            }
+        }
+    }
     const targets = getTargets(player, effect, targetIndex, chatId);
     for (const target of targets) {
       if (target.stats.hp <= 0) continue;
@@ -5742,7 +5770,14 @@ async function applyAbilityEffect(
       const baseStat = effect.damageType === "magic"
         ? (player.stats.mag || player.stats.atk || lvl * 10)
         : (player.stats.atk || lvl * 8);
-      const mult = Number(effect.multiplier) || 1.0;
+      let mult = Number(effect.multiplier) || 1.0;
+      if (!player.isEnemy && player.equipment?.main_hand) {
+          try {
+              const weaponSynergy = require('./weaponSynergy');
+              const synergyMult = weaponSynergy.getSkillSynergyMultiplier(player, effect, player.equipment.main_hand);
+              mult *= synergyMult;
+          } catch (e) {}
+      }
       // Bug 2 fix: compute raw power then route through calculateDamage() for
       // proper DEF mitigation, buffs, status modifiers, rank bonuses, variance.
       const rawPower = Math.floor(baseStat * mult);
@@ -5798,6 +5833,11 @@ async function applyAbilityEffect(
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
       totalDamage += damage;
+
+      if (!target.isEnemy) {
+          const durabilitySystem = require('./durabilitySystem');
+          durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
+      }
 
       if (target.stats.hp > 0 && target.isBoss) {
         await checkBossPhase(sock, target, chatId);
@@ -5898,7 +5938,15 @@ async function applyAbilityEffect(
       // Bug 2 fix (AOE block): route through calculateDamage() for DEF mitigation.
       const aoeDmgTypeStr = effect.damageType === "magic" ? "magic" : "physical";
       const aoeBaseStat = effect.damageType === "magic" ? player.stats.mag : player.stats.atk;
-      const aoeRawPower = Math.floor((aoeBaseStat || 0) * (effect.multiplier || 1.0));
+      let aoeMult = effect.multiplier || 1.0;
+      if (!player.isEnemy && player.equipment?.main_hand) {
+          try {
+              const weaponSynergy = require('./weaponSynergy');
+              const synergyMult = weaponSynergy.getSkillSynergyMultiplier(player, effect, player.equipment.main_hand);
+              aoeMult *= synergyMult;
+          } catch (e) {}
+      }
+      const aoeRawPower = Math.floor((aoeBaseStat || 0) * aoeMult);
       const aoeDmgResult = calculateDamage(player, target, aoeRawPower, aoeDmgTypeStr, aoeDmgTypeStr.toUpperCase(), chatId);
 
       if (aoeDmgResult.noDamageReason) {
@@ -5927,6 +5975,11 @@ async function applyAbilityEffect(
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
       totalDamage += damage;
+
+      if (!target.isEnemy) {
+          const durabilitySystem = require('./durabilitySystem');
+          durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
+      }
 
       if (target.stats.hp > 0 && target.isBoss) {
         await checkBossPhase(sock, target, chatId);

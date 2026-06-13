@@ -335,6 +335,22 @@ function getEquipment(userId) {
         delete user.equipment.weapon;
         economy.saveUser(userId);
     }
+
+    // 💡 Durability Migration: Initialize durability for already equipped gear
+    let needsSave = false;
+    for (const [slot, item] of Object.entries(user.equipment)) {
+        if (item && item.durability === undefined) {
+            const durabilitySystem = require('./durabilitySystem');
+            const durProfile = durabilitySystem.getDurabilityProfile(item.id, item, lootSystem.getItemInfo(item.id));
+            item.maxDurability = durProfile.max;
+            item.durability = durProfile.max;
+            item.durabilityTraits = durProfile.traits;
+            needsSave = true;
+        }
+    }
+    if (needsSave) {
+        economy.saveUser(userId);
+    }
     
     return user.equipment;
 }
@@ -461,8 +477,16 @@ async function equipItem(userId, itemId, slot) {
         await addItem(userId, oldItem.id, 1, oldItem);
     }
     
+    const durabilitySystem = require('./durabilitySystem');
+    const durProfile = durabilitySystem.getDurabilityProfile(targetItemId, itemToEquip, itemInfo);
+    
     equipment[slotName] = { ...itemToEquip };
     delete equipment[slotName].quantity;
+    
+    // Seed durability
+    equipment[slotName].maxDurability = durProfile.max;
+    equipment[slotName].durability = durProfile.max;
+    equipment[slotName].durabilityTraits = durProfile.traits;
     
     await economy.saveUser(userId);
     
@@ -502,7 +526,14 @@ async function unequipItem(userId, slot) {
         };
     }
 
-    const result = await addItem(userId, item.id, 1, item);
+    // Strip durability before merging back into bag stack
+    const itemToBag = { ...item };
+    delete itemToBag.durability;
+    delete itemToBag.maxDurability;
+    delete itemToBag.durabilityTraits;
+    delete itemToBag.warnedLow;
+
+    const result = await addItem(userId, itemToBag.id, 1, itemToBag);
     
     if (!result.success) {
         return result;
@@ -522,14 +553,23 @@ function getEquipmentStats(userId) {
     const equipment = getEquipment(userId);
     if (!equipment) return {};
     
+    const durabilitySystem = require('./durabilitySystem');
+    const weaponSynergy = require('./weaponSynergy');
+    const userClass = economy.getUserClass(userId);
+    const player = userClass ? { class: userClass } : null;
+    
     const totalStats = {
         hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0
     };
     
     for (const [slot, item] of Object.entries(equipment)) {
         if (item && item.stats) {
+            const condition = durabilitySystem.getConditionMultiplier(item);
+            const affinity = player ? weaponSynergy.getRoleAffinityMultiplier(player, item) : 1.0;
+            const mult = condition * affinity;
+            
             for (const [stat, value] of Object.entries(item.stats)) {
-                totalStats[stat] = (totalStats[stat] || 0) + value;
+                totalStats[stat] = (totalStats[stat] || 0) + Math.floor(value * mult);
             }
         }
     }
@@ -674,7 +714,7 @@ function sellItem(userId, itemId, quantity = 1) {
 // 🛠️ ITEM USAGE
 // ==========================================
 
-function useItem(userId, rawItemId) {
+function useItem(userId, rawItemId, targetSlot = null) {
     const inventory = getInventory(userId);
     const progression = require('./progression');
     const sheet = progression.getCharacterSheet(userId);
@@ -694,6 +734,47 @@ function useItem(userId, rawItemId) {
     }
 
     const itemInfo = lootSystem.getItemInfo(itemId);
+    
+    // 🆕 Repair Kit Handling
+    if (itemId.startsWith('repair_kit')) {
+        if (!targetSlot) {
+            const prefix = require('../../botConfig').getPrefix();
+            return { success: false, message: `❌ Please specify which slot to repair!\nExample: \`${prefix}use ${itemId} main_hand\` or \`${prefix}use <#bag_index> main_hand\`` };
+        }
+        
+        const equipment = getEquipment(userId);
+        const slotName = EQUIPMENT_SLOTS[targetSlot.toUpperCase()];
+        if (!slotName || !equipment[slotName]) {
+            return { success: false, message: `❌ You do not have anything equipped in the ${targetSlot} slot!` };
+        }
+        
+        const item = equipment[slotName];
+        if (item.durability === undefined || item.durability === null) {
+            return { success: false, message: `❌ That item does not have durability!` };
+        }
+        
+        if (item.durability >= item.maxDurability) {
+            return { success: false, message: `❌ That item is already at full durability!` };
+        }
+        
+        let repairAmount = 25;
+        if (itemId.includes('advanced')) repairAmount = 60;
+        if (itemId.includes('master')) repairAmount = 9999;
+        
+        const oldDur = item.durability;
+        item.durability = Math.min(item.maxDurability, item.durability + repairAmount);
+        item.durability = Math.round(item.durability * 10) / 10;
+        delete item.warnedLow;
+        
+        removeItem(userId, itemId, 1);
+        economy.saveUser(userId);
+        
+        return {
+            success: true,
+            message: `repaired *${item.name}* (${slotName}) for +${Math.round(item.durability - oldDur)} durability! (${Math.ceil(item.durability)}/${item.maxDurability})`
+        };
+    }
+
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
         // Give specific guidance based on item type
         if (itemId === 'ascension_stone' || itemId === 'evolution_stone') {

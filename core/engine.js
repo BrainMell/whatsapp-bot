@@ -217,6 +217,7 @@ const inventorySystem = require('./rpg/inventorySystem');
 const lootSystem = require('./rpg/lootSystem');
 const progressionCommands = require('./commands/progressionCommands');
 const shopCommands = require('./commands/shopCommands');
+const repairCommands = require('./commands/repairCommands');
 const skillCommands = require('./commands/skillCommands');
 const classCommands = require('./commands/classCommands');
 const pvpSystem = require('./rpg/pvpSystem');
@@ -4684,6 +4685,26 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderJid,
                         senderName
                       );
+                      return;
+                    }
+
+                    // .j blacksmith
+                    if (primaryCmd === "blacksmith") {
+                      await repairCommands.displayBlacksmith(sock, chatId, senderJid);
+                      return;
+                    }
+
+                    // .j repair
+                    if (primaryCmd === "repair") {
+                      const target = cmdArgs.slice(1).join(" ");
+                      await repairCommands.repair(sock, chatId, senderJid, target);
+                      return;
+                    }
+
+                    // .j inspect
+                    if (primaryCmd === "inspect") {
+                      const target = cmdArgs.slice(1).join(" ");
+                      await repairCommands.inspectItem(sock, chatId, senderJid, target);
                       return;
                     }
 
