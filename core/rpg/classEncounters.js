@@ -1025,14 +1025,14 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
         // C rank
         dmgFactor = 0.18; hpFactor = 0.22; hpQuadFactor = 0.004;
     } else if (rankIndex <= 13.0) {
-        // B rank
-        dmgFactor = 0.22; hpFactor = 0.28; hpQuadFactor = 0.006;
+        // B rank - hpFactor adjusted down for new progression system
+        dmgFactor = 0.22; hpFactor = 0.20; hpQuadFactor = 0.003;
     } else if (rankIndex <= 25.0) {
-        // A rank
-        dmgFactor = 0.26; hpFactor = 0.34; hpQuadFactor = 0.008;
+        // A rank - hpFactor adjusted down for new progression system
+        dmgFactor = 0.26; hpFactor = 0.24; hpQuadFactor = 0.004;
     } else {
-        // S rank and above
-        dmgFactor = 0.30; hpFactor = 0.40; hpQuadFactor = 0.010;
+        // S rank and above - hpFactor adjusted down for new progression system
+        dmgFactor = 0.30; hpFactor = 0.28; hpQuadFactor = 0.0045;
     }
 
     const dmgMult = 1 + (rankIndex * dmgFactor);
@@ -1118,7 +1118,12 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     
     scaled.stats = { ...boss.stats };
     
-    scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * 0.3)));
+    let bossHpFactor = 0.3;
+    if (rankIndex > 25.0) bossHpFactor = 0.16; // S, SS, SSS
+    else if (rankIndex > 13.0) bossHpFactor = 0.22; // A
+    else if (rankIndex > 7.0) bossHpFactor = 0.26; // B
+
+    scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * bossHpFactor)));
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     

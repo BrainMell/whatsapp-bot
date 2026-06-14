@@ -2040,6 +2040,7 @@ function calculateDamage(
   type = "physical",
   element = "PHYSICAL",
   chatId = null,
+  isAbility = false,
 ) {
   // 🛡️ Guard against NaN
   let damage = Number(power) || 0;
@@ -2232,14 +2233,15 @@ function calculateDamage(
   }
 
   // 💡 SS+ DUNGEON ENEMY MINIMUM DAMAGE FLOOR
-  // Enemies in SS/SSS dungeons must always deal at least 3% of target's max HP per hit,
+  // Enemies in SS/SSS dungeons must always deal at least 3% (or 5% for abilities) of target's max HP per hit,
   // regardless of how high the player's DEF/dmgReduction is.
   if (attacker.isEnemy && !target.isEnemy) {
     const dungeonRankOfAttacker = attacker.dungeonRank || attacker.rank || null;
     const highRankSet = ['SS', 'SSS'];
     if (highRankSet.includes(dungeonRankOfAttacker)) {
       const targetMaxHp = target.stats.maxHp || target.stats.hp;
-      const minDmg = Math.floor(targetMaxHp * 0.03);
+      const minDmgPct = isAbility ? 0.05 : 0.03;
+      const minDmg = Math.floor(targetMaxHp * minDmgPct);
       if (damage < minDmg) damage = minDmg;
     }
   }
@@ -2445,7 +2447,7 @@ function createEnemy(enemyType, level = 1) {
     isEnemy: true,
     loot: template.loot,
     xp: Math.floor(template.xp * (1 + (level - 1) * 0.3)),
-    gold: Math.floor(template.gold * 15 * (1 + (level - 1) * 0.8)),
+    gold: Math.floor(template.gold * 3 * (1 + (level - 1) * 0.8)),
   };
   return enemy;
 }
@@ -2480,7 +2482,7 @@ function createBoss(bossType, level = 1) {
     isBoss: true,
     loot: template.loot,
     xp: Math.floor(template.xp * (1 + (level - 1) * 0.4)),
-    gold: Math.floor(template.gold * 30 * (1 + (level - 1) * 1.0)),
+    gold: Math.floor(template.gold * 6 * (1 + (level - 1) * 1.0)),
   };
 
   return boss;
@@ -2528,7 +2530,7 @@ function generateTrapEncounter(chatId) {
         difficulty: trap.difficulty,
         success: {
           description: "You jump out of the way just in time!",
-          gold: 50,
+          gold: 10,
         },
         failure: {
           description: `You were too slow!`,
@@ -2557,7 +2559,7 @@ function generateTrapEncounter(chatId) {
         success: {
           description:
             "You successfully disarmed the trap! Found some scrap gold.",
-          gold: 200,
+          gold: 40,
         },
         failure: {
           description: `It blew up in your face!`,
@@ -2574,13 +2576,13 @@ function generatePuzzleEncounter(chatId) {
     {
       name: "Ancient Riddle",
       icon: "📜",
-      reward: 300 + tier * 150,
+      reward: 60 + tier * 30,
       difficulty: 15 + tier,
     },
     {
       name: "Magic Lock",
       icon: "🔐",
-      reward: 500 + tier * 200,
+      reward: 100 + tier * 40,
       difficulty: 16 + tier,
     },
   ];
@@ -2642,8 +2644,8 @@ function generateMerchantEncounter(chatId) {
 function generateTreasureEncounter(chatId) {
   const tier = getCurrentTier(chatId);
   const treasureTypes = [
-    { name: "Ancient Chest", gold: 1000 + tier * 500, damage: 50 + tier * 10 },
-    { name: "Cursed Relic", gold: 5000 + tier * 1000, damage: 100 + tier * 20 },
+    { name: "Ancient Chest", gold: 200 + tier * 100, damage: 50 + tier * 10 },
+    { name: "Cursed Relic", gold: 1000 + tier * 200, damage: 100 + tier * 20 },
   ];
 
   const treasure =
@@ -2690,7 +2692,7 @@ function generateEventEncounter(chatId) {
           outcome: {
             description: "The altar drinks your life force and grants power.",
             damage: 50,
-            gold: 1000,
+            gold: 200,
           },
         },
         {
@@ -2701,7 +2703,7 @@ function generateEventEncounter(chatId) {
           success: {
             description: "The gods smile upon you.",
             heal: 100,
-            gold: 500,
+            gold: 100,
           },
           failure: { description: "The gods are silent.", damage: 20 },
         },
@@ -2996,14 +2998,20 @@ async function processCombatTurn(sock, sessionKey) {
         const effectName = activeEffect.name || activeEffect.type;
         const stylishMsg = `${statusPrefix}❄️ *STATUS EFFECT ACTIVE* ❄️\n━━━━━━━━━━━━━━━━\n${activeActor.icon || activeActor.class?.icon || "👤"} *${activeActor.name}* is **${effectName.toUpperCase()}**!\n\n${effectIcon} _Unable to act this turn._\n━━━━━━━━━━━━━━━━`;
 
-        await sock.sendMessage(state.chatId, {
-          text: stylishMsg,
-        });
+        try {
+          await sock.sendMessage(state.chatId, {
+            text: stylishMsg,
+          });
+        } catch (msgErr) {
+          console.error("Failed to send skip status message:", msgErr.message);
+        }
         await nextTurn(
           sock,
           null, // skip round image generation
           sessionKey,
         );
+        // Wait a brief moment so skipped turns don't spam instantly and crash
+        await new Promise((r) => setTimeout(r, state.solo ? 1000 : 2500));
         continue;
       }
 
@@ -4073,7 +4081,7 @@ async function endCombat(sock, victory, sessionKey) {
         }
       }
       return sum + (isNaN(goldVal) ? 0 : goldVal);
-    }, 0) * 15; // Increased by 15x as requested
+    }, 0) * 3; // Reduced to 20% of previous 15x multiplier
 
   // Distribute rewards
   const alivePlayers = state.players.filter((p) => !p.isDead);
@@ -5360,9 +5368,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
     DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
   const _baseCompletionXP = Math.floor((_completionRankData.xpMult || 1) * 100);
   
-  // Scale bonus gold with rank
-  const rankGoldMap = { F: 500, E: 800, D: 1200, C: 1800, B: 2600, A: 4000, S: 6000, SS: 8500, SSS: 12000, DRAGON: 5000 };
-  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 500;
+  // Scale bonus gold with rank (reduced to 20% of previous values)
+  const rankGoldMap = { F: 100, E: 160, D: 240, C: 360, B: 520, A: 800, S: 1200, SS: 1700, SSS: 2400, DRAGON: 1000 };
+  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 100;
   
   for (const player of state.players) {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
@@ -5806,7 +5814,7 @@ async function applyAbilityEffect(
       // Bug 2 fix: compute raw power then route through calculateDamage() for
       // proper DEF mitigation, buffs, status modifiers, rank bonuses, variance.
       const rawPower = Math.floor(baseStat * mult);
-      const dmgResult = calculateDamage(player, target, rawPower, damageTypeStr, damageTypeStr.toUpperCase(), chatId);
+      const dmgResult = calculateDamage(player, target, rawPower, damageTypeStr, damageTypeStr.toUpperCase(), chatId, true);
       // Restore crit stat after the AOE crit penalty was applied for this hit
       if (_tIdx > 0) player.stats.crit = _originalCrit;
 
@@ -5974,7 +5982,7 @@ async function applyAbilityEffect(
           } catch (e) {}
       }
       const aoeRawPower = Math.floor((aoeBaseStat || 0) * aoeMult);
-      const aoeDmgResult = calculateDamage(player, target, aoeRawPower, aoeDmgTypeStr, aoeDmgTypeStr.toUpperCase(), chatId);
+      const aoeDmgResult = calculateDamage(player, target, aoeRawPower, aoeDmgTypeStr, aoeDmgTypeStr.toUpperCase(), chatId, true);
 
       if (aoeDmgResult.noDamageReason) {
         msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
@@ -6343,6 +6351,7 @@ async function applyAbilityEffect(
             dType,
             element,
             chatId,
+            true,
           );
           if (!wasEvaded) {
             target.stats.hp -= damage;
