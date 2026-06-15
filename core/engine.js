@@ -4363,6 +4363,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     const mentionsBot = rawTxt.toLowerCase().includes(botJid.split("@")[0]) ||
                       (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).includes(botJid);
                     const cachedSize = getCachedGroupSize(chatId);
+                    const isLargeGroup = cachedSize !== null && cachedSize >= LARGE_GROUP_THRESHOLD;
+                    const metadataAlreadyCached = groupMetadataCache.has(chatId);
                     const settings = getGroupSettings(chatId);
                     const hasActiveRankLock = settings.lockMode?.startsWith('rank:');
                     const shouldFetchEarly = !isLargeGroup || looksLikeCommand || mentionsBot || metadataAlreadyCached || hasActiveRankLock;
