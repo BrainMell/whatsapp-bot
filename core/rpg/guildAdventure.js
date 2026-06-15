@@ -5495,7 +5495,18 @@ const handleCombatAction = async (
 
   const player = state.players.find((p) => p.jid === senderJid);
   if (!player || player.isDead) {
-    return "❌ You can't act!";
+    // If solo and player is dead but state wasn't cleaned up (checkCombatEnd failed
+    // silently after an enemy kill), force-end combat so the player isn't stuck.
+    if (state.solo && state.inCombat) {
+      state.inCombat = false;
+      state.combatProcessing = false;
+      const sessionKey = chatId + '_' + senderJid;
+      endCombat(sock, false, sessionKey).catch(() => {});
+      return "💀 *You have fallen!* Quest ended.";
+    }
+    return player?.isDead
+      ? "💀 *You have fallen in battle!* Wait for your allies or the battle to end."
+      : "❌ You can't act!";
   }
 
   const current = state.activeCombatant;

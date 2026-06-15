@@ -61,32 +61,33 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
                 captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
                 
-                // Add Gear and Durability info to image caption
+                // Gear list — name + rarity mark + critical durability warning only
+                // (Full durability bar renders in the profile image card via durXxx fields in cardData)
                 captionMsg += `\n*GEAR:*\n`;
                 const captionEquipped = [];
                 if (equipment) {
-                    for (const [slot, item] of Object.entries(equipment)) { 
-                        if (item) { 
+                    for (const [slot, item] of Object.entries(equipment)) {
+                        if (item) {
                             const itemInfo = lootSystem.getItemInfo(item.id);
                             if (itemInfo) {
-                                let durStr = '';
-                                if (item.durability !== undefined && item.maxDurability !== undefined) {
-                                    const pct = Math.max(0, Math.min(100, Math.round((item.durability / item.maxDurability) * 100)));
-                                    let block = '🟩';
-                                    if (pct <= 20) block = '🟥';
-                                    else if (pct <= 50) block = '🟨';
-                                    const filled = Math.max(0, Math.min(5, Math.round(pct / 20)));
-                                    durStr = ` (${block.repeat(filled)}${'⬜'.repeat(5 - filled)} ${pct}%)`;
+                                let condLabel = '';
+                                if (item.durability !== undefined && item.maxDurability) {
+                                    const pct = Math.round((item.durability / item.maxDurability) * 100);
+                                    if (pct <= 0)      condLabel = ' 💔 *BROKEN*';
+                                    else if (pct < 25) condLabel = ` 🔴 ${pct}%`;
+                                    else if (pct < 50) condLabel = ` 🟠 ${pct}%`;
                                 }
+                                const RARITY_MARK = { UNCOMMON: ' ✦', RARE: ' ✦✦', EPIC: ' ✦✦✦', LEGENDARY: ' ★', MYTHIC: ' ★★' };
+                                const rarityMark = RARITY_MARK[itemInfo.rarity?.toUpperCase()] || '';
                                 const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                                captionEquipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${durStr}`);
+                                captionEquipped.push(`${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${rarityMark}${condLabel}`);
                             }
                         }
                     }
                 }
-                if (captionEquipped.length > 0) { 
+                if (captionEquipped.length > 0) {
                     captionMsg += captionEquipped.join('\n') + '\n';
-                } else { 
+                } else {
                     captionMsg += `_None equipped_\n`;
                 }
 

@@ -72,7 +72,19 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         gearRing: equipment?.ring ? (lootSystem.getItemInfo(equipment.ring.id)?.name || "None") : "None",
         gearAmulet: equipment?.amulet ? (lootSystem.getItemInfo(equipment.amulet.id)?.name || "None") : "None",
         gearCloak: equipment?.cloak ? (lootSystem.getItemInfo(equipment.cloak.id)?.name || "None") : "None",
-        gearGloves: equipment?.gloves ? (lootSystem.getItemInfo(equipment.gloves.id)?.name || "None") : "None"
+        gearGloves: equipment?.gloves ? (lootSystem.getItemInfo(equipment.gloves.id)?.name || "None") : "None",
+
+        // Durability percent per slot (0-100), -1 = slot empty/no item
+        // Go renderer uses these to draw a vertical fill bar behind each gear slot box.
+        durMainHand:  equipment?.main_hand?.maxDurability ? Math.round((equipment.main_hand.durability  / equipment.main_hand.maxDurability)  * 100) : -1,
+        durOffHand:   equipment?.off_hand?.maxDurability  ? Math.round((equipment.off_hand.durability   / equipment.off_hand.maxDurability)   * 100) : -1,
+        durArmor:     equipment?.armor?.maxDurability     ? Math.round((equipment.armor.durability      / equipment.armor.maxDurability)      * 100) : -1,
+        durHelmet:    equipment?.helmet?.maxDurability    ? Math.round((equipment.helmet.durability     / equipment.helmet.maxDurability)     * 100) : -1,
+        durBoots:     equipment?.boots?.maxDurability     ? Math.round((equipment.boots.durability      / equipment.boots.maxDurability)      * 100) : -1,
+        durRing:      equipment?.ring?.maxDurability      ? Math.round((equipment.ring.durability       / equipment.ring.maxDurability)       * 100) : -1,
+        durAmulet:    equipment?.amulet?.maxDurability    ? Math.round((equipment.amulet.durability     / equipment.amulet.maxDurability)     * 100) : -1,
+        durCloak:     equipment?.cloak?.maxDurability     ? Math.round((equipment.cloak.durability      / equipment.cloak.maxDurability)      * 100) : -1,
+        durGloves:    equipment?.gloves?.maxDurability    ? Math.round((equipment.gloves.durability     / equipment.gloves.maxDurability)     * 100) : -1,
     };
 }
 

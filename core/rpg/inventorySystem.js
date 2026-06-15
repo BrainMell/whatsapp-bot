@@ -563,12 +563,21 @@ function getEquipmentStats(userId) {
     };
     
     for (const [slot, item] of Object.entries(equipment)) {
-        if (item && item.stats) {
+        if (!item) continue;
+
+        // Prefer stats on the item instance; fall back to the item database.
+        // Fixes: items equipped before stat-hydration had empty .stats = {}
+        // making all equipment bonuses silently show as 0 on the stats window.
+        let statsToApply = (item.stats && Object.keys(item.stats).length > 0)
+            ? item.stats
+            : lootSystem.getItemInfo(item.id)?.stats;
+
+        if (statsToApply && Object.keys(statsToApply).length > 0) {
             const condition = durabilitySystem.getConditionMultiplier(item);
             const affinity = player ? weaponSynergy.getRoleAffinityMultiplier(player, item) : 1.0;
             const mult = condition * affinity;
-            
-            for (const [stat, value] of Object.entries(item.stats)) {
+
+            for (const [stat, value] of Object.entries(statsToApply)) {
                 totalStats[stat] = (totalStats[stat] || 0) + Math.floor(value * mult);
             }
         }

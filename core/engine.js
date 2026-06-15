@@ -950,7 +950,10 @@ async function startBot(configInstance) {
         groupSettings.set(chatId, {
           antilink: false,
           antilinkAction: "delete",
-          welcomeMessage: null,
+          welcomeEnabled: true,   // welcome on by default
+          welcomeMessage: null,   // null = use built-in default message
+          byeEnabled: false,      // goodbye off by default (opt-in)
+          byeMessage: null,       // null = use built-in default message
           antispam: false,
           recording: false,
           blacklist: [],
@@ -7887,6 +7890,31 @@ Usage: ${newUsage}/5${warningText}`;
 
                     return await sock.sendMessage(chatId, {
                       text: BOT_MARKER + `✅ Goodbye message updated!`,
+                    });
+                  }
+
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} greetings`) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    }
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    }
+                    const settings = getGroupSettings(chatId);
+                    const welStatus  = settings.welcomeEnabled === false ? "❌ OFF" : "✅ ON";
+                    const byeStatus  = settings.byeEnabled === false || settings.byeEnabled === undefined ? "❌ OFF" : "✅ ON";
+                    const welMsg     = settings.welcomeMessage || "(default)";
+                    const byeMsg     = settings.byeMessage     || "(default)";
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER +
+                        `*👋 Group Greetings*\n\n` +
+                        `*Welcome:* ${welStatus}\n_${welMsg}_\n\n` +
+                        `*Goodbye:* ${byeStatus}\n_${byeMsg}_\n\n` +
+                        `*Commands:*\n` +
+                        `\`${botConfig.getPrefix()} welcome on/off\`\n` +
+                        `\`${botConfig.getPrefix()} setwelcome <text>\`\n` +
+                        `\`${botConfig.getPrefix()} bye on/off\`\n` +
+                        `\`${botConfig.getPrefix()} setbye <text>\``,
                     });
                   }
 
