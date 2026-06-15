@@ -957,10 +957,83 @@ async function startBot(configInstance) {
           antispam: false,
           recording: false,
           blacklist: [],
+          rankLadder: [],
+          memberRanks: {},
+          lockMode: "open",
+          adminTitles: {},
         });
         saveGroupSettings();
       }
       return groupSettings.get(chatId);
+    }
+
+    // Returns the rank level for a JID, 0 if unranked.
+    function getMemberRankLevel(chatId, jid) {
+      const settings = getGroupSettings(chatId);
+      const assigned = settings.memberRanks?.[jid];
+      if (assigned) return assigned;
+
+      // If not explicitly assigned, check if they inherit rank authority automatically:
+      // - WhatsApp superadmin -> auto-assigned to highest rank in the group
+      // - WhatsApp admin -> auto-assigned to the second-highest rank if unranked
+      if (!settings.rankLadder || settings.rankLadder.length === 0) return 0;
+
+      const meta = groupMetadataCache.get(chatId);
+      if (meta && meta.participants) {
+        const p = meta.participants.find(x => (x.id || x) === jid);
+        if (p) {
+          if (p.admin === 'superadmin') {
+            return getTopRankLevel(chatId);
+          } else if (p.admin === 'admin') {
+            const ladder = [...settings.rankLadder].sort((a, b) => b.level - a.level);
+            if (ladder.length > 1) {
+              return ladder[1].level; // second-highest
+            } else if (ladder.length === 1) {
+              return ladder[0].level; // fallback if only 1 rank exists
+            }
+          }
+        }
+      }
+      return 0;
+    }
+
+    // Returns the rank object {level, name, icon, color} or null.
+    function getMemberRankObj(chatId, jid) {
+      const settings = getGroupSettings(chatId);
+      const level = getMemberRankLevel(chatId, jid);
+      if (!level || !settings.rankLadder?.length) return null;
+      return settings.rankLadder.find(r => r.level === level) || null;
+    }
+
+    // Highest rank level defined in this group's ladder.
+    function getTopRankLevel(chatId) {
+      const settings = getGroupSettings(chatId);
+      if (!settings.rankLadder?.length) return 0;
+      return Math.max(...settings.rankLadder.map(r => r.level));
+    }
+
+    // Can actor act on target? Returns true if actor outranks target.
+    // isOwner / globalMod always return true.
+    function canActOnMember(chatId, actorJid, targetJid, actorIsOwner, actorIsGlobalMod) {
+      if (actorIsOwner || actorIsGlobalMod) return true;
+      const actorLevel  = getMemberRankLevel(chatId, actorJid);
+      const targetLevel = getMemberRankLevel(chatId, targetJid);
+      return actorLevel > targetLevel;
+    }
+
+    // Format a rank badge for display in messages.
+    function formatRankBadge(rank) {
+      if (!rank) return '👤 *Unranked*';
+      return `${rank.icon} *${rank.name}* _(Rank ${rank.level})_`;
+    }
+
+    // Check if sender can MANAGE the rank system in this group.
+    // Must be owner, global mod, or WA superadmin.
+    function canManageRanks(chatId, senderJid, isOwner, isGlobalMod, groupMetadata) {
+      if (isOwner || isGlobalMod) return true;
+      if (!groupMetadata?.participants) return false;
+      const p = groupMetadata.participants.find(x => (x.id || x) === senderJid);
+      return p?.admin === 'superadmin';
     }
 
     function loadSupportUsage() {
@@ -3977,6 +4050,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               .replace(/@group/gi, groupName)
               .replace(/{group}/gi, groupName);
 
+            // After welcomeText is built, append rank badge if any of the new members has a rank
+            for (const memberJid of members) {
+              const newMemberRank = getMemberRankObj(groupId, memberJid);
+              if (newMemberRank) {
+                const title = settings.adminTitles?.[memberJid];
+                const phone = memberJid.split('@')[0];
+                welcomeText += `\n\n@${phone} Rank:\n${newMemberRank.icon} *${newMemberRank.name}*${title ? `\n🏷️ _${title}_` : ''}`;
+              }
+            }
+
             await sock.sendMessage(groupId, {
               text: welcomeText,
               mentions: mentionedMembers,
@@ -4280,10 +4363,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     const mentionsBot = rawTxt.toLowerCase().includes(botJid.split("@")[0]) ||
                       (m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).includes(botJid);
                     const cachedSize = getCachedGroupSize(chatId);
-                    const isLargeGroup = cachedSize !== null && cachedSize >= LARGE_GROUP_THRESHOLD;
-                    const metadataAlreadyCached = !!groupMetadataCache.get(chatId);
-
-                    const shouldFetchEarly = !isLargeGroup || looksLikeCommand || mentionsBot || metadataAlreadyCached;
+                    const settings = getGroupSettings(chatId);
+                    const hasActiveRankLock = settings.lockMode?.startsWith('rank:');
+                    const shouldFetchEarly = !isLargeGroup || looksLikeCommand || mentionsBot || metadataAlreadyCached || hasActiveRankLock;
 
                     if (shouldFetchEarly) {
                       try {
@@ -4525,6 +4607,30 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   const isSelf = !!m.key.fromMe || senderJid === botJid || (botLid && senderJid === botLid);
                   if (isSelf) return;
+
+                  // ── RANK LOCK ENFORCEMENT ──────────────────────────────────────
+                  // If the group has an active rank lock, delete messages from under-ranked members.
+                  if (isGroupChat) {
+                    const settings = getGroupSettings(chatId);
+                    if (settings.lockMode?.startsWith('rank:')) {
+                      const minLevel = parseInt(settings.lockMode.split(':')[1]);
+                      const memberLevel = getMemberRankLevel(chatId, senderJid);
+                      const isWaAdmin = senderIsAdmin;
+
+                      // WA admins and ranked members above threshold pass through
+                      if (!isWaAdmin && !isOwner && !isGlobalMod(senderJid) && memberLevel < minLevel) {
+                        if (botIsAdmin) {
+                          try {
+                            await sock.sendMessage(chatId, { delete: m.key });
+                          } catch (e) {
+                            console.error("❌ Delete under-ranked message failed:", e.message);
+                          }
+                        }
+                        return; // Don't process further
+                      }
+                    }
+                  }
+                  // ─────────────────────────────────────────────────────────────────
 
                   // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
                   const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
@@ -7340,6 +7446,20 @@ Usage: ${newUsage}/5${warningText}`;
 
                     const target = getMentionOrReply(m);
                     if (target) {
+                      // 🛡️ Rank protection: can't kick someone of equal or higher rank
+                      const settings = getGroupSettings(chatId);
+                      if (settings.rankLadder?.length > 0) {
+                        if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                          const targetRank = getMemberRankObj(chatId, target);
+                          const targetPhone = target.split('@')[0];
+                          return reply(
+                            `🚫 *Rank protection triggered.*\n\n` +
+                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot remove them.`,
+                            { mentions: [target] }
+                          );
+                        }
+                      }
+
                       try {
                         await sock.groupParticipantsUpdate(
                           chatId,
@@ -7551,48 +7671,96 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // `${botConfig.getPrefix().toLowerCase()}` lock - only admins can send messages
+                  // `.g glock` (with rank and open modes)
                   if (
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} lock` ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock`
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} glock rank`) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock open`
                   ) {
+                    if (!isGroupChat) return reply('Groups only.');
                     if (!canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `❌ Admins only.`,
                       });
                     }
-                    if (!botIsAdmin) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ I need to be an admin to lock the group.",
-                      });
+                    const settings = getGroupSettings(chatId);
+                    const P = botConfig.getPrefix().toLowerCase();
+
+                    // .g glock (no args) → WA-level lock, existing behaviour
+                    if (lowerTxt === `${P} glock`) {
+                      if (!botIsAdmin) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ I need to be an admin to lock the group.",
+                        });
+                      }
+                      try {
+                        await sock.groupSettingUpdate(chatId, "announcement");
+                        settings.lockMode = 'locked';
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            "🔒 *GROUP LOCKED*\n\nOnly admins can now send messages in this group.\n_Use `" + P + " glock rank <N>` for rank-based access instead._",
+                        });
+                      } catch (err) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌❌ Failed to lock group: " + err.message,
+                        });
+                      }
+                      return;
                     }
-                    try {
-                      await sock.groupSettingUpdate(chatId, "announcement");
+
+                    // .g glock open
+                    if (lowerTxt === `${P} glock open`) {
+                      if (botIsAdmin) {
+                        try {
+                          await sock.groupSettingUpdate(chatId, "not_announcement");
+                        } catch (err) {}
+                      }
+                      settings.lockMode = 'open';
+                      saveGroupSettings();
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "🔒 *GROUP LOCKED*\n\nOnly admins can now send messages in this group.",
+                        text: BOT_MARKER + "🔓 *GROUP OPEN* — All members can send messages.",
                       });
-                    } catch (err) {
-                      await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌❌ Failed to lock group: " +
-                          err.message,
-                      });
+                      return;
+                    }
+
+                    // .g glock rank <N>
+                    const rankMatch = lowerTxt.match(/glock rank (\d+)/);
+                    if (rankMatch) {
+                      const minLevel = parseInt(rankMatch[1]);
+                      const ladder   = settings.rankLadder || [];
+                      if (!ladder.length) {
+                        return reply(`❌ No rank ladder set up. Use \`${P} rank add\` first.`);
+                      }
+                      const rankObj = ladder.find(r => r.level === minLevel);
+                      if (!rankObj) {
+                        return reply(`❌ Rank ${minLevel} doesn't exist. Use \`${P} ranks\` to see valid levels.`);
+                      }
+                      // Keep WA open so everyone CAN send — bot will delete non-qualifying messages
+                      if (botIsAdmin) {
+                        try {
+                          await sock.groupSettingUpdate(chatId, 'not_announcement');
+                        } catch (err) {}
+                      }
+                      settings.lockMode = `rank:${minLevel}`;
+                      saveGroupSettings();
+                      return reply(
+                        `🔐 *RANK LOCK ACTIVE*\n\n` +
+                        `${rankObj.icon} Only *${rankObj.name}* _(Rank ${minLevel}+)_ and above can send messages.\n` +
+                        `Lower-ranked members' messages will be automatically deleted.\n\n` +
+                        `_Lift with: \`${P} glock open\` or \`${P} gunlock\`_`
+                      );
                     }
                     return;
                   }
 
-                  // `${botConfig.getPrefix().toLowerCase()}` unlock/open - everyone can send messages
+                  // `.g gunlock` or `.g open`
                   if (
-                    lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} unlock` ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} open` ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} gunlock`
                   ) {
+                    if (!isGroupChat) return reply('Groups only.');
                     if (!canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `❌ Admins only.`,
@@ -7600,13 +7768,14 @@ Usage: ${newUsage}/5${warningText}`;
                     }
                     if (!botIsAdmin) {
                       return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ I need to be an admin to unlock the group.",
+                        text: BOT_MARKER + "❌ I need to be an admin to unlock the group.",
                       });
                     }
                     try {
                       await sock.groupSettingUpdate(chatId, "not_announcement");
+                      const settings = getGroupSettings(chatId);
+                      settings.lockMode = 'open';
+                      saveGroupSettings();
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
@@ -7614,10 +7783,7 @@ Usage: ${newUsage}/5${warningText}`;
                       });
                     } catch (err) {
                       await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌❌ Failed to unlock group: " +
-                          err.message,
+                        text: BOT_MARKER + "❌❌ Failed to unlock group: " + err.message,
                       });
                     }
                     return;
@@ -8144,6 +8310,20 @@ Commands:
 
                     const targetUser = getMentionOrReply(m);
                     if (targetUser) {
+                      // 🛡️ Rank protection: can't warn someone of equal or higher rank
+                      const settings = getGroupSettings(chatId);
+                      if (settings.rankLadder?.length > 0) {
+                        if (!canActOnMember(chatId, senderJid, targetUser, isOwner, isGlobalMod(senderJid))) {
+                          const targetRank = getMemberRankObj(chatId, targetUser);
+                          const targetPhone = targetUser.split('@')[0];
+                          return reply(
+                            `🚫 *Rank protection triggered.*\n\n` +
+                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot warn them.`,
+                            { mentions: [targetUser] }
+                          );
+                        }
+                      }
+
                       // Remove command and mention from text to get reason
                       let reason = txt
                         .replace(
@@ -8312,6 +8492,20 @@ Commands:
                     const targets = [target];
                     console.log("⬆️ Attempting to promote:", targets);
 
+                    // 🛡️ Rank protection: can't promote someone of equal or higher rank
+                    const settings = getGroupSettings(chatId);
+                    if (settings.rankLadder?.length > 0) {
+                      if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                        const targetRank = getMemberRankObj(chatId, target);
+                        const targetPhone = target.split('@')[0];
+                        return reply(
+                          `🚫 *Rank protection triggered.*\n\n` +
+                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot promote them.`,
+                          { mentions: [target] }
+                        );
+                      }
+                    }
+
                     try {
                       await sock.groupParticipantsUpdate(
                         chatId,
@@ -8377,6 +8571,20 @@ Commands:
                     const targets = [target];
                     console.log("⬇️ Attempting to demote:", targets);
 
+                    // 🛡️ Rank protection: can't demote someone of equal or higher rank
+                    const settings = getGroupSettings(chatId);
+                    if (settings.rankLadder?.length > 0) {
+                      if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                        const targetRank = getMemberRankObj(chatId, target);
+                        const targetPhone = target.split('@')[0];
+                        return reply(
+                          `🚫 *Rank protection triggered.*\n\n` +
+                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot demote them.`,
+                          { mentions: [target] }
+                        );
+                      }
+                    }
+
                     try {
                       await sock.groupParticipantsUpdate(
                         chatId,
@@ -8397,6 +8605,427 @@ Commands:
                     }
 
                     return;
+                  }
+
+                  // ── GROUP RANK SYSTEM COMMANDS ──────────────────────────────────────
+                  const P = botConfig.getPrefix().toLowerCase();
+
+                  // .g rank setup
+                  if (lowerTxt === `${P} rank setup`) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage ranks.');
+                    }
+                    const settings = getGroupSettings(chatId);
+                    settings.rankLadder = [
+                      { level: 5, name: 'Overlord', icon: '👑' },
+                      { level: 4, name: 'Commander', icon: '⚔️' },
+                      { level: 3, name: 'Guardian', icon: '🛡️' },
+                      { level: 2, name: 'Initiate', icon: '🌿' },
+                      { level: 1, name: 'Wanderer', icon: '💤' }
+                    ];
+                    saveGroupSettings();
+                    return reply(
+                      `✅ *Rank ladder initialized with defaults!*\n\n` +
+                      `👑 *Overlord* (Rank 5)\n` +
+                      `⚔️ *Commander* (Rank 4)\n` +
+                      `🛡️ *Guardian* (Rank 3)\n` +
+                      `🌿 *Initiate* (Rank 2)\n` +
+                      `💤 *Wanderer* (Rank 1)\n\n` +
+                      `_Modify using: \`${P} rank add <level> <icon> <name>\` or \`${P} rank remove <level>\`_`
+                    );
+                  }
+
+                  // .g rank add <level> <icon> <name>
+                  if (lowerTxt.startsWith(`${P} rank add `)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage ranks.');
+                    }
+                    const match = txt.slice(`${P} rank add `.length).trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
+                    if (!match) {
+                      return reply(`❌ Usage: \`${P} rank add <level> <icon> <name>\`\nExample: \`${P} rank add 3 🛡️ Guardian\``);
+                    }
+                    const level = parseInt(match[1]);
+                    const icon = match[2];
+                    const name = match[3].trim();
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.rankLadder) settings.rankLadder = [];
+
+                    if (settings.rankLadder.some(r => r.level === level)) {
+                      return reply(`❌ A rank with level ${level} already exists.`);
+                    }
+                    if (settings.rankLadder.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+                      return reply(`❌ A rank with the name "${name}" already exists.`);
+                    }
+
+                    settings.rankLadder.push({ level, name, icon });
+                    settings.rankLadder.sort((a, b) => b.level - a.level);
+                    saveGroupSettings();
+
+                    return reply(`✅ Added rank: ${icon} *${name}* (Level ${level})`);
+                  }
+
+                  // .g rank remove <level>
+                  if (lowerTxt.startsWith(`${P} rank remove `)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage ranks.');
+                    }
+                    const levelStr = lowerTxt.slice(`${P} rank remove `.length).trim();
+                    const level = parseInt(levelStr);
+                    if (isNaN(level)) {
+                      return reply(`❌ Usage: \`${P} rank remove <level>\``);
+                    }
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.rankLadder || !settings.rankLadder.length) {
+                      return reply(`❌ No rank ladder exists. Set up defaults first with \`${P} rank setup\`.`);
+                    }
+
+                    const initialLen = settings.rankLadder.length;
+                    settings.rankLadder = settings.rankLadder.filter(r => r.level !== level);
+                    if (settings.rankLadder.length === initialLen) {
+                      return reply(`❌ No rank found at level ${level}.`);
+                    }
+
+                    saveGroupSettings();
+                    return reply(`✅ Removed rank level ${level}.`);
+                  }
+
+                  // .g ranks
+                  if (lowerTxt === `${P} ranks`) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.rankLadder || !settings.rankLadder.length) {
+                      return reply(`📊 *No ranks configured in this group.*\nUse \`${P} rank setup\` to initialize default ranks.`);
+                    }
+
+                    let listStr = `📊 *GROUP RANK LADDER*\n\n`;
+                    for (const r of settings.rankLadder) {
+                      listStr += `${r.icon} *${r.name}* (Level ${r.level})\n`;
+                    }
+                    return reply(listStr);
+                  }
+
+                  // .g set rank @user <level>
+                  if (lowerTxt.startsWith(`${P} set rank `) || lowerTxt.startsWith(`${P} setrank `)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to assign ranks.');
+                    }
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      return reply(`❌ Usage: \`${P} set rank @user <level>\` or reply to a message with \`${P} set rank <level>\``);
+                    }
+
+                    const matches = lowerTxt.match(/\b(\d+)\b/g);
+                    if (!matches) {
+                      return reply(`❌ Could not determine rank level. Specify a level number.`);
+                    }
+                    const level = parseInt(matches[matches.length - 1]);
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.rankLadder || !settings.rankLadder.length) {
+                      return reply(`❌ Set up ranks first with \`${P} rank setup\`.`);
+                    }
+
+                    const rankObj = settings.rankLadder.find(r => r.level === level);
+                    if (!rankObj) {
+                      return reply(`❌ Rank level ${level} is not in the rank ladder. Use \`${P} ranks\` to see valid levels.`);
+                    }
+
+                    if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                      return reply(`❌ Rank protection: You cannot change the rank of someone with an equal or higher rank.`);
+                    }
+
+                    const senderLevel = getMemberRankLevel(chatId, senderJid);
+                    if (level > senderLevel && !isOwner && !isGlobalMod(senderJid)) {
+                      return reply(`❌ You cannot assign a rank level (${level}) higher than your own rank (${senderLevel}).`);
+                    }
+
+                    if (!settings.memberRanks) settings.memberRanks = {};
+                    settings.memberRanks[target] = level;
+                    saveGroupSettings();
+
+                    const phone = target.split('@')[0];
+                    return reply({
+                      text: BOT_MARKER + `✅ Promoted @${phone} to rank: ${rankObj.icon} *${rankObj.name}* (Level ${level})`,
+                      mentions: [target]
+                    });
+                  }
+
+                  // .g unrank @user
+                  if (lowerTxt.startsWith(`${P} unrank`) || lowerTxt.startsWith(`${P} removerank`)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage ranks.');
+                    }
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      return reply(`❌ Usage: \`${P} unrank @user\``);
+                    }
+
+                    if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                      return reply(`❌ Rank protection: You cannot modify the rank of someone with an equal or higher rank.`);
+                    }
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.memberRanks || !settings.memberRanks[target]) {
+                      return reply(`❌ That user does not have an assigned rank.`);
+                    }
+
+                    delete settings.memberRanks[target];
+                    saveGroupSettings();
+
+                    const phone = target.split('@')[0];
+                    return reply({
+                      text: BOT_MARKER + `✅ Removed rank from @${phone}.`,
+                      mentions: [target]
+                    });
+                  }
+
+                  // .g myrank
+                  if (lowerTxt === `${P} myrank`) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    const level = getMemberRankLevel(chatId, senderJid);
+                    const rankObj = getMemberRankObj(chatId, senderJid);
+                    const settings = getGroupSettings(chatId);
+                    const title = settings.adminTitles?.[senderJid];
+
+                    let resp = `👤 *YOUR RANK DETAILS*\n\n`;
+                    resp += `User: @${senderJid.split('@')[0]}\n`;
+                    resp += `Rank Level: *${level}*\n`;
+                    resp += `Rank Title: *${rankObj ? rankObj.name : 'Unranked'}* ${rankObj ? rankObj.icon : ''}\n`;
+                    if (title) resp += `Custom Title: 🏷️ _${title}_\n`;
+
+                    return reply({
+                      text: BOT_MARKER + resp,
+                      mentions: [senderJid]
+                    });
+                  }
+
+                  // .g rankinfo @user
+                  if (lowerTxt.startsWith(`${P} rankinfo`) || lowerTxt.startsWith(`${P} rank info`)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    const target = getMentionOrReply(m) || senderJid;
+                    const level = getMemberRankLevel(chatId, target);
+                    const rankObj = getMemberRankObj(chatId, target);
+                    const settings = getGroupSettings(chatId);
+                    const title = settings.adminTitles?.[target];
+
+                    let resp = `👤 *RANK DETAILS*\n\n`;
+                    resp += `User: @${target.split('@')[0]}\n`;
+                    resp += `Rank Level: *${level}*\n`;
+                    resp += `Rank Title: *${rankObj ? rankObj.name : 'Unranked'}* ${rankObj ? rankObj.icon : ''}\n`;
+                    if (title) resp += `Custom Title: 🏷️ _${title}_\n`;
+
+                    return reply({
+                      text: BOT_MARKER + resp,
+                      mentions: [target]
+                    });
+                  }
+
+                  // .g title set @user <title>
+                  if (lowerTxt.startsWith(`${P} title set `)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage titles.');
+                    }
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      return reply(`❌ Usage: \`${P} title set @user <title>\``);
+                    }
+
+                    if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                      return reply(`❌ Rank protection: You cannot modify titles for someone with an equal or higher rank.`);
+                    }
+
+                    let title = txt.slice(`${P} title set `.length).trim();
+                    const phone = target.split('@')[0];
+                    title = title.replace(new RegExp(`@${phone}`, 'g'), '').trim();
+
+                    if (!title) {
+                      return reply(`❌ Please provide a custom title name.`);
+                    }
+                    if (title.length > 30) {
+                      return reply(`❌ Custom title is too long (maximum 30 characters).`);
+                    }
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.adminTitles) settings.adminTitles = {};
+                    settings.adminTitles[target] = title;
+                    saveGroupSettings();
+
+                    return reply({
+                      text: BOT_MARKER + `✅ Set custom title for @${phone} to: _${title}_`,
+                      mentions: [target]
+                    });
+                  }
+
+                  // .g title remove @user
+                  if (lowerTxt.startsWith(`${P} title remove`) || lowerTxt.startsWith(`${P} title delete`)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage titles.');
+                    }
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      return reply(`❌ Usage: \`${P} title remove @user\``);
+                    }
+
+                    if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
+                      return reply(`❌ Rank protection: You cannot modify titles for someone with an equal or higher rank.`);
+                    }
+
+                    const settings = getGroupSettings(chatId);
+                    if (!settings.adminTitles || !settings.adminTitles[target]) {
+                      return reply(`❌ That user does not have a custom title.`);
+                    }
+
+                    delete settings.adminTitles[target];
+                    saveGroupSettings();
+
+                    const phone = target.split('@')[0];
+                    return reply({
+                      text: BOT_MARKER + `✅ Removed custom title from @${phone}.`,
+                      mentions: [target]
+                    });
+                  }
+
+                  // .g who
+                  if (lowerTxt === `${P} who`) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    const settings = getGroupSettings(chatId);
+                    const ladder = settings.rankLadder || [];
+
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try {
+                        meta = await getGroupMetadata(chatId);
+                      } catch (err) {}
+                    }
+
+                    const admins = new Set();
+                    let superAdmin = null;
+                    if (meta && meta.participants) {
+                      for (const p of meta.participants) {
+                        if (p.admin === 'admin') admins.add(p.id);
+                        if (p.admin === 'superadmin') {
+                          admins.add(p.id);
+                          superAdmin = p.id;
+                        }
+                      }
+                    }
+
+                    let roster = `📋 *GROUP HIERARCHY ROSTER*\n\n`;
+                    const mentions = [];
+
+                    const levels = ladder.map(r => r.level).sort((a, b) => b - a);
+                    
+                    if (!levels.length) {
+                      roster += `_No ranks set up yet. Run \`${P} rank setup\` to create default ranks._\n\n`;
+                    } else {
+                      for (const level of levels) {
+                        const rankObj = ladder.find(r => r.level === level);
+                        const membersAtRank = [];
+                        if (settings.memberRanks) {
+                          for (const [jid, rLevel] of Object.entries(settings.memberRanks)) {
+                            if (rLevel === level) {
+                              membersAtRank.push(jid);
+                            }
+                          }
+                        }
+
+                        roster += `${rankObj.icon} *${rankObj.name}* (Level ${level})\n`;
+                        if (membersAtRank.length === 0) {
+                          roster += `• _None_\n\n`;
+                        } else {
+                          for (const jid of membersAtRank) {
+                            const phone = jid.split('@')[0];
+                            const title = settings.adminTitles?.[jid];
+                            let suffix = '';
+                            if (jid === superAdmin) {
+                              suffix = ' [Superadmin]';
+                            } else if (admins.has(jid)) {
+                              suffix = ' [Admin]';
+                            }
+                            roster += `• @${phone}${title ? ` 🏷️ _${title}_` : ''}${suffix}\n`;
+                            mentions.push(jid);
+                          }
+                          roster += `\n`;
+                        }
+                      }
+                    }
+
+                    const unrankedAdmins = [];
+                    if (meta && meta.participants) {
+                      for (const p of meta.participants) {
+                        if (p.admin && (!settings.memberRanks || settings.memberRanks[p.id] === undefined)) {
+                          unrankedAdmins.push(p.id);
+                        }
+                      }
+                    }
+
+                    if (unrankedAdmins.length > 0) {
+                      roster += `🛡️ *Unranked Administrators*\n`;
+                      for (const jid of unrankedAdmins) {
+                        const phone = jid.split('@')[0];
+                        const title = settings.adminTitles?.[jid];
+                        let suffix = jid === superAdmin ? ' [Superadmin]' : ' [Admin]';
+                        roster += `• @${phone}${title ? ` 🏷️ _${title}_` : ''}${suffix}\n`;
+                        mentions.push(jid);
+                      }
+                      roster += `\n`;
+                    }
+
+                    return reply({
+                      text: BOT_MARKER + roster.trim(),
+                      mentions
+                    });
                   }
 
                   // ✅ FIXED: `${botConfig.getPrefix().toLowerCase()}` mute - temporarily mute user (with proper time parsing)
