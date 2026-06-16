@@ -5836,7 +5836,8 @@ _💡 Reply with another number from your search list!_`.trim();
                             freshUser.lastFishReset = Date.now();
                           economy.saveUser(senderJid);
 
-                          const luck = freshUser.stats?.luck || 5;
+                          const eqStats = inventorySystem.getEquipmentStats(senderJid) || {};
+                          const luck = (freshUser.stats?.luck || 5) + (eqStats.luck || 0);
 
                           // Rarity Logic
                           let itemKey = "common_fish";
@@ -5903,7 +5904,10 @@ _💡 Reply with another number from your search list!_`.trim();
                       { id: "deer_antler", emoji: "🦌", weight: 30 },
                       { id: "bear_claw", emoji: "🐻", weight: 10 },
                     ];
-                    let roll = Math.random() * 100;
+                    const freshUser = economy.getUser(senderJid);
+                    const eqStats = inventorySystem.getEquipmentStats(senderJid) || {};
+                    const luck = (freshUser.stats?.luck || 5) + (eqStats.luck || 0);
+                    let roll = (Math.random() * 100) + (luck / 5);
                     let selected = animals[0];
                     for (const a of animals) {
                       roll -= a.weight;
