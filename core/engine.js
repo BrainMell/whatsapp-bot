@@ -1045,16 +1045,14 @@ async function startBot(configInstance) {
     }
 
     // Check if a rank level has permission to use a specific command key.
-    // Higher ranks always have permission. Returns true if no perms configured.
-    function hasRankPermission(chatId, memberLevel, cmdKey) {
+    // Returns true (explicitly allowed), false (explicitly denied), or null (no override).
+    function checkRankPermission(chatId, memberLevel, cmdKey) {
       const settings = getGroupSettings(chatId);
       const perms = settings.rankPerms?.[memberLevel];
-      if (!perms) return true; // no restrictions configured = allow
+      if (!perms) return null;
       if (perms.deniedCmds && perms.deniedCmds.includes(cmdKey)) return false;
-      if (perms.allowedCmds && perms.allowedCmds.length > 0) {
-        return perms.allowedCmds.includes(cmdKey);
-      }
-      return true;
+      if (perms.allowedCmds && perms.allowedCmds.includes(cmdKey)) return true;
+      return null;
     }
 
     function loadSupportUsage() {
@@ -4590,11 +4588,29 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 🧠 BRAIN: Context-Aware Extraction System
                   contextEngine.onMessage(m, txt);
 
-                  const canUseAdminCommands =
+                  const senderRankLevel = isGroupChat ? getMemberRankLevel(chatId, senderJid) : 0;
+                  let canUseAdminCommands =
                     senderIsAdmin ||
                     isOwner ||
                     overrideUsers.has(senderJid) ||
-                    isGlobalMod(senderJid);
+                    isGlobalMod(senderJid) ||
+                    senderRankLevel >= 4;
+
+                  if (isGroupChat && senderRankLevel > 0) {
+                    const prefix = botConfig.getPrefix().toLowerCase();
+                    if (lowerTxt.startsWith(prefix)) {
+                      const cmdTail = lowerTxt.slice(prefix.length).trim();
+                      const rawCmd = cmdTail.split(/\s+/)[0];
+                      if (rawCmd) {
+                        const rankPerm = checkRankPermission(chatId, senderRankLevel, rawCmd);
+                        if (rankPerm === true) {
+                          canUseAdminCommands = true;
+                        } else if (rankPerm === false && !isOwner && !isGlobalMod(senderJid)) {
+                          canUseAdminCommands = false;
+                        }
+                      }
+                    }
+                  }
 
                   // 📢 DEBUG: Get Newsletter JID
                   const newsletterJid =
@@ -8837,7 +8853,7 @@ Commands:
                     const level = getMemberRankLevel(chatId, senderJid);
                     const rankObj = getMemberRankObj(chatId, senderJid);
                     const settings = getGroupSettings(chatId);
-                    const title = settings.adminTitles?.[senderJid];
+                    const title = settings.adminTitles?.[senderJid] || rankObj?.name;
                     const phone = senderJid.split('@')[0];
 
                     let resp = `🎖️ *YOUR RANK*\n${'─'.repeat(20)}\n`;
@@ -8862,7 +8878,7 @@ Commands:
                     const level = getMemberRankLevel(chatId, target);
                     const rankObj = getMemberRankObj(chatId, target);
                     const settings = getGroupSettings(chatId);
-                    const title = settings.adminTitles?.[target];
+                    const title = settings.adminTitles?.[target] || rankObj?.name;
                     const phone = target.split('@')[0];
 
                     let resp = `🎖️ *MEMBER RANK*\n${'─'.repeat(20)}\n`;
@@ -9070,10 +9086,10 @@ Commands:
                       for (const level of levels) {
                         const rankObj = ladder.find(r => r.level === level);
                         const membersAtRank = [];
-                        if (settings.memberRanks) {
-                          for (const [jid, rLevel] of Object.entries(settings.memberRanks)) {
-                            if (rLevel === level) {
-                              membersAtRank.push(jid);
+                        if (meta && meta.participants) {
+                          for (const p of meta.participants) {
+                            if (getMemberRankLevel(chatId, p.id) === level) {
+                              membersAtRank.push(p.id);
                             }
                           }
                         }
@@ -9084,14 +9100,15 @@ Commands:
                         } else {
                           for (const jid of membersAtRank) {
                             const phone = jid.split('@')[0];
-                            const title = settings.adminTitles?.[jid];
+                            const title = settings.adminTitles?.[jid] || rankObj?.name;
                             let suffix = '';
                             if (jid === superAdmin) {
                               suffix = ' [Superadmin]';
                             } else if (admins.has(jid)) {
                               suffix = ' [Admin]';
                             }
-                            roster += `• @${phone}${title ? ` 🏷️ _${title}_` : ''}${suffix}\n`;
+                            roster += `• @${phone}${suffix}\n`;
+                            if (title) roster += `  └ 🏷️ _${title}_\n`;
                             mentions.push(jid);
                           }
                           roster += `\n`;
@@ -9102,7 +9119,7 @@ Commands:
                     const unrankedAdmins = [];
                     if (meta && meta.participants) {
                       for (const p of meta.participants) {
-                        if (p.admin && (!settings.memberRanks || settings.memberRanks[p.id] === undefined)) {
+                        if (p.admin && getMemberRankLevel(chatId, p.id) === 0) {
                           unrankedAdmins.push(p.id);
                         }
                       }
@@ -9112,9 +9129,10 @@ Commands:
                       roster += `🛡️ *Unranked Administrators*\n`;
                       for (const jid of unrankedAdmins) {
                         const phone = jid.split('@')[0];
-                        const title = settings.adminTitles?.[jid];
+                        const title = settings.adminTitles?.[jid] || getMemberRankObj(chatId, jid)?.name;
                         let suffix = jid === superAdmin ? ' [Superadmin]' : ' [Admin]';
-                        roster += `• @${phone}${title ? ` 🏷️ _${title}_` : ''}${suffix}\n`;
+                        roster += `• @${phone}${suffix}\n`;
+                        if (title) roster += `  └ 🏷️ _${title}_\n`;
                         mentions.push(jid);
                       }
                       roster += `\n`;
