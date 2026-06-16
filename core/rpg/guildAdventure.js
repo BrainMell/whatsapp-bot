@@ -3711,7 +3711,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           const effect =
             followUpSkill.currentEffect ||
             followUpSkill.effect(enemy.level || 1);
-          await applyAbilityEffect(
+          const abilityRes = await applyAbilityEffect(
             sock,
             enemy,
             followUpSkill,
@@ -3736,6 +3736,9 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           const chargeMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!`;
           state.roundLog = state.roundLog || [];
           state.roundLog.push(chargeMsg);
+          if (abilityRes && abilityRes.message) {
+            state.roundLog.push(abilityRes.message.trim());
+          }
           setTimeout(() => resolve(), turnDelay);
           return;
         }
