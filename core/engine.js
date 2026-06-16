@@ -4588,6 +4588,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 🧠 BRAIN: Context-Aware Extraction System
                   contextEngine.onMessage(m, txt);
 
+                  // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, ~, outer _) for command parsing
+                  const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
+                  let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
+
                   const senderRankLevel = isGroupChat ? getMemberRankLevel(chatId, senderJid) : 0;
                   let canUseAdminCommands =
                     senderIsAdmin ||
@@ -4621,10 +4625,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       `\n📢 NEWSLETTER JID DETECTED: ${newsletterJid}\n`,
                     );
                   }
-
-                  // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, ~, outer _) for command parsing
-                  const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
-                  let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
 
                   // ── CARD SYSTEM INTERCEPT ──────────────────
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
