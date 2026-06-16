@@ -5908,7 +5908,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     const eqStats = inventorySystem.getEquipmentStats(senderJid) || {};
                     const luck = (freshUser.stats?.luck || 5) + (eqStats.luck || 0);
                     let roll = (Math.random() * 100) + (luck / 5);
-                    let selected = animals[0];
+                    let selected = animals[animals.length - 1];
                     for (const a of animals) {
                       roll -= a.weight;
                       if (roll <= 0) {
