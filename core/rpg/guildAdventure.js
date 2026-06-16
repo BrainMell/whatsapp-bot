@@ -2244,6 +2244,12 @@ function calculateDamage(
       const minDmg = Math.floor(targetMaxHp * minDmgPct);
       if (damage < minDmg) damage = minDmg;
     }
+    
+    // One-shot protection (Sturdy): if the hit deals >= maxHp OR would kill from full health
+    if (damage >= target.stats.hp && target.stats.hp >= target.stats.maxHp * 0.9) {
+      const hpLeft = Math.floor(Math.random() * 9) + 2; // leaves 2 to 10 HP
+      damage = target.stats.hp - hpLeft;
+    }
   }
 
   return {
@@ -3776,7 +3782,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             ? state.enemies.indexOf(target)
             : state.players.indexOf(target);
 
-        await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+        const abilityRes = await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
         if (await checkCombatEnd(sock, state, sessionKey)) {
           resolve();
           return;
@@ -3784,6 +3790,12 @@ async function performEnemyAction(sock, enemy, sessionKey) {
 
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
+
+        // Ensure the enemy's ability damage is logged for the players to see
+        state.roundLog = state.roundLog || [];
+        if (abilityRes && abilityRes.message) {
+            state.roundLog.push(abilityRes.message.trim());
+        }
 
         // No image per enemy skill — push to roundLog and resolve
         setTimeout(() => resolve(), turnDelay);

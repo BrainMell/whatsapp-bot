@@ -607,6 +607,16 @@ function enhanceItem(userId, itemId, stoneId) {
     const multiplier = bonusMap[stoneId] || 0.05;
     item.enhancementLevel = (item.enhancementLevel || 0) + 1;
     
+    // Hydrate stats if not already set (fixes items dropping without explicitly cloned stats)
+    if (!item.stats || Object.keys(item.stats).length === 0) {
+        const baseItem = lootSystem.getItemInfo(item.id || itemId);
+        if (baseItem && baseItem.stats) {
+            item.stats = JSON.parse(JSON.stringify(baseItem.stats));
+        } else {
+            item.stats = {};
+        }
+    }
+
     // Apply bonus to stats
     if (item.stats) {
         for (const stat in item.stats) {
