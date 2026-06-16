@@ -9050,6 +9050,40 @@ Commands:
                     return reply(`✅ Cleared all command permissions for Rank ${targetLevel}.`);
                   }
 
+                  // .g rank guide
+                  if (lowerTxt === `${P} rank guide`) {
+                    const guideText = `🏅 *GROUP RANK SYSTEM GUIDE* 🏅
+${'─'.repeat(24)}
+
+*1. Rank Hierarchy & Protections*
+Members are assigned to Rank Tiers (1 to 5).
+• *Rank 4 & 5 (Superadmin)* can manage ranks, titles, and use all admin commands.
+• *Lower ranks (1-3)* can only use basic commands unless explicitly allowed.
+• *Protection:* You can NEVER edit the rank, title, or permissions of someone at an equal or higher rank than yourself.
+
+*2. Setting Up Ranks*
+\`${P} rank setup\` - Initialize default 5 tiers.
+\`${P} rank add <level> <icon> <name>\` - Add custom tier.
+\`${P} rank remove <level>\` - Delete a tier.
+
+*3. Managing Members*
+\`${P} set rank @user <level>\` - Assign a rank.
+\`${P} unrank @user\` - Remove assigned rank.
+\`${P} title set @user <title>\` - Give custom title.
+\`${P} title remove @user\` - Remove title.
+
+*4. Command Permissions*
+\`${P} rank allow <level> <cmd>\` - Whitelist an admin command for a lower rank (e.g., \`${P} rank allow 2 kick\`).
+\`${P} rank deny <level> <cmd>\` - Blacklist a command for a senior rank.
+\`${P} rank perms\` - View all active rules.
+
+*5. Viewing Ranks*
+\`${P} ranks\` - View the rank ladder.
+\`${P} who\` - View the full styled group roster.
+\`${P} myrank\` / \`${P} rankinfo @user\` - Check details.`;
+                    return reply(guideText);
+                  }
+
                   // .g who
                   if (lowerTxt === `${P} who`) {
                     if (!isGroupChat) return reply('❌ Groups only.');

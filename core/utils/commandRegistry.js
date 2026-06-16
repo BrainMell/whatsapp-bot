@@ -75,6 +75,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'unrank', desc: 'Remove an assigned rank from a member.', usage: 'unrank @user' },
     { cmd: 'myrank', desc: 'Check your current rank details and custom title.', usage: 'myrank' },
     { cmd: 'rankinfo', desc: 'Check another member\'s rank and title details.', usage: 'rankinfo @user' },
+    { cmd: 'rank guide', desc: 'Display a comprehensive guide for the group rank system.', usage: 'rank guide' },
     { cmd: 'title set', desc: 'Set a custom cosmetic title for an admin/member.', usage: 'title set @user <title>' },
     { cmd: 'title remove', desc: 'Remove a custom title from a member.', usage: 'title remove @user' },
     { cmd: 'who', desc: 'Display a styled roster of group hierarchy by ranks.', usage: 'who' },
