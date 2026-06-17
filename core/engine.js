@@ -898,7 +898,8 @@ async function startBot(configInstance) {
         .join("");
     }
 
-    const groupSettings = new Map();
+    if (!global.sharedGroupSettings) global.sharedGroupSettings = new Map();
+    const groupSettings = global.sharedGroupSettings;
     const enabledChats = new Set();
     const supportUsage = new Map();
     const userWarnings = new Map();
@@ -930,11 +931,15 @@ async function startBot(configInstance) {
 
     function loadGroupSettings() {
       try {
-        const data = system.get(BOT_ID + "_group_settings", {});
-        groupSettings.clear();
-        Object.entries(data).forEach(([key, value]) => {
-          groupSettings.set(key, value);
-        });
+        let data = system.get("shared_group_settings");
+        if (!data || Object.keys(data).length === 0) {
+          data = system.get(BOT_ID + "_group_settings", {});
+        }
+        if (groupSettings.size === 0) {
+          Object.entries(data).forEach(([key, value]) => {
+            groupSettings.set(key, value);
+          });
+        }
         console.log(`✅ [${BOT_ID}] Loaded group settings from MongoDB`);
       } catch (err) {
         console.error("Error loading group settings:", err.message);
@@ -942,7 +947,7 @@ async function startBot(configInstance) {
     }
 
     function saveGroupSettings() {
-      system.set(BOT_ID + "_group_settings", Object.fromEntries(groupSettings));
+      system.set("shared_group_settings", Object.fromEntries(groupSettings));
     }
 
     const activePinTimers = new Map();
@@ -1018,17 +1023,42 @@ async function startBot(configInstance) {
       }
     }
 
+    const _isBotOwner = (jid) => jid.startsWith("233201487480") || jid.includes("251453323092189") || jid.includes("105712667648066");
+
     function hasActionPermission(chatId, userJid, cmdKey) {
-      const level = getMemberRankLevel(chatId, userJid);
-      const isOwner = userJid === botConfig.getOwnerNumber() + "@s.whatsapp.net" || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
+      const isOwner = _isBotOwner(userJid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
       const globalMod = isGlobalMod && isGlobalMod(userJid);
       if (isOwner || globalMod) return true;
 
+      const level = getMemberRankLevel(chatId, userJid);
       const override = checkRankPermission(chatId, level, cmdKey);
       if (override === true) return true;
       if (override === false) return false;
 
-      return level >= 4;
+      const settings = getGroupSettings(chatId);
+      const lockMode = settings.lockMode || 'open';
+
+      const meta = groupMetadataCache.get(chatId);
+      let isGroupAdmin = false;
+      let isGroupSuperadmin = false;
+      if (meta && meta.participants) {
+        const p = meta.participants.find(x => (x.id || x) === userJid);
+        if (p) {
+          if (p.admin === 'superadmin') isGroupSuperadmin = true;
+          if (p.admin === 'admin') isGroupAdmin = true;
+        }
+      }
+
+      if (lockMode === 'locked') {
+        return isGroupSuperadmin;
+      } else if (lockMode === 'admin' || lockMode === 'open') {
+        return isGroupAdmin || isGroupSuperadmin;
+      } else if (lockMode.startsWith('rank:')) {
+        const requiredRank = parseInt(lockMode.split(':')[1], 10);
+        return level >= requiredRank;
+      }
+
+      return false;
     }
 
     function getGroupSettings(chatId) {
@@ -1072,7 +1102,7 @@ async function startBot(configInstance) {
       }
 
       // Also check if owner or global mod
-      const isOwner = jid === botConfig.getOwnerNumber() + "@s.whatsapp.net" || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(jid));
+      const isOwner = _isBotOwner(jid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(jid));
       const globalMod = isGlobalMod && isGlobalMod(jid);
 
       if (assigned != null) {
@@ -4207,7 +4237,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 const authorNormalized = jidNormalizedUser(update.author);
                 const botNormalized = jidNormalizedUser(sock.user.id);
                 if (authorNormalized !== botNormalized) {
-                  const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                  const isOwner = _isBotOwner(authorNormalized);
                   const isGlobal = isGlobalMod && isGlobalMod(update.author);
                   if (!isOwner && !isGlobal) {
                     const allowed = hasActionPermission(update.id, update.author, "glock");
@@ -4249,7 +4279,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const authorNormalized = jidNormalizedUser(author);
               const botNormalized = jidNormalizedUser(sock.user.id);
               if (authorNormalized !== botNormalized) {
-                const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                const isOwner = _isBotOwner(authorNormalized);
                 const isGlobal = isGlobalMod && isGlobalMod(author);
                 if (!isOwner && !isGlobal) {
                   const cmdKey = action === "remove" ? "kick" : action;
@@ -4613,7 +4643,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     const pinInChat = m.message?.pinInChatMessage || m.message?.protocolMessage?.pinInChatMessage;
                     if (pinInChat && isGroupChat) {
                       const authorNormalized = jidNormalizedUser(senderJid);
-                      const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                      const isOwner = _isBotOwner(authorNormalized);
                       const isGlobal = isGlobalMod && isGlobalMod(senderJid);
                       if (!isOwner && !isGlobal) {
                         const allowed = hasActionPermission(chatId, senderJid, "pin");
@@ -9172,7 +9202,7 @@ Commands:
                     }
 
                     const isTargetAdmin = meta?.participants?.some(p => (p.id || p) === target && (p.admin === 'admin' || p.admin === 'superadmin'));
-                    const targetIsOwner = target === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                    const targetIsOwner = _isBotOwner(target);
                     const targetIsGlobal = isGlobalMod && isGlobalMod(target);
                     if (!isTargetAdmin && !targetIsOwner && !targetIsGlobal) {
                       return reply('❌ You can only assign ranks to group administrators (admins or superadmins).');
