@@ -945,6 +945,20 @@ async function startBot(configInstance) {
             groupSettings.set(key, value);
           });
         }
+
+        // One-time migration to disable welcome, bye, and ranks for all existing GCs
+        if (!system.get("migration_disabled_defaults_v2")) {
+          console.log("🛠️ Running one-time migration to disable welcome, bye, and ranks in all groups...");
+          for (const [chatId, settings] of groupSettings.entries()) {
+            settings.welcomeEnabled = false;
+            settings.byeEnabled = false;
+            settings.ranksEnabled = false;
+          }
+          saveGroupSettings();
+          system.set("migration_disabled_defaults_v2", true);
+          console.log("✅ Migration completed and saved.");
+        }
+
         console.log(`✅ [${BOT_ID}] Loaded group settings from MongoDB`);
       } catch (err) {
         console.error("Error loading group settings:", err.message);
@@ -1044,11 +1058,18 @@ async function startBot(configInstance) {
       const settings = getGroupSettings(chatId);
       const lockMode = settings.lockMode || 'open';
 
+      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+      const phoneJid = resolveToPhone(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const canonicalJid = resolveJid(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+
       const meta = groupMetadataCache.get(chatId);
       let isGroupAdmin = false;
       let isGroupSuperadmin = false;
       if (meta && meta.participants) {
-        const p = meta.participants.find(x => (x.id || x) === userJid);
+        const p = meta.participants.find(x => {
+          const pid = x.id || x;
+          return pid === userJid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+        });
         if (p) {
           if (p.admin === 'superadmin') isGroupSuperadmin = true;
           if (p.admin === 'admin') isGroupAdmin = true;
@@ -1072,10 +1093,11 @@ async function startBot(configInstance) {
         groupSettings.set(chatId, {
           antilink: false,
           antilinkAction: "delete",
-          welcomeEnabled: true,   // welcome on by default
+          welcomeEnabled: false,   // welcome off by default
           welcomeMessage: null,   // null = use built-in default message
           byeEnabled: false,      // goodbye off by default (opt-in)
           byeMessage: null,       // null = use built-in default message
+          ranksEnabled: false,    // rank system off by default
           antispam: false,
           recording: false,
           blacklist: [],
@@ -1088,13 +1110,18 @@ async function startBot(configInstance) {
         });
         saveGroupSettings();
       }
-      return groupSettings.get(chatId);
+      const settings = groupSettings.get(chatId);
+      if (settings.welcomeEnabled === undefined) settings.welcomeEnabled = false;
+      if (settings.byeEnabled === undefined) settings.byeEnabled = false;
+      if (settings.ranksEnabled === undefined) settings.ranksEnabled = false;
+      return settings;
     }
 
     // Returns the rank level for a JID, 0 if unranked.
     function getMemberRankLevel(chatId, jid) {
       if (!jid) return 0;
       const settings = getGroupSettings(chatId);
+      if (settings.ranksEnabled === false) return 0;
       
       let assigned = settings.memberRanks?.[jid];
       let assignedKey = jid;
@@ -1113,11 +1140,18 @@ async function startBot(configInstance) {
         }
       }
       
+      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+      const phoneJid = resolveToPhone(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const canonicalJid = resolveJid(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+
       const meta = groupMetadataCache.get(chatId);
       let isGroupAdmin = false;
       let isGroupSuperadmin = false;
       if (meta && meta.participants) {
-        const p = meta.participants.find(x => (x.id || x) === jid);
+        const p = meta.participants.find(x => {
+          const pid = x.id || x;
+          return pid === jid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+        });
         if (p) {
           if (p.admin === 'superadmin') isGroupSuperadmin = true;
           if (p.admin === 'admin') isGroupAdmin = true;
@@ -1185,9 +1219,59 @@ async function startBot(configInstance) {
     // isOwner / globalMod always return true.
     function canActOnMember(chatId, actorJid, targetJid, actorIsOwner, actorIsGlobalMod) {
       if (actorIsOwner || actorIsGlobalMod) return true;
-      const actorLevel  = getMemberRankLevel(chatId, actorJid);
-      const targetLevel = getMemberRankLevel(chatId, targetJid);
-      return actorLevel > targetLevel;
+
+      // Check if bot owner or global mod is target
+      const targetIsOwner = _isBotOwner(targetJid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(targetJid));
+      const targetIsGlobal = isGlobalMod && isGlobalMod(targetJid);
+      if (targetIsOwner || targetIsGlobal) return false;
+
+      // Resolve actor and target JIDs to match metadata
+      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+      const actorPhone = resolveToPhone(actorJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const actorCanonical = resolveJid(actorJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const targetPhone = resolveToPhone(targetJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const targetCanonical = resolveJid(targetJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+
+      let actorAdminStatus = null;
+      let targetAdminStatus = null;
+
+      const meta = groupMetadataCache.get(chatId);
+      if (meta && meta.participants) {
+        const actorPart = meta.participants.find(x => {
+          const pid = x.id || x;
+          return pid === actorJid || (actorPhone && pid === actorPhone) || (actorCanonical && pid === actorCanonical);
+        });
+        if (actorPart) actorAdminStatus = actorPart.admin;
+
+        const targetPart = meta.participants.find(x => {
+          const pid = x.id || x;
+          return pid === targetJid || (targetPhone && pid === targetPhone) || (targetCanonical && pid === targetCanonical);
+        });
+        if (targetPart) targetAdminStatus = targetPart.admin;
+      }
+
+      const actorIsAdmin = actorAdminStatus === 'admin' || actorAdminStatus === 'superadmin';
+      const targetIsAdmin = targetAdminStatus === 'admin' || targetAdminStatus === 'superadmin';
+
+      // If actor is not an admin, they can't act on anyone
+      if (!actorIsAdmin) return false;
+
+      // If actor is admin/superadmin and target is not an admin, actor can act on them
+      if (actorIsAdmin && !targetIsAdmin) return true;
+
+      // If both are admins/superadmins, rank system takes precedence if enabled.
+      // Otherwise, superadmin can act on admin, but admin cannot act on superadmin or admin.
+      const settings = getGroupSettings(chatId);
+      if (settings.ranksEnabled !== false && settings.rankLadder?.length) {
+        const actorLevel  = getMemberRankLevel(chatId, actorJid);
+        const targetLevel = getMemberRankLevel(chatId, targetJid);
+        if (actorLevel > targetLevel) return true;
+      }
+
+      // Fallback: superadmin can act on admin
+      if (actorAdminStatus === 'superadmin' && targetAdminStatus === 'admin') return true;
+
+      return false;
     }
 
     // Format a rank badge for display in messages.
@@ -1201,12 +1285,19 @@ async function startBot(configInstance) {
     const RANK_MANAGE_LEVEL = 4;
     function canManageRanks(chatId, senderJid, isOwner, isGlobalMod, groupMetadata) {
       if (isOwner || isGlobalMod) return true;
-      // WA superadmin always qualifies
+      
+      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+      const phoneJid = resolveToPhone(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      const canonicalJid = resolveJid(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+
       if (groupMetadata?.participants) {
-        const p = groupMetadata.participants.find(x => (x.id || x) === senderJid);
-        if (p?.admin === 'superadmin') return true;
+        const p = groupMetadata.participants.find(x => {
+          const pid = x.id || x;
+          return pid === senderJid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+        });
+        if (p?.admin === 'superadmin' || p?.admin === 'admin') return true;
       }
-      // Rank level 4+ qualifies
+      
       const level = getMemberRankLevel(chatId, senderJid);
       return level >= RANK_MANAGE_LEVEL;
     }
@@ -1220,6 +1311,60 @@ async function startBot(configInstance) {
       if (perms.deniedCmds && perms.deniedCmds.includes(cmdKey)) return false;
       if (perms.allowedCmds && perms.allowedCmds.includes(cmdKey)) return true;
       return null;
+    }
+
+    // CATEGORY TOGGLE MAP & HELPER
+    const CATEGORY_MAP = {
+      admin: ['ADMIN'],
+      moderation: ['MODERATOR'],
+      interactions: ['INTERACTIONS'],
+      fun: ['FUN', 'ANIME'],
+      games: ['GAMES', 'PowerScaling'],
+      utility: ['SUPPORT', 'STICKERS', 'SEARCH', 'INFO', 'USER INFO', 'PHANTOM THIEF', 'GROUP'],
+      rpg: ['RPG', 'GUILDS', 'PROGRESSION'],
+      cards: ['CARDS'],
+      gambling: ['GAMBLING'],
+      ai: [],
+      music: [],
+      logging: []
+    };
+
+    function isCommandDisabled(primaryCmd, botId) {
+      const disabledCats = system.get(botId + "_disabled_categories", []);
+      if (disabledCats.length === 0) return false;
+
+      const normalizedCats = disabledCats.map(c => c.toLowerCase());
+
+      const COMMAND_REGISTRY = require('./utils/commandRegistry');
+      for (const [catName, cmdList] of Object.entries(COMMAND_REGISTRY)) {
+        if (cmdList.some(c => c.cmd.toLowerCase() === primaryCmd.toLowerCase())) {
+          for (const [userCat, registryCats] of Object.entries(CATEGORY_MAP)) {
+            if (registryCats.includes(catName)) {
+              if (normalizedCats.includes(userCat.toLowerCase())) {
+                return userCat;
+              }
+            }
+          }
+        }
+      }
+
+      if (normalizedCats.includes('ai')) {
+        if (['summary', 'recap', 'roast', 'debate', 'judge'].includes(primaryCmd.toLowerCase())) {
+          return 'AI';
+        }
+      }
+      if (normalizedCats.includes('music')) {
+        if (['audio'].includes(primaryCmd.toLowerCase())) {
+          return 'Music';
+        }
+      }
+      if (normalizedCats.includes('logging')) {
+        if (['record', 'activity', 'active', 'inactive', 'tagactive', 'taginactive'].includes(primaryCmd.toLowerCase())) {
+          return 'Logging';
+        }
+      }
+
+      return false;
     }
 
     function loadSupportUsage() {
@@ -4066,7 +4211,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               admins.add(p.id);
               // Also store the resolved phone JID so lookups work either way
               // resolveToPhone is O(1) from in-memory lidCache for known mappings
-              const phoneJid = lidResolver.resolveToPhone(p.id, null);
+              const phoneJid = lidResolver.resolveToPhone(p.id, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
               if (phoneJid && phoneJid !== p.id) admins.add(phoneJid);
             }
           }
@@ -4220,9 +4365,20 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             const mentionedMembers = members.slice(0, WELCOME_MENTION_LIMIT);
             const extraCount = members.length - mentionedMembers.length;
-            const mentionsText = mentionedMembers
-              .map((jid) => `@${jid.split("@")[0]}`)
-              .join(", ");
+            const allMentions = [];
+            const mentionsTextList = [];
+
+            for (const jid of mentionedMembers) {
+              const phoneJid = lidResolver.resolveToPhone(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+              const phone = phoneJid ? phoneJid.split('@')[0] : jid.split('@')[0];
+              mentionsTextList.push(`@${phone}`);
+              allMentions.push(jid);
+              if (phoneJid && phoneJid !== jid) {
+                allMentions.push(phoneJid);
+              }
+            }
+
+            const mentionsText = mentionsTextList.join(", ");
             const mentionSuffix = extraCount > 0 ? ` and ${extraCount} more` : "";
             const userText = `${mentionsText}${mentionSuffix}`;
 
@@ -4243,14 +4399,18 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const newMemberRank = getMemberRankObj(groupId, memberJid);
               if (newMemberRank) {
                 const title = getMemberAdminTitle(groupId, memberJid);
-                const phone = memberJid.split('@')[0];
+                const phoneJid = lidResolver.resolveToPhone(memberJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+                const phone = phoneJid ? phoneJid.split('@')[0] : memberJid.split('@')[0];
                 welcomeText += `\n\n@${phone} Rank:\n${newMemberRank.icon} *${newMemberRank.name}*${title ? `\n🏷️ _${title}_` : ''}`;
+
+                if (!allMentions.includes(memberJid)) allMentions.push(memberJid);
+                if (phoneJid && !allMentions.includes(phoneJid)) allMentions.push(phoneJid);
               }
             }
 
             await sock.sendMessage(groupId, {
               text: welcomeText,
-              mentions: mentionedMembers,
+              mentions: allMentions,
             });
           }, WELCOME_BATCH_DELAY_MS);
 
@@ -4312,44 +4472,54 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const authorNormalized = jidNormalizedUser(author);
               const botNormalized = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
               if (authorNormalized !== botNormalized) {
-                const isOwner = _isBotOwner(authorNormalized);
-                const isGlobal = isGlobalMod && isGlobalMod(author);
-                if (!isOwner && !isGlobal) {
-                  const cmdKey = action === "remove" ? "kick" : action;
-                  let allowed = hasActionPermission(id, author, cmdKey);
-                  if (allowed) {
-                    for (const target of participants) {
-                      if (!canActOnMember(id, author, target, isOwner, isGlobal)) {
-                        allowed = false;
-                        break;
+                // If it is a voluntary leave (the author is the participant being removed), don't trigger kick protection
+                const isVoluntaryLeave = action === "remove" && participants.some(p => {
+                  const pNorm = jidNormalizedUser(normalizeParticipantJid(p) || '');
+                  return pNorm === authorNormalized;
+                });
+
+                if (isVoluntaryLeave) {
+                  console.log(`ℹ️ Voluntary leave by ${authorNormalized} in group ${id}. Ignoring kick protection.`);
+                } else {
+                  const isOwner = _isBotOwner(authorNormalized);
+                  const isGlobal = isGlobalMod && isGlobalMod(author);
+                  if (!isOwner && !isGlobal) {
+                    const cmdKey = action === "remove" ? "kick" : action;
+                    let allowed = hasActionPermission(id, author, cmdKey);
+                    if (allowed) {
+                      for (const target of participants) {
+                        if (!canActOnMember(id, author, target, isOwner, isGlobal)) {
+                          allowed = false;
+                          break;
+                        }
                       }
                     }
-                  }
 
-                  if (!allowed) {
-                    if (action === "promote") {
-                      console.log(`🛡️ Undo manual promotion by unauthorized user: ${author} in group ${id}`);
-                      await sock.sendMessage(id, {
-                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to promote members. Reverting promotion...`,
-                        mentions: [author]
-                      });
-                      await sock.groupParticipantsUpdate(id, participants, "demote");
-                    } else if (action === "demote") {
-                      console.log(`🛡️ Undo manual demotion by unauthorized user: ${author} in group ${id}`);
-                      await sock.sendMessage(id, {
-                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to demote members. Reverting demotion...`,
-                        mentions: [author]
-                      });
-                      await sock.groupParticipantsUpdate(id, participants, "promote");
-                    } else if (action === "remove") {
-                      console.log(`🛡️ Undo manual kick by unauthorized user: ${author} in group ${id}`);
-                      await sock.sendMessage(id, {
-                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to kick members. Attempting to add them back...`,
-                        mentions: [author]
-                      });
-                      await sock.groupParticipantsUpdate(id, participants, "add");
+                    if (!allowed) {
+                      if (action === "promote") {
+                        console.log(`🛡️ Undo manual promotion by unauthorized user: ${author} in group ${id}`);
+                        await sock.sendMessage(id, {
+                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to promote members. Reverting promotion...`,
+                          mentions: [author]
+                        });
+                        await sock.groupParticipantsUpdate(id, participants, "demote");
+                      } else if (action === "demote") {
+                        console.log(`🛡️ Undo manual demotion by unauthorized user: ${author} in group ${id}`);
+                        await sock.sendMessage(id, {
+                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to demote members. Reverting demotion...`,
+                          mentions: [author]
+                        });
+                        await sock.groupParticipantsUpdate(id, participants, "promote");
+                      } else if (action === "remove") {
+                        console.log(`🛡️ Undo manual kick by unauthorized user: ${author} in group ${id}`);
+                        await sock.sendMessage(id, {
+                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to kick members. Attempting to add them back...`,
+                          mentions: [author]
+                        });
+                        await sock.groupParticipantsUpdate(id, participants, "add");
+                      }
+                      return;
                     }
-                    return;
                   }
                 }
               }
@@ -4913,6 +5083,20 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   }
 
                   // ── CARD SYSTEM INTERCEPT ──────────────────
+                  if (_looksLikeCmd) {
+                    const disabledCats = system.get(botConfig.getBotId() + "_disabled_categories", []);
+                    const normalizedDisabled = disabledCats.map(c => c.toLowerCase());
+                    if (normalizedDisabled.includes('cards')) {
+                      const cardCmds = ['claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 'swap card', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'list decks', 'create deck', 'cdeck', 'rename deck', 'delete deck'];
+                      const words = lowerTxt.split(' ');
+                      const prefixPart = botConfig.getPrefix().toLowerCase();
+                      const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
+                      if (cardCmds.includes(firstWord.toLowerCase()) || cardCmds.includes(words.slice(0, 2).map(w => w.startsWith(prefixPart) ? w.slice(prefixPart.length) : (w.startsWith('.') ? w.slice(1) : w)).join(' ').toLowerCase())) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ The *Cards* category is currently disabled for this bot instance.` });
+                      }
+                    }
+                  }
+
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
                     lowerTxt, // cleaned, lowercased text
@@ -5103,6 +5287,13 @@ _💡 Reply with another number from your search list!_`.trim();
                       .trim();
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
+
+                    const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
+                    if (disabledCat) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ The *${disabledCat}* category is currently disabled for this bot instance.`,
+                      });
+                    }
 
                     // ── PIPELINE STAGE 4: CMD ROUTER ───────────
                     console.log(`⚡ [Pipeline:4] CMD DETECTED | cmd=${JSON.stringify(primaryCmd)} | sender=${senderJid.split('@')[0]} | chat=${chatId.split('@')[0]} | isSelf=${isSelf}`);
@@ -7916,6 +8107,82 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // .j category enable/disable/list & .j rank on/off commands
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} categories` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} category `)
+                  ) {
+                    const isGlobal = isGlobalMod && isGlobalMod(senderJid);
+                    if (!isOwner && !isGlobal) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only Global Moderators or Owners can toggle command categories.",
+                      });
+                    }
+
+                    const args = cleanTxt.split(" ");
+                    const subCommand = args[2] ? args[2].toLowerCase() : "list";
+                    const targetCat = args.slice(3).join(" ").trim().toLowerCase();
+
+                    const validCategories = [
+                      'Admin', 'Moderation', 'Interactions', 'Fun', 'Games',
+                      'Utility', 'AI', 'Music', 'Logging', 'RPG', 'Cards', 'Gambling'
+                    ];
+
+                    const disabledCats = system.get(botConfig.getBotId() + "_disabled_categories", []);
+
+                    if (subCommand === "list" || lowerTxt.endsWith("categories")) {
+                      let msg = `⚙️ *COMMAND CATEGORY STATUS* ⚙️\n`;
+                      msg += `Bot Instance: *${botConfig.getBotName()}* [${botConfig.getBotId()}]\n\n`;
+                      for (const cat of validCategories) {
+                        const isDisabled = disabledCats.some(c => c.toLowerCase() === cat.toLowerCase());
+                        msg += `${isDisabled ? '❌' : '✅'} *${cat}*: ${isDisabled ? 'DISABLED' : 'ENABLED'}\n`;
+                      }
+                      msg += `\n_To toggle: \`${botConfig.getPrefix()} category <enable/disable> <category>\`_\n`;
+                      msg += `_Note: The Economy system cannot be disabled._`;
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    }
+
+                    if (subCommand === "disable" || subCommand === "enable") {
+                      if (!targetCat) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Please specify a category. Example: \`${botConfig.getPrefix()} category ${subCommand} RPG\``,
+                        });
+                      }
+
+                      const matched = validCategories.find(c => c.toLowerCase() === targetCat);
+                      if (!matched) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Invalid category. Valid categories: ${validCategories.join(", ")}`,
+                        });
+                      }
+
+                      if (subCommand === "disable") {
+                        if (disabledCats.some(c => c.toLowerCase() === matched.toLowerCase())) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `ℹ️ Category *${matched}* is already disabled.`,
+                          });
+                        }
+                        disabledCats.push(matched);
+                        system.set(botConfig.getBotId() + "_disabled_categories", disabledCats);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Category *${matched}* has been *DISABLED* for bot instance *${botConfig.getBotName()}*.`,
+                        });
+                      } else {
+                        const index = disabledCats.findIndex(c => c.toLowerCase() === matched.toLowerCase());
+                        if (index === -1) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `ℹ️ Category *${matched}* is already enabled.`,
+                          });
+                        }
+                        disabledCats.splice(index, 1);
+                        system.set(botConfig.getBotId() + "_disabled_categories", disabledCats);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Category *${matched}* has been *ENABLED* for bot instance *${botConfig.getBotName()}*.`,
+                        });
+                      }
+                    }
+                  }
+
                   // `${botConfig.getPrefix().toLowerCase()}` delete - delete the replied-to message and tag the person
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} delete`
@@ -9098,6 +9365,52 @@ Commands:
 
                   // ── GROUP RANK SYSTEM COMMANDS ──────────────────────────────────────
                   const P = botConfig.getPrefix().toLowerCase();
+
+                  // .g rank on / .g rank off
+                  if (lowerTxt === `${P} rank on` || lowerTxt === `${P} rank off`) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try { meta = await getGroupMetadata(chatId); } catch (err) {}
+                    }
+                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                      return reply('❌ You do not have permission to manage ranks.');
+                    }
+                    const settings = getGroupSettings(chatId);
+                    const enable = lowerTxt.endsWith("on");
+                    settings.ranksEnabled = enable;
+                    saveGroupSettings();
+                    return reply(BOT_MARKER + `✅ Rank system is now ${enable ? 'ENABLED' : 'DISABLED'} for this group.`);
+                  }
+
+                  // Intercept rank system commands if disabled
+                  const isRankCommand = 
+                    lowerTxt === `${P} rank setup` ||
+                    lowerTxt.startsWith(`${P} rank add `) ||
+                    lowerTxt.startsWith(`${P} rank remove `) ||
+                    lowerTxt === `${P} ranks` ||
+                    lowerTxt.startsWith(`${P} set rank `) ||
+                    lowerTxt.startsWith(`${P} setrank `) ||
+                    lowerTxt.startsWith(`${P} unrank`) ||
+                    lowerTxt.startsWith(`${P} removerank`) ||
+                    lowerTxt === `${P} myrank` ||
+                    lowerTxt.startsWith(`${P} rankinfo`) ||
+                    lowerTxt.startsWith(`${P} rank info`) ||
+                    lowerTxt.startsWith(`${P} rank allow `) ||
+                    lowerTxt.startsWith(`${P} rank deny `) ||
+                    lowerTxt === `${P} rank perms` ||
+                    lowerTxt.startsWith(`${P} rank reset perms`) ||
+                    lowerTxt === `${P} rank guide` ||
+                    lowerTxt === `${P} who` ||
+                    lowerTxt.startsWith(`${P} title set `) ||
+                    lowerTxt.startsWith(`${P} title remove`);
+
+                  if (isRankCommand) {
+                    const settings = getGroupSettings(chatId);
+                    if (settings.ranksEnabled === false) {
+                      return reply(BOT_MARKER + `❌ The rank system is currently disabled in this group. An admin can enable it with \`${P} rank on\`.`);
+                    }
+                  }
 
                   // .g rank setup
                   if (lowerTxt === `${P} rank setup`) {
