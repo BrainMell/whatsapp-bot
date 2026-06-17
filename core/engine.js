@@ -188,8 +188,13 @@ function delGlobalMod(userId) {
 }
 
 function isGlobalMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
-  return globalMods.has(jidNormalizedUser(userId));
+  try {
+    return globalMods.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
 }
 
 // Helper for dynamic ESM import of got-scraping
@@ -1023,9 +1028,10 @@ async function startBot(configInstance) {
       }
     }
 
-    const _isBotOwner = (jid) => jid.startsWith("233201487480") || jid.includes("251453323092189") || jid.includes("105712667648066");
+    const _isBotOwner = (jid) => typeof jid === 'string' && (jid.startsWith("233201487480") || jid.includes("251453323092189") || jid.includes("105712667648066"));
 
     function hasActionPermission(chatId, userJid, cmdKey) {
+      if (!userJid || typeof userJid !== 'string') return false;
       const isOwner = _isBotOwner(userJid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
       const globalMod = isGlobalMod && isGlobalMod(userJid);
       if (isOwner || globalMod) return true;
@@ -1087,8 +1093,25 @@ async function startBot(configInstance) {
 
     // Returns the rank level for a JID, 0 if unranked.
     function getMemberRankLevel(chatId, jid) {
+      if (!jid) return 0;
       const settings = getGroupSettings(chatId);
-      const assigned = settings.memberRanks?.[jid];
+      
+      let assigned = settings.memberRanks?.[jid];
+      let assignedKey = jid;
+      
+      if (assigned === undefined && settings.memberRanks) {
+        const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+        const phoneJid = resolveToPhone(jid, configInstance.getAuthPath());
+        const canonicalJid = resolveJid(jid, configInstance.getAuthPath());
+        
+        if (phoneJid && settings.memberRanks[phoneJid] !== undefined) {
+          assigned = settings.memberRanks[phoneJid];
+          assignedKey = phoneJid;
+        } else if (canonicalJid && settings.memberRanks[canonicalJid] !== undefined) {
+          assigned = settings.memberRanks[canonicalJid];
+          assignedKey = canonicalJid;
+        }
+      }
       
       const meta = groupMetadataCache.get(chatId);
       let isGroupAdmin = false;
@@ -1102,16 +1125,21 @@ async function startBot(configInstance) {
       }
 
       // Also check if owner or global mod
-      const isOwner = _isBotOwner(jid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(jid));
+      const isOwner = (jid && typeof jid === 'string') && (_isBotOwner(jid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(jid)));
       const globalMod = isGlobalMod && isGlobalMod(jid);
 
       if (assigned != null) {
         if (isGroupAdmin || isGroupSuperadmin || isOwner || globalMod) {
           return assigned;
+        } else if (meta && meta.participants) {
+          // Clean up rank assignment since they are no longer admin (metadata verified)
+          if (settings.memberRanks?.[assignedKey] !== undefined) {
+            delete settings.memberRanks[assignedKey];
+            saveGroupSettings();
+          }
         } else {
-          // Clean up rank assignment since they are no longer admin
-          delete settings.memberRanks[jid];
-          saveGroupSettings();
+          // Metadata is missing/uncached right now, return the assigned rank without deleting it
+          return assigned;
         }
       }
 
@@ -1139,6 +1167,26 @@ async function startBot(configInstance) {
       const level = getMemberRankLevel(chatId, jid);
       if (!level || !settings.rankLadder?.length) return null;
       return settings.rankLadder.find(r => r.level === level) || null;
+    }
+
+    // Returns custom admin title for a JID (handles JID-agnostic formats)
+    function getMemberAdminTitle(chatId, jid) {
+      if (!jid) return null;
+      const settings = getGroupSettings(chatId);
+      if (!settings.adminTitles) return null;
+      let title = settings.adminTitles[jid];
+      if (title === undefined) {
+        const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+        const phoneJid = resolveToPhone(jid, configInstance.getAuthPath());
+        const canonicalJid = resolveJid(jid, configInstance.getAuthPath());
+        
+        if (phoneJid && settings.adminTitles[phoneJid] !== undefined) {
+          title = settings.adminTitles[phoneJid];
+        } else if (canonicalJid && settings.adminTitles[canonicalJid] !== undefined) {
+          title = settings.adminTitles[canonicalJid];
+        }
+      }
+      return title || null;
     }
 
     // Highest rank level defined in this group's ladder.
@@ -4209,7 +4257,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             for (const memberJid of members) {
               const newMemberRank = getMemberRankObj(groupId, memberJid);
               if (newMemberRank) {
-                const title = settings.adminTitles?.[memberJid];
+                const title = getMemberAdminTitle(groupId, memberJid);
                 const phone = memberJid.split('@')[0];
                 welcomeText += `\n\n@${phone} Rank:\n${newMemberRank.icon} *${newMemberRank.name}*${title ? `\n🏷️ _${title}_` : ''}`;
               }
@@ -4233,9 +4281,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 groupMetadataCache.set(update.id, cached);
               }
 
-              if (update.author) {
+              if (update.author && typeof update.author === 'string') {
                 const authorNormalized = jidNormalizedUser(update.author);
-                const botNormalized = jidNormalizedUser(sock.user.id);
+                const botNormalized = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
                 if (authorNormalized !== botNormalized) {
                   const isOwner = _isBotOwner(authorNormalized);
                   const isGlobal = isGlobalMod && isGlobalMod(update.author);
@@ -4275,9 +4323,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             if (!groupMetadata) return;
 
             // AUTO-UNDO MANUAL ACTIONS
-            if (author && (action === "promote" || action === "demote" || action === "remove")) {
+            if (author && typeof author === 'string' && (action === "promote" || action === "demote" || action === "remove")) {
               const authorNormalized = jidNormalizedUser(author);
-              const botNormalized = jidNormalizedUser(sock.user.id);
+              const botNormalized = sock?.user?.id ? jidNormalizedUser(sock.user.id) : null;
               if (authorNormalized !== botNormalized) {
                 const isOwner = _isBotOwner(authorNormalized);
                 const isGlobal = isGlobalMod && isGlobalMod(author);
@@ -4641,7 +4689,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   if (!m.key.fromMe) {
                     // Revert unauthorized manual pin/unpin
                     const pinInChat = m.message?.pinInChatMessage || m.message?.protocolMessage?.pinInChatMessage;
-                    if (pinInChat && isGroupChat) {
+                    if (pinInChat && isGroupChat && senderJid && typeof senderJid === 'string') {
                       const authorNormalized = jidNormalizedUser(senderJid);
                       const isOwner = _isBotOwner(authorNormalized);
                       const isGlobal = isGlobalMod && isGlobalMod(senderJid);
@@ -9261,11 +9309,19 @@ Commands:
                     }
 
                     const settings = getGroupSettings(chatId);
-                    if (!settings.memberRanks?.[target]) {
+                    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+                    const phoneJid = resolveToPhone(target, configInstance.getAuthPath());
+                    const canonicalJid = resolveJid(target, configInstance.getAuthPath());
+                    
+                    let removed = false;
+                    if (settings.memberRanks) {
+                      if (settings.memberRanks[target] !== undefined) { delete settings.memberRanks[target]; removed = true; }
+                      if (phoneJid && settings.memberRanks[phoneJid] !== undefined) { delete settings.memberRanks[phoneJid]; removed = true; }
+                      if (canonicalJid && settings.memberRanks[canonicalJid] !== undefined) { delete settings.memberRanks[canonicalJid]; removed = true; }
+                    }
+                    if (!removed) {
                       return reply(`❌ That user does not have an assigned rank.`);
                     }
-
-                    delete settings.memberRanks[target];
                     saveGroupSettings();
                     const phone = target.split('@')[0];
                     return reply({
@@ -9279,8 +9335,7 @@ Commands:
                     if (!isGroupChat) return reply('❌ Groups only.');
                     const level = getMemberRankLevel(chatId, senderJid);
                     const rankObj = getMemberRankObj(chatId, senderJid);
-                    const settings = getGroupSettings(chatId);
-                    const title = settings.adminTitles?.[senderJid] || rankObj?.name;
+                    const title = getMemberAdminTitle(chatId, senderJid) || rankObj?.name;
                     const phone = senderJid.split('@')[0];
 
                     let resp = `🎖️ *YOUR RANK*\n${'─'.repeat(20)}\n`;
@@ -9304,8 +9359,7 @@ Commands:
                     const target = getMentionOrReply(m) || senderJid;
                     const level = getMemberRankLevel(chatId, target);
                     const rankObj = getMemberRankObj(chatId, target);
-                    const settings = getGroupSettings(chatId);
-                    const title = settings.adminTitles?.[target] || rankObj?.name;
+                    const title = getMemberAdminTitle(chatId, target) || rankObj?.name;
                     const phone = target.split('@')[0];
 
                     let resp = `🎖️ *MEMBER RANK*\n${'─'.repeat(20)}\n`;
@@ -9374,10 +9428,19 @@ Commands:
                     }
 
                     const settings = getGroupSettings(chatId);
-                    if (!settings.adminTitles?.[target]) {
+                    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+                    const phoneJid = resolveToPhone(target, configInstance.getAuthPath());
+                    const canonicalJid = resolveJid(target, configInstance.getAuthPath());
+                    
+                    let removed = false;
+                    if (settings.adminTitles) {
+                      if (settings.adminTitles[target] !== undefined) { delete settings.adminTitles[target]; removed = true; }
+                      if (phoneJid && settings.adminTitles[phoneJid] !== undefined) { delete settings.adminTitles[phoneJid]; removed = true; }
+                      if (canonicalJid && settings.adminTitles[canonicalJid] !== undefined) { delete settings.adminTitles[canonicalJid]; removed = true; }
+                    }
+                    if (!removed) {
                       return reply(`❌ That user does not have a custom title.`);
                     }
-                    delete settings.adminTitles[target];
                     saveGroupSettings();
                     const phone = target.split('@')[0];
                     return reply({
@@ -9562,7 +9625,7 @@ Members are assigned to Rank Tiers (1 to 5).
                         } else {
                           for (const jid of membersAtRank) {
                             const phone = jid.split('@')[0];
-                            const title = settings.adminTitles?.[jid] || rankObj?.name;
+                            const title = getMemberAdminTitle(chatId, jid) || rankObj?.name;
                             let suffix = '';
                             if (jid === superAdmin) {
                               suffix = ' [Superadmin]';
@@ -9591,7 +9654,7 @@ Members are assigned to Rank Tiers (1 to 5).
                       roster += `🛡️ *Unranked Administrators*\n`;
                       for (const jid of unrankedAdmins) {
                         const phone = jid.split('@')[0];
-                        const title = settings.adminTitles?.[jid] || getMemberRankObj(chatId, jid)?.name;
+                        const title = getMemberAdminTitle(chatId, jid) || getMemberRankObj(chatId, jid)?.name;
                         let suffix = jid === superAdmin ? ' [Superadmin]' : ' [Admin]';
                         roster += `• @${phone}${suffix}\n`;
                         if (title) roster += `  └ 🏷️ _${title}_\n`;
