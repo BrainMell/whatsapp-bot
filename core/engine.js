@@ -9549,6 +9549,7 @@ Members are assigned to Rank Tiers (1 to 5).
                         const membersAtRank = [];
                         if (meta && meta.participants) {
                           for (const p of meta.participants) {
+                            if (!p.admin && !_isBotOwner(p.id) && !(isGlobalMod && isGlobalMod(p.id))) continue;
                             if (getMemberRankLevel(chatId, p.id) === level) {
                               membersAtRank.push(p.id);
                             }
