@@ -945,6 +945,92 @@ async function startBot(configInstance) {
       system.set(BOT_ID + "_group_settings", Object.fromEntries(groupSettings));
     }
 
+    const activePinTimers = new Map();
+
+    async function unpinMessage(sock, chatId, pin) {
+      try {
+        await sock.sendMessage(chatId, {
+          pin: {
+            key: {
+              remoteJid: chatId,
+              fromMe: pin.fromMe,
+              id: pin.stanzaId,
+              participant: pin.participant,
+            },
+            type: 0, // 0 to unpin
+            time: 0,
+          },
+        });
+      } catch (err) {
+        console.log(`Unpin failed for ${chatId}, attempting relayMessage fallback...`);
+        try {
+          await sock.relayMessage(
+            chatId,
+            {
+              pinInChatMessage: {
+                key: {
+                  remoteJid: chatId,
+                  fromMe: pin.fromMe,
+                  id: pin.stanzaId,
+                  participant: pin.participant,
+                },
+                type: 0,
+                time: 0,
+              },
+            },
+            {},
+          );
+        } catch (relayErr) {
+          console.error(`Unpin relay error for ${chatId}:`, relayErr);
+        }
+      }
+    }
+
+    function resumePinTimers(sock) {
+      if (!sock) return;
+      console.log("📌 Resuming active pin timers...");
+      for (const [chatId, settings] of groupSettings.entries()) {
+        if (!settings.activePins) continue;
+        const pins = [...settings.activePins];
+        settings.activePins = [];
+        for (const pin of pins) {
+          const timeLeft = pin.unpinAt - Date.now();
+          if (timeLeft <= 0) {
+            console.log(`📌 Pin expired for chat ${chatId}, message ${pin.stanzaId}. Unpinning...`);
+            unpinMessage(sock, chatId, pin).catch(err => console.error("Error unpinning expired pin:", err));
+          } else {
+            console.log(`📌 Pin active for chat ${chatId}, message ${pin.stanzaId}. Unpinning in ${timeLeft}ms`);
+            settings.activePins.push(pin);
+            const timerId = setTimeout(() => {
+              const s = getGroupSettings(chatId);
+              s.activePins = (s.activePins || []).filter(p => p.stanzaId !== pin.stanzaId);
+              saveGroupSettings();
+              unpinMessage(sock, chatId, pin).catch(err => console.error("Error unpinning pin on timeout:", err));
+            }, timeLeft);
+            const key = `${chatId}_${pin.stanzaId}`;
+            if (activePinTimers.has(key)) {
+              clearTimeout(activePinTimers.get(key));
+            }
+            activePinTimers.set(key, timerId);
+          }
+        }
+        saveGroupSettings();
+      }
+    }
+
+    function hasActionPermission(chatId, userJid, cmdKey) {
+      const level = getMemberRankLevel(chatId, userJid);
+      const isOwner = userJid === botConfig.getOwnerNumber() + "@s.whatsapp.net" || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
+      const globalMod = isGlobalMod && isGlobalMod(userJid);
+      if (isOwner || globalMod) return true;
+
+      const override = checkRankPermission(chatId, level, cmdKey);
+      if (override === true) return true;
+      if (override === false) return false;
+
+      return level >= 4;
+    }
+
     function getGroupSettings(chatId) {
       if (!groupSettings.has(chatId)) {
         groupSettings.set(chatId, {
@@ -962,6 +1048,7 @@ async function startBot(configInstance) {
           lockMode: "open",
           adminTitles: {},
           rankPerms: {},          // { level: { allowedCmds: [], deniedCmds: [] } }
+          activePins: [],
         });
         saveGroupSettings();
       }
@@ -972,28 +1059,45 @@ async function startBot(configInstance) {
     function getMemberRankLevel(chatId, jid) {
       const settings = getGroupSettings(chatId);
       const assigned = settings.memberRanks?.[jid];
-      // FIX: use != null so explicit rank-0 assignments are respected (0 is falsy)
-      if (assigned != null) return assigned;
+      
+      const meta = groupMetadataCache.get(chatId);
+      let isGroupAdmin = false;
+      let isGroupSuperadmin = false;
+      if (meta && meta.participants) {
+        const p = meta.participants.find(x => (x.id || x) === jid);
+        if (p) {
+          if (p.admin === 'superadmin') isGroupSuperadmin = true;
+          if (p.admin === 'admin') isGroupAdmin = true;
+        }
+      }
+
+      // Also check if owner or global mod
+      const isOwner = jid === botConfig.getOwnerNumber() + "@s.whatsapp.net" || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(jid));
+      const globalMod = isGlobalMod && isGlobalMod(jid);
+
+      if (assigned != null) {
+        if (isGroupAdmin || isGroupSuperadmin || isOwner || globalMod) {
+          return assigned;
+        } else {
+          // Clean up rank assignment since they are no longer admin
+          delete settings.memberRanks[jid];
+          saveGroupSettings();
+        }
+      }
 
       // If not explicitly assigned, check if they inherit rank authority automatically:
       // - WhatsApp superadmin -> auto-assigned to highest rank in the group
       // - WhatsApp admin -> auto-assigned to the second-highest rank if unranked
       if (!settings.rankLadder || settings.rankLadder.length === 0) return 0;
 
-      const meta = groupMetadataCache.get(chatId);
-      if (meta && meta.participants) {
-        const p = meta.participants.find(x => (x.id || x) === jid);
-        if (p) {
-          if (p.admin === 'superadmin') {
-            return getTopRankLevel(chatId);
-          } else if (p.admin === 'admin') {
-            const ladder = [...settings.rankLadder].sort((a, b) => b.level - a.level);
-            if (ladder.length > 1) {
-              return ladder[1].level; // second-highest
-            } else if (ladder.length === 1) {
-              return ladder[0].level; // fallback if only 1 rank exists
-            }
-          }
+      if (isGroupSuperadmin) {
+        return getTopRankLevel(chatId);
+      } else if (isGroupAdmin) {
+        const ladder = [...settings.rankLadder].sort((a, b) => b.level - a.level);
+        if (ladder.length > 1) {
+          return ladder[1].level; // second-highest
+        } else if (ladder.length === 1) {
+          return ladder[0].level; // fallback if only 1 rank exists
         }
       }
       return 0;
@@ -3802,6 +3906,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 [], // Mods (init empty, will load from DB)
                 "233201487480@s.whatsapp.net", // Owner
               );
+              
+              setTimeout(() => resumePinTimers(sock), 5000);
             }
 
             if (connection === "close") {
@@ -4096,17 +4202,95 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 Object.assign(cached, update);
                 groupMetadataCache.set(update.id, cached);
               }
+
+              if (update.author) {
+                const authorNormalized = jidNormalizedUser(update.author);
+                const botNormalized = jidNormalizedUser(sock.user.id);
+                if (authorNormalized !== botNormalized) {
+                  const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                  const isGlobal = isGlobalMod && isGlobalMod(update.author);
+                  if (!isOwner && !isGlobal) {
+                    const allowed = hasActionPermission(update.id, update.author, "glock");
+                    if (!allowed) {
+                      console.log(`🛡️ Undo manual group setting change by unauthorized user: ${update.author} in group ${update.id}`);
+                      await sock.sendMessage(update.id, {
+                        text: BOT_MARKER + `⚠️ @${update.author.split('@')[0]} is not authorized to edit group settings. Reverting changes...`,
+                        mentions: [update.author]
+                      });
+
+                      if (update.announce !== undefined) {
+                        const settings = getGroupSettings(update.id);
+                        const expectedAnnounce = settings.lockMode === 'locked';
+                        await sock.groupSettingUpdate(update.id, expectedAnnounce ? 'announcement' : 'not_announcement');
+                      }
+                      
+                      if (update.restrict !== undefined) {
+                        const originalRestrict = cached ? !update.restrict : true;
+                        await sock.groupSettingUpdate(update.id, originalRestrict ? 'locked' : 'unlocked');
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         });
 
         sock.ev.on("group-participants.update", async (update) => {
           try {
-            const { id, participants, action } = update;
+            const { id, participants, action, author } = update;
 
             // Get cached metadata or fetch it (non-forced)
             let groupMetadata = await getGroupMetadata(id, false);
             if (!groupMetadata) return;
+
+            // AUTO-UNDO MANUAL ACTIONS
+            if (author && (action === "promote" || action === "demote" || action === "remove")) {
+              const authorNormalized = jidNormalizedUser(author);
+              const botNormalized = jidNormalizedUser(sock.user.id);
+              if (authorNormalized !== botNormalized) {
+                const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                const isGlobal = isGlobalMod && isGlobalMod(author);
+                if (!isOwner && !isGlobal) {
+                  const cmdKey = action === "remove" ? "kick" : action;
+                  let allowed = hasActionPermission(id, author, cmdKey);
+                  if (allowed) {
+                    for (const target of participants) {
+                      if (!canActOnMember(id, author, target, isOwner, isGlobal)) {
+                        allowed = false;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (!allowed) {
+                    if (action === "promote") {
+                      console.log(`🛡️ Undo manual promotion by unauthorized user: ${author} in group ${id}`);
+                      await sock.sendMessage(id, {
+                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to promote members. Reverting promotion...`,
+                        mentions: [author]
+                      });
+                      await sock.groupParticipantsUpdate(id, participants, "demote");
+                    } else if (action === "demote") {
+                      console.log(`🛡️ Undo manual demotion by unauthorized user: ${author} in group ${id}`);
+                      await sock.sendMessage(id, {
+                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to demote members. Reverting demotion...`,
+                        mentions: [author]
+                      });
+                      await sock.groupParticipantsUpdate(id, participants, "promote");
+                    } else if (action === "remove") {
+                      console.log(`🛡️ Undo manual kick by unauthorized user: ${author} in group ${id}`);
+                      await sock.sendMessage(id, {
+                        text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to kick members. Attempting to add them back...`,
+                        mentions: [author]
+                      });
+                      await sock.groupParticipantsUpdate(id, participants, "add");
+                    }
+                    return;
+                  }
+                }
+              }
+            }
 
             // In-memory sync of the cached participants list
             if (groupMetadata.participants) {
@@ -4331,7 +4515,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.imageMessage ||
                     m.message.videoMessage ||
                     m.message.stickerMessage ||
-                    m.message.audioMessage;
+                    m.message.audioMessage ||
+                    m.message.protocolMessage ||
+                    m.message.pinInChatMessage;
                   if (!hasRealContent && m.messageStubType) return;
 
                   // 4. Diagnostic Log
@@ -4423,6 +4609,43 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // SECURITY & SPAM DETECTION
                   // ============================================
                   if (!m.key.fromMe) {
+                    // Revert unauthorized manual pin/unpin
+                    const pinInChat = m.message?.pinInChatMessage || m.message?.protocolMessage?.pinInChatMessage;
+                    if (pinInChat && isGroupChat) {
+                      const authorNormalized = jidNormalizedUser(senderJid);
+                      const isOwner = authorNormalized === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                      const isGlobal = isGlobalMod && isGlobalMod(senderJid);
+                      if (!isOwner && !isGlobal) {
+                        const allowed = hasActionPermission(chatId, senderJid, "pin");
+                        if (!allowed) {
+                          console.log(`🛡️ Undo manual pin/unpin by unauthorized user: ${senderJid} in group ${chatId}`);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `⚠️ @${senderJid.split('@')[0]} is not authorized to pin/unpin messages. Reverting...`,
+                            mentions: [senderJid]
+                          });
+
+                          const type = pinInChat.type; // 1 = pin, 0 = unpin
+                          const targetKey = pinInChat.key;
+                          if (type === 1) {
+                            await unpinMessage(sock, chatId, {
+                              stanzaId: targetKey.id,
+                              participant: targetKey.participant,
+                              fromMe: targetKey.fromMe
+                            });
+                          } else if (type === 0) {
+                            await sock.sendMessage(chatId, {
+                              pin: {
+                                key: targetKey,
+                                type: 1,
+                                time: 2592000
+                              }
+                            });
+                          }
+                          return;
+                        }
+                      }
+                    }
+
                     // 1. Antilink Security (Skip for admins)
                     // Pass groupMetadata to avoid redundant fetches
                     await runSecurity.handleSecurity(
@@ -7863,20 +8086,73 @@ Usage: ${newUsage}/5${warningText}`;
                         "📌 PIN",
                         "pin <duration>",
                         "pin 24h",
-                        "Durations: 24h, 7d, 30d. You must reply to a message.",
+                        "Durations: 24h, 7d, 30d, or custom time like 30s, 15m, 2h. You must reply to a message.",
                       );
                     }
 
                     // Parse duration
                     const args = lowerTxt.split(" ");
                     let time = 2592000; // Default 30 days in seconds
+                    let isCustomTimer = false;
+                    let customSeconds = 0;
+                    let durationStr = "30 days";
 
                     if (args[2]) {
                       const durStr = args[2].toLowerCase();
-                      if (durStr.endsWith("h")) time = parseInt(durStr) * 3600;
-                      else if (durStr.endsWith("d"))
-                        time = parseInt(durStr) * 86400;
+                      const match = durStr.match(/^(\d+)([smdh])$/);
+                      if (match) {
+                        const val = parseInt(match[1]);
+                        const unit = match[2];
+                        if (unit === 's') {
+                          customSeconds = val;
+                          isCustomTimer = true;
+                          durationStr = `${val} seconds`;
+                        } else if (unit === 'm') {
+                          customSeconds = val * 60;
+                          isCustomTimer = true;
+                          durationStr = `${val} minutes`;
+                        } else if (unit === 'h') {
+                          customSeconds = val * 3600;
+                          if (val !== 24) {
+                            isCustomTimer = true;
+                            durationStr = `${val} hours`;
+                          } else {
+                            time = 86400;
+                            durationStr = "24 hours";
+                          }
+                        } else if (unit === 'd') {
+                          customSeconds = val * 86400;
+                          if (val === 7) {
+                            time = 604800;
+                            durationStr = "7 days";
+                          } else if (val === 30) {
+                            time = 2592000;
+                            durationStr = "30 days";
+                          } else {
+                            isCustomTimer = true;
+                            durationStr = `${val} days`;
+                          }
+                        }
+                      } else {
+                        if (durStr.endsWith("h")) {
+                          const val = parseInt(durStr);
+                          time = val * 3600;
+                          if (val !== 24) isCustomTimer = true;
+                          customSeconds = time;
+                          durationStr = `${val} hours`;
+                        } else if (durStr.endsWith("d")) {
+                          const val = parseInt(durStr);
+                          time = val * 86400;
+                          if (val !== 7 && val !== 30) isCustomTimer = true;
+                          customSeconds = time;
+                          durationStr = `${val} days`;
+                        }
+                      }
                     }
+
+                    const participantNormalized = contextInfo.participant ? jidNormalizedUser(contextInfo.participant) : null;
+                    const botNormalized = jidNormalizedUser(sock.user.id);
+                    const fromMe = participantNormalized === botNormalized;
 
                     try {
                       // Attempt standard pin
@@ -7884,49 +8160,98 @@ Usage: ${newUsage}/5${warningText}`;
                         pin: {
                           key: {
                             remoteJid: chatId,
-                            fromMe:
-                              contextInfo.participant ===
-                              jidNormalizedUser(sock.user.id),
+                            fromMe: fromMe,
                             id: contextInfo.stanzaId,
                             participant: contextInfo.participant,
                           },
                           type: 1, // 1 to pin
-                          time: time,
+                          time: isCustomTimer ? 2592000 : time,
                         },
                       });
+
+                      if (isCustomTimer) {
+                        const settings = getGroupSettings(chatId);
+                        settings.activePins = settings.activePins || [];
+                        settings.activePins = settings.activePins.filter(p => p.stanzaId !== contextInfo.stanzaId);
+                        const pinObj = {
+                          stanzaId: contextInfo.stanzaId,
+                          participant: contextInfo.participant,
+                          fromMe: fromMe,
+                          unpinAt: Date.now() + (customSeconds * 1000)
+                        };
+                        settings.activePins.push(pinObj);
+                        saveGroupSettings();
+
+                        const key = `${chatId}_${contextInfo.stanzaId}`;
+                        if (activePinTimers.has(key)) {
+                          clearTimeout(activePinTimers.get(key));
+                        }
+                        const timerId = setTimeout(() => {
+                          const s = getGroupSettings(chatId);
+                          s.activePins = (s.activePins || []).filter(p => p.stanzaId !== contextInfo.stanzaId);
+                          saveGroupSettings();
+                          unpinMessage(sock, chatId, pinObj).catch(err => console.error("Error unpinning on timeout:", err));
+                        }, customSeconds * 1000);
+                        activePinTimers.set(key, timerId);
+                      }
+
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `✅ Message pinned for ${args[2] || "30 days"}!`,
+                          `✅ Message pinned for ${durationStr}!`,
                       });
                     } catch (err) {
                       console.log(
                         "Pin failed, attempting relayMessage fallback...",
                       );
                       try {
-                        // Fallback for some versions of Baileys/WhatsApp
                         await sock.relayMessage(
                           chatId,
                           {
                             pinInChatMessage: {
                               key: {
                                 remoteJid: chatId,
-                                fromMe:
-                                  contextInfo.participant ===
-                                  jidNormalizedUser(sock.user.id),
+                                fromMe: fromMe,
                                 id: contextInfo.stanzaId,
                                 participant: contextInfo.participant,
                               },
                               type: 1,
-                              time: time,
+                              time: isCustomTimer ? 2592000 : time,
                             },
                           },
                           {},
                         );
+
+                        if (isCustomTimer) {
+                          const settings = getGroupSettings(chatId);
+                          settings.activePins = settings.activePins || [];
+                          settings.activePins = settings.activePins.filter(p => p.stanzaId !== contextInfo.stanzaId);
+                          const pinObj = {
+                            stanzaId: contextInfo.stanzaId,
+                            participant: contextInfo.participant,
+                            fromMe: fromMe,
+                            unpinAt: Date.now() + (customSeconds * 1000)
+                          };
+                          settings.activePins.push(pinObj);
+                          saveGroupSettings();
+
+                          const key = `${chatId}_${contextInfo.stanzaId}`;
+                          if (activePinTimers.has(key)) {
+                            clearTimeout(activePinTimers.get(key));
+                          }
+                          const timerId = setTimeout(() => {
+                            const s = getGroupSettings(chatId);
+                            s.activePins = (s.activePins || []).filter(p => p.stanzaId !== contextInfo.stanzaId);
+                            saveGroupSettings();
+                            unpinMessage(sock, chatId, pinObj).catch(err => console.error("Error unpinning on timeout:", err));
+                          }, customSeconds * 1000);
+                          activePinTimers.set(key, timerId);
+                        }
+
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `✅ Message pinned for ${args[2] || "30 days"}! (Relay)`,
+                            `✅ Message pinned for ${durationStr}! (Relay)`,
                         });
                       } catch (relayErr) {
                         console.error("Pin relay error:", relayErr);
@@ -7938,6 +8263,67 @@ Usage: ${newUsage}/5${warningText}`;
                       }
                     }
                     return;
+                  }
+
+                  // `${botConfig.getPrefix().toLowerCase()}` unpin - unpin the replied-to message
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unpin` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} unpin `,
+                    )
+                  ) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Groups only.`,
+                      });
+                    }
+
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Admins only.`,
+                      });
+                    }
+
+                    const contextInfo =
+                      m.message.extendedTextMessage?.contextInfo ||
+                      m.message.imageMessage?.contextInfo ||
+                      m.message.videoMessage?.contextInfo ||
+                      m.message.stickerMessage?.contextInfo;
+
+                    if (!contextInfo || !contextInfo.stanzaId) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Reply to the message you want to unpin with \`${P} unpin\`.`,
+                      });
+                    }
+
+                    const fromMe = contextInfo.participant
+                      ? jidNormalizedUser(contextInfo.participant) === jidNormalizedUser(sock.user.id)
+                      : false;
+
+                    const pinKey = {
+                      stanzaId: contextInfo.stanzaId,
+                      participant: contextInfo.participant,
+                      fromMe: fromMe,
+                    };
+
+                    const settings = getGroupSettings(chatId);
+                    if (settings.activePins) {
+                      settings.activePins = settings.activePins.filter(p => p.stanzaId !== contextInfo.stanzaId);
+                      saveGroupSettings();
+                    }
+
+                    const key = `${chatId}_${contextInfo.stanzaId}`;
+                    if (activePinTimers.has(key)) {
+                      clearTimeout(activePinTimers.get(key));
+                      activePinTimers.delete(key);
+                    }
+
+                    try {
+                      await unpinMessage(sock, chatId, pinKey);
+                      return reply('✅ Message unpinned successfully!');
+                    } catch (err) {
+                      return reply('❌ Failed to unpin the message.');
+                    }
                   }
 
                   // Welcome message for Group chat
@@ -8783,6 +9169,13 @@ Commands:
                     const target = getMentionOrReply(m);
                     if (!target) {
                       return reply(`❌ Usage: \`${P} set rank @user <level>\` or reply to a message with \`${P} set rank <level>\``);
+                    }
+
+                    const isTargetAdmin = meta?.participants?.some(p => (p.id || p) === target && (p.admin === 'admin' || p.admin === 'superadmin'));
+                    const targetIsOwner = target === botConfig.getOwnerNumber() + "@s.whatsapp.net";
+                    const targetIsGlobal = isGlobalMod && isGlobalMod(target);
+                    if (!isTargetAdmin && !targetIsOwner && !targetIsGlobal) {
+                      return reply('❌ You can only assign ranks to group administrators (admins or superadmins).');
                     }
 
                     // FIX: Extract level from the tail of the command, not the full string
