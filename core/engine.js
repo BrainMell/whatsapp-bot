@@ -1143,21 +1143,6 @@ async function startBot(configInstance) {
         }
       }
 
-      // If not explicitly assigned, check if they inherit rank authority automatically:
-      // - WhatsApp superadmin -> auto-assigned to highest rank in the group
-      // - WhatsApp admin -> auto-assigned to the second-highest rank if unranked
-      if (!settings.rankLadder || settings.rankLadder.length === 0) return 0;
-
-      if (isGroupSuperadmin) {
-        return getTopRankLevel(chatId);
-      } else if (isGroupAdmin) {
-        const ladder = [...settings.rankLadder].sort((a, b) => b.level - a.level);
-        if (ladder.length > 1) {
-          return ladder[1].level; // second-highest
-        } else if (ladder.length === 1) {
-          return ladder[0].level; // fallback if only 1 rank exists
-        }
-      }
       return 0;
     }
 
