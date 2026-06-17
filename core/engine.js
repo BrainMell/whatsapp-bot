@@ -9342,7 +9342,7 @@ Commands:
 
                     let title = txt.slice(`${P} title set `.length).trim();
                     const phone = target.split('@')[0];
-                    title = title.replace(new RegExp(`@${phone}`, 'g'), '').trim();
+                    title = title.replace(/@\d{10,20}/g, '').trim();
                     if (!title) return reply(`❌ Please provide a title.`);
                     if (title.length > 30) return reply(`❌ Title too long (max 30 chars).`);
 
