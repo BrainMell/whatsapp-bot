@@ -282,3 +282,248 @@ existing entries; rollback on partial failure.
   loans validation.
 
 **Cumulative test count: 67 tests, all passing.**
+
+---
+
+## Batch 4 — Critical Loan Bug, Guilds, Shop (commit 4)
+
+### BUG-024 [CRITICAL] — Loans could NEVER be accepted via the `accept` command
+**File:** `core/rpg/loans.js`
+**Symptom:** `getPendingRequest(senderJid)` was called by the engine.js
+`.j accept` handler with the LENDER's JID (the person typing accept),
+but the function only matched by BORROWER JID. The lookup always
+returned null, so lenders always saw "no pending invitations" and no
+loan was ever accepted through the normal command flow.
+**Fix:** `getPendingRequest` now does a direct lookup by lender JID
+(pendingLoans is keyed by lender) AND an iteration by borrower JID —
+so it works regardless of which side calls it.
+
+### BUG-025 [MINOR] — Duplicate `getUserGuild` definition in guilds.js
+**File:** `core/rpg/guilds.js`
+**Symptom:** `getUserGuild` was defined twice (lines 722 and 841). The
+second silently overrode the first. Both implementations were
+identical so no functional impact, but a maintenance trap.
+**Fix:** Removed the duplicate.
+
+### BUG-026 [MINOR] — `guilds.addGuildPoints` used raw `points` instead of coerced `val`
+**File:** `core/rpg/guilds.js`
+**Symptom:** Validated `val = Number(points)` then used `points` (the
+raw param) in the actual addition. If `points` was a string like "50",
+`guild.points += "50"` produced string concatenation: 0 + "50" = "050".
+**Fix:** Use the coerced `val` consistently.
+
+### BUG-027 [MAJOR] — `shopCommands.buyItem` didn't verify removeMoney succeeded
+**File:** `core/commands/shopCommands.js`
+**Symptom:** Between the balance check and the deduction there's an
+`await` (for the item-add handler). During that await, the user could
+spend money in another chat. If removeMoney then failed, the player
+kept both the item AND their money.
+**Fix:** Verify removeMoney return value; roll back the item add if it
+failed.
+
+---
+
+## Batch 5 — Gambling Input Validation (commit 5)
+
+### BUG-028 [CRITICAL] — All 17 gambling functions could corrupt wallet with NaN
+**File:** `core/gambling.js`
+**Symptom:** A non-numeric `amount` (string, NaN, undefined) would
+slip past `amount < GLOBAL_MIN_BET` (NaN < x is always false in JS),
+then `user.wallet -= amount` would produce NaN, PERMANENTLY corrupting
+the wallet. The user's balance would show "NaN" forever.
+**Fix:** Added `normalizeBet()` helper. All 17 gambling entry points
+(coinflip, diceRoll, slots, startBlackjack, roulette, crash,
+startMines, horseRace, lottery, rps, penalty, guessNumber,
+higherLower, plinko, scratchCard, cupGame, wheelOfFortune) now
+coerce amount to a finite positive integer before any wallet math.
+
+---
+
+## Batch 6 — Negative Allocation Exploit (commit 6)
+
+### BUG-029 [CRITICAL] — `allocateStatPoint` accepted negative amounts (stat-point duplication)
+**File:** `core/rpg/progression.js`
+**Symptom:** A negative `amount` (e.g. -5) would slip past
+`user.statPoints < amount` (0 < -5 is false), then:
+- `user.statPoints -= amount` → 0 - -5 = 5 (user GAINS 5 stat points)
+- `user.allocatedStats[s] += gainedValue` → 0 + (3 × 1 × -5) = -15
+  (user LOSES 15 ATK)
+
+The user could then reallocate those free stat points elsewhere —
+a stat-point duplication exploit.
+**Fix:** Reject negative, zero, NaN, and non-integer amounts up-front.
+
+### BUG-030 [MINOR] — `handleAllocateCommand` silently defaulted non-numeric input to 1
+**File:** `core/commands/progressionCommands.js`, `core/engine.js`
+**Symptom:** `parseInt(args[1]) || 1` would convert "abc" to NaN, then
+to 1. The user wouldn't get an error — just an unintended 1-point
+allocation.
+**Fix:** Validate `args[1]` is a positive integer up-front; emit a
+clear error message if not.
+
+---
+
+## Batch 7 — Mining Energy Cap (commit 7)
+
+### BUG-031 [MAJOR] — `mineOre` capped energy at 100 instead of actual maxEnergy
+**File:** `core/commands/rpgCommands.js`
+**Symptom:** Used `user.maxEnergy || 100` to cap energy, but
+`user.maxEnergy` is never initialized — it's derived dynamically from
+`progression.getBaseStats` (formula: `100 + (level-1)*15 + mag*3`).
+For a L50 mage with 100 MAG, actual maxEnergy is 1135, but mining
+capped energy recovery at 100 — effectively useless at high levels.
+**Fix:** Use `progression.getBaseStats(userId, user.class).maxEnergy`.
+
+---
+
+## Batch 8 — Gambling Error Message Strings (commit 8)
+
+### BUG-032 [MINOR] — 11 gambling error messages displayed literal `${botConfig.getPrefix()}`
+**File:** `core/gambling.js`
+**Symptom:** 11 error messages used double-quoted strings with
+`${botConfig.getPrefix()}` inside, but `${...}` is only interpolated
+in template literals (backticks). Users saw literal text like:
+> ❌ Register first with `${botConfig.getPrefix()} register <nickname>`!
+instead of:
+> ❌ Register first with `.j register <nickname>`!
+**Fix:** Converted all 11 outer double quotes to backticks.
+
+---
+
+## Batch 9 — Card System uniqueOwners (commit 9)
+
+### BUG-033 [MINOR] — `cardSystem.cmdClaim` double-counted uniqueOwners
+**File:** `core/rpg/cardSystem.js`
+**Symptom:** `uniqueOwners` was incremented on every claim, but the
+counter is supposed to track DISTINCT users. A user claiming 3 copies
+of the same card would inflate uniqueOwners by 3 even though only 1
+unique user owned it.
+**Fix:** Query `UserCard.findOne` before incrementing; only increment
+if the user didn't previously own any copy.
+
+---
+
+## Batch 10 — Membership Daily Bonus (commit 10)
+
+### BUG-034 [CRITICAL] — Membership `dailyBonus` was advertised but never granted
+**File:** `core/rpg/economy.js`
+**Symptom:** `MEMBERSHIP_TIERS.PREMIUM.dailyBonus = 1000` and
+`MEMBERSHIP_TIERS.DIAMOND.dailyBonus = 5000` were defined and shown in
+the help text, but `claimDaily` always rewarded just the base 500.
+Players paid 50k-250k Zeni for memberships that did nothing.
+**Fix:** `claimDaily` now checks membership tier and adds the bonus:
+- BASIC: 500/day (unchanged)
+- PREMIUM: 500 + 1000 = 1500/day
+- DIAMOND: 500 + 5000 = 5500/day
+Also auto-resets expired memberships to BASIC.
+
+### BUG-035 [MINOR] — Duel challenge expiry message said 5 minutes (actually 2)
+**File:** `core/engine.js`
+**Symptom:** Message said "Challenge expires in 5 minutes" but
+`CHALLENGE_TIMEOUT` is 120000ms (2 minutes).
+**Fix:** Updated message to "2 minutes".
+
+---
+
+## Batch 11 — addStatBonus Validation (commit 11)
+
+### BUG-036 [MINOR] — `economy.addStatBonus` didn't validate stat name or value
+**File:** `core/rpg/economy.js`
+**Symptom:** A non-numeric `value` (e.g. "5" as a string) would
+concatenate as a string (0 + "5" = "05"). An invalid `stat` name
+would create a garbage property on `statBonuses` that
+`progression.getBaseStats` wouldn't read — so the bonus would silently
+do nothing.
+**Fix:** Validate stat name against the 7 valid stats; coerce value
+with `Number()` and reject non-finite values.
+
+---
+
+## Batch 12 — Card Market Purchase Atomicity (commit 12)
+
+### BUG-037 [MAJOR] — `cardSystem.cmdBuyCard` could leak money or cards on failure
+**File:** `core/rpg/cardSystem.js`
+**Symptom:** `economy.removeMoney`, `economy.addMoney`, and
+`UserCard.findByIdAndUpdate` were called without checking return
+values. If any failed:
+- removeMoney fails → card transferred for free
+- addMoney fails → buyer paid, seller got nothing, card transferred
+- findByIdAndUpdate returns null (stale listing) → both parties lost
+  money, card not transferred
+**Fix:** Verify each step; roll back on failure so neither party can
+lose out.
+
+---
+
+## Batch 13 — Deposit/Withdraw Validation (commit 13)
+
+### BUG-038 [CRITICAL] — `deposit`/`withdraw` could corrupt wallet with NaN
+**File:** `core/rpg/economy.js`
+**Symptom:** Same JS-comparison-coercion trap as BUG-028. A
+non-numeric `amount` would slip past `amount <= 0` and then
+`user.wallet -= amount` would produce NaN, permanently corrupting
+the wallet.
+**Fix:** Coerce amount to a positive integer up-front using
+`Math.floor(Number(amount))` and `Number.isFinite(val)`.
+
+---
+
+## Batch 14 — addMoney/removeMoney Integer Flooring (commit 14)
+
+### BUG-039 [MINOR] — `addMoney`/`removeMoney` accepted fractional amounts
+**File:** `core/rpg/economy.js`
+**Symptom:** A fractional amount like 100.5 would accumulate as a
+float in `user.wallet`, causing display weirdness ("Wallet: 100.5
+Zeni") and float-precision drift over many transactions.
+**Fix:** Floor to integer. Also replaced `isNaN(val)` with
+`Number.isFinite(val)` which is stricter (rejects Infinity).
+
+---
+
+## Batch 15 — handleEvolve Resource Deduction Rollback (commit 15)
+
+### BUG-040 [MAJOR] — `skillCommands.handleEvolve` could let users evolve for free
+**File:** `core/commands/skillCommands.js`
+**Symptom:** `inventorySystem.removeItem` and `economy.removeMoney`
+were called without checking return values. If either failed (e.g.
+stone used elsewhere between the hasItem check and removeItem call,
+or wallet dropped between balance check and deduction), the evolution
+proceeded without consuming the stone or paying the cost.
+**Fix:** Verify each deduction; roll back previous deductions if a
+later one fails. User gets a clear error message instead of being
+evolved for free.
+
+---
+
+## Summary
+
+**Total bugs fixed:** 40
+**Critical (could corrupt data or break core features):** 13
+**Major (significant UX/economy impact):** 18
+**Minor (cosmetic or edge-case):** 9
+
+**Test coverage added:**
+- `scripts/test_harness.js` — mocks mongoose/botConfig/db so all 21 RPG
+  subsystems can be imported standalone.
+- `scripts/smoke_imports.js` — verifies all 21 modules import cleanly.
+- `scripts/test_progression.js` — 9 tests
+- `scripts/test_classSystem.js` — 10 tests
+- `scripts/test_batch2.js` — 15 tests (economy, inventory, PvP)
+- `scripts/test_batch3.js` — 12 tests (stock market, investment, loans)
+- `scripts/test_batch4.js` — 9 tests (loan accept/decline flow)
+- `scripts/test_batch5.js` — 12 tests (gambling input validation)
+- `scripts/test_batch6.js` — 6 tests (negative allocation exploit)
+- `scripts/test_batch7.js` — 7 tests (membership daily bonus)
+- `scripts/test_batch8.js` — 13 tests (deposit/withdraw validation)
+
+**Total: 114 regression tests, all passing.**
+
+**Recurring bug pattern (the "JS comparison coercion trap"):**
+12 of the 40 bugs (BUG-016, 018, 022, 028, 029, 033, 036, 038, etc.)
+stem from the same root cause: JavaScript's `NaN < x` is always
+`false`, and string-vs-number comparisons coerce unpredictably. Any
+validation that does `if (amount < threshold) return error` is
+vulnerable to non-numeric input slipping past and then producing NaN
+in arithmetic. The fix is always: coerce with `Number()` or
+`Math.floor(Number())`, then check `Number.isFinite(val) && val > 0`
+BEFORE any arithmetic.
