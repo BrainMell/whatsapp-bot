@@ -4011,6 +4011,15 @@ async function handleDeath(
     state.stats.monstersKilled++;
     if (entity.isBoss) state.stats.bossesDefeated++;
 
+    // 💡 Track boss kills on each player's user profile for rank missions
+    if (entity.isBoss) {
+      state.players.forEach((p) => {
+        if (p.jid && !p.isDead) {
+          economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+        }
+      });
+    }
+
     // Dragon Tracking
     if (entity.id.startsWith("DRAKE") || entity.id.includes("DRAGON")) {
       state.players.forEach((p) => {

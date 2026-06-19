@@ -58,7 +58,11 @@ const UserSchema = new mongoose.Schema({
     biggestWin: { type: Number, default: 0 },
     biggestLoss: { type: Number, default: 0 },
     questsCompleted: { type: Number, default: 0 },
+    questsWon: { type: Number, default: 0 },       // Rank mission tracking
+    bossesDefeated: { type: Number, default: 0 },   // Rank mission tracking
     dragonsKilled: { type: Number, default: 0 },
+    itemsCrafted: { type: Number, default: 0 },     // Rank mission tracking
+    itemsEquipped: { type: Number, default: 0 },    // Rank mission tracking
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },
@@ -135,6 +139,9 @@ const UserSchema = new mongoose.Schema({
 
   // Event Tokens (for token events — earned by claiming cards, spent in eShop)
   eventTokens: { type: Number, default: 0 },
+
+  // Rank Mission System
+  completedRankMissions: { type: [Number], default: [] }, // [1, 2, 3, 4]
 
   // AI Memory & Profile Data
   profile: {

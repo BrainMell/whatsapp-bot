@@ -312,6 +312,14 @@ function getUser(userId) {
   // Lazy migration: eventTokens (added for token event system)
   if (user.eventTokens === undefined) user.eventTokens = 0;
 
+  // Lazy migration: rank mission tracking
+  if (!user.completedRankMissions) user.completedRankMissions = [];
+  if (!user.stats) user.stats = {};
+  if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
+  if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
+  if (user.stats.itemsCrafted === undefined) user.stats.itemsCrafted = 0;
+  if (user.stats.itemsEquipped === undefined) user.stats.itemsEquipped = 0;
+
   return user;
 }
 
@@ -1111,24 +1119,30 @@ function updateAdventurerRank(userId) {
   const calculatedRank = classSystem.calculateAdventurerRank(level, questsCompleted, gp);
   const oldRank = user.adventurerRank || 'F';
 
-  // 💡 CRITICAL FIX: NEVER downgrade an existing rank. Previously this
-  // function would overwrite user.adventurerRank with whatever
-  // calculateAdventurerRank returned, which meant:
-  //   - If the GP requirement was removed/changed, players who earned
-  //     their rank under the old rules got DOWNGRADED.
-  //   - If a player's GP dropped temporarily, they lost their rank.
-  //   - When the bot restarted with updated code, EVERY player got
-  //     recalculated and many dropped to F-rank.
-  //
-  // Now: only UPGRADE. A player's rank can only go up, never down.
-  // Rank downgrades should only happen via explicit admin action
-  // (e.g. `.g demote @user`) or a ranking mission failure system.
+  // 💡 CRITICAL FIX: NEVER downgrade an existing rank.
   const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
   const oldIdx = rankOrder.indexOf(oldRank);
   const newIdx = rankOrder.indexOf(calculatedRank);
 
   if (newIdx > oldIdx) {
-    // Upgrade — the player has earned a higher rank via level + quests.
+    // 💡 RANK MISSION GATE: Check if the promotion from oldRank requires
+    // a rank mission to be completed. If it does and the player hasn't
+    // completed it yet, DON'T promote — they need to finish the mission first.
+    const completedMissions = user.completedRankMissions || [];
+    const eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
+
+    if (!eligibility.canPromote) {
+      // Player meets level/quest requirements but hasn't completed the
+      // rank mission. Don't promote — they need to finish the mission.
+      return {
+        ranked_up: false,
+        rank: oldRank,
+        blocked_by_mission: eligibility.mission,
+        mission_id: eligibility.blockedByMission,
+      };
+    }
+
+    // Mission completed (or no mission required) → promote!
     user.adventurerRank = calculatedRank;
     scheduleSave(userId);
 
@@ -1144,6 +1158,138 @@ function updateAdventurerRank(userId) {
   // No upgrade (rank stays the same, or calculated rank is lower —
   // in which case we PRESERVE the existing rank, not downgrade).
   return { ranked_up: false, rank: oldRank };
+}
+
+/**
+ * Get the player's current rank mission status — what mission they need
+ * to complete next, their progress on each objective, and whether they
+ * can claim it.
+ */
+function getRankMissionStatus(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+
+  const currentRank = user.adventurerRank || 'F';
+  const gateMission = classSystem.getGateMissionForRank(currentRank);
+
+  if (!gateMission) {
+    return {
+      hasGate: false,
+      mission: null,
+      progress: [],
+      canClaim: false,
+      message: 'No rank mission required for your next promotion. Keep leveling up!',
+    };
+  }
+
+  // Check if already completed
+  const completed = (user.completedRankMissions || []).includes(gateMission.id);
+  if (completed) {
+    return {
+      hasGate: true,
+      mission: gateMission,
+      progress: [],
+      canClaim: false,
+      alreadyCompleted: true,
+      message: `You have already completed the ${gateMission.name}! Your next promotion is unlocked.`,
+    };
+  }
+
+  // Check progress
+  const playerStats = {
+    questsWon: user.stats?.questsWon || user.questsWon || 0,
+    bossesDefeated: user.stats?.bossesDefeated || 0,
+    pvpWins: user.pvpWins || 0,
+    dragonsKilled: user.stats?.dragonsKilled || 0,
+    itemsCrafted: user.stats?.itemsCrafted || 0,
+    itemsEquipped: user.stats?.itemsEquipped || 0,
+  };
+
+  const { complete, progress } = classSystem.checkMissionProgress(gateMission.id, playerStats);
+
+  return {
+    hasGate: true,
+    mission: gateMission,
+    progress,
+    canClaim: complete,
+    alreadyCompleted: false,
+    message: complete
+      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`.g rank mission claim\` to claim your reward and unlock promotion.`
+      : `📊 Progress for ${gateMission.name}:`,
+  };
+}
+
+/**
+ * Claim a completed rank mission. Marks it as completed on the user
+ * and triggers a rank update check.
+ */
+function claimRankMission(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: 'User not found.' };
+
+  const currentRank = user.adventurerRank || 'F';
+  const gateMission = classSystem.getGateMissionForRank(currentRank);
+
+  if (!gateMission) {
+    return { success: false, message: '❌ No rank mission required for your current rank. Keep leveling up!' };
+  }
+
+  if (!user.completedRankMissions) user.completedRankMissions = [];
+  if (user.completedRankMissions.includes(gateMission.id)) {
+    return { success: false, message: `❌ You have already completed the ${gateMission.name}.` };
+  }
+
+  // Verify all objectives are actually met
+  const playerStats = {
+    questsWon: user.stats?.questsWon || user.questsWon || 0,
+    bossesDefeated: user.stats?.bossesDefeated || 0,
+    pvpWins: user.pvpWins || 0,
+    dragonsKilled: user.stats?.dragonsKilled || 0,
+    itemsCrafted: user.stats?.itemsCrafted || 0,
+    itemsEquipped: user.stats?.itemsEquipped || 0,
+  };
+  const { complete, progress } = classSystem.checkMissionProgress(gateMission.id, playerStats);
+
+  if (!complete) {
+    let msg = `❌ You haven't completed all objectives for the ${gateMission.name} yet!\n\n📊 Progress:\n`;
+    progress.forEach(p => {
+      msg += `${p.done ? '✅' : '❌'} ${p.label} (${p.current}/${p.target})\n`;
+    });
+    return { success: false, message: msg };
+  }
+
+  // Mark mission as completed
+  user.completedRankMissions.push(gateMission.id);
+  scheduleSave(userId);
+
+  // Now try to promote (this will check mission eligibility — which should pass now)
+  const rankResult = updateAdventurerRank(userId);
+
+  let msg = `🎉 *MISSION COMPLETE!* 🎉\n\n`;
+  msg += `${gateMission.icon} *${gateMission.name}*\n`;
+  msg += `All objectives cleared!\n\n`;
+
+  if (rankResult.ranked_up) {
+    msg += `⬆️ *RANK UP!* ${rankResult.old_rank} → ${rankResult.new_rank}\n`;
+    msg += `You are now ${rankResult.rank_data?.name || rankResult.new_rank + '-Rank'}!`;
+  } else if (rankResult.blocked_by_mission) {
+    msg += `✅ Mission complete, but you still need to meet the level/quest requirements for the next rank.`;
+  } else {
+    msg += `✅ Mission recorded! You'll rank up when you meet the level/quest requirements.`;
+  }
+
+  return { success: true, message: msg, rankResult };
+}
+
+/**
+ * Track a stat for rank mission progress.
+ * Called by various game systems (quest completion, boss kills, etc.)
+ */
+function trackMissionStat(userId, statKey, amount = 1) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return;
+  user.stats[statKey] = (user.stats[statKey] || 0) + amount;
+  scheduleSave(userId);
 }
 
 function addStatBonus(userId, stat, value) {
@@ -1190,14 +1336,18 @@ function incrementDragonKills(userId, amount = 1) {
 function addQuestProgress(userId, amount, won = true) {
   const user = getUser(userId);
   if (!user) return;
-  
+
   user.questsCompleted = Math.ceil((parseFloat(user.questsCompleted) || 0) + amount);
   if (won) {
     user.questsWon = (user.questsWon || 0) + 1;
+    // 💡 Track for rank missions
+    if (user.stats) {
+      user.stats.questsWon = (user.stats.questsWon || 0) + 1;
+    }
   } else {
     user.questsFailed = (user.questsFailed || 0) + 1;
   }
-  
+
   scheduleSave(userId);
   
   return updateAdventurerRank(userId);
@@ -1496,6 +1646,11 @@ module.exports = {
   getTokens,
   addTokens,
   removeTokens,
+
+  // Rank Mission System
+  getRankMissionStatus,
+  claimRankMission,
+  trackMissionStat,
 };
 
 // Auto-load disabled - now called by index.js startBot()

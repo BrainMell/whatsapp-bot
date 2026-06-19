@@ -528,6 +528,11 @@ async function equipItem(userId, itemId, slot) {
     
     await economy.saveUser(userId);
     
+    // 💡 Track for rank missions
+    try {
+        economy.trackMissionStat(userId, 'itemsEquipped', 1);
+    } catch (e) {}
+
     return {
         success: true,
         equipped: itemId,

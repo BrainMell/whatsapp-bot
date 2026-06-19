@@ -538,9 +538,14 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 
+    // 💡 Track for rank missions
+    try {
+        economy.trackMissionStat(userId, 'itemsCrafted', 1);
+    } catch (e) {}
+
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
-    return { 
-        success: true, 
+    return {
+        success: true,
         message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}`,
         recipe
     };

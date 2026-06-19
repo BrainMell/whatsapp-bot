@@ -634,6 +634,155 @@ const ADVENTURER_RANKS = {
     }
 };
 
+// ==========================================
+// 🎯 RANK MISSION SYSTEM
+// ==========================================
+// Every 2 rank promotions, the player must complete a rank mission
+// before they can advance further. The gate is:
+//   F→E, E→D: Free (no mission)
+//   D→C:      Mission 1 required (the Trial of Combat)
+//   C→B:      Free
+//   B→A:      Mission 2 required (the Trial of Mastery)
+//   A→S:      Free
+//   S→SS:     Mission 3 required (the Trial of Legend)
+//   SS→SSS:   Free
+//   SSS→GOD:  Mission 4 required (the Trial of Divinity)
+//
+// Each mission has a set of objectives that must ALL be completed.
+// Objectives are tracked cumulatively (lifetime stats) so the player
+// can work on them over time — they don't have to do everything in
+// one session.
+
+const RANK_MISSIONS = {
+    // Mission 1: Unlocks C-rank (gate after D)
+    1: {
+        id: 1,
+        name: 'Trial of Combat',
+        icon: '⚔️',
+        desc: 'Prove your worth as a warrior by mastering combat across multiple disciplines.',
+        unlocksRank: 'C',
+        objectives: [
+            { id: 'quests_won', label: 'Win 20 quests', target: 20, statKey: 'questsWon' },
+            { id: 'bosses_killed', label: 'Defeat 5 bosses', target: 5, statKey: 'bossesDefeated' },
+            { id: 'pvp_wins', label: 'Win 3 PvP duels', target: 3, statKey: 'pvpWins' },
+        ]
+    },
+    // Mission 2: Unlocks A-rank (gate after B)
+    2: {
+        id: 2,
+        name: 'Trial of Mastery',
+        icon: '🏆',
+        desc: 'Show that you have mastered the crafting and progression systems.',
+        unlocksRank: 'A',
+        objectives: [
+            { id: 'quests_won', label: 'Win 50 quests', target: 50, statKey: 'questsWon' },
+            { id: 'items_crafted', label: 'Craft 15 items', target: 15, statKey: 'itemsCrafted' },
+            { id: 'items_equipped', label: 'Equip 10 different items', target: 10, statKey: 'itemsEquipped' },
+        ]
+    },
+    // Mission 3: Unlocks SS-rank (gate after S)
+    3: {
+        id: 3,
+        name: 'Trial of Legend',
+        icon: '🌟',
+        desc: 'Only true legends pass this trial. Prove your dominance in all aspects of the game.',
+        unlocksRank: 'SS',
+        objectives: [
+            { id: 'quests_won', label: 'Win 100 quests', target: 100, statKey: 'questsWon' },
+            { id: 'bosses_killed', label: 'Defeat 20 bosses', target: 20, statKey: 'bossesDefeated' },
+            { id: 'pvp_wins', label: 'Win 10 PvP duels', target: 10, statKey: 'pvpWins' },
+            { id: 'dragon_kills', label: 'Slay 10 dragons', target: 10, statKey: 'dragonsKilled' },
+        ]
+    },
+    // Mission 4: Unlocks GOD-rank (gate after SSS)
+    4: {
+        id: 4,
+        name: 'Trial of Divinity',
+        icon: '♾️',
+        desc: 'The ultimate trial. Only those who have truly conquered everything may ascend to godhood.',
+        unlocksRank: 'GOD',
+        objectives: [
+            { id: 'quests_won', label: 'Win 200 quests', target: 200, statKey: 'questsWon' },
+            { id: 'bosses_killed', label: 'Defeat 50 bosses', target: 50, statKey: 'bossesDefeated' },
+            { id: 'pvp_wins', label: 'Win 25 PvP duels', target: 25, statKey: 'pvpWins' },
+            { id: 'dragon_kills', label: 'Slay 50 dragons', target: 50, statKey: 'dragonsKilled' },
+            { id: 'items_crafted', label: 'Craft 50 items', target: 50, statKey: 'itemsCrafted' },
+        ]
+    },
+};
+
+// Map: which rank requires which mission to be completed before promotion?
+// null = no mission required (free promotion).
+const RANK_MISSION_GATES = {
+    'F': null,  // F→E: free
+    'E': null,  // E→D: free
+    'D': 1,     // D→C: need Mission 1 (Trial of Combat)
+    'C': null,  // C→B: free
+    'B': 2,     // B→A: need Mission 2 (Trial of Mastery)
+    'A': null,  // A→S: free
+    'S': 3,     // S→SS: need Mission 3 (Trial of Legend)
+    'SS': null,  // SS→SSS: free
+    'SSS': 4,    // SSS→GOD: need Mission 4 (Trial of Divinity)
+};
+
+/**
+ * Check if a player is allowed to be promoted from `currentRank` to the
+ * next rank. Returns { canPromote, blockedByMission, mission }.
+ */
+function checkRankPromotionEligibility(currentRank, completedMissions) {
+    const gate = RANK_MISSION_GATES[currentRank];
+    if (gate === null || gate === undefined) {
+        return { canPromote: true, blockedByMission: null, mission: null };
+    }
+    const mission = RANK_MISSIONS[gate];
+    const completed = (completedMissions || []).includes(gate);
+    if (!completed) {
+        return { canPromote: false, blockedByMission: gate, mission };
+    }
+    return { canPromote: true, blockedByMission: null, mission };
+}
+
+/**
+ * Get the mission that gates promotion from the player's current rank.
+ * Returns null if no mission is required.
+ */
+function getGateMissionForRank(currentRank) {
+    const gate = RANK_MISSION_GATES[currentRank];
+    if (gate === null || gate === undefined) return null;
+    return RANK_MISSIONS[gate];
+}
+
+/**
+ * Get a mission by ID.
+ */
+function getRankMission(missionId) {
+    return RANK_MISSIONS[missionId] || null;
+}
+
+/**
+ * Check if a mission's objectives are all complete given the player's stats.
+ * Returns { complete, progress: [{ objective, current, target, done }] }.
+ */
+function checkMissionProgress(missionId, playerStats) {
+    const mission = RANK_MISSIONS[missionId];
+    if (!mission) return { complete: false, progress: [] };
+
+    const progress = mission.objectives.map(obj => {
+        const current = Math.min(playerStats[obj.statKey] || 0, obj.target);
+        return {
+            id: obj.id,
+            label: obj.label,
+            statKey: obj.statKey,
+            current,
+            target: obj.target,
+            done: current >= obj.target,
+        };
+    });
+
+    const complete = progress.every(p => p.done);
+    return { complete, progress };
+}
+
 const CLASS_SHOP_ITEMS = {
       class_change_ticket: {
           id: 'class_change_ticket', name: 'Class Change Ticket', icon: '🎫',
@@ -801,5 +950,12 @@ module.exports = {
     getLineage,
     canEvolve,
     calculateAdventurerRank,
-    getNextRankRequirements
+    getNextRankRequirements,
+    // Rank Mission System
+    RANK_MISSIONS,
+    RANK_MISSION_GATES,
+    checkRankPromotionEligibility,
+    getGateMissionForRank,
+    getRankMission,
+    checkMissionProgress,
 };
