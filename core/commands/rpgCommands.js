@@ -767,16 +767,22 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const user = economy.getUser(senderJid);
     const energyCost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
     const currentEnergy = user.energy !== undefined ? user.energy : 100;
+    // Use progression-derived maxEnergy — `user.maxEnergy` is never initialized
+    // on the user object (it's computed dynamically from level + MAG).
+    // Previously this capped at 100, making high-level mages' energy pools
+    // effectively useless.
+    const derivedStats = progression.getBaseStats(senderJid, user.class);
+    const maxEn = derivedStats.maxEnergy || 100;
 
-    if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}.` });
+    if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}/${maxEn}.` });
 
     user.energy = Math.max(0, currentEnergy - energyCost);
     const xpGained = Math.floor(loc.energyCost * 20 + miningLevel * 5);
     const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
-    
+
     if (Math.random() < 0.25) {
         const energyRecovered = Math.floor(Math.random() * 15) + 8;
-        user.energy = Math.min(user.maxEnergy || 100, user.energy + energyRecovered);
+        user.energy = Math.min(maxEn, user.energy + energyRecovered);
     }
 
     economy.saveUser(senderJid);
@@ -784,22 +790,22 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     let msg = `⛏️ *MINING: ${loc.name.toUpperCase()}* ⛏️\n\nYou strike the veins of the earth...\n\n`;
     const luck = sheet.stats.luck || 5;
     const baseRolls = 2 + Math.floor(miningLevel / 10);
-    const bonusRolls = Math.floor(luck / 15); 
+    const bonusRolls = Math.floor(luck / 15);
     const totalRolls = baseRolls + bonusRolls;
     const found = {};
     const totalWeight = loc.ores.reduce((s, o) => s + o.weight, 0);
     let luckyFinds = 0;
 
-    for (let i = 0; i < totalRolls; i++) { 
-        if (Math.random() < 0.02) { 
+    for (let i = 0; i < totalRolls; i++) {
+        if (Math.random() < 0.02) {
             const foundZeni = Math.floor(Math.random() * 500) + 100;
             economy.addMoney(senderJid, foundZeni, "Mining Lucky Find");
             luckyFinds += foundZeni;
         }
         let roll = Math.random() * totalWeight;
-        for (const ore of loc.ores) { 
+        for (const ore of loc.ores) {
             roll -= ore.weight;
-            if (roll <= 0) { 
+            if (roll <= 0) {
                 const qty = ore.quantity || (Math.floor(Math.random() * (ore.max - ore.min + 1)) + ore.min);
                 await inventorySystem.addItem(senderJid, ore.id, qty);
                 found[ore.id] = (found[ore.id] || 0) + qty;
@@ -810,7 +816,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     Object.entries(found).forEach(([id, qty]) => { msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`; });
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
-    msg += `\n⚡ Energy Left: ${user.energy}/${user.maxEnergy || 100} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
+    msg += `\n⚡ Energy Left: ${user.energy}/${maxEn} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
     if (levelUp?.leveledUp) msg += `\n✨ *LEVEL UP!* Mining is now Level ${levelUp.newLevel}!`;
     await sock.sendMessage(chatId, { text: msg });
 }

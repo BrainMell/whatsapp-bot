@@ -7827,7 +7827,20 @@ Usage: ${newUsage}/5${warningText}`;
                   ) {
                     const parts = txt.split(" ");
                     const stat = parts[2];
-                    const amount = parseInt(parts[3]) || 1;
+                    // Validate amount up-front: previously `parseInt(parts[3]) || 1`
+                    // silently defaulted non-numeric input to 1, hiding typos.
+                    // The underlying allocateStatPoint now also rejects bad input,
+                    // but we should give the user a clear error message instead.
+                    let amount = 1;
+                    if (parts[3] !== undefined) {
+                      const parsed = parseInt(parts[3], 10);
+                      if (isNaN(parsed) || parsed <= 0) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Amount must be a positive whole number! Got: \`${parts[3]}\``
+                        });
+                      }
+                      amount = parsed;
+                    }
 
                     if (!stat) {
                       return await sendUsage(
