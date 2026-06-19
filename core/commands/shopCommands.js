@@ -203,9 +203,29 @@ async function buyItem(sock, chatId, senderJid, input) {
     }
     
     if (result.success) {
-        // 💡 BUG FIX: Only deduct money if inventory add was successful
-        economy.removeMoney(senderJid, item.cost);
-        
+        // 💡 BUG FIX: Only deduct money if inventory add was successful.
+        // ALSO verify removeMoney succeeded — between the balance check at
+        // line 167 and here, there's an `await` (for handleX), and during
+        // that await the user could spend money in another chat (the
+        // economy cache is shared across all chats/handlers). If removeMoney
+        // fails, we need to roll back the item add so the player doesn't
+        // get a free item.
+        const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+        if (!paid) {
+            // Roll back: remove the item we just added
+            try {
+                if (item.type === 'EQUIPMENT') {
+                    await inventorySystem.removeItem(senderJid, item.id, 1);
+                }
+                // For consumables/stats the effect already applied — log it
+                console.warn(`[shop] removeMoney failed for ${senderJid} buying ${item.id}; item effect was already applied and could not be rolled back.`);
+            } catch (e) { /* best effort */ }
+            await sock.sendMessage(chatId, {
+                text: `❌ Purchase failed: your wallet balance changed during the transaction. Please try again.`
+            });
+            return;
+        }
+
         await sock.sendMessage(chatId, {
             text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`
         });

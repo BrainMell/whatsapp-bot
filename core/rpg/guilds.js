@@ -719,10 +719,6 @@ function getMemberTitle(guildName, userJid) {
   return guild.titles[userJid] || 'Member';
 }
 
-function getUserGuild(userJid) {
-  return globalGuildData.memberGuilds[userJid];
-}
-
 function getGuild(guildName) {
   return globalGuildData.guilds[guildName];
 }
@@ -951,8 +947,14 @@ function addGuildPoints(guildName, points, reason) {
   if (!guild.level) guild.level = 1;
   if (!guild.pointsHistory) guild.pointsHistory = [];
 
-  guild.points += points;
-  
+  // Use the coerced numeric `val` instead of the raw `points` parameter.
+  // Previously `points` was validated as numeric but then the raw value
+  // (potentially a string like "50") was added to guild.points, producing
+  // string concatenation: 0 + "50" = "050". The guild points would then
+  // grow as a string until the next level-up subtraction restored numeric
+  // type. Functional but fragile.
+  guild.points += val;
+
   // 💡 LEVEL UP LOGIC
   const xpNeeded = guild.level * 1000;
   if (guild.points >= xpNeeded) {
@@ -961,7 +963,7 @@ function addGuildPoints(guildName, points, reason) {
   }
 
   guild.pointsHistory.push({
-    points,
+    points: val,
     reason,
     timestamp: Date.now()
   });

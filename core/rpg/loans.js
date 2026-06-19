@@ -246,10 +246,21 @@ function declineLoan(lenderJid) {
   };
 }
 
-// Find a pending loan request by borrower JID
-function getPendingRequest(borrowerJid) {
+// Find a pending loan request by borrower OR lender JID.
+// CRITICAL FIX: Previously this function only matched by `borrowerJid`,
+// but engine.js's `.j accept` handler passes the LENDER's JID (the
+// person typing accept). The lookup always returned null, so loans
+// could never be accepted via the `accept` command — the lender would
+// always see "no pending invitations". Now we check both sides.
+function getPendingRequest(userJid) {
+  // Direct lookup: is `userJid` the lender? (pendingLoans is keyed by lender)
+  const direct = pendingLoans.get(userJid);
+  if (direct) {
+    return { lenderJid: userJid, ...direct };
+  }
+  // Iteration: is `userJid` the borrower in some pending request?
   for (const [lenderJid, req] of pendingLoans.entries()) {
-    if (req.borrowerJid === borrowerJid) {
+    if (req.borrowerJid === userJid) {
       return { lenderJid, ...req };
     }
   }
