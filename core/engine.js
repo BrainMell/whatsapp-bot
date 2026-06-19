@@ -1127,15 +1127,15 @@ async function startBot(configInstance) {
       if (!jid) return 0;
       const settings = getGroupSettings(chatId);
       if (settings.ranksEnabled === false) return 0;
-      
+
       let assigned = settings.memberRanks?.[jid];
       let assignedKey = jid;
-      
+
       if (assigned === undefined && settings.memberRanks) {
         const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
         const phoneJid = resolveToPhone(jid, configInstance.getAuthPath());
         const canonicalJid = resolveJid(jid, configInstance.getAuthPath());
-        
+
         if (phoneJid && settings.memberRanks[phoneJid] !== undefined) {
           assigned = settings.memberRanks[phoneJid];
           assignedKey = phoneJid;
@@ -1144,21 +1144,46 @@ async function startBot(configInstance) {
           assignedKey = canonicalJid;
         }
       }
-      
+
       const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
       const phoneJid = resolveToPhone(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
       const canonicalJid = resolveJid(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
 
-      const meta = groupMetadataCache.get(chatId);
+      // Try the O(1) admin cache first — this is the critical fix.
+      // Previously this function only checked groupMetadataCache which may
+      // be empty on first contact. The admin cache is populated when
+      // canManageRanks runs (and by buildAdminCache during metadata fetch),
+      // so once any rank command has been run, subsequent admin checks
+      // should hit the cache and work even if metadata has expired.
       let isGroupAdmin = false;
       let isGroupSuperadmin = false;
-      if (meta && meta.participants) {
+
+      try {
+        // isAdminCached returns true/false (cache hit) or null (cache miss)
+        const cachedSender = isAdminCached(chatId, jid);
+        const cachedPhone = phoneJid ? isAdminCached(chatId, phoneJid) : null;
+        if (cachedSender === true || cachedPhone === true) {
+          isGroupAdmin = true; // cache stores both 'admin' and 'superadmin' together
+        }
+      } catch (e) {}
+
+      // Fall back to metadata if cache missed
+      const meta = groupMetadataCache.get(chatId);
+      if (!isGroupAdmin && meta && meta.participants) {
+        // Match multiple JID formats — bare phone numbers, @lid, @s.whatsapp.net
+        const bareJid = jid.split('@')[0];
+        const barePhone = phoneJid ? phoneJid.split('@')[0] : null;
         const p = meta.participants.find(x => {
           const pid = jidNormalizedUser(x.id || x);
+          const pidBare = (x.id || x || '').split('@')[0];
           const normJid = jidNormalizedUser(jid);
           const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
           const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
-          return pid === normJid || pid === normPhone || pid === normCan;
+          return pid === normJid
+              || pid === normPhone
+              || pid === normCan
+              || (barePhone && pidBare === barePhone)
+              || (bareJid && pidBare === bareJid);
         });
         if (p) {
           if (p.admin === 'superadmin') isGroupSuperadmin = true;
@@ -1183,6 +1208,13 @@ async function startBot(configInstance) {
           // Metadata is missing/uncached right now, return the assigned rank without deleting it
           return assigned;
         }
+      }
+
+      // If user is admin/superadmin/owner but has no explicit rank assigned,
+      // give them the highest rank level so admin commands work out of the box.
+      if ((isGroupSuperadmin || isGroupAdmin || isOwner || globalMod) && settings.rankLadder?.length) {
+        const maxLevel = Math.max(...settings.rankLadder.map(r => r.level));
+        return maxLevel;
       }
 
       return 0;
@@ -1308,31 +1340,74 @@ async function startBot(configInstance) {
     // Check if sender can MANAGE the rank system in this group.
     // Must be owner, global mod, WA superadmin, OR have rank level >= RANK_MANAGE_LEVEL (4).
     const RANK_MANAGE_LEVEL = 4;
-    function canManageRanks(chatId, senderJid, isOwner, isGlobalMod, groupMetadata) {
+    async function canManageRanks(chatId, senderJid, isOwner, isGlobalMod, groupMetadata) {
       if (isOwner || isGlobalMod) return true;
-      
+
       const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
       const phoneJid = resolveToPhone(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-      
+      const canonicalJid = resolveJid(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+
+      // 1. Try the admin cache first (fast path).
       try {
         if (isAdminCached(chatId, senderJid) || (phoneJid && isAdminCached(chatId, phoneJid))) {
           return true;
         }
       } catch (e) {}
 
-      const canonicalJid = resolveJid(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-
-      if (groupMetadata?.participants) {
-        const p = groupMetadata.participants.find(x => {
-          const pid = jidNormalizedUser(x.id || x);
-          const normSender = jidNormalizedUser(senderJid);
-          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
-          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
-          return pid === normSender || pid === normPhone || pid === normCan;
-        });
-        if (p?.admin === 'superadmin' || p?.admin === 'admin') return true;
+      // 2. If groupMetadata wasn't passed in or is missing participants,
+      //    FETCH IT. Previously this function would silently fail admin
+      //    detection when metadata wasn't already cached — meaning the
+      //    group creator running `.g rank setup` for the first time
+      //    would always get "You do not have permission" because the
+      //    metadata cache was empty on first contact.
+      let meta = groupMetadata;
+      if (!meta || !meta.participants || meta.participants.length === 0) {
+        try {
+          meta = await getGroupMetadata(chatId, true); // forceRefresh=true to ensure we get fresh data
+          // Refresh admin cache while we're at it
+          if (meta && meta.participants) {
+            buildAdminCache(chatId, meta.participants);
+          }
+        } catch (err) {
+          console.error('[canManageRanks] Failed to fetch group metadata:', err.message);
+        }
       }
-      
+
+      if (meta?.participants) {
+        // Try every possible JID variant for the sender — WhatsApp may
+        // return participant IDs as @lid or @s.whatsapp.net depending
+        // on the group's privacy mode, and we need to match either.
+        const normSender = jidNormalizedUser(senderJid);
+        const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+        const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+        // Also try the raw phone number (no domain) in case participants
+        // are stored as bare numbers.
+        const barePhone = phoneJid ? phoneJid.split('@')[0] : null;
+        const bareSender = senderJid ? senderJid.split('@')[0] : null;
+
+        const p = meta.participants.find(x => {
+          const pid = jidNormalizedUser(x.id || x);
+          const pidBare = (x.id || x || '').split('@')[0];
+          return pid === normSender
+              || pid === normPhone
+              || pid === normCan
+              || (barePhone && pidBare === barePhone)
+              || (bareSender && pidBare === bareSender);
+        });
+        if (p?.admin === 'superadmin' || p?.admin === 'admin') {
+          // Cache this admin status so future lookups are fast
+          try {
+            const entry = adminSetCache.get(chatId);
+            if (entry) {
+              entry.admins.add(senderJid);
+              if (phoneJid) entry.admins.add(phoneJid);
+            }
+          } catch (e) {}
+          return true;
+        }
+      }
+
+      // 3. Fall back to the rank system itself (rank 4+ can manage ranks).
       const level = getMemberRankLevel(chatId, senderJid);
       return level >= RANK_MANAGE_LEVEL;
     }
@@ -9421,7 +9496,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage ranks.');
                     }
                     const settings = getGroupSettings(chatId);
@@ -9467,7 +9542,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage ranks. (Requires Rank 4+ or Superadmin)');
                     }
                     const settings = getGroupSettings(chatId);
@@ -9499,7 +9574,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage ranks. (Requires Rank 4+ or Superadmin)');
                     }
                     const match = txt.slice(`${P} rank add `.length).trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
@@ -9538,7 +9613,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage ranks. (Requires Rank 4+ or Superadmin)');
                     }
                     const levelStr = lowerTxt.slice(`${P} rank remove `.length).trim();
@@ -9587,7 +9662,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to assign ranks.');
                     }
                     const target = getMentionOrReply(m);
@@ -9653,7 +9728,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage ranks.');
                     }
                     const target = getMentionOrReply(m);
@@ -9739,7 +9814,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage titles.');
                     }
                     const target = getMentionOrReply(m);
@@ -9772,7 +9847,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You do not have permission to manage titles.');
                     }
                     const target = getMentionOrReply(m);
@@ -9812,7 +9887,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You need Rank 4+ or Superadmin to manage command permissions.');
                     }
                     const isAllow = lowerTxt.startsWith(`${P} rank allow `);
@@ -9879,7 +9954,7 @@ Commands:
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta)) {
+                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
                       return reply('❌ You need Rank 4+ or Superadmin to manage command permissions.');
                     }
                     const tail = lowerTxt.slice(`${P} rank reset perms`.length).trim();

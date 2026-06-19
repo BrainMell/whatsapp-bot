@@ -559,8 +559,37 @@ function evaluateAction(enemy, players, allies = []) {
     const livePlayers = players.filter(p => !p.isDead && p.currentHP > 0);
     if (livePlayers.length === 0) return { action: 'attack', target: players[0] };
 
-    // Default target: random live player
-    let defaultTarget = livePlayers[Math.floor(Math.random() * livePlayers.length)];
+    // ── SMARTER TARGET SELECTION ────────────────────
+    // Previously: random live player. Now: prioritize vulnerable targets.
+    // 1. First priority: execute-eligible targets (below 30% HP) — finish them off.
+    // 2. Second priority: CC'd targets (stunned/frozen — can't dodge).
+    // 3. Third priority: lowest-HP target (focus fire to reduce party DPS).
+    // 4. Fallback: random (adds variety so the AI isn't 100% predictable).
+    const executeThreshold = 0.30;
+    const vulnerableTarget = livePlayers.find(p => {
+        const maxHp = p.maxHp || p.stats?.maxHp || 100;
+        return (p.currentHP / maxHp) < executeThreshold;
+    });
+    const ccTarget = livePlayers.find(p =>
+        p.statusEffects?.some(e => ['stun', 'freeze', 'sleep', 'root'].includes(e.type))
+    );
+    const lowestHpTarget = livePlayers.reduce((lowest, p) => {
+        const pRatio = p.currentHP / (p.maxHp || p.stats?.maxHp || 1);
+        const lRatio = lowest.currentHP / (lowest.maxHp || lowest.stats?.maxHp || 1);
+        return pRatio < lRatio ? p : lowest;
+    }, livePlayers[0]);
+
+    // 70% chance to pick a smart target, 30% random (keeps some unpredictability).
+    let defaultTarget;
+    if (vulnerableTarget && Math.random() < 0.75) {
+        defaultTarget = vulnerableTarget; // Finish the kill
+    } else if (ccTarget && Math.random() < 0.6) {
+        defaultTarget = ccTarget; // Punish CC'd players
+    } else if (Math.random() < 0.65) {
+        defaultTarget = lowestHpTarget; // Focus fire
+    } else {
+        defaultTarget = livePlayers[Math.floor(Math.random() * livePlayers.length)];
+    }
 
     // ── COUNTERMAGE (SPELLBREAKER) AI ────────────────
     if (aiType === 'COUNTERMAGE') {
@@ -572,31 +601,31 @@ function evaluateAction(enemy, players, allies = []) {
         }, livePlayers[0]);
         const silenceSkill = available.find(s => s.id === 'arcane_silence');
         const highEnergyRatio = (highEnergyTarget.stats?.energy || 0) / Math.max(1, highEnergyTarget.stats?.maxEnergy || 100);
-        if (silenceSkill && highEnergyRatio > 0.6 && Math.random() > 0.35) {
+        if (silenceSkill && highEnergyRatio > 0.6 && Math.random() > 0.15) {
             return { action: 'skill', skill: silenceSkill, target: highEnergyTarget };
         }
 
         // Priority 2: Spell Absorption shield when HP > 60%
         const absorbSkill = available.find(s => s.id === 'spell_absorption');
-        if (absorbSkill && hpPct > 0.4 && !enemy.statusEffects?.some(e => e.type === 'spellAbsorb') && Math.random() > 0.4) {
+        if (absorbSkill && hpPct > 0.4 && !enemy.statusEffects?.some(e => e.type === 'spellAbsorb') && Math.random() > 0.20) {
             return { action: 'skill', skill: absorbSkill, target: enemy, targetType: 'self' };
         }
 
         // Priority 3: Mana Drain the highest-energy target
         const manaDrainSkill = available.find(s => s.id === 'mana_drain');
-        if (manaDrainSkill && Math.random() > 0.45) {
+        if (manaDrainSkill && Math.random() > 0.20) {
             return { action: 'skill', skill: manaDrainSkill, target: highEnergyTarget };
         }
 
         // Priority 4: Runic Punishment (scales with their mana)
         const runicSkill = available.find(s => s.id === 'runic_punishment');
-        if (runicSkill && Math.random() > 0.4) {
+        if (runicSkill && Math.random() > 0.20) {
             return { action: 'skill', skill: runicSkill, target: defaultTarget };
         }
 
         // Priority 5: Arcane Feedback AoE
         const feedbackSkill = available.find(s => s.id === 'arcane_feedback');
-        if (feedbackSkill && Math.random() > 0.5) {
+        if (feedbackSkill && Math.random() > 0.25) {
             return { action: 'skill', skill: feedbackSkill, target: defaultTarget };
         }
 
@@ -618,25 +647,25 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 2: Last Stand if critical HP
         const lastStandSkill = available.find(s => s.id === 'last_stand');
-        if (lastStandSkill && hpPct < 0.25 && Math.random() > 0.3) {
+        if (lastStandSkill && hpPct < 0.25 && Math.random() > 0.10) {
             return { action: 'skill', skill: lastStandSkill, target: enemy, targetType: 'self' };
         }
 
         // Priority 3: Shield Wall when allies present
         const shieldWall = available.find(s => s.id === 'shield_wall');
-        if (shieldWall && liveAllies.length >= 2 && !enemy.statusEffects?.some(e => e.type === 'defense') && Math.random() > 0.4) {
+        if (shieldWall && liveAllies.length >= 2 && !enemy.statusEffects?.some(e => e.type === 'defense') && Math.random() > 0.20) {
             return { action: 'skill', skill: shieldWall, target: enemy, targetType: 'self' };
         }
 
         // Priority 4: Spear Volley AoE
         const spearVolley = available.find(s => s.id === 'spear_volley');
-        if (spearVolley && Math.random() > 0.45) {
+        if (spearVolley && Math.random() > 0.20) {
             return { action: 'skill', skill: spearVolley, target: livePlayers[0] };
         }
 
         // Priority 5: Coordinated Strike with ally bonus
         const coordStrike = available.find(s => s.id === 'coordinated_strike');
-        if (coordStrike && Math.random() > 0.35) {
+        if (coordStrike && Math.random() > 0.15) {
             return { action: 'skill', skill: coordStrike, target: defaultTarget };
         }
 
@@ -654,19 +683,19 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 2: Fate Seal to punish skill usage
         const fateSkill = available.find(s => s.id === 'fate_seal');
-        if (fateSkill && Math.random() > 0.45) {
+        if (fateSkill && Math.random() > 0.20) {
             return { action: 'skill', skill: fateSkill, target: defaultTarget };
         }
 
         // Priority 3: Null Field to adapt resist
         const nullField = available.find(s => s.id === 'null_field');
-        if (nullField && !enemy.statusEffects?.some(e => e.type === 'dmgReduction') && Math.random() > 0.4) {
+        if (nullField && !enemy.statusEffects?.some(e => e.type === 'dmgReduction') && Math.random() > 0.20) {
             return { action: 'skill', skill: nullField, target: enemy, targetType: 'self' };
         }
 
         // Priority 4: Void Anchor to slow
         const voidAnchor = available.find(s => s.id === 'void_anchor');
-        if (voidAnchor && Math.random() > 0.5) {
+        if (voidAnchor && Math.random() > 0.25) {
             return { action: 'skill', skill: voidAnchor, target: defaultTarget };
         }
 
@@ -685,19 +714,19 @@ function evaluateAction(enemy, players, allies = []) {
 
         // War Cry for speed
         const warCry = available.find(s => s.id === 'war_cry');
-        if (warCry && !enemy.statusEffects?.some(e => e.type === 'spd') && Math.random() > 0.5) {
+        if (warCry && !enemy.statusEffects?.some(e => e.type === 'spd') && Math.random() > 0.25) {
             return { action: 'skill', skill: warCry, target: enemy, targetType: 'self' };
         }
 
         // Bloodlust when wounded
         const bloodlust = available.find(s => s.id === 'bloodlust');
-        if (bloodlust && hpPct < 0.7 && Math.random() > 0.4) {
+        if (bloodlust && hpPct < 0.7 && Math.random() > 0.20) {
             return { action: 'skill', skill: bloodlust, target: enemy, targetType: 'self' };
         }
 
         // Frenzy Cleave AoE
         const frenzySkill = available.find(s => s.id === 'frenzy_cleave');
-        if (frenzySkill && Math.random() > 0.35) {
+        if (frenzySkill && Math.random() > 0.15) {
             return { action: 'skill', skill: frenzySkill, target: livePlayers[0] };
         }
 
@@ -710,25 +739,25 @@ function evaluateAction(enemy, players, allies = []) {
     if (aiType === 'EVASIVE') {
         // Void Collapse signature move
         const voidCollapse = available.find(s => s.id === 'void_collapse');
-        if (voidCollapse && hpPct < 0.5 && Math.random() > 0.4) {
+        if (voidCollapse && hpPct < 0.5 && Math.random() > 0.20) {
             return { action: 'skill', skill: voidCollapse, target: defaultTarget };
         }
 
         // Phase Step before combat
         const phaseStep = available.find(s => s.id === 'phase_step');
-        if (phaseStep && !enemy.statusEffects?.some(e => e.type === 'evasion') && Math.random() > 0.45) {
+        if (phaseStep && !enemy.statusEffects?.some(e => e.type === 'evasion') && Math.random() > 0.20) {
             return { action: 'skill', skill: phaseStep, target: enemy, targetType: 'self' };
         }
 
         // Shadow Mimic for dmg reduction
         const shadowMimic = available.find(s => s.id === 'shadow_mimic');
-        if (shadowMimic && hpPct < 0.6 && Math.random() > 0.4) {
+        if (shadowMimic && hpPct < 0.6 && Math.random() > 0.20) {
             return { action: 'skill', skill: shadowMimic, target: enemy, targetType: 'self' };
         }
 
         // Entropy Blast AoE
         const entropyBlast = available.find(s => s.id === 'entropy_blast');
-        if (entropyBlast && Math.random() > 0.5) {
+        if (entropyBlast && Math.random() > 0.25) {
             return { action: 'skill', skill: entropyBlast, target: livePlayers[0] };
         }
 
@@ -741,25 +770,25 @@ function evaluateAction(enemy, players, allies = []) {
     if (aiType === 'IMMOVABLE') {
         // Immovable CC immunity when HP drops
         const immovableSkill = available.find(s => s.id === 'immovable');
-        if (immovableSkill && hpPct < 0.8 && !enemy.statusEffects?.some(e => e.type === 'ccImmune') && Math.random() > 0.4) {
+        if (immovableSkill && hpPct < 0.8 && !enemy.statusEffects?.some(e => e.type === 'ccImmune') && Math.random() > 0.20) {
             return { action: 'skill', skill: immovableSkill, target: enemy, targetType: 'self' };
         }
 
         // Iron Rebuke reflect
         const rebukeSkill = available.find(s => s.id === 'iron_rebuke');
-        if (rebukeSkill && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.35) {
+        if (rebukeSkill && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.15) {
             return { action: 'skill', skill: rebukeSkill, target: enemy, targetType: 'self' };
         }
 
         // World Break at high HP to punish over-aggression
         const worldBreak = available.find(s => s.id === 'world_break');
-        if (worldBreak && Math.random() > 0.4) {
+        if (worldBreak && Math.random() > 0.20) {
             return { action: 'skill', skill: worldBreak, target: defaultTarget };
         }
 
         // Seismic Slam AoE
         const seismicSlam = available.find(s => s.id === 'seismic_slam');
-        if (seismicSlam && Math.random() > 0.45) {
+        if (seismicSlam && Math.random() > 0.20) {
             return { action: 'skill', skill: seismicSlam, target: livePlayers[0] };
         }
 
@@ -784,11 +813,11 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 3: Buff team
         const buffSkill = available.find(s => s.type === 'buff_team');
-        if (buffSkill && Math.random() > 0.5) return { action: 'skill', skill: buffSkill, target: enemy, targetType: 'self' };
+        if (buffSkill && Math.random() > 0.25) return { action: 'skill', skill: buffSkill, target: enemy, targetType: 'self' };
 
         // Priority 4: Attack / Divine Retribution
         const divRet = available.find(s => s.id === 'divine_retribution');
-        if (divRet && Math.random() > 0.4) {
+        if (divRet && Math.random() > 0.20) {
             return { action: 'skill', skill: divRet, target: defaultTarget };
         }
     }
@@ -806,7 +835,7 @@ function evaluateAction(enemy, players, allies = []) {
             const en = p.stats?.energy || 0;
             return en > (best.stats?.energy || 0) ? p : best;
         }, livePlayers[0]);
-        if (siphonSkill && (highEnTarget.stats?.energy || 0) > 50 && Math.random() > 0.4) {
+        if (siphonSkill && (highEnTarget.stats?.energy || 0) > 50 && Math.random() > 0.20) {
             return { action: 'skill', skill: siphonSkill, target: highEnTarget };
         }
 
@@ -818,7 +847,7 @@ function evaluateAction(enemy, players, allies = []) {
         });
 
         const shadowStrike = available.find(s => s.id === 'shadow_strike');
-        if (shadowStrike && Math.random() > 0.3) {
+        if (shadowStrike && Math.random() > 0.10) {
             return { action: 'skill', skill: shadowStrike, target: weakTarget };
         }
 
@@ -843,25 +872,25 @@ function evaluateAction(enemy, players, allies = []) {
         // Priority 1: Taunt if not already taunting
         const hasTauntActive = livePlayers.some(p => p.statusEffects?.some(e => e.type === 'taunt'));
         const tauntSkill = available.find(s => s.id === 'taunt');
-        if (!hasTauntActive && tauntSkill && Math.random() > 0.35) {
+        if (!hasTauntActive && tauntSkill && Math.random() > 0.15) {
             return { action: 'skill', skill: tauntSkill, target: defaultTarget };
         }
 
         // Priority 2: Thornwall reflect when low HP
         const thornwall = available.find(s => s.id === 'thornwall');
-        if (thornwall && hpPct < 0.5 && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.35) {
+        if (thornwall && hpPct < 0.5 && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.15) {
             return { action: 'skill', skill: thornwall, target: enemy, targetType: 'self' };
         }
 
         // Priority 3: Rupture if multiple players
         const earthRupture = available.find(s => s.id === 'earth_rupture');
-        if (earthRupture && livePlayers.length >= 2 && Math.random() > 0.3) {
+        if (earthRupture && livePlayers.length >= 2 && Math.random() > 0.10) {
             return { action: 'skill', skill: earthRupture, target: defaultTarget };
         }
 
         // Priority 4: Harden when below 65% HP
         const hardenSkill = available.find(s => s.id === 'harden');
-        if (hardenSkill && hpPct < 0.65 && Math.random() > 0.4) {
+        if (hardenSkill && hpPct < 0.65 && Math.random() > 0.20) {
             return { action: 'skill', skill: hardenSkill, target: enemy, targetType: 'self' };
         }
 
@@ -880,19 +909,19 @@ function evaluateAction(enemy, players, allies = []) {
     if (aiType === 'TACTICAL') {
         // If above 50% HP, consider charging ultimate
         const chargeSkill = available.find(s => s.type === 'charge' && s.id === 'meteor_charge');
-        if (chargeSkill && hpPct > 0.4 && Math.random() > 0.5) {
+        if (chargeSkill && hpPct > 0.4 && Math.random() > 0.25) {
             return { action: 'skill', skill: chargeSkill, target: defaultTarget };
         }
 
         // Singularity if multiple targets
         const abyssalVoid = available.find(s => s.id === 'abyssal_void');
-        if (abyssalVoid && livePlayers.length >= 2 && Math.random() > 0.3) {
+        if (abyssalVoid && livePlayers.length >= 2 && Math.random() > 0.10) {
             return { action: 'skill', skill: abyssalVoid, target: defaultTarget };
         }
 
         // Curse for debuffs early
         const curseSkill = available.find(s => s.id === 'curse');
-        if (curseSkill && !livePlayers[0].statusEffects?.some(e => e.type === 'debuff_all') && Math.random() > 0.5) {
+        if (curseSkill && !livePlayers[0].statusEffects?.some(e => e.type === 'debuff_all') && Math.random() > 0.25) {
             return { action: 'skill', skill: curseSkill, target: defaultTarget };
         }
 
@@ -910,24 +939,24 @@ function evaluateAction(enemy, players, allies = []) {
         // Shatter Will to strip player buffs
         const shatterWill = available.find(s => s.id === 'shatter_will');
         const playerWithBuffs = livePlayers.find(p => p.buffs && p.buffs.length > 0);
-        if (shatterWill && playerWithBuffs && Math.random() > 0.4) {
+        if (shatterWill && playerWithBuffs && Math.random() > 0.20) {
             return { action: 'skill', skill: shatterWill, target: playerWithBuffs };
         }
 
         const obliterate = available.find(s => s.id === 'obliterate');
-        if (obliterate && Math.random() > 0.3) {
+        if (obliterate && Math.random() > 0.10) {
             return { action: 'skill', skill: obliterate, target: defaultTarget };
         }
         const cleave = available.find(s => s.id === 'cleave');
-        if (cleave && livePlayers.length >= 2 && Math.random() > 0.4) {
+        if (cleave && livePlayers.length >= 2 && Math.random() > 0.20) {
             return { action: 'skill', skill: cleave, target: defaultTarget };
         }
         const armorBreak = available.find(s => s.id === 'armor_break');
-        if (armorBreak && Math.random() > 0.4) {
+        if (armorBreak && Math.random() > 0.20) {
             return { action: 'skill', skill: armorBreak, target: defaultTarget };
         }
         const smash = available.find(s => s.id === 'smash');
-        if (smash && Math.random() > 0.3) {
+        if (smash && Math.random() > 0.10) {
             return { action: 'skill', skill: smash, target: defaultTarget };
         }
     }
@@ -941,26 +970,45 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: phaseShift, target: enemy, targetType: 'self' };
         }
 
-        // Charge ultimate at low HP — id is 'ultimate' in BOSS archetype
+        // 💡 HARDER BOSS AI: charge ultimate earlier (50% HP instead of 30%)
+        // and more often (80% chance instead of 80%). Bosses now threaten
+        // the party sooner and more reliably.
         const ultimateSkill = available.find(s => s.id === 'ultimate' || s.chargeTime);
-        if (ultimateSkill && hpPct < 0.3 && Math.random() > 0.4) {
-            return { action: 'skill', skill: ultimateSkill, target: livePlayers[0] };
+        if (ultimateSkill && hpPct < 0.5 && Math.random() > 0.10) {
+            return { action: 'skill', skill: ultimateSkill, target: defaultTarget };
         }
 
-        // AoE slam — id is 'slam' in BOSS archetype
+        // AoE slam — id is 'slam' in BOSS archetype. 💡 HARDER: 85% chance
+        // (was 80%) and smart-target the lowest-HP player for pressure.
         const slamSkill = available.find(s => s.id === 'slam' || s.type === 'aoe');
-        if (slamSkill && Math.random() > 0.4) return { action: 'skill', skill: slamSkill, target: livePlayers[0] };
+        if (slamSkill && Math.random() > 0.05) return { action: 'skill', skill: slamSkill, target: defaultTarget };
 
         // Fallback: use any available offensive skill
-        const offSkill = available.find(s => ['attack', 'magic', 'aoe', 'damage_cc'].includes(s.type));
+        const offSkill = available.find(s => ['attack', 'magic', 'aoe', 'damage_cc', 'execute'].includes(s.type));
         if (offSkill) return { action: 'skill', skill: offSkill, target: defaultTarget };
     }
 
     // ── AGGRESSIVE FALLBACK ────────────────────────
-    if (available.length > 0 && Math.random() > 0.25) {
-        const offensiveSkills = available.filter(s => ['attack', 'magic', 'aoe', 'damage_cc'].includes(s.type));
+    // 💡 HARDER AI: Previously only 75% chance to use a skill (25% default attack).
+    // Now 90% chance to use a skill — enemies lead with their strongest
+    // available offensive ability instead of default-attacking. Default
+    // attack is now the last resort, not the norm.
+    if (available.length > 0 && Math.random() < 0.90) {
+        const offensiveSkills = available.filter(s => ['attack', 'magic', 'aoe', 'damage_cc', 'execute', 'charge'].includes(s.type));
         if (offensiveSkills.length > 0) {
-            const skill = offensiveSkills[Math.floor(Math.random() * offensiveSkills.length)];
+            // 💡 SMARTER SKILL PICK: prefer the highest-multiplier skill that's
+            // off cooldown, instead of purely random. This makes enemies feel
+            // like they're actually trying to win rather than just reacting.
+            offensiveSkills.sort((a, b) => {
+                const aEff = a.currentEffect || (typeof a.effect === 'function' ? a.effect(enemy.level || 1) : a.effect);
+                const bEff = b.currentEffect || (typeof b.effect === 'function' ? b.effect(enemy.level || 1) : b.effect);
+                const aMult = aEff?.multiplier || 1.0;
+                const bMult = bEff?.multiplier || 1.0;
+                return bMult - aMult;
+            });
+            // Pick from the top 2 strongest (adds slight variety)
+            const topN = Math.min(2, offensiveSkills.length);
+            const skill = offensiveSkills[Math.floor(Math.random() * topN)];
             return { action: 'skill', skill, target: defaultTarget };
         }
     }

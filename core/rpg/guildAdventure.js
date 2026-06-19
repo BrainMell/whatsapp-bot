@@ -3733,14 +3733,24 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           enemy.chargingSkill = null;
           enemy.chargeTarget = null;
 
-          // No image per enemy action — image is generated on player turn
+          // 💡 BUG FIX (same as skill flow): send the charge-release damage
+          // breakdown immediately instead of only queueing it in roundLog.
           const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
           state.pendingStatusMsg = null;
-          const chargeMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!`;
           state.roundLog = state.roundLog || [];
-          state.roundLog.push(chargeMsg);
           if (abilityRes && abilityRes.message) {
-            state.roundLog.push(abilityRes.message.trim());
+            const fullMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!\n\n${abilityRes.message.trim()}`;
+            let sentImmediately = false;
+            try {
+              await sock.sendMessage(chatId, { text: fullMsg });
+              sentImmediately = true;
+            } catch (err) {}
+            if (!sentImmediately) {
+              state.roundLog.push(fullMsg);
+            }
+          } else {
+            // No damage message (e.g. buff) — just log the charge release
+            state.roundLog.push(statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!`);
           }
           setTimeout(() => resolve(), turnDelay);
           return;
@@ -3772,12 +3782,6 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           return;
         }
 
-        try {
-          await sock.sendMessage(chatId, {
-            text: `⚡ *${enemy.name}* uses *${skill.name}*!`,
-          });
-        } catch (err) {}
-
         const effect =
           skill.currentEffect ||
           (typeof skill.effect === "function"
@@ -3797,10 +3801,26 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
 
-        // Ensure the enemy's ability damage is logged for the players to see
+        // 💡 BUG FIX: Send the enemy's full ability message (including damage
+        // breakdown) IMMEDIATELY as a standalone message. Previously this was
+        // only pushed to roundLog (flushed at the start of the player's next
+        // turn), which caused users to see "Enemy uses X!" then the turn
+        // prompt, then the damage log later — making it look like enemy
+        // damage wasn't being shown.
         state.roundLog = state.roundLog || [];
         if (abilityRes && abilityRes.message) {
-            state.roundLog.push(abilityRes.message.trim());
+          // Build a combined message: announcement + damage breakdown
+          const fullMsg = `⚡ *${enemy.name}* uses *${skill.name}*!\n\n${abilityRes.message.trim()}`;
+          let sentImmediately = false;
+          try {
+            await sock.sendMessage(chatId, { text: fullMsg });
+            sentImmediately = true;
+          } catch (err) {}
+          // Only push to roundLog if the immediate send failed (avoids
+          // duplicate display when the round summary flushes at turn start).
+          if (!sentImmediately) {
+            state.roundLog.push(fullMsg);
+          }
         }
 
         // No image per enemy skill — push to roundLog and resolve
@@ -3901,8 +3921,22 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         : "";
       state.pendingStatusMsg = null;
       const fullEnemyMsg = (enemyStatusPrefix ? enemyStatusPrefix + '\n' : '') + resultMsg;
+
+      // 💡 BUG FIX: Send the enemy's default-attack message IMMEDIATELY.
+      // Previously this was only pushed to roundLog (flushed at the start
+      // of the player's next turn), so the user would see the enemy attack
+      // result delayed — appearing AFTER the turn prompt instead of before
+      // it. This made it look like enemy damage wasn't being shown.
       state.roundLog = state.roundLog || [];
-      state.roundLog.push(fullEnemyMsg);
+      let sentImmediately = false;
+      try {
+        await sock.sendMessage(chatId, { text: fullEnemyMsg });
+        sentImmediately = true;
+      } catch (err) {}
+      // Fallback: push to roundLog only if the immediate send failed.
+      if (!sentImmediately) {
+        state.roundLog.push(fullEnemyMsg);
+      }
 
       // No image per enemy attack — roundLog is flushed before player's next prompt
       setTimeout(() => resolve(), turnDelay);
