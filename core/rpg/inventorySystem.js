@@ -445,9 +445,32 @@ async function equipItem(userId, itemId, slot) {
     }
     
     const slotName = EQUIPMENT_SLOTS[targetSlot.toUpperCase()];
-    
+
     // 💡 TWO-HANDED / SHIELD LOGIC
     const isTwoHanded = itemToEquip.isTwoHanded || itemInfo.isTwoHanded;
+
+    // PRE-CHECK: Verify we have enough inventory space for the worst-case
+    // number of items that will return to the bag during this swap.
+    //
+    // Worst case: equipping a two-hander to main_hand while a one-hander +
+    // shield are currently equipped. That swaps 1 new item OUT of the bag
+    // and pushes 2 old items (main_hand + off_hand) back IN — net +1 slot.
+    //
+    // Previously the code did removeItem() first, then awaited addItem()
+    // for the displaced items. If addItem() failed because the bag was full,
+    // the old item was silently lost. This pre-check prevents that.
+    const willReturnMainHand = !!equipment[slotName];
+    const willReturnOffHand = isTwoHanded && slotName === 'main_hand' && !!equipment.off_hand;
+    const willReturnMainHandForOffHandSwap = slotName === 'off_hand' && equipment.main_hand && lootSystem.getItemInfo(equipment.main_hand.id)?.isTwoHanded;
+    const itemsReturning = (willReturnMainHand ? 1 : 0) + (willReturnOffHand ? 1 : 0) + (willReturnMainHandForOffHandSwap ? 1 : 0);
+    // The new item is removed first, freeing 1 slot — so net slots needed = itemsReturning - 1
+    const netSlotsNeeded = Math.max(0, itemsReturning - 1);
+    if (netSlotsNeeded > 0 && !hasInventorySpace(userId, netSlotsNeeded)) {
+        return {
+            success: false,
+            message: `❌ Inventory full! Free up ${netSlotsNeeded} slot(s) before equipping — your current gear needs somewhere to go.`
+        };
+    }
 
     // 1. Remove new item from inventory first
     removeItem(userId, itemId, 1);
@@ -456,9 +479,13 @@ async function equipItem(userId, itemId, slot) {
     if (isTwoHanded && slotName === 'main_hand' && equipment.off_hand) {
         const offHand = equipment.off_hand;
         equipment.off_hand = null;
-        // Material pouch already handles infinite space for materials, but equipment needs space
-        // We just freed one slot by removing the itemToEquip, so adding one back is safe
-        await addItem(userId, offHand.id, 1, offHand);
+        const addResult = await addItem(userId, offHand.id, 1, offHand);
+        if (!addResult.success) {
+            // Rollback: re-equip the off-hand and put the new item back
+            equipment.off_hand = offHand;
+            await addItem(userId, targetItemId, 1, itemToEquip);
+            return { success: false, message: `❌ Inventory full! Could not store ${offHand.name || offHand.id} when unequipping.` };
+        }
     }
 
     // 3. Ensure Main-Hand isn't a 2-Hander if equipping to Off-Hand
@@ -467,14 +494,25 @@ async function equipItem(userId, itemId, slot) {
         if (mainHandInfo.isTwoHanded) {
             const mainHand = equipment.main_hand;
             equipment.main_hand = null;
-            await addItem(userId, mainHand.id, 1, mainHand);
+            const addResult = await addItem(userId, mainHand.id, 1, mainHand);
+            if (!addResult.success) {
+                // Rollback
+                equipment.main_hand = mainHand;
+                await addItem(userId, targetItemId, 1, itemToEquip);
+                return { success: false, message: `❌ Inventory full! Could not store ${mainHand.name || mainHand.id} when unequipping.` };
+            }
         }
     }
-    
+
     const oldItem = equipment[slotName];
     if (oldItem) {
-        // Safe to add back because we removed the new item first
-        await addItem(userId, oldItem.id, 1, oldItem);
+        const addResult = await addItem(userId, oldItem.id, 1, oldItem);
+        if (!addResult.success) {
+            // Rollback: re-equip the old item and put the new item back
+            equipment[slotName] = oldItem;
+            await addItem(userId, targetItemId, 1, itemToEquip);
+            return { success: false, message: `❌ Inventory full! Could not store ${oldItem.name || oldItem.id} when unequipping.` };
+        }
     }
     
     const durabilitySystem = require('./durabilitySystem');
@@ -821,24 +859,31 @@ function useItem(userId, rawItemId, targetSlot = null) {
     let consumed = true;
 
     if (itemId === 'hp_potion' || itemId === 'minor_hp_potion' || itemId === 'mega_potion') {
-        const user = economy.getUser(userId);
-        const maxHp = sheet.stats.maxHp || sheet.stats.hp;
-        const healPct = itemInfo.effectValue || 0.15;
-        const heal = Math.floor(maxHp * healPct);
-        if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
-        user.stats.maxHp = maxHp;
-        user.stats.hp = Math.min(maxHp, (user.stats.hp || maxHp) + heal);
-        effectMsg = `💚 Restored *${heal} HP*! (${Math.round(healPct * 100)}%)`;
-    } 
+        // HP potions only meaningfully heal during combat — outside of combat,
+        // characters don't have a persistent HP field (HP is computed from
+        // class+level+stats when a fight starts). Block out-of-combat use
+        // and direct the player to combat usage.
+        return {
+            success: false,
+            message: `💚 *${itemInfo.name}* can only be used during combat — your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
+        };
+    }
     else if (itemId === 'energy_drink') {
         const user = economy.getUser(userId);
-        user.energy = Math.min(user.maxEnergy || 100, (user.energy || 0) + 30);
-        effectMsg = `⚡ Restored **30 Energy**!`;
+        // Use the progression system's derived maxEnergy instead of an
+        // uninitialized user.maxEnergy field — for a L50 mage with 100 MAG,
+        // actual maxEnergy is 1135, not the 100 default this code assumed.
+        const derivedStats = progression.getBaseStats(userId, user.class);
+        const maxEn = derivedStats.maxEnergy || 100;
+        // Default current energy to maxEn on first use (undefined → full).
+        const currentEn = user.energy !== undefined ? user.energy : maxEn;
+        user.energy = Math.min(maxEn, currentEn + 30);
+        effectMsg = `⚡ Restored **30 Energy**! (Now ${user.energy}/${maxEn})`;
     }
     else if (itemId === 'class_change_ticket' || itemId === 'reroll_ticket') {
         const user = economy.getUser(userId);
         const currentClass = classSystem.getClassById(user.class);
-        
+
         // 1. Requirement: Must be a STARTER class
         if (currentClass.tier !== 'STARTER') {
             return { success: false, message: '❌ This item only works for *Starter* classes! Evolved or Ascended heroes must use a Skill Reset Scroll.' };
@@ -847,7 +892,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // 2. Cooldown Check: 5 hours after 5 uses
         const now = Date.now();
         const FIVE_HOURS = 5 * 60 * 60 * 1000;
-        
+
         if (user.lastClassChangeReset && (now - user.lastClassChangeReset < FIVE_HOURS)) {
             const remaining = Math.ceil((FIVE_HOURS - (now - user.lastClassChangeReset)) / (60 * 1000));
             return { success: false, message: `❌ Exhausted! Your spirit needs to rest. You can reroll again in **${remaining} minutes**.` };
@@ -855,7 +900,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
         // 3. Usage Increment
         user.classChangeCount = (user.classChangeCount || 0) + 1;
-        
+
         if (user.classChangeCount >= 5) {
             user.classChangeCount = 0;
             user.lastClassChangeReset = now;
@@ -866,26 +911,30 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
         const result = economy.changeClass(userId);
         if (!result.success) return result;
-        
+
         effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
     else if (itemId === 'holy_water') {
-        const user = economy.getUser(userId);
-        const maxHp = sheet.stats.maxHp || sheet.stats.hp;
-        if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
-        user.stats.maxHp = maxHp;
-        user.stats.hp = Math.min(maxHp, (user.stats.hp || maxHp) + 100);
-        effectMsg = `💚 Restored **100 HP** and cleansed your status!`;
+        // Same logic as HP potion — out-of-combat HP isn't a thing.
+        return {
+            success: false,
+            message: `💚 *${itemInfo.name}* can only be used during combat — your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
+        };
     }
     else if (itemId === 'energy_brew') {
         const user = economy.getUser(userId);
-        user.energy = Math.min(user.maxEnergy || 100, (user.energy || 0) + 50);
-        effectMsg = `⚡ Restored **50 Energy**!`;
+        const derivedStats = progression.getBaseStats(userId, user.class);
+        const maxEn = derivedStats.maxEnergy || 100;
+        const currentEn = user.energy !== undefined ? user.energy : maxEn;
+        user.energy = Math.min(maxEn, currentEn + 50);
+        effectMsg = `⚡ Restored **50 Energy**! (Now ${user.energy}/${maxEn})`;
     }
     else if (itemId === 'ether') {
         const user = economy.getUser(userId);
-        user.energy = user.maxEnergy || 100;
-        effectMsg = `⚡ Restored **100% Energy**!`;
+        const derivedStats = progression.getBaseStats(userId, user.class);
+        const maxEn = derivedStats.maxEnergy || 100;
+        user.energy = maxEn;
+        effectMsg = `⚡ Restored **100% Energy**! (Now ${user.energy}/${maxEn})`;
     }
     else if (itemId === 'rabbit_foot') {
         const user = economy.getUser(userId);

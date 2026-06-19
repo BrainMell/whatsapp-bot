@@ -1179,6 +1179,9 @@ class BossFightManager {
     }
     
     triggerEnrage() {
+        // Hard enrage: instant kill / wipe effect past the turn limit.
+        // If a boss has `enrageTimer` set but no `hardEnrage` effect, fall
+        // back to a generic enrage message so the turn doesn't end with null.
         if (this.boss.hardEnrage) {
             return {
                 type: 'hard_enrage',
@@ -1186,7 +1189,11 @@ class BossFightManager {
                 message: this.boss.hardEnrage.message
             };
         }
-        return null;
+        return {
+            type: 'hard_enrage',
+            effect: 'instant_wipe',
+            message: `⚠️ *ENRAGE TIMER EXPIRED!* ${this.boss.name || 'The boss'} unleashes their full fury!`
+        };
     }
     
     processChannels() {
@@ -1231,14 +1238,30 @@ class BossFightManager {
     selectBossAction() {
         const phase = this.boss.phases[this.phaseManager.currentPhaseIndex];
         const abilities = phase.abilities || [];
-        
-        // Select random ability weighted by priority
-        const ability = abilities[Math.floor(Math.random() * abilities.length)];
-        
+        if (abilities.length === 0) {
+            return { type: 'boss_action', ability: null, data: null };
+        }
+
+        // Select ability weighted by priority (if declared on the ability
+        // entry). Ability entries can be either a string (uniform weight) or
+        // an object `{ id, priority }`. Higher priority = more frequent.
+        // Previously the comment claimed "weighted by priority" but the code
+        // did uniform random — that's now fixed.
+        const expanded = [];
+        for (const ability of abilities) {
+            if (typeof ability === 'string') {
+                expanded.push(ability);
+            } else if (ability && typeof ability === 'object') {
+                const weight = Math.max(1, ability.priority || 1);
+                for (let i = 0; i < weight; i++) expanded.push(ability.id || ability.name);
+            }
+        }
+        const chosen = expanded[Math.floor(Math.random() * expanded.length)];
+
         return {
             type: 'boss_action',
-            ability: ability,
-            data: BOSS_ABILITIES[ability]
+            ability: chosen,
+            data: BOSS_ABILITIES[chosen]
         };
     }
     

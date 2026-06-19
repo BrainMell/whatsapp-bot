@@ -181,7 +181,7 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
     if (activeDuels.has(chatId)) {
         return { success: false, message: '❌ A duel is already active in this chat!' };
     }
-    
+
     const existing = duelInvites.get(chatId);
     if (existing && (Date.now() - existing.timestamp < CHALLENGE_TIMEOUT)) {
         return { success: false, message: '❌ A challenge is already pending! Accept or wait for it to expire.' };
@@ -189,6 +189,12 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
 
     const resolvedChallenger = resolveJid(challengerJid);
     const resolvedTarget = resolveJid(targetJid);
+
+    // Block self-challenges — previously a user could challenge themselves,
+    // which would create a nonsensical 1-player duel.
+    if (resolvedChallenger === resolvedTarget) {
+        return { success: false, message: '❌ You cannot challenge yourself!' };
+    }
 
     if (!economy.isRegistered(resolvedChallenger)) {
         return { success: false, message: '❌ You must be registered to challenge someone!' };
@@ -201,6 +207,15 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
         const user = economy.getUser(resolvedChallenger);
         if ((user?.wallet || 0) < stake) {
             return { success: false, message: `❌ Insufficient funds! You need ${botConfig.getCurrency().symbol}${stake.toLocaleString()} to stake.` };
+        }
+        // Also check the target's wallet upfront — if they obviously can't
+        // afford the stake, refuse the challenge instead of wasting 2 minutes
+        // of the challenger's time before the target gets the accept-time
+        // rejection. This is a soft check; the target's wallet could change
+        // between challenge and accept, so we still re-verify at accept time.
+        const target = economy.getUser(resolvedTarget);
+        if ((target?.wallet || 0) < stake) {
+            return { success: false, message: `❌ ${target?.nickname || resolvedTarget.split('@')[0]} doesn't have enough Zeni to match that stake!` };
         }
     }
 
@@ -228,11 +243,21 @@ async function acceptChallenge(sock, chatId, targetJid) {
         return { success: false, message: '❌ Challenge expired! (2 min limit)' };
     }
 
+    // Clean up the invite on ANY failure path so the challenger isn't locked
+    // out for 2 minutes when the target can't accept (e.g. insufficient funds,
+    // or one of the players unregistered in the meantime). Previously the
+    // invite stayed in `duelInvites` and blocked all new challenges in that
+    // chat until the 2-minute timeout elapsed — bad UX.
+    const cleanupAndFail = (msg) => {
+        duelInvites.delete(chatId);
+        return { success: false, message: msg };
+    };
+
     if (!economy.isRegistered(invite.challenger)) {
-        return { success: false, message: '❌ Challenger is no longer registered!' };
+        return cleanupAndFail('❌ Challenger is no longer registered!');
     }
     if (!economy.isRegistered(resolvedTarget)) {
-        return { success: false, message: '❌ You need to register first before accepting a duel!' };
+        return cleanupAndFail('❌ You need to register first before accepting a duel!');
     }
 
     // Validate stakes
@@ -240,10 +265,10 @@ async function acceptChallenge(sock, chatId, targetJid) {
         const challenger = economy.getUser(invite.challenger);
         const target = economy.getUser(resolvedTarget);
         if ((challenger?.wallet || 0) < invite.stake) {
-            return { success: false, message: '❌ Challenger no longer has enough Zeni for the stake!' };
+            return cleanupAndFail('❌ Challenger no longer has enough Zeni for the stake!');
         }
         if ((target?.wallet || 0) < invite.stake) {
-            return { success: false, message: `❌ You need ${botConfig.getCurrency().symbol}${invite.stake.toLocaleString()} to accept!` };
+            return cleanupAndFail(`❌ You need ${botConfig.getCurrency().symbol}${invite.stake.toLocaleString()} to accept!`);
         }
         economy.removeMoney(invite.challenger, invite.stake);
         economy.removeMoney(resolvedTarget, invite.stake);
@@ -747,10 +772,16 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         if (!item || !item.usable) {
             return { success: false, message: '❌ This item is not usable in combat!' };
         }
-        
-        // Remove 1 item
-        inventorySystem.removeItem(currentPlayer.jid, itemKey, 1);
-        
+
+        // Remove 1 item — verify removal succeeded BEFORE applying the effect.
+        // Previously the return value was ignored, so a failed removeItem
+        // (e.g. item already gone) would silently let the player use the
+        // item's effect for free.
+        const removeResult = inventorySystem.removeItem(currentPlayer.jid, itemKey, 1);
+        if (!removeResult.success) {
+            return { success: false, message: `❌ Failed to use item: ${removeResult.message || 'insufficient quantity'}` };
+        }
+
         actionResult = `🎒 *${currentPlayer.name}* used *${item.name}*!`;
         
         const isNegative = [
