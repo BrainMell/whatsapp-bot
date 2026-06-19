@@ -133,6 +133,9 @@ const UserSchema = new mongoose.Schema({
     }
   },
 
+  // Event Tokens (for token events — earned by claiming cards, spent in eShop)
+  eventTokens: { type: Number, default: 0 },
+
   // AI Memory & Profile Data
   profile: {
     whatsappName: { type: String, default: null },

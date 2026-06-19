@@ -451,6 +451,26 @@ class GoImageService {
       return null;
     }
   }
+
+  /**
+   * Generate the eShop deck image (4x4 grid of event card images).
+   * Calls the Go Image Service's /api/cards/eshop endpoint.
+   * Returns a PNG buffer, or null on failure.
+   */
+  async generateEShopDeck(data) {
+    try {
+      const response = await this.client.post("/api/cards/eshop", data, {
+        responseType: "arraybuffer",
+        timeout: 30000, // 30s — needs to fetch up to 16 card images
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService eShop Deck Error:", error.message);
+      return null;
+    }
+  }
 }
 
 module.exports = GoImageService;

@@ -77,7 +77,12 @@ function getInst() {
       pendingBurns:  new Map(),
       ALL_CARDS:     [],
       CARD_INDEX:    {},
-      CARDS_BY_TIER: {}
+      CARDS_BY_TIER: {},
+      // 💡 TOKEN EVENT STATE
+      tokenEventActive: false,     // toggled via .g event start/stop
+      tokenEventStart: 0,          // timestamp event started
+      // 💡 ESHOP DECK STATE
+      eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
     });
   }
   return instances.get(id);
@@ -339,6 +344,280 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  SECTION 3.5 — TOKEN EVENT & ESHOP SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if the token event is currently active.
+ * Returns true if the owner has started the event via `.g event start`.
+ */
+async function isTokenEventActive() {
+  const inst = getInst();
+  return !!inst.tokenEventActive;
+}
+
+/**
+ * Start the token event. Only the bot owner can do this.
+ */
+async function startTokenEvent(ownerJid) {
+  const inst = getInst();
+  if (inst.tokenEventActive) {
+    return { success: false, message: '❌ Token event is already active!' };
+  }
+  inst.tokenEventActive = true;
+  inst.tokenEventStart = Date.now();
+
+  // Persist to System collection
+  try {
+    await System.findOneAndUpdate(
+      { key: `token_event_${botConfig.getBotId()}` },
+      { $set: { value: { active: true, startedAt: inst.tokenEventStart } } },
+      { upsert: true }
+    );
+  } catch (e) { console.error('[TokenEvent] Failed to persist state:', e.message); }
+
+  return {
+    success: true,
+    message: `🎉 *TOKEN EVENT STARTED!* 🎉\n\n` +
+      `Claim cards to earn Event Tokens (1 token per ~2 claims).\n` +
+      `Spend tokens in the eShop: \`${P()} eshop\`\n\n` +
+      `Check your balance: \`${P()} tokens\``
+  };
+}
+
+/**
+ * Stop the token event. Only the bot owner can do this.
+ */
+async function stopTokenEvent(ownerJid) {
+  const inst = getInst();
+  if (!inst.tokenEventActive) {
+    return { success: false, message: '❌ Token event is not currently active.' };
+  }
+  inst.tokenEventActive = false;
+
+  try {
+    await System.findOneAndUpdate(
+      { key: `token_event_${botConfig.getBotId()}` },
+      { $set: { value: { active: false, startedAt: inst.tokenEventStart, stoppedAt: Date.now() } } },
+      { upsert: true }
+    );
+  } catch (e) { console.error('[TokenEvent] Failed to persist state:', e.message); }
+
+  return { success: true, message: '🛑 *Token event stopped.* No more tokens will drop.' };
+}
+
+/**
+ * Load token event state from DB on startup.
+ */
+async function loadTokenEventState() {
+  try {
+    const doc = await System.findOne({ key: `token_event_${botConfig.getBotId()}` }).lean();
+    if (doc && doc.value) {
+      const inst = getInst();
+      inst.tokenEventActive = !!doc.value.active;
+      inst.tokenEventStart = doc.value.startedAt || 0;
+    }
+  } catch (e) { /* silent — may not exist yet */ }
+}
+
+/**
+ * Load eShop deck from DB on startup.
+ */
+async function loadEShopDeck() {
+  try {
+    const doc = await System.findOne({ key: `eshop_deck_${botConfig.getBotId()}` }).lean();
+    if (doc && doc.value && Array.isArray(doc.value)) {
+      const inst = getInst();
+      inst.eshopDeck = doc.value;
+    }
+  } catch (e) { /* silent */ }
+}
+
+/**
+ * Save eShop deck to DB.
+ */
+async function saveEShopDeck() {
+  const inst = getInst();
+  try {
+    await System.findOneAndUpdate(
+      { key: `eshop_deck_${botConfig.getBotId()}` },
+      { $set: { value: inst.eshopDeck } },
+      { upsert: true }
+    );
+  } catch (e) { console.error('[eShop] Failed to save deck:', e.message); }
+}
+
+/**
+ * Add a card to the eShop deck at a specific slot (1-16).
+ * Owner-only.
+ */
+async function eshopAddCard(slot, cardId, price) {
+  const inst = getInst();
+  if (slot < 1 || slot > 16) {
+    return { success: false, message: '❌ Slot must be 1-16.' };
+  }
+  const card = CARD_INDEX()[cardId];
+  if (!card) {
+    return { success: false, message: `❌ Card ID "${cardId}" not found in database.` };
+  }
+  const priceNum = Math.max(1, Math.floor(Number(price) || 0));
+  inst.eshopDeck[slot - 1] = {
+    cardId: card.id,
+    cardName: card.cardName,
+    imageUrl: card.imageUrl,
+    tier: String(card.tier),
+    anime: card.animeName || '',
+    price: priceNum
+  };
+  await saveEShopDeck();
+  return {
+    success: true,
+    message: `✅ Added *${card.cardName}* (T${card.tier}) to eShop slot ${slot} for 🎫 ${priceNum} tokens.`
+  };
+}
+
+/**
+ * Remove a card from the eShop deck at a specific slot.
+ * Owner-only.
+ */
+async function eshopRemoveCard(slot) {
+  const inst = getInst();
+  if (slot < 1 || slot > 16) {
+    return { success: false, message: '❌ Slot must be 1-16.' };
+  }
+  if (!inst.eshopDeck[slot - 1]) {
+    return { success: false, message: `❌ Slot ${slot} is already empty.` };
+  }
+  const removed = inst.eshopDeck[slot - 1];
+  inst.eshopDeck[slot - 1] = null;
+  await saveEShopDeck();
+  return { success: true, message: `✅ Removed *${removed.cardName}* from eShop slot ${slot}.` };
+}
+
+/**
+ * Set the price for a card in the eShop deck.
+ * Owner-only.
+ */
+async function eshopSetPrice(slot, price) {
+  const inst = getInst();
+  if (slot < 1 || slot > 16) {
+    return { success: false, message: '❌ Slot must be 1-16.' };
+  }
+  const entry = inst.eshopDeck[slot - 1];
+  if (!entry) {
+    return { success: false, message: `❌ Slot ${slot} is empty. Add a card first with \`${P()} t2edeck add <slot> <cardId> <price>\`.` };
+  }
+  const priceNum = Math.max(1, Math.floor(Number(price) || 0));
+  entry.price = priceNum;
+  await saveEShopDeck();
+  return { success: true, message: `✅ Set price for *${entry.cardName}* (slot ${slot}) to 🎫 ${priceNum} tokens.` };
+}
+
+/**
+ * Buy a card from the eShop using event tokens.
+ * Anyone can use this.
+ */
+async function eshopBuy(senderJid, slot) {
+  const inst = getInst();
+  if (slot < 1 || slot > 16) {
+    return { success: false, message: '❌ Slot must be 1-16.' };
+  }
+  const entry = inst.eshopDeck[slot - 1];
+  if (!entry) {
+    return { success: false, message: `❌ Slot ${slot} is empty.` };
+  }
+
+  const balance = economy.getTokens(senderJid);
+  if (balance < entry.price) {
+    return {
+      success: false,
+      message: `❌ Insufficient tokens! Need 🎫 ${entry.price}, have 🎫 ${balance}.\nClaim cards during the token event to earn more!`
+    };
+  }
+
+  // Deduct tokens
+  const deducted = economy.removeTokens(senderJid, entry.price);
+  if (!deducted) {
+    return { success: false, message: '❌ Failed to deduct tokens. Try again.' };
+  }
+
+  // Grant the card to the user
+  try {
+    // Get the card stat to find the next copy number
+    const stat = await getOrInitStat(entry.cardId, entry.tier);
+    stat.totalCirculation += 1;
+    // Don't increment totalSpawned — eShop purchases aren't "spawns"
+    const copyNumber = stat.totalSpawned + 1; // Use next available copy number
+    await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
+    await stat.save();
+
+    const newBalance = economy.getTokens(senderJid);
+    return {
+      success: true,
+      message: `✅ *PURCHASE COMPLETE!*\n\n` +
+        `🎁 *${entry.cardName}* — _${entry.anime}_\n` +
+        `📋 Copy #${copyNumber} (T${entry.tier})\n\n` +
+        `🎫 Spent: ${entry.price} tokens\n` +
+        `🎫 Remaining: ${newBalance} tokens\n\n` +
+        `_Added to your collection!_`
+    };
+  } catch (err) {
+    // Roll back the token deduction if card grant failed
+    economy.addTokens(senderJid, entry.price);
+    console.error('[eShop Buy Error]', err);
+    return { success: false, message: '❌ Purchase failed — tokens refunded.' };
+  }
+}
+
+/**
+ * Generate the eShop deck image via the Go Image Service.
+ * Returns a PNG buffer.
+ */
+async function generateEShopDeckImage() {
+  const inst = getInst();
+  const cards = inst.eshopDeck
+    .map((entry, i) => entry ? { slot: i + 1, ...entry } : null)
+    .filter(Boolean);
+
+  const payload = {
+    title: '🎁 EVENT SHOP — TOKEN EVENT',
+    currency: '🎫 Tokens',
+    cards: cards
+  };
+
+  try {
+    const result = await goService.generateEShopDeck(payload);
+    return result;
+  } catch (err) {
+    console.error('[eShop] Image generation failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Search for event cards by name and/or anime.
+ * Used by `info <name> event | <anime>`.
+ */
+async function searchEventCards(nameQuery, animeQuery) {
+  const inst = getInst();
+  const eventCards = inst.CARDS_BY_TIER['E'] || [];
+
+  let results = eventCards;
+
+  if (nameQuery) {
+    const nq = nameQuery.toLowerCase();
+    results = results.filter(c => c.cardName.toLowerCase().includes(nq));
+  }
+
+  if (animeQuery) {
+    const aq = animeQuery.toLowerCase();
+    results = results.filter(c => (c.animeName || '').toLowerCase().includes(aq));
+  }
+
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 4 — COMMAND HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -387,9 +666,6 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 
   try {
     // Check if the user already owns at least one copy of this card.
-    // `uniqueOwners` should count DISTINCT users, not total claims —
-    // previously it was incremented on every claim, so a user claiming
-    // multiple copies of the same card would inflate the count.
     const alreadyOwned = await UserCard.findOne({ userId: senderJid, cardId: spawn.card.id }).lean();
 
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
@@ -400,8 +676,27 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     await spawn.stat.save();
     inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
+    // 💡 TOKEN EVENT: Drop 1 token per ~2 card claims.
+    // Uses a 50% chance per claim (≈1 token per 2 spawns as specified).
+    // Only drops if the token event is active.
+    let tokenMsg = '';
+    try {
+      const eventActive = await isTokenEventActive();
+      if (eventActive) {
+        // 50% chance to drop a token on each claim ≈ 1 token per 2 claims
+        if (Math.random() < 0.50) {
+          economy.addTokens(senderJid, 1);
+          const balance = economy.getTokens(senderJid);
+          tokenMsg = `\n\n🎫 *Token Drop!* +1 Event Token (Total: ${balance})\n_Use \`${P()} eshop\` to spend them!_`;
+        }
+      }
+    } catch (tokenErr) {
+      // Don't fail the claim if token drop fails
+      console.error('[Token Drop Error]', tokenErr.message);
+    }
+
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
-    return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
+    return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_${tokenMsg}`);
   } catch (err) {
     console.error('[Claim Error]', err);
     return reply('❌ Claim failed.');
@@ -932,12 +1227,46 @@ async function cmdInfo(reply, chatId, args = []) {
   const p = P();
   let query = args.join(' ').toLowerCase().trim();
   let animeFilter = null;
+
+  // Support both `|` separator and space-separated anime filter
+  // e.g. "info Roy event | fullmetal" or "info Roy event fullmetal"
+  let eventMode = false;
   if (query.includes('|')) {
     const parts = query.split('|');
     query = parts[0].trim();
     animeFilter = parts[1].trim();
   }
-  if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
+
+  // Check for "event" keyword — triggers event card search mode
+  // e.g. "roy event" or "roy event | fullmetal"
+  if (query.includes(' event')) {
+    eventMode = true;
+    query = query.replace(' event', '').trim();
+  }
+  // Also handle "event" at the start: "event roy"
+  if (query.startsWith('event ')) {
+    eventMode = true;
+    query = query.substring(6).trim();
+  }
+
+  if (!query && !eventMode) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
+
+  // 💡 EVENT CARD SEARCH MODE
+  // `info <name> event | <anime>` → search event-tier cards by name and anime
+  if (eventMode) {
+    const results = await searchEventCards(query, animeFilter);
+    if (results.length === 0) {
+      return reply(`❌ No event cards found${query ? ` matching "${query}"` : ''}${animeFilter ? ` in anime "${animeFilter}"` : ''}.\n\nEvent cards are special and don't spawn naturally. They're only available during token events via the eShop.`);
+    }
+
+    let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
+    msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}:\n\n`;
+    results.forEach(c => {
+      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
+    });
+    msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
+    return reply(msg);
+  }
 
   // Exact ID check first
   const exact = CARD_INDEX()[query];
@@ -957,13 +1286,13 @@ async function cmdInfo(reply, chatId, args = []) {
   }
 
   // Partial name search
-  const matches = ALL_CARDS().filter(c => 
-    c.cardName.toLowerCase().includes(query) && 
+  const matches = ALL_CARDS().filter(c =>
+    c.cardName.toLowerCase().includes(query) &&
     (!animeFilter || c.animeName.toLowerCase().includes(animeFilter))
   );
-  
+
   if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*${animeFilter ? ` in anime *"${animeFilter}"*` : ''}`);
-  
+
   if (matches.length === 1) {
     const card = matches[0];
     const stat = await CardStat.findOne({ cardId: card.id });
@@ -983,7 +1312,7 @@ async function cmdInfo(reply, chatId, args = []) {
   // Multiple matches
   let msg = `🔍 *Search Results for "${query}"*\n`;
   msg += `📦 Found ${matches.length} matches. Showing top 15:\n\n`;
-  
+
   matches.slice(0, 15).forEach(c => {
     msg += `▫️ *${c.cardName}* (${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
   });
@@ -1089,11 +1418,71 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   const p = P();
   const sub = args[0]?.toLowerCase();
 
+  // ── TOKEN EVENT ESHOP ────────────────────────────
+  // `eshop` (no args) → show the 4x4 event card grid
+  // `eshop buy <slot>` → buy a card from the grid using tokens
+  if (sub === 'buy' && args[1] && !args[1].startsWith('deck')) {
+    const slot = parseInt(args[1]);
+    if (isNaN(slot) || slot < 1 || slot > 16) {
+      return reply(`❌ Usage: \`${p} eshop buy <slot_number>\` (1-16)`);
+    }
+    const result = await eshopBuy(senderJid, slot);
+    return reply(result.message);
+  }
+
+  // ── DECK TRADING (old eshop, now under `eshop deck`) ──
+  if (sub === 'deck') {
+    return cmdEShopDeckTrading(senderJid, reply, chatId, args.slice(1), isMod);
+  }
+
+  // ── DEFAULT: Show the token event eShop (4x4 grid image) ──
+  const inst = getInst();
+  const filledSlots = inst.eshopDeck.filter(e => e !== null).length;
+
+  if (filledSlots === 0) {
+    return reply(`📭 *EVENT SHOP*\n\nThe eShop is currently empty. The owner needs to add event cards first.\n\nOwner: Use \`${p} t2edeck add <slot> <cardId> <price>\` to add cards.`);
+  }
+
+  // Generate and send the 4x4 grid image
+  const imageBuffer = await generateEShopDeckImage();
+  if (imageBuffer) {
+    const tokenBalance = economy.getTokens(senderJid);
+    const eventActive = await isTokenEventActive();
+    const caption = `🎁 *EVENT SHOP* 🎁\n` +
+      `━━━━━━━━━━━━━━━\n` +
+      `🎫 Your Tokens: *${tokenBalance}*\n` +
+      `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
+      `📦 Cards Available: *${filledSlots}/16*\n\n` +
+      `💡 Use \`${p} eshop buy <slot_number>\` to purchase.`;
+    try {
+      return await getInst().sock_ref.sendMessage(chatId, { image: imageBuffer, caption });
+    } catch (err) {
+      console.error('[eShop] Failed to send image:', err.message);
+    }
+  }
+
+  // Fallback: text list if image generation failed
+  let msg = `🎁 *EVENT SHOP* 🎁\n`;
+  msg += `🎫 Your Tokens: *${economy.getTokens(senderJid)}*\n\n`;
+  inst.eshopDeck.forEach((entry, i) => {
+    if (entry) {
+      msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier})\n   🎫 Price: ${entry.price} tokens\n   📺 ${entry.anime}\n\n`;
+    }
+  });
+  msg += `💡 Use \`${p} eshop buy <slot_number>\` to purchase.`;
+  return reply(msg);
+}
+
+// Old deck-trading eshop, renamed to `eshop deck <subcommand>`
+async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = false) {
+  const p = P();
+  const sub = args[0]?.toLowerCase();
+
   if (sub === 'sell') {
     const deckName = args[1];
     const price = parseInt(args[2]);
     if (!deckName || isNaN(price) || price < 1) {
-      return sendUsage(reply, `${p} eshop sell`, `${p} eshop sell <deck_name> <price>`, `${p} eshop sell Waifus 50000`);
+      return sendUsage(reply, `${p} eshop deck sell`, `${p} eshop deck sell <deck_name> <price>`, `${p} eshop deck sell Waifus 50000`);
     }
 
     const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${deckName}$`, 'i') } });
@@ -1118,17 +1507,17 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   if (sub === 'approve' || sub === 'reject') {
     if (!isMod) return reply('❌ Mod only.');
     const id = args[1];
-    if (!id) return reply(`❌ Usage: \`${p} eshop ${sub} <listing_id>\``);
+    if (!id) return reply(`❌ Usage: \`${p} eshop deck ${sub} <listing_id>\``);
 
     try {
       const listing = await CardMarket.findById(id);
       if (!listing || !listing.isDeck) return reply('❌ Listing not found.');
-      
+
       if (sub === 'approve') {
         listing.status = 'active';
         listing.approvalStatus = 'approved';
         await listing.save();
-        return reply(`✅ Approved deck listing *#${id}*. It is now live in the E-Shop!`);
+        return reply(`✅ Approved deck listing *#${id}*. It is now live in the Deck Shop!`);
       } else {
         listing.status = 'cancelled';
         listing.approvalStatus = 'rejected';
@@ -1151,13 +1540,13 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
       msg += `💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
       msg += `━━━━━━━━━━━━━━━\n`;
     });
-    msg += `💡 Use \`${p} eshop approve/reject <id>\``;
+    msg += `💡 Use \`${p} eshop deck approve/reject <id>\``;
     return reply(msg, { mentions: pending.map(l => l.sellerId) });
   }
 
   if (sub === 'buy') {
     const index = parseInt(args[1]);
-    if (isNaN(index)) return sendUsage(reply, `${p} eshop buy`, `${p} eshop buy <number>`, `${p} eshop buy 1`);
+    if (isNaN(index)) return sendUsage(reply, `${p} eshop deck buy`, `${p} eshop deck buy <number>`, `${p} eshop deck buy 1`);
 
     const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
     const listing = active[index - 1];
@@ -1189,17 +1578,17 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
     } catch (err) { return reply('❌ Purchase failed.'); }
   }
 
-  // Default: List Shop
+  // Default: List Deck Shop
   const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
-  if (active.length === 0) return reply('📭 The E-Shop is currently empty. Sell your decks with `.eshop sell <name> <price>`.');
+  if (active.length === 0) return reply('📭 The Deck Shop is currently empty. Sell your decks with `.eshop deck sell <name> <price>`.');
 
-  let msg = `🏬 *CARD DECK E-SHOP* 🏬\n\n`;
+  let msg = `🏬 *CARD DECK SHOP* 🏬\n\n`;
   active.forEach((l, i) => {
     msg += `*${i + 1}.* 📂 *${l.deckName}*\n`;
     msg += `   💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
     msg += `   👤 Seller: @${l.sellerId.split('@')[0]}\n\n`;
   });
-  msg += `💡 Use \`${p} eshop buy <number>\` to purchase.`;
+  msg += `💡 Use \`${p} eshop deck buy <number>\` to purchase.`;
   return reply(msg, { mentions: active.map(l => l.sellerId) });
 }
 
@@ -1958,6 +2347,58 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdT2Coll(senderJid, reply, args);
       return true;
 
+    // ── TOKEN EVENT & ESHOP COMMANDS ──────────────────
+    case 't2edeck':
+      await cmdT2EDeck(senderJid, reply, args, isOwner);
+      return true;
+
+    case 't2ecoll':
+      await cmdT2EColl(senderJid, reply, args);
+      return true;
+
+    case 'tokens':
+      const tokenBal = economy.getTokens(senderJid);
+      const eventActive = await isTokenEventActive();
+      return reply(
+        `🎫 *EVENT TOKENS* 🎫\n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `Your Balance: *${tokenBal} tokens*\n` +
+        `Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\n` +
+        `💡 Earn tokens by claiming cards during the event!\n` +
+        `Spend them with \`${p} eshop\` to buy event cards.`
+      ), true;
+
+    case 'event':
+      if (!isOwner) return reply('❌ Only the bot owner can control the token event.'), true;
+      const eventSub = args[0]?.toLowerCase();
+      if (eventSub === 'start') {
+        const result = await startTokenEvent(senderJid);
+        return reply(result.message), true;
+      }
+      if (eventSub === 'stop') {
+        const result = await stopTokenEvent(senderJid);
+        return reply(result.message), true;
+      }
+      if (eventSub === 'status') {
+        const active = await isTokenEventActive();
+        return reply(`📊 *Token Event Status*\n\nStatus: ${active ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\nUse \`${p} event start\` or \`${p} event stop\`.`), true;
+      }
+      return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` — Start the token event\n➥ \`${p} event stop\` — Stop the token event\n➥ \`${p} event status\` — Check current status`), true;
+
+    case 'setprice':
+      // .j setprice edeck <slot> <price>
+      if (!isOwner) return reply('❌ Only the bot owner can set eShop prices.'), true;
+      if (args[0]?.toLowerCase() === 'edeck') {
+        const slot = parseInt(args[1]);
+        const price = parseInt(args[2]);
+        if (isNaN(slot) || isNaN(price) || price < 1) {
+          return reply(`❌ Usage: \`${p} setprice edeck <slot 1-16> <price>\``), true;
+        }
+        const result = await eshopSetPrice(slot, price);
+        return reply(result.message), true;
+      }
+      return reply(`❌ Usage: \`${p} setprice edeck <slot 1-16> <price>\``), true;
+
     case 'swap':
       await cmdSwapCard(senderJid, reply, args);
       return true;
@@ -2093,7 +2534,149 @@ function init(sock, admins = [], mods = [], owner = null) {
   loadCardsDB();
   loadActiveGroups();
   loadRoles();
+  loadTokenEventState();  // 💡 Load token event state from DB
+  loadEShopDeck();        // 💡 Load eShop deck from DB
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
-module.exports = { init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances };
+// ═══════════════════════════════════════════════════════════════════════════
+//  SECTION 6 — ESHOP DECK MANAGEMENT COMMANDS (t2edeck, t2ecoll)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * cmdT2EDeck — Owner-only command to manage the eShop deck.
+ * Usage:
+ *   t2edeck                    → Show current deck (4x4 image)
+ *   t2edeck add <slot> <cardId> <price>  → Add a card to a slot
+ *   t2edeck remove <slot>      → Remove a card from a slot
+ *   t2edeck price <slot> <price> → Set price for a slot
+ *   t2edeck clear              → Clear all slots
+ */
+async function cmdT2EDeck(senderJid, reply, args, isOwner) {
+  const p = P();
+
+  if (!isOwner) {
+    return reply('❌ Only the bot owner can manage the eShop deck.');
+  }
+
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'add') {
+    const slot = parseInt(args[1]);
+    const cardId = args[2];
+    const price = parseInt(args[3]);
+    if (isNaN(slot) || !cardId || isNaN(price) || price < 1) {
+      return reply(`❌ Usage: \`${p} t2edeck add <slot 1-16> <cardId> <price>\`\nExample: \`${p} t2edeck add 1 roy_mustang_1 50\``);
+    }
+    const result = await eshopAddCard(slot, cardId, price);
+    return reply(result.message);
+  }
+
+  if (sub === 'remove') {
+    const slot = parseInt(args[1]);
+    if (isNaN(slot)) {
+      return reply(`❌ Usage: \`${p} t2edeck remove <slot 1-16>\``);
+    }
+    const result = await eshopRemoveCard(slot);
+    return reply(result.message);
+  }
+
+  if (sub === 'price') {
+    const slot = parseInt(args[1]);
+    const price = parseInt(args[2]);
+    if (isNaN(slot) || isNaN(price) || price < 1) {
+      return reply(`❌ Usage: \`${p} t2edeck price <slot 1-16> <price>\`\n💡 Or use \`${p} setprice edeck <slot> <price>\``);
+    }
+    const result = await eshopSetPrice(slot, price);
+    return reply(result.message);
+  }
+
+  if (sub === 'clear') {
+    const inst = getInst();
+    inst.eshopDeck = new Array(16).fill(null);
+    await saveEShopDeck();
+    return reply('✅ eShop deck cleared. All slots are now empty.');
+  }
+
+  // Default: show the current deck (4x4 image)
+  const inst = getInst();
+  const filledSlots = inst.eshopDeck.filter(e => e !== null).length;
+  if (filledSlots === 0) {
+    return reply(`📭 *ESHOP DECK — EMPTY*\n\nNo cards in the deck. Add cards with:\n\`${p} t2edeck add <slot 1-16> <cardId> <price>\``);
+  }
+
+  // Generate and show the image
+  const imageBuffer = await generateEShopDeckImage();
+  if (imageBuffer) {
+    let caption = `🎨 *ESHOP DECK EDITOR* 🎨\n`;
+    caption += `━━━━━━━━━━━━━━━\n`;
+    caption += `📦 Filled: ${filledSlots}/16 slots\n\n`;
+    caption += `Commands:\n`;
+    caption += `➥ \`${p} t2edeck add <slot> <cardId> <price>\`\n`;
+    caption += `➥ \`${p} t2edeck remove <slot>\`\n`;
+    caption += `➥ \`${p} t2edeck price <slot> <price>\`\n`;
+    caption += `➥ \`${p} t2edeck clear\``;
+    try {
+      return await getInst().sock_ref.sendMessage(reply._chatId || reply.chatId, { image: imageBuffer, caption });
+    } catch (err) {
+      // Fall through to text list
+    }
+  }
+
+  // Fallback: text list
+  let msg = `🎨 *ESHOP DECK* (${filledSlots}/16 filled)\n\n`;
+  inst.eshopDeck.forEach((entry, i) => {
+    if (entry) {
+      msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier}) — 🎫 ${entry.price}\n`;
+    } else {
+      msg += `*${i + 1}.* _[empty]_\n`;
+    }
+  });
+  msg += `\n💡 \`${p} t2edeck add <slot> <cardId> <price>\` to add`;
+  return reply(msg);
+}
+
+/**
+ * cmdT2EColl — Show the owner's event card collection (all E-tier cards).
+ * Anyone can use this — it shows which event cards exist in the database.
+ */
+async function cmdT2EColl(senderJid, reply, args) {
+  const p = P();
+  const inst = getInst();
+  const eventCards = inst.CARDS_BY_TIER['E'] || [];
+
+  if (eventCards.length === 0) {
+    return reply(`📭 No event cards exist in the database yet.\n\nEvent cards are added to cards_data.json by the owner and have tier "E".`);
+  }
+
+  // Group by anime
+  const byAnime = {};
+  eventCards.forEach(c => {
+    const anime = c.animeName || 'Unknown';
+    if (!byAnime[anime]) byAnime[anime] = [];
+    byAnime[anime].push(c);
+  });
+
+  let msg = `🎁 *EVENT CARD COLLECTION* 🎁\n`;
+  msg += `📦 Total: ${eventCards.length} event cards across ${Object.keys(byAnime).length} anime\n\n`;
+
+  Object.entries(byAnime).forEach(([anime, cards]) => {
+    msg += `📺 *${anime}* (${cards.length} cards)\n`;
+    cards.forEach(c => {
+      msg += `  ▫️ ${c.cardName} — \`${c.id}\`\n`;
+    });
+    msg += `\n`;
+  });
+
+  msg += `💡 Use \`${p} info <name> event | <anime>\` to search.`;
+  return reply(msg);
+}
+
+module.exports = {
+  init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
+  // 💡 Token event & eShop exports
+  isTokenEventActive, startTokenEvent, stopTokenEvent,
+  eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
+  generateEShopDeckImage, searchEventCards,
+  loadTokenEventState, loadEShopDeck
+};

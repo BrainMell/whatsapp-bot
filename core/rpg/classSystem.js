@@ -746,14 +746,21 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
 }
 
 function calculateAdventurerRank(level, questsCompleted, gp) {
-    // Bug fix: previously GP was passed in but never checked against the
-    // requirement, so a player could hit SSS-rank with 0 GP as long as
-    // they had the level and quest count. Now all three are enforced.
-    const gpVal = Number(gp) || 0;
+    // GP is NO LONGER a requirement for adventurer rank. Ranks are now earned
+    // by completing guild ranking missions (see the ranking mission system).
+    // Previously GP was required, but that meant players could grind GP
+    // without actually doing anything meaningful. Now rank promotions
+    // require completing specific missions.
+    //
+    // IMPORTANT: This function only checks level + questsCompleted. The actual
+    // rank assignment happens via ranking missions. If a player has a rank
+    // already assigned (stored on user.adventurerRank), it's preserved —
+    // this function is only used for INITIAL rank calculation when a player
+    // has no rank assigned yet.
     const ranks = ['GOD', 'SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
     for (const rank of ranks) {
         const req = ADVENTURER_RANKS[rank].requirement;
-        if (level >= req.level && questsCompleted >= req.questsCompleted && gpVal >= (req.gp || 0)) return rank;
+        if (level >= req.level && questsCompleted >= req.questsCompleted) return rank;
     }
     return 'F';
 }

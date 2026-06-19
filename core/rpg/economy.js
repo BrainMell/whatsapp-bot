@@ -308,7 +308,10 @@ function getUser(userId) {
       reason: ""
     };
   }
-  
+
+  // Lazy migration: eventTokens (added for token event system)
+  if (user.eventTokens === undefined) user.eventTokens = 0;
+
   return user;
 }
 
@@ -464,6 +467,36 @@ function removeGold(userId, amount) {
   const user = getUser(userId);
   if (!user || (user.questGold || 0) < amount) return false;
   user.questGold -= amount;
+  scheduleSave(userId);
+  return true;
+}
+
+// ================== EVENT TOKENS ==================
+// Token currency for the token event system. Earned by claiming cards
+// (1 token per ~2 card claims), spent in the eShop to buy event cards.
+
+function getTokens(userId) {
+  const user = getUser(userId);
+  return user ? (user.eventTokens || 0) : 0;
+}
+
+function addTokens(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.eventTokens = (user.eventTokens || 0) + val;
+  scheduleSave(userId);
+  return true;
+}
+
+function removeTokens(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.eventTokens || 0) < val) return false;
+  user.eventTokens -= val;
   scheduleSave(userId);
   return true;
 }
@@ -1069,29 +1102,48 @@ ${starterClass.icon} Back to *${starterClass.name}*
 function updateAdventurerRank(userId) {
   const user = getUser(userId);
   if (!user) return null;
-  
+
   const progression = require('./progression');
   const level = progression.getLevel(userId);
   const gp = progression.getGP(userId);
   const questsCompleted = user.questsCompleted || 0;
-  
-  const newRank = classSystem.calculateAdventurerRank(level, questsCompleted, gp);
+
+  const calculatedRank = classSystem.calculateAdventurerRank(level, questsCompleted, gp);
   const oldRank = user.adventurerRank || 'F';
-  
-  if (newRank !== oldRank) {
-    user.adventurerRank = newRank;
+
+  // 💡 CRITICAL FIX: NEVER downgrade an existing rank. Previously this
+  // function would overwrite user.adventurerRank with whatever
+  // calculateAdventurerRank returned, which meant:
+  //   - If the GP requirement was removed/changed, players who earned
+  //     their rank under the old rules got DOWNGRADED.
+  //   - If a player's GP dropped temporarily, they lost their rank.
+  //   - When the bot restarted with updated code, EVERY player got
+  //     recalculated and many dropped to F-rank.
+  //
+  // Now: only UPGRADE. A player's rank can only go up, never down.
+  // Rank downgrades should only happen via explicit admin action
+  // (e.g. `.g demote @user`) or a ranking mission failure system.
+  const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+  const oldIdx = rankOrder.indexOf(oldRank);
+  const newIdx = rankOrder.indexOf(calculatedRank);
+
+  if (newIdx > oldIdx) {
+    // Upgrade — the player has earned a higher rank via level + quests.
+    user.adventurerRank = calculatedRank;
     scheduleSave(userId);
-    
-    const rankData = classSystem.ADVENTURER_RANKS[newRank];
+
+    const rankData = classSystem.ADVENTURER_RANKS[calculatedRank];
     return {
       ranked_up: true,
       old_rank: oldRank,
-      new_rank: newRank,
+      new_rank: calculatedRank,
       rank_data: rankData
     };
   }
-  
-  return { ranked_up: false, rank: newRank };
+
+  // No upgrade (rank stays the same, or calculated rank is lower —
+  // in which case we PRESERVE the existing rank, not downgrade).
+  return { ranked_up: false, rank: oldRank };
 }
 
 function addStatBonus(userId, stat, value) {
@@ -1439,6 +1491,11 @@ module.exports = {
   getGold,
   getZENI,
   getCurrency,
+
+  // Event Tokens
+  getTokens,
+  addTokens,
+  removeTokens,
 };
 
 // Auto-load disabled - now called by index.js startBot()
