@@ -1089,12 +1089,28 @@ function updateAdventurerRank(userId) {
 function addStatBonus(userId, stat, value) {
   const user = getUser(userId);
   if (!user) return false;
-  
+
+  // Validate inputs. Without this, a non-numeric `value` would concatenate
+  // as a string (0 + "5" = "05"), and an invalid `stat` would create a
+  // garbage property on statBonuses that progression.getBaseStats wouldn't
+  // read (so the bonus would silently do nothing).
+  const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+  const s = String(stat || '').toLowerCase();
+  if (!validStats.includes(s)) {
+    console.warn(`[economy.addStatBonus] Invalid stat: ${stat}`);
+    return false;
+  }
+  const v = Number(value);
+  if (!Number.isFinite(v)) {
+    console.warn(`[economy.addStatBonus] Non-numeric value: ${value}`);
+    return false;
+  }
+
   if (!user.statBonuses) {
     user.statBonuses = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
   }
-  
-  user.statBonuses[stat] = (user.statBonuses[stat] || 0) + value;
+
+  user.statBonuses[s] = (user.statBonuses[s] || 0) + v;
   scheduleSave(userId);
   return true;
 }
