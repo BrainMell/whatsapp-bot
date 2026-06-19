@@ -15433,10 +15433,12 @@ ${senderName} said y'all should know:
                           stake > 0
                             ? ` with a *${economy.getZENI() || "💰"}${stake.toLocaleString()}* stake`
                             : "";
+                        // Note: CHALLENGE_TIMEOUT in pvpSystem.js is 120000ms (2 minutes).
+                        // The previous message said "5 minutes" which was incorrect.
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `⚔️ *DUEL CHALLENGE!* ⚔️\n\n@${senderName} has challenged @${targetName} to a duel${stakeText}!\n\n✅ Type \`${botConfig.getPrefix()} accept\` to accept\n❌ Type \`${botConfig.getPrefix()} decline\` to decline\n\n⏳ Challenge expires in 5 minutes.`,
+                            `⚔️ *DUEL CHALLENGE!* ⚔️\n\n@${senderName} has challenged @${targetName} to a duel${stakeText}!\n\n✅ Type \`${botConfig.getPrefix()} accept\` to accept\n❌ Type \`${botConfig.getPrefix()} decline\` to decline\n\n⏳ Challenge expires in 2 minutes.`,
                           mentions: [senderJid, target],
                         });
                       } else {

@@ -781,15 +781,15 @@ function getBankBalance(userId) {
 function claimDaily(userId) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
-  
+
   const now = Date.now();
   const dayInMs = 86400000;
-  
+
   if (now - user.lastDaily < dayInMs) {
     const timeLeft = dayInMs - (now - user.lastDaily);
     const hoursLeft = Math.floor(timeLeft / 3600000);
     const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
-    
+
     return {
       success: false,
       message: `⏰ *DAILY ALREADY CLAIMED!*
@@ -802,21 +802,45 @@ function claimDaily(userId) {
 💡 _Check back tomorrow for your reward!_`
     };
   }
-  
-  user.wallet += DAILY_REWARD;
+
+  // 💡 MEMBERSHIP DAILY BONUS — previously the membership tiers defined
+  // a `dailyBonus` field (1000 for PREMIUM, 5000 for DIAMOND) but it was
+  // never actually granted. Players paid 50k-250k for membership and got
+  // the same daily reward as free players.
+  let bonus = 0;
+  let membershipLabel = '';
+  if (user.membership && user.membership.expires > now) {
+    const tier = MEMBERSHIP_TIERS[user.membership.tier];
+    if (tier) {
+      bonus = tier.dailyBonus || 0;
+      membershipLabel = ` (${tier.name})`;
+    }
+  } else if (user.membership) {
+    // Membership expired — reset to BASIC
+    user.membership.tier = 'BASIC';
+    user.membership.expires = 0;
+  }
+
+  const totalReward = DAILY_REWARD + bonus;
+  user.wallet += totalReward;
   user.lastDaily = now;
-  user.stats.totalEarned += DAILY_REWARD;
-  
-  logTransaction(userId, "Daily Reward", DAILY_REWARD, user.wallet);
+  user.stats.totalEarned += totalReward;
+
+  logTransaction(userId, `Daily Reward${membershipLabel}`, totalReward, user.wallet);
 
   scheduleSave(userId);
-  
+
+  const bonusLine = bonus > 0
+    ? `💰 *Base:* +${getZENI()}${DAILY_REWARD.toLocaleString()}\n💎 *Membership Bonus:* +${getZENI()}${bonus.toLocaleString()}${membershipLabel}`
+    : `💰 *Reward:* +${getZENI()}${DAILY_REWARD.toLocaleString()}`;
+
   return {
     success: true,
     message: `🎁 *DAILY REWARD CLAIMED!*
 
 ━━━━━━━━━━━━━━━
-💰 *Reward:* +${getZENI()}${DAILY_REWARD.toLocaleString()}
+${bonusLine}
+*Total:* +${getZENI()}${totalReward.toLocaleString()}
 ━━━━━━━━━━━━━━━
 
 💵 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}
