@@ -306,6 +306,20 @@ function getBaseStats(userId, classId) {
 function allocateStatPoint(userId, stat, amount = 1) {
     const user = getUser(userId);
     if (!user) return { success: false, message: "User not found" };
+
+    // Validate amount: must be a positive finite integer. Previously a
+    // negative `amount` would slip past the `user.statPoints < amount`
+    // check (e.g. statPoints=0, amount=-5: 0 < -5 is false, so it passes),
+    // then `user.statPoints -= amount` would ADD stat points (0 - -5 = 5)
+    // while `user.allocatedStats[s] += gainedValue` would SUBTRACT stats
+    // (gainedValue = 3 * 1 * -5 = -15). The user could then reallocate
+    // those free stat points elsewhere — a stat-point duplication exploit.
+    const amt = Math.floor(Number(amount));
+    if (!Number.isFinite(amt) || amt <= 0) {
+        return { success: false, message: "Amount must be a positive whole number!" };
+    }
+    amount = amt;
+
     if (user.statPoints < amount) return { success: false, message: `Not enough stat points! Have: ${user.statPoints}, Need: ${amount}` };
     
     const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];

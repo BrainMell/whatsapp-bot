@@ -360,7 +360,19 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
 async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
   try {
     const stat = args[0];
-    const amount = parseInt(args[1]) || 1;
+    // Validate amount up-front. `parseInt(args[1]) || 1` would silently
+    // default non-numeric input to 1, hiding typos from the user. Also
+    // reject 0 and negative values explicitly.
+    let amount = 1;
+    if (args[1] !== undefined) {
+      const parsed = parseInt(args[1], 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        return await sock.sendMessage(chatId, {
+          text: getBotMarker() + `❌ Amount must be a positive whole number! Got: \`${args[1]}\``
+        }, { quoted: m });
+      }
+      amount = parsed;
+    }
 
     if (!stat) {
       const sheet = progression.getCharacterSheet(senderJid);
