@@ -677,34 +677,38 @@ function transferMoney(fromUserId, toUserId, amount) {
 function deposit(userId, amount) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
-  
-  if (amount <= 0) {
-    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be greater than ${getZENI()}0` };
+
+  // Coerce amount: non-numeric input would slip past `amount <= 0` (NaN
+  // comparisons are always false) and then `user.wallet -= amount` would
+  // produce NaN, permanently corrupting the wallet.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
   }
-  
-  if (user.wallet < amount) {
-    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${amount.toLocaleString()}` };
+
+  if (user.wallet < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${val.toLocaleString()}` };
   }
-  
-  user.wallet -= amount;
-  user.bank += amount;
-  
-  logTransaction(userId, "Bank Deposit", -amount, user.wallet);
+
+  user.wallet -= val;
+  user.bank += val;
+
+  logTransaction(userId, "Bank Deposit", -val, user.wallet);
 
   scheduleSave(userId);
-  
-  return { 
-    success: true, 
+
+  return {
+    success: true,
     message: `✅ *DEPOSIT SUCCESSFUL!*
 
 ━━━━━━━━━━━━━━━
-💵 *Deposited:* ${getZENI()}${amount.toLocaleString()}
+💵 *Deposited:* ${getZENI()}${val.toLocaleString()}
 ━━━━━━━━━━━━━━━
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
 📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
-    amount: amount,
+    amount: val,
     wallet: user.wallet,
     bank: user.bank,
     nickname: user.nickname || user.userId.split('@')[0]
@@ -714,17 +718,19 @@ function deposit(userId, amount) {
 function withdraw(userId, amount) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
-  
-  if (amount <= 0) {
-    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be greater than ${getZENI()}0` };
+
+  // Same coercion as deposit — protects against NaN corruption.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
   }
-  
-  if (user.bank < amount) {
-    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${amount.toLocaleString()}` };
+
+  if (user.bank < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${val.toLocaleString()}` };
   }
-  
-  user.bank -= amount;
-  user.wallet += amount;
+
+  user.bank -= val;
+  user.wallet += val;
 
   const today = getTodayKey();
   if (!user.gamblingProfile) {
@@ -743,24 +749,24 @@ function withdraw(userId, amount) {
     user.gamblingProfile.withdrawnToday = 0;
     user.gamblingProfile.netToday = 0;
   }
-  user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + amount;
-  
-  logTransaction(userId, "Bank Withdrawal", amount, user.wallet);
+  user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + val;
+
+  logTransaction(userId, "Bank Withdrawal", val, user.wallet);
 
   scheduleSave(userId);
-  
-  return { 
-    success: true, 
+
+  return {
+    success: true,
     message: `✅ *WITHDRAWAL SUCCESSFUL!*
 
 ━━━━━━━━━━━━━━━
-💵 *Withdrew:* ${getZENI()}${amount.toLocaleString()}
+💵 *Withdrew:* ${getZENI()}${val.toLocaleString()}
 ━━━━━━━━━━━━━━━
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
 📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
-    amount: amount,
+    amount: val,
     wallet: user.wallet,
     bank: user.bank,
     nickname: user.nickname || user.userId.split('@')[0]
