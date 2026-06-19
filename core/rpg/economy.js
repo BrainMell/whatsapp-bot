@@ -415,15 +415,17 @@ function getBalance(userId) {
 function addMoney(userId, amount, description = "Money Added") {
   const user = getUser(userId);
   if (!user) return false;
-  
-  const val = Number(amount);
-  if (isNaN(val) || val <= 0) return false;
+
+  // Floor to integer — Zeni doesn't have fractional units, and floating-point
+  // math would otherwise accumulate rounding errors over many transactions.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
 
   user.wallet += val;
   user.stats.totalEarned += val;
-  
+
   logTransaction(userId, description, val, user.wallet);
-  
+
   scheduleSave(userId);
   return user.wallet;
 }
@@ -431,16 +433,16 @@ function addMoney(userId, amount, description = "Money Added") {
 function removeMoney(userId, amount, description = "Money Removed") {
   const user = getUser(userId);
   if (!user) return false;
-  
-  const val = Number(amount);
-  if (isNaN(val) || val <= 0) return false;
+
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
   if (user.wallet < val) return false;
-  
+
   user.wallet -= val;
   user.stats.totalSpent += val;
-  
+
   logTransaction(userId, description, -val, user.wallet);
-  
+
   scheduleSave(userId);
   return true;
 }
