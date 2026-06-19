@@ -685,30 +685,52 @@ function isFighterLineage(classId) {
     return false;
 }
 
-function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0, completedTrials = []) {
+function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0, completedTrials = [], userContext = {}) {
+    // userContext is an optional bag of additional gating data:
+    //   { gold, goldEarned, victories, undeadKills }
+    // We use it instead of `arguments[5]` (which was unreadable, broken in
+    // arrow functions, and didn't include goldEarned / dragonsKilled / victories
+    // checks that several evolution requirements actually need).
     const currentClass = getClassById(currentClassId);
     if (!currentClass) return { canEvolve: false, reason: 'Invalid class' };
     if (currentClass.tier === 'ASCENDED') return { canEvolve: false, reason: 'Max tier reached' };
-    
+
     const evolutionIds = currentClass.evolves_into;
     if (!evolutionIds || evolutionIds.length === 0) return { canEvolve: false, reason: 'No evolutions' };
 
     const evolutions = [];
     const allClasses = getAllClasses();
-    
+
     for (const evoId of evolutionIds) {
         const evoClass = allClasses[evoId];
         if (evoClass) {
             const missing = [];
-            const req = evoClass.requirement;
+            const req = evoClass.requirement || {};
             if (userLevel < (req.level || 0)) missing.push(`Level ${req.level}`);
             if (questsCompleted < (req.questsCompleted || 0)) missing.push(`${req.questsCompleted} Quests`);
-            
-            // Check gold requirement
-            const userGold = arguments[5] || 0; // optional 6th param: userGold
-            if (req.gold && userGold < req.gold) missing.push(`${req.gold.toLocaleString()} Gold`);
-            
-            // Check Trial
+
+            // Gold on hand (one-time cost)
+            if (req.gold && (userContext.gold || 0) < req.gold) {
+                missing.push(`${req.gold.toLocaleString()} Gold`);
+            }
+            // Lifetime gold earned (e.g. Tycoon requires 500k earned)
+            if (req.goldEarned && (userContext.goldEarned || 0) < req.goldEarned) {
+                missing.push(`${req.goldEarned.toLocaleString()} Gold Earned (lifetime)`);
+            }
+            // Lifetime dragon kills (e.g. Dragon God requires 200)
+            if (req.dragonsKilled && (dragonsKilled || 0) < req.dragonsKilled) {
+                missing.push(`${req.dragonsKilled} Dragons Killed`);
+            }
+            // Lifetime victories (e.g. Warlord requires 100)
+            if (req.victories && (userContext.victories || 0) < req.victories) {
+                missing.push(`${req.victories} Victories`);
+            }
+            // Undead kills (e.g. Templar requires 200)
+            if (req.undeadKills && (userContext.undeadKills || 0) < req.undeadKills) {
+                missing.push(`${req.undeadKills} Undead Kills`);
+            }
+
+            // Trial boss must be in completedTrials
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
                 missing.push(`Defeat ${req.trialBoss} (${require('../../botConfig').getPrefix()} trial)`);
             }
@@ -724,10 +746,14 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
 }
 
 function calculateAdventurerRank(level, questsCompleted, gp) {
+    // Bug fix: previously GP was passed in but never checked against the
+    // requirement, so a player could hit SSS-rank with 0 GP as long as
+    // they had the level and quest count. Now all three are enforced.
+    const gpVal = Number(gp) || 0;
     const ranks = ['GOD', 'SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
     for (const rank of ranks) {
         const req = ADVENTURER_RANKS[rank].requirement;
-        if (level >= req.level && questsCompleted >= req.questsCompleted) return rank;
+        if (level >= req.level && questsCompleted >= req.questsCompleted && gpVal >= (req.gp || 0)) return rank;
     }
     return 'F';
 }

@@ -10,21 +10,24 @@ const economy = require('./economy'); // Integrated with MongoDB
 // ==========================================
 
 const XP_CONFIG = {
-    BASE_XP: 250,           // XP needed for level 2
+    BASE_XP: 250,           // Base XP per level (used as floor for the exponential curve)
     SCALING_FACTOR: 1.18,   // XP increases by 18% per level
     MAX_LEVEL: 100,         // Level cap
-    
+
     // XP Sources
     QUEST_BASE_XP: 100,     // Base XP per quest encounter
     BOSS_MULTIPLIER: 3.0,   // Bosses give 3x XP
     QUEST_COMPLETION: 300,  // Bonus for completing a full quest
-    
-    // Level Milestones (bonus XP needed)
+
+    // Level Milestones — these are TIERED REPLACEMENTS, not stacks.
+    // At level 75, only the 1.8x multiplier applies (not 1.2*1.3*1.5*1.8=4.21x).
+    // Previously the multipliers stacked, making late-game XP requirements
+    // astronomical (220M XP for L75->L76) and effectively unobtainable.
     MILESTONES: {
-        10: 1.2,  // 20% more XP needed
-        25: 1.3,  // 30% more XP needed
-        50: 1.5,  // 50% more XP needed
-        75: 1.8   // 80% more XP needed
+        10: 1.2,  // 20% more XP needed per level from L10 onward
+        25: 1.3,  // 30% more XP needed per level from L25 onward (replaces 1.2x)
+        50: 1.5,  // 50% more XP needed per level from L50 onward (replaces 1.3x)
+        75: 1.8   // 80% more XP needed per level from L75 onward (replaces 1.5x)
     }
 };
 
@@ -64,7 +67,6 @@ const STAT_GROWTH = {
         NECROMANCER: { hp: 0.9, atk: 0.8, def: 0.9, mag: 1.5, spd: 0.9, luck: 1.0, crit: 1.3 },
         MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
         CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 },
-        PALADIN: { hp: 1.6, atk: 1.2, def: 1.7, mag: 1.1, spd: 0.7, luck: 1.1, crit: 0.7 },
         DRAGONSLAYER: { hp: 1.7, atk: 1.8, def: 1.4, mag: 0.6, spd: 1.0, luck: 1.2, crit: 1.5 },
         SAMURAI: { hp: 1.2, atk: 1.7, def: 1.0, mag: 0.4, spd: 1.4, luck: 1.2, crit: 1.8 },
         NINJA: { hp: 0.9, atk: 1.6, def: 0.7, mag: 1.0, spd: 2.2, luck: 1.4, crit: 2.0 },
@@ -148,7 +150,7 @@ function getUser(userId) {
 
 function getXPForLevel(level) {
     if (level <= 1) return 0;
-    
+
     // Overrides for early levels (2-5) to make early progression much faster
     const earlyXP = {
         2: 80,       // Level 2 (80 XP total)
@@ -157,16 +159,20 @@ function getXPForLevel(level) {
         5: 700       // Level 5 (700 XP total)
     };
     if (earlyXP[level] !== undefined) return earlyXP[level];
-    
+
     let totalXP = earlyXP[5];
     for (let i = 5; i < level; i++) {
         let xpNeeded = Math.floor(XP_CONFIG.BASE_XP * Math.pow(XP_CONFIG.SCALING_FACTOR, i - 1));
-        // Apply milestones
-        if (i >= 10) xpNeeded = Math.floor(xpNeeded * 1.2);
-        if (i >= 25) xpNeeded = Math.floor(xpNeeded * 1.3);
-        if (i >= 50) xpNeeded = Math.floor(xpNeeded * 1.5);
-        if (i >= 75) xpNeeded = Math.floor(xpNeeded * 1.8);
-        
+        // Apply milestone multipliers as TIERED REPLACEMENTS (not stacks).
+        // Pick the single highest milestone tier that `i` has reached.
+        // Stacking 1.2*1.3*1.5*1.8 = 4.21x at L75 makes late-game XP mathematically
+        // unobtainable (~220M XP per level), so this was a critical balance bug.
+        let milestoneMult = 1.0;
+        for (const [tier, mult] of Object.entries(XP_CONFIG.MILESTONES)) {
+            if (i >= Number(tier)) milestoneMult = mult;
+        }
+        xpNeeded = Math.floor(xpNeeded * milestoneMult);
+
         totalXP += xpNeeded;
     }
     return totalXP;
@@ -442,12 +448,31 @@ function getUserRank(userId) {
 
 function getRankEmoji(rank) { return rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏅'; }
 
+function getGPLeaderboard(limit = 10) {
+    // Previously this was a stub returning []. Now it actually queries the economy
+    // cache and returns the top users by lifetime GP (totalGP).
+    const allUsers = Array.from(economy.economyData.values());
+    const leaderboard = allUsers
+        .filter(u => u.registered && u.progression)
+        .map(u => ({
+            userId: u.userId,
+            nickname: u.nickname || u.userId.split('@')[0],
+            gp: u.progression.gp || 0,
+            totalGP: u.progression.totalGP || 0,
+        }))
+        .sort((a, b) => (b.totalGP || 0) - (a.totalGP || 0))
+        .slice(0, limit);
+    return leaderboard;
+}
+
 module.exports = {
     loadProgression, saveProgression, getUser, addXP, awardXP: addXP, awardGP,
     getLevel, getGP, getXPForLevel, getXPForNextLevel, calculateQuestXP,
     getBaseStats, allocateStatPoint, resetStats, getUserStats, getUserRank,
     ACHIEVEMENTS, checkLevelAchievements, checkCommandAchievements, checkGPAchievements,
-    getCharacterSheet, getLeaderboard, getXPLeaderboard: (limit) => getLeaderboard('xp', limit),
-    getGPLeaderboard: (limit) => [], getLevelDisplay, getProgressBar, getRankEmoji,
+    getCharacterSheet, getLeaderboard,
+    getXPLeaderboard: (limit) => getLeaderboard('xp', limit),
+    getGPLeaderboard,
+    getLevelDisplay, getProgressBar, getRankEmoji,
     XP_CONFIG, STAT_GROWTH
 };

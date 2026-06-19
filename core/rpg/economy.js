@@ -1105,8 +1105,12 @@ function addQuestProgress(userId, amount, won = true) {
 
 function hasItem(userId, itemId) {
   const user = getUser(userId);
-  if (!user || !user.inventory) return false;
-  return (user.inventory[itemId] || 0) > 0;
+  if (!user || !user.inventory || !user.inventory[itemId]) return false;
+  // Inventory items can be either a plain number (legacy) or an object with
+  // a `quantity` field (current shape). Handle both.
+  const entry = user.inventory[itemId];
+  const qty = typeof entry === 'number' ? entry : (entry?.quantity || 0);
+  return qty > 0;
 }
 
 //==================this part handles leaderboards and user profiles==================

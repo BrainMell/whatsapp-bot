@@ -535,7 +535,17 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const questsDone = user.questsCompleted || 0;
 
     const evolutionCheck = classSystem.canEvolve(
-        user.class, level, questsDone, user.stats?.dragonsKilled || 0, user.completedTrials || [], user.wallet || 0
+        user.class,
+        level,
+        questsDone,
+        user.stats?.dragonsKilled || 0,
+        user.completedTrials || [],
+        {
+            gold: user.wallet || 0,
+            goldEarned: user.stats?.totalEarned || 0,
+            victories: user.questsWon || user.stats?.gamesWon || 0,
+            undeadKills: user.stats?.undeadKills || 0,
+        }
     );
 
     if (!evolutionCheck.canEvolve) {
