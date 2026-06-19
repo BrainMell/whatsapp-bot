@@ -386,9 +386,17 @@ async function cmdClaim(args, senderJid, reply, chatId) {
   }
 
   try {
+    // Check if the user already owns at least one copy of this card.
+    // `uniqueOwners` should count DISTINCT users, not total claims —
+    // previously it was incremented on every claim, so a user claiming
+    // multiple copies of the same card would inflate the count.
+    const alreadyOwned = await UserCard.findOne({ userId: senderJid, cardId: spawn.card.id }).lean();
+
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
     spawn.stat.totalCirculation += 1;
-    spawn.stat.uniqueOwners     += 1;
+    if (!alreadyOwned) {
+      spawn.stat.uniqueOwners += 1;
+    }
     await spawn.stat.save();
     inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
