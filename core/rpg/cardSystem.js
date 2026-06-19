@@ -1374,7 +1374,7 @@ async function cmdCS(reply, args = []) {
 async function cmdBuyCard(senderJid, reply, args = []) {
   const p = P();
   const inst = getInst();
-  
+
   if (args.length > 0) {
     const index = parseInt(args[0]);
     if (!isNaN(index)) {
@@ -1388,15 +1388,38 @@ async function cmdBuyCard(senderJid, reply, args = []) {
         if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
 
         try {
-            economy.removeMoney(senderJid, listing.price);
-            economy.addMoney(listing.sellerId, listing.price);
-            await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null });
+            // Verify return values: previously removeMoney and addMoney were
+            // called without checking, so if either failed the card might
+            // transfer without payment (or payment without card transfer).
+            const paid = economy.removeMoney(senderJid, listing.price, `Bought card ${listing.cardId}`);
+            if (!paid) {
+              return reply('❌ Purchase failed: wallet balance changed during transaction.');
+            }
+            const credited = economy.addMoney(listing.sellerId, listing.price, `Sold card ${listing.cardId}`);
+            if (!credited) {
+              // Roll back the buyer's payment
+              economy.addMoney(senderJid, listing.price, `Card purchase rollback (seller credit failed)`);
+              return reply('❌ Purchase failed: seller could not be credited. Try again later.');
+            }
+
+            // Transfer card ownership
+            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null });
+            if (!updated) {
+              // Roll back the transaction — neither party should lose out
+              economy.addMoney(senderJid, listing.price, `Card purchase rollback (card not found)`);
+              economy.removeMoney(listing.sellerId, listing.price, `Card sale rollback (card not found)`);
+              return reply('❌ Purchase failed: card listing was stale. Try the market listing again.');
+            }
+
             listing.status = 'sold';
             listing.completedAt = new Date();
             await listing.save();
             const card = CARD_INDEX()[listing.cardId];
             return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card.cardName}* for ${ZENI()}${listing.price.toLocaleString()}.`);
-        } catch (err) { return reply('❌ Purchase failed.'); }
+        } catch (err) {
+            console.error('[CardMarket] Purchase error:', err);
+            return reply('❌ Purchase failed: ' + (err.message || 'unknown error'));
+        }
     }
   }
 
