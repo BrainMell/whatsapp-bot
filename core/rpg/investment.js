@@ -14,44 +14,62 @@ const INVESTMENT_PLANS = {
 function startInvestment(userId, planId, amount) {
     const user = economy.getUser(userId);
     const plan = INVESTMENT_PLANS[planId.toUpperCase()];
-    
+
+    if (!user) return { success: false, message: "❌ User not registered!" };
     if (!plan) return { success: false, message: "❌ Invalid investment plan!" };
-    
+
+    // Validate amount up-front: must be a positive finite number. Previously
+    // passing a non-numeric string would slip past `amount < minDeposit` and
+    // `user.wallet < amount` (because string-vs-number comparisons in JS
+    // coerce to NaN, which is always false), then economy.removeMoney would
+    // silently fail, but the investment would still get pushed to the user's
+    // portfolio — letting them claim free payouts later.
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+        return { success: false, message: "❌ Amount must be a positive number!" };
+    }
+    const amtInt = Math.floor(amt);
+
     // ANTI-EXPLOIT: Max 3 active investments
     if (user.investments && user.investments.length >= 3) {
         return { success: false, message: "❌ You already have 3 active investments! Claim them first." };
     }
 
-    if (amount < plan.minDeposit) return { success: false, message: `❌ Minimum deposit for this plan is ${economy.getZENI()}${plan.minDeposit.toLocaleString()}` };
-    if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds in wallet!" };
-    
+    if (amtInt < plan.minDeposit) return { success: false, message: `❌ Minimum deposit for this plan is ${economy.getZENI()}${plan.minDeposit.toLocaleString()}` };
+    if (user.wallet < amtInt) return { success: false, message: "❌ Insufficient funds in wallet!" };
+
     // ANTI-EXPLOIT: Max 50% of current Zeni
     const maxAllowed = Math.floor(user.wallet * 0.5);
-    if (amount > maxAllowed) {
+    if (amtInt > maxAllowed) {
         return { success: false, message: `❌ Risk management: You can only invest up to 50% of your wallet (${economy.getZENI()}${maxAllowed.toLocaleString()}).` };
     }
 
     // Deduct money
-    economy.removeMoney(userId, amount, `Invested in ${plan.name}`);
-    
+    const deductOk = economy.removeMoney(userId, amtInt, `Invested in ${plan.name}`);
+    if (!deductOk) {
+        // Defensive: removeMoney can fail if the wallet dropped between the
+        // check above and now. Don't push the investment if we didn't pay.
+        return { success: false, message: "❌ Failed to deduct funds — your wallet may have changed." };
+    }
+
     // Create investment
     if (!user.investments) user.investments = [];
-    
+
     const investment = {
         planId: planId.toUpperCase(),
-        amount: amount,
+        amount: amtInt,
         startTime: Date.now(),
         endTime: Date.now() + (plan.durationHours * 60 * 60 * 1000),
-        expectedPayout: Math.floor(amount * (1 + plan.interest)),
+        expectedPayout: Math.floor(amtInt * (1 + plan.interest)),
         risk: plan.risk
     };
-    
+
     user.investments.push(investment);
     economy.saveUser(userId);
-    
-    return { 
-        success: true, 
-        message: `📊 *INVESTMENT STARTED!*\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amount.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleString()}`
+
+    return {
+        success: true,
+        message: `📊 *INVESTMENT STARTED!*\n\nPlan: *${plan.name}*\nDeposit: ${economy.getZENI()}${amtInt.toLocaleString()}\nExpected Payout: ${economy.getZENI()}${investment.expectedPayout.toLocaleString()}\nMaturity: ${new Date(investment.endTime).toLocaleString()}`
     };
 }
 

@@ -35,53 +35,73 @@ function updatePrices() {
 function buyStock(userId, symbol, amount) {
     const user = economy.getUser(userId);
     const stock = STOCKS[symbol.toUpperCase()];
-    
+
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
-    if (amount <= 0) return { success: false, message: "❌ Amount must be positive!" };
-    
-    const cost = stock.price * amount;
+    // Reject non-positive, non-integer, or NaN amounts. Stocks are whole shares.
+    const amt = Math.floor(Number(amount));
+    if (!Number.isFinite(amt) || amt <= 0) {
+        return { success: false, message: "❌ Amount must be a positive whole number!" };
+    }
+
+    const cost = stock.price * amt;
     if (user.wallet < cost) return { success: false, message: `❌ Insufficient funds! Need ${economy.getZENI()}${cost.toLocaleString()}` };
-    
+
     // Deduct money
-    economy.removeMoney(userId, cost, `Bought ${amount} ${symbol}`);
-    
+    economy.removeMoney(userId, cost, `Bought ${amt} ${symbol}`);
+
     // Add to portfolio
     if (!user.portfolio) user.portfolio = {};
     if (!user.portfolio[symbol]) user.portfolio[symbol] = 0;
-    user.portfolio[symbol] += amount;
-    
+    user.portfolio[symbol] += amt;
+
     economy.saveUser(userId);
-    return { success: true, message: `✅ Bought ${amount} shares of *${stock.name}* for ${economy.getZENI()}${cost.toLocaleString()}!` };
+    return { success: true, message: `✅ Bought ${amt} shares of *${stock.name}* for ${economy.getZENI()}${cost.toLocaleString()}!` };
 }
 
 function sellStock(userId, symbol, amount) {
     const user = economy.getUser(userId);
     const stock = STOCKS[symbol.toUpperCase()];
-    
+
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
-    if (!user.portfolio || !user.portfolio[symbol] || user.portfolio[symbol] < amount) {
+    const amt = Math.floor(Number(amount));
+    if (!Number.isFinite(amt) || amt <= 0) {
+        return { success: false, message: "❌ Amount must be a positive whole number!" };
+    }
+    if (!user.portfolio || !user.portfolio[symbol] || user.portfolio[symbol] < amt) {
         return { success: false, message: "❌ You don't have enough shares to sell!" };
     }
-    
-    const payout = stock.price * amount;
-    
+
+    const payout = stock.price * amt;
+
     // Remove shares
-    user.portfolio[symbol] -= amount;
+    user.portfolio[symbol] -= amt;
     if (user.portfolio[symbol] <= 0) delete user.portfolio[symbol];
-    
+
     // Add money
-    economy.addMoney(userId, payout, `Sold ${amount} ${symbol}`);
-    
+    economy.addMoney(userId, payout, `Sold ${amt} ${symbol}`);
+
     economy.saveUser(userId);
-    return { success: true, message: `✅ Sold ${amount} shares of *${stock.name}* for ${economy.getZENI()}${payout.toLocaleString()}!` };
+    return { success: true, message: `✅ Sold ${amt} shares of *${stock.name}* for ${economy.getZENI()}${payout.toLocaleString()}!` };
 }
 
 function getPortfolio(userId) {
     const user = economy.getUser(userId);
     if (!user || !user.portfolio) return [];
-    
+
     return Object.entries(user.portfolio).map(([symbol, amount]) => {
+        // Defensive: a stock symbol in the user's portfolio may have been
+        // removed from STOCKS in an update. Skip missing stock metadata
+        // instead of crashing.
         const stock = STOCKS[symbol];
+        if (!stock) {
+            return {
+                symbol,
+                name: `${symbol} (delisted)`,
+                amount,
+                currentPrice: 0,
+                totalValue: 0
+            };
+        }
         return {
             symbol,
             name: stock.name,

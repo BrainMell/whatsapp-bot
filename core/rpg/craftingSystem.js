@@ -552,29 +552,57 @@ async function dismantleItem(userId, itemId) {
 
     const itemData = inventory[itemId];
     const recipe = Object.values(CRAFTING_RECIPES).find(r => r.result.id === itemId);
-    
+
     if (!recipe) return { success: false, message: "This item cannot be dismantled." };
 
-    // Calculate returned materials
+    // Calculate returned materials (40% of each ingredient, min 1).
     const returned = {};
-    let totalItemsToReturn = 0;
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         const amount = Math.max(1, Math.floor(qty * 0.4));
         returned[ingId] = amount;
-        totalItemsToReturn++;
     }
 
-    // 💡 BUG FIX: Check for enough space for all materials
-    if (!inventorySystem.hasInventorySpace(userId, totalItemsToReturn)) {
+    // Count how many NEW slots we'll actually need. Materials stack
+    // infinitely and existing inventory entries stack too, so the worst-case
+    // "every ingredient takes a new slot" check from before was too
+    // conservative — dismantle would be refused when the materials would
+    // actually fit fine.
+    let newSlotsNeeded = 0;
+    for (const [ingId, qty] of Object.entries(returned)) {
+        const ingInfo = lootSystem.getItemInfo(ingId);
+        if (ingInfo.type === 'MATERIAL') continue;          // materials stack infinitely
+        if (inventory[ingId]) continue;                     // existing entry will stack
+        newSlotsNeeded++;
+    }
+    // We also free 1 slot when the dismantled item is removed (if it was a
+    // non-material unique stack), so net slots needed = newSlotsNeeded - 1 (if applicable).
+    const removedItemInfo = lootSystem.getItemInfo(itemId);
+    const freesSlot = removedItemInfo.type !== 'MATERIAL' && !inventory[itemId]?.quantity;
+    const netSlotsNeeded = Math.max(0, newSlotsNeeded - (freesSlot ? 1 : 0));
+    if (netSlotsNeeded > 0 && !inventorySystem.hasInventorySpace(userId, netSlotsNeeded)) {
         return { success: false, message: "❌ Not enough inventory space to store recovered materials!" };
     }
 
-    // Remove item
-    inventorySystem.removeItem(userId, itemId, 1);
+    // Remove item first
+    const removeResult = inventorySystem.removeItem(userId, itemId, 1);
+    if (!removeResult.success) {
+        return { success: false, message: `❌ Failed to dismantle: ${removeResult.message}` };
+    }
 
-    // Return materials
+    // Return materials. If any addItem fails (e.g. due to a race), roll back
+    // the removal so the player doesn't lose their item.
+    const addedSoFar = [];
     for (const [id, qty] of Object.entries(returned)) {
-        await inventorySystem.addItem(userId, id, qty);
+        const addResult = await inventorySystem.addItem(userId, id, qty);
+        if (!addResult.success) {
+            // Rollback: remove what we added, restore the original item
+            for (const [addedId, addedQty] of addedSoFar) {
+                inventorySystem.removeItem(userId, addedId, addedQty);
+            }
+            await inventorySystem.addItem(userId, itemId, 1, itemData);
+            return { success: false, message: `❌ Failed to store recovered materials: ${addResult.message}` };
+        }
+        addedSoFar.push([id, qty]);
     }
 
     let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;

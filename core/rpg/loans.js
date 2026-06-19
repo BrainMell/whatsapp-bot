@@ -105,15 +105,26 @@ function getTotalDebt() {
 // Request a loan
 function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinutes) {
   // Basic validation
-  if (amount <= 0) return { success: false, msg: `❌ Amount must be positive.` };
-  if (interestRate < 0) return { success: false, msg: `❌ Interest cannot be negative.` };
-  if (durationMinutes < 1) return { success: false, msg: `❌ Duration must be at least 1 minute.` };
+  // Coerce all numeric inputs — same JS-comparison-coercion trap as in
+  // investment.startInvestment: a non-numeric string would slip past every
+  // numeric comparison below (NaN < x is always false) and then break the
+  // transfer logic.
+  const amt = Number(amount);
+  const interest = Number(interestRate);
+  const duration = Number(durationMinutes);
+  if (!Number.isFinite(amt) || amt <= 0) return { success: false, msg: `❌ Amount must be a positive number.` };
+  if (!Number.isFinite(interest) || interest < 0) return { success: false, msg: `❌ Interest cannot be negative.` };
+  if (!Number.isFinite(duration) || duration < 1) return { success: false, msg: `❌ Duration must be at least 1 minute.` };
   if (borrowerJid === lenderJid) return { success: false, msg: `❌ You can't loan money to yourself.` };
 
-  // Check if lender has funds (pre-check)
+  // Check if lender has liquid wallet funds. We use `wallet` (not `total`)
+  // because economy.removeMoney only deducts from the wallet — a previous
+  // version of this check used `lenderBal.total` (wallet+bank), which let
+  // requests succeed when the lender had bank funds but no wallet funds,
+  // then the accept step would fail. Better to fail upfront.
   const lenderBal = economy.getBankBalance(lenderJid);
-  if (lenderBal.total < amount) {
-    return { success: false, msg: `❌ The lender doesn't have enough money.` };
+  if ((lenderBal.wallet || 0) < amt) {
+    return { success: false, msg: `❌ The lender doesn't have enough Zeni in their wallet (have ${getZENI()}${(lenderBal.wallet || 0).toLocaleString()}).` };
   }
 
   // Check if borrower is blocked
@@ -124,9 +135,9 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
   // Store pending request
   pendingLoans.set(lenderJid, {
     borrowerJid,
-    amount,
-    interest: interestRate,
-    duration: durationMinutes,
+    amount: amt,
+    interest,
+    duration,
     timestamp: Date.now()
   });
 
@@ -154,19 +165,39 @@ function acceptLoan(lenderJid) {
       return { success: false, msg: `❌ Loan request expired! (120s limit)` };
   }
 
-  // Double check funds
+  // Cleanup helper — same UX bug as PvP: previously failed accepts left
+  // the request in pendingLoans and blocked all future loan requests for 2 min.
+  const failAndCleanup = (msg) => {
+    pendingLoans.delete(lenderJid);
+    return { success: false, msg };
+  };
+
+  // Double check funds (wallet only — removeMoney doesn't touch bank)
   const lenderBal = economy.getBankBalance(lenderJid);
-  if (lenderBal.wallet < request.amount) {
-      return { success: false, msg: `❌ You don't have enough money in your wallet. Withdraw it first.` };
+  if ((lenderBal.wallet || 0) < request.amount) {
+      return failAndCleanup(`❌ You don't have enough money in your wallet. Withdraw it first.`);
   }
 
   // Calculate totals
   const totalRepayment = Math.floor(request.amount * (1 + request.interest / 100));
   const dueTime = Date.now() + (request.duration * 60 * 1000);
 
-  // Execute transfer
-  economy.removeMoney(lenderJid, request.amount);
-  economy.addMoney(request.borrowerJid, request.amount);
+  // Execute transfer — verify both legs succeeded before recording the loan.
+  // Previously the return values were ignored, so if removeMoney failed
+  // (e.g. wallet dropped between check and call) but addMoney succeeded,
+  // the borrower got free money and the lender lost nothing — but the loan
+  // was still recorded as active, so the borrower would later be forced to
+  // repay money they never received.
+  const deductOk = economy.removeMoney(lenderJid, request.amount, `Loan to @${request.borrowerJid.split('@')[0]}`);
+  if (!deductOk) {
+    return failAndCleanup(`❌ Failed to deduct funds — your wallet may have changed.`);
+  }
+  const creditOk = economy.addMoney(request.borrowerJid, request.amount, `Loan from @${lenderJid.split('@')[0]}`);
+  if (!creditOk) {
+    // Roll back the deduction so the lender doesn't lose money
+    economy.addMoney(lenderJid, request.amount, `Loan rollback (borrower credit failed)`);
+    return failAndCleanup(`❌ Failed to send money to borrower — loan cancelled.`);
+  }
 
   // Save active loan
   const loanObj = {
