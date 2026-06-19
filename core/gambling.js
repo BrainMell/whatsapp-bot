@@ -19,6 +19,21 @@ const activeMinesGames = new Map();
 // HELPER FUNCTIONS
 // ============================================
 
+// Coerce a bet amount to a finite positive integer. Returns null if invalid.
+// All gambling entry points should call this BEFORE doing any wallet math —
+// otherwise a non-numeric input (string, NaN, undefined) slips past the
+// `amount < GLOBAL_MIN_BET` check (NaN < x is always false) and then
+// `user.wallet -= amount` produces NaN, permanently corrupting the wallet.
+function normalizeBet(amount) {
+  const n = Math.floor(Number(amount));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
 function updateGamblingStats(userId, amount, won, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return;
@@ -129,7 +144,17 @@ function trackDailyNet(user, delta) {
 function coinflip(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
-  
+
+  // Defensive: coerce amount to a finite positive integer. Without this, a
+  // non-numeric `amount` would slip past the `amount < GLOBAL_MIN_BET` check
+  // (NaN < x is always false) and then `user.wallet -= amount` would
+  // produce NaN, permanently corrupting the wallet.
+  const bet = normalizeBet(amount);
+  if (bet === null) {
+    return { success: false, message: `❌ Invalid bet amount!` };
+  }
+  amount = bet;
+
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
   }
@@ -228,6 +253,11 @@ function coinflip(userId, amount, choice, economyModule) {
 function diceRoll(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -345,6 +375,11 @@ function diceRoll(userId, amount, economyModule) {
 function slots(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -531,6 +566,11 @@ function formatHand(hand, hideFirst = false) {
 function startBlackjack(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -843,6 +883,11 @@ Value: ${playerValue}
 function roulette(userId, amount, bet, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   // 1. Parse and Validate Bet First!
   const betLower = bet.toLowerCase();
@@ -1028,6 +1073,11 @@ ${spinVisual}
 function crash(userId, amount, multiplierStr, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1177,6 +1227,11 @@ function renderMinesGrid(game, showAll = false, explodedIdx = null) {
 function startMines(userId, amount, mineCount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1392,6 +1447,11 @@ ${outcomeMessage}
 function horseRace(userId, amount, horseNum, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1484,6 +1544,11 @@ ${horses}
 function lottery(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1574,6 +1639,11 @@ function lottery(userId, amount, economyModule) {
 function rps(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1686,6 +1756,11 @@ function rps(userId, amount, choice, economyModule) {
 function penalty(userId, amount, direction, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1780,6 +1855,11 @@ function penalty(userId, amount, direction, economyModule) {
 function guessNumber(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -1872,6 +1952,11 @@ function guessNumber(userId, amount, guess, economyModule) {
 function higherLower(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -2004,6 +2089,11 @@ Result: ${actualResult}
 function plinko(userId, amount, risk, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -2138,6 +2228,11 @@ ${multiplier >= 1 ? '🎉 *YOU WON!* 🎉' : '😢 *YOU LOST!* 😢'}
 function scratchCard(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum scratch card price is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -2251,6 +2346,11 @@ ${outcomeMessage}
 function cupGame(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
@@ -2333,6 +2433,11 @@ ${outcomeMessage}
 function wheelOfFortune(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
+
+  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+  const _bet = normalizeBet(amount);
+  if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
+  amount = _bet;
   
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
