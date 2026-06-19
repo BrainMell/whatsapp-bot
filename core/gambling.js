@@ -565,7 +565,7 @@ function formatHand(hand, hideFirst = false) {
 
 function startBlackjack(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -584,7 +584,7 @@ function startBlackjack(userId, amount, economyModule) {
   }
   
   if (activeBlackjackGames.has(userId)) {
-    return { success: false, message: "❌ You already have an active blackjack game! Type '${botConfig.getPrefix()} bj hit' or '${botConfig.getPrefix()} bj stand'" };
+    return { success: false, message: `❌ You already have an active blackjack game! Type '${botConfig.getPrefix()} bj hit' or '${botConfig.getPrefix()} bj stand'` };
   }
   
   user.wallet -= amount;
@@ -662,7 +662,7 @@ Type:
 
 function blackjackHit(userId, economyModule) {
   if (!activeBlackjackGames.has(userId)) {
-    return { success: false, message: "❌ No active blackjack game! Start one with '${botConfig.getPrefix()} bj <amount>'" };
+    return { success: false, message: `❌ No active blackjack game! Start one with '${botConfig.getPrefix()} bj <amount>'` };
   }
   
   const game = activeBlackjackGames.get(userId);
@@ -715,7 +715,7 @@ ${botConfig.getPrefix()} bj stand - Keep current hand`
 
 function blackjackStand(userId, economyModule) {
   if (!activeBlackjackGames.has(userId)) {
-    return { success: false, message: "❌ No active blackjack game! Start one with '${botConfig.getPrefix()} bj <amount>'" };
+    return { success: false, message: `❌ No active blackjack game! Start one with '${botConfig.getPrefix()} bj <amount>'` };
   }
   
   const game = activeBlackjackGames.get(userId);
@@ -882,7 +882,7 @@ Value: ${playerValue}
 
 function roulette(userId, amount, bet, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1446,7 +1446,7 @@ ${outcomeMessage}
 
 function horseRace(userId, amount, horseNum, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1543,7 +1543,7 @@ ${horses}
 
 function lottery(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1638,7 +1638,7 @@ function lottery(userId, amount, economyModule) {
 
 function rps(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1755,7 +1755,7 @@ function rps(userId, amount, choice, economyModule) {
 
 function penalty(userId, amount, direction, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1854,7 +1854,7 @@ function penalty(userId, amount, direction, economyModule) {
 
 function guessNumber(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
@@ -1951,7 +1951,7 @@ function guessNumber(userId, amount, guess, economyModule) {
 
 function higherLower(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
-  if (!user) return { success: false, message: "❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!" };
+  if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
   // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
