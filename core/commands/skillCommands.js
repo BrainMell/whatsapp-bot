@@ -664,9 +664,38 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
-    inventorySystem.removeItem(senderJid, requiredStone, 1);
-    if (chosen.requirement?.item) inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
-    economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
+    // Verify all resource deductions succeed before mutating class — otherwise
+    // the user could end up evolved without paying the cost (or losing the
+    // stone). Previously the return values of removeItem and removeMoney
+    // were ignored, so a race condition or stale inventory could let users
+    // evolve for free.
+    const stoneRemoved = inventorySystem.removeItem(senderJid, requiredStone, 1);
+    if (!stoneRemoved.success) {
+        return sock.sendMessage(chatId, {
+            text: `❌ Failed to consume ${stoneName} — it may have been used elsewhere. Evolution cancelled.`
+        });
+    }
+    if (chosen.requirement?.item) {
+        const itemRemoved = inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
+        if (!itemRemoved.success) {
+            // Roll back the stone removal
+            await inventorySystem.addItem(senderJid, requiredStone, 1);
+            return sock.sendMessage(chatId, {
+                text: `❌ Failed to consume required item ${chosen.requirement.item} — evolution cancelled.`
+            });
+        }
+    }
+    const paid = economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
+    if (!paid) {
+        // Roll back the item removals
+        await inventorySystem.addItem(senderJid, requiredStone, 1);
+        if (chosen.requirement?.item) {
+            await inventorySystem.addItem(senderJid, chosen.requirement.item, 1);
+        }
+        return sock.sendMessage(chatId, {
+            text: `❌ Failed to deduct ${chosen.evolutionCost.toLocaleString()} Zeni — your wallet may have changed. Evolution cancelled.`
+        });
+    }
     
     const oldClassName = currentClass?.name || 'Unknown';
 
