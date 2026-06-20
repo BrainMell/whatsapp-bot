@@ -137,9 +137,57 @@ function getUser(userId) {
         console.log(`[Progression] Legacy XP adjustment for ${userId} (Lv.${p.level}): +${adjustment}`);
         p.xp = (p.xp || 0) + adjustment;
         p.totalXPEarned = (p.totalXPEarned || 0) + adjustment;
-        economy.saveUser(userId);
+        // ⚠️ FIX (audit Task 3 Q3 root cause #2): drop the redundant fire-and-forget
+        // save here. The forward level-up sync below will save once after all
+        // mutations are applied. The previous save captured PRE-sync state and
+        // could race with the post-sync save in addXP, reverting level on restart.
     }
-    
+
+    // --- FORWARD LEVEL-UP SYNC (audit Task ID 3 BUG 1) ---
+    // If the user's XP is enough for one or more level-ups but level hasn't
+    // been bumped (e.g. an out-of-band write set progression.level=63 while
+    // leaving progression.xp=103M, or a fire-and-forget save race reverted
+    // the post-loop level), reconcile here. This makes the bug SELF-HEALING:
+    // the next time the user opens their profile (.g me, .g stats, etc.),
+    // getUser() runs and the level is corrected. Awards the same stat +
+    // skill points the regular addXP path would have.
+    //
+    // Coerce to numbers first — defense against type-coercion bugs where
+    // level/xp was written as a string (e.g. via .lean() skipping Mongoose
+    // type casting on cache load — audit Task 3 Q3 root cause #3).
+    p.level = Number(p.level) || 1;
+    p.xp = Number(p.xp) || 0;
+    if (p.level < 1) p.level = 1;
+    if (p.level >= XP_CONFIG.MAX_LEVEL) {
+        // At cap — clamp XP to the cap's threshold so the "416% progress"
+        // display stops showing for max-level players.
+        const capXP = getXPForLevel(XP_CONFIG.MAX_LEVEL);
+        if (p.xp > capXP) p.xp = capXP;
+    } else if (p.xp >= getXPForLevel(p.level + 1)) {
+        const oldLevel = p.level;
+        const levelUps = [];
+        while (p.level < XP_CONFIG.MAX_LEVEL && p.xp >= getXPForLevel(p.level + 1)) {
+            p.level++;
+            levelUps.push(p.level);
+        }
+        if (levelUps.length > 0) {
+            let statPointsGained = levelUps.length * STAT_GROWTH.STAT_POINTS_PER_LEVEL;
+            let skillPointsGained = levelUps.length;
+            for (const level of levelUps) {
+                if (STAT_GROWTH.MILESTONE_BONUSES[level]) statPointsGained += STAT_GROWTH.MILESTONE_BONUSES[level];
+                if (level % 10 === 0) skillPointsGained += 2;
+            }
+            p.statPoints = (p.statPoints || 0) + statPointsGained;
+            p.totalLevelsGained = (p.totalLevelsGained || 0) + levelUps.length;
+            const mainUser2 = economy.getUser(userId);
+            if (mainUser2) {
+                mainUser2.skillPoints = (mainUser2.skillPoints || 0) + skillPointsGained;
+            }
+            console.log(`[Progression] Forward level-up sync for ${userId}: Lv.${oldLevel} → Lv.${p.level} (+${levelUps.length} levels, +${statPointsGained} stat pts, +${skillPointsGained} skill pts)`);
+            economy.saveUser(userId);
+        }
+    }
+
     return p;
 }
 
