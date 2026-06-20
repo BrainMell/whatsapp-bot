@@ -528,8 +528,23 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
             const bossLoot = BOSS_DROPS[enemyName];
 
             for (const guaranteedDrop of bossLoot.guaranteed) {
-                const [min, max] = guaranteedDrop.quantity;
-                const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
+                // ⚠️ FIX (caught by audit_loot_rebalance.js SIM 1): previously
+                // this did `const [min, max] = guaranteedDrop.quantity` which
+                // throws TypeError when quantity is a number (e.g. 1) instead
+                // of an array (e.g. [1, 1]). Multiple boss guaranteed drops
+                // use the shorthand `quantity: 1` — ELEMENTAL_ARCHON's
+                // mega_potion, VOID_CORRUPTED's legendary_shard, PRIMORDIAL_CHAOS's
+                // void_essence, ABYSSAL_GOD's infernal_crown. Any kill of these
+                // bosses would have thrown and (depending on caller's try/catch)
+                // either silently failed the loot roll or crashed the dungeon.
+                // Now accepts both forms: number → fixed quantity, array → random in [min, max].
+                let quantity;
+                if (Array.isArray(guaranteedDrop.quantity)) {
+                    const [min, max] = guaranteedDrop.quantity;
+                    quantity = Math.floor(Math.random() * (max - min + 1)) + min;
+                } else {
+                    quantity = guaranteedDrop.quantity;
+                }
                 const dbInfo = ITEM_DATABASE[guaranteedDrop.id];
 
                 let finalRarity = guaranteedDrop.rarity || dbInfo?.rarity || 'COMMON';
