@@ -4938,11 +4938,30 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
     encounter.type === "BOSS" ||
     encounter.type === "ELITE_COMBAT"
   ) {
-    // Elite combat from branch choice gives 2x
+    // Elite combat from branch choice gives 2x difficulty for THIS encounter
+    // only. Previously this mutated state.difficulty in place, which compounded
+    // across every elite-combat at encounter index 3/6/9/12 without ever
+    // resetting — three elite-combats in an S-rank dungeon pushed difficulty
+    // 35 → 70 → 140 → 280, breaking both loot-table routing (jumped to
+    // SSS_RANK_COMMON) and boss HP scaling (quadratic via rankIndex^2 in
+    // scaleBossStats). Fix: stash the original difficulty and restore it
+    // after startCombat resolves. (audit bug #3)
+    let difficultyOverride = null;
     if (encounter.type === "ELITE_COMBAT" && state.encounter % 3 === 0) {
-      state.difficulty *= 2.0;
+      difficultyOverride = state.difficulty * 2.0;
     }
-    await startCombat(sock, groq, encounter, sessionKey);
+    if (difficultyOverride !== null) {
+      state._preEliteDifficulty = state.difficulty;
+      state.difficulty = difficultyOverride;
+    }
+    try {
+      await startCombat(sock, groq, encounter, sessionKey);
+    } finally {
+      if (difficultyOverride !== null && state._preEliteDifficulty !== undefined) {
+        state.difficulty = state._preEliteDifficulty;
+        delete state._preEliteDifficulty;
+      }
+    }
   } else if (encounter.type === "REST") {
     await handleRestEncounter(sock, encounter, sessionKey);
   } else {
