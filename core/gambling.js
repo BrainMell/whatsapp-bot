@@ -1788,6 +1788,10 @@ function penalty(userId, amount, direction, economyModule) {
 ━━━━━━━━━━━━━━━`;
 
   if (won) {
+    // 💡 FIX: Deduct the bet first, then add the payout. Previously the
+    // bet was never deducted on win — the player only received 0.4x profit
+    // without the original bet being at risk. Now: wallet = wallet - bet + (bet * 1.4)
+    // = wallet + (bet * 0.4). Same net effect, but the accounting is correct.
     const rawGain = Math.floor(amount * 0.4);
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
@@ -1808,7 +1812,9 @@ function penalty(userId, amount, direction, economyModule) {
       };
     }
 
-    user.wallet += gain;
+    // Deduct bet, add net profit
+    user.wallet -= amount;
+    user.wallet += gain + amount; // Return bet + profit
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -1822,7 +1828,7 @@ function penalty(userId, amount, direction, economyModule) {
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🥅 *GOAL!!! YOU SCORED!* 🎉
-📈 *Payout:* +${getZENI()}${gain.toLocaleString()}
+📈 *Net Profit:* +${getZENI()}${gain.toLocaleString()}
 
 💰 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}`
     };

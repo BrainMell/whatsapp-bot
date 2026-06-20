@@ -489,7 +489,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const nextPlayer = state.chess.turn() === 'w' ? state.playerW : state.playerB;
     const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*\n\n` +
         (gameEnded ? resultMsg : (resultMsg ? resultMsg + "\n" : "") + `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
-        (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} takes the ${(state.bet * 2).toLocaleString()} Zeni pot!` : "");
+        (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} wins ${state.bet.toLocaleString()} Zeni from @${normalizeJid(!isWhiteTurn ? state.playerB : state.playerW)}!` : "");
 
     if (gameEnded) {
         if (state.bet > 0 && state.chess.isCheckmate()) {

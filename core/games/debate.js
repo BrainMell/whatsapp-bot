@@ -139,8 +139,15 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
         const debate = activeDebates[chatId];
         if (!debate) return;
 
-        // Only record arguments from debaters
-        if (senderJid !== debate.debater1 && senderJid !== debate.debater2) {
+        // 💡 FIX: Normalize JIDs before comparison — previously strict !==
+        // was used, which failed if senderJid had a device suffix (e.g.
+        // 123:12@s.whatsapp.net) but the stored JID didn't.
+        const normJid = (jid) => {
+            if (!jid) return '';
+            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
+        };
+        const sender = normJid(senderJid);
+        if (sender !== normJid(debate.debater1) && sender !== normJid(debate.debater2)) {
             return;
         }
 
@@ -168,6 +175,22 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
             return {
                 success: false,
                 message: BOT_MARKER + "❌ Not enough arguments recorded! Both debaters must make at least 1 point."
+            };
+        }
+
+        // 💡 FIX: Check that BOTH debaters have at least 1 argument —
+        // previously the check was total count >= 2, which allowed one
+        // debater to make 2 arguments while the other made 0.
+        const normJid = (jid) => {
+            if (!jid) return '';
+            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
+        };
+        const d1Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater1)).length;
+        const d2Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater2)).length;
+        if (d1Count < 1 || d2Count < 1) {
+            return {
+                success: false,
+                message: BOT_MARKER + "❌ Both debaters must make at least 1 argument before judging!"
             };
         }
 
@@ -417,6 +440,17 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     addSpectator: async (sock, chatId, userId, wasAdmin, BOT_MARKER) => {
         const debate = activeDebates[chatId];
         if (!debate) return;
+
+        // 💡 FIX: Don't allow debaters to be added as spectators — they
+        // would get a 2-minute spectator timeout that demotes them
+        // mid-debate, losing their ability to post in the locked group.
+        const normJid = (jid) => {
+            if (!jid) return '';
+            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
+        };
+        if (normJid(userId) === normJid(debate.debater1) || normJid(userId) === normJid(debate.debater2)) {
+            return { success: false, message: "❌ Debaters cannot be spectators!" };
+        }
 
         if (!spectators.has(chatId)) {
             spectators.set(chatId, new Map());

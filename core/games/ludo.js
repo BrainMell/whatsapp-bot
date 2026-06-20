@@ -520,6 +520,11 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
 
     if (rollResult.burned) {
       message += `⚡ *BURNED!* ⚡\n3 consecutive 6s! Turn skipped!\n\n`;
+      // 💡 FIX: Force-clear extra turn before calling nextTurn — previously
+      // if hasExtraTurn was true from a previous six, nextTurn() would
+      // just clear the flag without advancing the turn, giving the player
+      // another roll despite being burned.
+      game.hasExtraTurn = false;
       game.nextTurn();
       message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}`;
     } else if (movablePieces.length === 0) {
@@ -535,6 +540,14 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       const pieceToMove = movablePieces[0];
       message += `✅ Only piece ${pieceToMove} can move - Auto-moving!\n\n`;
       const moveResult = game.movePiece(player, pieceToMove);
+      // 💡 FIX: Check if auto-move actually succeeded — previously if the
+      // move failed (e.g., wall block), the turn advanced anyway.
+      if (!moveResult.success) {
+        message += `❌ Move blocked! ${moveResult.error || 'Cannot move there.'}\n\n`;
+        game.hasExtraTurn = false;
+        game.nextTurn();
+        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}`;
+      } else {
       if (moveResult.captured) message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
       if (moveResult.reachedHome) message += `🏠 *PIECE HOME!* 🏠\n\n`;
       if (moveResult.won) {
@@ -561,6 +574,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
           message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
         }
       }
+      } // end of else (moveResult.success)
     } else {
       message += `✅ Movable pieces: ${movablePieces.join(', ')}\n\n`;
       message += `Use: \`${botConfig.getPrefix()} ludo move <piece>\``;

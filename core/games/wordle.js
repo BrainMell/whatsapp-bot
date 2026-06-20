@@ -282,11 +282,12 @@ class WordleGame {
 
     // Set timeout for 10 minutes
     this.timeout = setTimeout(async () => {
-      if (activeGames.has(this.playerJid)) {
-        activeGames.delete(this.playerJid);
+      const key = `${this.chatId}:${normalizeJid(this.playerJid)}`;
+      if (activeGames.has(key)) {
+        activeGames.delete(key);
         try {
-          if (sock) await sock.sendMessage(this.chatId, { 
-            text: botMarker + "⌛ *WORDLE TIMEOUT!* ⌛\n\nYour game has been cancelled due to inactivity." 
+          if (sock) await sock.sendMessage(this.chatId, {
+            text: botMarker + "⌛ *WORDLE TIMEOUT!* ⌛\n\nYour game has been cancelled due to inactivity."
           });
         } catch (e) {}
       }
@@ -296,8 +297,9 @@ class WordleGame {
   resetTimeout(sock, botMarker) {
     if (this.timeout) clearTimeout(this.timeout);
     this.timeout = setTimeout(async () => {
-      if (activeGames.has(this.playerJid)) {
-        activeGames.delete(this.playerJid);
+      const key = `${this.chatId}:${normalizeJid(this.playerJid)}`;
+      if (activeGames.has(key)) {
+        activeGames.delete(key);
         try {
           if (sock) await sock.sendMessage(this.chatId, { 
             text: botMarker + "⌛ *WORDLE TIMEOUT!* ⌛\n\nYour game has been cancelled due to inactivity." 
@@ -466,19 +468,31 @@ class WordleGame {
 // GAME MANAGEMENT
 // ============================================
 
+// 💡 FIX: Key games by `${chatId}:${playerJid}` instead of just `playerJid`
+// to prevent cross-chat game leakage. Previously a user could start a game
+// in chat A and make guesses in chat B, with responses going to chat B.
+function _gameKey(chatId, playerJid) {
+  return `${chatId}:${normalizeJid(playerJid)}`;
+}
+
 function createGame(playerJid, playerName, difficulty = 'medium', chatId, sock, botMarker) {
   const game = new WordleGame(playerJid, playerName, difficulty, chatId, sock, botMarker);
-  activeGames.set(normalizeJid(playerJid), game);
+  activeGames.set(_gameKey(chatId, playerJid), game);
   return game;
 }
 
-function getGame(playerJid) {
-  return activeGames.get(normalizeJid(playerJid));
+function getGame(playerJid, chatId) {
+  // Try chat-specific key first, then fall back to old playerJid-only key
+  // for backward compatibility with games started before this fix.
+  return activeGames.get(_gameKey(chatId, playerJid)) || activeGames.get(normalizeJid(playerJid));
 }
 
-function deleteGame(playerJid) {
-  const game = activeGames.get(normalizeJid(playerJid));
+function deleteGame(playerJid, chatId) {
+  const key = chatId ? _gameKey(chatId, playerJid) : normalizeJid(playerJid);
+  const game = activeGames.get(key);
   if (game && game.timeout) clearTimeout(game.timeout);
+  activeGames.delete(key);
+  // Also clean up any old-style key
   activeGames.delete(normalizeJid(playerJid));
 }
 
@@ -489,7 +503,7 @@ function deleteGame(playerJid) {
 module.exports = {
   getAllScores,
   startGame: async (sock, chatId, senderJid, botMarker, m, playerName = 'Player', difficulty = 'medium') => {
-    if (getGame(senderJid)) {
+    if (getGame(senderJid, chatId)) {
       return {
         success: false,
         message: botMarker + `❌ You already have an active game! Use \`${botConfig.getPrefix()} wordle end\` to quit.`
@@ -531,7 +545,7 @@ module.exports = {
   },
 
   makeGuess: async (sock, chatId, senderJid, word, botMarker, m) => {
-    const game = getGame(senderJid);
+    const game = getGame(senderJid, chatId);
 
     if (!game) {
       return {
@@ -567,7 +581,7 @@ module.exports = {
         message += `Better luck next time, @${normalizeJid(senderJid)}!\n\n`;
       }
       message += `Type \`${botConfig.getPrefix()} wordle start\` for a new game!`;
-      deleteGame(senderJid);
+      deleteGame(senderJid, chatId);
     }
 
     await sock.sendMessage(chatId, {
@@ -579,7 +593,7 @@ module.exports = {
   },
 
   showBoard: async (sock, chatId, senderJid, botMarker, m) => {
-    const game = getGame(senderJid);
+    const game = getGame(senderJid, chatId);
 
     if (!game) {
       return {
@@ -598,7 +612,7 @@ module.exports = {
   },
 
   endGame: async (sock, chatId, senderJid, botMarker, m, isAdmin = false) => {
-    const game = getGame(senderJid);
+    const game = getGame(senderJid, chatId);
 
     if (!game) {
       return {
@@ -614,7 +628,7 @@ module.exports = {
       updateScoreboard(game.fullJid, game.playerName, false, game.guesses.length, game.difficulty);
     }
     
-    deleteGame(senderJid);
+    deleteGame(senderJid, chatId);
 
     let message = botMarker + `🛑 Game ended! The word was *${word}*`;
     if (!isAdmin) {

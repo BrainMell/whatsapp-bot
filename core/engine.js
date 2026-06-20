@@ -9506,7 +9506,55 @@ Commands:
                     return reply(BOT_MARKER + `✅ Rank system is now ${enable ? 'ENABLED' : 'DISABLED'} for this group.`);
                   }
 
+                  // 💡 FIX: Handle '.g rank mission' BEFORE the isRankCommand gate.
+                  // The rank mission system is an ADVENTURER RANK (RPG) feature,
+                  // NOT a group rank (admin) feature. It should work even when the
+                  // group rank system is disabled. Previously it was included in
+                  // isRankCommand and got blocked by the ranksEnabled check.
+                  if (lowerTxt.startsWith(`${P} rank mission`)) {
+                    const missionSub = lowerTxt.split(' ')[3]; // .g rank mission <sub>
+                    const status = economy.getRankMissionStatus(senderJid);
+
+                    if (missionSub === 'claim') {
+                      const result = economy.claimRankMission(senderJid);
+                      return reply(BOT_MARKER + result.message);
+                    }
+
+                    // Default: show mission status
+                    if (!status) {
+                      return reply(BOT_MARKER + '❌ Could not load mission status. Make sure you are registered.');
+                    }
+
+                    if (!status.hasGate) {
+                      return reply(BOT_MARKER + `🎯 *RANK MISSIONS*\n\n${status.message}\n\nYou'll need to complete a rank mission every 2 promotions to advance further. Missions unlock at:\n• D→C: Trial of Combat\n• B→A: Trial of Mastery\n• S→SS: Trial of Legend\n• SSS→GOD: Trial of Divinity`);
+                    }
+
+                    if (status.alreadyCompleted) {
+                      return reply(BOT_MARKER + `✅ ${status.message}`);
+                    }
+
+                    let msg = `🎯 *RANK MISSION* 🎯\n`;
+                    msg += `${'─'.repeat(24)}\n\n`;
+                    msg += `${status.mission.icon} *${status.mission.name}*\n`;
+                    msg += `_${status.mission.desc}_\n`;
+                    msg += `🔓 Unlocks: ${status.mission.unlocksRank}-Rank\n\n`;
+                    msg += `📊 *Objectives:*\n`;
+                    status.progress.forEach(p => {
+                      const bar = '█'.repeat(Math.floor((p.current / p.target) * 10)) + '░'.repeat(10 - Math.floor((p.current / p.target) * 10));
+                      msg += `${p.done ? '✅' : '⬜'} ${p.label}\n   [${bar}] ${p.current}/${p.target}\n`;
+                    });
+                    msg += `\n`;
+                    if (status.canClaim) {
+                      msg += `🎉 *All objectives complete!*\nUse \`${P} rank mission claim\` to claim your reward.`;
+                    } else {
+                      msg += `💡 Complete all objectives to unlock your next rank promotion.`;
+                    }
+                    return reply(BOT_MARKER + msg);
+                  }
+
                   // Intercept rank system commands if disabled
+                  // 💡 NOTE: 'rank mission' is NOT included here — it's handled above
+                  // and is an RPG feature, not a group admin feature.
                   const isRankCommand =
                     lowerTxt === `${P} rank setup` ||
                     lowerTxt.startsWith(`${P} rank add `) ||
@@ -9525,7 +9573,6 @@ Commands:
                     lowerTxt.startsWith(`${P} rank reset perms`) ||
                     lowerTxt === `${P} rank guide` ||
                     lowerTxt === `${P} who` ||
-                    lowerTxt.startsWith(`${P} rank mission`) ||
                     lowerTxt.startsWith(`${P} title set `) ||
                     lowerTxt.startsWith(`${P} title remove`);
 
@@ -10003,48 +10050,6 @@ Members are assigned to Rank Tiers (1 to 5).
 \`${P} who\` - View the full styled group roster.
 \`${P} myrank\` / \`${P} rankinfo @user\` - Check details.`;
                     return reply(guideText);
-                  }
-
-                  // .g rank mission — view/claim adventurer rank missions
-                  if (lowerTxt.startsWith(`${P} rank mission`)) {
-                    const missionSub = lowerTxt.split(' ')[3]; // .g rank mission <sub>
-                    const status = economy.getRankMissionStatus(senderJid);
-
-                    if (missionSub === 'claim') {
-                      const result = economy.claimRankMission(senderJid);
-                      return reply(BOT_MARKER + result.message);
-                    }
-
-                    // Default: show mission status
-                    if (!status) {
-                      return reply(BOT_MARKER + '❌ Could not load mission status. Make sure you are registered.');
-                    }
-
-                    if (!status.hasGate) {
-                      return reply(BOT_MARKER + `🎯 *RANK MISSIONS*\n\n${status.message}\n\nYou'll need to complete a rank mission every 2 promotions to advance further. Missions unlock at:\n• D→C: Trial of Combat\n• B→A: Trial of Mastery\n• S→SS: Trial of Legend\n• SSS→GOD: Trial of Divinity`);
-                    }
-
-                    if (status.alreadyCompleted) {
-                      return reply(BOT_MARKER + `✅ ${status.message}`);
-                    }
-
-                    let msg = `🎯 *RANK MISSION* 🎯\n`;
-                    msg += `${'─'.repeat(24)}\n\n`;
-                    msg += `${status.mission.icon} *${status.mission.name}*\n`;
-                    msg += `_${status.mission.desc}_\n`;
-                    msg += `🔓 Unlocks: ${status.mission.unlocksRank}-Rank\n\n`;
-                    msg += `📊 *Objectives:*\n`;
-                    status.progress.forEach(p => {
-                      const bar = '█'.repeat(Math.floor((p.current / p.target) * 10)) + '░'.repeat(10 - Math.floor((p.current / p.target) * 10));
-                      msg += `${p.done ? '✅' : '⬜'} ${p.label}\n   [${bar}] ${p.current}/${p.target}\n`;
-                    });
-                    msg += `\n`;
-                    if (status.canClaim) {
-                      msg += `🎉 *All objectives complete!*\nUse \`${P} rank mission claim\` to claim your reward.`;
-                    } else {
-                      msg += `💡 Complete all objectives to unlock your next rank promotion.`;
-                    }
-                    return reply(BOT_MARKER + msg);
                   }
 
                   // .g who
