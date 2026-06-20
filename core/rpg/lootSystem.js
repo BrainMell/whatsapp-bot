@@ -826,7 +826,25 @@ const ITEM_DATABASE = {
 
     // --- CRAFTING-ONLY MATERIALS (previously referenced as recipe inputs but never defined) ---
     'plate_armor':         { name: 'Forged Plate',        description: 'A heavy metal plate ready to be worked into reinforced armor.', rarity: 'RARE',    value: 1800, type: 'MATERIAL' },
-    'strength_brew':       { name: 'Strength Brew',       description: 'A pungent alchemical concentrate. One sip makes your muscles scream.', rarity: 'EPIC',    value: 3200, type: 'MATERIAL' }
+    'strength_brew':       { name: 'Strength Brew',       description: 'A pungent alchemical concentrate. One sip makes your muscles scream.', rarity: 'EPIC',    value: 3200, type: 'MATERIAL' },
+
+    // --- NEW RARE ORES / MATERIALS (chaos → null → abyssal themed ladder) ---
+    // Each rank tier gets its own signature material that feeds 2 forge recipes
+    // (see craftingSystem.js Phase B2 commit). This gives S/SS/SSS players a
+    // reliable long-tail drop to chase beyond just boss trophies.
+    //
+    // S-rank:  chaos_ore        — LEGENDARY, ~5% drop weight in S_RANK_COMMON
+    // SS-rank: null_shard       — MYTHIC,    ~5% drop weight in SS_RANK_COMMON
+    // SSS-rank: abyssal_heartstone — MYTHIC, ~4% drop weight in SSS_RANK_COMMON
+    'chaos_ore':           { name: 'Chaos Ore',            description: 'Raw chaos crystallized into an unstable metallic ore. Tingles when held.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
+    'null_shard':          { name: 'Null Shard',           description: 'A fragment of pure negation. Light entering it does not come back.', rarity: 'MYTHIC', value: 90000, type: 'MATERIAL' },
+    'abyssal_heartstone':  { name: 'Abyssal Heartstone',   description: 'A warm, dense gem pulsing in sync with the Abyssal God\'s heartbeat. Theorized to be unmaking made solid.', rarity: 'MYTHIC', value: 220000, type: 'MATERIAL' },
+
+    // Refined forms (produced by Material Conversion recipes in craftingSystem.js,
+    // consumed by 2-handed weapon + armor forge recipes). Refining costs 3 raw → 1 refined.
+    'chaos_ingot':         { name: 'Chaos Ingot',          description: 'A worked ingot of refined chaos ore. Still hums, but the edges are tamed.', rarity: 'LEGENDARY', value: 110000, type: 'MATERIAL' },
+    'null_matrix':         { name: 'Null Matrix',          description: 'A stabilized null shard suspended in a mana-crystal lattice. The void made workable.', rarity: 'MYTHIC', value: 280000, type: 'MATERIAL' },
+    'abyssal_core':        { name: 'Abyssal Core',         description: 'A heartstone cut and polished into a perfect focal lens. Stares back.', rarity: 'MYTHIC', value: 650000, type: 'MATERIAL' }
 };
 
 function getItemInfo(itemId) {
