@@ -451,6 +451,11 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const isWhiteTurn = state.chess.turn() === 'w';
     const currentPlayer = !isWhiteTurn ? state.playerW : state.playerB; // Turn already flipped in chess.js
 
+    // 💡 FIX: Clear stale draw offers whenever a move is made. Previously
+    // a draw offer would persist after the offering player moved, allowing
+    // the opponent to accept a stale offer on a changed position.
+    state.drawOfferedBy = null;
+
     state.fen = state.chess.fen(); 
     if (!state.history) state.history = [];
     state.history.push(state.fen);
@@ -594,21 +599,24 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     if (cmd === 'stop' || cmd === 'end' || cmd === 'reset' || cmd === 'force-reset') {
         const activeGames = getActiveGames();
         const state = activeGames.get(chatId);
-        
+
         // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
         const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
-        const isForce = cmd === 'reset' || cmd === 'force-reset';
+        // 💡 FIX: 'reset'/'force-reset' should also require admin — previously
+        // any user could grief ongoing games (including bet matches) by typing
+        // '.chess reset'. Now only players in the game or admins can clear it.
+        const isForce = (cmd === 'reset' || cmd === 'force-reset') && isAdmin;
 
         if (isPlayer || isForce || isAdmin) {
             console.log(`[Chess] Termination triggered in ${chatId} by ${senderJid} (cmd: ${cmd})`);
             deleteGame(chatId);
             activeGames.delete(chatId); // Double-ensure memory is wiped
-            
-            const msg = isForce ? "🛑 Chess game has been FORCE CLEARED." : "🛑 Chess game has been terminated.";
+
+            const msg = isForce ? "🛑 Chess game has been FORCE CLEARED by admin." : "🛑 Chess game has been terminated.";
             return sock.sendMessage(chatId, { text: botMarker + msg });
         } else {
-            return sock.sendMessage(chatId, { text: botMarker + "❌ Only players can stop the game. Use `.chess reset` to force clear." });
+            return sock.sendMessage(chatId, { text: botMarker + "❌ Only players or admins can stop the game." });
         }
     }
 

@@ -58,6 +58,16 @@ module.exports = {
                 if (obj.viewOnceMessage) found.push(...extractAllText(obj.viewOnceMessage.message));
                 if (obj.viewOnceMessageV2) found.push(...extractAllText(obj.viewOnceMessageV2.message));
                 if (obj.ephemeralMessage) found.push(...extractAllText(obj.ephemeralMessage.message));
+                // 💡 FIX: Add missing message types that can carry captions/text.
+                // Previously audio, sticker, contact, and liveLocation messages
+                // were not scanned — antilink could be bypassed by sending a
+                // link in an audio/sticker caption.
+                if (obj.audioMessage) found.push(...extractAllText(obj.audioMessage));
+                if (obj.stickerMessage) found.push(...extractAllText(obj.stickerMessage));
+                if (obj.contactMessage) found.push(...extractAllText(obj.contactMessage));
+                if (obj.contactsArrayMessage) found.push(...extractAllText(obj.contactsArrayMessage));
+                if (obj.liveLocationMessage) found.push(...extractAllText(obj.liveLocationMessage));
+                if (obj.ptvMessage) found.push(...extractAllText(obj.ptvMessage));
                 
                 // Polls
                 if (obj.pollCreationMessage || obj.pollCreationMessageV2 || obj.pollCreationMessageV3) {

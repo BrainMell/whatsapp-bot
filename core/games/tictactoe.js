@@ -358,6 +358,12 @@ function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) 
 module.exports = {
   getAllScores,
   handleStartGame: async (sock, chatId, senderJid, mentionedJids, botMarker, m, gridSize = 3) => {
+    // 💡 FIX: Validate grid size — only 3, 8, and 16 have win patterns defined.
+    // Previously any value would pass and crash on the first move when
+    // WINNING_PATTERNS[gridSize] returned undefined.
+    if (![3, 8, 16].includes(gridSize)) {
+      return sock.sendMessage(chatId, { text: botMarker + '❌ Invalid grid size! Supported sizes: 3 (tic-tac-toe), 8 (mega), 16 (ultra).' }, { quoted: m });
+    }
     if (hasActiveGame(chatId)) return sock.sendMessage(chatId, { text: botMarker + `❌ Game in progress. Finish it first or use \`${botConfig.getPrefix()} ttt end\`` }, { quoted: m });
     if (!mentionedJids || mentionedJids.length === 0) return sock.sendMessage(chatId, { text: botMarker + `❌ Tag your opponent: \`${botConfig.getPrefix()} ${'t'.repeat(gridSize)} @opponent\`` }, { quoted: m });
 

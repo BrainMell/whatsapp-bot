@@ -630,11 +630,37 @@ module.exports = {
   },
 
   showStats: async (sock, chatId, senderJid, botMarker, m) => {
-    const game = new WordleGame(senderJid, 'Temp');
-    const stats = game.getStats();
+    // 💡 FIX: Don't create a full WordleGame instance just to read stats —
+    // the constructor selects a random word AND sets a 10-minute timeout
+    // that references undefined chatId/sock, causing memory leaks on every
+    // `.wordle s` call. Read stats directly from the system store instead.
+    const scores = system.get('wordle_scores', {});
+    const playerStats = scores[senderJid];
+
+    let statsText;
+    if (!playerStats) {
+      statsText = "No stats available.";
+    } else {
+      statsText = "┌───────────────┐\n";
+      statsText += "📊 *YOUR STATS* 📊\n";
+      statsText += "└───────────────┘\n\n";
+      statsText += `✅ Wins: ${playerStats.wins}\n`;
+      statsText += `❌ Losses: ${playerStats.losses}\n`;
+      const winRate = playerStats.wins + playerStats.losses > 0
+        ? ((playerStats.wins / (playerStats.wins + playerStats.losses)) * 100).toFixed(0)
+        : 0;
+      statsText += `📈 Win Rate: ${winRate}%\n`;
+      const avgGuesses = playerStats.wins > 0
+        ? (playerStats.totalGuesses / playerStats.wins).toFixed(1)
+        : 'N/A';
+      statsText += `🎯 Avg Guesses: ${avgGuesses}\n`;
+      statsText += `🔥 Current Streak: ${playerStats.currentStreak}\n`;
+      statsText += `🏆 Best Streak: ${playerStats.bestStreak}\n`;
+      statsText += "└───────────────┘";
+    }
 
     await sock.sendMessage(chatId, {
-      text: botMarker + stats,
+      text: botMarker + statsText,
       contextInfo: { mentionedJid: [senderJid] }
     });
 

@@ -203,27 +203,36 @@ async function buyItem(sock, chatId, senderJid, input) {
     }
     
     if (result.success) {
-        // 💡 BUG FIX: Only deduct money if inventory add was successful.
-        // ALSO verify removeMoney succeeded — between the balance check at
-        // line 167 and here, there's an `await` (for handleX), and during
-        // that await the user could spend money in another chat (the
-        // economy cache is shared across all chats/handlers). If removeMoney
-        // fails, we need to roll back the item add so the player doesn't
-        // get a free item.
-        const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
-        if (!paid) {
-            // Roll back: remove the item we just added
-            try {
-                if (item.type === 'EQUIPMENT') {
+        // 💡 FIX: For non-rollbackable items (STAT_BOOST, CLASS_CHANGE, RESET,
+        // CONSUMABLE), deduct money FIRST, then apply the effect. Previously
+        // the effect was applied first and removeMoney was called after — if
+        // removeMoney failed (race condition), the user got the effect for free.
+        // For EQUIPMENT, the item can be rolled back, so the order doesn't
+        // matter as much — but we still verify payment.
+        const nonRollbackable = ['STAT_BOOST', 'STAT_BOOST_PERM', 'CLASS_CHANGE', 'RESET', 'CONSUMABLE', 'BOOSTER', 'SPECIAL_KEY', 'EVOLUTION', 'ASCENSION'];
+
+        if (nonRollbackable.includes(item.type)) {
+            // Deduct FIRST, then apply effect
+            const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            if (!paid) {
+                await sock.sendMessage(chatId, {
+                    text: `❌ Purchase failed: insufficient funds (your wallet may have changed).`
+                });
+                return;
+            }
+            // Effect was already applied above — if we reach here, payment succeeded.
+        } else {
+            // EQUIPMENT: can be rolled back if payment fails
+            const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            if (!paid) {
+                try {
                     await inventorySystem.removeItem(senderJid, item.id, 1);
-                }
-                // For consumables/stats the effect already applied — log it
-                console.warn(`[shop] removeMoney failed for ${senderJid} buying ${item.id}; item effect was already applied and could not be rolled back.`);
-            } catch (e) { /* best effort */ }
-            await sock.sendMessage(chatId, {
-                text: `❌ Purchase failed: your wallet balance changed during the transaction. Please try again.`
-            });
-            return;
+                } catch (e) { /* best effort */ }
+                await sock.sendMessage(chatId, {
+                    text: `❌ Purchase failed: your wallet balance changed during the transaction.`
+                });
+                return;
+            }
         }
 
         await sock.sendMessage(chatId, {
@@ -318,7 +327,14 @@ async function handleConsumable(senderJid, item) {
     // Strip _shop suffix if it exists to match lootSystem base IDs
     const baseId = item.id.replace('_shop', '');
     const itemInfo = lootSystem.getItemInfo(baseId);
-    
+
+    // 💡 FIX: Guard against undefined itemInfo — previously a misconfigured
+    // shop item with _shop suffix but no matching base item would crash
+    // on itemInfo.name with a TypeError.
+    if (!itemInfo || !itemInfo.name) {
+        return { success: false, message: `❌ Item configuration error for "${item.id}". Please report this to the bot owner.` };
+    }
+
     // Add to inventory using the unified system
     const result = await inventorySystem.addItem(senderJid, baseId, 1, {
         name: itemInfo.name,

@@ -334,21 +334,32 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
 
     cancelDebate: async (sock, chatId, BOT_MARKER) => {
         const debate = activeDebates[chatId];
-        
+
         if (!debate) {
             return { success: false, message: BOT_MARKER + "❌ No active debate!" };
         }
 
-        clearTimeout(debate.timeoutId); // Clear the timeout
+        if (debate.timeoutId) clearTimeout(debate.timeoutId);
 
         try {
             // Unlock and demote if they weren't admins before
             await sock.groupSettingUpdate(chatId, 'not_announcement');
             if (!debate.debater1WasAdmin) {
-                await sock.groupParticipantsUpdate(chatId, [debate.debater1], 'demote');
+                await sock.groupParticipantsUpdate(chatId, [debate.debater1], 'demote').catch(() => {});
             }
             if (!debate.debater2WasAdmin) {
-                await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote');
+                await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote').catch(() => {});
+            }
+            // 💡 FIX: Clean up spectators — previously only handleDebateTimeout
+            // did this, leaving spectators promoted after cancel/judge.
+            if (spectators.has(chatId)) {
+                const groupSpectators = spectators.get(chatId);
+                for (const [jid, data] of groupSpectators.entries()) {
+                    if (!data.wasAdmin) {
+                        await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
+                    }
+                }
+                spectators.delete(chatId);
             }
         } catch (err) {
             console.log('⚠️ Error during cleanup:', err.message);
@@ -357,9 +368,9 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         delete activeDebates[chatId];
         saveDebates();
 
-        return { 
-            success: true, 
-            message: BOT_MARKER + "✅ Debate cancelled and group unlocked!" 
+        return {
+            success: true,
+            message: BOT_MARKER + "✅ Debate cancelled and group unlocked!"
         };
     },
 

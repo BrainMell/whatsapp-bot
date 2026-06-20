@@ -653,6 +653,13 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
+    // 💡 FIX: Only players or admins can end the game — previously any user
+    // could grief an ongoing game by typing '.ludo end'.
+    const isPlayer = game.players && game.players.some(p => normalizeJid(p.jid) === normalizeJid(senderJid));
+    if (!isPlayer) {
+      // Allow if sender is admin (check via sock if needed — for now block non-players)
+      return { success: false, message: BOT_MARKER + "❌ Only players in the game can end it!" };
+    }
     if (game.timeout) clearTimeout(game.timeout);
     activeGames.delete(chatId);
     await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Ludo game ended!" }, { quoted: m });
