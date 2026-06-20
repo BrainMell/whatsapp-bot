@@ -5182,13 +5182,26 @@ async function processVotes(sock, encounter, sessionKey) {
   if (choice.stat) {
     const roll = Math.floor(Math.random() * 20) + 1;
     // Get highest party stat for the check
-    const partyBestStat = Math.max(
+    const rawBestStat = Math.max(
       ...state.players.map((p) => p.stats[choice.stat.toLowerCase()] || 0),
     );
-    const total = roll + partyBestStat;
+    // ⚠️ FIX (audit Task 4): previously 'total = roll + partyBestStat' which
+    // made the d20 roll irrelevant at high stats (DEF=471 → +471 bonus,
+    // always beat any reasonable difficulty). Now the stat bonus is CAPPED
+    // at +10 and scales at 1 bonus per 20 stat points, so:
+    //   stat 0-19  → +0 bonus (pure d20 roll)
+    //   stat 20-39 → +1 bonus
+    //   stat 100   → +5 bonus
+    //   stat 200+  → +10 bonus (capped)
+    // The d20 roll (1-20) now matters again — a low roll can still fail
+    // even with maxed stats, and a high roll can succeed with low stats.
+    // This restores the RNG element that makes stat checks feel like
+    // 'checks' instead of auto-pass/auto-fail.
+    const statBonus = Math.min(10, Math.floor(rawBestStat / 20));
+    const total = roll + statBonus;
     const success = total >= choice.difficulty;
 
-    msg += `🎲 *ROLL:* ${roll} + ${partyBestStat} = *${total}* (Req: ${choice.difficulty})\n`;
+    msg += `🎲 *ROLL:* ${roll} + ${statBonus} (stat ${rawBestStat} → +${statBonus} cap) = *${total}* (Req: ${choice.difficulty})\n`;
     msg += success ? `✅ *SUCCESS!*\n` : `❌ *FAILURE!*\n`;
 
     finalOutcome = success ? choice.success : choice.failure;

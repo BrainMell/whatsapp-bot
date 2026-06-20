@@ -6508,7 +6508,14 @@ _💡 Reply with another number from your search list!_`.trim();
                           // Rarity Logic
                           let itemKey = "common_fish";
                           let emoji = "🐟";
-                          const roll = Math.random() * 100 + luck / 5;
+                          // ⚠️ FIX (audit Task 4): previously 'Math.random() * 100 + luck / 5'
+                          // which gave +94 bonus at luck=471 (auto-mythic every cast).
+                          // Now capped at +15 and scaled at 1 per 20 luck, so:
+                          //   luck 0-19  → +0 bonus (pure RNG)
+                          //   luck 100   → +5 bonus
+                          //   luck 300+  → +15 bonus (capped)
+                          const luckBonus = Math.min(15, Math.floor(luck / 20));
+                          const roll = Math.random() * 100 + luckBonus;
 
                           if (roll > 98) {
                             itemKey = "mythic_fish";
@@ -6573,7 +6580,12 @@ _💡 Reply with another number from your search list!_`.trim();
                     const freshUser = economy.getUser(senderJid);
                     const eqStats = inventorySystem.getEquipmentStats(senderJid) || {};
                     const luck = (freshUser.stats?.luck || 5) + (eqStats.luck || 0);
-                    let roll = (Math.random() * 100) + (luck / 5);
+                    // ⚠️ FIX (audit Task 4): previously '(Math.random() * 100) + (luck / 5)'
+                    // which gave +94 bonus at luck=471 (auto-bear every hunt).
+                    // Now capped at +15 and scaled at 1 per 20 luck — same fix
+                    // as the fishing roll at L6511.
+                    const luckBonus = Math.min(15, Math.floor(luck / 20));
+                    let roll = (Math.random() * 100) + luckBonus;
                     let selected = animals[animals.length - 1];
                     for (const a of animals) {
                       roll -= a.weight;
