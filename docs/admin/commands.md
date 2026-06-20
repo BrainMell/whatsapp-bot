@@ -107,9 +107,15 @@ if (
 ```
 
 This gating mechanism controls the following administrative commands:
-- **`addmod` / `delmod`**: Add or delete global bot moderators (Owner only).
+- **`addmod` / `delmod`**: Add or delete global bot moderators (Owner OR global mod — global mods can manage other global mods).
 - **`block` / `unblock`**: Prevent users from using bot commands, or lift the command block.
-- **`cardmod`**: Add or delete card moderators (Owner only) for approving eshop deck listings.
+- **`cardmod`**: Add or delete card moderators (Owner OR global mod) for approving eshop deck listings.
+- **`t2edeck`**: Manage the eShop event-card deck — add/remove slots, set prices, clear (Owner OR global mod).
+- **`event start/stop`**: Start or stop the token event (Owner OR global mod).
+- **`setprice`**: Set the zeni price of an eShop slot (Owner OR global mod).
+- **`updateall`**: Broadcast a custom message to every enabled chat (Owner OR global mod).
+
+As of audit Task ID 2, global mods are owner-equivalent across all of these commands. Global mods also bypass antispam detection and gambling-command cooldowns (same as owner).
 
 ---
 
