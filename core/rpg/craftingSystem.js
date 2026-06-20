@@ -280,6 +280,70 @@ const CRAFTING_RECIPES = {
         desc: 'Fuse 3 dark matters with boss essence.',
         ingredients: { 'dark_matter': 3, 'boss_essence': 1 },
         result: { id: 'legendary_shard' }
+    },
+
+    // --- NEW RARE-MATERIAL CONVERSION (chaos → null → abyssal ladder) ---
+    // Each tier's raw ore can be refined into a workable form for forging.
+    'chaos_ingot_conv': {
+        name: 'Chaos Ingot', category: 'CRAFT', id: 'chaos_ingot',
+        desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process — keep mana crystals on hand to quench.',
+        ingredients: { 'chaos_ore': 3, 'mana_crystal': 1 },
+        result: { id: 'chaos_ingot' }
+    },
+    'null_matrix_conv': {
+        name: 'Null Matrix', category: 'CRAFT', id: 'null_matrix',
+        desc: 'Suspend 3 null shards in a mana-crystal lattice to stabilize them into a workable matrix.',
+        ingredients: { 'null_shard': 3, 'mana_crystal': 2, 'void_crystal': 1 },
+        result: { id: 'null_matrix' }
+    },
+    'abyssal_core_conv': {
+        name: 'Abyssal Core', category: 'CRAFT', id: 'abyssal_core',
+        desc: 'Cut and polish 3 abyssal heartstones around a godshard focal point. The result stares back.',
+        ingredients: { 'abyssal_heartstone': 3, 'godshard': 1, 'mythic_enhancement_stone': 1 },
+        result: { id: 'abyssal_core' }
+    },
+
+    // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS ---
+    // Tier 1 (S-rank): chaos_blade + chaos_cloak — reqLevel 50, LEGENDARY
+    'chaos_blade': {
+        name: 'Chaos Blade', category: 'WEAPON', id: 'chaos_blade',
+        desc: 'Forge a chaos ingot into a two-handed blade that fractures reality on impact. (+95 ATK, +15 SPD, +10 CRIT)',
+        ingredients: { 'chaos_ingot': 1, 'mythril_ore': 5, 'dark_matter': 3, 'sharp_whetstone': 2 },
+        result: { id: 'chaos_blade', stats: { atk: 95, spd: 15, crit: 10 }, slot: 'main_hand' }
+    },
+    'chaos_cloak': {
+        name: 'Chaos Cloak', category: 'ARMOR', id: 'chaos_cloak',
+        desc: 'Weave chaos-tainted thread through a chaos ingot clasp. Shifts out of phase with incoming attacks. (+55 DEF, +90 HP, +20 SPD)',
+        ingredients: { 'chaos_ingot': 1, 'mystic_thread': 5, 'ancient_wood': 3, 'tough_leather': 5 },
+        result: { id: 'chaos_cloak', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor' }
+    },
+
+    // Tier 2 (SS-rank): null_staff + null_aegis — reqLevel 70, MYTHIC
+    'null_staff': {
+        name: 'Null Staff', category: 'WEAPON', id: 'null_staff',
+        desc: 'Mount a null matrix atop a mythril staff. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)',
+        ingredients: { 'null_matrix': 1, 'mythril_staff': 1, 'void_essence': 3, 'mana_crystal': 5 },
+        result: { id: 'null_staff', stats: { mag: 135, hp: 35, crit: 15 }, slot: 'main_hand' }
+    },
+    'null_aegis': {
+        name: 'Null Aegis', category: 'ARMOR', id: 'null_aegis',
+        desc: 'A shield that absorbs impacts into a pocket of nothingness. The null matrix drinks kinetic energy. (+130 DEF, +110 HP, +15 LUCK)',
+        ingredients: { 'null_matrix': 1, 'reinforced_plate': 1, 'void_essence': 3, 'infernal_crown': 1 },
+        result: { id: 'null_aegis', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor' }
+    },
+
+    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown — reqLevel 90, MYTHIC
+    'abyssal_blade': {
+        name: 'Abyssal Blade', category: 'WEAPON', id: 'abyssal_blade',
+        desc: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)',
+        ingredients: { 'abyssal_core': 1, 'chaos_blade': 1, 'godshard': 3, 'null_matrix': 2 },
+        result: { id: 'abyssal_blade', stats: { atk: 210, mag: 50, crit: 20 }, slot: 'main_hand' }
+    },
+    'abyssal_crown': {
+        name: 'Abyssal Crown', category: 'ARMOR', id: 'abyssal_crown',
+        desc: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)',
+        ingredients: { 'abyssal_core': 1, 'infernal_crown': 2, 'godshard': 3, 'mythic_enhancement_stone': 2 },
+        result: { id: 'abyssal_crown', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet' }
     }
 };
 

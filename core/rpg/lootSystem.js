@@ -148,6 +148,7 @@ const LOOT_TABLES = {
             { id: 'dragon_blood', weight: 8, quantity: [1, 1] },
             { id: 'boss_essence', weight: 10, quantity: [1, 2] },
             { id: 'legendary_shard', weight: 6, quantity: [1, 1] },
+            { id: 'chaos_ore', weight: 5, quantity: [1, 2] },
             { id: 'equipment_piece', weight: 15, quantity: [1, 1] },
         ]
     },
@@ -163,6 +164,7 @@ const LOOT_TABLES = {
             { id: 'boss_essence', weight: 12, quantity: [2, 3] },
             { id: 'mythic_enhancement_stone', weight: 8, quantity: [1, 1] },
             { id: 'infernal_crown', weight: 4, quantity: [1, 1] },
+            { id: 'null_shard', weight: 5, quantity: [1, 1] },
             { id: 'equipment_piece', weight: 25, quantity: [1, 1] },
         ]
     },
@@ -178,6 +180,7 @@ const LOOT_TABLES = {
             { id: 'elder_chaos_essence', weight: 8, quantity: [1, 1] },
             { id: 'godshard', weight: 3, quantity: [1, 1] },
             { id: 'mythic_enhancement_stone', weight: 12, quantity: [1, 2] },
+            { id: 'abyssal_heartstone', weight: 4, quantity: [1, 1] },
             { id: 'equipment_piece', weight: 40, quantity: [1, 1] },
         ]
     },
@@ -844,7 +847,16 @@ const ITEM_DATABASE = {
     // consumed by 2-handed weapon + armor forge recipes). Refining costs 3 raw → 1 refined.
     'chaos_ingot':         { name: 'Chaos Ingot',          description: 'A worked ingot of refined chaos ore. Still hums, but the edges are tamed.', rarity: 'LEGENDARY', value: 110000, type: 'MATERIAL' },
     'null_matrix':         { name: 'Null Matrix',          description: 'A stabilized null shard suspended in a mana-crystal lattice. The void made workable.', rarity: 'MYTHIC', value: 280000, type: 'MATERIAL' },
-    'abyssal_core':        { name: 'Abyssal Core',         description: 'A heartstone cut and polished into a perfect focal lens. Stares back.', rarity: 'MYTHIC', value: 650000, type: 'MATERIAL' }
+    'abyssal_core':        { name: 'Abyssal Core',         description: 'A heartstone cut and polished into a perfect focal lens. Stares back.', rarity: 'MYTHIC', value: 650000, type: 'MATERIAL' },
+
+    // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS (consumes the refined forms) ---
+    // Each tier produces one weapon + one armor. Stats scale to reqLevel 50/70/90.
+    'chaos_blade':         { name: 'Chaos Blade',          description: 'A two-handed sword forged from a chaos ingot. Reality fractures with every swing. (+95 ATK, +15 SPD, +10 CRIT)', rarity: 'LEGENDARY', value: 180000, type: 'EQUIPMENT', stats: { atk: 95, spd: 15, crit: 10 }, slot: 'main_hand', reqLevel: 50, isTwoHanded: true },
+    'chaos_cloak':         { name: 'Chaos Cloak',          description: 'A cloak woven from chaos-tainted thread. Shifts subtly out of phase with attacks. (+55 DEF, +90 HP, +20 SPD)', rarity: 'LEGENDARY', value: 160000, type: 'EQUIPMENT', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor', reqLevel: 50 },
+    'null_staff':          { name: 'Null Staff',           description: 'A staff tipped with a null matrix. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)', rarity: 'MYTHIC', value: 380000, type: 'EQUIPMENT', stats: { mag: 135, hp: 35, crit: 15 }, slot: 'main_hand', reqLevel: 70, isTwoHanded: true },
+    'null_aegis':          { name: 'Null Aegis',           description: 'A shield that absorbs impacts into a pocket of nothingness. (+130 DEF, +110 HP, +15 LUCK)', rarity: 'MYTHIC', value: 360000, type: 'EQUIPMENT', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor', reqLevel: 70 },
+    'abyssal_blade':       { name: 'Abyssal Blade',        description: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)', rarity: 'MYTHIC', value: 950000, type: 'EQUIPMENT', stats: { atk: 210, mag: 50, crit: 20 }, slot: 'main_hand', reqLevel: 90, isTwoHanded: true },
+    'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 }
 };
 
 function getItemInfo(itemId) {
