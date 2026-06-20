@@ -2491,6 +2491,8 @@ function generateTrapEncounter(chatId) {
   return {
     type: "TRAP",
     trap: trap,
+    name: trap.name,
+    icon: trap.icon,
     description: `You trigger a ${trap.name}!`,
     choices: [
       {
@@ -2562,6 +2564,8 @@ function generatePuzzleEncounter(chatId) {
   return {
     type: "PUZZLE",
     puzzle: puzzle,
+    name: puzzle.name,
+    icon: puzzle.icon,
     description: `You discover a ${puzzle.name}!`,
     choices: [
       {
@@ -2624,6 +2628,8 @@ function generateTreasureEncounter(chatId) {
   return {
     type: "TREASURE",
     treasure: treasure,
+    name: treasure.name,
+    icon: "💎",
     description: `You found a ${treasure.name}! It pulses with strange energy.`,
     choices: [
       {
@@ -2692,6 +2698,7 @@ function generateEventEncounter(chatId) {
     type: "EVENT",
     event: event,
     name: event.name,
+    icon: "✨",
     description: `You come across a ${event.name}.`,
     choices: event.choices,
   };
@@ -5043,7 +5050,15 @@ async function handleNonCombatEncounter(sock, encounter, sessionKey) {
     return handleMerchantEncounter(sock, encounter, sessionKey);
   }
 
-  let msg = `${encounter.icon} *${encounter.name}*\n\n`;
+  // Defensive fallback: if a generator forgets to expose name/icon at the top
+  // level (older generators nest them inside type-specific sub-objects), fall
+  // back through those sub-objects before giving up. Fixes the long-standing
+  // 'undefined *undefined*' header bug on TRAP/PUZZLE/TREASURE/EVENT encounters.
+  const encName = encounter.name || encounter.trap?.name || encounter.puzzle?.name ||
+                  encounter.treasure?.name || encounter.event?.name || "Unknown Event";
+  const encIcon = encounter.icon || encounter.trap?.icon || encounter.puzzle?.icon ||
+                  encounter.treasure?.icon || encounter.event?.icon || "🎲";
+  let msg = `${encIcon} *${encName}*\n\n`;
   msg += `${encounter.description}\n\n`;
 
   msg += `The party must decide what to do:\n\n`;
