@@ -803,7 +803,24 @@ const ITEM_DATABASE = {
     
     // --- SPECIALS ---
     'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },
-    'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' }
+    'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' },
+
+    // --- HIGH-RANK BOSS TROPHIES (previously missing — were falling back to 10-zeni stubs) ---
+    'elder_chaos_essence': { name: 'Elder Chaos Essence', description: 'Crystallized chaos from the Elder Chaos boss. Humming with unstable reality.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
+    'void_titan_heart':    { name: 'Void Titan Heart',    description: 'A still-beating heart ripped from the Void Titan. Pulses with dimensional energy.', rarity: 'MYTHIC', value: 120000, type: 'MATERIAL' },
+    'godshard':            { name: 'Godshard',            description: 'A fragment of the Abyssal God\'s divine essence. Reality bends around it.', rarity: 'MYTHIC', value: 250000, type: 'MATERIAL' },
+    'mythic_enhancement_stone': { name: 'Mythic Enhancement Stone', description: 'Boosts gear stats by 60%. The pinnacle of enhancement.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
+    'dragon_heart':        { name: 'Dragon Heart',        description: 'A still-warm dragon heart. Pumping ancient fire magic.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
+
+    // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
+    'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
+    'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },
+    'obsidian_chunk':      { name: 'Obsidian Chunk',      description: 'A jagged piece of volcanic glass. Edges sharper than steel.', rarity: 'EPIC',    value: 2200, type: 'MATERIAL' },
+    'diamond_shard':       { name: 'Diamond Shard',       description: 'A flawless fragment of compressed carbon. Cuts through anything.', rarity: 'EPIC',    value: 5500, type: 'MATERIAL' },
+
+    // --- CRAFTING-ONLY MATERIALS (previously referenced as recipe inputs but never defined) ---
+    'plate_armor':         { name: 'Forged Plate',        description: 'A heavy metal plate ready to be worked into reinforced armor.', rarity: 'RARE',    value: 1800, type: 'MATERIAL' },
+    'strength_brew':       { name: 'Strength Brew',       description: 'A pungent alchemical concentrate. One sip makes your muscles scream.', rarity: 'EPIC',    value: 3200, type: 'MATERIAL' }
 };
 
 function getItemInfo(itemId) {
