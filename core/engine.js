@@ -5021,7 +5021,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                     // 2. Antispam Detection
                     const settings = getGroupSettings(chatId);
-                    if (settings.antispam && !isOwner) {
+                    if (settings.antispam && !isOwner && !isGlobalMod(senderJid)) {
                       const isSpamming = checkSpam(senderJid, chatId);
                       if (isSpamming) {
                         console.log(
@@ -6545,7 +6545,7 @@ _💡 Reply with another number from your search list!_`.trim();
                   }
 
                   // SPAM PREVENTION: Intelligent Cooldowns
-                  if (isBotCommand && !isOwner) {
+                  if (isBotCommand && !isOwner && !isGlobalMod(senderJid)) {
                     const now = Date.now();
                     const gamblingCommands = [
                       "cf",
@@ -8185,11 +8185,11 @@ Usage: ${newUsage}/5${warningText}`;
                       `${botConfig.getPrefix().toLowerCase()} addmod`,
                     )
                   ) {
-                    if (!isOwner) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner can add global moderators.",
+                          "❌ Only the owner or a global mod can add global moderators.",
                       });
                     }
                     const target =
@@ -8219,11 +8219,11 @@ Usage: ${newUsage}/5${warningText}`;
                       `${botConfig.getPrefix().toLowerCase()} delmod`,
                     )
                   ) {
-                    if (!isOwner) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner can remove global moderators.",
+                          "❌ Only the owner or a global mod can remove global moderators.",
                       });
                     }
                     const target =
@@ -18575,11 +18575,11 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       `${botConfig.getPrefix().toLowerCase()} updateall `,
                     )
                   ) {
-                    if (!isOwner) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the bot owner can use this command.",
+                          "❌ Only the bot owner or a global mod can use this command.",
                       });
                     }
 
