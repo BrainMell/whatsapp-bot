@@ -1218,13 +1218,24 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     // Bosses are the climax of a dungeon and should drop significantly
     // better loot.
     //
-    // 💡 FIX: Changed to EXPONENTIAL scaling (1 + rankIndex^1.5 for XP,
-    // 1 + rankIndex^1.3 for gold) so S-rank bosses give ~208× F-rank XP
-    // (vs 29× under the old linear formula). Combined with the new
-    // distinct S/SS/SSS boss templates (ELDER_CHAOS/VOID_TITAN/ABYSSAL_GOD
-    // with much higher base XP), S-rank boss XP goes from ~229K to ~12.5M,
-    // and SSS-rank boss XP goes from ~525K to ~32M.
-    scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.5)));
+    // 💡 FIX (pass 1): Changed to EXPONENTIAL scaling (1 + rankIndex^1.5
+    // for XP, 1 + rankIndex^1.3 for gold) so S-rank bosses give ~208×
+    // F-rank XP (vs 29× under the old linear formula). Combined with
+    // the distinct S/SS/SSS boss templates, S-rank boss XP went from
+    // ~229K to ~12.5M.
+    //
+    // 💡 FIX (pass 2 — this commit): Bumped XP exponent from 1.5 → 1.55.
+    // The L75→L76 milestone (93.9M XP, 1.8× tier) was forcing ~8 S-rank
+    // boss kills per level — too grindy for the climax rank. The +0.05
+    // exponent bump yields:
+    //   S    (diff=35):  35^1.55 = 290.8 vs 35^1.5 = 207.1  → +40.4% (12.5M → 17.5M)
+    //   SS   (diff=75):  75^1.55 = 970.6 vs 75^1.5 = 649.5  → +49.4% (97.6M → 145.8M)
+    //   SSS  (diff=80):  80^1.55 =1069.4 vs 80^1.5 = 715.5  → +49.5% (286.6M → 428.6M)
+    // Net: S-rank now ~5-6 kills per level at L75, SS still ~1 kill per
+    // level at L75, SSS still ~2 kills per level at L80. Trash XP
+    // (rankIndex^1.4 at L1155) is unchanged — this targets boss XP only.
+    // Gold exponent (1.3) unchanged.
+    scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.55)));
     scaled.goldReward = [
         Math.floor(goldRewardBase[0] * (1 + Math.pow(rankIndex, 1.3))),
         Math.floor(goldRewardBase[1] * (1 + Math.pow(rankIndex, 1.3)))
