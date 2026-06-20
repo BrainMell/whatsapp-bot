@@ -1216,14 +1216,20 @@ async function startBot(configInstance) {
       if (assigned != null) {
         if (isGroupAdmin || isGroupSuperadmin || isOwner || globalMod) {
           return assigned;
-        } else if (meta && meta.participants) {
-          // Clean up rank assignment since they are no longer admin (metadata verified)
-          if (settings.memberRanks?.[assignedKey] !== undefined) {
-            delete settings.memberRanks[assignedKey];
-            saveGroupSettings();
-          }
         } else {
-          // Metadata is missing/uncached right now, return the assigned rank without deleting it
+          // ⚠️ FIX (audit Task ID 5 BUG A): previously this branch had a
+          // destructive 'delete settings.memberRanks[assignedKey]' side-effect
+          // that fired whenever the admin-status check failed (which happens
+          // on EVERY message via L5179/L5254 whenever the LID↔phone mapping
+          // isn't cached or the JID form mismatches meta.participants). The
+          // result: 'set rank @user 1' would silently delete the rank within
+          // milliseconds of the user's next message. This is the root cause
+          // of the 'I added ayomide to rank 1 and he dropped back to 0' bug.
+          //
+          // The auto-cleanup of stale rank entries for demoted admins now
+          // lives in the group-participants.update demote handler (L4674)
+          // where the demotion event is the actual source of truth. A READ
+          // function must NEVER mutate the data it reads.
           return assigned;
         }
       }
@@ -4675,6 +4681,38 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 const pSet = new Set(pArray.map(p => normalizeParticipantJid(p)).filter(Boolean));
                 for (const x of groupMetadata.participants) {
                   if (pSet.has(x.id || x)) x.admin = null;
+                }
+                // ⚠️ FIX (audit Task ID 5 BUG A): clean up stale rank entries
+                // for demoted admins HERE (the actual demotion event) instead
+                // of inside getMemberRankLevel (which is a READ function that
+                // was destroying the data it read — see comment at L1216-1234).
+                // Demoted admins lose their explicit rank assignment; if they
+                // are re-promoted later, the owner can re-assign via `set rank`.
+                try {
+                  const settings = getGroupSettings(id);
+                  if (settings.memberRanks) {
+                    const { canonicalRankKey } = require('./utils/lidResolver');
+                    let mutated = false;
+                    for (const p of pSet) {
+                      // Delete all known forms of the JID — phone, LID, canonical
+                      const forms = new Set([p, canonicalRankKey(p)]);
+                      // Also try resolveToPhone form if available
+                      try {
+                        const { resolveToPhone } = require('./utils/lidResolver');
+                        const phoneForm = resolveToPhone(p, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+                        if (phoneForm) forms.add(phoneForm);
+                      } catch (e) {}
+                      for (const f of forms) {
+                        if (settings.memberRanks[f] !== undefined) {
+                          delete settings.memberRanks[f];
+                          mutated = true;
+                        }
+                      }
+                    }
+                    if (mutated) saveGroupSettings();
+                  }
+                } catch (e) {
+                  console.log('[rank] demote cleanup failed:', e?.message || e);
                 }
               }
               groupMetadataCache.set(id, groupMetadata);
