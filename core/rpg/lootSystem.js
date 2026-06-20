@@ -37,27 +37,33 @@ const LOOT_TABLES = {
     },
     
     // Elite enemy drops
+    // 💡 FIX: Previously this table still dropped bronze_spear (reqLvl 2),
+    // chainmail (reqLvl 4), crystal_staff (reqLvl 6), greatsword (reqLvl 8)
+    // — all low-tier equipment unsuitable for B/A-rank players (the ranks
+    // that actually hit this table per the routing at lootSystem.js:508,
+    // since S+ uses S_RANK_COMMON). Removed those four and rebalanced
+    // weights toward mid-tier materials + a higher equipment_piece weight
+    // (which goes through the rarity-boost logic at L392-476 and can
+    // still roll up to LEGENDARY at high difficulty).
     ELITE_ENEMY: {
         dropChance: 75,
         items: [
-            { id: 'hp_potion', weight: 20, quantity: [1, 2] },
-            { id: 'remedy', weight: 12, quantity: [1, 1] },
+            { id: 'hp_potion', weight: 18, quantity: [1, 2] },
+            { id: 'remedy', weight: 10, quantity: [1, 1] },
             { id: 'refined_steel', weight: 15, quantity: [2, 4] },
             { id: 'mana_crystal', weight: 15, quantity: [1, 1] },
-            { id: 'sharp_whetstone', weight: 10, quantity: [1, 1] },
-            { id: 'fire_shard', weight: 8, quantity: [1, 1] },
-            { id: 'ice_shard', weight: 8, quantity: [1, 1] },
-            { id: 'lightning_shard', weight: 8, quantity: [1, 1] },
-            { id: 'demon_hide', weight: 10, quantity: [1, 1] },
-            { id: 'ghost_essence', weight: 10, quantity: [1, 1] },
-            { id: 'mythril_ore', weight: 10, quantity: [1, 2] },
+            { id: 'sharp_whetstone', weight: 12, quantity: [1, 1] },
+            { id: 'fire_shard', weight: 10, quantity: [1, 2] },
+            { id: 'ice_shard', weight: 10, quantity: [1, 2] },
+            { id: 'lightning_shard', weight: 10, quantity: [1, 2] },
+            { id: 'demon_hide', weight: 12, quantity: [1, 2] },
+            { id: 'ghost_essence', weight: 12, quantity: [1, 2] },
+            { id: 'mythril_ore', weight: 12, quantity: [1, 3] },
+            { id: 'obsidian_chunk', weight: 8, quantity: [1, 1] },
+            { id: 'silver_ore', weight: 10, quantity: [2, 4] },
+            { id: 'gold_ore', weight: 8, quantity: [1, 2] },
             { id: 'rare_enhancement_stone', weight: 8, quantity: [1, 1] },
-            { id: 'equipment_piece', weight: 15, quantity: [1, 1] },
-            { id: 'crystal_staff', weight: 5, quantity: [1, 1] },
-            { id: 'greatsword', weight: 5, quantity: [1, 1] },
-            { id: 'bronze_spear', weight: 5, quantity: [1, 1] },
-            { id: 'chainmail', weight: 5, quantity: [1, 1] },
-            { id: 'equipment_piece', weight: 5, quantity: [1, 1] },
+            { id: 'equipment_piece', weight: 25, quantity: [1, 1] },
         ]
     },
     
