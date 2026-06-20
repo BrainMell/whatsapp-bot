@@ -95,7 +95,7 @@ const DUNGEON_RANKS = {
     minMobs: 4,
     maxMobs: 6,
     difficulty: 35.0,
-    boss: "PRIMORDIAL_CHAOS",
+    boss: "ELDER_CHAOS",      // FIX: was PRIMORDIAL_CHAOS (same as A) — now distinct
     pool: 5,
     xpMult: 50.0,
   },
@@ -105,7 +105,7 @@ const DUNGEON_RANKS = {
     minMobs: 4,
     maxMobs: 7,
     difficulty: 75.0,
-    boss: "PRIMORDIAL_CHAOS",
+    boss: "VOID_TITAN",       // FIX: was PRIMORDIAL_CHAOS — now distinct
     pool: 5,
     xpMult: 70.0,
   },
@@ -115,7 +115,7 @@ const DUNGEON_RANKS = {
     minMobs: 5,
     maxMobs: 8,
     difficulty: 80.0,
-    boss: "PRIMORDIAL_CHAOS",
+    boss: "ABYSSAL_GOD",      // FIX: was PRIMORDIAL_CHAOS — now distinct
     pool: 5,
     xpMult: 100.0,
   },
@@ -4143,9 +4143,8 @@ async function endCombat(sock, victory, sessionKey) {
       }
       return sum + (isNaN(goldVal) ? 0 : goldVal);
     }, 0) * (5 + (state.difficulty || 1)); // 💡 FIX: Scale gold multiplier with
-    // dungeon difficulty. Previously was a flat 3x which made high-rank dungeons
-    // barely worth the effort. Now: 6x at F-rank (difficulty 1), 11x at E-rank,
-    // 21x at D-rank, 33x at C-rank, 56x at B-rank, 96x at A-rank, 181x at S-rank.
+    // dungeon difficulty. Was a flat 3x historically; now scales as (5 + difficulty):
+    //   F=5.8×, E=6.2×, D=8×, C=10×, B=15×, A=23×, S=40×, SS=80×, SSS=85×
     // This makes high-rank dungeons significantly more rewarding.
 
   // Distribute rewards
@@ -5424,30 +5423,54 @@ async function endAdventure(sock, sessionKey, victory = true) {
   // Default individual rewards
   const multiplier =
     state.mode === "PERMADEATH" ? GAME_CONFIG.PERMADEATH_MULTIPLIER : 1;
-  // Use rank-based quest completion XP bonus (xpMult * 100).
-  // Kill XP is already awarded immediately in endCombat via progression.addXP,
-  // so we give a separate rank-scaled completion bonus here instead of re-applying
-  // accumulated kill XP (which would double-count it).
-  // F=80, E=120, D=200, C=350, B=600, A=1000, S=1800, SS=3500, SSS=7500
+  // 💡 FIX: Completion XP now scales by xpMult² (quadratic) instead of
+  // xpMult (linear). Previously S-rank completion gave only 5,000 XP —
+  // just 0.43% of the run's total XP, making the "completion moment"
+  // statistically irrelevant. With quadratic scaling, S-rank completion
+  // gives 250,000 XP (~5% of total), SSS gives 1,000,000 XP.
+  //   F=64, E=144, D=400, C=1225, B=3600, A=10000,
+  //   S=250000, SS=490000, SSS=1000000
   const _completionRankData =
     DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
-  const _baseCompletionXP = Math.floor((_completionRankData.xpMult || 1) * 100);
-  
-  // Scale bonus gold with rank (reduced to 20% of previous values)
-  const rankGoldMap = { F: 100, E: 160, D: 240, C: 360, B: 520, A: 800, S: 1200, SS: 1700, SSS: 2400, DRAGON: 1000 };
-  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 100;
-  
+  const _baseCompletionXP = Math.floor(Math.pow(_completionRankData.xpMult || 1, 2) * 100);
+
+  // 💡 FIX: Completion bonus gold now scales by xpMult × 1000 (was flat
+  // 100-2400). At S-rank, completion gold goes from 1,200 (statistical
+  // noise — 0.010% of run total) to 50,000 (~0.4% of run total — still
+  // modest, but at least visible).
+  //   F=800, E=1200, D=2000, C=3500, B=6000, A=10000,
+  //   S=50000, SS=70000, SSS=100000
+  const rankGoldMap = {
+    F: 800, E: 1200, D: 2000, C: 3500, B: 6000, A: 10000,
+    S: 50000, SS: 70000, SSS: 100000, DRAGON: 5000
+  };
+  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 800;
+
+  // 💡 FIX: Award GP from dungeons. Previously dungeons gave ZERO GP,
+  // which meant the GP requirements in ADVENTURER_RANKS (50 → 25,000)
+  // could only be earned via chat-spam (1 GP per command). Now each
+  // dungeon clear awards GP scaled by rank.
+  const rankGpMap = {
+    F: 1, E: 2, D: 4, C: 7, B: 12, A: 20, S: 35, SS: 60, SSS: 100, DRAGON: 10
+  };
+  const _baseGp = rankGpMap[state.dungeonRank] || 1;
+
   for (const player of state.players) {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
     const finalGold = Math.floor(player.goldEarned * multiplier);
     const bonusGold = player.isDead ? 0 : _baseBonusGold;
+    const gpGain = player.isDead ? 0 : _baseGp;
 
-    msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+    msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
 
     // Update stats and rank
     if (!player.isDead) {
       economy.addMoney(player.jid, finalGold + bonusGold);
       economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
+      // Award GP — adventurer rank progression needs this
+      if (gpGain > 0) {
+        try { progression.awardGP(player.jid, gpGain); } catch (e) {}
+      }
     } else {
       economy.addQuestProgress(player.jid, 0, false); // No progress on death
     }

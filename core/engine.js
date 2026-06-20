@@ -1128,26 +1128,44 @@ async function startBot(configInstance) {
       const settings = getGroupSettings(chatId);
       if (settings.ranksEnabled === false) return 0;
 
-      let assigned = settings.memberRanks?.[jid];
-      let assignedKey = jid;
+      // FIX: Always normalize the input JID through canonicalRankKey before
+      // any lookup. Previously this function relied on the caller passing
+      // the right format, which broke for:
+      //   - ".g who" roster passing raw p.id (e.g. "1234567890:1@s.whatsapp.net")
+      //   - LID-privacy groups passing "<lid>@lid"
+      // canonicalRankKey strips ":device" suffixes and resolves LID→phone
+      // when the mapping is cached.
+      const { canonicalRankKey } = require('./utils/lidResolver');
+      const canonJid = canonicalRankKey(jid);
 
+      let assigned = settings.memberRanks?.[canonJid];
+      let assignedKey = canonJid;
+
+      // Fallback: try the raw input JID (in case it was stored before the fix)
+      if (assigned === undefined && settings.memberRanks && jid !== canonJid) {
+        if (settings.memberRanks[jid] !== undefined) {
+          assigned = settings.memberRanks[jid];
+          assignedKey = jid;
+        }
+      }
+
+      // Fallback: try LID form if input was a phone JID with a known mapping
       if (assigned === undefined && settings.memberRanks) {
-        const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
-        const phoneJid = resolveToPhone(jid, configInstance.getAuthPath());
-        const canonicalJid = resolveJid(jid, configInstance.getAuthPath());
-
-        if (phoneJid && settings.memberRanks[phoneJid] !== undefined) {
-          assigned = settings.memberRanks[phoneJid];
-          assignedKey = phoneJid;
-        } else if (canonicalJid && settings.memberRanks[canonicalJid] !== undefined) {
+        const { resolveJid } = require('./utils/lidResolver');
+        const canonicalJid = resolveJid(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+        if (canonicalJid && canonicalJid !== canonJid && settings.memberRanks[canonicalJid] !== undefined) {
           assigned = settings.memberRanks[canonicalJid];
           assignedKey = canonicalJid;
         }
       }
 
-      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
-      const phoneJid = resolveToPhone(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-      const canonicalJid = resolveJid(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      // (Legacy resolver-based fallbacks removed — canonicalRankKey already
+      //  covers the device-suffix and LID→phone cases that these were
+      //  trying to handle. Keeping the legacy resolveToPhone call would
+      //  re-introduce the "@s.whatsapp.net short-circuit" bug.)
+
+      const phoneJid = canonJid;
+      const canonicalJid = canonJid; // alias for code below
 
       // Try the O(1) admin cache first — this is the critical fix.
       // Previously this function only checked groupMetadataCache which may
@@ -9809,20 +9827,76 @@ Commands:
                     if (!canActOnMember(chatId, senderJid, target, isOwner, isGlobalMod(senderJid))) {
                       return reply(`❌ Rank protection: You cannot change the rank of someone with an equal or higher rank.`);
                     }
-                    const senderLevel = getMemberRankLevel(chatId, senderJid);
+                    let senderLevel = getMemberRankLevel(chatId, senderJid);
+                    // 💡 FIX: When the sender is a WA admin/superadmin with no
+                    // explicit rank (senderLevel === 0), the old guard
+                    // `levelNum >= senderLevel` evaluated to `levelNum >= 0`
+                    // which is ALWAYS true — blocking the admin from assigning
+                    // ANY rank, including level 1. The error message then said
+                    // "it is equal to or above your own rank (0)" which the
+                    // user reasonably misread as "the bot thinks I'm max rank".
+                    //
+                    // Now: if the sender has no explicit rank but IS a WA
+                    // admin/superadmin, treat them as (topRank - 0) for
+                    // superadmin or (topRank - 1) for admin. This matches the
+                    // documented inheritance behavior in docs/rank-system.md
+                    // without restoring the auto-assignment that caused the
+                    // "GrandRegent explosion".
+                    if (senderLevel === 0 && !isOwner && !isGlobalMod(senderJid)) {
+                      const topRank = getTopRankLevel(chatId);
+                      if (topRank > 0) {
+                        // Determine WA admin status of the sender
+                        let senderWaAdmin = false;
+                        let senderWaSuperadmin = false;
+                        try {
+                          if (isAdminCached(chatId, senderJid) === true) senderWaAdmin = true;
+                        } catch (e) {}
+                        if (!senderWaAdmin && meta?.participants) {
+                          const { canonicalRankKey } = require('./utils/lidResolver');
+                          const canonSender = canonicalRankKey(senderJid);
+                          const p = meta.participants.find(x => {
+                            const pid = jidNormalizedUser(x.id || x);
+                            return pid === jidNormalizedUser(senderJid)
+                                || pid === jidNormalizedUser(canonSender);
+                          });
+                          if (p?.admin === 'admin') senderWaAdmin = true;
+                          if (p?.admin === 'superadmin') { senderWaAdmin = true; senderWaSuperadmin = true; }
+                        }
+                        if (senderWaSuperadmin) senderLevel = topRank;
+                        else if (senderWaAdmin) senderLevel = Math.max(0, topRank - 1);
+                      }
+                    }
                     if (levelNum >= senderLevel && !isOwner && !isGlobalMod(senderJid)) {
-                      return reply(`❌ You cannot assign rank level ${levelNum} — it is equal to or above your own rank (${senderLevel}).`);
+                      const senderRankName = senderLevel === 0
+                        ? 'unranked — ask a higher admin to assign you a rank first'
+                        : senderLevel;
+                      return reply(`❌ You cannot assign rank level ${levelNum} — it is equal to or above your own rank (${senderRankName}).`);
                     }
 
                     if (!settings.memberRanks) settings.memberRanks = {};
-                    // 💡 FIX: Store rank using the phone JID (canonical format) so all
-                    // lookups are consistent. Previously the raw target JID from the
-                    // mention was used, which could be @lid or device-suffixed, causing
-                    // lookup failures in getMemberRankLevel and unrank.
-                    const storeJid = targetPhone || target;
+                    // 💡 FIX: Store rank using canonicalRankKey — the SAME
+                    // normalization that getMemberRankLevel uses for reads.
+                    // This guarantees write/read consistency regardless of
+                    // whether the input came from a mention (@s.whatsapp.net
+                    // with possible ":device" suffix) or a reply in a
+                    // LID-privacy group (@lid).
+                    //
+                    // Previous bug: stored under `targetPhone || target`,
+                    // but `targetPhone` came from `resolveToPhone` which
+                    // short-circuited on "@s.whatsapp.net" and left the
+                    // ":device" suffix intact. Reads via canonicalRankKey
+                    // would then miss.
+                    const { canonicalRankKey } = require('./utils/lidResolver');
+                    const storeJid = canonicalRankKey(target);
                     settings.memberRanks[storeJid] = levelNum;
-                    // Also store under the original target JID as a fallback
-                    if (target !== storeJid) settings.memberRanks[target] = levelNum;
+                    // Also store under the LID form if we know it, so that
+                    // LID-privacy groups can match without round-tripping
+                    // through the LID↔phone cache. `resolveJid` was already
+                    // destructured at the top of this block.
+                    const lidForm = resolveJid(target, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+                    if (lidForm && lidForm !== storeJid && lidForm.endsWith('@lid')) {
+                      settings.memberRanks[lidForm] = levelNum;
+                    }
                     saveGroupSettings();
 
                     const phone = target.split('@')[0];

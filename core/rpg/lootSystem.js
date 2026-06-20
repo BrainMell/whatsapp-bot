@@ -115,14 +115,66 @@ const LOOT_TABLES = {
     
     // Merchant special
     MERCHANT_GIFT: {
-        dropChance: 30, 
+        dropChance: 30,
         items: [
             { id: 'gold_pile', weight: 10, quantity: [500, 1000] },
             { id: 'merchant_token', weight: 30, quantity: [1, 1] },
             { id: 'rare_item_ticket', weight: 20, quantity: [1, 1] },
             { id: 'discount_coupon', weight: 40, quantity: [1, 1] }
         ]
-    }
+    },
+
+    // 💡 FIX: Rank-specific loot tables. Previously the same COMMON_ENEMY
+    // table was used at every rank from F to SSS, so SSS-rank chests were
+    // still dropping minor_hp_potion and bandage 33% of the time. Now
+    // high-rank dungeons pull from their own tables with appropriately
+    // high-tier items.
+    S_RANK_COMMON: {
+        dropChance: 60,
+        items: [
+            { id: 'mega_potion', weight: 20, quantity: [2, 4] },
+            { id: 'mana_dew', weight: 15, quantity: [1, 3] },
+            { id: 'dark_matter', weight: 12, quantity: [1, 2] },
+            { id: 'mythril_ore', weight: 18, quantity: [3, 6] },
+            { id: 'ancient_wood', weight: 12, quantity: [1, 3] },
+            { id: 'mystic_thread', weight: 12, quantity: [2, 4] },
+            { id: 'legendary_enhancement_stone', weight: 8, quantity: [1, 1] },
+            { id: 'dragon_blood', weight: 8, quantity: [1, 1] },
+            { id: 'boss_essence', weight: 10, quantity: [1, 2] },
+            { id: 'legendary_shard', weight: 6, quantity: [1, 1] },
+            { id: 'equipment_piece', weight: 15, quantity: [1, 1] },
+        ]
+    },
+    SS_RANK_COMMON: {
+        dropChance: 70,
+        items: [
+            { id: 'mega_potion', weight: 15, quantity: [3, 6] },
+            { id: 'mana_dew', weight: 12, quantity: [2, 4] },
+            { id: 'dark_matter', weight: 15, quantity: [2, 3] },
+            { id: 'dragon_blood', weight: 12, quantity: [1, 2] },
+            { id: 'void_essence', weight: 12, quantity: [1, 2] },
+            { id: 'legendary_shard', weight: 15, quantity: [2, 3] },
+            { id: 'boss_essence', weight: 12, quantity: [2, 3] },
+            { id: 'mythic_enhancement_stone', weight: 8, quantity: [1, 1] },
+            { id: 'infernal_crown', weight: 4, quantity: [1, 1] },
+            { id: 'equipment_piece', weight: 25, quantity: [1, 1] },
+        ]
+    },
+    SSS_RANK_COMMON: {
+        dropChance: 80,
+        items: [
+            { id: 'mega_potion', weight: 10, quantity: [5, 10] },
+            { id: 'void_essence', weight: 18, quantity: [2, 4] },
+            { id: 'legendary_shard', weight: 18, quantity: [3, 5] },
+            { id: 'dragon_blood', weight: 15, quantity: [2, 4] },
+            { id: 'infernal_crown', weight: 8, quantity: [1, 1] },
+            { id: 'void_titan_heart', weight: 6, quantity: [1, 1] },
+            { id: 'elder_chaos_essence', weight: 8, quantity: [1, 1] },
+            { id: 'godshard', weight: 3, quantity: [1, 1] },
+            { id: 'mythic_enhancement_stone', weight: 12, quantity: [1, 2] },
+            { id: 'equipment_piece', weight: 40, quantity: [1, 1] },
+        ]
+    },
 };
 
 // ==========================================
@@ -149,6 +201,52 @@ const BOSS_DROPS = {
     'PRIMORDIAL_CHAOS': {
         guaranteed: [{ id: 'void_essence', quantity: 1, rarity: 'MYTHIC' }],
         special: [{ id: 'essence_mirror', dropChance: 15, quantity: 1, rarity: 'LEGENDARY' }]
+    },
+
+    // 💡 FIX: New boss-specific drops for the distinct S/SS/SSS bosses.
+    // Previously A/S/SS/SSS all fought PRIMORDIAL_CHAOS and got the same
+    // drops. Now each high-rank boss has its own escalating drop table.
+    'ELDER_CHAOS': {
+        guaranteed: [
+            { id: 'void_essence', quantity: [2, 3], rarity: 'MYTHIC' },
+            { id: 'legendary_shard', quantity: [1, 2], rarity: 'LEGENDARY' }
+        ],
+        special: [{
+            id: 'elder_chaos_essence',
+            dropChance: 25,
+            quantity: 1,
+            rarity: 'MYTHIC',
+            announcement: '🌠 *MYTHIC DROP!* The Elder Chaos Essence crystallizes from the dissipating chaos!'
+        }]
+    },
+    'VOID_TITAN': {
+        guaranteed: [
+            { id: 'void_essence', quantity: [3, 5], rarity: 'MYTHIC' },
+            { id: 'legendary_shard', quantity: [2, 3], rarity: 'LEGENDARY' },
+            { id: 'infernal_crown', quantity: 1, rarity: 'MYTHIC' }
+        ],
+        special: [{
+            id: 'void_titan_heart',
+            dropChance: 18,
+            quantity: 1,
+            rarity: 'MYTHIC',
+            announcement: '🌑 *MYTHIC DROP!* The Void Titan\'s Heart still pulses with dimensional energy!'
+        }]
+    },
+    'ABYSSAL_GOD': {
+        guaranteed: [
+            { id: 'void_essence', quantity: [5, 8], rarity: 'MYTHIC' },
+            { id: 'infernal_crown', quantity: 1, rarity: 'MYTHIC' },
+            { id: 'void_titan_heart', quantity: 1, rarity: 'MYTHIC' },
+            { id: 'elder_chaos_essence', quantity: 1, rarity: 'MYTHIC' }
+        ],
+        special: [{
+            id: 'godshard',
+            dropChance: 12,
+            quantity: 1,
+            rarity: 'MYTHIC',
+            announcement: '🌌 *MYTHIC DROP!* A Godshard — fragment of the Abyssal God\'s divine essence — descends!'
+        }]
     },
     
     LICH: {
@@ -391,22 +489,40 @@ function rollDrop(lootTable, rarityBoost = 0) {
 function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     const drops = [];
     const rarityBoost = Math.floor(difficulty);
-    
-    let lootTable = LOOT_TABLES.COMMON_ENEMY;
-    
+
+    // 💡 FIX: Use rank-specific loot tables for high-rank dungeons.
+    // Previously COMMON_ENEMY was used for every rank, so SSS-rank chests
+    // still dropped minor_hp_potion. Now we pick the table by difficulty:
+    //   difficulty >= 75  → SSS_RANK_COMMON
+    //   difficulty >= 35  → S_RANK_COMMON   (covers S=35, SS=75 — but SS gets
+    //                                        bumped up by the >= 75 check first)
+    //   difficulty >= 50  → SS_RANK_COMMON
+    //   else              → COMMON_ENEMY (F/E/D/C/B/A ranks)
+    // The "BOSS" encounterType still uses the BOSS table + BOSS_DROPS, but
+    // the standard-roll portion picks the rank-appropriate table.
+    let lootTable;
+    const isHighRank = difficulty >= 35.0;
+
     if (encounterType === 'ELITE_COMBAT') {
-        lootTable = LOOT_TABLES.ELITE_ENEMY;
+        lootTable = isHighRank ? LOOT_TABLES.S_RANK_COMMON : LOOT_TABLES.ELITE_ENEMY;
     } else if (encounterType === 'BOSS') {
-        lootTable = LOOT_TABLES.BOSS;
-        
+        // Boss tables are already rank-appropriate via BOSS_DROPS per-boss
+        // entries, but the standard roll still pulled from COMMON_ENEMY.
+        // Use rank-specific table here too so boss kills don't drop
+        // minor_hp_potion at S-rank.
+        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
+        else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
+        else                         lootTable = LOOT_TABLES.BOSS;
+
         if (enemyName && BOSS_DROPS[enemyName]) {
             const bossLoot = BOSS_DROPS[enemyName];
-            
+
             for (const guaranteedDrop of bossLoot.guaranteed) {
                 const [min, max] = guaranteedDrop.quantity;
                 const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
                 const dbInfo = ITEM_DATABASE[guaranteedDrop.id];
-                
+
                 let finalRarity = guaranteedDrop.rarity || dbInfo?.rarity || 'COMMON';
                 const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
                 if (rarityBoost > 15) {
@@ -421,7 +537,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                     source: enemyName
                 });
             }
-            
+
             for (const specialDrop of bossLoot.special) {
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
@@ -437,27 +553,40 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
             }
         }
     } else if (encounterType === 'TREASURE') {
-        lootTable = LOOT_TABLES.TREASURE;
+        // Treasure chests at high rank use rank-specific tables too
+        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
+        else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
+        else                         lootTable = LOOT_TABLES.TREASURE;
     } else if (encounterType === 'TRAP') {
         lootTable = LOOT_TABLES.TRAP_SUCCESS;
     } else if (encounterType === 'PUZZLE') {
         lootTable = LOOT_TABLES.PUZZLE_REWARD;
     } else if (encounterType === 'MERCHANT') {
         lootTable = LOOT_TABLES.MERCHANT_GIFT;
+    } else {
+        // COMMON_ENEMY / default
+        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
+        else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
+        else                         lootTable = LOOT_TABLES.COMMON_ENEMY;
     }
-    
+
     const standardDrop = rollDrop(lootTable, rarityBoost);
     if (standardDrop) {
         drops.push(standardDrop);
     }
-    
-    if (difficulty >= 2.0 && Math.random() < (0.3 + (difficulty * 0.02))) {
+
+    // Bonus drop chance scales with difficulty — high-rank dungeons get
+    // more bonus drops, so the loot feels richer.
+    const bonusChance = difficulty >= 35.0 ? 0.5 + (difficulty * 0.005) : 0.3 + (difficulty * 0.02);
+    if (difficulty >= 2.0 && Math.random() < bonusChance) {
         const bonusDrop = rollDrop(lootTable, rarityBoost);
         if (bonusDrop) {
             drops.push(bonusDrop);
         }
     }
-    
+
     return drops;
 }
 

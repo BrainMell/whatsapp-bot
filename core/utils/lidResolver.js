@@ -200,22 +200,32 @@ setInterval(async () => {
 }, 5 * 60 * 1000); // every 5 minutes
 
 // Synchronous mapping lookup from caches — strictly in-memory O(1)
+// FIX: Strip the ":device" suffix BEFORE cache lookup. Previously
+// "1234567890:1@s.whatsapp.net" was split on "@" → "1234567890:1", which
+// never matched the cache key "1234567890". Same for LID JIDs.
 function getMapping(jid) {
     let lid = null;
     let phone = null;
-    
+
     if (jid.endsWith("@lid")) {
         lid = jid.split("@")[0];
+        // Strip ":device" suffix (LID JIDs can also carry ":1" etc.)
+        const colonIdx = lid.indexOf(":");
+        if (colonIdx > 0) lid = lid.substring(0, colonIdx);
         if (lidCache.has(lid)) {
             phone = lidCache.get(lid);
         }
     } else if (jid.endsWith("@s.whatsapp.net")) {
         phone = jid.split("@")[0];
+        // Strip ":device" suffix — this is the bug that caused rank lookups
+        // to miss when WhatsApp sent participant IDs like "1234567890:1@s.whatsapp.net"
+        const colonIdx = phone.indexOf(":");
+        if (colonIdx > 0) phone = phone.substring(0, colonIdx);
         if (phoneCache.has(phone)) {
             lid = phoneCache.get(phone);
         }
     }
-    
+
     return { lid, phone };
 }
 
@@ -262,12 +272,50 @@ function resolveJid(jid, authPath) {
 }
 
 // Helper to resolve any JID to phone number JID format (for comparing admin lists)
+// FIX: Don't short-circuit on "@s.whatsapp.net" — that left device suffixes
+// like "1234567890:1@s.whatsapp.net" intact and broke every comparison.
+// Now we always normalize: strip ":device" and return the bare phone JID.
 function resolveToPhone(jid, authPath) {
     if (!jid) return jid;
-    if (jid.endsWith("@s.whatsapp.net")) return jid;
-    
+    if (jid.endsWith("@s.whatsapp.net")) {
+        // Strip any ":device" suffix so the result is canonical
+        const phone = jid.split("@")[0];
+        const colonIdx = phone.indexOf(":");
+        if (colonIdx > 0) {
+            return phone.substring(0, colonIdx) + "@s.whatsapp.net";
+        }
+        return jid;
+    }
     const { phone } = getMapping(jid);
     return phone ? `${phone}@s.whatsapp.net` : jid;
+}
+
+// Canonical rank key — the single source of truth for what JID format
+// `memberRanks` (and any other rank-related map) should be keyed by.
+// Used by both `set rank` (write) and `getMemberRankLevel` / `.g who` (read)
+// to guarantee they always agree on the key.
+//
+// Returns the bare phone JID "<phone>@s.whatsapp.net" whenever the LID↔phone
+// mapping is known. Falls back to the LID JID "<lid>@lid" when the input is
+// an LID and no mapping is cached. Always strips ":device" suffixes.
+function canonicalRankKey(jid) {
+    if (!jid) return jid;
+    if (jid.endsWith("@s.whatsapp.net")) {
+        const phone = jid.split("@")[0];
+        const colonIdx = phone.indexOf(":");
+        if (colonIdx > 0) return phone.substring(0, colonIdx) + "@s.whatsapp.net";
+        return jid;
+    }
+    if (jid.endsWith("@lid")) {
+        const { phone } = getMapping(jid);
+        if (phone) return `${phone}@s.whatsapp.net`;
+        // No mapping cached — return normalized LID (device suffix stripped)
+        const lid = jid.split("@")[0];
+        const colonIdx = lid.indexOf(":");
+        if (colonIdx > 0) return lid.substring(0, colonIdx) + "@lid";
+        return jid;
+    }
+    return jid;
 }
 
 module.exports = {
@@ -277,6 +325,7 @@ module.exports = {
     resolveLidToPhone,
     resolveJid,
     resolveToPhone,
+    canonicalRankKey,
     lidCache,
     phoneCache
 };

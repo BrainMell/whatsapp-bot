@@ -827,10 +827,55 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 10000, atk: 1100, def: 70, mag: 1400, spd: 50, luck: 45, crit: 50 },
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang'],
             phases: ['Awakening', 'Chaos Form', 'True Chaos'],
-            xpReward: 8000,
-            goldReward: [3000, 5000],
+            xpReward: 25000,   // FIX: was 8000 (regression vs VOID_CORRUPTED's 15000)
+            goldReward: [8000, 14000],
             specialDrop: 'chaos_fragment',
             levelRange: [95, 120]
+        },
+        {
+            // NEW: S-rank boss — distinct from A-rank PRIMORDIAL_CHAOS so
+            // players feel escalation from A → S → SS → SSS instead of
+            // fighting the same boss four ranks in a row.
+            id: 'ELDER_CHAOS',
+            name: 'Elder Chaos',
+            icon: '🌠🌀',
+            desc: 'An ancient manifestation of the primordial chaos, awakened after eons of slumber',
+            stats: { hp: 18000, atk: 1600, def: 90, mag: 2000, spd: 60, luck: 50, crit: 55 },
+            skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang', 'Eternal Collapse'],
+            phases: ['Awakening', 'Chaos Form', 'True Chaos', 'Eternal Form'],
+            xpReward: 60000,
+            goldReward: [20000, 35000],
+            specialDrop: 'elder_chaos_essence',
+            levelRange: [100, 120]
+        },
+        {
+            // NEW: SS-rank boss
+            id: 'VOID_TITAN',
+            name: 'Void Titan',
+            icon: '🌑🗿',
+            desc: 'A colossal being born from the void between worlds',
+            stats: { hp: 32000, atk: 2400, def: 120, mag: 2800, spd: 70, luck: 55, crit: 60 },
+            skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion', 'Titan Crush', 'Dimensional Rend'],
+            phases: ['Contained', 'Unleashed', 'Transcendent', 'Astral Form'],
+            xpReward: 150000,
+            goldReward: [50000, 90000],
+            specialDrop: 'void_titan_heart',
+            levelRange: [100, 120]
+        },
+        {
+            // NEW: SSS-rank boss — the ultimate challenge
+            id: 'ABYSSAL_GOD',
+            name: 'Abyssal God',
+            icon: '🌌👁️',
+            desc: 'The divine entity ruling the deepest abyss, where even chaos fears to tread',
+            stats: { hp: 60000, atk: 3500, def: 160, mag: 4000, spd: 85, luck: 65, crit: 70 },
+            skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang',
+                     'Abyssal Verdict', 'Divine Annihilation', 'Reality End'],
+            phases: ['Slumbering', 'Awakening', 'Chaos Form', 'True Chaos', 'Divine Form'],
+            xpReward: 400000,
+            goldReward: [150000, 280000],
+            specialDrop: 'godshard',
+            levelRange: [100, 120]
         }
     ],
  
@@ -1002,16 +1047,18 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // =========================================================
     // 🎯 PER-RANK BALANCED SCALING — Target: ~60% player WR
     // =========================================================
-    // Rank difficulty values from guildAdventure:
-    //   F=0.5, E=1.0, D=3.0, C=5.5, B=10.0, A=18.0, S=35.0
+    // Rank difficulty values from guildAdventure (DUNGEON_RANKS[*].difficulty):
+    //   F=0.8, E=1.2, D=3.0, C=5.0, B=10.0, A=18.0, S=35.0, SS=75.0, SSS=80.0
     //
     // Formula breakpoints (tested to ~60% solo WR):
-    //   F/E  (0.5-1.0):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline — unchanged)
+    //   F/E  (0.8-1.2):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline — unchanged)
     //   D    (~3.0):     dmgF=0.14, hpF=0.18, hpQ=0.003
-    //   C    (~5.5):     dmgF=0.18, hpF=0.22, hpQ=0.004
+    //   C    (~5.0):     dmgF=0.18, hpF=0.22, hpQ=0.004
     //   B    (~10.0):    dmgF=0.22, hpF=0.28, hpQ=0.006
     //   A    (~18.0):    dmgF=0.26, hpF=0.34, hpQ=0.008
     //   S    (~35.0):    dmgF=0.30, hpF=0.40, hpQ=0.010
+    //   SS   (~75.0):    (uses S breakpoints — extreme scaling)
+    //   SSS  (~80.0):    (uses S breakpoints — extreme scaling)
     // =========================================================
 
     let dmgFactor, hpFactor, hpQuadFactor;
@@ -1096,11 +1143,19 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // Rewards — scaled significantly by difficulty rank so high-rank dungeons
     // are actually worth doing. Previously the scaling was only +20% XP and
     // +15% gold per rank, which made high-rank dungeons barely better than
-    // low-rank ones. Now: +50% XP and +40% gold per rank index.
-    scaled.xpReward = Math.floor(enemy.xpReward * (1 + (rankIndex * 0.5)));
+    // low-rank ones.
+    //
+    // 💡 FIX: Changed to EXPONENTIAL scaling so high ranks pull away from
+    // low ranks. Linear scaling (1 + rankIndex*0.5) gave S-rank only 18.5×
+    // F-rank XP, while the XP curve to L76 needs ~93.9M XP — meaning 82
+    // S-rank clears per level. With exponential scaling (1 + rankIndex^1.4)
+    // S-rank gives ~146× F-rank XP, dropping L75→L76 to ~10 clears.
+    // Gold uses a gentler exponent (1.2) so the economy doesn't inflate
+    // as fast as XP.
+    scaled.xpReward = Math.floor(enemy.xpReward * (1 + Math.pow(rankIndex, 1.4)));
     scaled.goldReward = [
-        Math.floor(enemy.goldReward[0] * (1 + (rankIndex * 0.4))),
-        Math.floor(enemy.goldReward[1] * (1 + (rankIndex * 0.4)))
+        Math.floor(enemy.goldReward[0] * (1 + Math.pow(rankIndex, 1.2))),
+        Math.floor(enemy.goldReward[1] * (1 + Math.pow(rankIndex, 1.2)))
     ];
     
     scaled.statusEffects = [];
@@ -1120,13 +1175,21 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     const spdMult = 1 + (rankIndex * 0.08);
     
     scaled.stats = { ...boss.stats };
-    
-    let bossHpFactor = 0.3;
-    if (rankIndex > 25.0) bossHpFactor = 0.16; // S, SS, SSS
-    else if (rankIndex > 13.0) bossHpFactor = 0.22; // A
-    else if (rankIndex > 7.0) bossHpFactor = 0.26; // B
 
-    scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * bossHpFactor)));
+    // 💡 FIX: Boss HP scaling restored to QUADRATIC at S+ ranks.
+    // Previously the factor was deliberately nerfed to 0.16 at S/SS/SSS
+    // ("adjusted down for new progression system"), which resulted in
+    // S-rank bosses having LESS HP than the common trash mobs (boss HP
+    // was linear while common-mob HP had a quadratic term). Now bosses
+    // get a quadratic term too, so the boss is always the climax of
+    // the dungeon.
+    let bossHpFactor = 0.30;
+    let bossHpQuadFactor = 0.003;
+    if (rankIndex > 25.0)      { bossHpFactor = 0.30; bossHpQuadFactor = 0.005; }  // S/SS/SSS
+    else if (rankIndex > 13.0) { bossHpFactor = 0.28; bossHpQuadFactor = 0.004; }  // A
+    else if (rankIndex > 7.0)  { bossHpFactor = 0.26; bossHpQuadFactor = 0.003; }  // B
+
+    scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * bossHpFactor) + (rankIndex * rankIndex * bossHpQuadFactor)));
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     
@@ -1153,11 +1216,18 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
 
     // Boss rewards — scaled even more aggressively than regular enemies.
     // Bosses are the climax of a dungeon and should drop significantly
-    // better loot. +80% XP and +60% gold per rank index.
-    scaled.xpReward = Math.floor(xpRewardBase * (1 + (rankIndex * 0.8)));
+    // better loot.
+    //
+    // 💡 FIX: Changed to EXPONENTIAL scaling (1 + rankIndex^1.5 for XP,
+    // 1 + rankIndex^1.3 for gold) so S-rank bosses give ~208× F-rank XP
+    // (vs 29× under the old linear formula). Combined with the new
+    // distinct S/SS/SSS boss templates (ELDER_CHAOS/VOID_TITAN/ABYSSAL_GOD
+    // with much higher base XP), S-rank boss XP goes from ~229K to ~12.5M,
+    // and SSS-rank boss XP goes from ~525K to ~32M.
+    scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.5)));
     scaled.goldReward = [
-        Math.floor(goldRewardBase[0] * (1 + (rankIndex * 0.6))),
-        Math.floor(goldRewardBase[1] * (1 + (rankIndex * 0.6)))
+        Math.floor(goldRewardBase[0] * (1 + Math.pow(rankIndex, 1.3))),
+        Math.floor(goldRewardBase[1] * (1 + Math.pow(rankIndex, 1.3)))
     ];
     
     scaled.statusEffects = [];

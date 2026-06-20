@@ -154,17 +154,29 @@ The `.g who` command shows:
 
 ---
 
-## Rank Inheritance (Auto-assignment)
+## Rank Inheritance (Comparison-Only, NOT Auto-Assignment)
 
-Even without explicit assignment, WA roles inherit rank automatically:
+WA roles do **not** automatically get assigned a rank. Admins must be explicitly
+assigned via `.g set rank @user <level>`. However, for **hierarchy comparison
+purposes only** (e.g. when an admin tries to assign a rank to someone else),
+the system treats unranked admins as if they held a virtual rank:
 
-| WA Role | Auto Rank |
+| WA Role | Virtual Comparison Rank |
 |---|---|
-| WA Superadmin | Highest rank level in the ladder |
-| WA Admin | Second-highest rank level in the ladder |
+| WA Superadmin | Highest rank level in the ladder (top) |
+| WA Admin | Second-highest rank level in the ladder (top − 1) |
 | Regular Member | 0 (Unranked) |
 
-Explicit rank assignments via `.g set rank` override these defaults.
+This means a WA superadmin with no explicit rank can still assign any rank to
+other admins, and a WA admin with no explicit rank can assign ranks below the
+top tier. **Display rank** (in `.g who`, `.g myrank`, etc.) is still 0 until
+explicitly assigned — the virtual rank only affects what rank-management
+actions the admin can perform.
+
+> Note: An earlier version of this system auto-assigned the max rank to every
+> admin, which caused the "GrandRegent explosion" where all admins appeared
+> at level 5. That behavior was removed; only the comparison-time virtual
+> rank remains.
 
 ---
 
@@ -183,6 +195,21 @@ Explicit rank assignments via `.g set rank` override these defaults.
 ## Changelog
 
 ### Bug Fixes
+- **JID format mismatch (roster vs. set rank)** — Both write (`set rank`) and
+  read (`getMemberRankLevel`, `.g who`) now normalize JIDs through
+  `canonicalRankKey` from `lidResolver.js`. Previously `set rank` stored under
+  `<phone>@s.whatsapp.net` but `.g who` looked up the raw participant ID
+  (often `<phone>:1@s.whatsapp.net` with a device suffix, or `<lid>@lid` in
+  LID-privacy groups). Lookups missed → admins appeared as Unranked.
+- **Device-suffix bug in `lidResolver.getMapping`** — `jid.split("@")[0]`
+  left `:1` device suffixes attached, so cache lookups always missed. Now
+  strips the suffix before lookup.
+- **`resolveToPhone` short-circuit** — Was returning `@s.whatsapp.net` JIDs
+  unchanged, leaving device suffixes intact. Now normalizes.
+- **Hierarchy guard blocked unranked admins** — `if (levelNum >= senderLevel)`
+  evaluated to `levelNum >= 0` for any admin whose rank lookup failed,
+  blocking them from assigning ANY rank. Now treats unranked WA
+  superadmins as top rank and unranked WA admins as top-1 for comparison.
 - **Rank-0 assignment** — Explicit rank level 0 now correctly returns 0 instead of falling through to admin-inheritance logic (`if (assigned)` → `if (assigned != null)`).
 - **`set rank` level parsing** — Level is now extracted from the command tail after removing @mentions, not the full string. Previously, phone number digits in the @mention could corrupt the parsed level.
 - **`glock rank` (no number)** — Now replies with a helpful usage hint instead of silently doing nothing.
