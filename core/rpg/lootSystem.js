@@ -252,13 +252,13 @@ const BOSS_DROPS = {
 // ==========================================
 
 const GOLD_RANGES = {
-    COMMON_ENEMY: [10, 30],
-    ELITE_ENEMY: [50, 100],
-    BOSS: [200, 500],
-    TRAP_SUCCESS: [20, 50],
-    PUZZLE_SUCCESS: [50, 150],
-    TREASURE: [100, 300],
-    MERCHANT_BONUS: [50, 200]
+    COMMON_ENEMY: [15, 50],      // Was [10, 30] — increased by 50-66%
+    ELITE_ENEMY: [80, 200],      // Was [50, 100] — increased by 60-100%
+    BOSS: [400, 1200],            // Was [200, 500] — increased by 100-140%
+    TRAP_SUCCESS: [30, 80],       // Was [20, 50] — increased by 50-60%
+    PUZZLE_SUCCESS: [80, 250],    // Was [50, 150] — increased by 60-67%
+    TREASURE: [200, 600],         // Was [100, 300] — increased by 100%
+    MERCHANT_BONUS: [100, 400]    // Was [50, 200] — increased by 100%
 };
 
 // ==========================================

@@ -4142,7 +4142,11 @@ async function endCombat(sock, victory, sessionKey) {
         }
       }
       return sum + (isNaN(goldVal) ? 0 : goldVal);
-    }, 0) * 3; // Reduced to 20% of previous 15x multiplier
+    }, 0) * (5 + (state.difficulty || 1)); // 💡 FIX: Scale gold multiplier with
+    // dungeon difficulty. Previously was a flat 3x which made high-rank dungeons
+    // barely worth the effort. Now: 6x at F-rank (difficulty 1), 11x at E-rank,
+    // 21x at D-rank, 33x at C-rank, 56x at B-rank, 96x at A-rank, 181x at S-rank.
+    // This makes high-rank dungeons significantly more rewarding.
 
   // Distribute rewards
   const alivePlayers = state.players.filter((p) => !p.isDead);

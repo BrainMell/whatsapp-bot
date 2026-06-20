@@ -1210,12 +1210,12 @@ async function startBot(configInstance) {
         }
       }
 
-      // If user is admin/superadmin/owner but has no explicit rank assigned,
-      // give them the highest rank level so admin commands work out of the box.
-      if ((isGroupSuperadmin || isGroupAdmin || isOwner || globalMod) && settings.rankLadder?.length) {
-        const maxLevel = Math.max(...settings.rankLadder.map(r => r.level));
-        return maxLevel;
-      }
+      // 💡 REMOVED: Auto-assignment of maxLevel to admins without explicit ranks.
+      // This was causing EVERY admin to appear as Level 5 (GrandRegent) in the
+      // roster, which broke the hierarchy system. Admins now need to be
+      // explicitly assigned a rank via `.g set rank @user <level>`.
+      // Admin permissions are still handled by canManageRanks/canActOnMember
+      // which check admin status independently of the rank system.
 
       return 0;
     }
@@ -9721,13 +9721,69 @@ Commands:
                     const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
                     const targetPhone = resolveToPhone(target, configInstance.getAuthPath());
                     const targetCanonical = resolveJid(target, configInstance.getAuthPath());
-                    const isTargetAdmin = meta?.participants?.some(p => {
-                      const pid = jidNormalizedUser(p.id || p);
+
+                    // 💡 FIX: Use the same comprehensive admin check as canActOnMember.
+                    // Previously this only checked meta.participants with basic JID matching,
+                    // which failed when:
+                    // 1. Metadata wasn't cached (meta was null)
+                    // 2. JID formats didn't match (target had @s.whatsapp.net but
+                    //    participants had @lid or device-suffixed JIDs)
+                    // 3. The admin cache wasn't consulted
+                    let isTargetAdmin = false;
+
+                    // Check admin cache first
+                    try {
+                      if (isAdminCached(chatId, target) === true || (targetPhone && isAdminCached(chatId, targetPhone) === true)) {
+                        isTargetAdmin = true;
+                      }
+                    } catch (e) {}
+
+                    // Check metadata with multiple JID format matching
+                    if (!isTargetAdmin && meta?.participants) {
                       const normTarget = jidNormalizedUser(target);
                       const normPhone = targetPhone ? jidNormalizedUser(targetPhone) : null;
                       const normCan = targetCanonical ? jidNormalizedUser(targetCanonical) : null;
-                      return (pid === normTarget || pid === normPhone || pid === normCan) && (p.admin === 'admin' || p.admin === 'superadmin');
-                    });
+                      const bareTarget = target.split('@')[0];
+                      const barePhone = targetPhone ? targetPhone.split('@')[0] : null;
+
+                      isTargetAdmin = meta.participants.some(p => {
+                        const pid = jidNormalizedUser(p.id || p);
+                        const pidBare = (p.id || p || '').split('@')[0];
+                        const matches = pid === normTarget
+                          || pid === normPhone
+                          || pid === normCan
+                          || (barePhone && pidBare === barePhone)
+                          || (bareTarget && pidBare === bareTarget);
+                        return matches && (p.admin === 'admin' || p.admin === 'superadmin');
+                      });
+                    }
+
+                    // If still not found, try fetching fresh metadata
+                    if (!isTargetAdmin) {
+                      try {
+                        const freshMeta = await getGroupMetadata(chatId, true);
+                        if (freshMeta?.participants) {
+                          buildAdminCache(chatId, freshMeta.participants);
+                          const normTarget = jidNormalizedUser(target);
+                          const normPhone = targetPhone ? jidNormalizedUser(targetPhone) : null;
+                          const bareTarget = target.split('@')[0];
+                          const barePhone = targetPhone ? targetPhone.split('@')[0] : null;
+
+                          isTargetAdmin = freshMeta.participants.some(p => {
+                            const pid = jidNormalizedUser(p.id || p);
+                            const pidBare = (p.id || p || '').split('@')[0];
+                            const matches = pid === normTarget
+                              || pid === normPhone
+                              || (barePhone && pidBare === barePhone)
+                              || (bareTarget && pidBare === bareTarget);
+                            return matches && (p.admin === 'admin' || p.admin === 'superadmin');
+                          });
+                        }
+                      } catch (err) {
+                        console.error('[set rank] Failed to fetch fresh metadata:', err.message);
+                      }
+                    }
+
                     const targetIsOwner = _isBotOwner(target);
                     const targetIsGlobal = isGlobalMod && isGlobalMod(target);
                     if (!isTargetAdmin && !targetIsOwner && !targetIsGlobal) {
@@ -9759,7 +9815,14 @@ Commands:
                     }
 
                     if (!settings.memberRanks) settings.memberRanks = {};
-                    settings.memberRanks[target] = levelNum;
+                    // 💡 FIX: Store rank using the phone JID (canonical format) so all
+                    // lookups are consistent. Previously the raw target JID from the
+                    // mention was used, which could be @lid or device-suffixed, causing
+                    // lookup failures in getMemberRankLevel and unrank.
+                    const storeJid = targetPhone || target;
+                    settings.memberRanks[storeJid] = levelNum;
+                    // Also store under the original target JID as a fallback
+                    if (target !== storeJid) settings.memberRanks[target] = levelNum;
                     saveGroupSettings();
 
                     const phone = target.split('@')[0];
@@ -9790,12 +9853,27 @@ Commands:
                     const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
                     const phoneJid = resolveToPhone(target, configInstance.getAuthPath());
                     const canonicalJid = resolveJid(target, configInstance.getAuthPath());
-                    
+                    const bareTarget = target.split('@')[0];
+                    const barePhone = phoneJid ? phoneJid.split('@')[0] : null;
+
                     let removed = false;
                     if (settings.memberRanks) {
+                      // 💡 FIX: Also check bare phone number as a key — some rank entries
+                      // may have been stored with a different JID format.
                       if (settings.memberRanks[target] !== undefined) { delete settings.memberRanks[target]; removed = true; }
                       if (phoneJid && settings.memberRanks[phoneJid] !== undefined) { delete settings.memberRanks[phoneJid]; removed = true; }
                       if (canonicalJid && settings.memberRanks[canonicalJid] !== undefined) { delete settings.memberRanks[canonicalJid]; removed = true; }
+                      // Check bare phone number keys
+                      if (bareTarget) {
+                        Object.keys(settings.memberRanks).forEach(key => {
+                          if (key.split('@')[0] === bareTarget) { delete settings.memberRanks[key]; removed = true; }
+                        });
+                      }
+                      if (barePhone) {
+                        Object.keys(settings.memberRanks).forEach(key => {
+                          if (key.split('@')[0] === barePhone) { delete settings.memberRanks[key]; removed = true; }
+                        });
+                      }
                     }
                     if (!removed) {
                       return reply(`❌ That user does not have an assigned rank.`);

@@ -1093,11 +1093,14 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
         scaled.abilities = enemy.skills || [];
     }
     
-    // Rewards
-    scaled.xpReward = Math.floor(enemy.xpReward * (1 + (rankIndex * 0.2)));
+    // Rewards — scaled significantly by difficulty rank so high-rank dungeons
+    // are actually worth doing. Previously the scaling was only +20% XP and
+    // +15% gold per rank, which made high-rank dungeons barely better than
+    // low-rank ones. Now: +50% XP and +40% gold per rank index.
+    scaled.xpReward = Math.floor(enemy.xpReward * (1 + (rankIndex * 0.5)));
     scaled.goldReward = [
-        Math.floor(enemy.goldReward[0] * (1 + (rankIndex * 0.15))),
-        Math.floor(enemy.goldReward[1] * (1 + (rankIndex * 0.15)))
+        Math.floor(enemy.goldReward[0] * (1 + (rankIndex * 0.4))),
+        Math.floor(enemy.goldReward[1] * (1 + (rankIndex * 0.4)))
     ];
     
     scaled.statusEffects = [];
@@ -1148,10 +1151,13 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     const xpRewardBase = boss.xpReward !== undefined ? boss.xpReward : 1000;
     const goldRewardBase = boss.goldReward !== undefined ? boss.goldReward : [100, 200];
 
-    scaled.xpReward = Math.floor(xpRewardBase * (1 + (rankIndex * 0.3)));
+    // Boss rewards — scaled even more aggressively than regular enemies.
+    // Bosses are the climax of a dungeon and should drop significantly
+    // better loot. +80% XP and +60% gold per rank index.
+    scaled.xpReward = Math.floor(xpRewardBase * (1 + (rankIndex * 0.8)));
     scaled.goldReward = [
-        Math.floor(goldRewardBase[0] * (1 + (rankIndex * 0.2))),
-        Math.floor(goldRewardBase[1] * (1 + (rankIndex * 0.2)))
+        Math.floor(goldRewardBase[0] * (1 + (rankIndex * 0.6))),
+        Math.floor(goldRewardBase[1] * (1 + (rankIndex * 0.6)))
     ];
     
     scaled.statusEffects = [];
