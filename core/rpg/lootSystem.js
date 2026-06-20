@@ -493,13 +493,15 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
     // 💡 FIX: Use rank-specific loot tables for high-rank dungeons.
     // Previously COMMON_ENEMY was used for every rank, so SSS-rank chests
     // still dropped minor_hp_potion. Now we pick the table by difficulty:
-    //   difficulty >= 75  → SSS_RANK_COMMON
-    //   difficulty >= 35  → S_RANK_COMMON   (covers S=35, SS=75 — but SS gets
-    //                                        bumped up by the >= 75 check first)
-    //   difficulty >= 50  → SS_RANK_COMMON
+    //   difficulty >  75  → SSS_RANK_COMMON (SSS=80)
+    //   difficulty >= 50  → SS_RANK_COMMON  (SS=75)
+    //   difficulty >= 35  → S_RANK_COMMON   (S=35)
     //   else              → COMMON_ENEMY (F/E/D/C/B/A ranks)
-    // The "BOSS" encounterType still uses the BOSS table + BOSS_DROPS, but
-    // the standard-roll portion picks the rank-appropriate table.
+    //
+    // The threshold uses STRICT > 75 for SSS so that SS=75 routes to
+    // SS_RANK_COMMON. Previously this used >= 75.0 which caught SS=75 first
+    // and sent it to SSS_RANK_COMMON, leaving SS_RANK_COMMON as dead code
+    // (audit bug #2).
     let lootTable;
     const isHighRank = difficulty >= 35.0;
 
@@ -510,7 +512,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         // entries, but the standard roll still pulled from COMMON_ENEMY.
         // Use rank-specific table here too so boss kills don't drop
         // minor_hp_potion at S-rank.
-        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        if (difficulty > 75.0)       lootTable = LOOT_TABLES.SSS_RANK_COMMON;
         else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
         else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
         else                         lootTable = LOOT_TABLES.BOSS;
@@ -554,7 +556,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         }
     } else if (encounterType === 'TREASURE') {
         // Treasure chests at high rank use rank-specific tables too
-        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        if (difficulty > 75.0)       lootTable = LOOT_TABLES.SSS_RANK_COMMON;
         else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
         else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
         else                         lootTable = LOOT_TABLES.TREASURE;
@@ -566,7 +568,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         lootTable = LOOT_TABLES.MERCHANT_GIFT;
     } else {
         // COMMON_ENEMY / default
-        if (difficulty >= 75.0)      lootTable = LOOT_TABLES.SSS_RANK_COMMON;
+        if (difficulty > 75.0)       lootTable = LOOT_TABLES.SSS_RANK_COMMON;
         else if (difficulty >= 50.0) lootTable = LOOT_TABLES.SS_RANK_COMMON;
         else if (difficulty >= 35.0) lootTable = LOOT_TABLES.S_RANK_COMMON;
         else                         lootTable = LOOT_TABLES.COMMON_ENEMY;
