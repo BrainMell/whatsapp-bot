@@ -236,9 +236,7 @@ const BOSS_DROPS = {
     'ABYSSAL_GOD': {
         guaranteed: [
             { id: 'void_essence', quantity: [5, 8], rarity: 'MYTHIC' },
-            { id: 'infernal_crown', quantity: 1, rarity: 'MYTHIC' },
-            { id: 'void_titan_heart', quantity: 1, rarity: 'MYTHIC' },
-            { id: 'elder_chaos_essence', quantity: 1, rarity: 'MYTHIC' }
+            { id: 'infernal_crown', quantity: 1, rarity: 'MYTHIC' }
         ],
         special: [{
             id: 'godshard',
