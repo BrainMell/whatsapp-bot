@@ -2458,42 +2458,6 @@ function createEnemy(enemyType, level = 1) {
   return enemy;
 }
 
-function createBoss(bossType, level = 1) {
-  const template = BOSS_ENEMIES[bossType];
-  if (!template) return null;
-
-  const boss = {
-    id: `boss_${Date.now()}`,
-    type: bossType,
-    name: template.name,
-    icon: template.icon,
-    level: level,
-    stats: {
-      hp: Math.floor(template.stats.hp * (1 + (level - 1) * 0.3)),
-      maxHp: Math.floor(template.stats.hp * (1 + (level - 1) * 0.3)),
-      energy: 200,
-      maxEnergy: 200,
-      atk: Math.floor(template.stats.atk * (1 + (level - 1) * 0.2)),
-      def: Math.floor(template.stats.def * (1 + (level - 1) * 0.2)),
-      mag: Math.floor(template.stats.mag * (1 + (level - 1) * 0.2)),
-      spd: template.stats.spd,
-      luck: template.stats.luck,
-      crit: template.stats.crit || 10,
-    },
-    phases: template.phases,
-    currentPhase: 0,
-    abilities: template.phases[0].abilities,
-    statusEffects: [],
-    isEnemy: true,
-    isBoss: true,
-    loot: template.loot,
-    xp: Math.floor(template.xp * (1 + (level - 1) * 0.4)),
-    gold: Math.floor(template.gold * 6 * (1 + (level - 1) * 1.0)),
-  };
-
-  return boss;
-}
-
 // ==========================================
 // 📝 ENCOUNTER GENERATORS
 // ==========================================
@@ -5009,22 +4973,6 @@ async function handleRestEncounter(sock, encounter, sessionKey) {
     },
     state.solo ? 0 : GAME_CONFIG.BREAK_TIME,
   );
-}
-
-async function generateBossEncounter(sock, groq, chatId) {
-  const state = getGameState(chatId);
-  if (!state) return null;
-  const rankData = DUNGEON_RANKS[state.dungeonRank];
-  const bossType = rankData.boss;
-
-  const tier = getCurrentTier(chatId);
-  const boss = createBoss(bossType, tier);
-
-  return {
-    type: "BOSS",
-    enemies: [boss],
-    description: `The dungeon boss, ${boss.name}, emerges from the shadows!`,
-  };
 }
 
 function selectRandomEncounter(chatId) {

@@ -16,7 +16,6 @@ const XP_CONFIG = {
 
     // XP Sources
     QUEST_BASE_XP: 100,     // Base XP per quest encounter
-    BOSS_MULTIPLIER: 3.0,   // Bosses give 3x XP
     QUEST_COMPLETION: 300,  // Bonus for completing a full quest
 
     // Level Milestones — these are TIERED REPLACEMENTS, not stacks.
@@ -405,15 +404,6 @@ function getLeaderboard(type = 'level', limit = 10) {
     return leaderboard.slice(0, limit);
 }
 
-function calculateQuestXP(encounterType, difficulty, playerLevel) {
-    let baseXP = XP_CONFIG.QUEST_BASE_XP;
-    const encounterMultipliers = { 'COMBAT': 1.0, 'ELITE_COMBAT': 1.5, 'BOSS': XP_CONFIG.BOSS_MULTIPLIER, 'TRAP': 0.8, 'PUZZLE': 0.9, 'MERCHANT': 0.5, 'TREASURE': 0.7, 'EVENT': 0.8 };
-    baseXP *= (encounterMultipliers[encounterType] || 1.0);
-    baseXP *= difficulty;
-    baseXP = Math.floor(baseXP * (1 + (playerLevel * 0.05)));
-    return Math.max(50, baseXP);
-}
-
 function getCharacterSheet(userId) {
     const user = getUser(userId);
     const mainUser = economy.getUser(userId);
@@ -481,7 +471,7 @@ function getGPLeaderboard(limit = 10) {
 
 module.exports = {
     loadProgression, saveProgression, getUser, addXP, awardXP: addXP, awardGP,
-    getLevel, getGP, getXPForLevel, getXPForNextLevel, calculateQuestXP,
+    getLevel, getGP, getXPForLevel, getXPForNextLevel,
     getBaseStats, allocateStatPoint, resetStats, getUserStats, getUserRank,
     ACHIEVEMENTS, checkLevelAchievements, checkCommandAchievements, checkGPAchievements,
     getCharacterSheet, getLeaderboard,

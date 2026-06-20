@@ -756,7 +756,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Normal', 'Enraged', 'Desperate'],
             xpReward: 3000,
             goldReward: [800, 1400],
-            specialDrop: 'colossus_core',
             levelRange: [1, 60]
         },
         {
@@ -769,7 +768,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Defensive', 'Balanced', 'Aggressive'],
             xpReward: 3500,
             goldReward: [900, 1600],
-            specialDrop: 'guardian_shield',
             levelRange: [1, 60]
         }
     ],
@@ -786,7 +784,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Fire Phase', 'Water Phase', 'Final Form'],
             xpReward: 6000,
             goldReward: [1500, 2500],
-            specialDrop: 'archon_essence',
             levelRange: [61, 90]
         },
         {
@@ -799,7 +796,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Basic', 'Advanced', 'Perfect'],
             xpReward: 8000,
             goldReward: [2000, 3200],
-            specialDrop: 'mutation_sample',
             levelRange: [61, 90]
         }
     ],
@@ -816,7 +812,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Contained', 'Unleashed', 'Transcendent'],
             xpReward: 15000,
             goldReward: [4000, 7000],
-            specialDrop: 'void_crystal',
             levelRange: [91, 110]
         },
         {
@@ -829,7 +824,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Awakening', 'Chaos Form', 'True Chaos'],
             xpReward: 25000,   // FIX: was 8000 (regression vs VOID_CORRUPTED's 15000)
             goldReward: [8000, 14000],
-            specialDrop: 'chaos_fragment',
             levelRange: [95, 120]
         },
         {
@@ -845,7 +839,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Awakening', 'Chaos Form', 'True Chaos', 'Eternal Form'],
             xpReward: 60000,
             goldReward: [20000, 35000],
-            specialDrop: 'elder_chaos_essence',
             levelRange: [100, 120]
         },
         {
@@ -859,7 +852,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Contained', 'Unleashed', 'Transcendent', 'Astral Form'],
             xpReward: 150000,
             goldReward: [50000, 90000],
-            specialDrop: 'void_titan_heart',
             levelRange: [100, 120]
         },
         {
@@ -874,7 +866,6 @@ const BOSS_ENCOUNTERS = {
             phases: ['Slumbering', 'Awakening', 'Chaos Form', 'True Chaos', 'Divine Form'],
             xpReward: 400000,
             goldReward: [150000, 280000],
-            specialDrop: 'godshard',
             levelRange: [100, 120]
         }
     ],
@@ -1228,13 +1219,23 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     // The L75→L76 milestone (93.9M XP, 1.8× tier) was forcing ~8 S-rank
     // boss kills per level — too grindy for the climax rank. The +0.05
     // exponent bump yields:
-    //   S    (diff=35):  35^1.55 = 290.8 vs 35^1.5 = 207.1  → +40.4% (12.5M → 17.5M)
-    //   SS   (diff=75):  75^1.55 = 970.6 vs 75^1.5 = 649.5  → +49.4% (97.6M → 145.8M)
-    //   SSS  (diff=80):  80^1.55 =1069.4 vs 80^1.5 = 715.5  → +49.5% (286.6M → 428.6M)
-    // Net: S-rank now ~5-6 kills per level at L75, SS still ~1 kill per
-    // level at L75, SSS still ~2 kills per level at L80. Trash XP
-    // (rankIndex^1.4 at L1155) is unchanged — this targets boss XP only.
-    // Gold exponent (1.3) unchanged.
+    //   S    (diff=35):  35^1.55 = 247.3 vs 35^1.5 = 207.1   → +19.4% (12.5M → 14.9M)
+    //   SS   (diff=75):  75^1.55 = 806.0 vs 75^1.5 = 649.5   → +24.1% (97.6M → 121.1M)
+    //   SSS  (diff=80):  80^1.55 = 890.8 vs 80^1.5 = 715.5   → +24.5% (286.6M → 356.7M)
+    //
+    // NOTE: An earlier draft of this comment claimed +40-50% bumps. That
+    // was a math error — 35^1.55 was miscomputed as 290.8 (actual 247.3).
+    // The bump is real but smaller than originally pitched. If a bigger
+    // bump is desired, exponent 1.6 would deliver +~107% (S: 12.5M→26.3M,
+    // SSS: 286.6M→592M) — roughly 2x the current value.
+    //
+    // Net effect at the L75 milestone (93.9M XP, the steepest single-level
+    // jump in the curve due to the 1.8× tier kicking in):
+    //   S-rank boss kills per level: was ~8, now ~6.3 (small but noticeable)
+    //   SS-rank: still ~1 boss kill per level
+    //   SSS-rank: still ~1 boss kill per level
+    // Trash XP (rankIndex^1.4 at L1155) is unchanged — this targets boss
+    // XP only. Gold exponent (1.3) unchanged.
     scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.55)));
     scaled.goldReward = [
         Math.floor(goldRewardBase[0] * (1 + Math.pow(rankIndex, 1.3))),
