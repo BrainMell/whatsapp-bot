@@ -2271,7 +2271,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   switch (cmd) {
     case 'cardmod':
-      if (!isOwner) return reply('❌ Only the bot owner can manage card moderators.'), true;
+      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can manage card moderators.'), true;
       const sub = args[0]?.toLowerCase();
       if (sub === 'add') {
         const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
@@ -2349,7 +2349,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     // ── TOKEN EVENT & ESHOP COMMANDS ──────────────────
     case 't2edeck':
-      await cmdT2EDeck(senderJid, reply, args, isOwner);
+      await cmdT2EDeck(senderJid, reply, args, isOwner, isMod);
       return true;
 
     case 't2ecoll':
@@ -2369,7 +2369,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       ), true;
 
     case 'event':
-      if (!isOwner) return reply('❌ Only the bot owner can control the token event.'), true;
+      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can control the token event.'), true;
       const eventSub = args[0]?.toLowerCase();
       if (eventSub === 'start') {
         const result = await startTokenEvent(senderJid);
@@ -2387,7 +2387,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'setprice':
       // .j setprice edeck <slot> <price>
-      if (!isOwner) return reply('❌ Only the bot owner can set eShop prices.'), true;
+      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can set eShop prices.'), true;
       if (args[0]?.toLowerCase() === 'edeck') {
         const slot = parseInt(args[1]);
         const price = parseInt(args[2]);
@@ -2552,11 +2552,11 @@ function init(sock, admins = [], mods = [], owner = null) {
  *   t2edeck price <slot> <price> → Set price for a slot
  *   t2edeck clear              → Clear all slots
  */
-async function cmdT2EDeck(senderJid, reply, args, isOwner) {
+async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod) {
   const p = P();
 
-  if (!isOwner) {
-    return reply('❌ Only the bot owner can manage the eShop deck.');
+  if (!isOwner && !isMod) {
+    return reply('❌ Only the bot owner or a global mod can manage the eShop deck.');
   }
 
   const sub = args[0]?.toLowerCase();
