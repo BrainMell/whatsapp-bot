@@ -1244,6 +1244,29 @@ async function startBot(configInstance) {
       return 0;
     }
 
+    // Returns true if the user has an EXPLICIT rank assignment in memberRanks
+    // (i.e. someone ran `set rank @user N` for them). Used by the roster to
+    // distinguish "explicitly assigned rank 0" from "no assignment at all".
+    // Without this, both cases return getMemberRankLevel === 0, causing users
+    // to appear in BOTH the Rank 0 bucket AND the Unranked Administrators
+    // bucket simultaneously (audit Task ID 5 BUG B).
+    function hasExplicitRank(chatId, jid) {
+      if (!jid) return false;
+      const settings = getGroupSettings(chatId);
+      if (!settings.memberRanks) return false;
+      const { canonicalRankKey } = require('./utils/lidResolver');
+      const canonJid = canonicalRankKey(jid);
+      if (settings.memberRanks[canonJid] !== undefined) return true;
+      if (jid !== canonJid && settings.memberRanks[jid] !== undefined) return true;
+      // Try LID-form fallback (matches the read path in getMemberRankLevel L1153-1160)
+      try {
+        const { resolveJid } = require('./utils/lidResolver');
+        const canonicalJid = resolveJid(jid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+        if (canonicalJid && canonicalJid !== canonJid && settings.memberRanks[canonicalJid] !== undefined) return true;
+      } catch (e) {}
+      return false;
+    }
+
     // Returns the rank object {level, name, icon, color} or null.
     function getMemberRankObj(chatId, jid) {
       const settings = getGroupSettings(chatId);
@@ -8447,10 +8470,14 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // `.g glock` (with rank and open modes)
+                  // ⚠️ FIX (audit Task ID 5 BUG C): also accept `.g glock <N>`
+                  // shorthand (e.g. `.j glock 2`) — previously only `.g glock rank <N>`
+                  // was accepted, so users typing `.j glock 2` silently got nothing.
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} glock rank`) ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock open`
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock open` ||
+                    /^glock\s+\d+\s*$/.test(lowerTxt.slice(botConfig.getPrefix().length))
                   ) {
                     if (!isGroupChat) return reply('Groups only.');
                     if (!canUseAdminCommands) {
@@ -8500,8 +8527,9 @@ Usage: ${newUsage}/5${warningText}`;
                       return;
                     }
 
-                    // .g glock rank <N>
-                    const rankMatch = lowerTxt.match(/glock rank (\d+)/);
+                    // .g glock rank <N>  OR  .g glock <N> (shorthand)
+                    // ⚠️ FIX (audit Task ID 5 BUG C): accept both forms.
+                    const rankMatch = lowerTxt.match(/glock(?:\s+rank)?\s+(\d+)/);
                     if (rankMatch) {
                       const minLevel = parseInt(rankMatch[1]);
                       const ladder   = settings.rankLadder || [];
@@ -10312,7 +10340,14 @@ Members are assigned to Rank Tiers (1 to 5).
                     const unrankedAdmins = [];
                     if (meta && meta.participants) {
                       for (const p of meta.participants) {
-                        if (p.admin && getMemberRankLevel(chatId, p.id) === 0) {
+                        // ⚠️ FIX (audit Task ID 5 BUG B): previously this checked
+                        // 'getMemberRankLevel(chatId, p.id) === 0', which is true
+                        // for BOTH 'explicitly assigned rank 0' AND 'no assignment'.
+                        // When the ladder contains level 0, the same user appeared
+                        // in BOTH the Rank 0 bucket (Loop 1) AND here. Now we
+                        // exclude users who have an explicit rank assignment,
+                        // so they only appear in their assigned rank bucket.
+                        if (p.admin && !hasExplicitRank(chatId, p.id)) {
                           unrankedAdmins.push(p.id);
                         }
                       }
