@@ -5083,7 +5083,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     // 2. Antispam Detection
                     const settings = getGroupSettings(chatId);
                     if (settings.antispam && !isOwner && !isGlobalMod(senderJid)) {
-                      const isSpamming = checkSpam(senderJid, chatId);
+                      // Exempt sticker messages (useful when other bots are sending bulk stickers)
+                      const isSticker = m.message?.stickerMessage;
+                      const isSpamming = !isSticker && checkSpam(senderJid, chatId);
+                      
                       if (isSpamming) {
                         console.log(
                           `🚨 Spam detected from ${senderJid} in ${chatId}`,
