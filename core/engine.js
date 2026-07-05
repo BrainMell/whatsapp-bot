@@ -7491,7 +7491,13 @@ Usage: ${newUsage}/5${warningText}`;
 
                     // Check if first word is a number
                     if (!isNaN(firstWord) && parseInt(firstWord) > 0) {
-                      count = Math.min(parseInt(firstWord), 30); // Cap at 30 stickers
+                      const requestedCount = parseInt(firstWord);
+                      if (requestedCount > 30) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `⚠️ Maximum limit is 30 stickers per session. Fetching 30 stickers for you.`,
+                        });
+                      }
+                      count = Math.min(requestedCount, 30); // Cap at 30 stickers
                       searchTerm = parts.slice(1).join(" ").trim();
                     }
 
