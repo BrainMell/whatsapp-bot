@@ -774,8 +774,9 @@ const ANCIENT_DRAGON_BOSS = {
     // Previously only `loot.xp`/`loot.gold` were defined, which endCombat
     // ignores — the dragon boss fell back to the default 1000 XP / [100,200]
     // gold, less than a D-rank common mob. Now S-rank-appropriate.
+    // 💡 ECONOMY REBALANCE: cut gold by 50% (was [20000, 40000]).
     xpReward: 50000,
-    goldReward: [20000, 40000],
+    goldReward: [10000, 20000],
 
     loot: {
         guaranteed: ['dragon_heart'],

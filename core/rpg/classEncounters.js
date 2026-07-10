@@ -838,7 +838,7 @@ const BOSS_ENCOUNTERS = {
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang', 'Eternal Collapse'],
             phases: ['Awakening', 'Chaos Form', 'True Chaos', 'Eternal Form'],
             xpReward: 60000,
-            goldReward: [20000, 35000],
+            goldReward: [10000, 17500], // Economy rebalance: cut 50% (was [20000, 35000])
             levelRange: [100, 120]
         },
         {
@@ -851,7 +851,7 @@ const BOSS_ENCOUNTERS = {
             skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion', 'Titan Crush', 'Dimensional Rend'],
             phases: ['Contained', 'Unleashed', 'Transcendent', 'Astral Form'],
             xpReward: 150000,
-            goldReward: [50000, 90000],
+            goldReward: [25000, 45000], // Economy rebalance: cut 50% (was [50000, 90000])
             levelRange: [100, 120]
         },
         {
@@ -865,7 +865,7 @@ const BOSS_ENCOUNTERS = {
                      'Abyssal Verdict', 'Divine Annihilation', 'Reality End'],
             phases: ['Slumbering', 'Awakening', 'Chaos Form', 'True Chaos', 'Divine Form'],
             xpReward: 400000,
-            goldReward: [150000, 280000],
+            goldReward: [75000, 140000], // Economy rebalance: cut 50% (was [150000, 280000])
             levelRange: [100, 120]
         }
     ],
