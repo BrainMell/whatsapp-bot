@@ -633,7 +633,13 @@ function sellItem(userId, itemId, quantity = 1) {
         return { success: false, msg: "❌ You don't have enough of that item!" };
     }
 
-    const value = ITEMS[itemId].value * quantity;
+    // 💡 Phase 2: Apply guild MERCHANT sell bonus (+10% if in a MERCHANT guild)
+    let sellMult = 1.0;
+    try {
+      const guildPerks = require('./guildPerks');
+      sellMult = guildPerks.getSellMultiplier(userId);
+    } catch (e) {}
+    const value = Math.floor(ITEMS[itemId].value * quantity * sellMult);
     user.wallet += value;
     user.stats.totalEarned += value;
     

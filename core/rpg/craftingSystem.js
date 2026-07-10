@@ -607,9 +607,17 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
       economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
     }
 
-    // 1. Remove ingredients
+    // 💡 Phase 2: Apply guild RESEARCH craft cost reduction (-10% materials if in a RESEARCH guild)
+    let craftReduction = 0.0;
+    try {
+      const guildPerks = require('./guildPerks');
+      craftReduction = guildPerks.getCraftCostReduction(userId);
+    } catch (e) {}
+
+    // 1. Remove ingredients (reduced by RESEARCH perk if applicable)
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
-        inventorySystem.removeItem(userId, ingId, qty);
+        const reducedQty = craftReduction > 0 ? Math.max(1, Math.ceil(qty * (1.0 - craftReduction))) : qty;
+        inventorySystem.removeItem(userId, ingId, reducedQty);
     }
 
     // 2. Add result
@@ -633,7 +641,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        guilds.updateBoardProgress(userGuild, 'CRAFT', 1);
+        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' — mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 

@@ -687,6 +687,12 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         if (stayingUser) {
             stayingUser.pvpWins = (stayingUser.pvpWins || 0) + 1;
             economy.saveUser(stayingJid);
+            // 💡 Phase 2: Award guild XP + war points for PvP win
+            try {
+                const guildPerks = require('./guildPerks');
+                guildPerks.awardGuildXp(stayingJid, 5, 'PvP win');
+                guildPerks.awardWarPoints(stayingJid, 5, 'pvp');
+            } catch (e) {}
         }
         if (fleeingUser) {
             fleeingUser.pvpLosses = (fleeingUser.pvpLosses || 0) + 1;
@@ -1066,6 +1072,12 @@ async function finishDuel(chatId, duel, winner, loser) {
     if (winnerUser) {
         winnerUser.pvpWins = (winnerUser.pvpWins || 0) + 1;
         economy.saveUser(winner.jid);
+        // 💡 Phase 2: Award guild XP + war points for PvP win
+        try {
+            const guildPerks = require('./guildPerks');
+            guildPerks.awardGuildXp(winner.jid, 5, 'PvP win');
+            guildPerks.awardWarPoints(winner.jid, 5, 'pvp');
+        } catch (e) {}
     }
     if (loserUser) {
         loserUser.pvpLosses = (loserUser.pvpLosses || 0) + 1;

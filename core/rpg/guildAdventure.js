@@ -4049,6 +4049,47 @@ function recordEnemyKill(state, entity) {
     if (!p.jid || p.isDead) return;
     if (entity.isBoss) {
       economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+      // 💡 Phase 2: Award guild XP for boss kills (more than regular mobs)
+      try {
+        const guildPerks = require('./guildPerks');
+        guildPerks.awardGuildXp(p.jid, 10, `Boss kill: ${entity.name || entity.id}`);
+        guildPerks.awardWarPoints(p.jid, 50, 'boss kill');
+      } catch (e) {}
+
+      // 💡 Phase 3: Roll for rune drop on S+ bosses
+      // S: 10%, SS: 15%, SSS: 25%, Dragon: 20%
+      try {
+        const runeSystem = require('./runeSystem');
+        const bossLevel = entity.level || entity.stats?.level || 1;
+        let runeDropChance = 0;
+        if (entity.id && entity.id.toUpperCase().includes('DRAGON')) {
+          runeDropChance = 0.20;
+        } else if (bossLevel >= 100) {
+          runeDropChance = 0.25; // SSS-rank
+        } else if (bossLevel >= 90) {
+          runeDropChance = 0.15; // SS-rank
+        } else if (bossLevel >= 80) {
+          runeDropChance = 0.10; // S-rank
+        }
+        if (runeDropChance > 0) {
+          const drop = runeSystem.rollRuneDrop(runeDropChance);
+          if (drop) {
+            // awardRune is async but recordEnemyKill is sync — fire and forget,
+            // log result to console. The rune will appear in the player's
+            // inventory on next check; we can't display inline because this
+            // function is called from sync kill paths.
+            runeSystem.awardRune(p.jid, drop.type, drop.tier, 'boss_drop')
+              .then(runeResult => {
+                if (runeResult.success) {
+                  console.log(`[RuneDrop] Awarded ${drop.type} (${drop.tier}) to ${p.jid} from boss drop`);
+                }
+              })
+              .catch(e => console.error('[RuneDrop] Failed to award rune:', e.message));
+          }
+        }
+      } catch (e) {
+        console.error('[RuneDrop] Failed to roll rune drop:', e.message);
+      }
     }
     // Total lifetime kills — required for DOOMSLAYER (req.kills: 500)
     economy.trackMissionStat(p.jid, 'kills', 1);
@@ -5725,17 +5766,52 @@ async function endAdventure(sock, sessionKey, victory = true) {
 
     // Update stats and rank
     if (!player.isDead) {
-      economy.addMoney(player.jid, finalGold + bonusGold);
+      // 💡 Phase 2: Apply guild gold multiplier (MERCHANT +10%, treasury building, etc.)
+      let guildGoldMult = 1.0;
+      let guildXpMult = 1.0;
+      try {
+        const guildPerks = require('./guildPerks');
+        guildGoldMult = guildPerks.getGoldMultiplier(player.jid);
+        guildXpMult = guildPerks.getXpMultiplier(player.jid);
+      } catch (e) {}
+
+      const guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
+      const guildBonusXp = Math.floor(finalXP * (guildXpMult - 1.0));
+
+      economy.addMoney(player.jid, finalGold + bonusGold + guildBonusGold);
       economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
       // Award GP — adventurer rank progression needs this
       if (gpGain > 0) {
         try { progression.awardGP(player.jid, gpGain); } catch (e) {}
       }
+
+      // 💡 Phase 2: Award guild XP from dungeon clear
+      // Scaled by dungeon rank: F=5, E=10, D=15, C=20, B=30, A=40, S=60, SS=80, SSS=100
+      try {
+        const guildPerks = require('./guildPerks');
+        const rankXpMap = { F: 5, E: 10, D: 15, C: 20, B: 30, A: 40, S: 60, SS: 80, SSS: 100, DRAGON: 25 };
+        const guildXpAward = rankXpMap[state.dungeonRank] || 5;
+        guildPerks.awardGuildXp(player.jid, guildXpAward, `Dungeon clear (${state.dungeonRank})`);
+        // Also award war points for Phase 7
+        guildPerks.awardWarPoints(player.jid, rankXpMap[state.dungeonRank] || 5, 'dungeon');
+      } catch (e) {}
+
+      // Add guild bonus to display message if applicable
+      if (guildBonusGold > 0 || guildBonusXp > 0) {
+        msg += `🏰 *Guild Bonus:* +${guildBonusGold.toLocaleString()} gold, +${guildBonusXp.toLocaleString()} XP\n`;
+      }
     } else {
       economy.addQuestProgress(player.jid, 0, false); // No progress on death
     }
 
-    progression.awardXP(player.jid, finalXP);
+    // 💡 Phase 2: Apply guild XP multiplier to the XP award
+    let xpToAward = finalXP;
+    try {
+      const guildPerks = require('./guildPerks');
+      const guildXpMult = guildPerks.getXpMultiplier(player.jid);
+      xpToAward = Math.floor(finalXP * guildXpMult);
+    } catch (e) {}
+    progression.awardXP(player.jid, xpToAward);
 
     const rankUpdate = economy.updateAdventurerRank(player.jid);
     if (rankUpdate && rankUpdate.ranked_up) {
@@ -6083,15 +6159,29 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   // Get effect
   const effect = skillTree.getSkillEffect(ability, ability.skillLevel);
 
+  // 💡 Phase 3: Apply socketed rune modifiers to the skill effect.
+  // Loads any runes the user has socketed into this skill from MongoDB
+  // and applies their modifiers (damage mult, energy cost, target bonus, etc.)
+  let runeModifiedEffect = effect;
+  try {
+    const runeSystem = require('./runeSystem');
+    const socketedRunes = await runeSystem.getSocketedRunes(player.jid, ability.id);
+    if (socketedRunes && socketedRunes.length > 0) {
+      runeModifiedEffect = runeSystem.applyRuneModifiers(effect, socketedRunes);
+    }
+  } catch (e) {
+    // Rune system is optional — fall through with unmodified effect
+  }
+
   // Consume energy (clamped to 0 — never let NaN/Infinity sneak through)
   player.stats.energy = Math.max(0, (player.stats.energy || 0) - (safeCost === Infinity ? 0 : safeCost));
 
-  // Apply ability effect
+  // Apply ability effect (using rune-modified effect if runes are socketed)
   const result = await applyAbilityEffect(
     sock,
     player,
     ability,
-    effect,
+    runeModifiedEffect,
     targetIndex,
     chatId,
   );
