@@ -358,5 +358,71 @@ module.exports = {
   getWeekKey,
   runDailyInterest,
   canRecruitMember,
+  runDailyLoanProcessing,
 };
+
+// ─── DAILY LOAN PROCESSING ─────────────────────────────────────────────────
+// Runs daily alongside runDailyInterest. For each overdue loan:
+//   - Auto-deduct 10% from the borrower's wallet (forced repayment)
+//   - Apply the deducted amount to the loan principal
+//   - If wallet is empty, the loan stays overdue and accrues a 5% penalty
+//     added to the principal (compounding — encourages repayment)
+// Called from index.js scheduler (same as runDailyInterest).
+async function runDailyLoanProcessing() {
+  console.log('[GuildPerks] Running daily loan processing...');
+  let loansProcessed = 0;
+  let totalRecovered = 0;
+  let penaltiesApplied = 0;
+
+  try {
+    const guildsModule = require('./guilds');
+    const economy = require('./economy');
+    const guildData = guildsModule.getGuildInfo();
+    if (!guildData || !guildData.guilds) return;
+
+    const now = Date.now();
+    for (const [guildName, guild] of Object.entries(guildData.guilds)) {
+      if (!guild || !guild.loans || guild.loans.length === 0) continue;
+
+      for (const loan of guild.loans) {
+        if (loan.repaid) continue;
+        const dueAt = new Date(loan.dueAt).getTime();
+        if (dueAt > now) continue; // not overdue yet
+
+        loansProcessed++;
+        // Try to auto-deduct 10% from borrower's wallet
+        const deduction = Math.floor(loan.amount * 0.10);
+        if (deduction <= 0) continue;
+
+        const borrowerWallet = economy.getGold(loan.borrowerJid);
+        if (borrowerWallet >= deduction) {
+          // Force-deduct
+          economy.removeMoney(loan.borrowerJid, deduction, `Auto-repayment for overdue guild loan`);
+          loan.amount -= deduction;
+          totalRecovered += deduction;
+          // Add deducted amount back to guild bank
+          guild.balance = (guild.balance || 0) + deduction;
+          if (loan.amount <= 0) {
+            loan.repaid = true;
+            loan.repaidAt = new Date();
+          }
+        } else {
+          // Borrower can't pay — apply 5% penalty to principal (compounds)
+          const penalty = Math.floor(loan.amount * 0.05);
+          loan.amount += penalty;
+          penaltiesApplied += penalty;
+        }
+      }
+
+      // Persist
+      try { guildsModule.syncGuild(guildName); } catch (e) {}
+    }
+  } catch (e) {
+    console.error('[GuildPerks] Daily loan processing failed:', e.message);
+  }
+
+  console.log(`[GuildPerks] Loans done. Processed ${loansProcessed} overdue loans, recovered ${totalRecovered.toLocaleString()} Zeni, applied ${penaltiesApplied.toLocaleString()} in penalties.`);
+  return { loansProcessed, totalRecovered, penaltiesApplied };
+}
+
 

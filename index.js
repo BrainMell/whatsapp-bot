@@ -525,7 +525,7 @@ async function boot() {
       console.error("Failed to init wealth tax scheduler:", e.message);
     }
 
-    // 3b. Schedule daily guild bank interest (Phase 2 — Guild Polish)
+    // 3b. Schedule daily guild bank interest + loan processing (Phase 2 — Guild Polish)
     try {
       const guildPerks = require('./core/rpg/guildPerks');
       if (typeof guildPerks.runDailyInterest === 'function') {
@@ -534,11 +534,18 @@ async function boot() {
         // First run in 1 hour (so it doesn't fire immediately on boot), then daily
         setTimeout(() => {
           guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
+          // 💡 Phase 2: also process overdue loans daily
+          if (typeof guildPerks.runDailyLoanProcessing === 'function') {
+            guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
+          }
           setInterval(() => {
             guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
+            if (typeof guildPerks.runDailyLoanProcessing === 'function') {
+              guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
+            }
           }, ONE_DAY);
         }, 60 * 60 * 1000);
-        console.log("🏛️ Guild bank interest scheduler initialized (runs every 24h).");
+        console.log("🏛️ Guild bank interest + loan scheduler initialized (runs every 24h).");
       }
     } catch (e) {
       console.error("Failed to init guild interest scheduler:", e.message);
