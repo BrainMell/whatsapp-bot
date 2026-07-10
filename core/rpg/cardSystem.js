@@ -45,15 +45,27 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S', 'E': 'EVENT'
 };
 
-const SPAWN_WEIGHTS = [
-  { tier: '1', w: 20 },
-  { tier: '2', w: 15 },
-  { tier: '3', w: 10 },
-  { tier: '4', w:  8 },
-];
+// 💡 Default tier spawn weights. Can be overridden per-bot via .g spawnset tier.
+// Weights are relative (not percentages). The system normalizes them.
+// T5 and T6 have separate "per-interval chance" gates that fire BEFORE
+// the weighted pool — if the gate passes, that tier is selected directly.
+// S and E tiers are disabled by default (weight=0, no per-interval gate).
+// Owners can enable them with: .g spawnset tier S 5
+const DEFAULT_SPAWN_WEIGHTS = {
+  '1': 20,
+  '2': 15,
+  '3': 10,
+  '4':  8,
+  '5':  0,  // controlled by T5_PER_INTERVAL gate by default
+  '6':  0,  // controlled by T6_PER_INTERVAL gate by default
+  'S':  0,  // disabled by default — enable with .g spawnset tier S <weight>
+  'E':  0,  // disabled by default — event cards, enable with .g spawnset tier E <weight>
+};
 
-const T5_PER_INTERVAL = 1 / 144;
-const T6_PER_INTERVAL = 1 / 672;
+const DEFAULT_T5_CHANCE = 1 / 144;  // ~0.7% per spawn
+const DEFAULT_T6_CHANCE = 1 / 672;  // ~0.15% per spawn
+const DEFAULT_S_CHANCE  = 0;        // disabled by default
+const DEFAULT_E_CHANCE  = 0;        // disabled by default
 const CLAIM_WINDOW_MS = 30 * 60 * 1000; 
 const MAIN_DECK_SIZE = 12;
 
@@ -84,6 +96,15 @@ function getInst() {
       // 💡 SPAWN COUNTER — every 3rd spawn grants a guaranteed event token
       // (when the event is active). Replaces the old 50%-chance-per-claim RNG.
       spawnCounter: 0,
+      // 💡 TIER SPAWN CONFIG — per-bot configurable tier weights + chances.
+      // Loaded from DB on init, overridden via .g spawnset tier.
+      tierWeights: { ...DEFAULT_SPAWN_WEIGHTS },
+      tierChances: {
+        '5': DEFAULT_T5_CHANCE,
+        '6': DEFAULT_T6_CHANCE,
+        'S': DEFAULT_S_CHANCE,
+        'E': DEFAULT_E_CHANCE,
+      },
       // 💡 SPAWN INTERVAL — per-bot configurable via '.g spawnset <minutes>'.
       // Default 20 min (= 3 spawns/hour). Persisted in System collection
       // (key: card_spawn_interval_<botId>) so it survives restarts.
@@ -260,6 +281,98 @@ async function loadSpawnInterval() {
   }
 }
 
+// 💡 Load persisted tier spawn config from System collection on startup.
+async function loadTierConfig() {
+  const inst = getInst();
+  try {
+    const doc = await System.findOne({ key: `card_tier_config_${botConfig.getBotId()}` });
+    if (doc && doc.value) {
+      if (doc.value.tierWeights) inst.tierWeights = { ...DEFAULT_SPAWN_WEIGHTS, ...doc.value.tierWeights };
+      if (doc.value.tierChances) inst.tierChances = { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0, ...doc.value.tierChances };
+      console.log(`[CardSystem][${botConfig.getBotId()}] Loaded tier config: weights=${JSON.stringify(inst.tierWeights)} chances=${JSON.stringify(inst.tierChances)}`);
+    }
+  } catch (e) {
+    console.error('[CardSystem] Failed to load tier config:', e.message);
+  }
+}
+
+// 💡 Set a tier's spawn weight or chance. Persisted to DB.
+// For T1-T4: use weight (relative number, higher = more common)
+// For T5/T6/S/E: use chance (0.0-1.0 per-spawn probability) OR weight
+// Setting weight to 0 disables the tier from the weighted pool.
+// Setting chance to 0 disables the per-interval gate.
+async function setTierConfig(tier, type, value) {
+  const inst = getInst();
+  const validTiers = ['1', '2', '3', '4', '5', '6', 'S', 'E'];
+  if (!validTiers.includes(tier)) {
+    return { success: false, message: `❌ Invalid tier. Valid: ${validTiers.join(', ')}` };
+  }
+  const numVal = Number(value);
+  if (!Number.isFinite(numVal) || numVal < 0) {
+    return { success: false, message: `❌ Invalid value. Use a number >= 0.` };
+  }
+
+  if (type === 'weight') {
+    if (numVal > 100) {
+      return { success: false, message: `❌ Weight must be 0-100. Use 0 to disable.` };
+    }
+    inst.tierWeights[tier] = numVal;
+  } else if (type === 'chance') {
+    if (numVal > 1) {
+      return { success: false, message: `❌ Chance must be 0.0-1.0 (e.g. 0.05 = 5% per spawn). Use 0 to disable.` };
+    }
+    inst.tierChances[tier] = numVal;
+  } else {
+    return { success: false, message: `❌ Invalid type. Use 'weight' or 'chance'.` };
+  }
+
+  // Persist
+  try {
+    await System.findOneAndUpdate(
+      { key: `card_tier_config_${botConfig.getBotId()}` },
+      { value: { tierWeights: inst.tierWeights, tierChances: inst.tierChances } },
+      { upsert: true }
+    );
+  } catch (e) {
+    return { success: false, message: `⚠️ Set in memory but failed to persist: ${e.message}` };
+  }
+
+  return {
+    success: true,
+    message: `✅ Tier ${tier} ${type} set to ${numVal}.\n\n_Current config:_\n${formatTierConfig(inst)}`,
+  };
+}
+
+function formatTierConfig(inst) {
+  let lines = [];
+  const tiers = ['1', '2', '3', '4', '5', '6', 'S', 'E'];
+  for (const t of tiers) {
+    const w = inst.tierWeights[t] || 0;
+    const c = inst.tierChances[t] || 0;
+    let status = '';
+    if (w > 0) status += `weight=${w}`;
+    if (c > 0) status += (status ? ', ' : '') + `chance=${(c * 100).toFixed(2)}%`;
+    if (!status) status = 'disabled';
+    lines.push(`  T${t}: ${status}`);
+  }
+  return lines.join('\n');
+}
+
+// 💡 Reset tier config to defaults.
+async function resetTierConfig() {
+  const inst = getInst();
+  inst.tierWeights = { ...DEFAULT_SPAWN_WEIGHTS };
+  inst.tierChances = { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0 };
+  try {
+    await System.findOneAndUpdate(
+      { key: `card_tier_config_${botConfig.getBotId()}` },
+      { value: { tierWeights: inst.tierWeights, tierChances: inst.tierChances } },
+      { upsert: true }
+    );
+  } catch (e) {}
+  return { success: true, message: `✅ Tier config reset to defaults.\n\n${formatTierConfig(inst)}` };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 3 — CORE ENGINE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -369,12 +482,20 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     stat = await getOrInitStat(card.id, card.tier);
   } else {
     const tier = forceTier || (() => {
-      if (Math.random() < T6_PER_INTERVAL) return '6';
-      if (Math.random() < T5_PER_INTERVAL) return '5';
-      const total = SPAWN_WEIGHTS.reduce((s, e) => s + e.w, 0);
+      // 💡 Use per-bot configurable tier chances (T5/T6/S/E fire first)
+      const chances = inst.tierChances || { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0 };
+      if (chances['6'] > 0 && Math.random() < chances['6']) return '6';
+      if (chances['5'] > 0 && Math.random() < chances['5']) return '5';
+      if (chances['S'] > 0 && Math.random() < chances['S']) return 'S';
+      if (chances['E'] > 0 && Math.random() < chances['E']) return 'E';
+      // Weighted pool for T1-T4 (+ any T5/T6/S/E with weight > 0)
+      const weights = inst.tierWeights || { ...DEFAULT_SPAWN_WEIGHTS };
+      const entries = Object.entries(weights).filter(([t, w]) => w > 0);
+      if (entries.length === 0) return '1'; // fallback
+      const total = entries.reduce((s, [, w]) => s + w, 0);
       let roll = Math.random() * total;
-      for (const { tier, w } of SPAWN_WEIGHTS) { roll -= w; if (roll <= 0) return tier; }
-      return '1';
+      for (const [t, w] of entries) { roll -= w; if (roll <= 0) return t; }
+      return entries[0][0];
     })();
     
     const pool = [...(CARDS_BY_TIER()[tier] || [])];
@@ -2633,6 +2754,43 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       // 💡 QA: changed from owner-only to mod+ (owner OR global mod OR card mod)
       if (!isCardMod) return reply('❌ Only moderators and above can change the spawn interval.'), true;
       const sub = args[0]?.toLowerCase();
+
+      // .g spawnset tier <tier> <weight|chance> <value>
+      // .g spawnset tier reset
+      // .g spawnset tier show
+      if (sub === 'tier') {
+        const tierSub = args[1]?.toUpperCase();
+        if (!tierSub) {
+          return reply(
+            `🔧 *Tier Spawn Configuration*\n\n` +
+            `Usage:\n` +
+            `• \`${p} spawnset tier <T1-T6|S|E> weight <0-100>\` — set weighted pool weight (0 = disabled)\n` +
+            `• \`${p} spawnset tier <T5|T6|S|E> chance <0.0-1.0>\` — set per-spawn chance (0 = disabled)\n` +
+            `• \`${p} spawnset tier reset\` — reset to defaults\n` +
+            `• \`${p} spawnset tier show\` — view current config\n\n` +
+            `Examples:\n` +
+            `• \`${p} spawnset tier S chance 0.05\` — 5% chance per spawn for S-tier\n` +
+            `• \`${p} spawnset tier 5 weight 5\` — T5 in weighted pool with weight 5\n` +
+            `• \`${p} spawnset tier S chance 0\` — disable S-tier spawns\n\n` +
+            `_T1-T4 use weights only. T5/T6/S/E can use both weight and chance._`
+          ), true;
+        }
+        if (tierSub === 'RESET') {
+          const res = await resetTierConfig();
+          return reply(res.message), true;
+        }
+        if (tierSub === 'SHOW') {
+          return reply(`📊 *Tier Spawn Config — ${botConfig.getBotId()}*\n\n${formatTierConfig(getInst())}`), true;
+        }
+        const type = args[2]?.toLowerCase();
+        const value = args[3];
+        if (!type || value === undefined) {
+          return reply(`❌ Usage: \`${p} spawnset tier ${tierSub} <weight|chance> <value>\``), true;
+        }
+        const res = await setTierConfig(tierSub, type, value);
+        return reply(res.message), true;
+      }
+
       if (sub === 'reset' || sub === 'default') {
         const res = await setSpawnInterval(20, senderJid, isOwner || isMod);
         return reply(res.message), true;
@@ -2658,6 +2816,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'spawninfo': {
       const info = getSpawnIntervalInfo();
+      const inst = getInst();
       return reply(
         `📊 *Spawn Configuration — ${botConfig.getBotId()}*\n\n` +
         `⏱️ Interval: *${info.minutes} minutes*\n` +
@@ -2666,7 +2825,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `🎲 RNG token bonus: *25%* on non-guaranteed spawns\n\n` +
         `🏠 Active groups: *${info.activeGroups}*\n` +
         `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
-        `_Use \`${p} spawnset <minutes>\` to change (owner only)._`
+        `📋 *Tier Spawn Config:*\n${formatTierConfig(inst)}\n\n` +
+        `_Use \`${p} spawnset <minutes>\` for interval, \`${p} spawnset tier\` for tier config._`
       ), true;
     }
   }
@@ -2691,6 +2851,7 @@ function init(sock, admins = [], mods = [], owner = null) {
   loadTokenEventState();  // 💡 Load token event state from DB
   loadEShopDeck();        // 💡 Load eShop deck from DB
   loadSpawnInterval();    // 💡 Load per-bot spawn interval from DB
+  loadTierConfig();       // 💡 Load per-bot tier spawn config from DB
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
@@ -2836,4 +2997,6 @@ module.exports = {
   loadTokenEventState, loadEShopDeck,
   // 💡 Spawn interval configuration exports
   setSpawnInterval, getSpawnIntervalInfo, loadSpawnInterval, restartSpawnTimer,
+  // 💡 Tier spawn configuration exports
+  setTierConfig, loadTierConfig, resetTierConfig, formatTierConfig,
 };
