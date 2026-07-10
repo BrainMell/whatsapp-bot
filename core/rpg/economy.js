@@ -1542,6 +1542,89 @@ async function syncUserFromDB(userId) {
     console.error("Error syncing user from DB:", err.message);
   }
 }
+
+//========================================
+// 💡 WEALTH TAX (Phase 1 — Economy Rebalance)
+//========================================
+// Weekly auto-deduction on bank balances to combat Zeni inflation.
+// - 1% on bank balances over 10M
+// - 2% on bank balances over 50M
+// Wallet (cash on hand) is NOT taxed — only bank. This encourages spending
+// or investing rather than hoarding. Tax revenue is deleted from the economy
+// (not redistributed) — it's a pure sink.
+//
+// Runs automatically every Monday 00:00 UTC via the scheduler in index.js.
+// Can also be triggered manually by the owner via `.g wealthtax run` for
+// testing or catch-up after downtime.
+
+const WEALTH_TAX_BRACKETS = [
+  { threshold: 50000000, rate: 0.02 },  // 2% over 50M
+  { threshold: 10000000, rate: 0.01 },  // 1% over 10M
+];
+
+async function runWealthTax() {
+  console.log('[WealthTax] Running weekly wealth tax...');
+  let totalTaxed = 0;
+  let playersTaxed = 0;
+  const report = [];
+
+  for (const [userId, user] of economyData.entries()) {
+    if (!user) continue;
+    const bankBalance = user.bank || 0;
+    if (bankBalance < 10000000) continue; // below first bracket
+
+    // Find applicable bracket (highest first)
+    let tax = 0;
+    let bracketLabel = '';
+    for (const bracket of WEALTH_TAX_BRACKETS) {
+      if (bankBalance >= bracket.threshold) {
+        tax = Math.floor(bankBalance * bracket.rate);
+        bracketLabel = `${(bracket.rate * 100).toFixed(0)}% over ${bracket.threshold.toLocaleString()}`;
+        break;
+      }
+    }
+
+    if (tax <= 0) continue;
+
+    // Deduct
+    user.bank = Math.max(0, bankBalance - tax);
+    scheduleSave(userId);
+    totalTaxed += tax;
+    playersTaxed++;
+
+    if (playersTaxed <= 10) {
+      report.push(`  ${user.nickname || userId}: -${tax.toLocaleString()} (${bracketLabel})`);
+    }
+  }
+
+  console.log(`[WealthTax] Done. Taxed ${playersTaxed} players, removed ${totalTaxed.toLocaleString()} Zeni from economy.`);
+  return {
+    playersTaxed,
+    totalTaxed,
+    report: report.slice(0, 10),
+  };
+}
+
+// Schedule the weekly tax — call from index.js on bot startup.
+// Runs every Monday at 00:00 UTC.
+function scheduleWealthTax() {
+  const now = new Date();
+  const nextMonday = new Date(now);
+  const daysUntilMonday = (1 + 7 - now.getDay()) % 7; // 1 = Monday
+  nextMonday.setDate(now.getDate() + (daysUntilMonday === 0 ? 7 : daysUntilMonday));
+  nextMonday.setHours(0, 0, 0, 0);
+
+  const msUntilNext = nextMonday.getTime() - now.getTime();
+  console.log(`[WealthTax] Scheduled. Next run: ${nextMonday.toISOString()} (in ${Math.round(msUntilNext / 3600000)}h)`);
+
+  setTimeout(() => {
+    runWealthTax().catch(e => console.error('[WealthTax] Run failed:', e.message));
+    // Re-schedule for next week (7 days = 604800000 ms)
+    setInterval(() => {
+      runWealthTax().catch(e => console.error('[WealthTax] Run failed:', e.message));
+    }, 7 * 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+}
 //========================================
 
 module.exports = {
@@ -1584,6 +1667,10 @@ module.exports = {
   
   getUserProfile,
   economyData,
+
+  // 💡 Wealth tax (Phase 1)
+  runWealthTax,
+  scheduleWealthTax,
 
   ITEMS,
   addItem,

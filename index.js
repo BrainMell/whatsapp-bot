@@ -514,7 +514,18 @@ async function boot() {
         return;
     }
 
-    // 3. Start each instance with a stagger delay
+    // 3. Schedule weekly wealth tax (Phase 1 — Economy Rebalance)
+    try {
+      const economy = require('./core/rpg/economy');
+      if (typeof economy.scheduleWealthTax === 'function') {
+        economy.scheduleWealthTax();
+        console.log("💸 Wealth tax scheduler initialized.");
+      }
+    } catch (e) {
+      console.error("Failed to init wealth tax scheduler:", e.message);
+    }
+
+    // 4. Start each instance with a stagger delay
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
         const instancePath = path.join(instancesDir, folder);
