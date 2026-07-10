@@ -551,6 +551,46 @@ async function boot() {
       console.error("Failed to init guild interest scheduler:", e.message);
     }
 
+    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 — Avatar Raid)
+    try {
+      const raidSystem = require('./core/rpg/raidSystem');
+      // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
+      const checkAndSpawnRaid = async () => {
+        try {
+          const existing = await raidSystem.getRaidStatus();
+          if (!existing) {
+            // Estimate active player count from economy
+            const economy = require('./core/rpg/economy');
+            const econInfo = economy.getGlobalEconomyStats ? economy.getGlobalEconomyStats() : { totalUsers: 50 };
+            const activeCount = econInfo.totalUsers || 50;
+            const result = await raidSystem.spawnWeeklyRaid(activeCount);
+            if (result.success) {
+              console.log(`[RaidSystem] Spawned weekly raid: ${result.raid.bossName}`);
+            }
+          }
+        } catch (e) {
+          console.error('[RaidSystem] Spawn check failed:', e.message);
+        }
+      };
+      // Check on boot (delayed 2 min so DB is ready), then every hour
+      setTimeout(checkAndSpawnRaid, 2 * 60 * 1000);
+      setInterval(checkAndSpawnRaid, 60 * 60 * 1000);
+
+      // Voting round resolver — runs every 30s to check if voting window closed
+      const resolveRaidRound = async () => {
+        try {
+          await raidSystem.resolveVotingRound();
+        } catch (e) {
+          // Silent — raid may not exist yet
+        }
+      };
+      setInterval(resolveRaidRound, 30 * 1000);
+
+      console.log("⚔️ Raid scheduler initialized (spawn check every 1h, voting resolver every 30s).");
+    } catch (e) {
+      console.error("Failed to init raid scheduler:", e.message);
+    }
+
     // 4. Start each instance with a stagger delay
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
