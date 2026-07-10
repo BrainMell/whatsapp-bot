@@ -769,7 +769,14 @@ const ANCIENT_DRAGON_BOSS = {
     ],
     
     enrageTimer: 25,
-    
+
+    // 💡 FIX: add top-level xpReward/goldReward so endCombat reads them.
+    // Previously only `loot.xp`/`loot.gold` were defined, which endCombat
+    // ignores — the dragon boss fell back to the default 1000 XP / [100,200]
+    // gold, less than a D-rank common mob. Now S-rank-appropriate.
+    xpReward: 50000,
+    goldReward: [20000, 40000],
+
     loot: {
         guaranteed: ['dragon_heart'],
         possible: ['dragon_scale_armor', 'dragon_fang_dagger'],
