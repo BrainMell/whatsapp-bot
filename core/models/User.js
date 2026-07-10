@@ -35,6 +35,7 @@ const UserSchema = new mongoose.Schema({
   
   // Flexible Objects
   inventory: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
+  inventorySlots: { type: Number, default: 20 }, // Persistent inventory cap (was missing — caused reset-to-20 bug)
   
   equipment: {
     main_hand: { type: Object, default: null },
@@ -63,6 +64,8 @@ const UserSchema = new mongoose.Schema({
     dragonsKilled: { type: Number, default: 0 },
     itemsCrafted: { type: Number, default: 0 },     // Rank mission tracking
     itemsEquipped: { type: Number, default: 0 },    // Rank mission tracking
+    undeadKills: { type: Number, default: 0 },      // Required for TEMPLAR ascension (was missing — class permanently locked)
+    kills: { type: Number, default: 0 },            // Total lifetime kills — required for DOOMSLAYER (req.kills: 500)
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },
