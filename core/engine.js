@@ -13199,6 +13199,180 @@ _Sorted by guild level + XP_
                     }
 
                     // ============================================
+                    // 💡 PHASE 6: BOUNTY COMMANDS (`.g bounty ...`)
+                    // ============================================
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bounty`)) {
+                      const bountyArgs = txt.trim().split(/\s+/).slice(2);
+                      const bountySub = bountyArgs[0]?.toLowerCase();
+                      const bountySystem = require('./rpg/bountySystem');
+
+                      // .g bounty — help
+                      if (!bountySub || bountySub === 'help') {
+                        let msg = `💰 *BOUNTY SYSTEM* 💰\n\n`;
+                        msg += `Place Zeni bounties on other players. Bounty hunters track via PvP. Adds risk to hoarding wealth.\n\n`;
+                        msg += `*Rules:*\n`;
+                        msg += `• Min bounty: 100K Zeni | Max: 50M Zeni\n`;
+                        msg += `• Target must be level 20+\n`;
+                        msg += `• Max 3 active bounties per target\n`;
+                        msg += `• 24h cooldown between placements by same user\n`;
+                        msg += `• 7-day expiry with Zeni refund\n`;
+                        msg += `• Hunter fee: 5% to hunter's guild treasury\n`;
+                        msg += `• Failed hunt: hunter pays 10% penalty to target\n`;
+                        msg += `• Targets with bounties CANNOT use the bank\n\n`;
+                        msg += `*Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty place @target <amount>\` — place a bounty\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty list\` — top 10 active bounties\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty target\` — bounties on you\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty mine\` — bounties you placed\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty cancel <bountyId>\` — cancel (10% fee)\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty admin\` — admin commands`;
+                        msg += `\n\n_Claim bounties by winning PvP duels against the target. The bounty auto-claims on win._`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        return;
+                      }
+
+                      // .g bounty place @target <amount>
+                      if (bountySub === 'place') {
+                        const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                          || (bountyArgs[1]?.includes('@') ? bountyArgs[1] : null);
+                        const amount = parseInt(bountyArgs[2], 10);
+                        if (!targetJid || !amount) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty place @target <amount>\`` });
+                        }
+                        try {
+                          const economy = require('./rpg/economy');
+                          const progression = require('./rpg/progression');
+                          const targetUser = economy.getUser(targetJid);
+                          if (!targetUser) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Target user not found. They must be registered.' });
+                          }
+                          const placerLevel = progression.getLevel(senderJid);
+                          const targetLevel = progression.getLevel(targetJid);
+                          const result = await bountySystem.placeBounty(senderJid, targetJid, amount, placerLevel, targetLevel);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g bounty list — top 10 active bounties
+                      if (bountySub === 'list' || bountySub === 'top') {
+                        try {
+                          const top = await bountySystem.getTopBounties(10);
+                          if (top.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💰 *Active Bounties*\n\n_No active bounties right now._' });
+                          }
+                          let msg = `💰 *TOP ACTIVE BOUNTIES* 💰\n\n`;
+                          for (let i = 0; i < top.length; i++) {
+                            const entry = top[i];
+                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                            msg += `${medal} @${entry._id.split('@')[0]}\n   💰 ${entry.totalBounty.toLocaleString()} Zeni (${entry.count} bounties)\n`;
+                          }
+                          msg += `\n_Win a PvP duel against a target to claim their bounties._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: top.map(e => e._id) });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g bounty target — bounties on you
+                      if (bountySub === 'target' || bountySub === 'onme') {
+                        try {
+                          const bounties = await bountySystem.getBountiesOnTarget(senderJid);
+                          if (bounties.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '✅ You have no active bounties on your head.' });
+                          }
+                          let total = 0;
+                          let msg = `⚠️ *BOUNTIES ON YOU* ⚠️\n\n`;
+                          for (const b of bounties) {
+                            msg += `💰 ${b.amount.toLocaleString()} Zeni\n`;
+                            msg += `  Placed by: @${b.placerJid.split('@')[0]}\n`;
+                            msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n\n`;
+                            total += b.amount;
+                          }
+                          msg += `*Total on your head: ${total.toLocaleString()} Zeni*\n\n`;
+                          msg += `_⚠️ You cannot deposit to the bank while bounties are active._\n`;
+                          msg += `_Win PvP duels or wait for expiry to clear them._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: bounties.map(b => b.placerJid) });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g bounty mine — bounties you placed
+                      if (bountySub === 'mine' || bountySub === 'placed') {
+                        try {
+                          const bounties = await bountySystem.getPlacedBounties(senderJid);
+                          if (bounties.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💰 *Your Placed Bounties*\n\n_No active bounties placed._' });
+                          }
+                          let msg = `💰 *Your Placed Bounties* (${bounties.length} active)\n\n`;
+                          for (const b of bounties) {
+                            msg += `💰 ${b.amount.toLocaleString()} Zeni on @${b.targetJid.split('@')[0]}\n`;
+                            msg += `  ID: \`${b.bountyId}\`\n`;
+                            msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n`;
+                            msg += `  Cancel: \`${botConfig.getPrefix()} bounty cancel ${b.bountyId}\`\n\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: bounties.map(b => b.targetJid) });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g bounty cancel <bountyId>
+                      if (bountySub === 'cancel') {
+                        const bountyId = bountyArgs[1];
+                        if (!bountyId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty cancel <bountyId>\`` });
+                        }
+                        try {
+                          const result = await bountySystem.cancelBounty(senderJid, bountyId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g bounty admin — admin commands
+                      if (bountySub === 'admin' || bountySub === 'mod') {
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
+                        }
+                        const adminSub = bountyArgs[1]?.toLowerCase();
+                        if (!adminSub) {
+                          let msg = `🔧 *BOUNTY ADMIN COMMANDS*\n\n`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin cancel <bountyId>\` — cancel (full refund, no fee)\n`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin purge\` — delete ALL bounties (no refunds)\n`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin expire\` — force-expire all old bounties now`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+                        if (adminSub === 'cancel') {
+                          const bountyId = bountyArgs[2];
+                          if (!bountyId) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty admin cancel <bountyId>\`` });
+                          }
+                          const result = await bountySystem.adminCancelBounty(bountyId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'purge') {
+                          const result = await bountySystem.adminPurgeAllBounties();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'expire') {
+                          const result = await bountySystem.expireOldBounties();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Force-expired ${result.expiredCount} bounties, refunded ${result.refundedTotal.toLocaleString()} Zeni.` });
+                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand.` });
+                      }
+
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown bounty subcommand. Use \`${botConfig.getPrefix()} bounty help\` for usage.` });
+                    }
+
+                    // ============================================
                     // 💡 PHASE 4: ABYSS COMMANDS (`.g abyss ...`)
                     // ============================================
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} abyss`)) {
@@ -13670,6 +13844,173 @@ _Sorted by guild level + XP_
                       }
 
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown raid subcommand. Use \`${botConfig.getPrefix()} raid help\` for usage.` });
+                    }
+
+                    // ============================================
+                    // 💡 PHASE 7: GUILD WAR COMMANDS (`.g war ...`)
+                    // ============================================
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} war`)) {
+                      const warArgs = txt.trim().split(/\s+/).slice(2);
+                      const warSub = warArgs[0]?.toLowerCase();
+                      const guildWars = require('./rpg/guildWars');
+
+                      // .g war — help
+                      if (!warSub || warSub === 'help') {
+                        const event = guildWars.getCurrentEvent();
+                        let msg = `${event.icon} *GUILD WARS* ${event.icon}\n\n`;
+                        msg += `Weekly guild competition. 4 event types rotate weekly (Monday → Sunday):\n\n`;
+                        msg += `*Event Rotation:*\n`;
+                        msg += `• Week 1: ⚔️ Champion Tournament — 1v1 PvP bracket between guild champions\n`;
+                        msg += `• Week 2: 🛡️ Guardian Clash — 3v3 team PvP between top guilds\n`;
+                        msg += `• Week 3: 🐉 Monster Hunt — PvE race (boss kills + Abyss)\n`;
+                        msg += `• Week 4: 🏰 Stronghold Siege — defend virtual strongholds\n\n`;
+                        msg += `*This Week:* ${event.icon} ${event.name}\n${event.desc}\n\n`;
+                        msg += `*How to earn points:*\n`;
+                        msg += `• Dungeon clear: 10 × rank tier\n`;
+                        msg += `• Boss kill: 50\n`;
+                        msg += `• PvP win: 5\n`;
+                        msg += `• Raid participation: 20\n`;
+                        msg += `• Abyss completion: floor × 2\n\n`;
+                        msg += `*Rewards:*\n`;
+                        msg += `• 1st: 5M Zeni + 10% XP/gold buff for members\n`;
+                        msg += `• 2nd-3rd: 2M Zeni + 5% buff\n`;
+                        msg += `• 4th-8th: 500K Zeni\n\n`;
+                        msg += `*Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} war status\` — view current war\n`;
+                        msg += `• \`${botConfig.getPrefix()} war leaderboard\` — this week's rankings\n`;
+                        msg += `• \`${botConfig.getPrefix()} war history\` — all-time top guilds\n`;
+                        msg += `• \`${botConfig.getPrefix()} war admin\` — admin commands`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        return;
+                      }
+
+                      // .g war status
+                      if (warSub === 'status' || warSub === 'info') {
+                        try {
+                          const war = await guildWars.getWarStatus();
+                          if (!war) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
+                          }
+                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
+                          let msg = `${event?.icon || '⚔️'} *${war.eventName}* — Active\n\n`;
+                          msg += `📅 Ends: ${new Date(war.endsAt).toLocaleString()}\n`;
+                          msg += `👥 Guilds: ${war.participants.length}\n`;
+                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
+                          msg += `⏰ Time left: ${hoursLeft}h\n\n`;
+                          // Show top 5
+                          const sorted = [...war.participants].sort((a, b) => b.points - a.points).slice(0, 5);
+                          msg += `*Top 5:*\n`;
+                          for (let i = 0; i < sorted.length; i++) {
+                            msg += `${i + 1}. ${sorted[i].guildName} — ${sorted[i].points.toLocaleString()} pts\n`;
+                          }
+                          // Show user's guild rank
+                          const userGuild = guilds.getUserGuild(senderJid);
+                          if (userGuild) {
+                            const myRank = war.participants.find(p => p.guildName === userGuild);
+                            if (myRank) {
+                              const rankIdx = war.participants
+                                .slice()
+                                .sort((a, b) => b.points - a.points)
+                                .findIndex(p => p.guildName === userGuild) + 1;
+                              msg += `\n🏠 Your guild *${userGuild}*: rank ${rankIdx} (${myRank.points.toLocaleString()} pts)\n`;
+                            }
+                          }
+                          msg += `\n_Earn points by doing dungeons, bosses, PvP, raids, and Abyss runs._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g war leaderboard
+                      if (warSub === 'leaderboard' || warSub === 'lb') {
+                        try {
+                          const leaderboard = await guildWars.getWarLeaderboard();
+                          if (leaderboard.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
+                          }
+                          let msg = `🏆 *WEEKLY WAR LEADERBOARD* 🏆\n\n`;
+                          for (let i = 0; i < Math.min(15, leaderboard.length); i++) {
+                            const entry = leaderboard[i];
+                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                            msg += `${medal} ${entry.guildName} — ${entry.points.toLocaleString()} pts\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g war history — all-time
+                      if (warSub === 'history' || warSub === 'alltime') {
+                        try {
+                          const history = await guildWars.getAllTimeWarLeaderboard(15);
+                          if (history.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No war history yet.' });
+                          }
+                          let msg = `📜 *ALL-TIME WAR LEADERBOARD* 📜\n\n`;
+                          for (let i = 0; i < history.length; i++) {
+                            const entry = history[i];
+                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                            msg += `${medal} ${entry._id}\n   📊 ${entry.totalPoints.toLocaleString()} pts | 🏆 ${entry.warsParticipated} wars\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g war admin
+                      if (warSub === 'admin' || warSub === 'mod') {
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
+                        }
+                        const adminSub = warArgs[1]?.toLowerCase();
+                        if (!adminSub) {
+                          let msg = `🔧 *GUILD WAR ADMIN COMMANDS*\n\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin spawn\` — force-spawn the weekly war\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin resolve\` — force-resolve the war (distribute rewards)\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin champion @user\` — set your guild's champion (tournament weeks)\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin purge\` — delete ALL war data\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin sync\` — force-sync war points from guild data`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+                        if (adminSub === 'spawn') {
+                          const result = await guildWars.adminForceSpawn();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'resolve') {
+                          const result = await guildWars.adminForceResolve();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'purge') {
+                          const result = await guildWars.adminPurgeAllWars();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'sync') {
+                          await guildWars.syncWarPointsToActiveWar();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Synced war points from guild data.' });
+                        }
+                        if (adminSub === 'champion') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion @user\`` });
+                          }
+                          const userGuild = guilds.getUserGuild(targetJid);
+                          if (!userGuild) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ That user is not in a guild.' });
+                          }
+                          const result = await guildWars.setChampion(userGuild, targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand.` });
+                      }
+
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown war subcommand. Use \`${botConfig.getPrefix()} war help\` for usage.` });
                     }
 
                     // ============================================
@@ -18387,6 +18728,17 @@ Examples:
                     }
 
                     const result = economy.deposit(senderJid, amount);
+                    // 💡 Phase 6: Block bank deposits for users with active bounties
+                    // (forces them to carry wallet = risk, can't hide wealth in bank)
+                    try {
+                      const bountySystem = require('./rpg/bountySystem');
+                      const hasBounty = await bountySystem.hasActiveBounty(senderJid);
+                      if (hasBounty) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head — you cannot deposit Zeni to the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
+                      }
+                    } catch (e) {
+                      // If bounty check fails, allow the deposit (don't block on error)
+                    }
                     if (result.success) {
                       try {
                         const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);

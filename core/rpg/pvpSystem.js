@@ -693,6 +693,21 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                 guildPerks.awardGuildXp(stayingJid, 5, 'PvP win');
                 guildPerks.awardWarPoints(stayingJid, 5, 'pvp');
             } catch (e) {}
+            // 💡 Phase 6: Check if the loser had an active bounty — claim it
+            // (bounty message stored and appended to rewardMsg below)
+            duel._bountyClaimMsg = '';
+            try {
+                const bountySystem = require('./bountySystem');
+                const bountyCheck = await bountySystem.getBountiesOnTarget(fleeingJid);
+                if (bountyCheck.length > 0) {
+                    const claimResult = await bountySystem.claimBounty(stayingJid, fleeingJid);
+                    if (claimResult.claimed) {
+                        duel._bountyClaimMsg = '\n\n' + claimResult.message;
+                    }
+                }
+            } catch (e) {
+                console.error('[BountyClaim] Failed:', e.message);
+            }
         }
         if (fleeingUser) {
             fleeingUser.pvpLosses = (fleeingUser.pvpLosses || 0) + 1;
@@ -725,7 +740,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                       `👑 *Winner:* *${opponent.name}* by forfeit!\n` +
                       `🎁 *Rewards for ${opponent.name}:*\n` +
                       `   ↳ ${rewardMsg}\n` +
-                      `   ↳ ⭐ +${xpGain} XP`;
+                      `   ↳ ⭐ +${xpGain} XP` +
+                      (duel._bountyClaimMsg || '');
 
         return { 
             success: true, 
@@ -1069,6 +1085,7 @@ async function finishDuel(chatId, duel, winner, loser) {
     // Update PvP stats
     const winnerUser = economy.getUser(winner.jid);
     const loserUser = economy.getUser(loser.jid);
+    let bountyClaimMsg = '';
     if (winnerUser) {
         winnerUser.pvpWins = (winnerUser.pvpWins || 0) + 1;
         economy.saveUser(winner.jid);
@@ -1078,6 +1095,19 @@ async function finishDuel(chatId, duel, winner, loser) {
             guildPerks.awardGuildXp(winner.jid, 5, 'PvP win');
             guildPerks.awardWarPoints(winner.jid, 5, 'pvp');
         } catch (e) {}
+        // 💡 Phase 6: Check if loser had an active bounty — claim it
+        try {
+            const bountySystem = require('./bountySystem');
+            const bountyCheck = await bountySystem.getBountiesOnTarget(loser.jid);
+            if (bountyCheck.length > 0) {
+                const claimResult = await bountySystem.claimBounty(winner.jid, loser.jid);
+                if (claimResult.claimed) {
+                    bountyClaimMsg = '\n' + claimResult.message;
+                }
+            }
+        } catch (e) {
+            console.error('[BountyClaim] Failed:', e.message);
+        }
     }
     if (loserUser) {
         loserUser.pvpLosses = (loserUser.pvpLosses || 0) + 1;
@@ -1090,7 +1120,7 @@ async function finishDuel(chatId, duel, winner, loser) {
     msg += `💀 *Defeated:* ${loser.name}\n\n`;
     msg += `🎁 *Rewards:*\n`;
     msg += `   ↳ ${rewardMsg}\n`;
-    msg += `   ↳ ⭐ +${xpGain} XP\n`;
+    msg += `   ↳ ⭐ +${xpGain} XP\n` + bountyClaimMsg;
     
     return msg;
 }

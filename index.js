@@ -591,6 +591,55 @@ async function boot() {
       console.error("Failed to init raid scheduler:", e.message);
     }
 
+    // 3d. Schedule daily bounty expiry (Phase 6 — Bounty System)
+    try {
+      const bountySystem = require('./core/rpg/bountySystem');
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+      // First run in 30 min, then daily
+      setTimeout(() => {
+        bountySystem.expireOldBounties().catch(e => console.error('[Bounty] Expire failed:', e.message));
+        setInterval(() => {
+          bountySystem.expireOldBounties().catch(e => console.error('[Bounty] Expire failed:', e.message));
+        }, ONE_DAY);
+      }, 30 * 60 * 1000);
+      console.log("💰 Bounty expiry scheduler initialized (runs every 24h).");
+    } catch (e) {
+      console.error("Failed to init bounty scheduler:", e.message);
+    }
+
+    // 3e. Schedule weekly guild war spawn + resolve (Phase 7 — Multi-Event Guild Wars)
+    try {
+      const guildWars = require('./core/rpg/guildWars');
+      // Check on boot (delayed 3 min so DB is ready), then every 1h
+      // — spawns new war if missing for current week, resolves if expired
+      const checkAndSpawnWar = async () => {
+        try {
+          const existing = await guildWars.getWarStatus();
+          if (!existing) {
+            const result = await guildWars.spawnWeeklyWar();
+            if (result.success) {
+              console.log(`[GuildWars] Spawned weekly war: ${result.war.eventName}`);
+            }
+          } else if (existing.status === 'active' && new Date() > new Date(existing.endsAt)) {
+            // War has expired — resolve it
+            const result = await guildWars.resolveWeeklyWar();
+            if (result.action === 'resolved') {
+              console.log(`[GuildWars] Resolved expired war: ${result.war.eventName}`);
+              // Spawn next week's war
+              await guildWars.spawnWeeklyWar();
+            }
+          }
+        } catch (e) {
+          console.error('[GuildWars] Check failed:', e.message);
+        }
+      };
+      setTimeout(checkAndSpawnWar, 3 * 60 * 1000);
+      setInterval(checkAndSpawnWar, 60 * 60 * 1000);
+      console.log("⚔️ Guild war scheduler initialized (spawn check every 1h).");
+    } catch (e) {
+      console.error("Failed to init guild war scheduler:", e.message);
+    }
+
     // 4. Start each instance with a stagger delay
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
