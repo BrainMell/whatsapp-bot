@@ -13199,6 +13199,315 @@ _Sorted by guild level + XP_
                     }
 
                     // ============================================
+                    // 💡 PHASE 4: ABYSS COMMANDS (`.g abyss ...`)
+                    // ============================================
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} abyss`)) {
+                      const abyssArgs = txt.trim().split(/\s+/).slice(2);
+                      const abyssSub = abyssArgs[0]?.toLowerCase();
+                      const abyssSystem = require('./rpg/abyssSystem');
+
+                      // .g abyss — show status or help
+                      if (!abyssSub || abyssSub === 'help') {
+                        let msg = `🕳️ *ABYSS — ENDLESS DUNGEON* 🕳️\n\n`;
+                        msg += `Procedural floors that get harder the deeper you go. Death = lose 90% of run loot. Retreat = keep 100%.\n\n`;
+                        msg += `*Floor Structure:*\n`;
+                        msg += `• Floors 1-10: F→A rank enemies\n`;
+                        msg += `• Floors 11-20: S rank, mini-boss every 3rd floor\n`;
+                        msg += `• Floors 21-49: SS+ rank, every floor is a boss\n`;
+                        msg += `• Floors 50+: SSS rank, brutal\n`;
+                        msg += `• Floor 100: The Abyssal God (final boss)\n\n`;
+                        msg += `*Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss attack\` — attack current floor enemy\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your active run\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss retreat\` — extract with 100% loot\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs this week\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run ever\n\n`;
+                        msg += `*Rewards:* XP + Zeni per floor, rune drops on floor 21+ bosses, leaderboard glory.\n`;
+                        msg += `*Score:* deepestFloor × 100 + monstersKilled × 5`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        return;
+                      }
+
+                      // .g abyss enter — start a run
+                      if (abyssSub === 'enter' || abyssSub === 'start') {
+                        try {
+                          // Get player stats
+                          const economy = require('./rpg/economy');
+                          const progression = require('./rpg/progression');
+                          const user = economy.getUser(senderJid);
+                          if (!user) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `.g register`.' });
+                          }
+                          const level = progression.getLevel(senderJid);
+                          if (level < 20) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
+                          }
+                          const baseStats = progression.getBaseStats(senderJid, user.class);
+                          const playerStats = {
+                            hp: baseStats.hp,
+                            maxHp: baseStats.hp,
+                            energy: baseStats.maxEnergy || 100,
+                            maxEnergy: baseStats.maxEnergy || 100,
+                            atk: baseStats.atk || 10,
+                            def: baseStats.def || 5,
+                          };
+                          const result = await abyssSystem.startRun(senderJid, playerStats);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g abyss attack — attack current enemy
+                      if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
+                        try {
+                          const run = await abyssSystem.getRunStatus(senderJid);
+                          if (!run) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run. Start one with `.g abyss enter`.' });
+                          }
+                          // Calculate player damage based on class + level
+                          const economy = require('./rpg/economy');
+                          const progression = require('./rpg/progression');
+                          const user = economy.getUser(senderJid);
+                          const baseStats = progression.getBaseStats(senderJid, user.class);
+                          const playerDamage = Math.floor((baseStats.atk || 10) * (1 + (progression.getLevel(senderJid) * 0.1)) * (0.8 + Math.random() * 0.4));
+                          const result = await abyssSystem.processAttack(senderJid, playerDamage, baseStats);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g abyss status — view active run
+                      if (abyssSub === 'status' || abyssSub === 'info') {
+                        try {
+                          const run = await abyssSystem.getRunStatus(senderJid);
+                          if (!run) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run.\n_Start one with `.g abyss enter`._' });
+                          }
+                          let msg = `🕳️ *ABYSS RUN STATUS*\n\n`;
+                          msg += `📊 Floor: ${run.currentFloor}\n`;
+                          msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+                          msg += `⚡ Energy: ${run.currentEnergy}/${run.playerSnapshot.maxEnergy}\n`;
+                          msg += `☠️ Monsters Slain: ${run.monstersKilled}\n`;
+                          msg += `👑 Bosses Slain: ${run.bossesKilled}\n\n`;
+                          msg += `💰 Loot So Far:\n`;
+                          msg += `• XP: ${run.lootAccumulator.xp.toLocaleString()}\n`;
+                          msg += `• Zeni: ${run.lootAccumulator.gold.toLocaleString()}\n`;
+                          if (run.lootAccumulator.runes.length > 0) {
+                            msg += `• Runes: ${run.lootAccumulator.runes.length}\n`;
+                          }
+                          msg += `\n👹 *Current Enemy:* ${run.currentEnemy.name}\n`;
+                          msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
+                          msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
+                          if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
+                          msg += `\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g abyss retreat — extract with loot
+                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee') {
+                        try {
+                          const result = await abyssSystem.retreat(senderJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g abyss leaderboard — top runs this week
+                      if (abyssSub === 'leaderboard' || abyssSub === 'lb') {
+                        try {
+                          const leaderboard = await abyssSystem.getWeeklyLeaderboard(15);
+                          if (leaderboard.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '🕳️ *Abyss Leaderboard (This Week)*\n\n_No runs completed yet this week._' });
+                          }
+                          let msg = `🕳️ *ABYSS LEADERBOARD — THIS WEEK* 🕳️\n\n`;
+                          for (let i = 0; i < leaderboard.length; i++) {
+                            const entry = leaderboard[i];
+                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                            msg += `${medal} ${entry.userId.split('@')[0]}\n`;
+                            msg += `   🕳️ Floor ${entry.deepestFloor} | ☠️ ${entry.monstersKilled} kills | 📊 ${entry.score} pts\n`;
+                            msg += `   ${entry.result === 'retreat' ? '🏃 Retreated' : '💀 Died'}\n`;
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g abyss best — your best run ever
+                      if (abyssSub === 'best') {
+                        try {
+                          const best = await abyssSystem.getPlayerBest(senderJid);
+                          if (!best) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have no Abyss runs recorded yet.' });
+                          }
+                          let msg = `🕳️ *Your Best Abyss Run*\n\n`;
+                          msg += `📊 Score: ${best.score}\n`;
+                          msg += `🕳️ Deepest Floor: ${best.deepestFloor}\n`;
+                          msg += `☠️ Monsters Slain: ${best.monstersKilled}\n`;
+                          msg += `👑 Bosses Slain: ${best.bossesKilled}\n`;
+                          msg += `${best.result === 'retreat' ? '🏃 Retreated' : '💀 Died'} on ${new Date(best.completedAt).toLocaleDateString()}`;
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown abyss subcommand. Use \`${botConfig.getPrefix()} abyss help\` for usage.` });
+                    }
+
+                    // ============================================
+                    // 💡 PHASE 5: RAID COMMANDS (`.g raid ...`)
+                    // ============================================
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} raid`)) {
+                      const raidArgs = txt.trim().split(/\s+/).slice(2);
+                      const raidSub = raidArgs[0]?.toLowerCase();
+                      const raidSystem = require('./rpg/raidSystem');
+
+                      // .g raid — show status or help
+                      if (!raidSub || raidSub === 'help') {
+                        let msg = `⚔️ *WEEKLY RAID — AVATAR MODE* ⚔️\n\n`;
+                        msg += `Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players merge into "The Avatar" — a single entity whose class, stats, and skills are determined by the participants.\n\n`;
+                        msg += `*How it works:*\n`;
+                        msg += `• Join the raid with \`.g raid join\`\n`;
+                        msg += `• Each round, vote for which skill the Avatar uses (\`.g raid vote 1-5\`)\n`;
+                        msg += `• 60-second voting window per round\n`;
+                        msg += `• Most-voted skill is executed, then boss attacks back\n`;
+                        msg += `• Continues until boss dies (win) or all attackers dead (loss)\n\n`;
+                        msg += `*Boss Rotation (4 weeks):*\n`;
+                        msg += `• Week 1: Elder Chaos (physical-resist)\n`;
+                        msg += `• Week 2: Void Titan (magic-resist)\n`;
+                        msg += `• Week 3: Abyssal God (immune to weak attacks)\n`;
+                        msg += `• Week 4: Ancient Dragon (requires dragon seal ring)\n\n`;
+                        msg += `*Rewards:*\n`;
+                        msg += `• Top 3: 500K XP + 200K Zeni + Greater Rune\n`;
+                        msg += `• Top 10: 200K XP + 100K Zeni + Normal Rune\n`;
+                        msg += `• Top 50: 100K XP + 50K Zeni\n`;
+                        msg += `• All participants: 10K XP + 5K Zeni\n\n`;
+                        msg += `*Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid status\` — view current raid\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid join\` — join the raid\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid vote <1-5>\` — vote for a skill\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid leaderboard\` — all-time top contributors`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        return;
+                      }
+
+                      // .g raid status
+                      if (raidSub === 'status' || raidSub === 'info') {
+                        try {
+                          const raid = await raidSystem.getRaidStatus();
+                          if (!raid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active raid this week. Raids spawn every Sunday 00:00 UTC.' });
+                          }
+                          let msg = `⚔️ *WEEKLY RAID STATUS* ⚔️\n\n`;
+                          msg += `👹 *Boss:* ${raid.bossName} (Phase ${raid.bossPhase})\n`;
+                          msg += `❤️ Boss HP: ${raid.bossHp.toLocaleString()}/${raid.bossMaxHp.toLocaleString()}\n`;
+                          const hpPct = (raid.bossHp / raid.bossMaxHp * 100).toFixed(1);
+                          msg += `📊 HP%: ${hpPct}%\n`;
+                          msg += `\n⚔️ *The Avatar* (${raid.avatar.class || 'Unknown'})\n`;
+                          msg += `❤️ HP: ${raid.avatar.hp.toLocaleString()}/${raid.avatar.maxHp.toLocaleString()}\n`;
+                          msg += `⚔️ ATK: ${raid.avatar.atk.toLocaleString()} | 🛡️ DEF: ${raid.avatar.def.toLocaleString()}\n`;
+                          msg += `\n👥 Attackers: ${raid.attackerCount} (${raid.attackers.filter(a => !a.isDead).length} alive)\n`;
+                          msg += `📊 Round: ${raid.round}\n`;
+                          if (raid.votingClosesAt && new Date() < new Date(raid.votingClosesAt)) {
+                            const secsLeft = Math.ceil((new Date(raid.votingClosesAt) - new Date()) / 1000);
+                            msg += `🗳️ Voting open: ${secsLeft}s left (${raid.currentVotes.length} votes cast)\n`;
+                          } else {
+                            msg += `🗳️ Voting closed — next round starting\n`;
+                          }
+                          const endsAt = new Date(raid.endsAt);
+                          const hoursLeft = Math.ceil((endsAt - new Date()) / 3600000);
+                          msg += `⏰ Raid ends in: ${hoursLeft}h\n`;
+                          // Show available skills
+                          msg += `\n🎯 *Avatar Skills:*\n`;
+                          for (let i = 0; i < raid.avatar.skills.length; i++) {
+                            const skill = raid.avatar.skills[i];
+                            const votes = raid.currentVotes.filter(v => v.skillIndex === i).length;
+                            msg += `${i + 1}. ${skill.name} (${skill.class}) — ${votes} votes\n`;
+                          }
+                          msg += `\n_Vote with \`${botConfig.getPrefix()} raid vote 1-5\`_`;
+                          // Show last 3 combat log entries
+                          if (raid.combatLog && raid.combatLog.length > 0) {
+                            msg += `\n\n📜 *Recent:*\n`;
+                            const recent = raid.combatLog.slice(-3);
+                            for (const entry of recent) {
+                              msg += `• ${entry}\n`;
+                            }
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g raid join
+                      if (raidSub === 'join') {
+                        try {
+                          const economy = require('./rpg/economy');
+                          const progression = require('./rpg/progression');
+                          const user = economy.getUser(senderJid);
+                          if (!user) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first.' });
+                          }
+                          const level = progression.getLevel(senderJid);
+                          if (level < 20) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to join the raid.' });
+                          }
+                          const result = await raidSystem.joinRaid(senderJid, user.class, level);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g raid vote <1-5>
+                      if (raidSub === 'vote') {
+                        const skillNum = parseInt(raidArgs[1], 10);
+                        if (!skillNum || skillNum < 1 || skillNum > 5) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid vote <1-5>\`` });
+                        }
+                        try {
+                          const result = await raidSystem.castVote(senderJid, skillNum);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g raid leaderboard
+                      if (raidSub === 'leaderboard' || raidSub === 'lb') {
+                        try {
+                          const leaderboard = await raidSystem.getRaidLeaderboard(15);
+                          if (leaderboard.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ *Raid Leaderboard (All-Time)*\n\n_No raid data yet._' });
+                          }
+                          let msg = `⚔️ *RAID LEADERBOARD — ALL-TIME* ⚔️\n\n`;
+                          for (let i = 0; i < leaderboard.length; i++) {
+                            const entry = leaderboard[i];
+                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                            msg += `${medal} ${entry._id.split('@')[0]}\n`;
+                            msg += `   🎯 Contribution: ${entry.totalContribution} | 💥 Damage: ${entry.totalDamage.toLocaleString()}\n`;
+                            msg += `   📊 Raids: ${entry.raidsJoined}\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown raid subcommand. Use \`${botConfig.getPrefix()} raid help\` for usage.` });
+                    }
+
+                    // ============================================
                     // ACTIVITY COMMANDS
                     // ============================================
 
