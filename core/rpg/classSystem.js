@@ -878,6 +878,11 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
             if (req.undeadKills && (userContext.undeadKills || 0) < req.undeadKills) {
                 missing.push(`${req.undeadKills} Undead Kills`);
             }
+            // 💡 FIX: Total lifetime kills (e.g. DOOMSLAYER requires 500). Was
+            // silently ignored — DOOMSLAYER was achievable without the kill count.
+            if (req.kills && (userContext.kills || 0) < req.kills) {
+                missing.push(`${req.kills} Total Kills`);
+            }
 
             // Trial boss must be in completedTrials
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
