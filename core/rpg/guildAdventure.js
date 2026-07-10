@@ -3837,6 +3837,39 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         return;
       }
 
+      // --- FLEE (reactive mob AI — Phase 1) ---
+      // When a regular mob is alone and critical HP, it may try to flee.
+      // 50% chance of success — if successful, mob escapes (removed from
+      // combat, no XP/gold for that mob). If failed, mob wastes its turn.
+      if (decision.action === 'flee') {
+        const fleeSuccess = Math.random() < 0.50;
+        if (fleeSuccess) {
+          try {
+            await sock.sendMessage(chatId, {
+              text: `💨 *${enemy.name}* FLEES from combat!\n_The enemy escaped — no rewards for this kill._`,
+            });
+          } catch (e) {}
+          enemy.isDead = true;
+          enemy.currentHP = 0;
+          enemy.fled = true;
+          // Check if combat should end (all enemies dead)
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        } else {
+          try {
+            await sock.sendMessage(chatId, {
+              text: `💨 *${enemy.name}* tries to flee but FAILS!\n_The enemy wasted its turn in panic._`,
+            });
+          } catch (e) {}
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+      }
+
       // --- DEFAULT ATTACK ---
       let target = decision.target;
       if (!target || target.isDead) {
@@ -4977,6 +5010,98 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
       state._preEliteDifficulty = state.difficulty;
       state.difficulty = difficultyOverride;
     }
+
+    // 💡 BOSS SPLASH (Phase 0): render a full-screen boss intro image
+    // before combat starts. Non-fatal — if the Go service fails or times
+    // out, combat proceeds normally. Only fires for BOSS encounters (not
+    // COMBAT or ELITE_COMBAT) to keep splash impactful + avoid spam.
+    if (encounter.type === "BOSS") {
+      try {
+        const bossEnemy = encounter.enemies && encounter.enemies[0];
+        if (bossEnemy) {
+          // Determine tier label for color theme
+          let tierLabel = "S";
+          if (state.mode === "TRIAL") {
+            tierLabel = "TRIAL";
+          } else if (state.dungeonRank === "DRAGON") {
+            tierLabel = "DRAGON";
+          } else if (state.dungeonRank === "SSS") {
+            tierLabel = "SSS";
+          } else if (state.dungeonRank === "SS") {
+            tierLabel = "SS";
+          } else if (state.dungeonRank === "S") {
+            tierLabel = "S";
+          }
+
+          // Pick a flavor text line based on boss name
+          const flavorTexts = {
+            "ELDER CHAOS": "An ancient chaos awakens, twisting reality itself...",
+            "VOID TITAN": "The void between worlds takes form. Reality trembles.",
+            "ABYSSAL GOD": "The divine entity of the deepest abyss stirs. Pray.",
+            "PRIMORDIAL CHAOS": "The source of all corruption turns its gaze upon you.",
+            "IGNEEL THE FIRE KING": "The dragon's roar scorches the heavens. Steel yourself.",
+            "ANCIENT DRAGON": "Scales harder than diamond. Bring your seal ring.",
+            "DEMON LORD": "The lord of demons grins. Your soul smells sweet.",
+            "LEVIATHAN": "From the abyssal depths, a titanic serpent rises.",
+            "ETERNAL DRAGON": "Time itself bends around this eternal wyrm.",
+            "SHADOW LORD": "Darkness given form. Light fears this name.",
+            "PRIMORDIAL EVIL": "The first evil. The origin of all sin.",
+            "GRAVEYARD LORD": "Bone and shadow. The dead obey his every word.",
+            "ELDER FLAME": "Ancient fire given will. Burn, or be burned.",
+          };
+          const bossNameUpper = (bossEnemy.name || "").toUpperCase();
+          const flavor = flavorTexts[bossNameUpper] ||
+            `A legendary foe stands before you. ${bossEnemy.name || "The boss"} prepares to strike.`;
+
+          // Resolve sprite filename — mirror the Go BossNameSprites map
+          // so the splash shows the same image the combat scene will use.
+          const BOSS_SPLASH_SPRITES = {
+            "ELDER CHAOS": "calamaties (1).png",
+            "VOID TITAN": "calamaties (3).png",
+            "ABYSSAL GOD": "calamaties (5).png",
+            "IGNEEL THE FIRE KING": "calamaties (2).png",
+            "ANCIENT DRAGON": "calamaties (2).png",
+            "DEMON LORD": "calamaties (4).png",
+            "LEVIATHAN": "calamaties (6).png",
+            "ETERNAL DRAGON": "calamaties (2).png",
+            "SHADOW LORD": "highlevelbosses (13).png",
+            "PRIMORDIAL EVIL": "calamaties (1).png",
+            "GRAVEYARD LORD": "highlevelbosses (12).png",
+            "ELDER FLAME": "calamaties (2).png",
+            "PRIMORDIAL CHAOS": "calamaties (1).png",
+          };
+          const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
+
+          const splashPayload = {
+            name: bossEnemy.name || "Unknown Boss",
+            spriteFilename: splashSprite,
+            flavorText: flavor,
+            tier: tierLabel,
+          };
+
+          // Try to render splash
+          const goService = require('../utils/goImageService');
+          const go = new goService();
+          const splashBuf = await go.generateBossSplash(splashPayload);
+          if (splashBuf && splashBuf.length > 100) {
+            try {
+              await sock.sendMessage(state.chatId, {
+                image: splashBuf,
+                caption: `⚔️ *${bossEnemy.name}* — ${tierLabel === "TRIAL" ? "TRIAL" : tierLabel + "-RANK"} BOSS\n_${flavor}_`,
+                mimetype: "image/png",
+              });
+              // Brief pause so players see the splash before combat starts
+              await new Promise((r) => setTimeout(r, 2500));
+            } catch (splashSendErr) {
+              console.error("[BossSplash] Failed to send splash image:", splashSendErr.message);
+            }
+          }
+        }
+      } catch (splashErr) {
+        console.error("[BossSplash] Render failed (non-fatal):", splashErr.message);
+      }
+    }
+
     try {
       await startCombat(sock, groq, encounter, sessionKey);
     } finally {
@@ -5540,17 +5665,31 @@ async function endAdventure(sock, sessionKey, victory = true) {
     DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
   const _baseCompletionXP = Math.floor(Math.pow(_completionRankData.xpMult || 1, 2) * 100);
 
-  // 💡 FIX: Completion bonus gold now scales by xpMult × 1000 (was flat
-  // 100-2400). At S-rank, completion gold goes from 1,200 (statistical
-  // noise — 0.010% of run total) to 50,000 (~0.4% of run total — still
-  // modest, but at least visible).
-  //   F=800, E=1200, D=2000, C=3500, B=6000, A=10000,
+  // 💡 ECONOMY REBALANCE (Phase 1): Cut S/SS/SSS completion bonus gold by
+  // 60% to combat Zeni inflation. Original values were:
   //   S=50000, SS=70000, SSS=100000
+  // New values:
+  //   S=20000, SS=28000, SSS=40000
+  // Combined with boss goldReward cuts (see bossMechanics.js + classEncounters.js)
+  // and per-dungeon gold cap, this should slow inflation significantly.
+  // Lower ranks (F-B) unchanged — they were already balanced.
   const rankGoldMap = {
     F: 800, E: 1200, D: 2000, C: 3500, B: 6000, A: 10000,
-    S: 50000, SS: 70000, SSS: 100000, DRAGON: 5000
+    S: 20000, SS: 28000, SSS: 40000, DRAGON: 5000
   };
   const _baseBonusGold = rankGoldMap[state.dungeonRank] || 800;
+
+  // 💡 ECONOMY REBALANCE: Per-dungeon gold cap. Prevents absurd luck
+  // streaks where a single SSS run dumps 5M+ Zeni into the economy.
+  // Cap scales by rank — high ranks can still earn more, just not infinitely.
+  // Caps (total gold per run, including bonus + boss + monsters):
+  //   F-A: 500K (mostly hit by A-rank lucky streaks)
+  //   S: 1M, SS: 2M, SSS: 3M, DRAGON: 800K
+  const rankGoldCapMap = {
+    F: 500000, E: 500000, D: 500000, C: 500000, B: 500000, A: 500000,
+    S: 1000000, SS: 2000000, SSS: 3000000, DRAGON: 800000
+  };
+  const _runGoldCap = rankGoldCapMap[state.dungeonRank] || 500000;
 
   // 💡 FIX: Award GP from dungeons. Previously dungeons gave ZERO GP,
   // which meant the GP requirements in ADVENTURER_RANKS (50 → 25,000)
@@ -5563,11 +5702,26 @@ async function endAdventure(sock, sessionKey, victory = true) {
 
   for (const player of state.players) {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
-    const finalGold = Math.floor(player.goldEarned * multiplier);
-    const bonusGold = player.isDead ? 0 : _baseBonusGold;
+    let finalGold = Math.floor(player.goldEarned * multiplier);
+    let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
 
-    msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+    // 💡 ECONOMY REBALANCE: apply per-dungeon gold cap.
+    // finalGold = monster/boss gold accumulated during the run.
+    // bonusGold = completion bonus.
+    // Combined total is capped at _runGoldCap.
+    let totalGoldThisRun = finalGold + bonusGold;
+    if (totalGoldThisRun > _runGoldCap) {
+      const reducedTo = _runGoldCap;
+      const cut = totalGoldThisRun - reducedTo;
+      // Reduce proportionally from both sources
+      const ratio = reducedTo / totalGoldThisRun;
+      finalGold = Math.floor(finalGold * ratio);
+      bonusGold = Math.floor(bonusGold * ratio);
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+    } else {
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+    }
 
     // Update stats and rank
     if (!player.isDead) {
