@@ -406,6 +406,17 @@ Leave first with: ${botConfig.getPrefix()} guild leave`
 
   const [realGuildName, guildData] = guild;
 
+  // 💡 Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
+  try {
+    const guildPerks = require('./guildPerks');
+    const capCheck = guildPerks.canRecruitMember(guildData);
+    if (!capCheck.canRecruit) {
+      return { success: false, message: capCheck.message };
+    }
+  } catch (e) {
+    // If guildPerks fails to load, fall through to old behavior (no cap)
+  }
+
   guildData.members.push(userJid);
   info.memberGuilds[userJid] = realGuildName;
 
@@ -527,6 +538,17 @@ function acceptGuildInvite(userJid) {
     syncGuildSystem();
     return { success: false, message: "❌ That guild no longer exists!" };
   }
+
+  // 💡 Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
+  try {
+    const guildPerks = require('./guildPerks');
+    const capCheck = guildPerks.canRecruitMember(guild);
+    if (!capCheck.canRecruit) {
+      delete info.guildInvites[userJid];
+      syncGuildSystem();
+      return { success: false, message: capCheck.message };
+    }
+  } catch (e) {}
 
   guild.members.push(userJid);
   info.memberGuilds[userJid] = guildName;
