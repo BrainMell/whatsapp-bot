@@ -84,6 +84,10 @@ function getInst() {
       // 💡 SPAWN COUNTER — every 3rd spawn grants a guaranteed event token
       // (when the event is active). Replaces the old 50%-chance-per-claim RNG.
       spawnCounter: 0,
+      // 💡 SPAWN INTERVAL — per-bot configurable via '.g spawnset <minutes>'.
+      // Default 20 min (= 3 spawns/hour). Persisted in System collection
+      // (key: card_spawn_interval_<botId>) so it survives restarts.
+      spawnIntervalMs: 20 * 60 * 1000,
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
     });
@@ -159,19 +163,100 @@ async function loadRoles() {
 
 function ensureTimerRunning() {
   const inst = getInst();
-  if (!inst.spawnTimer && inst.activeGroups.size > 0) {
-    let groupIndex = 0;
-    // 💡 FIX: spawn interval 30min → 20min = 3 spawns/hour (was 2/hour).
-    // User asked for 3x/hour so card economy stays active. Combined with
-    // the token-on-every-3rd-spawn change below, every 3rd spawn (~1/hour)
-    // grants a guaranteed event token during token events.
-    inst.spawnTimer = setInterval(() => {
-      const groups = Array.from(inst.activeGroups);
-      if (groups.length === 0) return;
-      const gid = groups[groupIndex % groups.length];
-      doSpawn(null, null, false, gid);
-      groupIndex++;
-    }, 20 * 60 * 1000);
+  if (inst.spawnTimer) return; // already running
+  if (inst.activeGroups.size === 0) return;
+
+  let groupIndex = 0;
+  // 💡 FIX: spawn interval is now per-bot configurable via '.g spawnset <minutes>'.
+  // Default 20 min = 3 spawns/hour. User asked for 3x/hour so card economy
+  // stays active. Combined with the token-on-every-3rd-spawn change, every
+  // 3rd spawn (~1/hour) grants a guaranteed event token during token events.
+  const intervalMs = inst.spawnIntervalMs || (20 * 60 * 1000);
+  inst.spawnTimer = setInterval(() => {
+    const groups = Array.from(inst.activeGroups);
+    if (groups.length === 0) return;
+    const gid = groups[groupIndex % groups.length];
+    doSpawn(null, null, false, gid);
+    groupIndex++;
+  }, intervalMs);
+  console.log(`[CardSystem][${botConfig.getBotId()}] Spawn timer started: interval=${Math.round(intervalMs/60000)}min (${Math.round(3600000/intervalMs*10)/10} spawns/hour)`);
+}
+
+// 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
+// Clears the existing timer and re-creates it with the new interval.
+function restartSpawnTimer() {
+  const inst = getInst();
+  if (inst.spawnTimer) {
+    clearInterval(inst.spawnTimer);
+    inst.spawnTimer = null;
+  }
+  ensureTimerRunning();
+}
+
+// 💡 Persist + apply a new spawn interval for this bot instance.
+// minutes must be a number between 1 and 1440 (24 hours).
+// Returns { success, message }.
+async function setSpawnInterval(minutes, callerJid, isOwner) {
+  const inst = getInst();
+  if (!isOwner) {
+    return { success: false, message: '❌ Only the bot owner can change the spawn interval.' };
+  }
+  const mins = Number(minutes);
+  if (!Number.isFinite(mins) || mins < 1 || mins > 1440) {
+    return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours).\nExample: `.g spawnset 20` (3 spawns/hour)' };
+  }
+  inst.spawnIntervalMs = mins * 60 * 1000;
+  // Persist to System collection so it survives restarts
+  try {
+    await System.findOneAndUpdate(
+      { key: `card_spawn_interval_${botConfig.getBotId()}` },
+      { value: inst.spawnIntervalMs },
+      { upsert: true }
+    );
+  } catch (e) {
+    console.error('[CardSystem] Failed to persist spawn interval:', e.message);
+    return { success: false, message: `⚠️ Interval set to ${mins}min in memory but failed to persist: ${e.message}` };
+  }
+  // Restart timer if it's running
+  if (inst.activeGroups.size > 0) {
+    restartSpawnTimer();
+  }
+  const spawnsPerHour = Math.round(60 / mins * 10) / 10;
+  const tokensPerHour = spawnsPerHour / 3; // every 3rd spawn = guaranteed token
+  return {
+    success: true,
+    message: `✅ Spawn interval set to *${mins} minutes* for ${botConfig.getBotId()}.\n\n📊 Approximate rates:\n• ${spawnsPerHour} spawns/hour\n• ${tokensPerHour} guaranteed event tokens/hour (during events)\n• +25% RNG token bonus on non-guaranteed spawns\n\n_Interval persists across bot restarts._`
+  };
+}
+
+// 💡 Get current spawn interval info for display.
+function getSpawnIntervalInfo() {
+  const inst = getInst();
+  const ms = inst.spawnIntervalMs || (20 * 60 * 1000);
+  const mins = Math.round(ms / 60000);
+  const spawnsPerHour = Math.round(60 / mins * 10) / 10;
+  const tokensPerHour = Math.round(spawnsPerHour / 3 * 10) / 10;
+  return {
+    minutes: mins,
+    ms,
+    spawnsPerHour,
+    tokensPerHour,
+    activeGroups: inst.activeGroups.size,
+    timerRunning: !!inst.spawnTimer,
+  };
+}
+
+// 💡 Load persisted spawn interval from System collection on startup.
+async function loadSpawnInterval() {
+  const inst = getInst();
+  try {
+    const doc = await System.findOne({ key: `card_spawn_interval_${botConfig.getBotId()}` });
+    if (doc && typeof doc.value === 'number' && doc.value > 0) {
+      inst.spawnIntervalMs = doc.value;
+      console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: ${Math.round(doc.value/60000)}min`);
+    }
+  } catch (e) {
+    console.error('[CardSystem] Failed to load spawn interval:', e.message);
   }
 }
 
@@ -2540,6 +2625,49 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       const spawnRes = await doSpawn(spawnQuery, forceTier, true, chatId);
       if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
+
+    // 💡 NEW: .g spawnset <minutes> — set per-bot spawn interval (owner-only)
+    // .g spawnset reset — restore default 20min
+    // .g spawninfo — show current interval + calculated rates
+    case 'spawnset': {
+      if (!isOwner) return reply('❌ Only the bot owner can change the spawn interval.'), true;
+      const sub = args[0]?.toLowerCase();
+      if (sub === 'reset' || sub === 'default') {
+        const res = await setSpawnInterval(20, senderJid, isOwner);
+        return reply(res.message), true;
+      }
+      if (!sub) {
+        return reply(
+          `🔧 *Spawn Interval Configuration*\n\n` +
+          `Usage:\n` +
+          `• \`${p} spawnset <minutes>\` — set interval (1 to 1440)\n` +
+          `• \`${p} spawnset reset\` — restore default (20 min)\n` +
+          `• \`${p} spawninfo\` — view current settings\n\n` +
+          `Examples:\n` +
+          `• \`${p} spawnset 20\` → 3 spawns/hour (default)\n` +
+          `• \`${p} spawnset 15\` → 4 spawns/hour\n` +
+          `• \`${p} spawnset 30\` → 2 spawns/hour\n` +
+          `• \`${p} spawnset 60\` → 1 spawn/hour\n\n` +
+          `_Interval is unique per bot instance and persists across restarts._`
+        ), true;
+      }
+      const res = await setSpawnInterval(sub, senderJid, isOwner);
+      return reply(res.message), true;
+    }
+
+    case 'spawninfo': {
+      const info = getSpawnIntervalInfo();
+      return reply(
+        `📊 *Spawn Configuration — ${botConfig.getBotId()}*\n\n` +
+        `⏱️ Interval: *${info.minutes} minutes*\n` +
+        `📈 Rate: *${info.spawnsPerHour} spawns/hour*\n` +
+        `🎫 Guaranteed tokens: *${info.tokensPerHour}/hour* (during events)\n` +
+        `🎲 RNG token bonus: *25%* on non-guaranteed spawns\n\n` +
+        `🏠 Active groups: *${info.activeGroups}*\n` +
+        `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
+        `_Use \`${p} spawnset <minutes>\` to change (owner only)._`
+      ), true;
+    }
   }
 
   return false;
@@ -2561,6 +2689,7 @@ function init(sock, admins = [], mods = [], owner = null) {
   loadRoles();
   loadTokenEventState();  // 💡 Load token event state from DB
   loadEShopDeck();        // 💡 Load eShop deck from DB
+  loadSpawnInterval();    // 💡 Load per-bot spawn interval from DB
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
@@ -2703,5 +2832,7 @@ module.exports = {
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
   generateEShopDeckImage, searchEventCards,
-  loadTokenEventState, loadEShopDeck
+  loadTokenEventState, loadEShopDeck,
+  // 💡 Spawn interval configuration exports
+  setSpawnInterval, getSpawnIntervalInfo, loadSpawnInterval, restartSpawnTimer,
 };
