@@ -988,6 +988,43 @@ function evaluateAction(enemy, players, allies = []) {
         if (offSkill) return { action: 'skill', skill: offSkill, target: defaultTarget };
     }
 
+    // 💡 REACTIVE MOB AI (Phase 1 — smarter regular mobs):
+    // When HP is low, prioritize self-buffs/heals/defensive skills.
+    // When allies are dead and HP is critical, attempt to flee (returns
+    // 'flee' action — handled by performEnemyAction in guildAdventure.js).
+    const liveAllies = allies.filter(a => !a.isDead && a.currentHP > 0 && a !== enemy);
+    const isAlone = liveAllies.length === 0;
+
+    // Low-HP defensive behavior (below 30% HP)
+    if (hpPct < 0.30) {
+        // Try to heal self
+        const healSkill = available.find(s => s.type === 'heal' || s.type === 'heal_self');
+        if (healSkill && Math.random() < 0.70) {
+            return { action: 'skill', skill: healSkill, target: enemy, targetType: 'self' };
+        }
+        // Try to buff self (defense/shield)
+        const buffSkill = available.find(s => s.type === 'buff_self' || s.id?.includes('shield') || s.id?.includes('defense'));
+        if (buffSkill && Math.random() < 0.50) {
+            return { action: 'skill', skill: buffSkill, target: enemy, targetType: 'self' };
+        }
+        // If alone and HP < 15%, try to flee (only regular mobs, not bosses)
+        if (isAlone && hpPct < 0.15 && !enemy.isBoss && Math.random() < 0.30) {
+            return { action: 'flee', msg: `${enemy.name} tries to escape!` };
+        }
+    }
+
+    // Mid-HP reactive behavior (30-60% HP): use CC or debuff to swing the fight
+    if (hpPct < 0.60 && hpPct >= 0.30) {
+        const ccSkill = available.find(s => s.type === 'damage_cc' || s.type === 'cc');
+        if (ccSkill && Math.random() < 0.40) {
+            return { action: 'skill', skill: ccSkill, target: defaultTarget };
+        }
+        const debuffSkill = available.find(s => s.type === 'debuff' || s.type === 'debuff_target');
+        if (debuffSkill && Math.random() < 0.35) {
+            return { action: 'skill', skill: debuffSkill, target: defaultTarget };
+        }
+    }
+
     // ── AGGRESSIVE FALLBACK ────────────────────────
     // 💡 HARDER AI: Previously only 75% chance to use a skill (25% default attack).
     // Now 90% chance to use a skill — enemies lead with their strongest
