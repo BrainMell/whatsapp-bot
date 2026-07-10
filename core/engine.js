@@ -5558,6 +5558,100 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 💡 .g modcom — show moderator commands by permission level
+                    if (primaryCmd === "modcom") {
+                      const isSenderOwner = isOwner;
+                      const isSenderGMod = isGlobalMod(senderJid);
+                      const isSenderMod = isMod || isSenderGMod || isSenderOwner;
+                      const isSenderCardMod = isSenderMod || (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid));
+
+                      // Non-mods get nothing
+                      if (!isSenderMod && !isSenderCardMod) {
+                        return reply(BOT_MARKER + '❌ This command is for moderators and above only.\n\n_If you believe this is an error, contact a bot owner._');
+                      }
+
+                      let msg = `🔧 *MODERATOR COMMAND REFERENCE* 🔧\n`;
+                      msg += `_Showing commands available to your permission level._\n\n`;
+                      msg += `**Your permissions:** ${isSenderOwner ? '👑 Owner' : isSenderGMod ? '🛡️ Global Mod' : isSenderCardMod ? '🎴 Card Mod' : '👤 Member'}\n\n`;
+
+                      // ── GLOBAL MOD COMMANDS (owner + global mod) ──
+                      if (isSenderOwner || isSenderGMod) {
+                        msg += `┌─ *🛡️ GLOBAL MOD COMMANDS* ─┐\n`;
+                        msg += `• \`${botConfig.getPrefix()} addmod @user\` — promote to global mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} delmod @user\` — demote global mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} mods\` — list all global mods\n`;
+                        msg += `• \`${botConfig.getPrefix()} updateall [message]\` — broadcast to all groups\n`;
+                        msg += `• \`${botConfig.getPrefix()} setpack <name>\` — set sticker pack name\n`;
+                        msg += `• \`${botConfig.getPrefix()} setauthor <name>\` — set sticker author\n`;
+                        msg += `• \`${botConfig.getPrefix()} spawnset <minutes>\` — set card spawn interval\n`;
+                        msg += `• \`${botConfig.getPrefix()} spawninfo\` — view spawn config\n\n`;
+                        msg += `*RPG Admin Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss admin\` — Abyss management\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid admin\` — Raid management\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty admin\` — Bounty management\n`;
+                        msg += `• \`${botConfig.getPrefix()} war admin\` — Guild war management\n`;
+                        msg += `• \`${botConfig.getPrefix()} rank toggleperm <level>\` — grant toggle perm\n`;
+                        msg += `• \`${botConfig.getPrefix()} rank togglelock on|off\` — lock rank toggle\n\n`;
+                      }
+
+                      // ── CARD MOD COMMANDS (owner + global mod + card mod) ──
+                      if (isSenderOwner || isSenderGMod || isSenderCardMod) {
+                        msg += `┌─ *🎴 CARD MOD COMMANDS* ─┐\n`;
+                        msg += `• \`${botConfig.getPrefix()} cardmod add @user\` — add card mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} cardmod del @user\` — remove card mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} cardmod list\` — list card mods\n`;
+                        msg += `• \`${botConfig.getPrefix()} spawn <name>\` — force-spawn a card\n`;
+                        msg += `• \`${botConfig.getPrefix()} event start\` — start token event\n`;
+                        msg += `• \`${botConfig.getPrefix()} event stop\` — stop token event\n`;
+                        msg += `• \`${botConfig.getPrefix()} event status\` — event status\n`;
+                        msg += `• \`${botConfig.getPrefix()} t2edeck\` — manage eShop deck\n`;
+                        msg += `• \`${botConfig.getPrefix()} setprice edeck <slot> <price>\` — set price\n\n`;
+                      }
+
+                      // ── GROUP ADMIN COMMANDS (WA admin + owner + global mod) ──
+                      msg += `┌─ *⚔️ GROUP ADMIN COMMANDS* ─┐\n`;
+                      msg += `• \`${botConfig.getPrefix()} warn @user\` — warn a user\n`;
+                      msg += `• \`${botConfig.getPrefix()} resetwarn @user\` — reset warnings\n`;
+                      msg += `• \`${botConfig.getPrefix()} mute @user <time>\` — mute a user\n`;
+                      msg += `• \`${botConfig.getPrefix()} unmute @user\` — unmute\n`;
+                      msg += `• \`${botConfig.getPrefix()} kick @user\` — kick from group\n`;
+                      msg += `• \`${botConfig.getPrefix()} block @user\` — block from using bot\n`;
+                      msg += `• \`${botConfig.getPrefix()} unblock @user\` — unblock\n`;
+                      msg += `• \`${botConfig.getPrefix()} glock\` — lock group (admin only)\n`;
+                      msg += `• \`${botConfig.getPrefix()} gunlock\` — unlock group\n`;
+                      msg += `• \`${botConfig.getPrefix()} glock rank <N>\` — rank-locked group\n`;
+                      msg += `• \`${botConfig.getPrefix()} pin <duration>\` — pin message\n`;
+                      msg += `• \`${botConfig.getPrefix()} unpin\` — unpin\n\n`;
+
+                      // ── RANK MANAGEMENT (canManageRanks) ──
+                      msg += `┌─ *🏷️ RANK MANAGEMENT* ─┐\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank on\` — enable rank system\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank off\` — disable rank system\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank setup\` — initialize rank ladder\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank add <level> <icon> <name>\` — add rank tier\n`;
+                      msg += `• \`${botConfig.getPrefix()} set rank @user <level>\` — set user rank\n`;
+                      msg += `• \`${botConfig.getPrefix()} unrank @user\` — remove user rank\n`;
+                      msg += `• \`${botConfig.getPrefix()} title set @user <title>\` — set custom title\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank allow @user\` — allow rank commands\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank deny @user\` — deny rank commands\n`;
+                      msg += `• \`${botConfig.getPrefix()} rank perms\` — view rank permissions\n\n`;
+
+                      // ── RPG SYSTEM COMMANDS (everyone, listed for discovery) ──
+                      msg += `┌─ *🎮 RPG SYSTEMS* ─┐\n`;
+                      msg += `• \`${botConfig.getPrefix()} abyss\` — endless dungeon\n`;
+                      msg += `• \`${botConfig.getPrefix()} raid\` — weekly avatar raid\n`;
+                      msg += `• \`${botConfig.getPrefix()} bounty\` — PvP bounty system\n`;
+                      msg += `• \`${botConfig.getPrefix()} war\` — guild wars\n`;
+                      msg += `• \`${botConfig.getPrefix()} rune\` — rune socketing system\n`;
+                      msg += `• \`${botConfig.getPrefix()} guild perks\` — view guild perks\n`;
+                      msg += `• \`${botConfig.getPrefix()} guild info\` — guild status\n`;
+                      msg += `• \`${botConfig.getPrefix()} guild donate <amount>\` — donate to guild\n`;
+                      msg += `• \`${botConfig.getPrefix()} guild loan <amount>\` — borrow from guild\n`;
+
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      return;
+                    }
+
                     // .j profile / .j me / .j whois
                     if (
                       primaryCmd === "profile" ||

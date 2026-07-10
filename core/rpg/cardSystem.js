@@ -199,7 +199,7 @@ function restartSpawnTimer() {
 async function setSpawnInterval(minutes, callerJid, isOwner) {
   const inst = getInst();
   if (!isOwner) {
-    return { success: false, message: '❌ Only the bot owner can change the spawn interval.' };
+    return { success: false, message: '❌ Only moderators and above can change the spawn interval.' };
   }
   const mins = Number(minutes);
   if (!Number.isFinite(mins) || mins < 1 || mins > 1440) {
@@ -2630,10 +2630,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     // .g spawnset reset — restore default 20min
     // .g spawninfo — show current interval + calculated rates
     case 'spawnset': {
-      if (!isOwner) return reply('❌ Only the bot owner can change the spawn interval.'), true;
+      // 💡 QA: changed from owner-only to mod+ (owner OR global mod OR card mod)
+      if (!isCardMod) return reply('❌ Only moderators and above can change the spawn interval.'), true;
       const sub = args[0]?.toLowerCase();
       if (sub === 'reset' || sub === 'default') {
-        const res = await setSpawnInterval(20, senderJid, isOwner);
+        const res = await setSpawnInterval(20, senderJid, isOwner || isMod);
         return reply(res.message), true;
       }
       if (!sub) {
@@ -2651,7 +2652,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           `_Interval is unique per bot instance and persists across restarts._`
         ), true;
       }
-      const res = await setSpawnInterval(sub, senderJid, isOwner);
+      const res = await setSpawnInterval(sub, senderJid, isOwner || isMod);
       return reply(res.message), true;
     }
 
