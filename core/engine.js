@@ -13359,6 +13359,89 @@ _Sorted by guild level + XP_
                         }
                       }
 
+                      // ── ABYSS ADMIN COMMANDS (owner / global mod only) ──
+                      if (abyssSub === 'admin' || abyssSub === 'mod') {
+                        // Permission check
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        }
+                        const adminSub = abyssArgs[1]?.toLowerCase();
+                        if (!adminSub) {
+                          let msg = `🔧 *ABYSS ADMIN COMMANDS*\n\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin reset @user\` — reset user's cooldown\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin clear @user\` — clear user's active run (no loot)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\` — set user's floor (testing)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin purge\` — purge ALL active runs (emergency)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin inspect @user\` — view a user's active run`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+
+                        // .g abyss admin reset @user
+                        if (adminSub === 'reset') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (abyssArgs[2]?.includes('@') ? abyssArgs[2] : null);
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin reset @user\`` });
+                          }
+                          const result = await abyssSystem.adminResetCooldown(targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+
+                        // .g abyss admin clear @user
+                        if (adminSub === 'clear') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (abyssArgs[2]?.includes('@') ? abyssArgs[2] : null);
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin clear @user\`` });
+                          }
+                          const result = await abyssSystem.adminClearRun(targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+
+                        // .g abyss admin setfloor @user <floor>
+                        if (adminSub === 'setfloor') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (abyssArgs[2]?.includes('@') ? abyssArgs[2] : null);
+                          const floor = parseInt(abyssArgs[3], 10);
+                          if (!targetJid || !floor) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\`` });
+                          }
+                          const result = await abyssSystem.adminSetFloor(targetJid, floor);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+
+                        // .g abyss admin purge — purge ALL active runs
+                        if (adminSub === 'purge') {
+                          const result = await abyssSystem.adminPurgeAllRuns();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        // .g abyss admin inspect @user
+                        if (adminSub === 'inspect') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (abyssArgs[2]?.includes('@') ? abyssArgs[2] : null);
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin inspect @user\`` });
+                          }
+                          const run = await abyssSystem.adminGetRunById(targetJid);
+                          if (!run) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.` });
+                          }
+                          let msg = `🔍 *Abyss Run Inspection — ${targetJid.split('@')[0]}*\n\n`;
+                          msg += `Floor: ${run.currentFloor} | Status: ${run.status}\n`;
+                          msg += `HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+                          msg += `Monsters: ${run.monstersKilled} | Bosses: ${run.bossesKilled}\n`;
+                          msg += `Loot: ${run.lootAccumulator.xp.toLocaleString()} XP, ${run.lootAccumulator.gold.toLocaleString()} Zeni\n`;
+                          msg += `Started: ${new Date(run.startedAt).toLocaleString()}\n`;
+                          msg += `Current Enemy: ${run.currentEnemy?.name || 'none'} (HP ${run.currentEnemy?.hp?.toLocaleString() || 0})\n`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [targetJid] });
+                          return;
+                        }
+
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} abyss admin\` for help.` });
+                      }
+
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown abyss subcommand. Use \`${botConfig.getPrefix()} abyss help\` for usage.` });
                     }
 
@@ -13502,6 +13585,88 @@ _Sorted by guild level + XP_
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                         return;
+                      }
+
+                      // ── RAID ADMIN COMMANDS (owner / global mod only) ──
+                      if (raidSub === 'admin' || raidSub === 'mod') {
+                        // Permission check
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        }
+                        const adminSub = raidArgs[1]?.toLowerCase();
+                        if (!adminSub) {
+                          let msg = `🔧 *RAID ADMIN COMMANDS*\n\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin spawn\` — force-spawn the weekly raid\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin end <won|lost|fled>\` — force-end the raid\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin sethp <hp>\` — set boss HP (testing)\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin revive @user\` — revive a dead attacker\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin kick @user\` — remove an attacker\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin skip\` — skip current voting round\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin purge\` — delete ALL raid data (emergency)`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+
+                        // .g raid admin spawn
+                        if (adminSub === 'spawn') {
+                          // Estimate player count
+                          const econInfo = economy.getGlobalEconomyStats ? economy.getGlobalEconomyStats() : { totalUsers: 50 };
+                          const result = await raidSystem.adminForceSpawn(econInfo.totalUsers || 50);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        // .g raid admin end <result>
+                        if (adminSub === 'end') {
+                          const result2 = raidArgs[2]?.toLowerCase() || 'fled';
+                          const result = await raidSystem.adminForceEnd(result2);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        // .g raid admin sethp <hp>
+                        if (adminSub === 'sethp') {
+                          const hp = parseInt(raidArgs[2], 10);
+                          if (!hp && hp !== 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin sethp <hp>\`` });
+                          }
+                          const result = await raidSystem.adminSetBossHp(hp);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        // .g raid admin revive @user
+                        if (adminSub === 'revive') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (raidArgs[2]?.includes('@') ? raidArgs[2] : null);
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin revive @user\`` });
+                          }
+                          const result = await raidSystem.adminReviveAttacker(targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+
+                        // .g raid admin kick @user
+                        if (adminSub === 'kick') {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                            || (raidArgs[2]?.includes('@') ? raidArgs[2] : null);
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin kick @user\`` });
+                          }
+                          const result = await raidSystem.adminKickAttacker(targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        }
+
+                        // .g raid admin skip
+                        if (adminSub === 'skip') {
+                          const result = await raidSystem.adminSkipRound();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        // .g raid admin purge
+                        if (adminSub === 'purge') {
+                          const result = await raidSystem.adminPurgeAllRaids();
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} raid admin\` for help.` });
                       }
 
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown raid subcommand. Use \`${botConfig.getPrefix()} raid help\` for usage.` });

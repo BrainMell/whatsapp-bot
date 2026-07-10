@@ -610,4 +610,174 @@ module.exports = {
   getRaidLeaderboard,
   getCurrentBoss,
   getWeekKey,
+  // 💡 Admin functions
+  adminForceSpawn,
+  adminForceEnd,
+  adminSetBossHp,
+  adminReviveAttacker,
+  adminKickAttacker,
+  adminSkipRound,
+  adminPurgeAllRaids,
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ADMIN FUNCTIONS (Phase 5 — moderation)
+// ═══════════════════════════════════════════════════════════════════════════
+// All admin functions are caller-permission-checked in the engine command
+// handler — these functions assume the caller is authorized.
+
+// ─── FORCE SPAWN ──────────────────────────────────────────────────────────
+// Force-spawns the weekly raid boss even if one already exists.
+// If a raid already exists for this week, it gets overwritten.
+async function adminForceSpawn(activePlayerCount = 50) {
+  try {
+    const weekKey = getWeekKey();
+    // Delete existing raid for this week if any
+    await RaidBoss.deleteOne({ weekKey });
+    // Spawn fresh
+    return await spawnWeeklyRaid(activePlayerCount);
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── FORCE END ────────────────────────────────────────────────────────────
+// Force-ends the current raid with a specified result ('won', 'lost', 'fled').
+// Distributes rewards if 'won', consolation otherwise.
+async function adminForceEnd(result = 'fled') {
+  try {
+    const weekKey = getWeekKey();
+    const raid = await RaidBoss.findOne({ weekKey, status: 'active' });
+    if (!raid) {
+      return { success: false, message: '❌ No active raid to end.' };
+    }
+    if (!['won', 'lost', 'fled'].includes(result)) {
+      return { success: false, message: '❌ Invalid result. Use: won, lost, or fled.' };
+    }
+    const resolution = await resolveRaid(raid, result);
+    return {
+      success: true,
+      message: `✅ Force-ended raid as *${result.toUpperCase()}*.\n\n${resolution.message || ''}`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── SET BOSS HP ──────────────────────────────────────────────────────────
+// Sets the boss's current HP (testing/debugging). Useful for testing phase
+// transitions or bringing a stuck raid to completion.
+async function adminSetBossHp(hp) {
+  try {
+    const weekKey = getWeekKey();
+    const raid = await RaidBoss.findOne({ weekKey, status: 'active' });
+    if (!raid) {
+      return { success: false, message: '❌ No active raid.' };
+    }
+    const targetHp = Math.max(0, Math.floor(hp));
+    raid.bossHp = Math.min(targetHp, raid.bossMaxHp);
+    await raid.save();
+    return {
+      success: true,
+      message: `✅ Set ${raid.bossName} HP to ${raid.bossHp.toLocaleString()}/${raid.bossMaxHp.toLocaleString()} (${((raid.bossHp / raid.bossMaxHp) * 100).toFixed(1)}%).`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── REVIVE ATTACKER ──────────────────────────────────────────────────────
+// Revives a dead attacker so they can vote again.
+async function adminReviveAttacker(userId) {
+  try {
+    const weekKey = getWeekKey();
+    const raid = await RaidBoss.findOne({ weekKey, status: 'active' });
+    if (!raid) {
+      return { success: false, message: '❌ No active raid.' };
+    }
+    const attacker = raid.attackers.find(a => a.jid === userId);
+    if (!attacker) {
+      return { success: false, message: `❌ ${userId.split('@')[0]} is not in the raid.` };
+    }
+    if (!attacker.isDead) {
+      return { success: false, message: `❌ ${userId.split('@')[0]} is already alive.` };
+    }
+    attacker.isDead = false;
+    await raid.save();
+    return {
+      success: true,
+      message: `✅ Revived ${userId.split('@')[0]} in the raid. They can vote again.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── KICK ATTACKER ────────────────────────────────────────────────────────
+// Removes an attacker from the raid entirely.
+async function adminKickAttacker(userId) {
+  try {
+    const weekKey = getWeekKey();
+    const raid = await RaidBoss.findOne({ weekKey, status: 'active' });
+    if (!raid) {
+      return { success: false, message: '❌ No active raid.' };
+    }
+    const originalCount = raid.attackers.length;
+    raid.attackers = raid.attackers.filter(a => a.jid !== userId);
+    raid.attackerCount = raid.attackers.length;
+    // Also remove their votes
+    raid.currentVotes = raid.currentVotes.filter(v => v.jid !== userId);
+    if (raid.attackers.length === originalCount) {
+      return { success: false, message: `❌ ${userId.split('@')[0]} is not in the raid.` };
+    }
+    // Recompute avatar stats
+    await recomputeAvatar(raid);
+    await raid.save();
+    return {
+      success: true,
+      message: `✅ Kicked ${userId.split('@')[0]} from the raid. Attackers: ${raid.attackerCount}.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── SKIP ROUND ───────────────────────────────────────────────────────────
+// Force-closes the current voting window and resolves the round immediately.
+// Useful when voting is stuck or for testing.
+async function adminSkipRound() {
+  try {
+    const weekKey = getWeekKey();
+    const raid = await RaidBoss.findOne({ weekKey, status: 'active' });
+    if (!raid) {
+      return { success: false, message: '❌ No active raid.' };
+    }
+    // Close voting window immediately
+    raid.votingClosesAt = new Date(0); // set to past
+    await raid.save();
+    // Now resolve
+    const result = await resolveVotingRound();
+    return {
+      success: true,
+      message: `✅ Skipped voting round. Round ${raid.round} resolved.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── PURGE ALL RAIDS ──────────────────────────────────────────────────────
+// Emergency admin function — deletes ALL raid data (all weeks).
+// Use with caution — this is the nuclear option.
+async function adminPurgeAllRaids() {
+  try {
+    const result = await RaidBoss.deleteMany({});
+    return {
+      success: true,
+      message: `✅ Purged ALL raid data. ${result.deletedCount} raid(s) deleted. A new raid will spawn on next scheduler check.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+

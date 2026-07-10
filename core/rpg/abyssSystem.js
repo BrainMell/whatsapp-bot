@@ -423,4 +423,119 @@ module.exports = {
   getFloorRewards,
   generateFloorEnemy,
   RUN_COOLDOWN_MS,
+  // 💡 Admin functions
+  adminResetCooldown,
+  adminClearRun,
+  adminSetFloor,
+  adminPurgeAllRuns,
+  adminGetRunById,
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ADMIN FUNCTIONS (Phase 4 — moderation)
+// ═══════════════════════════════════════════════════════════════════════════
+// All admin functions are caller-permission-checked in the engine command
+// handler — these functions assume the caller is authorized.
+
+// ─── RESET COOLDOWN ───────────────────────────────────────────────────────
+// Clears a user's Abyss cooldown by deleting their most recent
+// completed/failed run record. Lets them enter immediately.
+async function adminResetCooldown(userId) {
+  try {
+    // Delete completed/failed runs for this user (keep active runs + leaderboard)
+    const result = await AbyssRun.deleteMany({
+      userId,
+      status: { $in: ['completed', 'failed'] },
+    });
+    return {
+      success: true,
+      message: `✅ Reset Abyss cooldown for ${userId.split('@')[0]}. Cleared ${result.deletedCount} past run record(s).`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── CLEAR ACTIVE RUN ─────────────────────────────────────────────────────
+// Force-ends a user's active Abyss run without rewards. Useful for unsticking
+// stuck runs or dealing with exploiters.
+async function adminClearRun(userId) {
+  try {
+    const run = await AbyssRun.findOne({ userId, status: 'active' });
+    if (!run) {
+      return { success: false, message: `❌ No active Abyss run for ${userId.split('@')[0]}.` };
+    }
+    run.status = 'failed';
+    run.finalScore = 0;
+    run.finalFloor = run.currentFloor;
+    run.currentEnemy = null;
+    run.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] }; // zero out loot
+    await run.save();
+    return {
+      success: true,
+      message: `✅ Cleared active Abyss run for ${userId.split('@')[0]} (floor ${run.currentFloor}). No loot awarded.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── SET FLOOR ────────────────────────────────────────────────────────────
+// Sets a user's current floor (testing/debugging). Generates a new enemy
+// for the target floor. Only works on active runs.
+async function adminSetFloor(userId, floor) {
+  try {
+    const run = await AbyssRun.findOne({ userId, status: 'active' });
+    if (!run) {
+      return { success: false, message: `❌ No active Abyss run for ${userId.split('@')[0]}.` };
+    }
+    const targetFloor = Math.max(1, Math.floor(floor));
+    run.currentFloor = targetFloor;
+    run.currentEnemy = generateFloorEnemy(targetFloor);
+    // Restore player to full HP on floor set (testing convenience)
+    run.currentHp = run.playerSnapshot.maxHp;
+    run.currentEnergy = run.playerSnapshot.maxEnergy;
+    await run.save();
+    return {
+      success: true,
+      message: `✅ Set ${userId.split('@')[0]}'s Abyss floor to ${targetFloor}. Enemy: ${run.currentEnemy.name} (HP ${run.currentEnemy.hp.toLocaleString()}). HP restored to full.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── PURGE ALL ACTIVE RUNS ────────────────────────────────────────────────
+// Emergency admin function — ends ALL active Abyss runs without rewards.
+// Use when something is broken and runs are stuck.
+async function adminPurgeAllRuns() {
+  try {
+    const result = await AbyssRun.updateMany(
+      { status: 'active' },
+      {
+        $set: {
+          status: 'failed',
+          finalScore: 0,
+          finalFloor: 0,
+          currentEnemy: null,
+          'lootAccumulator.xp': 0,
+          'lootAccumulator.gold': 0,
+          'lootAccumulator.runes': [],
+          'lootAccumulator.items': [],
+        },
+      },
+    );
+    return {
+      success: true,
+      message: `✅ Purged ${result.modifiedCount} active Abyss run(s). All ended without loot.`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// ─── GET RUN BY USER ID (for admin display) ───────────────────────────────
+async function adminGetRunById(userId) {
+  return await AbyssRun.findOne({ userId, status: 'active' });
+}
+
