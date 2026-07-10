@@ -98,6 +98,32 @@ class GoImageService {
   }
 
   /*
+   * Generate Boss Splash Screen (new — Phase 0 of RPG expansion)
+   * Renders a full-screen boss intro image with sprite, name, flavor text,
+   * tier-colored background. Returns PNG buffer.
+   * Payload: { name, spriteFilename, flavorText, tier }
+   * tier: "S" | "SS" | "SSS" | "TRIAL" | "DRAGON" | "RAID"
+   */
+  async generateBossSplash(data) {
+    return this._enqueue(async () => {
+      try {
+        const response = await this.client.post(
+          "/api/combat/splash",
+          data,
+          {
+            responseType: "arraybuffer",
+            timeout: 10000,
+          },
+        );
+        return Buffer.from(response.data);
+      } catch (error) {
+        console.error("GoService Boss Splash Error:", error.message);
+        return null; // non-fatal — splash is optional
+      }
+    });
+  }
+
+  /*
    * Generate Chess Board
    */
   async generateChessBoard(data) {
