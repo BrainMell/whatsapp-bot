@@ -81,6 +81,9 @@ function getInst() {
       // 💡 TOKEN EVENT STATE
       tokenEventActive: false,     // toggled via .g event start/stop
       tokenEventStart: 0,          // timestamp event started
+      // 💡 SPAWN COUNTER — every 3rd spawn grants a guaranteed event token
+      // (when the event is active). Replaces the old 50%-chance-per-claim RNG.
+      spawnCounter: 0,
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
     });
@@ -158,13 +161,17 @@ function ensureTimerRunning() {
   const inst = getInst();
   if (!inst.spawnTimer && inst.activeGroups.size > 0) {
     let groupIndex = 0;
+    // 💡 FIX: spawn interval 30min → 20min = 3 spawns/hour (was 2/hour).
+    // User asked for 3x/hour so card economy stays active. Combined with
+    // the token-on-every-3rd-spawn change below, every 3rd spawn (~1/hour)
+    // grants a guaranteed event token during token events.
     inst.spawnTimer = setInterval(() => {
       const groups = Array.from(inst.activeGroups);
       if (groups.length === 0) return;
       const gid = groups[groupIndex % groups.length];
       doSpawn(null, null, false, gid);
       groupIndex++;
-    }, 30 * 60 * 1000);
+    }, 20 * 60 * 1000);
   }
 }
 
@@ -331,11 +338,18 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
 
     const spawnKey = `${targetGroup}_${card.id}`;
+    // 💡 FIX: increment spawn counter. Every 3rd spawn becomes "token-bearing"
+    // — when claimed during an active token event, it grants a guaranteed
+    // token (replaces the old 50%-chance-per-claim RNG). Roughly 1 token per
+    // hour at 3 spawns/hour.
+    inst.spawnCounter = (inst.spawnCounter || 0) + 1;
+    const isTokenSpawn = (inst.spawnCounter % 3 === 0);
     inst.activeSpawns.set(spawnKey, {
       card, copyNumber: stat.totalSpawned, stat, price,
-      groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS
+      groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS,
+      hasToken: isTokenSpawn, // 💡 marked for guaranteed token drop on claim
     });
-    console.log(`[CardSystem][${botConfig.getBotId()}] Spawned: ${card.cardName} (T${card.tier}) #${stat.totalSpawned}/${stat.maxCopies} in ${targetGroup}`);
+    console.log(`[CardSystem][${botConfig.getBotId()}] Spawned: ${card.cardName} (T${card.tier}) #${stat.totalSpawned}/${stat.maxCopies} in ${targetGroup}${isTokenSpawn ? ' [TOKEN BEARING]' : ''}`);
     return { card, copyNumber: stat.totalSpawned, stat, price };
   } catch (err) {
     stat.totalSpawned -= 1;
@@ -676,19 +690,18 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     await spawn.stat.save();
     inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
-    // 💡 TOKEN EVENT: Drop 1 token per ~2 card claims.
-    // Uses a 50% chance per claim (≈1 token per 2 spawns as specified).
-    // Only drops if the token event is active.
+    // 💡 FIX: TOKEN EVENT — every 3rd spawn is marked hasToken=true at spawn
+    // time. On claim, if the event is active AND this spawn is token-bearing,
+    // grant a guaranteed token (no RNG). Old behavior was 50% chance per
+    // claim, which felt random and inconsistent. Now: 3 spawns/hour ÷ 3 =
+    // ~1 guaranteed token per hour of active spawns.
     let tokenMsg = '';
     try {
       const eventActive = await isTokenEventActive();
-      if (eventActive) {
-        // 50% chance to drop a token on each claim ≈ 1 token per 2 claims
-        if (Math.random() < 0.50) {
-          economy.addTokens(senderJid, 1);
-          const balance = economy.getTokens(senderJid);
-          tokenMsg = `\n\n🎫 *Token Drop!* +1 Event Token (Total: ${balance})\n_Use \`${P()} eshop\` to spend them!_`;
-        }
+      if (eventActive && spawn.hasToken) {
+        economy.addTokens(senderJid, 1);
+        const balance = economy.getTokens(senderJid);
+        tokenMsg = `\n\n🎫 *GUARANTEED TOKEN DROP!* +1 Event Token (Total: ${balance})\n_This was a token-bearing spawn! Use \`${P()} eshop\` to spend them._`;
       }
     } catch (tokenErr) {
       // Don't fail the claim if token drop fails
