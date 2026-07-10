@@ -8553,6 +8553,12 @@ Usage: ${newUsage}/5${warningText}`;
                     const rankMatch = lowerTxt.match(/glock(?:\s+rank)?\s+(\d+)/);
                     if (rankMatch) {
                       const minLevel = parseInt(rankMatch[1]);
+                      // 💡 FIX: don't allow rank lock when rank system is OFF.
+                      // (When ranksEnabled===false, memberLevel is 0 for everyone,
+                      // so the lock would silently block ALL non-admin messages.)
+                      if (settings.ranksEnabled === false) {
+                        return reply(`❌ Cannot set a rank lock while the rank system is OFF.\nRun \`${P} rank on\` first, or use \`${P} glock admin\` instead.`);
+                      }
                       const ladder   = settings.rankLadder || [];
                       if (!ladder.length) {
                         return reply(`❌ No rank ladder set up. Use \`${P} rank add\` first.`);
@@ -9595,20 +9601,112 @@ Commands:
                   const P = botConfig.getPrefix().toLowerCase();
 
                   // .g rank on / .g rank off
+                  // 💡 FIX: per-tier permission check + lockMode auto-clear.
+                  // Previously anyone with rank 4+ (Commander) could toggle.
+                  // Now default is level 5 (Overlord) only, plus owner/global
+                  // mods/WA admins. Other tiers can be granted via
+                  // settings.rankToggleAllowedLevels (array of levels).
                   if (lowerTxt === `${P} rank on` || lowerTxt === `${P} rank off`) {
                     if (!isGroupChat) return reply('❌ Groups only.');
                     let meta = groupMetadata;
                     if (!meta) {
                       try { meta = await getGroupMetadata(chatId); } catch (err) {}
                     }
-                    if (!(await canManageRanks(chatId, senderJid, isOwner, isGlobalMod(senderJid), meta))) {
-                      return reply('❌ You do not have permission to manage ranks.');
-                    }
                     const settings = getGroupSettings(chatId);
+
+                    // Permission: owner / global mod / WA admin always allowed.
+                    // Otherwise: must be in rankToggleAllowedLevels (default [5]).
+                    let canToggle = isOwner || isGlobalMod(senderJid);
+                    if (!canToggle && meta) {
+                      const participant = meta.participants?.find(p => p.id === senderJid);
+                      const isWaAdmin = participant && (participant.admin === 'admin' || participant.admin === 'superadmin');
+                      canToggle = isWaAdmin;
+                    }
+                    if (!canToggle && settings.ranksEnabled !== false) {
+                      const memberLevel = getMemberRankLevel(chatId, senderJid);
+                      const allowedLevels = settings.rankToggleAllowedLevels || [5]; // default: Overlord only
+                      canToggle = allowedLevels.includes(memberLevel);
+                    }
+
+                    // Hard lock override — even Overlords can't toggle if locked
+                    if (settings.rankToggleLocked === true) {
+                      canToggle = false;
+                    }
+
+                    if (!canToggle) {
+                      return reply('❌ You do not have permission to toggle the rank system. (Required: Overlord tier, WA admin, or owner.)');
+                    }
+
                     const enable = lowerTxt.endsWith("on");
                     settings.ranksEnabled = enable;
+
+                    // 💡 FIX: when turning OFF, auto-clear any rank-based lockMode
+                    // so non-admins aren't silently locked out of every command.
+                    // (Previously lockMode: 'rank:N' would persist with
+                    // memberLevel=0 for everyone, blocking all gated commands.)
+                    if (!enable && settings.lockMode && settings.lockMode.startsWith('rank:')) {
+                      settings.lockMode = null;
+                    }
+
                     saveGroupSettings();
-                    return reply(BOT_MARKER + `✅ Rank system is now ${enable ? 'ENABLED' : 'DISABLED'} for this group.`);
+                    let replyMsg = `✅ Rank system is now ${enable ? 'ENABLED' : 'DISABLED'} for this group.`;
+                    if (!enable) replyMsg += `\n\n🔧 Any rank-based group lock has been cleared.`;
+                    return reply(BOT_MARKER + replyMsg);
+                  }
+
+                  // 💡 NEW: .g rank toggleperm <level> — grant toggle permission to a tier
+                  // .g rank toggleperm clear — reset to default (Overlord only)
+                  // .g rank togglelock on/off — hard-lock toggle (no one can change)
+                  if (lowerTxt.startsWith(`${P} rank toggleperm`) || lowerTxt.startsWith(`${P} rank togglelock`)) {
+                    if (!isGroupChat) return reply('❌ Groups only.');
+                    let meta = groupMetadata;
+                    if (!meta) {
+                      try { meta = await getGroupMetadata(chatId); } catch (err) {}
+                    }
+                    // Only owner / global mod / WA admin can change toggle perms
+                    let canConfig = isOwner || isGlobalMod(senderJid);
+                    if (!canConfig && meta) {
+                      const participant = meta.participants?.find(p => p.id === senderJid);
+                      canConfig = participant && (participant.admin === 'admin' || participant.admin === 'superadmin');
+                    }
+                    if (!canConfig) {
+                      return reply('❌ Only group admins / owner / global mods can configure toggle permissions.');
+                    }
+                    const settings = getGroupSettings(chatId);
+                    const parts = lowerTxt.split(' ');
+
+                    if (lowerTxt.startsWith(`${P} rank toggleperm`)) {
+                      const arg = parts[3];
+                      if (arg === 'clear') {
+                        settings.rankToggleAllowedLevels = [5]; // default
+                        saveGroupSettings();
+                        return reply(BOT_MARKER + '✅ Toggle permission reset to default (Overlord tier only).');
+                      }
+                      const lvl = parseInt(arg, 10);
+                      if (isNaN(lvl) || lvl < 1 || lvl > 5) {
+                        return reply('❌ Usage: `.g rank toggleperm <1-5>` or `.g rank toggleperm clear`\nLevels: 1=Wanderer 2=Initiate 3=Guardian 4=Commander 5=Overlord');
+                      }
+                      settings.rankToggleAllowedLevels = settings.rankToggleAllowedLevels || [5];
+                      if (!settings.rankToggleAllowedLevels.includes(lvl)) {
+                        settings.rankToggleAllowedLevels.push(lvl);
+                      }
+                      saveGroupSettings();
+                      return reply(BOT_MARKER + `✅ Tier ${lvl} can now toggle the rank system.\nAllowed tiers: ${settings.rankToggleAllowedLevels.join(', ')}`);
+                    }
+
+                    if (lowerTxt.startsWith(`${P} rank togglelock`)) {
+                      const arg = parts[3];
+                      if (arg === 'on') {
+                        settings.rankToggleLocked = true;
+                        saveGroupSettings();
+                        return reply(BOT_MARKER + '🔒 Rank toggle is now LOCKED. No one can change the rank system state until `.g rank togglelock off` is run.');
+                      } else if (arg === 'off') {
+                        settings.rankToggleLocked = false;
+                        saveGroupSettings();
+                        return reply(BOT_MARKER + '🔓 Rank toggle is now UNLOCKED.');
+                      }
+                      return reply('❌ Usage: `.g rank togglelock on|off`');
+                    }
                   }
 
                   // 💡 FIX: Handle '.g rank mission' BEFORE the isRankCommand gate.
