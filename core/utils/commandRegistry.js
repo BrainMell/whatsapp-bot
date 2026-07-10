@@ -111,7 +111,11 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild donate', desc: 'Donate Zeni to guild bank (earns guild XP).', usage: 'guild donate <amount>' },
     { cmd: 'guild loan', desc: 'Borrow from guild bank (7-day repayment).', usage: 'guild loan <amount> | list | repay <amount>' },
     { cmd: 'guild emblem', desc: 'Set guild emblem (Leader only).', usage: 'guild emblem <emoji> [hexColor]' },
-    { cmd: 'guild role', desc: 'Set member role (Leader only).', usage: 'guild role @user <recruit|member|officer>' }
+    { cmd: 'guild role', desc: 'Set member role (Leader only).', usage: 'guild role @user <recruit|member|officer>' },
+    { cmd: 'war', desc: 'Guild war help and this week event.', usage: 'war' },
+    { cmd: 'war status', desc: 'Current war state and rankings.', usage: 'war status' },
+    { cmd: 'war leaderboard', desc: 'This week guild war rankings.', usage: 'war leaderboard' },
+    { cmd: 'war history', desc: 'All-time top guilds by war points.', usage: 'war history' }
   ],
   RPG: [
     { cmd: 'character', desc: 'View your RPG character sheet, class, and stats.', usage: 'character' },
@@ -151,7 +155,36 @@ const COMMAND_REGISTRY = {
     { cmd: 'vote', desc: 'Vote on decisions during a quest.', usage: 'vote <n>' },
     { cmd: 'duel', desc: 'Challenge another player to a 1v1 RPG duel with optional stakes.', usage: 'duel @user [stake]' },
     { cmd: 'challenge', desc: 'Alias for duel.', usage: 'challenge @user [stake]' },
-    { cmd: 'pvp', desc: 'Perform actions during an active duel.', usage: 'pvp <attack/ability/item> [n]' }
+    { cmd: 'pvp', desc: 'Perform actions during an active duel.', usage: 'pvp <attack/ability/item> [n]' },
+    { cmd: 'rune', desc: 'Rune system help and overview.', usage: 'rune' },
+    { cmd: 'rune inv', desc: 'View your rune inventory.', usage: 'rune inv' },
+    { cmd: 'rune list', desc: 'List all rune types and tiers.', usage: 'rune list' },
+    { cmd: 'rune socket', desc: 'Socket a rune into a skill.', usage: 'rune socket <runeId> <skillId>' },
+    { cmd: 'rune remove', desc: 'Remove a socketed rune (needs scroll).', usage: 'rune remove <runeId>' },
+    { cmd: 'rune destroy', desc: 'Permanently destroy a socketed rune.', usage: 'rune destroy <runeId>' },
+    { cmd: 'rune slots', desc: 'Check rune slot capacity for a skill.', usage: 'rune slots <skillId>' },
+    { cmd: 'rune sell', desc: 'List a rune for sale on the market.', usage: 'rune sell <runeId> <price>' },
+    { cmd: 'rune buy', desc: 'Buy a listed rune.', usage: 'rune buy <listingId>' },
+    { cmd: 'rune market', desc: 'Browse all runes for sale.', usage: 'rune market' },
+    { cmd: 'rune unsell', desc: 'Cancel a rune market listing.', usage: 'rune unsell <runeId>' },
+    { cmd: 'abyss', desc: 'Abyss help and floor structure.', usage: 'abyss' },
+    { cmd: 'abyss enter', desc: 'Start an Abyss run (12h cooldown, L20+).', usage: 'abyss enter' },
+    { cmd: 'abyss attack', desc: 'Attack the current floor enemy.', usage: 'abyss attack' },
+    { cmd: 'abyss status', desc: 'View your active Abyss run.', usage: 'abyss status' },
+    { cmd: 'abyss retreat', desc: 'Extract with 100% of loot.', usage: 'abyss retreat' },
+    { cmd: 'abyss leaderboard', desc: 'Top Abyss runs this week.', usage: 'abyss leaderboard' },
+    { cmd: 'abyss best', desc: 'Your best Abyss run ever.', usage: 'abyss best' },
+    { cmd: 'raid', desc: 'Raid help and boss rotation.', usage: 'raid' },
+    { cmd: 'raid status', desc: 'View current raid state and avatar.', usage: 'raid status' },
+    { cmd: 'raid join', desc: 'Join the weekly raid (L20+).', usage: 'raid join' },
+    { cmd: 'raid vote', desc: 'Vote for the Avatar skill (1-5).', usage: 'raid vote <1-5>' },
+    { cmd: 'raid leaderboard', desc: 'All-time top raid contributors.', usage: 'raid leaderboard' },
+    { cmd: 'bounty', desc: 'Bounty system help and rules.', usage: 'bounty' },
+    { cmd: 'bounty place', desc: 'Place a Zeni bounty on a player.', usage: 'bounty place @target <amount>' },
+    { cmd: 'bounty list', desc: 'Top 10 active bounties.', usage: 'bounty list' },
+    { cmd: 'bounty target', desc: 'View bounties on your head.', usage: 'bounty target' },
+    { cmd: 'bounty mine', desc: 'View bounties you placed.', usage: 'bounty mine' },
+    { cmd: 'bounty cancel', desc: 'Cancel a bounty (10% fee).', usage: 'bounty cancel <bountyId>' }
   ],
   GROUP: [
     { cmd: 'record', desc: 'Toggle message recording for summaries.', usage: 'record on/off' },
@@ -341,49 +374,6 @@ const COMMAND_REGISTRY = {
     { cmd: 'smug', desc: 'Look smug.', usage: 'smug' },
     { cmd: 'eat', desc: 'Eat/Nom something or someone.', usage: 'eat @user' },
     { cmd: 'backflip', desc: 'Do a backflip.', usage: 'backflip' }
-  ],
-  RUNES: [
-    { cmd: 'rune', desc: 'Rune system help and overview.', usage: 'rune' },
-    { cmd: 'rune inv', desc: 'View your rune inventory.', usage: 'rune inv' },
-    { cmd: 'rune list', desc: 'List all rune types and tiers.', usage: 'rune list' },
-    { cmd: 'rune socket', desc: 'Socket a rune into a skill.', usage: 'rune socket <runeId> <skillId>' },
-    { cmd: 'rune remove', desc: 'Remove a socketed rune (needs scroll).', usage: 'rune remove <runeId>' },
-    { cmd: 'rune destroy', desc: 'Permanently destroy a socketed rune.', usage: 'rune destroy <runeId>' },
-    { cmd: 'rune slots', desc: 'Check rune slot capacity for a skill.', usage: 'rune slots <skillId>' },
-    { cmd: 'rune sell', desc: 'List a rune for sale on the market.', usage: 'rune sell <runeId> <price>' },
-    { cmd: 'rune buy', desc: 'Buy a listed rune.', usage: 'rune buy <listingId>' },
-    { cmd: 'rune market', desc: 'Browse all runes for sale.', usage: 'rune market' },
-    { cmd: 'rune unsell', desc: 'Cancel a rune market listing.', usage: 'rune unsell <runeId>' }
-  ],
-  ABYSS: [
-    { cmd: 'abyss', desc: 'Abyss help and floor structure.', usage: 'abyss' },
-    { cmd: 'abyss enter', desc: 'Start an Abyss run (12h cooldown, L20+).', usage: 'abyss enter' },
-    { cmd: 'abyss attack', desc: 'Attack the current floor enemy.', usage: 'abyss attack' },
-    { cmd: 'abyss status', desc: 'View your active Abyss run.', usage: 'abyss status' },
-    { cmd: 'abyss retreat', desc: 'Extract with 100% of loot.', usage: 'abyss retreat' },
-    { cmd: 'abyss leaderboard', desc: 'Top Abyss runs this week.', usage: 'abyss leaderboard' },
-    { cmd: 'abyss best', desc: 'Your best Abyss run ever.', usage: 'abyss best' }
-  ],
-  RAID: [
-    { cmd: 'raid', desc: 'Raid help and boss rotation.', usage: 'raid' },
-    { cmd: 'raid status', desc: 'View current raid state and avatar.', usage: 'raid status' },
-    { cmd: 'raid join', desc: 'Join the weekly raid (L20+).', usage: 'raid join' },
-    { cmd: 'raid vote', desc: 'Vote for the Avatar skill (1-5).', usage: 'raid vote <1-5>' },
-    { cmd: 'raid leaderboard', desc: 'All-time top raid contributors.', usage: 'raid leaderboard' }
-  ],
-  BOUNTY: [
-    { cmd: 'bounty', desc: 'Bounty system help and rules.', usage: 'bounty' },
-    { cmd: 'bounty place', desc: 'Place a Zeni bounty on a player.', usage: 'bounty place @target <amount>' },
-    { cmd: 'bounty list', desc: 'Top 10 active bounties.', usage: 'bounty list' },
-    { cmd: 'bounty target', desc: 'View bounties on your head.', usage: 'bounty target' },
-    { cmd: 'bounty mine', desc: 'View bounties you placed.', usage: 'bounty mine' },
-    { cmd: 'bounty cancel', desc: 'Cancel a bounty (10% fee).', usage: 'bounty cancel <bountyId>' }
-  ],
-  'GUILD WARS': [
-    { cmd: 'war', desc: 'Guild war help and this week event.', usage: 'war' },
-    { cmd: 'war status', desc: 'Current war state and rankings.', usage: 'war status' },
-    { cmd: 'war leaderboard', desc: 'This week guild war rankings.', usage: 'war leaderboard' },
-    { cmd: 'war history', desc: 'All-time top guilds by war points.', usage: 'war history' }
   ],
   MODERATOR: [
     { cmd: 'modcom', desc: 'Show all moderator commands by permission level.', usage: 'modcom' },
