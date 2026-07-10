@@ -473,7 +473,16 @@ async function equipItem(userId, itemId, slot) {
     }
 
     // 1. Remove new item from inventory first
-    removeItem(userId, itemId, 1);
+    // 💡 QA FIX: was using `itemId` (original input) instead of `targetItemId`
+    // (the matched inventory key). When loose matching converts e.g.
+    // "steel sabre" → "steel_sabre", removeItem received "steel sabre"
+    // which doesn't match any key → removeItem fails silently → item
+    // stays in inventory AND gets equipped = duplication exploit.
+    // Also: return value was never checked.
+    const removeResult = removeItem(userId, targetItemId, 1);
+    if (!removeResult || !removeResult.success) {
+        return { success: false, message: `❌ Failed to remove item from inventory. Make sure you have the item.` };
+    }
 
     // 2. Handle Two-Hander logic (unequip Off-Hand if equipping to Main-Hand)
     if (isTwoHanded && slotName === 'main_hand' && equipment.off_hand) {

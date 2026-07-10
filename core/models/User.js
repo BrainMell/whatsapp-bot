@@ -129,6 +129,18 @@ const UserSchema = new mongoose.Schema({
         luck: { type: Number, default: 0 },
         crit: { type: Number, default: 0 }
     },
+    // 💡 QA FIX: was missing from schema — Mongoose strict mode stripped it
+    // on save, causing the stat soft cap (20 points) to be disabled and
+    // resetStats to refund wrong amounts.
+    allocatedStatPoints: {
+        hp: { type: Number, default: 0 },
+        atk: { type: Number, default: 0 },
+        def: { type: Number, default: 0 },
+        mag: { type: Number, default: 0 },
+        spd: { type: Number, default: 0 },
+        luck: { type: Number, default: 0 },
+        crit: { type: Number, default: 0 }
+    },
     achievements: { type: Array, default: [] }
   },
 

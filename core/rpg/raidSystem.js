@@ -222,8 +222,19 @@ async function recomputeAvatar(raid) {
   }
 
   raid.avatar.class = mostCommonClass;
-  raid.avatar.hp = Math.floor(totalHp * scale);
-  raid.avatar.maxHp = Math.floor(totalHp * scale);
+  // 💡 QA FIX: preserve HP percentage on recompute. Previously, every time
+  // a new player joined, recomputeAvatar set hp = maxHp (full heal).
+  // Coordinated guilds could keep the Avatar at full HP indefinitely by
+  // staggering joins. Now: first join = full HP; subsequent joins preserve
+  // the current HP percentage.
+  const newMaxHp = Math.floor(totalHp * scale);
+  if (raid.avatar.maxHp > 0 && raid.avatar.hp > 0) {
+    const hpPct = raid.avatar.hp / raid.avatar.maxHp;
+    raid.avatar.hp = Math.floor(newMaxHp * hpPct);
+  } else {
+    raid.avatar.hp = newMaxHp; // first join or dead avatar — full HP
+  }
+  raid.avatar.maxHp = newMaxHp;
   raid.avatar.atk = Math.floor(totalAtk * scale);
   raid.avatar.def = Math.floor(totalDef * scale);
   raid.avatar.spd = Math.floor(totalSpd * scale);

@@ -4844,17 +4844,17 @@ function getSkillEffect(skill, level) {
             type = 'aoe';
             targets = skill.chainTargets;
         } else if (skill.targeting === 'CLEAVE') {
-            // 💡 FIX: was hard-coded `targets = 2`, which capped WARRIOR cleave
-            // at 2 enemies regardless of skill level. Now: honor per-skill
-            // `targets`/`maxTargets` if defined, else fall back to all living
-            // enemies (mirrors the AOE fix below).
+            // 💡 QA FIX: was falling through to `targets = undefined` when the
+            // skill doesn't define targets/maxTargets (which WARRIOR cleave
+            // doesn't), causing getTargets to hit ALL enemies. Now defaults
+            // to the CLEAVE maxTargets from ABILITY_MECHANICS (which is 2).
             type = 'aoe';
             if (typeof skill.targets === 'number') {
                 targets = skill.targets;
             } else if (typeof skill.maxTargets === 'number') {
                 targets = skill.maxTargets;
             } else {
-                targets = undefined; // getTargets will use opponentSide.length
+                targets = (ABILITY_MECHANICS.CLEAVE && ABILITY_MECHANICS.CLEAVE.maxTargets) || 2;
             }
         } else if (skill.targeting && (skill.targeting.includes('AOE') || skill.targeting === 'ALL_ENEMIES')) {
             type = 'aoe';

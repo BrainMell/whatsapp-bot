@@ -139,10 +139,33 @@ async function socketRune(userJid, runeId, skillId) {
 
   // Count existing socketed runes for this skill
   const existing = await getSocketedRunes(userJid, skillId);
-  // We can't check slot count without the skill definition — the caller
-  // (command handler) validates that. Here we just enforce a hard cap of 3.
-  if (existing.length >= 3) {
-    return { success: false, message: '❌ This skill already has 3 runes socketed (maximum).' };
+  // 💡 QA FIX: actually check the skill's slot count. Previously the comment
+  // said "the caller validates that" but the caller (engine.js) did NOT
+  // validate — players could socket into 0-slot starter skills.
+  // Look up the skill definition across all class trees.
+  const skillTree = require('./skillTree');
+  let skillDef = null;
+  const allClasses = skillTree.SKILL_TREES || {};
+  for (const [classId, classTree] of Object.entries(allClasses)) {
+    if (!classTree || !classTree.trees) continue;
+    for (const [treeName, treeData] of Object.entries(classTree.trees)) {
+      if (!treeData || !treeData.skills) continue;
+      if (treeData.skills[skillId]) {
+        skillDef = treeData.skills[skillId];
+        break;
+      }
+    }
+    if (skillDef) break;
+  }
+  if (!skillDef) {
+    return { success: false, message: `❌ Skill "${skillId}" not found.` };
+  }
+  const maxSlots = getSkillSlotCount(skillDef);
+  if (maxSlots === 0) {
+    return { success: false, message: `❌ This skill has 0 rune slots (starter skills can't be socketed).` };
+  }
+  if (existing.length >= maxSlots) {
+    return { success: false, message: `❌ This skill already has ${existing.length}/${maxSlots} runes socketed (maximum).` };
   }
 
   rune.socketedSkillId = skillId;

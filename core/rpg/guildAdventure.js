@@ -2048,9 +2048,7 @@ function calculateDamage(
   // 💡 DRAGON SEAL RING REQUIREMENT
   if (
     target.id &&
-    (target.id.startsWith("DRAKE") ||
-      target.id.includes("DRAGON") ||
-      target.id.includes("Dragon"))
+    (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
   ) {
     if (!attacker.isEnemy && attacker.jid) {
       // 💡 FIX: accept ring in inventory OR equipped. Equip removes from
@@ -3852,6 +3850,11 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           enemy.isDead = true;
           enemy.currentHP = 0;
           enemy.fled = true;
+          // 💡 QA FIX: must also set enemy.stats.hp = 0 — checkCombatEnd
+          // and the action-gauge loop check `c.stats.hp <= 0`, not
+          // `c.isDead`. Without this, a "fled" mob keeps gaining action
+          // gauge and taking turns (attacking, healing, fleeing again).
+          if (enemy.stats) enemy.stats.hp = 0;
           // Check if combat should end (all enemies dead)
           if (await checkCombatEnd(sock, state, sessionKey)) {
             resolve();
@@ -4309,7 +4312,13 @@ async function endCombat(sock, victory, sessionKey) {
       else if (state.enemies.some((e) => e.name.includes("Elite")))
         progress = 0.2;
 
-      economy.addQuestProgress(player.jid, progress, true);
+      // 💡 QA FIX: was passing won=true per-combat, which incremented
+      // questsWon by 1 for EVERY combat encounter in the dungeon.
+      // Combined with the final-act call, a 5-encounter dungeon
+      // incremented questsWon by 6. Now: pass won=false per-combat
+      // (only progress is tracked), and the final-act call at
+      // endAdventure passes won=true once.
+      economy.addQuestProgress(player.jid, progress, false);
     }
 
     // 🟢 CLEAR all enemies and their states
@@ -5602,8 +5611,11 @@ async function endAdventure(sock, sessionKey, victory = true) {
       );
 
       // Verify both deductions actually succeeded
-      // (removeItem returns the new count or false; removeMoney returns true/false)
-      const stoneOk = stoneRemoved !== false && stoneRemoved !== undefined;
+      // 💡 QA FIX: removeItem returns {success: true/false, ...}, not a
+      // count or false. The old check `stoneRemoved !== false && !== undefined`
+      // was always true (objects are neither false nor undefined), allowing
+      // free evolutions and stone duplication on rollback.
+      const stoneOk = stoneRemoved && stoneRemoved.success === true;
       const moneyOk = moneyRemoved === true || moneyRemoved === undefined;
 
       if (!stoneOk || !moneyOk) {
@@ -5747,23 +5759,6 @@ async function endAdventure(sock, sessionKey, victory = true) {
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
 
-    // 💡 ECONOMY REBALANCE: apply per-dungeon gold cap.
-    // finalGold = monster/boss gold accumulated during the run.
-    // bonusGold = completion bonus.
-    // Combined total is capped at _runGoldCap.
-    let totalGoldThisRun = finalGold + bonusGold;
-    if (totalGoldThisRun > _runGoldCap) {
-      const reducedTo = _runGoldCap;
-      const cut = totalGoldThisRun - reducedTo;
-      // Reduce proportionally from both sources
-      const ratio = reducedTo / totalGoldThisRun;
-      finalGold = Math.floor(finalGold * ratio);
-      bonusGold = Math.floor(bonusGold * ratio);
-      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
-    } else {
-      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: ${finalGold + bonusGold}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
-    }
-
     // Update stats and rank
     if (!player.isDead) {
       // 💡 Phase 2: Apply guild gold multiplier (MERCHANT +10%, treasury building, etc.)
@@ -5775,10 +5770,26 @@ async function endAdventure(sock, sessionKey, victory = true) {
         guildXpMult = guildPerks.getXpMultiplier(player.jid);
       } catch (e) {}
 
+      // 💡 QA FIX: apply guild bonus BEFORE the gold cap, not after.
+      // Previously the cap applied to base gold, then guild bonus was
+      // added on top — allowing the total to exceed the cap.
       const guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
       const guildBonusXp = Math.floor(finalXP * (guildXpMult - 1.0));
 
-      economy.addMoney(player.jid, finalGold + bonusGold + guildBonusGold);
+      // 💡 QA FIX: apply gold cap to the COMBINED total (base + guild bonus)
+      let totalGoldThisRun = finalGold + bonusGold + guildBonusGold;
+      if (totalGoldThisRun > _runGoldCap) {
+        const cut = totalGoldThisRun - _runGoldCap;
+        const ratio = _runGoldCap / totalGoldThisRun;
+        finalGold = Math.floor(finalGold * ratio);
+        bonusGold = Math.floor(bonusGold * ratio);
+        totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP + guildBonusXp}\n  💰 Gold: ${totalGoldThisRun} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      } else {
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP + guildBonusXp}\n  💰 Gold: ${totalGoldThisRun}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      }
+
+      economy.addMoney(player.jid, totalGoldThisRun);
       economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
       // Award GP — adventurer rank progression needs this
       if (gpGain > 0) {
@@ -5801,6 +5812,8 @@ async function endAdventure(sock, sessionKey, victory = true) {
         msg += `🏰 *Guild Bonus:* +${guildBonusGold.toLocaleString()} gold, +${guildBonusXp.toLocaleString()} XP\n`;
       }
     } else {
+      // Dead player — no gold, no guild bonus
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: 0\n  🏅 GP: +0\n  💀 Fallen\n\n`;
       economy.addQuestProgress(player.jid, 0, false); // No progress on death
     }
 
@@ -6144,24 +6157,16 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     };
   }
 
-  // 💡 Defense-in-depth: if cost or energy ever becomes NaN/undefined, reject
-  // instead of corrupting player.stats.energy (root cause of the old
-  // infinite-mana bug).
-  const safeCost = Number.isFinite(ability.cost) ? ability.cost : Infinity;
-  const safeEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
-  if (safeEnergy < safeCost) {
-    return {
-      success: false,
-      message: `Not enough energy! Need ${safeCost}, have ${Math.floor(safeEnergy)}`,
-    };
-  }
-
   // Get effect
   const effect = skillTree.getSkillEffect(ability, ability.skillLevel);
 
   // 💡 Phase 3: Apply socketed rune modifiers to the skill effect.
   // Loads any runes the user has socketed into this skill from MongoDB
   // and applies their modifiers (damage mult, energy cost, target bonus, etc.)
+  // 💡 QA FIX: moved this block BEFORE the energy check so rune-modified
+  // energy costs are actually enforced. Previously the energy check used
+  // the base ability.cost, ignoring POWER (+10-20% cost) and EFFICIENCY
+  // (-20-40% cost) runes entirely.
   let runeModifiedEffect = effect;
   try {
     const runeSystem = require('./runeSystem');
@@ -6173,8 +6178,20 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     // Rune system is optional — fall through with unmodified effect
   }
 
+  // 💡 QA FIX: use runeModifiedEffect.cost (if available) instead of ability.cost
+  // so POWER/EFFICIENCY runes actually affect energy consumption.
+  const effectiveCost = Number.isFinite(runeModifiedEffect.cost) ? runeModifiedEffect.cost
+    : (Number.isFinite(ability.cost) ? ability.cost : Infinity);
+  const safeEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+  if (safeEnergy < effectiveCost) {
+    return {
+      success: false,
+      message: `Not enough energy! Need ${effectiveCost}, have ${Math.floor(safeEnergy)}`,
+    };
+  }
+
   // Consume energy (clamped to 0 — never let NaN/Infinity sneak through)
-  player.stats.energy = Math.max(0, (player.stats.energy || 0) - (safeCost === Infinity ? 0 : safeCost));
+  player.stats.energy = Math.max(0, (player.stats.energy || 0) - (effectiveCost === Infinity ? 0 : effectiveCost));
 
   // Apply ability effect (using rune-modified effect if runes are socketed)
   const result = await applyAbilityEffect(
@@ -6223,7 +6240,10 @@ async function applyAbilityEffect(
   let totalHealing = 0;
 
   // DAMAGE ABILITIES
-  const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "multi_hit", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
+  // 💡 QA FIX: removed "multi_hit" from damageKeywords — it caused multi-hit
+  // abilities to run BOTH the generic single-target damage block AND the
+  // dedicated multi_hit block, dealing damage twice and double-counting kills.
+  const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
   const isDamageType = damageKeywords.some((t) => effect.type && effect.type.includes(t));
   if (isDamageType && !effect.type.includes("heal_team")) {
     if (!player.isEnemy) {
@@ -6253,9 +6273,7 @@ async function applyAbilityEffect(
       // 💡 DRAGON SEAL RING REQUIREMENT
       if (
         target.id &&
-        (target.id.startsWith("DRAKE") ||
-          target.id.includes("DRAGON") ||
-          target.id.includes("Dragon"))
+        (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
       ) {
         if (!player.isEnemy && player.jid) {
           // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)
@@ -6427,9 +6445,7 @@ async function applyAbilityEffect(
       // 💡 DRAGON SEAL RING REQUIREMENT
       if (
         target.id &&
-        (target.id.startsWith("DRAKE") ||
-          target.id.includes("DRAGON") ||
-          target.id.includes("Dragon"))
+        (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
       ) {
         if (!player.isEnemy && player.jid) {
           // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)

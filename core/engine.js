@@ -18448,7 +18448,7 @@ ${senderName} said y'all should know:
                     // Award guild points for daily claim
                     if (result.success) {
                       try {
-                        const guilds = require(`./guilds`);
+                        const guilds = require('./rpg/guilds'); // 💡 QA FIX: was `./guilds` (wrong path — MODULE_NOT_FOUND silently swallowed)
                         guilds.awardPointsForActivity(
                           senderJid,
                           "daily_claimed",
@@ -18727,9 +18727,11 @@ Examples:
                       return;
                     }
 
-                    const result = economy.deposit(senderJid, amount);
-                    // 💡 Phase 6: Block bank deposits for users with active bounties
-                    // (forces them to carry wallet = risk, can't hide wealth in bank)
+                    // 💡 QA FIX: moved bounty check BEFORE economy.deposit().
+                    // Previously the deposit executed first, then the bounty
+                    // check returned an error — but the Zeni had already
+                    // moved from wallet to bank. Bounty targets could bypass
+                    // the bank block entirely.
                     try {
                       const bountySystem = require('./rpg/bountySystem');
                       const hasBounty = await bountySystem.hasActiveBounty(senderJid);
@@ -18739,6 +18741,8 @@ Examples:
                     } catch (e) {
                       // If bounty check fails, allow the deposit (don't block on error)
                     }
+
+                    const result = economy.deposit(senderJid, amount);
                     if (result.success) {
                       try {
                         const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);

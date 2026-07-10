@@ -459,8 +459,11 @@ function removeMoney(userId, amount, description = "Money Removed") {
 }
 
 function getGold(userId) {
+  // 💡 QA FIX: was returning user.questGold (always 0) instead of user.wallet.
+  // This broke bounty placement, crafting costs, guild donations, guild loan
+  // repayments, rune market purchases, and loan auto-processing.
   const user = getUser(userId);
-  return user ? (user.questGold || 0) : 0;
+  return user ? (user.wallet || 0) : 0;
 }
 
 function addGold(userId, amount) {

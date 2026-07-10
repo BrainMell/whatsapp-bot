@@ -156,8 +156,8 @@ async function syncGuild(guildName) {
                 leader: g.owner,
                 members: g.members.map(jid => ({
                     userId: jid,
-                    role: g.owner === jid ? 'leader' : (g.admins.includes(jid) ? 'officer' : 'member'),
-                    title: g.titles[jid] || 'Member'
+                    role: g.owner === jid ? 'leader' : (g.admins && g.admins.includes(jid) ? 'officer' : (g.recruits && g.recruits.includes(jid) ? 'recruit' : 'member')),
+                    title: (g.titles && g.titles[jid]) || 'Member'
                 })),
                 xp: g.points || 0,
                 level: g.level || 1,
@@ -166,7 +166,16 @@ async function syncGuild(guildName) {
                 dailyBoard: g.dailyBoard || { targets: [] },
                 motto: g.motto || "Adapt or be Infected.",
                 upgrades: g.buildings || {},
-                logs: g.pointsHistory || []
+                logs: g.pointsHistory || [],
+                // 💡 QA FIX: these fields were missing from syncGuild, causing
+                // loans to vanish on restart (borrower keeps Zeni, guild bank
+                // drained) and war points to reset to 0 every restart.
+                loans: g.loans || [],
+                warPoints: g.warPoints || 0,
+                warPointsWeek: g.warPointsWeek || null,
+                lastInterestPayout: g.lastInterestPayout || null,
+                emblem: g.emblem || { icon: null, color: '#FFD700' },
+                recruits: g.recruits || []
             },
             { upsert: true }
         );

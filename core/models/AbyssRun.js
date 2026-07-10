@@ -4,7 +4,10 @@ const mongoose = require('mongoose');
 // One active run per user at a time. Deleted on death or retreat.
 // Leaderboard entries (AbyssLeaderboard) persist after the run ends.
 const AbyssRunSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true, index: true },
+  // 💡 QA FIX: removed `unique: true` — it prevented players from starting
+  // new runs after their first run completed/died (E11000 duplicate key).
+  // Now multiple AbyssRun documents can exist per user (active + history).
+  userId: { type: String, required: true, index: true },
   currentFloor: { type: Number, default: 1 },
   monstersKilled: { type: Number, default: 0 },
   bossesKilled: { type: Number, default: 0 },

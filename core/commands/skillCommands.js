@@ -189,7 +189,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     // 🏆 RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
     // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
-    const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+    // 💡 QA FIX: was missing 'GOD' — GOD-rank players got indexOf=-1, treated
+    // as below F-rank, and were blocked from learning ANY T3/T4 skills.
+    const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
     const userRank = user.adventurerRank || 'F';
     const userRankIdx = RANK_ORDER.indexOf(userRank);
     const skillTier = targetSkill.tier || 1;
@@ -543,7 +545,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         {
             gold: user.wallet || 0,
             goldEarned: user.stats?.totalEarned || 0,
-            victories: user.questsWon || user.stats?.gamesWon || 0,
+            victories: user.questsWon || user.stats?.questsWon || 0, // 💡 QA FIX: was falling back to gamesWon (gambling wins), not quest wins
             undeadKills: user.stats?.undeadKills || 0,
             kills: user.stats?.kills || 0, // 💡 FIX: pass total lifetime kills (DOOMSLAYER req)
         }
