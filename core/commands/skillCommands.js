@@ -545,6 +545,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             goldEarned: user.stats?.totalEarned || 0,
             victories: user.questsWon || user.stats?.gamesWon || 0,
             undeadKills: user.stats?.undeadKills || 0,
+            kills: user.stats?.kills || 0, // 💡 FIX: pass total lifetime kills (DOOMSLAYER req)
         }
     );
 
@@ -638,25 +639,40 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         const trialMsg = `⚔️ *CLASS TRIAL INITIATED* ⚔️\n\nTo evolve into a *${chosen.name}*, you must first defeat the **${chosen.requirement.trialBoss.replace('_', ' ')}**!\n\nPrepare yourself... the battle begins in 5 seconds.`;
         await sock.sendMessage(chatId, { text: trialMsg });
 
+        // 💡 FIX: wrap trial kickoff in try/catch. If initAdventure throws
+        // (transient state issue, corrupted gameStates entry, downstream
+        // startCombat error), the player would otherwise see "CLASS TRIAL
+        // INITIATED" then nothing — no error reply, no follow-up. The
+        // unhandled promise rejection was silently swallowed by the
+        // engine's outer try/catch (engine.js:20355-20366).
         setTimeout(async () => {
-            const result = await guildAdventure.initAdventure(
-                sock, 
-                chatId, 
-                null, // No Groq required for trials
-                'TRIAL', 
-                true, // Always solo
-                null, // No rank needed
-                senderJid, 
-                null, // No smartGroqCall
-                {
-                    trialBoss: chosen.requirement.trialBoss,
-                    targetClass: chosen.id,
-                    stoneId: requiredStone,
-                    cost: chosen.evolutionCost
+            try {
+                const result = await guildAdventure.initAdventure(
+                    sock,
+                    chatId,
+                    null, // No Groq required for trials
+                    'TRIAL',
+                    true, // Always solo
+                    null, // No rank needed
+                    senderJid,
+                    null, // No smartGroqCall
+                    {
+                        trialBoss: chosen.requirement.trialBoss,
+                        targetClass: chosen.id,
+                        stoneId: requiredStone,
+                        cost: chosen.evolutionCost
+                    }
+                );
+                if (result && result.msg) {
+                    await sock.sendMessage(chatId, { text: result.msg });
                 }
-            );
-            if (result && result.msg) {
-                await sock.sendMessage(chatId, { text: result.msg });
+            } catch (err) {
+                console.error('Trial kickoff failed for', senderJid, ':', err.message, err.stack);
+                try {
+                    await sock.sendMessage(chatId, {
+                        text: `❌ *TRIAL FAILED TO START*\n\nSomething went wrong initializing your class trial.\nError: ${err.message || 'unknown'}\n\nYour resources have not been consumed. Please try again or contact an admin.`
+                    });
+                } catch (e) {}
             }
         }, 5000);
         
