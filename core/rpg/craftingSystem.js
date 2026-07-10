@@ -572,6 +572,41 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         return { success: false, message: "❌ Cannot craft: Inventory full!" };
     }
 
+    // 💡 ECONOMY REBALANCE (Phase 1c): Zeni cost for high-tier crafting.
+    // Recipe can declare `goldCost` to require Zeni beyond materials.
+    // Scales by recipe tier if not explicitly set:
+    //   - Common recipes: 0 Zeni (unchanged behavior)
+    //   - Rare recipes: 5,000 Zeni
+    //   - Epic recipes: 25,000 Zeni
+    //   - Legendary recipes: 100,000 Zeni
+    //   - Mythic recipes: 500,000 Zeni
+    // Explicit goldCost in recipe definition always wins.
+    let goldCost = recipe.goldCost;
+    if (goldCost === undefined) {
+      const rarity = (recipe.result && recipe.result.rarity) || (recipe.rarity) || 'COMMON';
+      const RARITY_GOLD_COST = {
+        'COMMON': 0,
+        'UNCOMMON': 1000,
+        'RARE': 5000,
+        'EPIC': 25000,
+        'LEGENDARY': 100000,
+        'MYTHIC': 500000,
+      };
+      goldCost = RARITY_GOLD_COST[rarity] || 0;
+    }
+
+    if (goldCost > 0) {
+      const userGold = economy.getGold(userId);
+      if (userGold < goldCost) {
+        return {
+          success: false,
+          message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).\n_Crafting high-tier items now requires a Zeni investment — see_ \`.g balance\` _for your wallet._`,
+        };
+      }
+      // Deduct Zeni BEFORE removing ingredients (so we can abort cleanly)
+      economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
+    }
+
     // 1. Remove ingredients
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         inventorySystem.removeItem(userId, ingId, qty);
@@ -608,9 +643,10 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     } catch (e) {}
 
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
+    const goldCostMsg = goldCost > 0 ? `\n💸 Zeni cost: ${goldCost.toLocaleString()}` : '';
     return {
         success: true,
-        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${guildMsg}`,
+        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}`,
         recipe
     };
 }
