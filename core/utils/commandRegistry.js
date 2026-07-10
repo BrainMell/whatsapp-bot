@@ -105,7 +105,13 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild challenges', desc: 'View pending guild challenges.', usage: 'guild challenges' },
     { cmd: 'guild points', desc: 'Check your guild\'s current points.', usage: 'guild points' },
     { cmd: 'guild pointsboard', desc: 'Leaderboard of guilds by points.', usage: 'guild pointsboard' },
-    { cmd: 'guild upgrade', desc: 'Upgrade guild buildings for bonuses.', usage: 'guild upgrade <id>' }
+    { cmd: 'guild upgrade', desc: 'Upgrade guild buildings for bonuses.', usage: 'guild upgrade <id>' },
+    { cmd: 'guild perks', desc: 'View active guild perks and multipliers.', usage: 'guild perks' },
+    { cmd: 'guild info', desc: 'Comprehensive guild status dashboard.', usage: 'guild info' },
+    { cmd: 'guild donate', desc: 'Donate Zeni to guild bank (earns guild XP).', usage: 'guild donate <amount>' },
+    { cmd: 'guild loan', desc: 'Borrow from guild bank (7-day repayment).', usage: 'guild loan <amount> | list | repay <amount>' },
+    { cmd: 'guild emblem', desc: 'Set guild emblem (Leader only).', usage: 'guild emblem <emoji> [hexColor]' },
+    { cmd: 'guild role', desc: 'Set member role (Leader only).', usage: 'guild role @user <recruit|member|officer>' }
   ],
   RPG: [
     { cmd: 'character', desc: 'View your RPG character sheet, class, and stats.', usage: 'character' },
@@ -160,6 +166,9 @@ const COMMAND_REGISTRY = {
   PROGRESSION: [
     { cmd: 'level', desc: 'Check your current level and XP progress.', usage: 'level [user]' },
     { cmd: 'rank', desc: 'View your Adventurer Rank and requirements.', usage: 'rank' },
+    { cmd: 'rank mission', desc: 'View or claim your rank advancement mission.', usage: 'rank mission [claim]' },
+    { cmd: 'rank on', desc: 'Enable the rank system for this group.', usage: 'rank on' },
+    { cmd: 'rank off', desc: 'Disable the rank system for this group.', usage: 'rank off' },
     { cmd: 'xptop', desc: 'XP Leaderboard - See the top players.', usage: 'xptop' },
     { cmd: 'gptop', desc: 'GP Leaderboard - See the top contributors.', usage: 'gptop' },
     { cmd: 'achievements', desc: 'View your unlocked achievements.', usage: 'achievements' },
@@ -333,14 +342,75 @@ const COMMAND_REGISTRY = {
     { cmd: 'eat', desc: 'Eat/Nom something or someone.', usage: 'eat @user' },
     { cmd: 'backflip', desc: 'Do a backflip.', usage: 'backflip' }
   ],
+  RUNES: [
+    { cmd: 'rune', desc: 'Rune system help and overview.', usage: 'rune' },
+    { cmd: 'rune inv', desc: 'View your rune inventory.', usage: 'rune inv' },
+    { cmd: 'rune list', desc: 'List all rune types and tiers.', usage: 'rune list' },
+    { cmd: 'rune socket', desc: 'Socket a rune into a skill.', usage: 'rune socket <runeId> <skillId>' },
+    { cmd: 'rune remove', desc: 'Remove a socketed rune (needs scroll).', usage: 'rune remove <runeId>' },
+    { cmd: 'rune destroy', desc: 'Permanently destroy a socketed rune.', usage: 'rune destroy <runeId>' },
+    { cmd: 'rune slots', desc: 'Check rune slot capacity for a skill.', usage: 'rune slots <skillId>' },
+    { cmd: 'rune sell', desc: 'List a rune for sale on the market.', usage: 'rune sell <runeId> <price>' },
+    { cmd: 'rune buy', desc: 'Buy a listed rune.', usage: 'rune buy <listingId>' },
+    { cmd: 'rune market', desc: 'Browse all runes for sale.', usage: 'rune market' },
+    { cmd: 'rune unsell', desc: 'Cancel a rune market listing.', usage: 'rune unsell <runeId>' }
+  ],
+  ABYSS: [
+    { cmd: 'abyss', desc: 'Abyss help and floor structure.', usage: 'abyss' },
+    { cmd: 'abyss enter', desc: 'Start an Abyss run (12h cooldown, L20+).', usage: 'abyss enter' },
+    { cmd: 'abyss attack', desc: 'Attack the current floor enemy.', usage: 'abyss attack' },
+    { cmd: 'abyss status', desc: 'View your active Abyss run.', usage: 'abyss status' },
+    { cmd: 'abyss retreat', desc: 'Extract with 100% of loot.', usage: 'abyss retreat' },
+    { cmd: 'abyss leaderboard', desc: 'Top Abyss runs this week.', usage: 'abyss leaderboard' },
+    { cmd: 'abyss best', desc: 'Your best Abyss run ever.', usage: 'abyss best' }
+  ],
+  RAID: [
+    { cmd: 'raid', desc: 'Raid help and boss rotation.', usage: 'raid' },
+    { cmd: 'raid status', desc: 'View current raid state and avatar.', usage: 'raid status' },
+    { cmd: 'raid join', desc: 'Join the weekly raid (L20+).', usage: 'raid join' },
+    { cmd: 'raid vote', desc: 'Vote for the Avatar skill (1-5).', usage: 'raid vote <1-5>' },
+    { cmd: 'raid leaderboard', desc: 'All-time top raid contributors.', usage: 'raid leaderboard' }
+  ],
+  BOUNTY: [
+    { cmd: 'bounty', desc: 'Bounty system help and rules.', usage: 'bounty' },
+    { cmd: 'bounty place', desc: 'Place a Zeni bounty on a player.', usage: 'bounty place @target <amount>' },
+    { cmd: 'bounty list', desc: 'Top 10 active bounties.', usage: 'bounty list' },
+    { cmd: 'bounty target', desc: 'View bounties on your head.', usage: 'bounty target' },
+    { cmd: 'bounty mine', desc: 'View bounties you placed.', usage: 'bounty mine' },
+    { cmd: 'bounty cancel', desc: 'Cancel a bounty (10% fee).', usage: 'bounty cancel <bountyId>' }
+  ],
+  'GUILD WARS': [
+    { cmd: 'war', desc: 'Guild war help and this week event.', usage: 'war' },
+    { cmd: 'war status', desc: 'Current war state and rankings.', usage: 'war status' },
+    { cmd: 'war leaderboard', desc: 'This week guild war rankings.', usage: 'war leaderboard' },
+    { cmd: 'war history', desc: 'All-time top guilds by war points.', usage: 'war history' }
+  ],
   MODERATOR: [
+    { cmd: 'modcom', desc: 'Show all moderator commands by permission level.', usage: 'modcom' },
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },
-    { cmd: 'cardmod', desc: 'Manage Card Moderators (Owner only).', usage: 'cardmod <add/del/list> @user' },
-    { cmd: 'eshop approve', desc: 'Approve a pending deck listing.', usage: 'eshop approve <id>' },
-    { cmd: 'eshop reject', desc: 'Reject a pending deck listing.', usage: 'eshop reject <id>' },
-    { cmd: 'eshop pending', desc: 'View all decks awaiting approval.', usage: 'eshop pending' },
+    { cmd: 'spawnset', desc: 'Set per-bot card spawn interval (Mod+).', usage: 'spawnset <minutes> | reset' },
+    { cmd: 'spawninfo', desc: 'View current spawn configuration.', usage: 'spawninfo' },
+    { cmd: 'cardmod', desc: 'Manage Card Moderators (Owner/Mod only).', usage: 'cardmod <add/del/list> @user' },
+    { cmd: 'eshop deck approve', desc: 'Approve a pending deck listing.', usage: 'eshop deck approve <id>' },
+    { cmd: 'eshop deck reject', desc: 'Reject a pending deck listing.', usage: 'eshop deck reject <id>' },
+    { cmd: 'eshop deck pending', desc: 'View all decks awaiting approval.', usage: 'eshop deck pending' },
     { cmd: 'addmod', desc: 'Add a global bot moderator.', usage: 'addmod @user' },
-    { cmd: 'delmod', desc: 'Remove a global bot moderator.', usage: 'delmod @user' }
+    { cmd: 'delmod', desc: 'Remove a global bot moderator.', usage: 'delmod @user' },
+    { cmd: 'mods', desc: 'List all global moderators.', usage: 'mods' },
+    { cmd: 'updateall', desc: 'Broadcast a message to all groups.', usage: 'updateall [message]' },
+    { cmd: 'event start', desc: 'Start a token event (Owner/Mod).', usage: 'event start' },
+    { cmd: 'event stop', desc: 'Stop the active token event.', usage: 'event stop' },
+    { cmd: 'event status', desc: 'Check token event status.', usage: 'event status' },
+    { cmd: 't2edeck', desc: 'Manage the eShop deck (Owner/Mod).', usage: 't2edeck [add/remove/price/clear]' },
+    { cmd: 'setprice edeck', desc: 'Set eShop slot price (Owner/Mod).', usage: 'setprice edeck <slot> <price>' },
+    { cmd: 'cards on', desc: 'Enable card spawns for this group.', usage: 'cards on' },
+    { cmd: 'cards off', desc: 'Disable card spawns for this group.', usage: 'cards off' },
+    { cmd: 'rank toggleperm', desc: 'Grant rank toggle permission to a tier.', usage: 'rank toggleperm <level>' },
+    { cmd: 'rank togglelock', desc: 'Hard-lock rank toggle (no one can change).', usage: 'rank togglelock on|off' },
+    { cmd: 'abyss admin', desc: 'Abyss admin commands (Owner/GMod).', usage: 'abyss admin [reset|clear|setfloor|purge|inspect]' },
+    { cmd: 'raid admin', desc: 'Raid admin commands (Owner/GMod).', usage: 'raid admin [spawn|end|sethp|revive|kick|skip|purge]' },
+    { cmd: 'bounty admin', desc: 'Bounty admin commands (Owner/GMod).', usage: 'bounty admin [cancel|purge|expire]' },
+    { cmd: 'war admin', desc: 'Guild war admin commands (Owner/GMod).', usage: 'war admin [spawn|resolve|champion|purge|sync]' }
   ]
 };
 
