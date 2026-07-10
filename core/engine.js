@@ -1052,12 +1052,17 @@ async function startBot(configInstance) {
       const globalMod = isGlobalMod && isGlobalMod(userJid);
       if (isOwner || globalMod) return true;
 
-      const level = getMemberRankLevel(chatId, userJid);
-      const override = checkRankPermission(chatId, level, cmdKey);
-      if (override === true) return true;
-      if (override === false) return false;
-
+      // 💡 QA FIX: if rank system is OFF, skip rank permission checks entirely.
+      // Previously, checkRankPermission could return false (denying permission)
+      // even when ranksEnabled was false, blocking pin/unpin and other actions.
       const settings = getGroupSettings(chatId);
+      if (settings.ranksEnabled !== false) {
+        const level = getMemberRankLevel(chatId, userJid);
+        const override = checkRankPermission(chatId, level, cmdKey);
+        if (override === true) return true;
+        if (override === false) return false;
+      }
+
       const lockMode = settings.lockMode || 'open';
 
       const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
