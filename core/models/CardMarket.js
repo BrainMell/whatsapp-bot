@@ -14,12 +14,16 @@ const CardMarketSchema = new mongoose.Schema({
   userCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserCard', required: false },
   deckId:     { type: mongoose.Schema.Types.ObjectId, ref: 'CardDeck', required: false },
 
+  // 💡 Phase 3e: Rune listings — runeId references the Rune model
+  runeId: { type: String, required: false },
+
   // Convenience copies so we don't always need a join
   cardId:   { type: String, required: false },
   deckName: { type: String, required: false },
   sellerId: { type: String, required: true },
 
   isDeck: { type: Boolean, default: false },
+  isRune: { type: Boolean, default: false }, // 💡 Phase 3e: marks rune listings
 
   // 'sale' = fixed price | 'auction' = bidding
   type: { type: String, enum: ['sale', 'auction'], required: true },
