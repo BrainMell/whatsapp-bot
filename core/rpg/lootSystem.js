@@ -799,6 +799,9 @@ const ITEM_DATABASE = {
     'iron_ring': { name: 'Iron Ring', description: 'A sturdy band. (+10 HP)', rarity: 'UNCOMMON', value: 2000, type: 'EQUIPMENT', stats: { hp: 10 }, slot: 'ring', reqLevel: 5 },
     'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'Pierce draconic hide. (+10 ATK)', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', stats: { atk: 10 }, slot: 'ring', reqLevel: 20 },
 
+    // 💡 Phase 3: Rune system consumables
+    'rune_removal_scroll': { name: 'Rune Removal Scroll', description: 'Safely removes a socketed rune without destroying it.', rarity: 'RARE', value: 50000, type: 'CONSUMABLE', usable: true },
+
     // --- POTIONS & CONSUMABLES ---
     // 💡 Prices here are synced from the pre-quest shop (CONSUMABLES in guildAdventure.js, which is the authoritative source)
     'minor_hp_potion': { name: 'Minor HP Potion', description: 'Restores ~15% HP.', rarity: 'COMMON', value: 200, type: 'POTION', usable: true, effect: 'heal', effectValue: 0.15 },

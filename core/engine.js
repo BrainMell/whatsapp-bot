@@ -12579,6 +12579,168 @@ Admins can:
                     }
 
                     // ============================================
+                    // 💡 PHASE 3: RUNE COMMANDS (`.g rune ...`)
+                    // ============================================
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} rune`)) {
+                      const runeArgs = txt.trim().split(/\s+/).slice(2); // skip prefix + "rune"
+                      const runeSub = runeArgs[0]?.toLowerCase();
+                      const runeSystem = require('./rpg/runeSystem');
+
+                      // .g rune — show inventory + help
+                      if (!runeSub || runeSub === 'help') {
+                        let helpMsg = `💎 *RUNE SYSTEM* 💎\n\n`;
+                        helpMsg += `Socket runes into skills to modify their behavior. Runes drop from S+ bosses, weekly raids, and the Abyss.\n\n`;
+                        helpMsg += `*Commands:*\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune inv\` — view your rune inventory\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune list\` — list all rune types\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\` — socket a rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeId>\` — remove a rune (needs scroll)\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeId>\` — destroy a socketed rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune slots <skillId>\` — check slot capacity for a skill\n`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + helpMsg });
+                        return;
+                      }
+
+                      // .g rune inv — inventory
+                      if (runeSub === 'inv' || runeSub === 'inventory') {
+                        try {
+                          const runes = await runeSystem.getRuneInventory(senderJid);
+                          if (runes.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Your Rune Inventory*\n\n_No runes yet. Defeat S+ bosses, join weekly raids, or descend into the Abyss to find some._' });
+                          }
+                          let msg = `💎 *Your Rune Inventory* (${runes.length} runes)\n\n`;
+                          for (const r of runes) {
+                            const rt = runeSystem.RUNE_TYPES[r.type];
+                            const tt = runeSystem.RUNE_TIERS[r.tier];
+                            msg += `${rt.icon} *${rt.name}* (${tt.name})\n`;
+                            msg += `  ID: \`${r.runeId}\`\n`;
+                            msg += `  ${rt.desc}\n\n`;
+                          }
+                          msg += `_Use \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\` to socket a rune._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to load rune inventory: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g rune list — all rune types
+                      if (runeSub === 'list') {
+                        let msg = `💎 *Rune Types*\n\n`;
+                        for (const [id, rt] of Object.entries(runeSystem.RUNE_TYPES)) {
+                          msg += `${rt.icon} *${rt.name}*\n  ${rt.desc}\n\n`;
+                        }
+                        msg += `*Tiers:* Lesser < Normal < Greater\n`;
+                        msg += `_Socket slots: Starter=0, Evolved=1, Ascended=2, Ultimate=3_`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        return;
+                      }
+
+                      // .g rune socket <runeId> <skillId>
+                      if (runeSub === 'socket') {
+                        const runeId = runeArgs[1];
+                        const skillId = runeArgs[2]?.toLowerCase();
+                        if (!runeId || !skillId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\`` });
+                        }
+                        try {
+                          const result = await runeSystem.socketRune(senderJid, runeId, skillId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g rune remove <runeId>
+                      if (runeSub === 'remove') {
+                        const runeId = runeArgs[1];
+                        if (!runeId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune remove <runeId>\`\n_Requires a Rune Removal Scroll._` });
+                        }
+                        try {
+                          // Check for scroll in inventory
+                          const inventorySystem = require('./rpg/inventorySystem');
+                          const hasScroll = inventorySystem.hasItem(senderJid, 'rune_removal_scroll');
+                          const result = await runeSystem.removeRune(senderJid, runeId, hasScroll);
+                          if (result.success && hasScroll) {
+                            inventorySystem.removeItem(senderJid, 'rune_removal_scroll', 1);
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g rune destroy <runeId>
+                      if (runeSub === 'destroy') {
+                        const runeId = runeArgs[1];
+                        if (!runeId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune destroy <runeId>\`\n_⚠️ This permanently destroys the rune. No scroll needed._` });
+                        }
+                        try {
+                          const result = await runeSystem.destroyRune(senderJid, runeId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g rune slots <skillId>
+                      if (runeSub === 'slots') {
+                        const skillId = runeArgs[1]?.toLowerCase();
+                        if (!skillId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune slots <skillId>\`` });
+                        }
+                        try {
+                          // Look up the skill in the user's class skill tree
+                          const economy = require('./rpg/economy');
+                          const user = economy.getUser(senderJid);
+                          if (!user || !user.class) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `.g class`.' });
+                          }
+                          const skillTree = require('./rpg/skillTree');
+                          const allClasses = skillTree.SKILL_TREES || {};
+                          let skill = null;
+                          for (const [classId, classTree] of Object.entries(allClasses)) {
+                            if (!classTree || !classTree.trees) continue;
+                            for (const [treeName, treeData] of Object.entries(classTree.trees)) {
+                              if (!treeData || !treeData.skills) continue;
+                              if (treeData.skills[skillId]) {
+                                skill = treeData.skills[skillId];
+                                break;
+                              }
+                            }
+                            if (skill) break;
+                          }
+                          if (!skill) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill "${skillId}" not found.` });
+                          }
+                          const slotCount = runeSystem.getSkillSlotCount(skill);
+                          const socketed = await runeSystem.getSocketedRunes(senderJid, skillId);
+                          let msg = `💎 *Rune Slots for ${skill.name || skillId}*\n\n`;
+                          msg += `Capacity: ${socketed.length}/${slotCount} slots used\n\n`;
+                          if (socketed.length > 0) {
+                            msg += `*Socketed runes:*\n`;
+                            for (const r of socketed) {
+                              const rt = runeSystem.RUNE_TYPES[r.type];
+                              const tt = runeSystem.RUNE_TIERS[r.tier];
+                              msg += `${rt.icon} ${rt.name} (${tt.name}) — \`${r.runeId}\`\n`;
+                            }
+                          } else {
+                            msg += `_No runes socketed._`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // Unknown subcommand
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune subcommand. Use \`${botConfig.getPrefix()} rune help\` for usage.` });
+                    }
+
+                    // ============================================
                     // ACTIVITY COMMANDS
                     // ============================================
 
