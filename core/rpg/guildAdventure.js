@@ -2050,10 +2050,15 @@ function calculateDamage(
     target.id &&
     (target.id.startsWith("DRAKE") ||
       target.id.includes("DRAGON") ||
-      target.id.includes("Ancient Dragon"))
+      target.id.includes("Dragon"))
   ) {
     if (!attacker.isEnemy && attacker.jid) {
-      if (!inventorySystem.hasItem(attacker.jid, "dragon_seal_ring")) {
+      // 💡 FIX: accept ring in inventory OR equipped. Equip removes from
+      // inventory (inventorySystem.js:476), so the old hasItem-only check
+      // made the dragon unkillable if you actually equipped the ring.
+      const hasRingInBag = inventorySystem.hasItem(attacker.jid, "dragon_seal_ring");
+      const hasRingEquipped = attacker.equipment && attacker.equipment.ring && attacker.equipment.ring.id === 'dragon_seal_ring';
+      if (!hasRingInBag && !hasRingEquipped) {
         return {
           damage: 0,
           isCrit: false,
@@ -2862,6 +2867,19 @@ async function processCombatTurn(sock, sessionKey) {
       state.players.forEach((p) => (p.justDied = false));
       state.enemies.forEach((e) => (e.justDied = false));
 
+      // 💡 FIX: tick down enemy cooldowns each turn so monster skills
+      // actually go on cooldown (previously cooldowns were checked by
+      // monsterSkills.js:553 but never decremented — so once a cooldown
+      // was set, it stayed set forever, blocking the skill permanently).
+      // We decrement by 1 each round and delete when it reaches 0.
+      state.enemies.forEach((e) => {
+        if (!e.cooldowns) return;
+        for (const k of Object.keys(e.cooldowns)) {
+          e.cooldowns[k] = Math.max(0, (e.cooldowns[k] || 0) - 1);
+          if (e.cooldowns[k] <= 0) delete e.cooldowns[k];
+        }
+      });
+
       let activeActor = null;
       let ticks = 0;
       const maxTicks = 1000;
@@ -3305,8 +3323,7 @@ async function performAction(sock, player, action, sessionKey) {
           resolvedTarget.currentHP = 0;
           resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
           player.combatStats.kills = (player.combatStats.kills || 0) + 1;
-          state.stats.monstersKilled++;
-          if (resolvedTarget.isBoss) state.stats.bossesDefeated++;
+          recordEnemyKill(state, resolvedTarget);
 
           state.combatHistory.push(resultMsg);
           delete state.pendingActions[player.jid];
@@ -3726,12 +3743,33 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           setTimeout(() => resolve(), turnDelay);
           return;
         }
+        // 💡 FIX: skillData missing or no nextSkill — clear charging state so
+        // the enemy doesn't soft-lock in "isCharging=true" forever (which
+        // caused performEnemyAction to keep returning release_charge, fall
+        // through to default-attack, and never clear isCharging).
+        console.warn(`[performEnemyAction] enemy ${enemy.id} was charging skill ${skillId} but no follow-up exists — clearing charge state`);
+        enemy.isCharging = false;
+        enemy.chargingSkill = null;
+        enemy.chargeTarget = null;
+        // Fall through to default attack below.
       }
 
       // --- USE SKILL ---
       if (decision.action === "skill") {
         const skill = decision.skill;
         const target = decision.target;
+
+        // 💡 FIX: actually consume mana + set cooldown. Previously monsterSkills
+        // checked these (monsterSkills.js:553-557) but performEnemyAction
+        // never decremented them — so monsters had infinite mana AND never
+        // put their own skills on cooldown, allowing ult spam every turn.
+        if (typeof skill.cost === 'number' && skill.cost > 0) {
+          enemy.mana = Math.max(0, (enemy.mana ?? 0) - skill.cost);
+        }
+        if (typeof skill.cooldown === 'number' && skill.cooldown > 0) {
+          enemy.cooldowns = enemy.cooldowns || {};
+          enemy.cooldowns[skill.id] = skill.cooldown;
+        }
 
         if (skill.type === "charge") {
           enemy.isCharging = true;
@@ -3964,6 +4002,42 @@ async function checkBossPhase(sock, boss, chatId) {
   return false;
 }
 
+// 💡 Helper: record an enemy kill across all tracking systems.
+// Used by every kill path (handleDeath, basic attack, single-target ability,
+// AOE sweep, multi-hit) so boss/dragon/undead/guild-board tracking can never
+// drift out of sync again. (Previously only handleDeath called trackMissionStat,
+// so 4 of 5 kill paths silently skipped rank-mission progress.)
+function recordEnemyKill(state, entity) {
+  if (!state || !entity || !entity.isEnemy) return;
+  state.stats.monstersKilled++;
+  if (entity.isBoss) state.stats.bossesDefeated++;
+
+  state.players.forEach((p) => {
+    if (!p.jid || p.isDead) return;
+    if (entity.isBoss) {
+      economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+    }
+    // Total lifetime kills — required for DOOMSLAYER (req.kills: 500)
+    economy.trackMissionStat(p.jid, 'kills', 1);
+    // Dragon tracking — case-insensitive to handle the lowercase id bug
+    // (bossMechanics has 'ancient_dragon_boss' lowercase, classEncounters
+    // expects uppercase 'DRAGON' substring). Both forms now match.
+    const eid = String(entity.id || '').toUpperCase();
+    if (eid.startsWith('DRAKE') || eid.includes('DRAGON')) {
+      economy.incrementDragonKills(p.jid, 1);
+    }
+    // Undead tracking — required for TEMPLAR ascension (req.undeadKills: 200)
+    if (eid.includes('UNDEAD') || eid.includes('SKELETON') || eid.includes('ZOMBIE') || eid.includes('GHOUL') || eid.includes('WIGHT') || eid.includes('LICH') || eid.includes('NECRO')) {
+      economy.trackMissionStat(p.jid, 'undeadKills', 1);
+    }
+    // Guild board progress for all kills
+    const userGuild = guilds.getUserGuild(p.jid);
+    if (userGuild) {
+      guilds.updateBoardProgress(userGuild, entity.type, 1);
+    }
+  });
+}
+
 async function handleDeath(
   sock,
   entity,
@@ -3979,32 +4053,7 @@ async function handleDeath(
   entity.justDied = true;
 
   if (entity.isEnemy) {
-    state.stats.monstersKilled++;
-    if (entity.isBoss) state.stats.bossesDefeated++;
-
-    // 💡 Track boss kills on each player's user profile for rank missions
-    if (entity.isBoss) {
-      state.players.forEach((p) => {
-        if (p.jid && !p.isDead) {
-          economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
-        }
-      });
-    }
-
-    // Dragon Tracking
-    if (entity.id.startsWith("DRAKE") || entity.id.includes("DRAGON")) {
-      state.players.forEach((p) => {
-        economy.incrementDragonKills(p.jid, 1);
-      });
-    }
-
-    // Adventurer Tracking: Log kills to guild board for all party members
-    state.players.forEach((p) => {
-      const userGuild = guilds.getUserGuild(p.jid);
-      if (userGuild) {
-        guilds.updateBoardProgress(userGuild, entity.type, 1);
-      }
-    });
+    recordEnemyKill(state, entity);
   }
 
   if (!entity.isEnemy) {
@@ -4884,6 +4933,9 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
       {
         minMobs: rankData.minMobs,
         maxMobs: rankData.maxMobs,
+        // 💡 Pass environment so special dungeons (DRAGON_LAIR) spawn their
+        // dedicated mob pool instead of generic level-based enemies.
+        environment: state.environment || null,
         // Pin the boss to the one defined for this rank so HP stays sane
         ...(encounterType === 'BOSS' && rankData.boss ? { forceBossId: rankData.boss } : {}),
       },
@@ -5306,6 +5358,32 @@ async function endAdventure(sock, sessionKey, victory = true) {
       "The heroes return from the depths of the void, their names etched in history forever.";
   }
 
+  // 💡 FIX: branch on TRIAL mode BEFORE building the "QUEST COMPLETE!" header.
+  // Previously, a defeated trial would still show "🎉 QUEST COMPLETE! The
+  // party has conquered all challenges!" + reward gold/XP — extremely
+  // confusing for the player who actually lost their class trial.
+  if (state.mode === "TRIAL" && !victory) {
+    let trialFailMsg = `┏━━━━━━━━━━━━━━━━┓\n`;
+    trialFailMsg += `┃ ⚔️ *TRIAL FAILED* ⚔️ ┃\n`;
+    trialFailMsg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
+    trialFailMsg += `You have not proven your worth.\n`;
+    trialFailMsg += `Class evolution has been *denied*.\n\n`;
+    trialFailMsg += `📊 *RUN STATS:*\n`;
+    trialFailMsg += `☠️ Monsters Slain: ${state.stats.monstersKilled}\n`;
+    trialFailMsg += `👑 Bosses Defeated: ${state.stats.bossesDefeated}\n\n`;
+    trialFailMsg += `Try again when you're stronger. 🗡️`;
+
+    try {
+      await sock.sendMessage(state.chatId, { text: trialFailMsg });
+    } catch (err) {
+      console.error("Failed to send trial-fail message:", err.message);
+    }
+
+    state.active = false;
+    deleteGameState(sessionKey);
+    return;
+  }
+
   let msg = `\n🎉 *QUEST COMPLETE!* 🎉\n\n`;
   msg += `📜 ${narration}\n\n`;
   msg += `The party has conquered all challenges!\n\n`;
@@ -5338,22 +5416,55 @@ async function endAdventure(sock, sessionKey, victory = true) {
     if (user && nextClass) {
       const oldClassName =
         classSystem.getClassById(user.class)?.name || "Unknown";
+      const oldClassId = user.class; // for rollback
 
       // Calculate HP ratio before changing class to scale it properly
       const oldMaxHp = progression.getBaseStats(player.jid, user.class).hp;
       const currentHp = user.stats?.hp || oldMaxHp;
       const ratio = Math.min(1, currentHp / oldMaxHp);
 
-      user.class = trialData.targetClass;
-
-      // Deduct cost and stone here if not already handled
+      // 💡 FIX: deduct resources BEFORE mutating user.class. The old order
+      // (mutate class → deduct → save) meant a player could spend their
+      // Zeni during the 5-second pre-trial wait, win the trial, and evolve
+      // for free. Now if either deduction fails, we abort the evolution.
       const inventorySystem = require("./inventorySystem");
-      inventorySystem.removeItem(player.jid, trialData.stoneId, 1);
-      economy.removeMoney(
+      const stoneRemoved = inventorySystem.removeItem(player.jid, trialData.stoneId, 1);
+      const moneyRemoved = economy.removeMoney(
         player.jid,
         trialData.cost,
         `Evolved to ${nextClass.name}`,
       );
+
+      // Verify both deductions actually succeeded
+      // (removeItem returns the new count or false; removeMoney returns true/false)
+      const stoneOk = stoneRemoved !== false && stoneRemoved !== undefined;
+      const moneyOk = moneyRemoved === true || moneyRemoved === undefined;
+
+      if (!stoneOk || !moneyOk) {
+        // Rollback — re-add what we did remove
+        if (stoneOk) {
+          try { inventorySystem.addItem(player.jid, trialData.stoneId, 1); } catch (e) {}
+        }
+        if (moneyOk) {
+          try { economy.addMoney(player.jid, trialData.cost); } catch (e) {}
+        }
+        economy.saveUser(player.jid);
+
+        let failMsg = `❌ *EVOLUTION ABORTED*\n\n`;
+        failMsg += `You defeated the trial boss, but resource deduction failed.\n`;
+        failMsg += `Required: ${trialData.cost} Zeni + 1× ${trialData.stoneId.replace(/_/g, ' ')}\n\n`;
+        failMsg += `Your class has *not* changed. Try again with the required items.`;
+        try {
+          await sock.sendMessage(chatId, { text: failMsg });
+        } catch (e) {}
+
+        state.active = false;
+        deleteGameState(sessionKey);
+        return;
+      }
+
+      // Now safe to mutate class
+      user.class = trialData.targetClass;
 
       // Update actual User base stats in the database
       if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
@@ -5763,11 +5874,21 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     user.borrowedSkills.forEach((s) => {
       if (!seen.has(s.id)) {
         seen.add(s.id);
+        // 💡 FIX: handle both scalar `cost` and array `energyCost` (skillTree uses
+        // arrays for advanced classes). The old `s.cost || s.energyCost || 0` form
+        // coerced the array to a string, then *1.5 → NaN, which corrupted
+        // player.stats.energy permanently and produced infinite mana.
+        const rawCost = typeof s.cost === 'number'
+          ? s.cost
+          : Array.isArray(s.energyCost)
+            ? (s.energyCost[0] || 0)
+            : (typeof s.energyCost === 'number' ? s.energyCost : 0);
+        const mirroredCost = Math.floor(rawCost * 1.5); // 50% more energy for mirrored
         learnedAbilities.push({
           ...s,
           level: 1,
           skillLevel: 1,
-          cost: Math.floor((s.cost || s.energyCost || 0) * 1.5), // 50% more energy for mirrored
+          cost: mirroredCost,
           isMirrored: true,
         });
       }
@@ -5793,19 +5914,23 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     };
   }
 
-  // Check energy cost
-  if (player.stats.energy < ability.cost) {
+  // 💡 Defense-in-depth: if cost or energy ever becomes NaN/undefined, reject
+  // instead of corrupting player.stats.energy (root cause of the old
+  // infinite-mana bug).
+  const safeCost = Number.isFinite(ability.cost) ? ability.cost : Infinity;
+  const safeEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+  if (safeEnergy < safeCost) {
     return {
       success: false,
-      message: `Not enough energy! Need ${ability.cost}, have ${player.stats.energy}`,
+      message: `Not enough energy! Need ${safeCost}, have ${Math.floor(safeEnergy)}`,
     };
   }
 
   // Get effect
   const effect = skillTree.getSkillEffect(ability, ability.skillLevel);
 
-  // Consume energy
-  player.stats.energy -= ability.cost;
+  // Consume energy (clamped to 0 — never let NaN/Infinity sneak through)
+  player.stats.energy = Math.max(0, (player.stats.energy || 0) - (safeCost === Infinity ? 0 : safeCost));
 
   // Apply ability effect
   const result = await applyAbilityEffect(
@@ -5886,10 +6011,13 @@ async function applyAbilityEffect(
         target.id &&
         (target.id.startsWith("DRAKE") ||
           target.id.includes("DRAGON") ||
-          target.id.includes("Ancient Dragon"))
+          target.id.includes("Dragon"))
       ) {
         if (!player.isEnemy && player.jid) {
-          if (!inventorySystem.hasItem(player.jid, "dragon_seal_ring")) {
+          // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)
+          const hasRingInBag = inventorySystem.hasItem(player.jid, "dragon_seal_ring");
+          const hasRingEquipped = player.equipment && player.equipment.ring && player.equipment.ring.id === 'dragon_seal_ring';
+          if (!hasRingInBag && !hasRingEquipped) {
             msg += `🛡️ Your attacks slide off ${target.name}'s scales! You need the *Dragon Seal Ring* 💍🐲 to pierce their hide!\n`;
             continue;
           }
@@ -6005,8 +6133,7 @@ async function applyAbilityEffect(
           player.combatStats.kills = (player.combatStats.kills || 0) + 1;
         }
         // 💡 Track quest stats (moved out of checkCombatEnd so abilities are counted)
-        state.stats.monstersKilled++;
-        if (target.isBoss) state.stats.bossesDefeated++;
+        recordEnemyKill(state, target);
         // Note: checkCombatEnd is called by performAction AFTER the full ability message
         // is sent, so the damage text always shows before the victory screen.
       }
@@ -6058,10 +6185,13 @@ async function applyAbilityEffect(
         target.id &&
         (target.id.startsWith("DRAKE") ||
           target.id.includes("DRAGON") ||
-          target.id.includes("Ancient Dragon"))
+          target.id.includes("Dragon"))
       ) {
         if (!player.isEnemy && player.jid) {
-          if (!inventorySystem.hasItem(player.jid, "dragon_seal_ring")) {
+          // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)
+          const hasRingInBag = inventorySystem.hasItem(player.jid, "dragon_seal_ring");
+          const hasRingEquipped = player.equipment && player.equipment.ring && player.equipment.ring.id === 'dragon_seal_ring';
+          if (!hasRingInBag && !hasRingEquipped) {
             msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
             continue;
           }
@@ -6184,8 +6314,7 @@ async function applyAbilityEffect(
           player.combatStats.kills = (player.combatStats.kills || 0) + 1;
         }
         // 💡 Track quest stats for every kill in the AOE sweep
-        state.stats.monstersKilled++;
-        if (target.isBoss) state.stats.bossesDefeated++;
+        recordEnemyKill(state, target);
         // Note: checkCombatEnd called by performAction after full message is sent.
       }
     }
@@ -6293,6 +6422,29 @@ async function applyAbilityEffect(
           applyStatusEffect(ally, "haste", effData.duration || 3, effData.value || 30);
         }
         msg += `⚡ Friendly team gains Haste!\n`;
+      }
+      // 💡 FIX: energyRestore was declared by mana_drain (skillTree.js:1176)
+      // but had no handler — Mana Drain dealt damage but never restored energy.
+      else if (effId === "energyRestore") {
+        if (!player.isEnemy) {
+          const restore = Math.min(
+            Math.floor(effData.value),
+            (player.stats.maxEnergy || 100) - (player.stats.energy || 0),
+          );
+          if (restore > 0) {
+            player.stats.energy = (player.stats.energy || 0) + restore;
+            msg += `⚡ ${player.name} restores ${restore} energy!\n`;
+          }
+        }
+      }
+      // 💡 FIX: magDebuff was declared by mana_drain (skillTree.js:1177)
+      // but had no handler — Magick defense was never reduced on target.
+      else if (effId === "magDebuff") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        for (const target of targets) {
+          applyDebuff(target, 'mag', effData.value, effData.duration || 2);
+        }
+        msg += `📉 Targets lose -${effData.value}% MAG for ${effData.duration || 2} turns!\n`;
       }
     }
     if (!player.isEnemy) {
@@ -6473,6 +6625,11 @@ async function applyAbilityEffect(
           msg += `💀 ${target.name} defeated!\n`;
           target.isDead = true;
           target.currentHP = 0;
+          if (player.combatStats) {
+            player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+          }
+          // 💡 Track quest stats — was entirely missing for multi-hit kill path
+          recordEnemyKill(state, target);
 
           // 💡 CRITICAL FIX: Check if combat should end immediately
           if (await checkCombatEnd(sock, state, sessionKey))
