@@ -690,18 +690,30 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     await spawn.stat.save();
     inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
-    // 💡 FIX: TOKEN EVENT — every 3rd spawn is marked hasToken=true at spawn
-    // time. On claim, if the event is active AND this spawn is token-bearing,
-    // grant a guaranteed token (no RNG). Old behavior was 50% chance per
-    // claim, which felt random and inconsistent. Now: 3 spawns/hour ÷ 3 =
-    // ~1 guaranteed token per hour of active spawns.
+    // 💡 TOKEN EVENT: two-layer drop mechanic.
+    //   1) GUARANTEED: every 3rd spawn is marked hasToken=true at spawn time.
+    //      On claim, if the event is active AND the spawn is token-bearing,
+    //      grant a guaranteed token (no RNG). ~1 guaranteed token per hour
+    //      at 3 spawns/hour.
+    //   2) RNG FALLBACK: non-token-bearing spawns (the other 2/3) still have
+    //      a 25% chance to drop a token. This keeps the old RNG excitement
+    //      without the old inconsistency (the guaranteed layer ensures a
+    //      steady baseline). Net result: ~1.5 tokens/hour during events.
     let tokenMsg = '';
     try {
       const eventActive = await isTokenEventActive();
-      if (eventActive && spawn.hasToken) {
-        economy.addTokens(senderJid, 1);
-        const balance = economy.getTokens(senderJid);
-        tokenMsg = `\n\n🎫 *GUARANTEED TOKEN DROP!* +1 Event Token (Total: ${balance})\n_This was a token-bearing spawn! Use \`${P()} eshop\` to spend them._`;
+      if (eventActive) {
+        if (spawn.hasToken) {
+          // Guaranteed drop
+          economy.addTokens(senderJid, 1);
+          const balance = economy.getTokens(senderJid);
+          tokenMsg = `\n\n🎫 *GUARANTEED TOKEN DROP!* +1 Event Token (Total: ${balance})\n_This was a token-bearing spawn! Use \`${P()} eshop\` to spend them._`;
+        } else if (Math.random() < 0.25) {
+          // RNG fallback for non-token-bearing spawns (25% chance)
+          economy.addTokens(senderJid, 1);
+          const balance = economy.getTokens(senderJid);
+          tokenMsg = `\n\n🎫 *Token Drop!* +1 Event Token (Total: ${balance})\n_Use \`${P()} eshop\` to spend them!_`;
+        }
       }
     } catch (tokenErr) {
       // Don't fail the claim if token drop fails
