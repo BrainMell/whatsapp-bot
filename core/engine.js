@@ -4288,8 +4288,32 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               botStarting = false; // CLEAR GUARD
 
               if (!hasAuth(configInstance.getAuthPath())) {
-                console.log(`🛑 [${BOT_ID}] No auth folder. NOT reconnecting.`);
-                sendQueue.clear("No auth folder - cannot reconnect");
+                console.log(`🔑 [${BOT_ID}] Auth folder missing or empty — creating it and restarting for fresh QR login...`);
+                try {
+                  fs.mkdirSync(configInstance.getAuthPath(), { recursive: true });
+                } catch (e) {
+                  console.error(`❌ [${BOT_ID}] Could not create auth folder:`, e.message);
+                }
+                const delayMs = getBackoff();
+                console.log(`🔁 [${BOT_ID}] Spawning fresh QR in ${Math.round(delayMs / 1000)}s...`);
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(() => {
+                  reconnectTimer = null;
+                  if (!botStarting) {
+                    botConfig.storage.run(configInstance, () => {
+                      botInstancesHealth.set(BOT_ID, {
+                        name: BOT_NAME,
+                        status: "connecting",
+                        lastUpdated: Date.now(),
+                        error: null,
+                      });
+                      initSocket().catch((e) => {
+                        console.error("❌ Fresh QR reconnect failed:", e.message);
+                        botStarting = false;
+                      });
+                    });
+                  }
+                }, delayMs);
                 return;
               }
 
