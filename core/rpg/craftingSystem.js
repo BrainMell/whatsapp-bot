@@ -572,25 +572,21 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         return { success: false, message: "❌ Cannot craft: Inventory full!" };
     }
 
-    // 💡 ECONOMY REBALANCE (Phase 1c): Zeni cost for high-tier crafting.
-    // Recipe can declare `goldCost` to require Zeni beyond materials.
-    // Scales by recipe tier if not explicitly set:
-    //   - Common recipes: 0 Zeni (unchanged behavior)
-    //   - Rare recipes: 5,000 Zeni
-    //   - Epic recipes: 25,000 Zeni
-    //   - Legendary recipes: 100,000 Zeni
-    //   - Mythic recipes: 500,000 Zeni
-    // Explicit goldCost in recipe definition always wins.
+    // 💡 QA FIX: Look up rarity from loot DB if recipe doesn't declare it.
+    // Previously goldCost was ALWAYS 0 because no recipe declares rarity.
     let goldCost = recipe.goldCost;
     if (goldCost === undefined) {
-      const rarity = (recipe.result && recipe.result.rarity) || (recipe.rarity) || 'COMMON';
+      let rarity = (recipe.result && recipe.result.rarity) || recipe.rarity;
+      if (!rarity) {
+        try {
+          const lootSystem = require('./lootSystem');
+          const resultInfo = lootSystem.getItemInfo(resultItem.id);
+          rarity = resultInfo?.rarity || 'COMMON';
+        } catch (e) { rarity = 'COMMON'; }
+      }
       const RARITY_GOLD_COST = {
-        'COMMON': 0,
-        'UNCOMMON': 1000,
-        'RARE': 5000,
-        'EPIC': 25000,
-        'LEGENDARY': 100000,
-        'MYTHIC': 500000,
+        'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
+        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 500000,
       };
       goldCost = RARITY_GOLD_COST[rarity] || 0;
     }
@@ -600,11 +596,14 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
       if (userGold < goldCost) {
         return {
           success: false,
-          message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).\n_Crafting high-tier items now requires a Zeni investment — see_ \`.g balance\` _for your wallet._`,
+          message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).`,
         };
       }
-      // Deduct Zeni BEFORE removing ingredients (so we can abort cleanly)
-      economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
+      // 💡 QA FIX: check return value — removeMoney returns false if wallet insufficient
+      const deductResult = economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
+      if (!deductResult) {
+        return { success: false, message: '❌ Zeni deduction failed. You may not have enough Zeni.' };
+      }
     }
 
     // 💡 Phase 2: Apply guild RESEARCH craft cost reduction (-10% materials if in a RESEARCH guild)
@@ -615,24 +614,43 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     } catch (e) {}
 
     // 1. Remove ingredients (reduced by RESEARCH perk if applicable)
+    // 💡 QA FIX: capture actually-removed quantities for correct rollback,
+    // AND check removeItem return values to prevent dupe on race condition.
+    const removedIngredients = [];
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         const reducedQty = craftReduction > 0 ? Math.max(1, Math.ceil(qty * (1.0 - craftReduction))) : qty;
-        inventorySystem.removeItem(userId, ingId, reducedQty);
+        const removeResult = inventorySystem.removeItem(userId, ingId, reducedQty);
+        if (!removeResult || !removeResult.success) {
+            // 💡 QA FIX: rollback what we already removed + refund Zeni
+            for (const [rid, rq] of removedIngredients) {
+                await inventorySystem.addItem(userId, rid, rq);
+            }
+            if (goldCost > 0) economy.addMoney(userId, goldCost, `Craft refund: ${recipe.name}`);
+            return { success: false, message: `❌ Failed to consume ${ingId}. Materials and Zeni refunded.` };
+        }
+        removedIngredients.push([ingId, reducedQty]);
     }
 
     // 2. Add result
-    const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
+    // 💡 QA FIX: spread full resultItem so effect/effectValue/duration/boost/
+    // usable/type fields are preserved (was dropping them, breaking rabbit_foot etc.)
+    const itemData = {
         name: recipe.name,
+        ...resultItem,
         stats: resultItem.stats || {},
         slot: resultItem.slot,
-        type: resultItem.stats ? 'EQUIPMENT' : (resultItem.usable ? 'CONSUMABLE' : 'ITEM')
-    });
+        type: resultItem.type || (resultItem.stats ? 'EQUIPMENT' : (resultItem.usable ? 'CONSUMABLE' : 'ITEM')),
+    };
+    delete itemData.id; // let addItem set the id
+    const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, itemData);
 
     if (!addResult.success) {
-        // Restore ingredients if addition failed
-        for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
-            await inventorySystem.addItem(userId, ingId, qty);
+        // 💡 QA FIX: restore the CORRECT (reduced) quantities, not full qty.
+        // Also refund Zeni (was missing entirely).
+        for (const [ingId, rq] of removedIngredients) {
+            await inventorySystem.addItem(userId, ingId, rq);
         }
+        if (goldCost > 0) economy.addMoney(userId, goldCost, `Craft refund: ${recipe.name}`);
         return addResult;
     }
 
@@ -663,7 +681,12 @@ async function dismantleItem(userId, itemId) {
     const inventory = inventorySystem.getInventory(userId);
     if (!inventory[itemId]) return { success: false, message: "Item not found in inventory." };
 
-    const itemData = inventory[itemId];
+    // 💡 QA FIX: snapshot a deep copy of itemData BEFORE removeItem mutates it.
+    // Previously itemData was a reference to inventory[itemId], and removeItem
+    // would set quantity=0 and delete the key — then the rollback would restore
+    // the item with quantity: 0 (permanently destroyed).
+    const itemSnapshot = { ...inventory[itemId] };
+    delete itemSnapshot.quantity; // let addItem set quantity: 1
     const recipe = Object.values(CRAFTING_RECIPES).find(r => r.result.id === itemId);
 
     if (!recipe) return { success: false, message: "This item cannot be dismantled." };
@@ -675,22 +698,22 @@ async function dismantleItem(userId, itemId) {
         returned[ingId] = amount;
     }
 
-    // Count how many NEW slots we'll actually need. Materials stack
-    // infinitely and existing inventory entries stack too, so the worst-case
-    // "every ingredient takes a new slot" check from before was too
-    // conservative — dismantle would be refused when the materials would
-    // actually fit fine.
+    // Count how many NEW slots we'll actually need.
     let newSlotsNeeded = 0;
     for (const [ingId, qty] of Object.entries(returned)) {
         const ingInfo = lootSystem.getItemInfo(ingId);
-        if (ingInfo.type === 'MATERIAL') continue;          // materials stack infinitely
-        if (inventory[ingId]) continue;                     // existing entry will stack
+        if (ingInfo.type === 'MATERIAL') continue;
+        if (inventory[ingId]) continue;
         newSlotsNeeded++;
     }
-    // We also free 1 slot when the dismantled item is removed (if it was a
-    // non-material unique stack), so net slots needed = newSlotsNeeded - 1 (if applicable).
+    // 💡 QA FIX: freesSlot check was wrong — !inventory[itemId]?.quantity is
+    // false for quantity: 1 (the most common case). Should check if the item
+    // will be fully consumed (current quantity <= 1).
     const removedItemInfo = lootSystem.getItemInfo(itemId);
-    const freesSlot = removedItemInfo.type !== 'MATERIAL' && !inventory[itemId]?.quantity;
+    const currentQty = (typeof inventory[itemId] === 'number')
+        ? inventory[itemId]
+        : (inventory[itemId]?.quantity ?? 1);
+    const freesSlot = removedItemInfo.type !== 'MATERIAL' && currentQty <= 1;
     const netSlotsNeeded = Math.max(0, newSlotsNeeded - (freesSlot ? 1 : 0));
     if (netSlotsNeeded > 0 && !inventorySystem.hasInventorySpace(userId, netSlotsNeeded)) {
         return { success: false, message: "❌ Not enough inventory space to store recovered materials!" };
@@ -702,8 +725,7 @@ async function dismantleItem(userId, itemId) {
         return { success: false, message: `❌ Failed to dismantle: ${removeResult.message}` };
     }
 
-    // Return materials. If any addItem fails (e.g. due to a race), roll back
-    // the removal so the player doesn't lose their item.
+    // Return materials. If any addItem fails, roll back the removal.
     const addedSoFar = [];
     for (const [id, qty] of Object.entries(returned)) {
         const addResult = await inventorySystem.addItem(userId, id, qty);
@@ -712,7 +734,8 @@ async function dismantleItem(userId, itemId) {
             for (const [addedId, addedQty] of addedSoFar) {
                 inventorySystem.removeItem(userId, addedId, addedQty);
             }
-            await inventorySystem.addItem(userId, itemId, 1, itemData);
+            // 💡 QA FIX: use itemSnapshot (clean copy) instead of itemData (mutated)
+            await inventorySystem.addItem(userId, itemId, 1, itemSnapshot);
             return { success: false, message: `❌ Failed to store recovered materials: ${addResult.message}` };
         }
         addedSoFar.push([id, qty]);

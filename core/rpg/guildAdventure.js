@@ -130,6 +130,30 @@ const DUNGEON_RANKS = {
     xpMult: 5.0,
     isSpecial: true,
   },
+  // 💡 GOD DUNGEON — boundless, transcendent, lore-heavy
+  // Only GOD-rank players can enter. Extremely hard.
+  GOD: {
+    name: "The Boundless Void",
+    encounters: 7,
+    minMobs: 3,
+    maxMobs: 4,
+    difficulty: 25.0,
+    boss: "ABYSSAL_GOD",
+    pool: "DRAGON_LAIR",
+    xpMult: 10.0,
+    isSpecial: true,
+    requiresGodRank: true,
+    loreIntro: "You step beyond the veil of dimensionality. Reality unravels around you — time flows backward, space folds upon itself, and the very laws of physics dissolve into primordial chaos. Here, in the Boundless Void, only those who have transcended the boundaries of mortal existence can survive. You are a GOD. But even gods can die.",
+    loreFloors: [
+      "Floor 1: The air itself rejects your presence. Shadows move with intent, whispering secrets that predate creation.",
+      "Floor 2: You encounter echoes of fallen adventurers — their last moments replaying eternally. They reach for you, seeking to drag you into their eternal loop.",
+      "Floor 3: The ground beneath you is not ground. It is compressed time. Each step costs you a memory. You feel yourself forgetting... something important.",
+      "Floor 4: A figure appears — it wears your face, but its eyes are void. It speaks: 'I am what you could have been. What you should have been. The version of you that never compromised.' It attacks.",
+      "Floor 5: The Void itself becomes sentient. It has watched you since the moment of your ascension. It is curious. It is hungry. It is everywhere.",
+      "Floor 6: You find the remnants of a previous god who attempted this journey. Their final message, carved into non-existence: 'The Abyssal God is not a creature. It is a concept. You cannot kill a concept. But you can become one.'",
+      "Floor 7: The Abyssal God manifests. It does not speak. It does not need to. It simply IS — the antithesis of existence, the final question with no answer.",
+    ],
+  },
   // ⚔️ Class Evolution Trial — boss-only single-encounter dungeon
   TRIAL: {
     name: "Class Trial",
@@ -4043,6 +4067,9 @@ async function checkBossPhase(sock, boss, chatId) {
 // AOE sweep, multi-hit) so boss/dragon/undead/guild-board tracking can never
 // drift out of sync again. (Previously only handleDeath called trackMissionStat,
 // so 4 of 5 kill paths silently skipped rank-mission progress.)
+// 💡 Rank order for boss kill gating — only bosses at your rank or 2 ranks below count
+const RANK_ORDER_FOR_GATE = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+
 function recordEnemyKill(state, entity) {
   if (!state || !entity || !entity.isEnemy) return;
   state.stats.monstersKilled++;
@@ -4051,7 +4078,25 @@ function recordEnemyKill(state, entity) {
   state.players.forEach((p) => {
     if (!p.jid || p.isDead) return;
     if (entity.isBoss) {
-      economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+      // 💡 QA FIX: Rank-gate boss kills for rank-up missions.
+      // Only bosses from dungeons at your rank or up to 2 ranks below count.
+      // This prevents F-rank bosses from counting for S-rank players.
+      const dungeonRank = state.dungeonRank || 'F';
+      const dungeonRankIdx = RANK_ORDER_FOR_GATE.indexOf(dungeonRank === 'DRAGON' ? 'SSS' : dungeonRank);
+      const user = economy.getUser(p.jid);
+      const playerRank = user?.adventurerRank || 'F';
+      const playerRankIdx = RANK_ORDER_FOR_GATE.indexOf(playerRank);
+      const rankDiff = playerRankIdx - dungeonRankIdx;
+
+      if (rankDiff > 2) {
+        // Boss is too far below player's rank — doesn't count for missions
+        // Still award guild XP + war points + rune drops, just not mission stat
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`⚠️ Boss kill didn't count for rank missions (dungeon ${dungeonRank} is more than 2 ranks below your ${playerRank} rank).`);
+      } else {
+        economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+      }
+
       // 💡 Phase 2: Award guild XP for boss kills (more than regular mobs)
       try {
         const guildPerks = require('./guildPerks');
@@ -4401,8 +4446,21 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
   }
 
   msg += `━━━━━━━━━━━━\n`;
+  // 💡 GOD dungeon entry in the menu
+  const godRank = DUNGEON_RANKS.GOD;
+  if (godRank) {
+    const user = senderJid ? economy.getUser(senderJid) : null;
+    const playerRank = user?.adventurerRank || 'F';
+    if (playerRank === 'GOD') {
+      msg += `🌌 *GOD-Rank* | The Boundless Void | ${godRank.encounters}stg | Diff:${godRank.difficulty}x\n`;
+      msg += `  👹 Abyssal God | _Only the transcendent may enter_\n\n`;
+    } else {
+      msg += `🔒 *GOD-Rank* (Locked — transcend to GOD rank)\n\n`;
+    }
+  }
   msg += `👉 \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} <Rank>\`\n`;
-  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} D\``;
+  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} D\`\n`;
+  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} GOD\` (GOD rank only)`;
 
   return msg;
 };
@@ -4461,6 +4519,24 @@ const initAdventure = async (
 
   // Special Dungeon Key & Lineage Check
   if (rankData.isSpecial && senderJid) {
+    // 💡 GOD DUNGEON — only GOD-rank players can enter
+    if (rankData.requiresGodRank) {
+      const user = economy.getUser(senderJid);
+      const playerRank = user?.adventurerRank || 'F';
+      if (playerRank !== 'GOD') {
+        return {
+          success: false,
+          msg: `❌ *THE BOUNDLESS VOID REJECTS YOU*\n\nYou are not yet ready. Only a GOD — one who has transcended the very bounds of dimensionality — may step beyond the veil.\n\n_Your current rank: ${playerRank}. Required: GOD._\n\n_Complete the Trial of Divinity (Mission 4) and reach GOD rank to enter._`,
+        };
+      }
+      // Send lore intro
+      try {
+        if (sock && rankData.loreIntro) {
+          await sock.sendMessage(chatId, { text: `\n🌌 *${rankData.name}* 🌌\n\n${rankData.loreIntro}\n` });
+        }
+      } catch (e) {}
+    }
+
     if (upperRank === "DRAGON") {
       // Check Lineage
       const currentClass = economy.getUserClass(senderJid);
@@ -4898,6 +4974,17 @@ async function nextStage(sock, groq, sessionKey) {
   try {
     if (!groq) groq = state.groq;
     state.encounter++;
+
+    // 💡 GOD DUNGEON: send lore message for each floor
+    const godRankData = DUNGEON_RANKS.GOD;
+    if (state.dungeonRank === 'GOD' && godRankData && godRankData.loreFloors) {
+      const loreIdx = state.encounter - 1;
+      if (loreIdx >= 0 && loreIdx < godRankData.loreFloors.length) {
+        try {
+          await sock.sendMessage(chatId, { text: `\n🌌 _${godRankData.loreFloors[loreIdx]}_\n` });
+        } catch (e) {}
+      }
+    }
 
     // Check if dungeon is complete
     if (state.encounter > state.maxEncounters) {
