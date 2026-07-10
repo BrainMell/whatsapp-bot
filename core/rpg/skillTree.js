@@ -831,7 +831,7 @@ const SKILL_TREES = {
                         damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
                         damageType: 'PHYSICAL',
                         targeting: 'CLEAVE',
-                        description: 'Strike 2 enemies at once',
+                        description: 'Strike all enemies in front of you',
                         animation: '⚔️⚔️',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
@@ -2427,7 +2427,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 8,
                         damageMultiplier: [10.0, 12.0, 15.0],
                         damageType: 'TRUE',
@@ -2502,7 +2502,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [150, 135, 120],
+                        energyCost: [100, 90, 80],
                         cooldown: 12,
                         damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
@@ -2999,7 +2999,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [150, 130, 110],
+                        energyCost: [100, 87, 73],
                         cooldown: 12,
                         damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 16.0, 22.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
@@ -3096,7 +3096,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 10,
                         damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] — nerfed AOE ult
                         damageType: 'MAGICAL',
@@ -3189,7 +3189,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 10,
                         damageMultiplier: [10.0, 12.5, 15.0],
                         damageType: 'MAGICAL',
@@ -3288,7 +3288,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 10,
                         damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] — nerfed AOE ult w/ root
                         damageType: 'MAGICAL',
@@ -3510,7 +3510,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [150, 130, 110],
+                        energyCost: [100, 87, 73],
                         cooldown: 10,
                         damageMultiplier: [3.5, 4.0, 5.0], // was [20.0, 25.0, 30.0] — nerfed ALL_ENEMIES TRUE ult
                         damageType: 'MAGICAL',
@@ -3638,7 +3638,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 10,
                         damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] — nerfed ALL targets ult (stays higher, single-ish)
                         damageType: 'MAGICAL',
@@ -3770,7 +3770,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 42,
                         maxLevel: 1,
-                        energyCost: [150],
+                        energyCost: [100],
                         cooldown: 15,
                         targeting: 'TEAM',
                         effects: {
@@ -4073,7 +4073,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [110, 100, 90],
+                        energyCost: [100, 91, 82],
                         cooldown: 9,
                         damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] — nerfed AOE physical ult
                         damageType: 'PHYSICAL',
@@ -4248,7 +4248,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
+                        energyCost: [100, 92, 83],
                         cooldown: 10,
                         damageMultiplier: [10.0, 12.5, 15.0],
                         damageType: 'MAGICAL',
@@ -4345,7 +4345,7 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [150, 130, 110],
+                        energyCost: [100, 87, 73],
                         cooldown: 12,
                         damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] — nerfed AOE large ult
                         damageType: 'MAGICAL',
@@ -4844,9 +4844,18 @@ function getSkillEffect(skill, level) {
             type = 'aoe';
             targets = skill.chainTargets;
         } else if (skill.targeting === 'CLEAVE') {
-            // Bug 3 fix: CLEAVE hits exactly 2 enemies, not all.
+            // 💡 FIX: was hard-coded `targets = 2`, which capped WARRIOR cleave
+            // at 2 enemies regardless of skill level. Now: honor per-skill
+            // `targets`/`maxTargets` if defined, else fall back to all living
+            // enemies (mirrors the AOE fix below).
             type = 'aoe';
-            targets = 2;
+            if (typeof skill.targets === 'number') {
+                targets = skill.targets;
+            } else if (typeof skill.maxTargets === 'number') {
+                targets = skill.maxTargets;
+            } else {
+                targets = undefined; // getTargets will use opponentSide.length
+            }
         } else if (skill.targeting && (skill.targeting.includes('AOE') || skill.targeting === 'ALL_ENEMIES')) {
             type = 'aoe';
             // Bug 4: do NOT set targets here so getTargets uses opponentSide.length (actual living enemies)
