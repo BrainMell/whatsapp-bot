@@ -1031,46 +1031,12 @@ function changeClass(userId) {
   };
 }
 
-function evolveClass(userId, evolutionId) {
-    const user = getUser(userId);
-    const skillTree = require('./skillTree');
-    
-    if (!user) return { success: false, message: 'User not found' };
-    
-    const oldClassId = user.class;
-    user.class = evolutionId;
-    
-    // 💡 SKILL POINT REFUND LOGIC
-    // Calculate total points spent on the old class tree
-    let pointsToRefund = 0;
-    const oldTree = skillTree.SKILL_TREES[oldClassId];
-    
-    if (oldTree && user.skills) {
-        for (const [treeName, treeData] of Object.entries(oldTree.trees)) {
-            for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                const level = user.skills[skillId] || 0;
-                if (level > 0) {
-                    // Calculate cost spent based on skillPointCost array
-                    for (let i = 0; i < level; i++) {
-                        pointsToRefund += (skill.skillPointCost && skill.skillPointCost[i]) ? skill.skillPointCost[i] : 1;
-                    }
-                }
-            }
-        }
-    }
-    
-    if (pointsToRefund > 0) {
-        user.skillPoints = (user.skillPoints || 0) + pointsToRefund;
-    }
-    
-    scheduleSave(userId);
-    
-    return { 
-        success: true, 
-        message: `✨ *EVOLVED!* ✨\n\nYou are now a *${evolutionId}*!\n\n♻️ *Skill Refund:* ${pointsToRefund} points returned to spend on your new tree.`, 
-        refundedPoints: pointsToRefund
-    };
-}
+// 💡 DELETED: evolveClass(userId, evolutionId) — was dead code (zero callers
+// in the entire codebase). The actual evolution logic lives inline in
+// skillCommands.handleEvolve (non-trial path) and guildAdventure.endAdventure
+// (trial path), both of which were hardened in prior commits. Keeping this
+// orphan function around was a maintenance hazard — anyone reading economy.js
+// might assume it was the canonical evolution entry point.
 
 function resetClass(userId) {
   const user = getUser(userId);
@@ -1630,7 +1596,7 @@ module.exports = {
       addProfessionXP,
       getProfessionLevel,
       getUserStats,  changeClass,
-  evolveClass,
+  // 💡 evolveClass removed — was dead code (zero callers)
   resetClass,
   updateAdventurerRank,
   addStatBonus,
