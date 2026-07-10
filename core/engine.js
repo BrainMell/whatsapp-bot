@@ -12261,6 +12261,7 @@ Admins can:
                     }
 
                     // `${botConfig.getPrefix().toLowerCase()}` guild leaderboard
+                    // 💡 Phase 2: now uses level + XP as primary sort (was mini-game wins only)
                     if (
                       lowerTxt ===
                         `${botConfig.getPrefix().toLowerCase()} guild leaderboard` ||
@@ -12268,13 +12269,18 @@ Admins can:
                         `${botConfig.getPrefix().toLowerCase()} guild lb`
                     ) {
                       try {
-                        const leaderboard = guilds.getGuildLeaderboard(
+                        // Get the points-based leaderboard (sorted by guild XP/level)
+                        const pointsLeaderboard = guilds.getGuildPointsLeaderboard(10);
+
+                        // Also fetch mini-game leaderboard for additional context
+                        const miniGameLeaderboard = guilds.getGuildLeaderboard(
                           wordle.getAllScores(),
                           tictactoe.getAllScores(),
                           economy,
                         );
+                        const miniGameMap = new Map(miniGameLeaderboard.map(g => [g.name, g]));
 
-                        if (leaderboard.length === 0) {
+                        if (pointsLeaderboard.length === 0 && miniGameLeaderboard.length === 0) {
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + `📜 No guilds exist yet!`,
                           });
@@ -12284,10 +12290,14 @@ Admins can:
                         let leaderboardText = `╔══════════════╗
    🏆 *GUILD LEADERBOARD* 🏆
 ╚═════════════╝
+_Sorted by guild level + XP_
 
 `;
 
-                        leaderboard.forEach((guild, i) => {
+                        // Use points leaderboard as primary (fallback to mini-game if empty)
+                        const primaryList = pointsLeaderboard.length > 0 ? pointsLeaderboard : miniGameLeaderboard;
+
+                        primaryList.forEach((guild, i) => {
                           const medal =
                             i === 0
                               ? "🥇"
@@ -12296,12 +12306,24 @@ Admins can:
                                 : i === 2
                                   ? "🥉"
                                   : "🏰";
-                          leaderboardText += `${medal} *${guild.name}*\n`;
-                          leaderboardText += `   💰 Score: ${guild.score}\n`;
-                          leaderboardText += `   📝 Wordle: ${guild.wordleWins} wins\n`;
-                          leaderboardText += `   ⭕ TicTacToe: ${guild.tttWins} wins\n`;
-                          leaderboardText += `   🎰 Gambling: ${guild.gamblingWins} wins\n`;
-                          leaderboardText += `   👥 Members: ${guild.memberCount}\n`;
+                          const name = guild.name || guild.guildName;
+                          const level = guild.level || 1;
+                          const xp = guild.points || guild.xp || 0;
+                          const xpNeeded = level * 1000;
+                          const bank = guild.balance || 0;
+                          const members = (guild.members || []).length;
+                          const archetype = guild.type || 'ADVENTURER';
+                          const mg = miniGameMap.get(name);
+
+                          leaderboardText += `${medal} *${name}* [${archetype}]\n`;
+                          leaderboardText += `   📊 Lv ${level} | XP ${xp.toLocaleString()}/${xpNeeded.toLocaleString()}\n`;
+                          leaderboardText += `   💰 Bank: ${bank.toLocaleString()} | 👥 ${members} members\n`;
+                          if (mg) {
+                            leaderboardText += `   🎮 Mini-games: ${mg.wordleWins}W/${mg.tttWins}T/${mg.gamblingWins}G\n`;
+                          }
+                          if (guild.warPoints > 0) {
+                            leaderboardText += `   ⚔️ War Points: ${guild.warPoints}\n`;
+                          }
                           leaderboardText += `━━━━━━━━━━━━━━━━\n`;
                         });
 
@@ -12491,6 +12513,299 @@ Admins can:
                       return;
                     }
 
+                    // ============================================
+                    // 💡 PHASE 2: GUILD POLISH COMMANDS
+                    // .g guild perks / donate / loan / repay / emblem / info
+                    // ============================================
+
+                    // `.g guild perks` — show active perks for your guild
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild perks`) {
+                      try {
+                        const guildPerks = require('./rpg/guildPerks');
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                        }
+                        const perks = guildPerks.getPerkSummary(senderJid);
+                        const xpMult = guildPerks.getXpMultiplier(senderJid);
+                        const goldMult = guildPerks.getGoldMultiplier(senderJid);
+                        const sellMult = guildPerks.getSellMultiplier(senderJid);
+                        const craftRed = guildPerks.getCraftCostReduction(senderJid);
+                        const memberCap = guildPerks.getMemberCap(guild);
+                        const interestRate = guildPerks.getBankInterestRate(guild);
+
+                        let msg = `🏰 *${userGuild}* — Active Perks\n\n`;
+                        msg += `📊 *Guild Level:* ${guild.level || 1} (${guild.points || 0} XP)\n`;
+                        msg += `🏷️ *Archetype:* ${guild.type || 'ADVENTURER'}\n`;
+                        msg += `👥 *Members:* ${(guild.members || []).length}/${memberCap}\n`;
+                        msg += `💰 *Bank:* ${(guild.balance || 0).toLocaleString()} Zeni\n\n`;
+                        msg += `⚙️ *Active Multipliers:*\n`;
+                        msg += `• XP: ×${xpMult.toFixed(2)} (${((xpMult - 1) * 100).toFixed(0)}% bonus)\n`;
+                        msg += `• Gold: ×${goldMult.toFixed(2)} (${((goldMult - 1) * 100).toFixed(0)}% bonus)\n`;
+                        msg += `• Sell Value: ×${sellMult.toFixed(2)} (${((sellMult - 1) * 100).toFixed(0)}% bonus)\n`;
+                        msg += `• Craft Cost Reduction: ${(craftRed * 100).toFixed(0)}%\n`;
+                        if (interestRate > 0) {
+                          msg += `• Bank Interest: ${(interestRate * 100).toFixed(2)}% daily (cap 1M)\n`;
+                        }
+                        msg += `\n🎁 *Perk Breakdown:*\n`;
+                        if (perks.length > 0) {
+                          for (const p of perks) msg += `• ${p}\n`;
+                        } else {
+                          msg += `_No active perks. Join a guild with an archetype or upgrade buildings to gain perks._\n`;
+                        }
+                        msg += `\n_Building levels: Hall L${(guild.buildings?.hall?.level) || 0}, Training L${(guild.buildings?.training?.level) || 0}, Treasury L${(guild.buildings?.treasury?.level) || 0}_`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to load perks: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // `.g guild donate <amount>` — donate Zeni from wallet to guild bank
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donate `)) {
+                      try {
+                        const amountStr = lowerTxt.split(' ')[3];
+                        const amount = parseInt(amountStr, 10);
+                        if (!amount || amount <= 0) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild donate <amount>\`` });
+                        }
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        const economy = require('./rpg/economy');
+                        const userWallet = economy.getGold(senderJid);
+                        if (userWallet < amount) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
+                        }
+                        economy.removeMoney(senderJid, amount, `Donation to ${userGuild}`);
+                        guilds.addGuildBalance(userGuild, amount);
+                        // Award guild XP for the donation (1 XP per 1000 Zeni donated)
+                        const xpAward = Math.max(1, Math.floor(amount / 1000));
+                        guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
+                        // Sync to DB
+                        guilds.syncGuild(userGuild);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Donated ${amount.toLocaleString()} Zeni to *${userGuild}*.\n🏛️ Bank: ${((guilds.getGuild(userGuild).balance) || 0).toLocaleString()} Zeni\n🎁 Guild XP: +${xpAward}` });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // `.g guild loan <amount>` — borrow from guild bank (must repay in 7 days)
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
+                      try {
+                        const sub = lowerTxt.split(' ')[3]?.toLowerCase();
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                        }
+
+                        // .g guild loan — show your active loans
+                        if (!sub || sub === 'list' || sub === 'status') {
+                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
+                          if (myLoans.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `💵 *Your Guild Loans*\n\n_No active loans._\n\n_Borrow with \`${botConfig.getPrefix()} guild loan <amount>\` (max 10% of guild bank, repay within 7 days or auto-deducted from earnings)._` });
+                          }
+                          let msg = `💵 *Your Guild Loans* (${myLoans.length} active)\n\n`;
+                          let totalOwed = 0;
+                          for (const loan of myLoans) {
+                            const daysLeft = Math.ceil((new Date(loan.dueAt).getTime() - Date.now()) / 86400000);
+                            msg += `💰 ${loan.amount.toLocaleString()} Zeni\n`;
+                            msg += `  Due: ${daysLeft > 0 ? `${daysLeft}d left` : '⚠️ OVERDUE'}\n`;
+                            msg += `  Taken: ${new Date(loan.takenAt).toLocaleDateString()}\n\n`;
+                            totalOwed += loan.amount;
+                          }
+                          msg += `*Total owed: ${totalOwed.toLocaleString()} Zeni*\n\n_Repay with \`${botConfig.getPrefix()} guild loan repay <amount>\`_`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+
+                        // .g guild loan repay <amount>
+                        if (sub === 'repay') {
+                          const repayAmount = parseInt(lowerTxt.split(' ')[4], 10);
+                          if (!repayAmount || repayAmount <= 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild loan repay <amount>\`` });
+                          }
+                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
+                          if (myLoans.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have no active loans to repay.' });
+                          }
+                          const economy = require('./rpg/economy');
+                          const userWallet = economy.getGold(senderJid);
+                          if (userWallet < repayAmount) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
+                          }
+                          // Apply repayment to loans oldest-first
+                          let remaining = repayAmount;
+                          let totalRepaid = 0;
+                          for (const loan of myLoans) {
+                            if (remaining <= 0) break;
+                            const apply = Math.min(remaining, loan.amount);
+                            loan.amount -= apply;
+                            remaining -= apply;
+                            totalRepaid += apply;
+                            if (loan.amount <= 0) {
+                              loan.repaid = true;
+                              loan.repaidAt = new Date();
+                            }
+                          }
+                          economy.removeMoney(senderJid, totalRepaid, `Guild loan repayment`);
+                          guilds.addGuildBalance(userGuild, totalRepaid);
+                          guilds.syncGuild(userGuild);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Repaid ${totalRepaid.toLocaleString()} Zeni to *${userGuild}* bank.` });
+                          return;
+                        }
+
+                        // .g guild loan <amount> — take a new loan
+                        const amount = parseInt(sub, 10);
+                        if (!amount || amount <= 0) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild loan <amount>\` (or \`list\` / \`repay <amount>\`)` });
+                        }
+                        const bankBalance = guild.balance || 0;
+                        const maxLoan = Math.floor(bankBalance * 0.10); // max 10% of bank
+                        if (amount > maxLoan) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Max loan is 10% of guild bank = ${maxLoan.toLocaleString()} Zeni.\n_Requested: ${amount.toLocaleString()}_` });
+                        }
+                        // Check existing loans from this user
+                        const existingLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
+                        const totalExisting = existingLoans.reduce((s, l) => s + l.amount, 0);
+                        if (totalExisting + amount > maxLoan) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You already owe ${totalExisting.toLocaleString()} Zeni. Max additional loan: ${(maxLoan - totalExisting).toLocaleString()} Zeni.` });
+                        }
+                        // Permission: only members+ can borrow (not recruits — added in this commit)
+                        const memberInfo = guilds.getGuildMember(userGuild, senderJid);
+                        if (memberInfo.role === 'recruit') {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Recruits cannot borrow from the guild bank. Ask an officer to promote you.' });
+                        }
+                        // Create loan
+                        if (!guild.loans) guild.loans = [];
+                        const dueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+                        guild.loans.push({
+                          borrowerJid: senderJid,
+                          amount,
+                          takenAt: new Date(),
+                          dueAt,
+                          repaid: false,
+                          repaidAt: null,
+                        });
+                        guild.balance = bankBalance - amount;
+                        guilds.syncGuild(userGuild);
+                        const economy = require('./rpg/economy');
+                        economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${botConfig.getPrefix()} guild loan repay <amount>\`_` });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // `.g guild info` — comprehensive guild info (level, members, perks, buildings)
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild info` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status`) {
+                      try {
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                        }
+                        const guildPerks = require('./rpg/guildPerks');
+                        const memberCap = guildPerks.getMemberCap(guild);
+                        const interestRate = guildPerks.getBankInterestRate(guild);
+
+                        let msg = `🏰 *${userGuild}* — Guild Info\n\n`;
+                        msg += `🏷️ Archetype: ${guild.type || 'ADVENTURER'}\n`;
+                        msg += `📊 Level: ${guild.level || 1} | XP: ${guild.points || 0}/${(guild.level || 1) * 1000}\n`;
+                        msg += `👤 Leader: ${guild.leader || 'unknown'}\n`;
+                        msg += `👥 Members: ${(guild.members || []).length}/${memberCap}\n`;
+                        msg += `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n`;
+                        if (guild.emblem && guild.emblem.icon) {
+                          msg += `🎨 Emblem: ${guild.emblem.icon}\n`;
+                        }
+                        msg += `\n🏗️ *Buildings:*\n`;
+                        msg += `• Guild Hall: L${(guild.buildings?.hall?.level) || 0} (+${((guild.buildings?.hall?.level) || 0) * 5} member cap)\n`;
+                        msg += `• Training: L${(guild.buildings?.training?.level) || 0} (+${((guild.buildings?.training?.level) || 0) * 5}% XP)\n`;
+                        msg += `• Treasury: L${(guild.buildings?.treasury?.level) || 0} (+${((guild.buildings?.treasury?.level) || 0) * 10}% gold`;
+                        if (interestRate > 0) msg += `, ${(interestRate * 100).toFixed(2)}% daily interest`;
+                        msg += `)\n`;
+                        if (guild.motto) {
+                          msg += `\n💬 _"${guild.motto}"_\n`;
+                        }
+                        msg += `\n_Use \`${botConfig.getPrefix()} guild perks\` for full perk breakdown._`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // `.g guild emblem <icon> <color>` — set guild emblem (leader only)
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild emblem `)) {
+                      try {
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        if (!guilds.isGuildOwner(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the guild leader can set the emblem.' });
+                        }
+                        const parts = txt.trim().split(/\s+/);
+                        const icon = parts[3]; // .g guild emblem <icon>
+                        const color = parts[4] || '#FFD700'; // optional hex color
+                        if (!icon) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild emblem <emoji> [hexColor]\`\nExample: \`${botConfig.getPrefix()} guild emblem 🐉 #FF5500\`` });
+                        }
+                        if (icon.length > 4) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Emblem icon must be a single emoji (max 4 chars).' });
+                        }
+                        // Validate hex color
+                        const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+                        if (!hexColorRegex.test(color)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Color must be a hex code like #FFD700.\n_Got: ${color}_` });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (!guild.emblem) guild.emblem = {};
+                        guild.emblem.icon = icon;
+                        guild.emblem.color = color;
+                        guilds.syncGuild(userGuild);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Guild emblem updated: ${icon} (color ${color})` });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // `.g guild role <@user> <recruit|member|officer>` — Phase 2 4-tier role system
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild role `)) {
+                      try {
+                        const parts = txt.trim().split(/\s+/);
+                        const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+                          || (parts[3]?.includes('@') ? parts[3] : null);
+                        const newRole = parts[4]?.toLowerCase();
+                        if (!targetJid || !newRole) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`` });
+                        }
+                        if (!['recruit', 'member', 'officer'].includes(newRole)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid role. Use: recruit, member, or officer.` });
+                        }
+                        const result = guilds.setMemberRole(senderJid, targetJid, newRole);
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                      } catch (e) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                    }
+
                     // `${botConfig.getPrefix().toLowerCase()}` guild challenges - List available challenge types
                     if (
                       lowerTxt ===
@@ -12597,8 +12912,151 @@ Admins can:
                         helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeId>\` — remove a rune (needs scroll)\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeId>\` — destroy a socketed rune\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune slots <skillId>\` — check slot capacity for a skill\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune sell <runeId> <price>\` — list a rune for sale\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune buy <listingId>\` — buy a listed rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune market\` — browse runes for sale\n`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + helpMsg });
                         return;
+                      }
+
+                      // .g rune sell <runeId> <price> — list a rune for sale on the market
+                      if (runeSub === 'sell') {
+                        const runeId = runeArgs[1];
+                        const price = parseInt(runeArgs[2], 10);
+                        if (!runeId || !price || price <= 0) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune sell <runeId> <price>\`` });
+                        }
+                        try {
+                          const Rune = require('./models/Rune');
+                          const CardMarket = require('./models/CardMarket');
+                          const rune = await Rune.findOne({ runeId, ownerJid: senderJid });
+                          if (!rune) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Rune not found in your inventory.' });
+                          if (rune.socketedSkillId) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Cannot sell a socketed rune. Remove it first.' });
+                          if (rune.onMarket) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune is already on the market.' });
+
+                          // Check for existing active listing
+                          const existing = await CardMarket.findOne({ runeId, sellerId: senderJid, status: 'active' });
+                          if (existing) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune already has an active listing.' });
+
+                          // Create market listing
+                          const listing = new CardMarket({
+                            runeId: rune.runeId,
+                            sellerId: senderJid,
+                            isRune: true,
+                            type: 'sale',
+                            price,
+                            status: 'active',
+                            approvalStatus: 'approved',
+                          });
+                          await listing.save();
+
+                          // Mark rune as on market
+                          rune.onMarket = true;
+                          rune.marketPrice = price;
+                          await rune.save();
+
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Listed ${runeSystem.RUNE_TYPES[rune.type].name} (${runeSystem.RUNE_TIERS[rune.tier].name}) for ${price.toLocaleString()} Zeni.\n_Listing ID: \`${listing._id}\`_\n_Buyers: \`${botConfig.getPrefix()} rune buy ${listing._id}\`_` });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g rune market — browse runes for sale
+                      if (runeSub === 'market') {
+                        try {
+                          const CardMarket = require('./models/CardMarket');
+                          const Rune = require('./models/Rune');
+                          const listings = await CardMarket.find({ isRune: true, status: 'active' }).sort({ price: 1 }).limit(20);
+                          if (listings.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Rune Market*\n\n_No runes for sale right now._' });
+                          }
+                          let msg = `💎 *Rune Market* (${listings.length} listings)\n\n`;
+                          for (const l of listings) {
+                            const rune = await Rune.findOne({ runeId: l.runeId });
+                            if (!rune) continue;
+                            const rt = runeSystem.RUNE_TYPES[rune.type];
+                            const tt = runeSystem.RUNE_TIERS[rune.tier];
+                            msg += `${rt.icon} ${rt.name} (${tt.name}) — ${l.price.toLocaleString()} Zeni\n`;
+                            msg += `  Buy: \`${botConfig.getPrefix()} rune buy ${l._id}\`\n`;
+                            msg += `  Seller: ${l.sellerId.split('@')[0]}\n\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g rune buy <listingId> — buy a listed rune
+                      if (runeSub === 'buy') {
+                        const listingId = runeArgs[1];
+                        if (!listingId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune buy <listingId>\`` });
+                        }
+                        try {
+                          const CardMarket = require('./models/CardMarket');
+                          const Rune = require('./models/Rune');
+                          const economy = require('./rpg/economy');
+
+                          const listing = await CardMarket.findOne({ _id: listingId, isRune: true, status: 'active' });
+                          if (!listing) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Listing not found or no longer active.' });
+                          if (listing.sellerId === senderJid) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You cannot buy your own listing.' });
+
+                          const buyerWallet = economy.getGold(senderJid);
+                          if (buyerWallet < listing.price) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need ${listing.price.toLocaleString()} Zeni (have ${buyerWallet.toLocaleString()}).` });
+                          }
+
+                          // Transfer funds
+                          economy.removeMoney(senderJid, listing.price, `Rune purchase: ${listing.runeId}`);
+                          economy.addMoney(listing.sellerId, listing.price, `Rune sale: ${listing.runeId}`);
+
+                          // Transfer rune ownership
+                          const rune = await Rune.findOne({ runeId: listing.runeId });
+                          if (rune) {
+                            rune.ownerJid = senderJid;
+                            rune.onMarket = false;
+                            rune.marketPrice = 0;
+                            await rune.save();
+                          }
+
+                          // Mark listing as sold
+                          listing.status = 'sold';
+                          listing.completedAt = new Date();
+                          await listing.save();
+
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Purchased ${rune ? runeSystem.RUNE_TYPES[rune.type].name : 'rune'} for ${listing.price.toLocaleString()} Zeni.\n_Use \`${botConfig.getPrefix()} rune inv\` to see it in your inventory._` });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g rune unsell <runeId> — cancel a market listing
+                      if (runeSub === 'unsell') {
+                        const runeId = runeArgs[1];
+                        if (!runeId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune unsell <runeId>\`` });
+                        }
+                        try {
+                          const Rune = require('./models/Rune');
+                          const CardMarket = require('./models/CardMarket');
+                          const rune = await Rune.findOne({ runeId, ownerJid: senderJid });
+                          if (!rune) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Rune not found.' });
+                          if (!rune.onMarket) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune is not on the market.' });
+
+                          // Cancel the listing
+                          await CardMarket.updateOne(
+                            { runeId, sellerId: senderJid, status: 'active' },
+                            { $set: { status: 'cancelled', completedAt: new Date() } }
+                          );
+                          rune.onMarket = false;
+                          rune.marketPrice = 0;
+                          await rune.save();
+
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Removed ${runeSystem.RUNE_TYPES[rune.type].name} from the market.` });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
                       }
 
                       // .g rune inv — inventory

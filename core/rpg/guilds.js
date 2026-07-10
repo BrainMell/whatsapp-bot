@@ -749,10 +749,59 @@ function getGuildMember(guildName, userJid) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild || !guild.members.includes(userJid)) return null;
 
+  // 💡 Phase 2: 4-tier role system — leader / officer / member / recruit
+  // Recruits are stored in guild.recruits[] (new). If a user is in recruits,
+  // they're a recruit. Otherwise: officer (in admins[]), member (default).
+  if (!guild.recruits) guild.recruits = [];
+  let role = 'member';
+  if (guild.leader === userJid || guild.owner === userJid) {
+    role = 'leader';
+  } else if (guild.admins && guild.admins.includes(userJid)) {
+    role = 'officer';
+  } else if (guild.recruits.includes(userJid)) {
+    role = 'recruit';
+  }
+
   return {
     jid: userJid,
-    role: guild.owner === userJid ? 'leader' : (guild.admins.includes(userJid) ? 'officer' : 'member'),
-    title: guild.titles[userJid] || 'Member'
+    role,
+    title: (guild.titles && guild.titles[userJid]) || 'Member'
+  };
+}
+
+// 💡 Phase 2: Set a member's role (leader-only).
+// Supported roles: 'recruit', 'member', 'officer'. (Leader can't be changed here.)
+function setMemberRole(ownerJid, targetJid, newRole) {
+  const info = globalGuildData;
+  const guildName = info.guildOwners[ownerJid];
+  if (!guildName) return { success: false, message: '❌ You don\'t own any guild!' };
+
+  const guild = info.guilds[guildName];
+  if (!guild) return { success: false, message: '❌ Guild not found.' };
+  if (!guild.members.includes(targetJid)) return { success: false, message: '❌ That user is not in your guild!' };
+  if (guild.leader === targetJid || guild.owner === targetJid) {
+    return { success: false, message: '❌ Cannot change the leader\'s role.' };
+  }
+
+  if (!guild.recruits) guild.recruits = [];
+  if (!guild.admins) guild.admins = [];
+
+  // Remove from all role arrays first
+  guild.admins = guild.admins.filter(j => j !== targetJid);
+  guild.recruits = guild.recruits.filter(j => j !== targetJid);
+
+  // Apply new role
+  if (newRole === 'officer') {
+    guild.admins.push(targetJid);
+  } else if (newRole === 'recruit') {
+    guild.recruits.push(targetJid);
+  }
+  // 'member' = neither array
+
+  syncGuild(guildName);
+  return {
+    success: true,
+    message: `✅ @${targetJid.split('@')[0]} is now a *${newRole}*.`,
   };
 }
 
@@ -1150,6 +1199,7 @@ module.exports = {
 
   promoteToAdmin,
   demoteAdmin,
+  setMemberRole,
   kickFromGuild,
   setMemberTitle,
   getMemberTitle,
