@@ -144,7 +144,7 @@ function getPlayerEffectsString(player) {
 
 // ─── PvP Balance Constants ────────────────────
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
-const PVP_ENERGY_REGEN  = 20;    // Energy gained per turn
+const PVP_ENERGY_REGEN  = 25;    // Energy gained per turn. FIX: bumped from 20 so ultimate-cost skills (capped at 100) are still usable alongside basic actions.
 const PVP_DEFENSE_CAP   = 0.50;  // Max 50% damage reduction from DEF in PvP
 const PVP_ABILITY_MULT  = 0.45;  // Ability damage multiplier in PvP
 const PVP_CRIT_MULT     = 1.5;   // Crit multiplier in PvP
