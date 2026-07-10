@@ -894,7 +894,18 @@ const BOSS_ENCOUNTERS = {
         { id: 'SOUND_REAPER', name: 'Sound Reaper', icon: '🎸💀', stats: { hp: 19000, atk: 280, def: 20, mag: 380, spd: 35 }, levelRange: [1, 100] },
         { id: 'MAESTRO_OF_VOID', name: 'Maestro of Void', icon: '🎻🌑', stats: { hp: 59000, atk: 520, def: 40, mag: 820, spd: 45 }, levelRange: [1, 100] },
         { id: 'CLOCKWORK_TITAN', name: 'Clockwork Titan', icon: '⚙️🗿', stats: { hp: 23000, atk: 380, def: 420, mag: 20, spd: 15 }, levelRange: [1, 100] },
-        { id: 'MECH_GOD', name: 'Mech God', icon: '🦾🤖', stats: { hp: 80000, atk: 750, def: 750, mag: 450, spd: 25 }, levelRange: [1, 100] }
+        { id: 'MECH_GOD', name: 'Mech God', icon: '🦾🤖', stats: { hp: 80000, atk: 750, def: 750, mag: 450, spd: 25 }, levelRange: [1, 100] },
+        // 💡 FIX: 7 trial bosses referenced by classSystem.js but missing from
+        // the registry — previously selectBoss silently fell back to a random
+        // boss, so the player fought the wrong enemy and the trial completion
+        // recorded the wrong boss id.
+        { id: 'DEMON_LORD',          name: 'Demon Lord',          icon: '😈👑', stats: { hp: 45000, atk: 580, def: 80,  mag: 720, spd: 50 }, levelRange: [1, 100] },
+        { id: 'ELDER_FLAME',         name: 'Elder Flame',         icon: '🔥🐉', stats: { hp: 28000, atk: 420, def: 60,  mag: 680, spd: 45 }, levelRange: [1, 100] },
+        { id: 'LEVIATHAN',           name: 'Leviathan',           icon: '🌊🐲', stats: { hp: 85000, atk: 720, def: 180, mag: 900, spd: 40 }, levelRange: [1, 100] },
+        { id: 'ETERNAL_DRAGON',      name: 'Eternal Dragon',      icon: '🐉✨', stats: { hp: 92000, atk: 800, def: 200, mag: 950, spd: 55 }, levelRange: [1, 100] },
+        { id: 'SHADOW_LORD',         name: 'Shadow Lord',         icon: '🌑👑', stats: { hp: 38000, atk: 540, def: 70,  mag: 620, spd: 80 }, levelRange: [1, 100] },
+        { id: 'PRIMORDIAL_EVIL',     name: 'Primordial Evil',     icon: '💫👹', stats: { hp: 72000, atk: 760, def: 110, mag: 980, spd: 60 }, levelRange: [1, 100] },
+        { id: 'GRAVEYARD_LORD',      name: 'Graveyard Lord',      icon: '🪦💀', stats: { hp: 41000, atk: 480, def: 90,  mag: 700, spd: 35 }, levelRange: [1, 100] }
     ]
 };
 
@@ -915,16 +926,37 @@ function getEnemyPoolByLevel(avgLevel) {
     return INFECTED_POOLS.FIRE_ELITE;
 }
 
-function selectRandomEnemy(avgLevel, difficulty = 'COMMON') {
-    const pool = getEnemyPoolByLevel(avgLevel);
-    
+// 💡 FIX: selectRandomEnemy now accepts an optional `environment` parameter.
+// When state.environment is a special dungeon (e.g., DRAGON_LAIR), we pull
+// from environment.mobs instead of getEnemyPoolByLevel — which was ignoring
+// the dragon pool entirely and spawning generic FIRE/WATER/EARTH enemies
+// inside the Dragon's Lair.
+function selectRandomEnemy(avgLevel, difficulty = 'COMMON', environment = null) {
+    let pool;
+    if (environment && environment.mobs && environment.isSpecial) {
+        // Use the environment's dedicated mob pool (DRAGON_LAIR, etc.)
+        // Reuse the same difficulty key for consistency.
+        pool = environment.mobs;
+        // If the environment pool doesn't have the requested difficulty tier,
+        // fall back to COMMON within the same pool, then to level-based.
+        if (!pool[difficulty] || pool[difficulty].length === 0) {
+            if (pool.COMMON && pool.COMMON.length > 0) {
+                difficulty = 'COMMON';
+            } else {
+                pool = getEnemyPoolByLevel(avgLevel);
+            }
+        }
+    } else {
+        pool = getEnemyPoolByLevel(avgLevel);
+    }
+
     if (!pool || !pool[difficulty] || pool[difficulty].length === 0) {
         return INFECTED_POOLS.FIRE_LOW.COMMON[0];
     }
-    
+
     const enemies = pool[difficulty];
     const randomEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-    
+
     return { ...randomEnemy };
 }
 
@@ -944,13 +976,23 @@ function selectBoss(avgLevel, forceId = null) {
                 for (const key of Object.keys(bossMechanics.BOSS_REGISTRY)) {
                     if (key.toLowerCase() === targetKey) {
                         const foundBoss = bossMechanics.BOSS_REGISTRY[key];
-                        return { id: forceId, ...foundBoss };
+                        // 💡 FIX: spread foundBoss first, then set id last so
+                        // the uppercase `forceId` wins. (FoundBoss.id is often
+                        // lowercase, which broke every `id.includes("DRAGON")`
+                        // substring check downstream — dragon-seal-ring gate,
+                        // dragon kill tracking, etc.)
+                        return { ...foundBoss, id: forceId };
                     }
                 }
             }
         } catch (err) {
             console.error("Error loading boss from bossMechanics in selectBoss fallback:", err);
         }
+
+        // 💡 FIX: log when forceId is unfound so trial-boss mismatches are
+        // visible. Previously this silently fell through to a random boss and
+        // players saw the wrong enemy.
+        console.warn(`[selectBoss] forceId "${forceId}" not found in BOSS_ENCOUNTERS or BOSS_REGISTRY — falling back to random boss`);
     }
 
     let pool;
@@ -1003,7 +1045,7 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
         // 1-2 elite enemies
         const eliteCount = options.maxMobs ? Math.min(options.maxMobs, 4) : Math.min(1 + Math.floor(players.length / 2), 4);
         for (let i = 0; i < eliteCount; i++) {
-            const elite = selectRandomEnemy(avgLevel, 'ELITE');
+            const elite = selectRandomEnemy(avgLevel, 'ELITE', options.environment);
             enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     } else {
@@ -1015,9 +1057,9 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
             // Default logic: 2-4 common enemies
             enemyCount = Math.min(2 + players.length, 6);
         }
-        
+
         for (let i = 0; i < enemyCount; i++) {
-            const enemy = selectRandomEnemy(avgLevel, 'COMMON');
+            const enemy = selectRandomEnemy(avgLevel, 'COMMON', options.environment);
             enemies.push(scaleEnemyStats(enemy, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     }
@@ -1159,12 +1201,19 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
 function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpeed = 10) {
     const scaled = { ...boss };
     const rankIndex = difficulty;
-    
+
     // Standardize Party Factor to 20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
     const dmgMult = 1 + (rankIndex * 0.15);
     const spdMult = 1 + (rankIndex * 0.08);
-    
+
+    // 💡 FIX: ensure `level` is present on the scaled entity. Boss templates
+    // declare `level: 15` (snake_case) but downstream code calls
+    // `skill.effect(enemy.level || 1)` which read undefined for bosses,
+    // causing skill effects (ultimate multiplier, dot magnitude, etc.) to
+    // evaluate at level 1 instead of the boss's actual level.
+    scaled.level = boss.level || Math.max(1, Math.floor(avgLevel));
+
     scaled.stats = { ...boss.stats };
 
     // 💡 FIX: Boss HP scaling restored to QUADRATIC at S+ ranks.
