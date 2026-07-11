@@ -203,6 +203,18 @@ async function getGot() {
   return gotScraping;
 }
 
+// 💡 Format milliseconds as "Xd Yh Zm" for uptime display in `.g instances`
+function formatUptime(ms) {
+  if (!ms || ms < 0 || !Number.isFinite(ms)) return '—';
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
 const { getAnikaiBestMatch } = require('./utils/anikaiResolver');
@@ -241,6 +253,7 @@ async function startBot(configInstance) {
   let isNewLogin = false;
   let isRekeying = true;
   let botStartTime;
+  let heartbeatInterval = null; // 💡 cross-instance heartbeat timer
   const msgRetryCounterCache = new NodeCache({ stdTTL: 300 }); // 5 min TTL
   const groupMetadataCache = new NodeCache({ stdTTL: 300 });
   // O(1) admin lookup cache: groupJid -> { admins: Set<jid>, expires: number }
@@ -4223,6 +4236,34 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // Give the WS a moment to settle, then flush any queued outbound messages.
               setTimeout(() => sendQueue.kick(), 1500);
 
+              // 💡 CROSS-INSTANCE HEARTBEAT — write this instance's status to
+              // the shared System collection every 30s so other instances can
+              // check if we're alive via `.g instances`. Key format:
+              // "heartbeat_<BOT_ID>" → { botId, name, status, lastSeen, uptime,
+              // messagesProcessed, version, prefix }
+              if (heartbeatInterval) clearInterval(heartbeatInterval);
+              const writeHeartbeat = async () => {
+                try {
+                  const siblings = botConfig.get('siblings', []) || [];
+                  await system.set('heartbeat_' + BOT_ID, {
+                    botId: BOT_ID,
+                    name: BOT_NAME,
+                    status: 'connected',
+                    lastSeen: Date.now(),
+                    startedAt: botStartTime || Date.now(),
+                    uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
+                    version: botConfig.get('version', 'unknown'),
+                    prefix: botConfig.getPrefix(),
+                    siblings: siblings,
+                    pid: process.pid,
+                  });
+                } catch (e) {
+                  // Silent fail — heartbeat is best-effort
+                }
+              };
+              await writeHeartbeat(); // write immediately on connect
+              heartbeatInterval = setInterval(writeHeartbeat, 30000);
+
               // ⚡ DEFERRED DATA LOAD: if we skipped loading on startup (fresh QR login),
               // load all data now that the session is established.
               if (isFreshLogin) {
@@ -4291,6 +4332,25 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               });
               console.log(`🔻 [${BOT_ID}] Connection closed. Status code:`, statusCode);
               botStarting = false; // CLEAR GUARD
+
+              // 💡 Write a disconnected heartbeat so other instances see we're
+              // down immediately (instead of waiting 2 min for staleness).
+              try {
+                await system.set('heartbeat_' + BOT_ID, {
+                  botId: BOT_ID,
+                  name: BOT_NAME,
+                  status: statusCode === DisconnectReason.loggedOut ? 'logged_out' : 'disconnected',
+                  lastSeen: Date.now(),
+                  startedAt: botStartTime || Date.now(),
+                  uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
+                  version: botConfig.get('version', 'unknown'),
+                  prefix: botConfig.getPrefix(),
+                  siblings: botConfig.get('siblings', []) || [],
+                  pid: process.pid,
+                  error: statusCode ? `Status ${statusCode}` : (lastDisconnect?.error?.message || 'Connection closed'),
+                });
+              } catch (e) { /* best-effort */ }
+              if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
 
               if (!hasAuth(configInstance.getAuthPath())) {
                 console.log(`🔑 [${BOT_ID}] Auth folder missing or empty — creating it and restarting for fresh QR login...`);
@@ -5645,7 +5705,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `• \`${botConfig.getPrefix()} setpack <name>\` — set sticker pack name\n`;
                         msg += `• \`${botConfig.getPrefix()} setauthor <name>\` — set sticker author\n`;
                         msg += `• \`${botConfig.getPrefix()} spawnset <minutes>\` — set card spawn interval\n`;
-                        msg += `• \`${botConfig.getPrefix()} spawninfo\` — view spawn config\n\n`;
+                        msg += `• \`${botConfig.getPrefix()} spawninfo\` — view spawn config\n`;
+                        msg += `• \`${botConfig.getPrefix()} instances\` — check all bot instances' status\n\n`;
                         msg += `*RPG Admin Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss admin\` — Abyss management\n`;
                         msg += `• \`${botConfig.getPrefix()} raid admin\` — Raid management\n`;
@@ -5713,7 +5774,136 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j profile / .j me / .j whois
+                    // 💡 .g instances — cross-instance health check
+                    // Shows the status of ALL bot instances (self + siblings)
+                    // by reading their heartbeats from the shared System collection.
+                    // Mods/owner only — exposes operational info.
+                    if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health") {
+                      const isSenderOwner = isOwner;
+                      const isSenderGMod = isGlobalMod(senderJid);
+                      const isSenderMod = isMod || isSenderGMod || isSenderOwner;
+
+                      if (!isSenderMod) {
+                        return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
+                      }
+
+                      try {
+                        // Build the list of all known instances: self + siblings
+                        const selfId = BOT_ID;
+                        const siblingIds = botConfig.get('siblings', []) || [];
+                        const allIds = Array.from(new Set([selfId, ...siblingIds]));
+
+                        // 💡 Read fresh heartbeat data from MongoDB (not cache).
+                        // system.get() reads from a local cache loaded at startup,
+                        // so for live health data we hit the DB directly.
+                        const System = require('./models/System');
+                        const heartbeatDocs = await System.find({
+                          key: { $in: allIds.map(id => 'heartbeat_' + id) }
+                        }).lean();
+
+                        const heartbeatMap = {};
+                        for (const doc of heartbeatDocs) {
+                          heartbeatMap[doc.key.replace('heartbeat_', '')] = doc.value;
+                        }
+
+                        const now = Date.now();
+                        const STALE_THRESHOLD = 2 * 60 * 1000;   // 2 min → STALE
+                        const DEAD_THRESHOLD  = 5 * 60 * 1000;   // 5 min → DEAD
+                        const SELF_TAG = ' (you)';
+
+                        let out = `🖥️ *BOT INSTANCE STATUS*\n`;
+                        out += `_Checked at ${new Date().toLocaleTimeString()} — ${allIds.length} instances_\n\n`;
+
+                        let aliveCount = 0, staleCount = 0, deadCount = 0, unknownCount = 0;
+
+                        for (const id of allIds) {
+                          const hb = heartbeatMap[id];
+                          let statusIcon, statusLabel, lastSeenStr, uptimeStr, detailStr;
+
+                          if (!hb) {
+                            // No heartbeat record at all — instance never started
+                            // since the heartbeat feature was deployed, OR its
+                            // heartbeat was cleared. Treat as DEAD.
+                            statusIcon = '⚫';
+                            statusLabel = 'NEVER_SEEN';
+                            lastSeenStr = '—';
+                            uptimeStr = '—';
+                            detailStr = 'No heartbeat record. Instance may be offline or running a pre-heartbeat version.';
+                            deadCount++;
+                          } else {
+                            const ageMs = now - (hb.lastSeen || 0);
+                            const isSelf = (id === selfId);
+
+                            // Self reports its own connection state directly;
+                            // siblings are judged by heartbeat freshness.
+                            if (isSelf) {
+                              const selfHealth = botInstancesHealth.get(BOT_ID);
+                              const selfStatus = selfHealth?.status || 'unknown';
+                              if (selfStatus === 'connected') {
+                                statusIcon = '🟢'; statusLabel = 'ONLINE';
+                                aliveCount++;
+                              } else if (selfStatus === 'connecting') {
+                                statusIcon = '🟡'; statusLabel = 'CONNECTING';
+                                staleCount++;
+                              } else {
+                                statusIcon = '🔴'; statusLabel = String(selfStatus).toUpperCase();
+                                deadCount++;
+                              }
+                            } else if (hb.status === 'disconnected' || hb.status === 'logged_out') {
+                              statusIcon = '🔴'; statusLabel = String(hb.status).toUpperCase();
+                              detailStr = hb.error ? `Error: ${hb.error}` : 'Connection closed';
+                              deadCount++;
+                            } else if (ageMs < STALE_THRESHOLD) {
+                              statusIcon = '🟢'; statusLabel = 'ONLINE';
+                              aliveCount++;
+                            } else if (ageMs < DEAD_THRESHOLD) {
+                              statusIcon = '🟡'; statusLabel = 'STALE';
+                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000)}s ago — may be lagging or restarting.`;
+                              staleCount++;
+                            } else {
+                              statusIcon = '⚫'; statusLabel = 'DEAD';
+                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000 / 60)}m ago — instance is likely down.`;
+                              deadCount++;
+                            }
+
+                            lastSeenStr = hb.lastSeen
+                              ? `${Math.floor((now - hb.lastSeen) / 1000)}s ago`
+                              : '—';
+                            uptimeStr = hb.startedAt
+                              ? formatUptime(now - hb.startedAt)
+                              : '—';
+                          }
+
+                          out += `${statusIcon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
+                          out += `   Status: ${statusLabel}\n`;
+                          out += `   Last seen: ${lastSeenStr}\n`;
+                          if (uptimeStr && uptimeStr !== '—') out += `   Uptime: ${uptimeStr}\n`;
+                          if (hb?.version) out += `   Version: ${hb.version}\n`;
+                          if (hb?.prefix) out += `   Prefix: ${hb.prefix}\n`;
+                          if (detailStr) out += `   ⚠️ ${detailStr}\n`;
+                          out += `\n`;
+                        }
+
+                        // Summary line
+                        out += `━━━━━━━━━━━━━━━━━━━━\n`;
+                        out += `Summary: 🟢 ${aliveCount} online · 🟡 ${staleCount} stale · 🔴 ${deadCount} down · ${allIds.length} total\n`;
+
+                        // Action recommendations
+                        if (deadCount > 0) {
+                          out += `\n⚠️ *Action needed:* ${deadCount} instance(s) are down. Check their deployment/logs.`;
+                        }
+                        if (staleCount > 0) {
+                          out += `\n🟡 *Watch:* ${staleCount} instance(s) are stale — may be restarting or lagging.`;
+                        }
+
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + out });
+                        return;
+                      } catch (err) {
+                        console.error('[instances] error:', err);
+                        return reply(BOT_MARKER + '❌ Failed to query instance health: ' + (err.message || 'unknown error'));
+                      }
+                    }
+
                     if (
                       primaryCmd === "profile" ||
                       primaryCmd === "me" ||
