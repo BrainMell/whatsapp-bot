@@ -529,7 +529,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   const caption = buildSpawnCaption(card, stat.totalSpawned, stat.maxCopies, price);
 
   try {
-    if (String(card.tier) === '6' || String(card.tier) === 'S') {
+    if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
       const gifBuffer = await goService.convertCardImage(card.imageUrl);
       if (gifBuffer) {
         await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
@@ -766,8 +766,11 @@ async function eshopBuy(senderJid, slot) {
     // Get the card stat to find the next copy number
     const stat = await getOrInitStat(entry.cardId, entry.tier);
     stat.totalCirculation += 1;
-    // Don't increment totalSpawned — eShop purchases aren't "spawns"
-    const copyNumber = stat.totalSpawned + 1; // Use next available copy number
+    // 💡 FIX: Use totalCirculation for the copy number, NOT totalSpawned.
+    // eShop purchases aren't "spawns" so totalSpawned stays unchanged,
+    // but the copy number must still be unique. Using totalSpawned+1
+    // would collide with the next natural spawn's copy number.
+    const copyNumber = stat.totalCirculation;
     await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
     await stat.save();
 
@@ -935,7 +938,11 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 }
 
 function getTopCards(cards) {
-  const tierOrder = { 'S': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1 };
+  // 💡 FIX: Added 'E' (Event) tier to the sort order. Event cards are
+  // special and should sort just below S-tier (rarity-wise they're
+  // unique event rewards). Previously they got tier 0 and sank to the
+  // bottom of collection highlights, making them invisible in the GIF.
+  const tierOrder = { 'S': 8, 'E': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1 };
   return [...cards].sort((a, b) => {
     const cardA = CARD_INDEX()[a.cardId];
     const cardB = CARD_INDEX()[b.cardId];
@@ -952,7 +959,7 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      animated: String(card.tier) === '6' || String(card.tier) === 'S'
+      animated: String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E'
     };
   }).filter(Boolean);
 }
@@ -985,8 +992,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   if (!owned.length) return reply('📭 Collection empty.');
 
   // Group by Tier
-  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
-  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+  // 💡 FIX: Added 'E' (Event) tier. Previously event cards were silently
+  // dropped from the tier view because `tiers[String(card.tier)]` was
+  // undefined for 'E', so the `if (tiers[t])` check skipped them.
+  const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+  const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
   
   owned.forEach((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
@@ -997,10 +1007,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   });
 
   let finalMsg = `🃏 *Cards | Tier View*\n\n`;
-  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
+  // 💡 FIX: Added 'E' to the iteration order (right after S)
+  for (const t of ['S', 'E', '6', '5', '4', '3', '2', '1']) {
     if (tiers[t].length > 0) {
-      const label = t === 'S' ? 'S' : t;
-      finalMsg += `${tierEmoji[t]} *Tier ${label}*\n`;
+      const label = TIER_LABEL[t] || `TIER ${t}`;
+      finalMsg += `${tierEmoji[t]} *${label}*\n`;
       tiers[t].forEach((item) => {
         finalMsg += `*#${item.index} ➳ ${item.name}*\n`;
       });
@@ -1058,7 +1069,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection', collIndex, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S') {
+        if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1126,7 +1137,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             const ownerName = await getUserName(uc.userId);
             const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot, ownerName);
             try {
-                if (String(card.tier) === '6' || String(card.tier) === 'S') {
+                if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
                     const gifBuffer = await goService.convertCardImage(card.imageUrl);
                     if (gifBuffer) {
                         return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1243,18 +1254,26 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
 
   if (!filtered.length) return reply(`📭 No owned cards found by maker: *${makerQuery}*`);
 
-  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
-  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+  // 💡 FIX: Added 'E' (Event) tier. Previously this code CRASHED with
+  // "TypeError: Cannot read property 'push' of undefined" if the user
+  // owned any event cards, because `tiers['E']` was undefined.
+  const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+  const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
 
   filtered.forEach(uc => {
     const card = CARD_INDEX()[uc.cardId];
-    if (card) tiers[String(card.tier)].push(card.cardName);
+    if (card) {
+      const t = String(card.tier);
+      if (tiers[t]) tiers[t].push(card.cardName);
+    }
   });
 
   let msg = `🎨 *Cards | Made by ${makerQuery}*\n\n`;
-  for (const t of ['S', '6', '5', '4', '3', '2', '1']) {
+  // 💡 FIX: Added 'E' to the iteration order
+  for (const t of ['S', 'E', '6', '5', '4', '3', '2', '1']) {
     if (tiers[t].length > 0) {
-      msg += `${tierEmoji[t]} *Tier ${t}*\n`;
+      const label = TIER_LABEL[t] || `TIER ${t}`;
+      msg += `${tierEmoji[t]} *${label}*\n`;
       tiers[t].forEach((name, i) => {
         msg += `🔹 *#${i + 1} ➳ ${name}*\n`;
       });
@@ -1505,7 +1524,7 @@ async function cmdInfo(reply, chatId, args = []) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
-      if (String(exact.tier) === '6' || String(exact.tier) === 'S') {
+      if (String(exact.tier) === '6' || String(exact.tier) === 'S' || String(exact.tier) === 'E') {
         const gifBuffer = await goService.convertCardImage(exact.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -1529,7 +1548,7 @@ async function cmdInfo(reply, chatId, args = []) {
     const stat = await CardStat.findOne({ cardId: card.id });
     const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
     try {
-      if (String(card.tier) === '6' || String(card.tier) === 'S') {
+      if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
         const gifBuffer = await goService.convertCardImage(card.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2252,7 +2271,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S') {
+        if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2747,6 +2766,31 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
 
+    // 💡 .g espawn <name> — force-spawn an event (E-tier) card.
+    // Shortcut for `.g spawn <name> | E`. Card-mod only.
+    case 'espawn':
+      if (!isCardMod) return reply('❌ No permission.'), true;
+      const espawnQuery = args.join(' ').trim();
+      if (!espawnQuery) {
+        // No args → list all available event cards
+        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        if (eventCards.length === 0) {
+          return reply(`📭 No event cards exist in the database.\n\nEvent cards have tier "E" in cards_data.json.`), true;
+        }
+        let listMsg = `🎁 *EVENT CARDS — ${eventCards.length} available*\n\n`;
+        listMsg += `Usage: \`${p} espawn <name or id>\`\n\n`;
+        eventCards.forEach(c => {
+          listMsg += `▫️ *${c.cardName}* — \`${c.id}\`\n   _${c.animeName}_\n`;
+        });
+        return reply(listMsg), true;
+      }
+      const espawnRes = await doSpawn(espawnQuery, 'E', true, chatId);
+      if (!espawnRes) {
+        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
+      }
+      return true;
+
     // 💡 NEW: .g spawnset <minutes> — set per-bot spawn interval (owner-only)
     // .g spawnset reset — restore default 20min
     // .g spawninfo — show current interval + calculated rates
@@ -2834,7 +2878,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   return false;
 }
 
-function init(sock, admins = [], mods = [], owner = null) {
+async function init(sock, admins = [], mods = [], owner = null) {
   const inst = getInst();
   inst.sock_ref  = sock;
   inst.ownerJid  = owner;
@@ -2845,13 +2889,19 @@ function init(sock, admins = [], mods = [], owner = null) {
 
   admins.forEach(a => inst.adminJids.add(a));
   mods.forEach(m => inst.modJids.add(m));
-  loadCardsDB();
-  loadActiveGroups();
-  loadRoles();
-  loadTokenEventState();  // 💡 Load token event state from DB
-  loadEShopDeck();        // 💡 Load eShop deck from DB
-  loadSpawnInterval();    // 💡 Load per-bot spawn interval from DB
-  loadTierConfig();       // 💡 Load per-bot tier spawn config from DB
+  loadCardsDB();  // synchronous — reads local JSON file
+  // 💡 FIX: await all async loads so the card system is fully ready
+  // before any commands are processed. Previously these were fire-and-
+  // forget, causing a race condition where commands ran before tier
+  // config / eShop deck / token event state was loaded.
+  await Promise.all([
+    loadActiveGroups(),
+    loadRoles(),
+    loadTokenEventState(),
+    loadEShopDeck(),
+    loadSpawnInterval(),
+    loadTierConfig(),
+  ]);
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 

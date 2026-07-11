@@ -4312,13 +4312,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               }
               qrShown = false;
 
-              // Initialize Card System
+              // Initialize Card System (now async — awaits DB loads)
               cardSystem.init(
                 sock,
                 [], // Admins (init empty, will load from DB)
                 [], // Mods (init empty, will load from DB)
                 "233201487480@s.whatsapp.net", // Owner
-              );
+              ).catch(err => console.error('[CardSystem] init failed:', err.message));
               
               setTimeout(() => resumePinTimers(sock), 5000);
             }
