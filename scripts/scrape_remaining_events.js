@@ -1,4 +1,6 @@
 // Scrape remaining event categories and merge into database + MongoDB
+// 💡 FIXED: Uses E-XXXXX sequential ID format (matching regular cards)
+// instead of the old 'event-<hex>' format that produced 40+ char IDs.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const mongoose = require('mongoose');
@@ -13,6 +15,19 @@ const events = [
   {name:'My Hero Academia CCG', slug:'my-hero-academia-ccg'},
   {name:'Maid Day', slug:'maid-day'},
 ];
+
+// 💡 Compute the next E-XXXXX sequence number from existing data
+function getNextEventId(existingCards) {
+  let maxNum = 0;
+  for (const c of existingCards) {
+    const m = String(c.id || '').match(/^E-(\d{5})$/);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return maxNum;
+}
 
 async function main() {
   const allCards = [];
@@ -32,8 +47,14 @@ async function main() {
         try { ids = JSON.parse(str); } catch(e) { break; }
         if (ids.length === 0) break;
         for (const id of ids) {
+          // 💡 FIX: Don't assign IDs here — the organizer script
+          // (organize-events.js) handles E-XXXXX assignment after
+          // dedup + sort. Store the raw shoob hex ID in cardId field
+          // so the organizer can match and dedupe by detailUrl/imageUrl.
           allCards.push({
-            cardId: id, id: 'event-' + id, cardName: event.name + ' Event Card',
+            cardId: id,  // raw shoob hex (for matching)
+            // id will be assigned by organize-events.js as E-XXXXX
+            cardName: event.name + ' Event Card',
             animeName: event.name, tier: 'E', event: event.name, eventSlug: event.slug,
             imageUrl: 'https://api.shoob.gg/site/api/cardr/' + id + '?size=400',
             detailUrl: 'https://shoob.gg/card-events/' + event.slug + '/' + id,
@@ -58,34 +79,13 @@ async function main() {
     const merged = [...existing, ...newCards];
     fs.writeFileSync('./core/data/cards_data.json', JSON.stringify({ cards: merged }, null, 2));
     console.log('Merged ' + newCards.length + ' new event cards. Total: ' + merged.length);
+    console.log('\n⚠️  NOTE: Event cards have no E-XXXXX IDs yet.');
+    console.log('   Run organize-events.js (from the event_scraper project) to assign proper IDs.');
 
-    // Create CardStat entries in MongoDB
-    const uri = 'mongodb+srv://admin:umtaSx2zu940HhKQ@cluster0.drpztk6.mongodb.net/test?retryWrites=true&w=majority&appName=Cluster0';
-    await mongoose.connect(uri);
-    const CardStat = require('./core/models/CardStat');
-
-    const batch = newCards.map(c => ({
-      cardId: c.id,
-      totalSpawned: 0,
-      maxCopies: 1000,
-      uniqueOwners: 0,
-      totalCirculation: 0,
-      lastTradePrice: 0,
-      recentTradePrices: [],
-    }));
-
-    if (batch.length > 0) {
-      await CardStat.insertMany(batch);
-      console.log('Created ' + batch.length + ' CardStat entries in MongoDB');
-    }
-
-    const total = await CardStat.countDocuments();
-    console.log('Total CardStat entries: ' + total);
-
-    // Final tier breakdown
-    const tiers = {};
-    merged.forEach(c => { const t = String(c.tier||'?'); tiers[t] = (tiers[t]||0)+1; });
-    console.log('Final tiers: ' + JSON.stringify(tiers));
+    // Create CardStat entries in MongoDB — but only after IDs are assigned
+    // by the organizer. Skip CardStat creation here; the merge_event_cards.js
+    // script handles it when the organized data is merged in.
+    console.log('\n⏭️  Skipping CardStat creation — run merge_event_cards.js after organizing.');
   }
 
   process.exit(0);
