@@ -20467,14 +20467,18 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                   // BOT CONTROL COMMANDS
                   // ============================================
 
-                  // .on - enable bot in group
+                  // .on - enable bot in this chat (group OR dm)
+                  // 💡 FIX: In a DM, any user can enable AI for their own
+                  // private conversation with the bot (it's their chat).
+                  // In a group, only admins/owner/mods can enable it.
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} on` ||
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} on `,
                     )
                   ) {
-                    if (!canUseAdminCommands) {
+                    const isDM = !chatId.endsWith("@g.us");
+                    if (!isDM && !canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "Admins only.",
                       });
@@ -20483,19 +20487,20 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     saveEnabledChats();
                     const replyText =
                       BOT_MARKER +
-                      `🤖 ${botConfig.getBotName()} AI is now *enabled* in this chat!`;
+                      `🤖 ${botConfig.getBotName()} AI is now *enabled* in this ${isDM ? "DM" : "chat"}!`;
                     await sock.sendMessage(chatId, { text: replyText });
                     return;
                   }
 
-                  // .off - disable bot in group
+                  // .off - disable bot in this chat (group OR dm)
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} off` ||
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} off `,
                     )
                   ) {
-                    if (!canUseAdminCommands) {
+                    const isDM = !chatId.endsWith("@g.us");
+                    if (!isDM && !canUseAdminCommands) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "Admins only.",
                       });
@@ -20505,7 +20510,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `🤖 ${botConfig.getBotName()} AI is now *disabled* in this chat!`,
+                        `🤖 ${botConfig.getBotName()} AI is now *disabled* in this ${isDM ? "DM" : "chat"}!`,
                     });
                     return;
                   }
@@ -21982,10 +21987,16 @@ _(Or reply to their message)_
                     isBotMentioned || isReplyToBot || isBotNameMention;
 
                   // --- Smart Activation Fuse ---
-                  // Private DMs: Always respond to triggers
-                  // Group Chats: Only respond if bot is turned "on" AND triggered
+                  // 💡 CRITICAL FIX: AI must be OFF everywhere (DMs AND groups)
+                  // unless explicitly enabled with `.on`. The previous logic
+                  // (`isDM || enabledChats.has(chatId)`) auto-enabled AI in
+                  // every DM, which caused the bot to spam random users who
+                  // messaged it (or whom it was mentioned by in a reply).
+                  // Now: AI only responds if the chat is in `enabledChats`,
+                  // regardless of whether it's a DM or group. Users must run
+                  // `.on` in the DM to turn the AI on for that conversation.
                   const isDM = !chatId.endsWith("@g.us");
-                  const isBotEnabled = isDM || enabledChats.has(chatId);
+                  const isBotEnabled = enabledChats.has(chatId);
 
                   if (!isBotEnabled || !hasTrigger) return;
 
