@@ -2906,8 +2906,11 @@ async function processCombatTurn(sock, sessionKey) {
       let ticks = 0;
       const maxTicks = 1000;
 
-      // Bug 1 fix: accumulate ALL gauges each tick, then pick the actor
-      // with the highest gauge >= 100 (prevents speed-monopoly via break).
+      // 💡 QA FIX: turn order — was "pick highest gauge > 99", which meant
+      // fast players ALWAYS had a higher gauge than enemies and enemies
+      // NEVER got a turn. Now: pick the FIRST combatant in turn order whose
+      // gauge >= 100, and RESET gauge to 0 after acting (not -= 100).
+      // This ensures all combatants get turns regardless of speed disparity.
       while (!activeActor && ticks < maxTicks) {
         ticks++;
         // Increment every living combatant's gauge this tick
@@ -2926,20 +2929,23 @@ async function processCombatTurn(sock, sessionKey) {
 
           c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
         }
-        // After all gauges are incremented, pick the one with the highest gauge
-        let bestGauge = 99; // Must exceed 100 threshold
+        // Pick the FIRST combatant in turn order whose gauge >= 100
         for (const c of state.turnOrder) {
           if (c.stats.hp <= 0) continue;
-          if (c.actionGauge > bestGauge) {
-            bestGauge = c.actionGauge;
+          if (c.actionGauge >= 100) {
             activeActor = c;
+            break;
           }
         }
       }
 
       if (!activeActor) break;
 
-      activeActor.actionGauge -= 100;
+      // 💡 QA FIX: reset gauge to 0 (was -= 100). With -= 100, a fast
+      // player's gauge stayed above 100 permanently, preventing enemies
+      // from ever being picked. Reset to 0 gives slower combatants a
+      // window to act before the fast combatant builds up again.
+      activeActor.actionGauge = 0;
       state.activeCombatant = activeActor;
       state.turnCount = (state.turnCount || 0) + 1;
 
@@ -4538,14 +4544,10 @@ const initAdventure = async (
     }
 
     if (upperRank === "DRAGON") {
-      // Check Lineage
-      const currentClass = economy.getUserClass(senderJid);
-      if (!classSystem.isFighterLineage(currentClass?.id)) {
-        return {
-          success: false,
-          msg: `❌ *DRACONIC BARRIER*\n\nOnly those of the *Fighter* lineage possess the physical fortitude to survive the Dragon’s Lair. Come back when you have followed the path of the warrior!`,
-        };
-      }
+      // 💡 QA FIX: Removed Fighter lineage restriction — multiple class
+      // evolution paths require dragon kills (DRAGONSLAYER, DRAGON_GOD).
+      // Locking non-Fighter classes out makes those evolutions impossible.
+      // All classes can now enter the Dragon Dungeon (with a dragon key).
 
       // Check Key
       if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
@@ -6699,10 +6701,12 @@ async function applyAbilityEffect(
         const target = getHealTarget(player, targetIndex, chatId);
         if (target) {
           const hMult = getHealMult(chatId);
-          const healAmount = Math.min(
-            Math.floor(effData.value * hMult),
-            target.stats.maxHp - target.stats.hp,
-          );
+          const rawHeal = Number(effData.value) || 0;
+          const maxHpVal = target.stats.maxHp || target.stats.hp || 100;
+          const healAmount = Math.max(0, Math.min(
+            Math.floor(rawHeal * hMult),
+            maxHpVal - target.stats.hp,
+          ));
           target.stats.hp += healAmount;
           target.currentHP = target.stats.hp;
           totalHealing += healAmount;
@@ -6717,10 +6721,12 @@ async function applyAbilityEffect(
           : state.players.filter((p) => !p.isDead);
         const hMult = getHealMult(chatId);
         for (const ally of friendlySide) {
-          const healAmount = Math.min(
-            Math.floor(effData.value * hMult),
-            (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp,
-          );
+          const rawHealT = Number(effData.value) || 0;
+          const maxHpT = ally.stats.maxHp || ally.stats.hp || 100;
+          const healAmount = Math.max(0, Math.min(
+            Math.floor(rawHealT * hMult),
+            maxHpT - ally.stats.hp,
+          ));
           ally.stats.hp += healAmount;
           ally.currentHP = ally.stats.hp;
           totalHealing += healAmount;
@@ -6824,10 +6830,12 @@ async function applyAbilityEffect(
       const target = getHealTarget(player, targetIndex, chatId);
       if (target) {
         const hMult = getHealMult(chatId);
-        const healAmount = Math.min(
-          Math.floor(effect.value * hMult),
-          target.stats.maxHp - target.stats.hp,
-        );
+        const rawHealE = Number(effect.value) || 0;
+        const maxHpE = target.stats.maxHp || target.stats.hp || 100;
+        const healAmount = Math.max(0, Math.min(
+          Math.floor(rawHealE * hMult),
+          maxHpE - target.stats.hp,
+        ));
         target.stats.hp += healAmount;
         target.currentHP = target.stats.hp;
         totalHealing += healAmount;
@@ -6847,10 +6855,12 @@ async function applyAbilityEffect(
         : state.players.filter((p) => !p.isDead);
       const hMult = getHealMult(chatId);
       for (const ally of friendlySide) {
-        const healAmount = Math.min(
-          Math.floor(effect.value * hMult),
-          (ally.stats.maxHp || ally.stats.hp) - ally.stats.hp,
-        );
+        const rawHealET = Number(effect.value) || 0;
+        const maxHpET = ally.stats.maxHp || ally.stats.hp || 100;
+        const healAmount = Math.max(0, Math.min(
+          Math.floor(rawHealET * hMult),
+          maxHpET - ally.stats.hp,
+        ));
         ally.stats.hp += healAmount;
         ally.currentHP = ally.stats.hp;
         totalHealing += healAmount;

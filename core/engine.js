@@ -13001,6 +13001,92 @@ _Sorted by guild level + XP_
                       }
                     }
 
+                    // 💡 .g dragonkills — show dragon kill progress
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills`) {
+                      try {
+                        const economy = require('./rpg/economy');
+                        const user = economy.getUser(senderJid);
+                        if (!user) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first.' });
+                        }
+                        const kills = user.stats?.dragonsKilled || 0;
+                        const classSystem = require('./rpg/classSystem');
+                        const userClass = economy.getUserClass(senderJid);
+                        const allClasses = classSystem.getAllClasses();
+                        let nextRequirement = null;
+                        for (const [classId, cls] of Object.entries(allClasses)) {
+                          if (cls.requirement?.dragonsKilled && cls.evolvedFrom === userClass?.id) {
+                            nextRequirement = { class: cls.name, needed: cls.requirement.dragonsKilled };
+                            break;
+                          }
+                        }
+                        let msg = `🐉 *Dragon Kill Progress*
+
+`;
+                        msg += `🐲 Dragons Slain: *${kills}*
+`;
+                        if (nextRequirement) {
+                          const pct = Math.min(100, Math.floor(kills / nextRequirement.needed * 100));
+                          msg += `📊 Progress to ${nextRequirement.class}: *${kills}/${nextRequirement.needed}* (${pct}%)
+`;
+                          msg += `[${'█'.repeat(Math.floor(pct/5))}${'░'.repeat(20-Math.floor(pct/5))}]
+`;
+                        } else {
+                          msg += `_No dragon kill requirements remaining for your current class path._
+`;
+                        }
+                        msg += `
+_Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // 💡 .g guild archetype <type> — change guild archetype (leader only, costs 1M Zeni)
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild archetype `)) {
+                      try {
+                        const userGuild = guilds.getUserGuild(senderJid);
+                        if (!userGuild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        }
+                        if (!guilds.isGuildOwner(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the guild leader can change the archetype.' });
+                        }
+                        const parts = txt.trim().split(/\s+/);
+                        const newType = parts[3]?.toUpperCase();
+                        if (!['ADVENTURER', 'MERCHANT', 'RESEARCH'].includes(newType)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Invalid archetype. Use: ADVENTURER, MERCHANT, or RESEARCH.' });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (guild.type === newType) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Your guild is already ' + newType + '.' });
+                        }
+                        // Cost: 1M Zeni from guild bank
+                        const cost = 1000000;
+                        if ((guild.balance || 0) < cost) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild bank needs ' + cost.toLocaleString() + ' Zeni to change archetype. Current: ' + (guild.balance || 0).toLocaleString() });
+                        }
+                        guild.balance = (guild.balance || 0) - cost;
+                        guild.type = newType;
+                        await guilds.syncGuild(userGuild);
+                        const perks = {
+                          ADVENTURER: '+15% XP from dungeons',
+                          MERCHANT: '+10% gold + 10% sell value',
+                          RESEARCH: '-10% crafting material cost',
+                        };
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Guild archetype changed to *${newType}*!
+💰 Cost: ${cost.toLocaleString()} Zeni from guild bank
+📋 Perk: ${perks[newType]}
+
+_Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
+                      } catch (e) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                    }
+
                     // 💡 .g guild guide — comprehensive guild system guide
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild guide` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild help`) {

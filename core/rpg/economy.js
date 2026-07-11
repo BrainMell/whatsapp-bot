@@ -1319,7 +1319,12 @@ function addQuestProgress(userId, amount, won = true) {
     if (user.stats) {
       user.stats.questsWon = (user.stats.questsWon || 0) + 1;
     }
-  } else {
+  }
+  // 💡 QA FIX: only increment questsFailed on actual failures (amount <= 0),
+  // not on successful combat encounters that pass won=false for XP-tracking
+  // purposes. Previously, every combat encounter with won=false incremented
+  // questsFailed, making the counter meaningless.
+  if (!won && amount <= 0) {
     user.questsFailed = (user.questsFailed || 0) + 1;
   }
 
