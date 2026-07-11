@@ -848,39 +848,53 @@ function getGuild(guildName) {
 
 function getGuildMember(guildName, userJid) {
   const guild = globalGuildData.guilds[guildName];
-  if (!guild || !guild.members.includes(userJid)) return null;
+  if (!guild) return null;
 
-  // 💡 Phase 2: 4-tier role system — leader / officer / member / recruit
-  // Recruits are stored in guild.recruits[] (new). If a user is in recruits,
-  // they're a recruit. Otherwise: officer (in admins[]), member (default).
+  // 💡 QA FIX: loose JID matching for member lookup
+  const memberJid = (guild.members || []).find(m =>
+    m === userJid ||
+    m.split('@')[0] === userJid.split('@')[0] ||
+    m.includes(userJid.split('@')[0]) ||
+    userJid.includes(m.split('@')[0])
+  );
+  if (!memberJid) return null;
+
   if (!guild.recruits) guild.recruits = [];
   let role = 'member';
-  if (guild.leader === userJid || guild.owner === userJid) {
+  if (guild.owner === memberJid) {
     role = 'leader';
-  } else if (guild.admins && guild.admins.includes(userJid)) {
+  } else if (guild.admins && guild.admins.includes(memberJid)) {
     role = 'officer';
-  } else if (guild.recruits.includes(userJid)) {
+  } else if (guild.recruits.includes(memberJid)) {
     role = 'recruit';
   }
 
   return {
-    jid: userJid,
+    jid: memberJid,
     role,
-    title: (guild.titles && guild.titles[userJid]) || 'Member'
+    title: (guild.titles && guild.titles[memberJid]) || 'Member'
   };
 }
 
 // 💡 Phase 2: Set a member's role (leader-only).
 // Supported roles: 'recruit', 'member', 'officer'. (Leader can't be changed here.)
-function setMemberRole(ownerJid, targetJid, newRole) {
+async function setMemberRole(ownerJid, targetJid, newRole) {
   const info = globalGuildData;
   const guildName = info.guildOwners[ownerJid];
   if (!guildName) return { success: false, message: '❌ You don\'t own any guild!' };
 
   const guild = info.guilds[guildName];
   if (!guild) return { success: false, message: '❌ Guild not found.' };
-  if (!guild.members.includes(targetJid)) return { success: false, message: '❌ That user is not in your guild!' };
-  if (guild.leader === targetJid || guild.owner === targetJid) {
+
+  // 💡 QA FIX: loose JID matching
+  const memberJid = (guild.members || []).find(m =>
+    m === targetJid ||
+    m.split('@')[0] === targetJid.split('@')[0] ||
+    m.includes(targetJid.split('@')[0]) ||
+    targetJid.includes(m.split('@')[0])
+  );
+  if (!memberJid) return { success: false, message: '❌ That user is not in your guild!' };
+  if (guild.owner === memberJid) {
     return { success: false, message: '❌ Cannot change the leader\'s role.' };
   }
 
@@ -888,18 +902,18 @@ function setMemberRole(ownerJid, targetJid, newRole) {
   if (!guild.admins) guild.admins = [];
 
   // Remove from all role arrays first
-  guild.admins = guild.admins.filter(j => j !== targetJid);
-  guild.recruits = guild.recruits.filter(j => j !== targetJid);
+  guild.admins = guild.admins.filter(j => j !== memberJid);
+  guild.recruits = guild.recruits.filter(j => j !== memberJid);
 
   // Apply new role
   if (newRole === 'officer') {
-    guild.admins.push(targetJid);
+    guild.admins.push(memberJid);
   } else if (newRole === 'recruit') {
-    guild.recruits.push(targetJid);
+    guild.recruits.push(memberJid);
   }
   // 'member' = neither array
 
-  syncGuild(guildName);
+  await syncGuild(guildName);
   return {
     success: true,
     message: `✅ @${targetJid.split('@')[0]} is now a *${newRole}*.`,
@@ -1127,11 +1141,16 @@ function addGuildPoints(guildName, points, reason) {
   // type. Functional but fragile.
   guild.points += val;
 
-  // 💡 LEVEL UP LOGIC
-  const xpNeeded = guild.level * 1000;
-  if (guild.points >= xpNeeded) {
+  // 💡 LEVEL UP LOGIC — must loop in case a large XP grant covers multiple levels.
+  // Previously was a single `if` — depositing 500M Zeni (500K XP) at L1 would
+  // only trigger ONE level-up (L1→L2, spending 1000 XP), leaving 499K XP stuck
+  // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
+  // broken. Now loops until all level-ups are consumed.
+  let xpNeeded = guild.level * 1000;
+  while (guild.points >= xpNeeded) {
     guild.points -= xpNeeded;
     guild.level++;
+    xpNeeded = guild.level * 1000;
   }
 
   guild.pointsHistory.push({
@@ -1188,8 +1207,9 @@ function upgradeGuildBuilding(userJid, buildingId) {
   const guildName = info.memberGuilds[userJid];
   const guild = info.guilds[guildName];
   
-  if (!guild || guild.owner !== userJid) {
-    return { success: false, message: "❌ Only the Guild Master can upgrade buildings!" };
+  // 💡 QA FIX: allow officers to upgrade buildings too (was owner-only)
+  if (!guild || (guild.owner !== userJid && !(guild.admins || []).includes(userJid))) {
+    return { success: false, message: "❌ Only the Guild Master or officers can upgrade buildings!" };
   }
 
   const upgrade = GUILD_UPGRADES[buildingId];

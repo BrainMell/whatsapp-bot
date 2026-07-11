@@ -12466,7 +12466,9 @@ _Sorted by guild level + XP_
                           const xp = guild.points || guild.xp || 0;
                           const xpNeeded = level * 1000;
                           const bank = guild.balance || 0;
-                          const members = (guild.members || []).length;
+                          // 💡 QA FIX: getGuildPointsLeaderboard returns members as a COUNT (number),
+                          // not an array. Was doing (number).length → undefined.
+                          const members = typeof guild.members === 'number' ? guild.members : (guild.members || []).length;
                           const archetype = guild.type || 'ADVENTURER';
                           const mg = miniGameMap.get(name);
 
@@ -12739,8 +12741,11 @@ _Sorted by guild level + XP_
                         }
                         economy.removeMoney(senderJid, amount, `Donation to ${userGuild}`);
                         guilds.addGuildBalance(userGuild, amount);
-                        // Award guild XP for the donation (1 XP per 1000 Zeni donated)
-                        const xpAward = Math.max(1, Math.floor(amount / 1000));
+                        // 💡 QA FIX: cap donation XP to prevent inflation.
+                        // Was 1 XP per 1000 Zeni — depositing 500M = 500K XP,
+                        // which broke the level curve. Now: 1 XP per 100K Zeni,
+                        // capped at 100 XP per donation.
+                        const xpAward = Math.min(100, Math.max(1, Math.floor(amount / 100000)));
                         guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
                         // Sync to DB
                         await guilds.syncGuild(userGuild);
@@ -12884,8 +12889,10 @@ _Sorted by guild level + XP_
 
                         let msg = `🏰 *${userGuild}* — Guild Info\n\n`;
                         msg += `🏷️ Archetype: ${guild.type || 'ADVENTURER'}\n`;
-                        msg += `📊 Level: ${guild.level || 1} | XP: ${guild.points || 0}/${(guild.level || 1) * 1000}\n`;
-                        msg += `👤 Leader: ${guild.owner || 'unknown'}\n`;
+                        msg += `📊 Level: ${guild.level || 1} | XP: ${(guild.points || 0).toLocaleString()}/${((guild.level || 1) * 1000).toLocaleString()}\n`;
+                        // 💡 QA FIX: show leader phone number (readable) instead of raw JID
+                        const leaderDisplay = guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown';
+                        msg += `👤 Leader: ${leaderDisplay}\n`;
                         msg += `👥 Members: ${(guild.members || []).length}/${memberCap}\n`;
                         msg += `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n`;
                         if (guild.emblem && guild.emblem.icon) {
@@ -12948,8 +12955,8 @@ _Sorted by guild level + XP_
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild role `)) {
                       try {
                         const parts = txt.trim().split(/\s+/);
-                        const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
-                          || (parts[3]?.includes('@') ? parts[3] : null);
+                        // 💡 QA FIX: use getMentionOrReply for LID normalization
+                        const targetJid = getMentionOrReply(m) || (parts[3]?.includes('@') ? parts[3] : null);
                         const newRole = parts[4]?.toLowerCase();
                         if (!targetJid || !newRole) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`` });
@@ -12957,7 +12964,7 @@ _Sorted by guild level + XP_
                         if (!['recruit', 'member', 'officer'].includes(newRole)) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid role. Use: recruit, member, or officer.` });
                         }
-                        const result = guilds.setMemberRole(senderJid, targetJid, newRole);
+                        const result = await guilds.setMemberRole(senderJid, targetJid, newRole);
                         return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
                       } catch (e) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
