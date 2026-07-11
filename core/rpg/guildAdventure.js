@@ -2392,10 +2392,14 @@ function processStatusEffects(entity) {
       effect.effect === "heal_over_time" ||
       template.effect === "heal_over_time"
     ) {
-      const heal = Math.min(
-        value,
-        (entity.stats.maxHp || entity.stats.hp) - entity.stats.hp,
-      );
+      // 💡 QA FIX: validate heal value + maxHp to prevent NaN HP (infinite HP bug)
+      const safeHealValue = Number.isFinite(value) ? value : 0;
+      const safeMaxHp = Number.isFinite(entity.stats.maxHp) ? entity.stats.maxHp
+        : (Number.isFinite(entity.stats.hp) ? entity.stats.hp : 100);
+      const heal = Math.max(0, Math.min(
+        safeHealValue,
+        safeMaxHp - (entity.stats.hp || 0),
+      ));
       entity.stats.hp += heal;
       messages.push(
         `💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`,

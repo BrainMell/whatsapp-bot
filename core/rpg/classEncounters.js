@@ -1142,18 +1142,27 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.stats.mag = Math.floor(baseMag * partyFactor * dmgMult);
 
     // Speed: blend between base scaling and player speed (rubber-band)
+    // 💡 QA FIX #33: Dynamic speed scaling relative to player speed.
+    // Regular enemies: 70-90% of player speed (player naturally faster).
+    // Elite enemies: 90-110% of player speed (competitive).
+    // Archetype modifiers still apply on top.
     let baseSpeed = Math.floor((enemy.stats.spd || 10) * partyFactor * spdMult);
     if (isElite) baseSpeed = Math.floor(baseSpeed * 1.20);
 
-    let targetSpeed = avgPlayerSpeed;
-    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN' || enemy.archetype === 'VOID_WALKER') targetSpeed *= 1.4;
-    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE' || enemy.archetype === 'COLOSSUS') targetSpeed *= 0.92;
-    if (enemy.archetype === 'BERSERKER_MOB') targetSpeed *= 1.2;
-    if (enemy.archetype === 'SPELLBREAKER') targetSpeed *= 1.1;
-    if (avgLevel > 50) targetSpeed *= 0.97;
-    if (avgLevel < 15) targetSpeed *= 1.3;
+    // Start with player speed as the baseline, modified by archetype
+    let targetSpeed = Math.max(10, avgPlayerSpeed);
+    if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN' || enemy.archetype === 'VOID_WALKER') targetSpeed *= 1.15; // fast enemies slightly outspeed
+    if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE' || enemy.archetype === 'COLOSSUS') targetSpeed *= 0.75; // tanks are slow
+    if (enemy.archetype === 'BERSERKER_MOB') targetSpeed *= 1.10;
+    if (enemy.archetype === 'SPELLBREAKER') targetSpeed *= 1.05;
+    // Level-based modifiers: low-level enemies slightly faster (to be threatening early)
+    if (avgLevel > 50) targetSpeed *= 0.90; // high-level players get an edge
+    if (avgLevel < 15) targetSpeed *= 1.20;
 
-    scaled.stats.spd = Math.floor((baseSpeed * 0.4) + (targetSpeed * 0.6));
+    // Regular enemies: 75% blend toward player speed (player usually faster)
+    // Elite enemies: 85% blend (competitive but player still has edge)
+    const speedBlend = isElite ? 0.85 : 0.75;
+    scaled.stats.spd = Math.max(5, Math.floor((baseSpeed * (1 - speedBlend)) + (targetSpeed * speedBlend)));
 
     // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
     scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.07)));
@@ -1233,15 +1242,27 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     
-    // Boss Speed Scaling
+    // Boss Speed Scaling — 💡 QA FIX #33: Bosses must be DANGEROUS.
+    // High-tier bosses (S+, Dragon, Raid) should outspeed players to feel
+    // threatening. They use a higher blend toward player speed (90%) PLUS
+    // a boss speed bonus so they act first or trade evenly.
     let baseSpeed = Math.floor(boss.stats.spd * partyFactor * spdMult);
-    
-    // Bosses should generally be slightly faster or matched to players to be threatening
-    // But respecting the "High Level = Slower" rule:
-    let targetSpeed = avgPlayerSpeed * 1.05; // Slightly faster than players
-    if (avgLevel > 60) targetSpeed *= 0.95; // High level players get an edge
-    
-    scaled.stats.spd = Math.floor((baseSpeed * 0.5) + (targetSpeed * 0.5));
+
+    // Bosses target 110% of player speed (slightly faster — they go first)
+    let targetSpeed = Math.max(20, avgPlayerSpeed) * 1.10;
+    // High-level bosses (S+/SS/SSS/Dragon) get EXTRA speed — they should
+    // consistently outspeed even fast players
+    if (rankIndex > 25.0) targetSpeed *= 1.15; // S+ bosses: 126% of player speed
+    if (rankIndex > 50.0) targetSpeed *= 1.10; // SS+ bosses: 139% of player speed
+    // Dragon bosses are always fast
+    if (boss.id && String(boss.id).toUpperCase().includes('DRAGON')) targetSpeed *= 1.20;
+
+    // Bosses use 80% blend toward target (stronger rubber-band than regular)
+    scaled.stats.spd = Math.max(10, Math.floor((baseSpeed * 0.20) + (targetSpeed * 0.80)));
+
+    // 💡 QA FIX: Bosses also get mana regen per turn (was missing)
+    scaled.mana = 200;
+    scaled.maxMana = 200;
 
     scaled.stats.def = Math.floor(boss.stats.def * partyFactor * (1 + (rankIndex * 0.1)));
     
