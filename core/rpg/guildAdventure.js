@@ -2392,15 +2392,19 @@ function processStatusEffects(entity) {
       effect.effect === "heal_over_time" ||
       template.effect === "heal_over_time"
     ) {
-      // 💡 QA FIX: validate heal value + maxHp to prevent NaN HP (infinite HP bug)
+      // 💡 QA FIX: validate heal value + maxHp + current HP to prevent NaN HP
+      // (infinite HP bug). If current HP is already NaN (from an upstream bug),
+      // adding a finite heal would still produce NaN. We reset NaN HP to 0
+      // before healing so the entity becomes killable again.
       const safeHealValue = Number.isFinite(value) ? value : 0;
       const safeMaxHp = Number.isFinite(entity.stats.maxHp) ? entity.stats.maxHp
         : (Number.isFinite(entity.stats.hp) ? entity.stats.hp : 100);
+      const safeCurrentHp = Number.isFinite(entity.stats.hp) ? entity.stats.hp : 0;
       const heal = Math.max(0, Math.min(
         safeHealValue,
-        safeMaxHp - (entity.stats.hp || 0),
+        safeMaxHp - safeCurrentHp,
       ));
-      entity.stats.hp += heal;
+      entity.stats.hp = safeCurrentHp + heal;
       messages.push(
         `💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`,
       );
@@ -2768,6 +2772,24 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 
   state.turnOrder = allCombatants;
 
+  // 💡 CRITICAL FIX (P1 follow-up): Dynamic gauge threshold based on max
+  // base speed in combat. With a hardcoded threshold of 100, any combatant
+  // with speed >= 100 reaches the threshold every single tick. Since
+  // turnOrder = [...players, ...enemies] (players first), the player is
+  // ALWAYS checked first and ALWAYS selected — enemies NEVER get a turn.
+  //
+  // This was the REAL root cause of "monsters not attacking": not the
+  // "highest gauge" selection logic (which the previous fix addressed), but
+  // the fact that high speed values made the gauge system meaningless.
+  //
+  // Dynamic threshold = max(100, 2 * maxBaseSpeed) ensures:
+  //   - The fastest combatant needs at least 2 ticks to act (not 1)
+  //   - Slower combatants accumulate gauge while the fast one is resetting
+  //   - Turn ratio approximates speed ratio (spd 500 vs 50 → ~10:1 turns)
+  //   - Low-speed combat (spd 10-50) is unaffected (threshold stays 100)
+  const maxBaseSpeed = Math.max(...allCombatants.map(c => c.stats.spd || 10));
+  state.gaugeThreshold = Math.max(100, maxBaseSpeed * 2);
+
   // Build the turn order string to put in the first message's image caption
   const orderList = state.turnOrder
     .slice(0, 6)
@@ -2912,9 +2934,23 @@ async function processCombatTurn(sock, sessionKey) {
 
       // 💡 QA FIX: turn order — was "pick highest gauge > 99", which meant
       // fast players ALWAYS had a higher gauge than enemies and enemies
-      // NEVER got a turn. Now: pick the FIRST combatant in turn order whose
-      // gauge >= 100, and RESET gauge to 0 after acting (not -= 100).
-      // This ensures all combatants get turns regardless of speed disparity.
+      // NEVER got a turn. The first fix changed to "first in turnOrder with
+      // gauge >= threshold" — but that caused turn STARVATION in multi-combatant
+      // fights: when several combatants reached the threshold on the same tick,
+      // the one earliest in turnOrder was always picked, and later combatants
+      // (especially the last enemy) never got a turn.
+      //
+      // 💡 FINAL FIX: "highest gauge among those >= threshold" + dynamic
+      // threshold + reset to 0. This is the correct gauge-based turn scheduler:
+      //   - Dynamic threshold (2 * maxBaseSpeed) prevents any combatant from
+      //     acting every single tick
+      //   - "Highest gauge" selection prioritizes combatants who have been
+      //     waiting the longest (accumulated the most excess gauge)
+      //   - Reset to 0 (not -= threshold) discards excess, so slower
+      //     combatants can catch up and eventually out-accumulate faster ones
+      //   - Turn ratio approximates speed ratio (spd 500 vs 50 → ~10:1 turns)
+      //   - No starvation: every combatant gets turns proportional to speed
+      const gaugeThreshold = state.gaugeThreshold || 100;
       while (!activeActor && ticks < maxTicks) {
         ticks++;
         // Increment every living combatant's gauge this tick
@@ -2933,12 +2969,14 @@ async function processCombatTurn(sock, sessionKey) {
 
           c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
         }
-        // Pick the FIRST combatant in turn order whose gauge >= 100
+        // Pick the combatant with the HIGHEST gauge among those >= threshold.
+        // Ties are broken by turnOrder position (earlier combatant wins).
+        let highestGauge = -1;
         for (const c of state.turnOrder) {
           if (c.stats.hp <= 0) continue;
-          if (c.actionGauge >= 100) {
+          if (c.actionGauge >= gaugeThreshold && c.actionGauge > highestGauge) {
             activeActor = c;
-            break;
+            highestGauge = c.actionGauge;
           }
         }
       }
