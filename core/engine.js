@@ -5762,7 +5762,11 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `• \`${botConfig.getPrefix()} event stop\` — stop token event\n`;
                         msg += `• \`${botConfig.getPrefix()} event status\` — event status\n`;
                         msg += `• \`${botConfig.getPrefix()} t2edeck\` — manage eShop deck\n`;
-                        msg += `• \`${botConfig.getPrefix()} setprice edeck <slot> <price>\` — set price\n\n`;
+                        msg += `• \`${botConfig.getPrefix()} setprice edeck <slot> <price>\` — set price\n`;
+                        msg += `• \`${botConfig.getPrefix()} espawn [name]\` — spawn event card (no args = list)\n`;
+                        msg += `• \`${botConfig.getPrefix()} einfo [name]\` — look up event card (no args = list)\n`;
+                        msg += `• \`${botConfig.getPrefix()} t2ecoll\` — view event card database\n`;
+                        msg += `• \`${botConfig.getPrefix()} info <name> event\` — search event cards\n\n`;
                       }
 
                       // ── GROUP ADMIN COMMANDS (WA admin + owner + global mod) ──

@@ -1473,8 +1473,14 @@ async function cmdFc(senderJid, reply, args = []) {
   return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
 }
 
-async function cmdInfo(reply, chatId, args = []) {
-  const p = P();
+async function cmdInfo(reply, chatId, args = [], perms = {}) {
+  // 💡 perms = { isOwner, isCardMod, p }
+  // Event card lookups require mod permissions. Regular card lookups
+  // are available to everyone.
+  const isOwner = perms.isOwner || false;
+  const isCardMod = perms.isCardMod || false;
+  const canViewEvents = isOwner || isCardMod;
+  const p = perms.p || P();
   let query = args.join(' ').toLowerCase().trim();
   let animeFilter = null;
 
@@ -1500,6 +1506,21 @@ async function cmdInfo(reply, chatId, args = []) {
   }
 
   if (!query && !eventMode) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
+
+  // 💡 MOD-ONLY GATE: Event card search requires mod permissions.
+  // Non-mods get a friendly message instead of the event search results.
+  if (eventMode && !canViewEvents) {
+    return reply(`❌ Event card search is for moderators and above only.\n\nEvent cards are special cards that don't spawn naturally — they're managed by mods via the token event eShop.\n\nUse \`${p} eshop\` to buy event cards during active token events.`);
+  }
+
+  // 💡 MOD-ONLY GATE: Looking up an E-tier card by exact ID also requires
+  // mod permissions (prevents non-mods from viewing event card details).
+  if (query && !eventMode) {
+    const exactCard = CARD_INDEX()[query];
+    if (exactCard && String(exactCard.tier).toUpperCase() === 'E' && !canViewEvents) {
+      return reply(`❌ Event card details are for moderators and above only.\n\nThis is an event-tier card. Use \`${p} eshop\` to buy event cards during active token events.`);
+    }
+  }
 
   // 💡 EVENT CARD SEARCH MODE
   // `info <name> event | <anime>` → search event-tier cards by name and anime
@@ -1956,7 +1977,10 @@ async function cmdCG(senderJid, reply, args = [], m) {
   return reply(`🎁 *GIFT SENT!*\n\n@${senderJid.split('@')[0]} gave *${card.cardName}* to @${targetJid.split('@')[0]}!`, { mentions: [senderJid, targetJid] });
 }
 
-async function cmdCS(reply, args = []) {
+async function cmdCS(reply, args = [], perms = {}) {
+  // 💡 perms = { isOwner, isCardMod }
+  // Non-mods cannot search event (E-tier) cards.
+  const canViewEvents = perms.isOwner || perms.isCardMod;
   const p = P();
   if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [tier n] [--page n]`, `${p} cs goku tier S`);
 
@@ -1982,7 +2006,17 @@ async function cmdCS(reply, args = []) {
   );
 
   if (tierFilter) {
+    // 💡 MOD-ONLY GATE: Non-mods cannot search for E-tier (event) cards.
+    if (tierFilter === 'E' && !canViewEvents) {
+      return reply(`❌ Event card search is for moderators and above only.`);
+    }
     matches = matches.filter(c => String(c.tier) === tierFilter);
+  }
+
+  // 💡 MOD-ONLY GATE: Filter out E-tier cards from non-mod search results
+  // entirely (even when no tier filter is specified).
+  if (!canViewEvents) {
+    matches = matches.filter(c => String(c.tier).toUpperCase() !== 'E');
   }
   
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
@@ -2582,11 +2616,16 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'esummon':
+      // 💡 MOD-ONLY: Legacy event summon — only mods can use this.
+      if (!isCardMod) return reply('❌ Event summon is for moderators and above only.'), true;
       await cmdESummon(senderJid, reply);
       return true;
 
     case 'info':
-      await cmdInfo(reply, chatId, args);
+      // 💡 Event card lookups are mod-only. Regular card lookups are
+      // available to everyone. The event mode is triggered by "event"
+      // keyword in the query OR by looking up an E-tier card by ID.
+      await cmdInfo(reply, chatId, args, { isOwner, isCardMod, p });
       return true;
 
     case 't2deck':
@@ -2603,6 +2642,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 't2ecoll':
+      // 💡 MOD-ONLY: Event card collection database viewer.
+      // Shows all event cards in the database — mod tool for managing events.
+      if (!isCardMod) return reply('❌ Event card collection viewer is for moderators and above only.'), true;
       await cmdT2EColl(senderJid, reply, args);
       return true;
 
@@ -2658,7 +2700,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'cs':
-      await cmdCS(reply, args);
+      await cmdCS(reply, args, { isOwner, isCardMod });
       return true;
 
     case 'buycard':
@@ -2789,6 +2831,40 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         const eventCards = getInst().CARDS_BY_TIER['E'] || [];
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
       }
+      return true;
+
+    // 💡 .g einfo <name or id> — look up an event card's details.
+    // Mod-only shortcut for `.g info <name> event` or `.g info <E-XXXXX>`.
+    // Without args, lists all event cards (same as .g espawn with no args).
+    case 'einfo':
+      if (!isCardMod) return reply('❌ Event card lookup is for moderators and above only.'), true;
+      const einfoQuery = args.join(' ').trim();
+      if (!einfoQuery) {
+        // No args → list all event cards
+        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        if (eventCards.length === 0) {
+          return reply(`📭 No event cards exist in the database.`), true;
+        }
+        let listMsg = `🎁 *EVENT CARDS — ${eventCards.length} in database*\n\n`;
+        listMsg += `Usage: \`${p} einfo <name or id>\`\n\n`;
+        // Group by event name for readability
+        const byEvent = {};
+        eventCards.forEach(c => {
+          const ev = c.eventName || c.animeName || 'Unknown Event';
+          if (!byEvent[ev]) byEvent[ev] = [];
+          byEvent[ev].push(c);
+        });
+        for (const [ev, cards] of Object.entries(byEvent)) {
+          listMsg += `📺 *${ev}* (${cards.length} cards)\n`;
+          cards.forEach(c => {
+            listMsg += `  ▫️ ${c.cardName} — \`${c.id}\`\n`;
+          });
+          listMsg += `\n`;
+        }
+        return reply(listMsg), true;
+      }
+      // Delegate to cmdInfo with event mode forced on
+      await cmdInfo(reply, chatId, [einfoQuery, 'event'], { isOwner, isCardMod: true, p });
       return true;
 
     // 💡 NEW: .g spawnset <minutes> — set per-bot spawn interval (owner-only)
