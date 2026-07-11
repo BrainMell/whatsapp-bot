@@ -12908,7 +12908,11 @@ _Sorted by guild level + XP_
                           msg += `\n💬 _"${guild.motto}"_\n`;
                         }
                         msg += `\n_Use \`${botConfig.getPrefix()} guild perks\` for full perk breakdown._`;
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        // 💡 QA FIX: include leader JID in mentions so WhatsApp renders
+                        // the @phone as the person's name (same as member list does)
+                        const infoMentions = [];
+                        if (guild.owner && guild.owner.includes('@')) infoMentions.push(guild.owner);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: infoMentions });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                       }
