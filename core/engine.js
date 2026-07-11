@@ -936,7 +936,36 @@ async function startBot(configInstance) {
       try {
         const data = system.get(BOT_ID + "_enabled_chats", []);
         enabledChats.clear();
-        data.forEach((chatId) => enabledChats.add(chatId));
+
+        // 💡 CRITICAL FIX: Purge ALL DM (non-@g.us) chatIds from the saved
+        // list. During the AI DM spam bug period, the Subaru RBD cooldown
+        // code (line ~22288) persisted DM chatIds to this collection when
+        // it re-enabled the chat after a 2-min cooldown. Those DM entries
+        // survived the earlier fix (which only changed the runtime check)
+        // because they were already in the database.
+        //
+        // This purge runs on every load. If the user wants AI in a DM,
+        // they must run `.on` in that DM again (which is the intended
+        // opt-in flow). Groups (@g.us) are unaffected.
+        const groupChats = [];
+        let dmPurgeCount = 0;
+        for (const chatId of data) {
+          if (typeof chatId === 'string' && chatId.endsWith('@g.us')) {
+            groupChats.push(chatId);
+          } else {
+            dmPurgeCount++;
+          }
+        }
+        groupChats.forEach((chatId) => enabledChats.add(chatId));
+
+        if (dmPurgeCount > 0) {
+          console.log(
+            `🧹 [${BOT_ID}] Purged ${dmPurgeCount} DM chatId(s) from enabled_chats (leftover from AI DM spam bug). Groups only from now on.`,
+          );
+          // Persist the cleaned list so we don't re-log the purge every restart
+          saveEnabledChats();
+        }
+
         console.log(
           `✅ [${BOT_ID}] Loaded ${enabledChats.size} enabled chats from MongoDB`,
         );
@@ -22241,12 +22270,21 @@ _(Or reply to their message)_
 
                   // --- Return by Death Logic for Subaru ---
                   if (botConfig.getBotName().toLowerCase() === "subaru") {
+                    // 💡 FIX: Tightened RBD keywords. The old list included
+                    // common words like "talk", "tell me", "secret", "power",
+                    // "ability", "spill" — these fire on completely normal
+                    // conversation, inflating the RBD counter and causing the
+                    // panic response + video to trigger after just 6 casual
+                    // messages. Now only phrases specifically about Subaru's
+                    // mysterious ability / death / time rewind trigger it.
                     const rbdKeywords = [
-                      "return by death", "return to death", "death ability", "rewind time",
-                      "ability", "secret", "power", "future sight", "time control", "hiding something",
-                      "spill", "talk", "tell me"
+                      "return by death", "return to death", "death ability",
+                      "rewind time", "future sight", "time control",
+                      "hiding something", "your ability", "what's your power",
+                      "whats your power", "how did you survive", "you should be dead",
+                      "how are you alive", "you died", "came back to life",
+                      "respawn", "redo", "loop", "restart time"
                     ];
-                    // Also check if they are aggressively questioning him
                     const isRbdTrigger = rbdKeywords.some(kw => lowerTxt.includes(kw));
 
                     if (isRbdTrigger) {
@@ -22279,16 +22317,31 @@ _(Or reply to their message)_
                         await reply(BOT_MARKER + "_Subaru has completely broken down. He won't be responding for a couple of minutes._");
                         
                         console.log(`[RBD] Disabling chatbot`);
+                        // 💡 FIX: Record whether this chat was actually in
+                        // enabledChats before removing. The cooldown re-enable
+                        // (below) will only re-add it if it was enabled before.
+                        // This prevents the RBD from persisting chats that were
+                        // never explicitly enabled (the root cause of the DM
+                        // spam bug — DMs that triggered RBD during the isDM||
+                        // bug period got permanently added to enabledChats).
+                        const wasEnabledBeforeRBD = enabledChats.has(chatId);
                         enabledChats.delete(chatId);
                         if (typeof saveEnabledChats === 'function') saveEnabledChats();
                         
-                        console.log(`[RBD] Cooldown started`);
+                        console.log(`[RBD] Cooldown started (wasEnabled=${wasEnabledBeforeRBD})`);
                         const COOLDOWN_MS = 2 * 60 * 1000;
                         setTimeout(() => {
-                          enabledChats.add(chatId);
-                          if (typeof saveEnabledChats === 'function') saveEnabledChats();
+                          // 💡 FIX: only re-add if the chat was enabled before
+                          // the RBD trigger. Don't persist chats that were never
+                          // explicitly enabled via .on
+                          if (wasEnabledBeforeRBD) {
+                            enabledChats.add(chatId);
+                            if (typeof saveEnabledChats === 'function') saveEnabledChats();
+                          }
                           returnByDeathCounters.set(chatId, 0);
-                          sock.sendMessage(chatId, { text: BOT_MARKER + "🤖 *Subaru has caught his breath and the bot is now re-enabled.*" }).catch(() => {});
+                          if (wasEnabledBeforeRBD) {
+                            sock.sendMessage(chatId, { text: BOT_MARKER + "🤖 *Subaru has caught his breath and the bot is now re-enabled.*" }).catch(() => {});
+                          }
                         }, COOLDOWN_MS);
                         
                         return; // Stop processing further
