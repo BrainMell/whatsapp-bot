@@ -11887,7 +11887,7 @@ Type:
                       }
 
                       try {
-                        const result = guilds.promoteToAdmin(
+                        const result = await guilds.promoteToAdmin(
                           senderJid,
                           targetUser,
                         );
@@ -12743,7 +12743,7 @@ _Sorted by guild level + XP_
                         const xpAward = Math.max(1, Math.floor(amount / 1000));
                         guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
                         // Sync to DB
-                        guilds.syncGuild(userGuild);
+                        await guilds.syncGuild(userGuild);
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Donated ${amount.toLocaleString()} Zeni to *${userGuild}*.\n🏛️ Bank: ${((guilds.getGuild(userGuild).balance) || 0).toLocaleString()} Zeni\n🎁 Guild XP: +${xpAward}` });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -12815,7 +12815,7 @@ _Sorted by guild level + XP_
                           }
                           economy.removeMoney(senderJid, totalRepaid, `Guild loan repayment`);
                           guilds.addGuildBalance(userGuild, totalRepaid);
-                          guilds.syncGuild(userGuild);
+                          await guilds.syncGuild(userGuild);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Repaid ${totalRepaid.toLocaleString()} Zeni to *${userGuild}* bank.` });
                           return;
                         }
@@ -12853,7 +12853,7 @@ _Sorted by guild level + XP_
                           repaidAt: null,
                         });
                         guild.balance = bankBalance - amount;
-                        guilds.syncGuild(userGuild);
+                        await guilds.syncGuild(userGuild);
                         const economy = require('./rpg/economy');
                         economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${botConfig.getPrefix()} guild loan repay <amount>\`_` });
@@ -12933,7 +12933,7 @@ _Sorted by guild level + XP_
                         if (!guild.emblem) guild.emblem = {};
                         guild.emblem.icon = icon;
                         guild.emblem.color = color;
-                        guilds.syncGuild(userGuild);
+                        await guilds.syncGuild(userGuild);
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Guild emblem updated: ${icon} (color ${color})` });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });

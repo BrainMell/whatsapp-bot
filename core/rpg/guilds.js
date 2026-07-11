@@ -673,7 +673,7 @@ function checkGuildInvite(userJid) {
 //========================================
 
 //==================this part handles guild management like promoting and kicking==================
-function promoteToAdmin(ownerJid, targetJid) {
+async function promoteToAdmin(ownerJid, targetJid) {
   const info = globalGuildData;
   const guildName = info.guildOwners[ownerJid];
 
@@ -682,21 +682,36 @@ function promoteToAdmin(ownerJid, targetJid) {
   }
 
   const guild = info.guilds[guildName];
+  if (!guild) {
+    return { success: false, message: "❌ Guild data not found!" };
+  }
 
-  if (!guild.members.includes(targetJid)) {
+  // 💡 QA FIX: try to match targetJid against members using loose matching
+  // (LID vs phone format may differ)
+  const memberJid = guild.members.find(m =>
+    m === targetJid ||
+    m.split('@')[0] === targetJid.split('@')[0] ||
+    m.includes(targetJid.split('@')[0]) ||
+    targetJid.includes(m.split('@')[0])
+  );
+
+  if (!memberJid) {
     return { success: false, message: "❌ That user is not in your guild!" };
   }
 
-  if (guild.admins.includes(targetJid)) {
-    return { success: false, message: "❌ That user is already an admin!" };
+  if (guild.admins && guild.admins.includes(memberJid)) {
+    return { success: false, message: "❌ That user is already an officer!" };
   }
 
-  guild.admins.push(targetJid);
-  syncGuild(guildName);
+  if (!guild.admins) guild.admins = [];
+  guild.admins.push(memberJid);
+  await syncGuild(guildName);
 
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} promoted to admin!`
+    message: `✅ @${memberJid.split('@')[0]} promoted to officer!`,
+    targetJid: memberJid,
+    guildName: guildName
   };
 }
 
@@ -1354,6 +1369,8 @@ module.exports = {
   saveGuilds,
   loadChallenges,
   saveChallenges,
+  syncGuild,
+  syncGuildSystem,
 
   getGuildInfo,
   createGuild,
