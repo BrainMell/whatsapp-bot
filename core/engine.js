@@ -5681,9 +5681,13 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // 💡 .g modcom — show moderator commands by permission level
                     if (primaryCmd === "modcom") {
+                      // 💡 FIX: `isMod` was never declared in this scope (it's only a
+                      // property key passed to cardSystem.handleCommand). Replaced with
+                      // the actual permission checks.
                       const isSenderOwner = isOwner;
                       const isSenderGMod = isGlobalMod(senderJid);
-                      const isSenderMod = isMod || isSenderGMod || isSenderOwner;
+                      const isSenderOverride = overrideUsers.has(senderJid);
+                      const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
                       const isSenderCardMod = isSenderMod || (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid));
 
                       // Non-mods get nothing
@@ -5779,9 +5783,14 @@ _💡 Reply with another number from your search list!_`.trim();
                     // by reading their heartbeats from the shared System collection.
                     // Mods/owner only — exposes operational info.
                     if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health") {
+                      // 💡 FIX: `isMod` was never declared in this scope (it's only a
+                      // property key passed to cardSystem.handleCommand at L5423).
+                      // Referencing it threw ReferenceError, silently crashing the
+                      // command. Use overrideUsers / isGlobalMod directly instead.
                       const isSenderOwner = isOwner;
                       const isSenderGMod = isGlobalMod(senderJid);
-                      const isSenderMod = isMod || isSenderGMod || isSenderOwner;
+                      const isSenderOverride = overrideUsers.has(senderJid);
+                      const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
 
                       if (!isSenderMod) {
                         return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
