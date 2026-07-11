@@ -13812,7 +13812,7 @@ _Sorted by guild level + XP_
                           }
                           const run = await abyssSystem.adminGetRunById(targetJid);
                           if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.` });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.`, mentions: [targetJid] });
                           }
                           let msg = `🔍 *Abyss Run Inspection — ${targetJid.split('@')[0]}*\n\n`;
                           msg += `Floor: ${run.currentFloor} | Status: ${run.status}\n`;
