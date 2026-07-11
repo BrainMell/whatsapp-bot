@@ -160,6 +160,26 @@ async function loadGuilds() {
       }
     }
 
+    // 💡 QA FIX: normalize guild XP on load — process any pending level-ups
+    // that weren't consumed (e.g. from the old single-if level-up bug or
+    // from large donations that the old code couldn't handle).
+    for (const [guildName, guild] of Object.entries(globalGuildData.guilds)) {
+      if (guild.points && guild.level) {
+        let xpNeeded = guild.level * 1000;
+        let levelsGained = 0;
+        while (guild.points >= xpNeeded && guild.level < 100) {
+          guild.points -= xpNeeded;
+          guild.level++;
+          levelsGained++;
+          xpNeeded = guild.level * 1000;
+        }
+        if (levelsGained > 0) {
+          console.log(`[Guild] ${guildName}: normalized ${levelsGained} level-up(s) on load (now L${guild.level}, ${guild.points} XP)`);
+          await syncGuild(guildName);
+        }
+      }
+    }
+
     console.log(`✅ Loaded ${Object.keys(globalGuildData.guilds).length} guilds from MongoDB`);
     await syncGuildSystem();
   } catch (err) {
@@ -209,6 +229,11 @@ async function syncGuild(guildName) {
                 type: g.type || 'ADVENTURER',
                 dailyBoard: g.dailyBoard || { targets: [] },
                 motto: g.motto || "Adapt or be Infected.",
+                // 💡 QA FIX: write to BOTH `buildings` (new schema field) AND
+                // `upgrades` (legacy field). Previously only wrote to `upgrades`,
+                // but loadGuilds reads `buildings` first — which has schema
+                // defaults (L1/L0/L0), so building levels reset every restart.
+                buildings: g.buildings || { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } },
                 upgrades: g.buildings || {},
                 logs: g.pointsHistory || [],
                 // 💡 QA FIX: these fields were missing from syncGuild, causing
