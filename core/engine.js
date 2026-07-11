@@ -12929,6 +12929,23 @@ _Sorted by guild level + XP_
                       }
                     }
 
+                    // 💡 .g guild guide — comprehensive guild system guide
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild guide` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild help`) {
+                      const guide = guilds.getGuildGuide(botConfig.getPrefix());
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + guide });
+                      return;
+                    }
+
+                    // 💡 .g guild purge — owner-only, wipes ALL guild data (fixes legacy conflicts)
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild purge`) {
+                      if (!isOwner && !isGlobalMod(senderJid)) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the bot owner or a global mod can purge all guild data.' });
+                      }
+                      const result = await guilds.purgeAllGuilds();
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                    }
+
                     // `${botConfig.getPrefix().toLowerCase()}` guild challenges - List available challenge types
                     if (
                       lowerTxt ===

@@ -88,22 +88,39 @@ async function loadGuilds() {
     for (const g of guilds) {
         const titles = {};
         const admins = [];
+        const recruits = [];
         const members = [];
         
         if (g.members) {
             g.members.forEach(m => {
                 members.push(m.userId);
-                if (m.role === 'officer' || m.role === 'leader') {
-                    if (m.role === 'officer') admins.push(m.userId);
-                }
+                if (m.role === 'officer') admins.push(m.userId);
+                if (m.role === 'recruit') recruits.push(m.userId);
                 if (m.title && m.title !== 'Member') titles[m.userId] = m.title;
             });
+        }
+
+        // 💡 QA FIX: load ALL new fields from the schema. Previously only
+        // a subset was loaded, causing loans/warPoints/emblem/recruits to
+        // be missing from the in-memory cache — which broke guild loans,
+        // war points, emblems, and the 4-tier role system after restart.
+        // Also handle legacy buildings stored as `upgrades` (Map<Number>).
+        let buildings = { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } };
+        if (g.buildings) {
+          buildings = g.buildings;
+        } else if (g.upgrades) {
+          // Legacy format: upgrades was a Map of { buildingId: level }
+          const ug = g.upgrades instanceof Map ? Object.fromEntries(g.upgrades) : g.upgrades;
+          if (ug.hall) buildings.hall.level = typeof ug.hall === 'number' ? ug.hall : (ug.hall.level || 1);
+          if (ug.training) buildings.training.level = typeof ug.training === 'number' ? ug.training : (ug.training.level || 0);
+          if (ug.treasury) buildings.treasury.level = typeof ug.treasury === 'number' ? ug.treasury : (ug.treasury.level || 0);
         }
 
         globalGuildData.guilds[g.guildId] = {
             members,
             owner: g.leader,
             admins,
+            recruits,
             titles,
             createdAt: g.createdAt,
             points: g.xp || 0,
@@ -113,11 +130,38 @@ async function loadGuilds() {
             dailyBoard: g.dailyBoard || { targets: [] },
             pointsHistory: g.logs || [],
             motto: g.motto || "Adapt or be Infected.",
-            buildings: g.upgrades ? (g.upgrades instanceof Map ? Object.fromEntries(g.upgrades) : g.upgrades) : {}
+            buildings,
+            // 💡 QA FIX: load new fields that were missing
+            loans: g.loans || [],
+            warPoints: g.warPoints || 0,
+            warPointsWeek: g.warPointsWeek || null,
+            lastInterestPayout: g.lastInterestPayout || null,
+            emblem: g.emblem || { icon: null, color: '#FFD700' },
         };
+
+        // Clean up memberGuilds — make sure every member is mapped
+        for (const m of members) {
+          if (!globalGuildData.memberGuilds[m]) {
+            globalGuildData.memberGuilds[m] = g.guildId;
+          }
+        }
     }
     
-    // console.log(`✅ Loaded ${guilds.length} guilds from MongoDB`);
+    // 💡 QA FIX: Clean up orphaned memberGuilds entries (pointing to deleted guilds)
+    for (const [jid, guildName] of Object.entries(globalGuildData.memberGuilds)) {
+      if (!globalGuildData.guilds[guildName]) {
+        delete globalGuildData.memberGuilds[jid];
+      }
+    }
+    // Clean up orphaned guildOwners entries
+    for (const [jid, guildName] of Object.entries(globalGuildData.guildOwners)) {
+      if (!globalGuildData.guilds[guildName]) {
+        delete globalGuildData.guildOwners[jid];
+      }
+    }
+
+    console.log(`✅ Loaded ${Object.keys(globalGuildData.guilds).length} guilds from MongoDB`);
+    await syncGuildSystem();
   } catch (err) {
     console.error("Error loading guilds from DB:", err.message);
   }
@@ -1188,6 +1232,120 @@ function getChallenges() {
 // loadGuilds();
 // loadChallenges();
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  GUILD PURGE + GUILD GUIDE (QA — fix legacy conflicts)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 💡 Purges ALL guild data — both MongoDB GuildModel documents AND the
+// System collection mappings (memberGuilds, guildOwners, guildInvites).
+// Also clears the in-memory cache. Used to fix legacy guild conflicts.
+async function purgeAllGuilds() {
+  try {
+    await connectDB();
+    // Delete all guild documents
+    const guildResult = await GuildModel.deleteMany({});
+    // Delete the system mappings
+    const sysResult = await System.deleteOne({ key: 'guild_system' });
+    // Clear in-memory cache
+    globalGuildData.guilds = {};
+    globalGuildData.memberGuilds = {};
+    globalGuildData.guildOwners = {};
+    globalGuildData.guildInvites = {};
+    return {
+      success: true,
+      message: `✅ *GUILD DATA PURGED*\n\nDeleted ${guildResult.deletedCount} guild(s) from MongoDB.\nCleared all member/owner/invite mappings.\n\n_All players are now guild-less. They can create or join new guilds fresh._`,
+    };
+  } catch (e) {
+    return { success: false, message: `❌ Failed to purge: ${e.message}` };
+  }
+}
+
+// 💡 Returns a comprehensive guild guide string for the .g guild guide command.
+function getGuildGuide(prefix) {
+  let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+  msg += `┃  🏰 GUILD SYSTEM GUIDE  ┃\n`;
+  msg += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+
+  msg += `*GETTING STARTED*\n`;
+  msg += `• \`${prefix} guild create <name>\` — Create a new guild\n`;
+  msg += `• \`${prefix} guild join <name>\` — Join an existing guild\n`;
+  msg += `• \`${prefix} guild leave\` — Leave your current guild\n`;
+  msg += `• \`${prefix} guild list\` — See all guilds\n\n`;
+
+  msg += `*GUILD ARCHETYPES*\n`;
+  msg += `Choose an archetype when creating (default: ADVENTURER):\n`;
+  msg += `• ⚔️ ADVENTURER — +15% XP from dungeons\n`;
+  msg += `• 💰 MERCHANT — +10% gold + 10% sell value\n`;
+  msg += `• 🧪 RESEARCH — -10% crafting material cost\n\n`;
+
+  msg += `*GUILD LEVELS & XP*\n`;
+  msg += `Guilds level up by earning XP from member activities:\n`;
+  msg += `• Dungeon clears: +5 to +100 XP (by rank)\n`;
+  msg += `• Boss kills: +10 XP\n`;
+  msg += `• PvP wins: +5 XP\n`;
+  msg += `• Item sales: +5% of value as XP\n`;
+  msg += `• Donations: +1 XP per 1000 Zeni\n\n`;
+  msg += `Guild level perks:\n`;
+  msg += `• L2: +5% XP for all members\n`;
+  msg += `• L3: +5% gold for all members\n`;
+  msg += `• L5: Guild bank earns daily interest\n`;
+  msg += `• L7: +1 skill point on adventurer rank-up\n`;
+  msg += `• L10: Access to guild-only dungeon rank\n\n`;
+
+  msg += `*GUILD BUILDINGS*\n`;
+  msg += `Upgrade buildings with guild points (\`${prefix} guild upgrade <id>\`):\n`;
+  msg += `• Hall: +5 member cap per level (base 20, max 45)\n`;
+  msg += `• Training: +5% XP per level (max +25%)\n`;
+  msg += `• Treasury: +10% gold per level (max +50%) + bank interest\n\n`;
+
+  msg += `*GUILD ROLES (4-tier system)*\n`;
+  msg += `• 👑 Leader — full control (can disband, set roles, emblem)\n`;
+  msg += `• ⚔️ Officer — can kick/invite/manage\n`;
+  msg += `• 🌿 Member — full guild access (loans, board, etc.)\n`;
+  msg += `• 💤 Recruit — limited (cannot borrow from bank)\n`;
+  msg += `Set roles: \`${prefix} guild role @user <recruit|member|officer>\`\n\n`;
+
+  msg += `*GUILD BANK & LOANS*\n`;
+  msg += `• \`${prefix} guild donate <amount>\` — Donate Zeni to guild bank\n`;
+  msg += `• \`${prefix} guild loan <amount>\` — Borrow (max 10% of bank, 7-day repayment)\n`;
+  msg += `• \`${prefix} guild loan list\` — View your active loans\n`;
+  msg += `• \`${prefix} guild loan repay <amount>\` — Repay early\n`;
+  msg += `Overdue loans: 10% auto-deducted daily from wallet, or 5% penalty compounds.\n`;
+  msg += `Bank interest (L5+): 0.5%/treasury level daily, capped at 1M/day.\n\n`;
+
+  msg += `*GUILD PERKS*\n`;
+  msg += `• \`${prefix} guild perks\` — View your active multipliers\n`;
+  msg += `• \`${prefix} guild info\` — Full guild status dashboard\n\n`;
+
+  msg += `*GUILD MANAGEMENT*\n`;
+  msg += `• \`${prefix} guild invite @user\` — Send invite (120s to accept)\n`;
+  msg += `• \`${prefix} guild promote @user\` — Promote to officer\n`;
+  msg += `• \`${prefix} guild demote @user\` — Demote officer\n`;
+  msg += `• \`${prefix} guild kick @user\` — Remove member\n`;
+  msg += `• \`${prefix} guild title @user <title>\` — Set custom title\n`;
+  msg += `• \`${prefix} guild motto <text>\` — Set guild motto\n`;
+  msg += `• \`${prefix} guild emblem <emoji> [hexColor]\` — Set guild emblem\n`;
+  msg += `• \`${prefix} guild delete\` — Disband guild (Leader only)\n\n`;
+
+  msg += `*GUILD WAR (weekly)*\n`;
+  msg += `• \`${prefix} war\` — View this week's event\n`;
+  msg += `• Earn points from dungeons, bosses, PvP, raids, Abyss\n`;
+  msg += `• 4 rotating events: Tournament, Clash, Hunt, Siege\n`;
+  msg += `• Rewards: 1st=5M Zeni + buff, 2nd-3rd=2M, 4th-8th=500K\n\n`;
+
+  msg += `*OTHER COMMANDS*\n`;
+  msg += `• \`${prefix} guild members\` — View roster\n`;
+  msg += `• \`${prefix} guild ranks\` — Members by adventurer rank\n`;
+  msg += `• \`${prefix} guild titles\` — Roster with titles\n`;
+  msg += `• \`${prefix} guild board\` — Daily monster hunting board\n`;
+  msg += `• \`${prefix} guild tag <msg>\` — Mention all guild members\n`;
+  msg += `• \`${prefix} guild leaderboard\` — Top guilds by level/XP\n`;
+  msg += `• \`${prefix} guild points\` — Your guild's XP\n`;
+  msg += `• \`${prefix} guild upgrade\` — Upgrade buildings menu\n`;
+
+  return msg;
+}
+
 module.exports = {
   loadGuilds,
   saveGuilds,
@@ -1209,6 +1367,8 @@ module.exports = {
   promoteToAdmin,
   demoteAdmin,
   setMemberRole,
+  purgeAllGuilds,
+  getGuildGuide,
   kickFromGuild,
   setMemberTitle,
   getMemberTitle,
