@@ -5066,7 +5066,39 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       const authorNormalized = jidNormalizedUser(senderJid);
                       const isOwner = _isBotOwner(authorNormalized);
                       const isGlobal = isGlobalMod && isGlobalMod(senderJid);
-                      if (!isOwner && !isGlobal) {
+
+                      // 💡 QA FIX: Check if sender is a WA group admin directly.
+                      // Previously relied on hasActionPermission which does complex
+                      // LID resolution + rank checks that fail when rank system is
+                      // off or when LID/phone formats don't match. WA admins should
+                      // ALWAYS be able to pin/unpin in their own group.
+                      let isWAAdmin = false;
+                      try {
+                        let meta = groupMetadataCache.get(chatId);
+                        if (!meta) {
+                          meta = await getGroupMetadata(chatId);
+                        }
+                        if (meta && meta.participants) {
+                          const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+                          const phoneJid = resolveToPhone ? resolveToPhone(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null) : null;
+                          const canonicalJid = resolveJid ? resolveJid(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null) : null;
+                          const normSender = jidNormalizedUser(senderJid);
+                          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+                          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+                          const p = meta.participants.find(x => {
+                            const pid = jidNormalizedUser(x.id || x);
+                            return pid === normSender || pid === normPhone || pid === normCan;
+                          });
+                          if (p && (p.admin === 'admin' || p.admin === 'superadmin')) {
+                            isWAAdmin = true;
+                          }
+                        }
+                      } catch (e) {
+                        // If metadata fetch fails, don't block the pin
+                        isWAAdmin = true;
+                      }
+
+                      if (!isOwner && !isGlobal && !isWAAdmin) {
                         const allowed = hasActionPermission(chatId, senderJid, "pin");
                         if (!allowed) {
                           console.log(`🛡️ Undo manual pin/unpin by unauthorized user: ${senderJid} in group ${chatId}`);
