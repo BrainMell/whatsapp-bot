@@ -12951,13 +12951,39 @@ _Sorted by guild level + XP_
                       return;
                     }
 
-                    // `.g guild role <@user> <recruit|member|officer>` — Phase 2 4-tier role system
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild role `)) {
+                    // `.g guild role` or `.g guild role @user <role>` — Phase 2 4-tier role system
+                    // 💡 QA FIX: was startsWith('guild role ') (trailing space) —
+                    // '.g guild role' (no args) didn't match and fell through to
+                    // another handler (building upgrade). Now matches both forms.
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild role` ||
+                        lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild role `)) {
                       try {
                         const parts = txt.trim().split(/\s+/);
                         // 💡 QA FIX: use getMentionOrReply for LID normalization
                         const targetJid = getMentionOrReply(m) || (parts[3]?.includes('@') ? parts[3] : null);
                         const newRole = parts[4]?.toLowerCase();
+
+                        // No args — show current roles for all members
+                        if (!targetJid && !newRole) {
+                          const userGuild = guilds.getUserGuild(senderJid);
+                          if (!userGuild) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          }
+                          const guild = guilds.getGuild(userGuild);
+                          if (!guild) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                          }
+                          let msg = `🏷️ *${userGuild}* — Guild Roles\n\n`;
+                          for (const memberJid of (guild.members || [])) {
+                            const memberInfo = guilds.getGuildMember(userGuild, memberJid);
+                            const roleIcon = memberInfo?.role === 'leader' ? '👑' : memberInfo?.role === 'officer' ? '⚔️' : memberInfo?.role === 'recruit' ? '💤' : '🌿';
+                            msg += `${roleIcon} @${memberJid.split('@')[0]} — ${memberInfo?.role || 'member'}\n`;
+                          }
+                          msg += `\n_Set roles: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`_`;
+                          const mentions = (guild.members || []).filter(j => j && j.includes('@'));
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions });
+                        }
+
                         if (!targetJid || !newRole) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`` });
                         }

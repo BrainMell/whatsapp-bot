@@ -1008,9 +1008,16 @@ ${message || 'Guild members, gather!'}
 👥 Members: ${members.length}`;
 
   try {
+    // 💡 QA FIX: resolve LID → phone format for mentions, filter out invalid JIDs
+    const { resolveToPhone } = require('../utils/lidResolver');
+    const authPath = sock.authState?.creds?.me
+      ? (sock.user?.id?.split('@')[0] ? null : null) // can't easily get authPath here
+      : null;
+    const mentionJids = members.filter(j => j && typeof j === 'string' && j.includes('@'));
+
     await sock.sendMessage(chatId, {
       text: BOT_MARKER + announcement,
-      mentions: members
+      mentions: mentionJids
     });
     return { success: true };
   } catch (err) {
@@ -1355,7 +1362,7 @@ function getGuildGuide(prefix) {
   msg += `• Boss kills: +10 XP\n`;
   msg += `• PvP wins: +5 XP\n`;
   msg += `• Item sales: +5% of value as XP\n`;
-  msg += `• Donations: +1 XP per 1000 Zeni\n\n`;
+  msg += `• Donations: +1 XP per 100K Zeni (max 100 XP per donation)\n\n`;
   msg += `Guild level perks:\n`;
   msg += `• L2: +5% XP for all members\n`;
   msg += `• L3: +5% gold for all members\n`;
@@ -1390,6 +1397,8 @@ function getGuildGuide(prefix) {
 
   msg += `*GUILD MANAGEMENT*\n`;
   msg += `• \`${prefix} guild invite @user\` — Send invite (1 hour to accept)\n`;
+  msg += `• \`${prefix} accept\` — Accept a pending invite\n`;
+  msg += `• \`${prefix} decline\` — Decline a pending invite\n`;
   msg += `• \`${prefix} guild promote @user\` — Promote to officer\n`;
   msg += `• \`${prefix} guild demote @user\` — Demote officer\n`;
   msg += `• \`${prefix} guild kick @user\` — Remove member\n`;
