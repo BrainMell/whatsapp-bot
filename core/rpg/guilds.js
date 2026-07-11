@@ -1015,6 +1015,7 @@ async function tagGuildMembers(sock, chatId, userJid, message, BOT_MARKER) {
   }
 
   const guild = info.guilds[guildName];
+  if (!guild) return { success: false, message: "❌ Guild not found!" };
   const members = Array.isArray(guild.members) ? guild.members : [];
 
   if (members.length === 0) {
@@ -1179,7 +1180,7 @@ function addGuildPoints(guildName, points, reason) {
   // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
   // broken. Now loops until all level-ups are consumed.
   let xpNeeded = guild.level * 1000;
-  while (guild.points >= xpNeeded) {
+  while (guild.points >= xpNeeded && guild.level < 100) {
     guild.points -= xpNeeded;
     guild.level++;
     xpNeeded = guild.level * 1000;
@@ -1229,6 +1230,7 @@ function getGuildPointsLeaderboard(limit = 10) {
 
 function awardPointsForActivity(userJid, activity) {
   // 💡 QA FIX: was an empty stub — daily claims never awarded guild XP
+  const info = globalGuildData;
   const guildName = info.memberGuilds[userJid];
   if (!guildName) return;
   return addGuildPoints(guildName, 5, activity || 'activity');

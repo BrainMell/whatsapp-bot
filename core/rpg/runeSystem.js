@@ -190,7 +190,7 @@ async function removeRune(userJid, runeId, hasScroll = false) {
   if (!hasScroll) {
     return {
       success: false,
-      message: '❌ Removing a socketed rune requires a *Rune Removal Scroll*. You can get one from the cash shop or as a rare raid drop.\n\n_Warning: removing without a scroll would destroy the rune. Use `.g rune remove <id> confirm` to destroy._',
+      message: '❌ Removing a socketed rune requires a *Rune Removal Scroll*. You can get one from the cash shop or as a rare raid drop.\n\n_Warning: removing without a scroll would destroy the rune. Use `.g rune destroy <id>` to destroy the rune without a scroll._',
     };
   }
 
@@ -210,6 +210,7 @@ async function destroyRune(userJid, runeId) {
   const rune = await Rune.findOne({ runeId, ownerJid: userJid });
   if (!rune) return { success: false, message: '❌ Rune not found.' };
   if (!rune.socketedSkillId) return { success: false, message: '❌ This rune is not socketed.' };
+  if (rune.onMarket) return { success: false, message: '❌ Cancel the market listing first.' };
 
   await Rune.deleteOne({ runeId });
   return {
@@ -249,8 +250,8 @@ function applyRuneModifiers(effect, socketedRunes) {
   }
 
   // Apply damage multiplier
-  if (modifiedEffect.multiplier && damageMult !== 1.0) {
-    modifiedEffect.multiplier = modifiedEffect.multiplier * damageMult;
+  if (damageMult !== 1.0) {
+    modifiedEffect.multiplier = (Number(modifiedEffect.multiplier) || 1) * damageMult;
   }
   // Apply energy cost multiplier
   if (modifiedEffect.cost && energyCostMult !== 1.0) {
@@ -267,7 +268,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   }
   // Apply DEF ignore
   if (defIgnorePct > 0) {
-    modifiedEffect.defIgnorePct = Math.min(0.80, defIgnorePct); // cap at 80%
+    modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(80, defIgnorePct); // cap at 80%
   }
   // Apply cannot-evade flag
   if (cannotEvade) {
@@ -282,7 +283,7 @@ function applyRuneModifiers(effect, socketedRunes) {
 // dropChance is the probability of dropping a rune (0.0-1.0).
 // Returns a random type + tier, or null if no drop.
 function rollRuneDrop(dropChance) {
-  if (Math.random() > dropChance) return null;
+  if (typeof dropChance !== 'number' || !Number.isFinite(dropChance) || dropChance <= 0 || Math.random() > dropChance) return null;
 
   // Roll tier based on drop weights
   const tierEntries = Object.values(RUNE_TIERS);

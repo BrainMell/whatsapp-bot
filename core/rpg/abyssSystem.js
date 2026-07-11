@@ -189,6 +189,11 @@ async function processAttack(userId, playerDamage, playerStats) {
 
   run.lastActionAt = new Date();
   const enemy = run.currentEnemy;
+  if (!enemy) {
+    run.status = 'failed';
+    await run.save();
+    return { success: false, message: '⚠️ Run data corrupted — auto-failed. Cooldown applies.' };
+  }
 
   // Player attacks first
   let attackMsg = `⚔️ You attack ${enemy.name} for ${playerDamage} damage!\n`;
@@ -199,6 +204,13 @@ async function processAttack(userId, playerDamage, playerStats) {
     attackMsg += `💀 ${enemy.name} defeated!\n`;
     run.monstersKilled += 1;
     if (enemy.isBoss) run.bossesKilled += 1;
+
+    // 💡 QA FIX: track kills for rank missions (was missing entirely)
+    try {
+      const economy = require('./economy');
+      economy.trackMissionStat(userId, 'kills', 1);
+      if (enemy.isBoss) economy.trackMissionStat(userId, 'bossesDefeated', 1);
+    } catch (e) {}
 
     // Award loot
     const rewards = getFloorRewards(run.currentFloor, enemy.isBoss);
@@ -254,6 +266,7 @@ async function processAttack(userId, playerDamage, playerStats) {
 // ─── PROCESS DEATH ────────────────────────────────────────────────────────
 // Player died — lose 90% of loot, keep 10%, run ends as 'failed'
 async function processDeath(userId, run, deathMsg) {
+  if (run.status !== 'active') return { success: false, message: 'Run already ended.' };
   const keptXp = Math.floor(run.lootAccumulator.xp * 0.10);
   const keptGold = Math.floor(run.lootAccumulator.gold * 0.10);
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
@@ -276,6 +289,9 @@ async function processDeath(userId, run, deathMsg) {
     console.error('[Abyss] Failed to award death recovery:', e.message);
   }
 
+  // 💡 QA FIX: zero lootAccumulator before saving to prevent double-award
+  run.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
+
   // Update run record
   run.status = 'failed';
   run.finalScore = score;
@@ -291,7 +307,7 @@ async function processDeath(userId, run, deathMsg) {
     const guildPerks = require('./guildPerks');
     guildPerks.awardGuildXp(userId, Math.floor(score / 100), `Abyss run (death, F${run.currentFloor})`);
     guildPerks.awardWarPoints(userId, Math.floor(score / 50), 'abyss');
-  } catch (e) {}
+  } catch (e) { console.error('[Abyss] Guild perks failed:', e.message); }
 
   return { success: true, message: deathMsg, run, died: true };
 }
@@ -303,6 +319,7 @@ async function retreat(userId) {
   if (!run) {
     return { success: false, message: '❌ No active Abyss run to retreat from.' };
   }
+  if (run.status !== 'active') return { success: false, message: 'Run already ended.' };
 
   const keptXp = run.lootAccumulator.xp;
   const keptGold = run.lootAccumulator.gold;
@@ -330,6 +347,9 @@ async function retreat(userId) {
   } catch (e) {
     console.error('[Abyss] Failed to award retreat loot:', e.message);
   }
+
+  // 💡 QA FIX: zero lootAccumulator before saving to prevent double-award
+  run.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
 
   // Update run record
   run.status = 'completed';

@@ -13656,6 +13656,9 @@ _Sorted by guild level + XP_
                           const economy = require('./rpg/economy');
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
+                          if (!user) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Account not found. Use `.g register`.' });
+                          }
                           const baseStats = progression.getBaseStats(senderJid, user.class);
                           const playerDamage = Math.floor((baseStats.atk || 10) * (1 + (progression.getLevel(senderJid) * 0.1)) * (0.8 + Math.random() * 0.4));
                           const result = await abyssSystem.processAttack(senderJid, playerDamage, baseStats);
