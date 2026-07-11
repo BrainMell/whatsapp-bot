@@ -6399,11 +6399,18 @@ async function applyAbilityEffect(
         continue;
       }
 
-      // Evasion check
+      // Evasion check — 💡 QA FIX: PIERCE rune (effect.cannotEvade) bypasses evasion
       if (dmgResult.wasEvaded) {
-        const targetIcon2 = target.isEnemy ? target.icon : target.class?.icon || "👤";
-        msg += `💨 ${targetIcon2} ${target.name} *evades* the attack!\n`;
-        continue;
+        if (effect.cannotEvade) {
+          msg += `⚔️ ${target.name} tried to evade but the attack PIERCES through!\n`;
+          // Recalculate with evasion disabled — deal minimum damage
+          dmgResult.wasEvaded = false;
+          dmgResult.damage = Math.max(1, Math.floor((player.stats.atk || 10) * (effect.multiplier || 1) * 0.5));
+        } else {
+          const targetIcon2 = target.isEnemy ? target.icon : target.class?.icon || "👤";
+          msg += `💨 ${targetIcon2} ${target.name} *evades* the attack!\n`;
+          continue;
+        }
       }
       let damage = dmgResult.damage;
       let isCrit = dmgResult.isCrit || false;
@@ -6564,13 +6571,27 @@ async function applyAbilityEffect(
         continue;
       }
 
-      // Evasion check
+      // Evasion check — 💡 QA FIX: PIERCE rune bypasses evasion for AOE too
       if (aoeDmgResult.wasEvaded) {
-        msg += `💨 ${target.name} *evades* the AOE!\n`;
-        continue;
+        if (effect.cannotEvade) {
+          msg += `⚔️ ${target.name} tried to evade but the AOE PIERCES through!\n`;
+          aoeDmgResult.wasEvaded = false;
+          aoeDmgResult.damage = Math.max(1, Math.floor((player.stats.atk || 10) * (effect.multiplier || 1) * 0.5));
+        } else {
+          msg += `💨 ${target.name} *evades* the AOE!\n`;
+          continue;
+        }
       }
       let damage = aoeDmgResult.damage;
-      const isCrit = aoeDmgResult.isCrit || false;
+      let isCrit = aoeDmgResult.isCrit || false;
+
+      // 💡 QA FIX: FOCUS rune critBonus for AOE (was missing — only applied to single-target)
+      if (effect.critBonus && !isCrit) {
+        if (Math.random() * 100 < effect.critBonus) {
+          isCrit = true;
+          damage = Math.floor(damage * 2.0);
+        }
+      }
 
       // Ignore defense bonus
       if (effect.ignoreDefense) {

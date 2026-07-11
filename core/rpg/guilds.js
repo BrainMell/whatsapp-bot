@@ -529,11 +529,19 @@ function leaveGuild(userJid) {
 
   const guild = info.guilds[guildName];
   if (guild) {
-    guild.members = guild.members.filter(m => m !== userJid);
-    guild.admins = (guild.admins || []).filter(a => a !== userJid);
+    // 💡 QA FIX: loose JID matching for member removal
+    const memberJid = (guild.members || []).find(m =>
+      m === userJid ||
+      m.split('@')[0] === userJid.split('@')[0] ||
+      m.includes(userJid.split('@')[0]) ||
+      userJid.includes(m.split('@')[0])
+    );
+    const removeJid = memberJid || userJid; // fallback to raw if not found
+    guild.members = guild.members.filter(m => m !== removeJid);
+    guild.admins = (guild.admins || []).filter(a => a !== removeJid);
     // 💡 QA FIX: also clean up recruits
-    if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== userJid);
-    delete guild.titles[userJid];
+    if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== removeJid);
+    delete guild.titles[removeJid];
     syncGuild(guildName);
   } else {
     console.warn(`[Guild] Found orphaned member ${userJid} for missing guild ${guildName}`);
@@ -946,7 +954,13 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
 }
 
 function isGuildOwner(userJid) {
-  return !!globalGuildData.guildOwners[userJid];
+  // 💡 QA FIX: check direct + loose match for LID/phone format tolerance
+  if (globalGuildData.guildOwners[userJid]) return true;
+  const phone = userJid.split('@')[0];
+  for (const jid of Object.keys(globalGuildData.guildOwners)) {
+    if (jid.split('@')[0] === phone || jid.includes(phone) || userJid.includes(jid.split('@')[0])) return true;
+  }
+  return false;
 }
 
 function isGuildAdmin(userJid) {

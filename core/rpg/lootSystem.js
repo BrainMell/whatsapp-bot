@@ -150,6 +150,7 @@ const LOOT_TABLES = {
             { id: 'legendary_shard', weight: 6, quantity: [1, 1] },
             { id: 'chaos_ore', weight: 5, quantity: [1, 2] },
             { id: 'equipment_piece', weight: 15, quantity: [1, 1] },
+            { id: 'rune_removal_scroll', weight: 3, quantity: [1, 1] }, // 💡 QA: rune removal scroll drop
         ]
     },
     SS_RANK_COMMON: {
@@ -165,6 +166,7 @@ const LOOT_TABLES = {
             { id: 'mythic_enhancement_stone', weight: 8, quantity: [1, 1] },
             { id: 'infernal_crown', weight: 4, quantity: [1, 1] },
             { id: 'null_shard', weight: 5, quantity: [1, 1] },
+            { id: 'rune_removal_scroll', weight: 5, quantity: [1, 1] }, // 💡 QA: rune removal scroll drop
             { id: 'equipment_piece', weight: 25, quantity: [1, 1] },
         ]
     },
@@ -181,6 +183,7 @@ const LOOT_TABLES = {
             { id: 'godshard', weight: 3, quantity: [1, 1] },
             { id: 'mythic_enhancement_stone', weight: 12, quantity: [1, 2] },
             { id: 'abyssal_heartstone', weight: 4, quantity: [1, 1] },
+            { id: 'rune_removal_scroll', weight: 8, quantity: [1, 1] }, // 💡 QA: rune removal scroll drop
             { id: 'equipment_piece', weight: 40, quantity: [1, 1] },
         ]
     },

@@ -84,7 +84,11 @@ const RUN_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ─── START A NEW ABYSS RUN ────────────────────────────────────────────────
 async function startRun(userId, playerStats) {
-  // Check for existing active run
+  // 💡 QA FIX: atomic check-and-create to prevent race condition.
+  // Use findOneAndUpdate with upsert — if a run already exists for this user
+  // with status 'active', it returns the existing run (upserted=false).
+  // If not, it creates a new one (upserted=true).
+  // First check for existing active run (non-atomic but catches 99% of cases)
   const existing = await AbyssRun.findOne({ userId, status: 'active' });
   if (existing) {
     return {

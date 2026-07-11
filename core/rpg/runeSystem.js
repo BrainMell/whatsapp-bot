@@ -168,6 +168,15 @@ async function socketRune(userJid, runeId, skillId) {
     return { success: false, message: `❌ This skill already has ${existing.length}/${maxSlots} runes socketed (maximum).` };
   }
 
+  // 💡 QA FIX: SPREAD rune is useless on single-target skills — reject to prevent traps
+  if (rune.type === 'SPREAD') {
+    const targeting = skillDef.targeting || '';
+    const isAOE = targeting.includes('AOE') || targeting === 'ALL_ENEMIES' || targeting === 'CLEAVE' || targeting === 'CHAIN' || skillDef.damageMultiplier;
+    if (!isAOE) {
+      return { success: false, message: `❌ SPREAD rune can only be socketed into AOE skills. "${skillDef.name || skillId}" is single-target.` };
+    }
+  }
+
   rune.socketedSkillId = skillId;
   rune.socketedAt = new Date();
   await rune.save();
