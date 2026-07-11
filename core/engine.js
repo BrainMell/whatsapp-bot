@@ -11766,8 +11766,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
 ━━━━━━━━━━━━━━━
 📨 @${targetUser.split("@")[0]} - Type:
-  • ${botConfig.getPrefix().toLowerCase()} guild accept - to join
-  • ${botConfig.getPrefix().toLowerCase()} guild decline - to decline
+  • ${botConfig.getPrefix().toLowerCase()} accept - to join
+  • ${botConfig.getPrefix().toLowerCase()} decline - to decline
 
 ⏰ Invite expires in 1 hour`;
 

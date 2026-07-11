@@ -554,7 +554,7 @@ function inviteToGuild(inviterJid, inviteeJid) {
     success: true,
     message: `✅ Invited @${inviteeJid.split('@')[0]} to "${guildName}"!
 
-⏳ *Time:* 120s to accept.
+⏳ *Time:* 1 hour to accept.
 They can accept with: ${botConfig.getPrefix()} accept`
   };
 }
@@ -568,10 +568,13 @@ function acceptGuildInvite(userJid) {
     return { success: false, message: "❌ You don't have any pending invites!" };
   }
 
-  if (Date.now() - invite.timestamp > 120000) {
+  // 💡 QA FIX: was 120000 (120s / 2 min) but invite message says 1 hour.
+  // Users couldn't accept because the invite expired before they read it.
+  const INVITE_TTL_MS = 60 * 60 * 1000; // 1 hour
+  if (Date.now() - invite.timestamp > INVITE_TTL_MS) {
     delete info.guildInvites[userJid];
     syncGuildSystem();
-    return { success: false, message: "❌ Invite expired! (120s limit)" };
+    return { success: false, message: "❌ Invite expired! (1 hour limit)" };
   }
 
   if (info.memberGuilds[userJid]) {
@@ -634,7 +637,7 @@ function declineGuildInvite(userJid) {
     return { success: false, message: "❌ You don't have any pending invites!" };
   }
 
-  if (Date.now() - invite.timestamp > 120000) {
+  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // 💡 QA FIX: was 120000 (2 min), now 1 hour
       delete info.guildInvites[userJid];
       syncGuildSystem();
       return { success: false, message: "❌ Invite already expired." };
@@ -659,7 +662,7 @@ function checkGuildInvite(userJid) {
     return null;
   }
 
-  if (Date.now() - invite.timestamp > 120000) {
+  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // 💡 QA FIX: was 120000 (2 min), now 1 hour
     delete info.guildInvites[userJid];
     syncGuildSystem();
     return null;
