@@ -4244,7 +4244,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (heartbeatInterval) clearInterval(heartbeatInterval);
               const writeHeartbeat = async () => {
                 try {
-                  const siblings = botConfig.get('siblings', []) || [];
+                  // 💡 FIX: botConfig.get() returns the active config STORE (for
+                  // AsyncLocalStorage), not a key-value getter. Use getSiblings().
+                  const siblings = botConfig.getSiblings();
                   await system.set('heartbeat_' + BOT_ID, {
                     botId: BOT_ID,
                     name: BOT_NAME,
@@ -4252,7 +4254,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     lastSeen: Date.now(),
                     startedAt: botStartTime || Date.now(),
                     uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
-                    version: botConfig.get('version', 'unknown'),
+                    version: botConfig.getVersion(),
                     prefix: botConfig.getPrefix(),
                     siblings: siblings,
                     pid: process.pid,
@@ -4343,9 +4345,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   lastSeen: Date.now(),
                   startedAt: botStartTime || Date.now(),
                   uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
-                  version: botConfig.get('version', 'unknown'),
+                  version: botConfig.getVersion(),
                   prefix: botConfig.getPrefix(),
-                  siblings: botConfig.get('siblings', []) || [],
+                  siblings: botConfig.getSiblings(),
                   pid: process.pid,
                   error: statusCode ? `Status ${statusCode}` : (lastDisconnect?.error?.message || 'Connection closed'),
                 });
@@ -5808,7 +5810,9 @@ _💡 Reply with another number from your search list!_`.trim();
                         // We still merge in self + siblings as a fallback in case
                         // the DB query fails or the heartbeat hasn't been written yet.
                         const selfId = BOT_ID;
-                        const siblingIds = botConfig.get('siblings', []) || [];
+                        // 💡 FIX: botConfig.get() returns the active config store,
+                        // not a key-value getter. Use getSiblings() instead.
+                        const siblingIds = botConfig.getSiblings();
                         const configIds = Array.from(new Set([selfId, ...siblingIds]));
 
                         // 💡 Read fresh heartbeat data from MongoDB (not cache).
