@@ -5788,23 +5788,52 @@ _💡 Reply with another number from your search list!_`.trim();
                       }
 
                       try {
-                        // Build the list of all known instances: self + siblings
+                        // 💡 AUTO-DISCOVER all instances from the database.
+                        // Instead of relying on the `siblings` array in botConfig
+                        // (which requires manual updates when adding a new instance),
+                        // we query MongoDB for ALL keys starting with "heartbeat_".
+                        // This means any instance that has ever written a heartbeat
+                        // will show up automatically — no config changes needed
+                        // when adding a new bot.
+                        //
+                        // We still merge in self + siblings as a fallback in case
+                        // the DB query fails or the heartbeat hasn't been written yet.
                         const selfId = BOT_ID;
                         const siblingIds = botConfig.get('siblings', []) || [];
-                        const allIds = Array.from(new Set([selfId, ...siblingIds]));
+                        const configIds = Array.from(new Set([selfId, ...siblingIds]));
 
                         // 💡 Read fresh heartbeat data from MongoDB (not cache).
                         // system.get() reads from a local cache loaded at startup,
                         // so for live health data we hit the DB directly.
                         const System = require('./models/System');
-                        const heartbeatDocs = await System.find({
-                          key: { $in: allIds.map(id => 'heartbeat_' + id) }
-                        }).lean();
+
+                        // Query ALL heartbeat keys (regex prefix match) so new
+                        // instances are auto-discovered. Fall back to explicit
+                        // $in query if regex isn't supported.
+                        let heartbeatDocs = [];
+                        try {
+                          heartbeatDocs = await System.find({
+                            key: { $regex: /^heartbeat_/ }
+                          }).lean();
+                        } catch (regexErr) {
+                          // Fallback: query the known IDs from config
+                          heartbeatDocs = await System.find({
+                            key: { $in: configIds.map(id => 'heartbeat_' + id) }
+                          }).lean();
+                        }
 
                         const heartbeatMap = {};
+                        const discoveredIds = [];
                         for (const doc of heartbeatDocs) {
-                          heartbeatMap[doc.key.replace('heartbeat_', '')] = doc.value;
+                          const id = doc.key.replace('heartbeat_', '');
+                          heartbeatMap[id] = doc.value;
+                          discoveredIds.push(id);
                         }
+
+                        // Merge: discovered (from DB) + config (siblings + self)
+                        // This ensures an instance shows up even if its heartbeat
+                        // hasn't been written yet (e.g., just deployed, not connected).
+                        const allIds = Array.from(new Set([...discoveredIds, ...configIds]));
 
                         const now = Date.now();
                         const STALE_THRESHOLD = 2 * 60 * 1000;   // 2 min → STALE
@@ -5815,6 +5844,13 @@ _💡 Reply with another number from your search list!_`.trim();
                         out += `_Checked at ${new Date().toLocaleTimeString()} — ${allIds.length} instances_\n\n`;
 
                         let aliveCount = 0, staleCount = 0, deadCount = 0, unknownCount = 0;
+
+                        // Sort: self first, then others alphabetically
+                        allIds.sort((a, b) => {
+                          if (a === selfId) return -1;
+                          if (b === selfId) return 1;
+                          return a.localeCompare(b);
+                        });
 
                         for (const id of allIds) {
                           const hb = heartbeatMap[id];
