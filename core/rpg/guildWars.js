@@ -200,7 +200,10 @@ async function resolveWeeklyWar() {
 
   // Sync latest points
   await syncWarPointsToActiveWar();
-  await war.populate('participants').execPopulate();
+  // 💡 QA FIX: removed war.populate('participants').execPopulate() —
+  // participants is an embedded subdoc array, not a ref. populate is
+  // meaningless AND execPopulate() was removed in Mongoose 7+.
+  // This was crashing the entire weekly war resolution pipeline.
 
   // Sort by points
   const sorted = [...war.participants].sort((a, b) => b.points - a.points);

@@ -11846,8 +11846,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
                         const inviteText = `📨 *PENDING GUILD INVITE*
 
-🏰 Guild: *${invite.guild}*
-👤 From: @${invite.from.split(`@`)[0]}
+🏰 Guild: *${invite.guildName}*
+👤 From: @${invite.inviter.split(`@`)[0]}
 ⏰ Expires in: ${minutesLeft} minutes
 
 ━━━━━━━━━━━━━━
@@ -11857,7 +11857,7 @@ Type:
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + inviteText,
-                          mentions: [invite.from],
+                          mentions: [invite.inviter],
                         });
                       } catch (err) {
                         console.error("Guild invites error:", err);
@@ -11939,7 +11939,7 @@ Admins can:
                       }
 
                       try {
-                        const result = guilds.demoteAdmin(
+                        const result = await guilds.demoteAdmin(
                           senderJid,
                           targetUser,
                         );
@@ -11983,7 +11983,7 @@ Admins can:
                       }
 
                       try {
-                        const result = guilds.kickFromGuild(
+                        const result = await guilds.kickFromGuild(
                           senderJid,
                           targetUser,
                         );
@@ -12838,6 +12838,9 @@ _Sorted by guild level + XP_
                         }
                         // Permission: only members+ can borrow (not recruits — added in this commit)
                         const memberInfo = guilds.getGuildMember(userGuild, senderJid);
+                        if (!memberInfo) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not a member of this guild.' });
+                        }
                         if (memberInfo.role === 'recruit') {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Recruits cannot borrow from the guild bank. Ask an officer to promote you.' });
                         }
@@ -12882,7 +12885,7 @@ _Sorted by guild level + XP_
                         let msg = `🏰 *${userGuild}* — Guild Info\n\n`;
                         msg += `🏷️ Archetype: ${guild.type || 'ADVENTURER'}\n`;
                         msg += `📊 Level: ${guild.level || 1} | XP: ${guild.points || 0}/${(guild.level || 1) * 1000}\n`;
-                        msg += `👤 Leader: ${guild.leader || 'unknown'}\n`;
+                        msg += `👤 Leader: ${guild.owner || 'unknown'}\n`;
                         msg += `👥 Members: ${(guild.members || []).length}/${memberCap}\n`;
                         msg += `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n`;
                         if (guild.emblem && guild.emblem.icon) {

@@ -505,7 +505,9 @@ function leaveGuild(userJid) {
   const guild = info.guilds[guildName];
   if (guild) {
     guild.members = guild.members.filter(m => m !== userJid);
-    guild.admins = guild.admins.filter(a => a !== userJid);
+    guild.admins = (guild.admins || []).filter(a => a !== userJid);
+    // 💡 QA FIX: also clean up recruits
+    if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== userJid);
     delete guild.titles[userJid];
     syncGuild(guildName);
   } else {
@@ -716,7 +718,7 @@ async function promoteToAdmin(ownerJid, targetJid) {
 }
 
 // demote an admin
-function demoteAdmin(ownerJid, targetJid) {
+async function demoteAdmin(ownerJid, targetJid) {
   const info = globalGuildData;
   const guildName = info.guildOwners[ownerJid];
 
@@ -725,22 +727,35 @@ function demoteAdmin(ownerJid, targetJid) {
   }
 
   const guild = info.guilds[guildName];
-
-  if (!guild.admins.includes(targetJid)) {
-    return { success: false, message: "❌ That user is not an admin!" };
+  if (!guild || !guild.admins) {
+    return { success: false, message: "❌ Guild data not found!" };
   }
 
-  guild.admins = guild.admins.filter(a => a !== targetJid);
-  syncGuild(guildName);
+  // 💡 QA FIX: loose JID matching (same as promoteToAdmin)
+  const adminJid = guild.admins.find(a =>
+    a === targetJid ||
+    a.split('@')[0] === targetJid.split('@')[0] ||
+    a.includes(targetJid.split('@')[0]) ||
+    targetJid.includes(a.split('@')[0])
+  );
+
+  if (!adminJid) {
+    return { success: false, message: "❌ That user is not an officer!" };
+  }
+
+  guild.admins = guild.admins.filter(a => a !== adminJid);
+  await syncGuild(guildName);
 
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} demoted from admin!`
+    message: `✅ @${adminJid.split('@')[0]} demoted from officer!`,
+    targetJid: adminJid,
+    guildName: guildName
   };
 }
 
 // kick someone out
-function kickFromGuild(ownerOrAdminJid, targetJid) {
+async function kickFromGuild(ownerOrAdminJid, targetJid) {
   const info = globalGuildData;
   const guildName = info.memberGuilds[ownerOrAdminJid];
 
@@ -749,32 +764,47 @@ function kickFromGuild(ownerOrAdminJid, targetJid) {
   }
 
   const guild = info.guilds[guildName];
+  if (!guild) {
+    return { success: false, message: "❌ Guild data not found!" };
+  }
   const isOwner = info.guildOwners[ownerOrAdminJid] === guildName;
-  const isAdmin = guild.admins.includes(ownerOrAdminJid);
+  const isAdmin = (guild.admins || []).includes(ownerOrAdminJid);
 
   if (!isOwner && !isAdmin) {
-    return { success: false, message: "❌ Only guild owner or admins can kick members!" };
+    return { success: false, message: "❌ Only guild owner or officers can kick members!" };
   }
 
-  if (!guild.members.includes(targetJid)) {
+  // 💡 QA FIX: loose JID matching
+  const memberJid = guild.members.find(m =>
+    m === targetJid ||
+    m.split('@')[0] === targetJid.split('@')[0] ||
+    m.includes(targetJid.split('@')[0]) ||
+    targetJid.includes(m.split('@')[0])
+  );
+
+  if (!memberJid) {
     return { success: false, message: "❌ That user is not in your guild!" };
   }
 
-  if (targetJid === guild.owner) {
+  if (memberJid === guild.owner) {
     return { success: false, message: "❌ Can't kick the guild owner!" };
   }
 
-  guild.members = guild.members.filter(m => m !== targetJid);
-  guild.admins = guild.admins.filter(a => a !== targetJid);
-  delete guild.titles[targetJid];
-  delete info.memberGuilds[targetJid];
+  guild.members = guild.members.filter(m => m !== memberJid);
+  guild.admins = (guild.admins || []).filter(a => a !== memberJid);
+  // 💡 QA FIX: also clean up recruits
+  if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== memberJid);
+  delete guild.titles[memberJid];
+  delete info.memberGuilds[memberJid];
 
-  syncGuild(guildName);
-  syncGuildSystem();
+  await syncGuild(guildName);
+  await syncGuildSystem();
 
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} has been kicked from "${guildName}"!`
+    message: `✅ @${memberJid.split('@')[0]} has been kicked from "${guildName}"!`,
+    targetJid: memberJid,
+    guildName: guildName
   };
 }
 
@@ -1147,7 +1177,10 @@ function getGuildPointsLeaderboard(limit = 10) {
 }
 
 function awardPointsForActivity(userJid, activity) {
-// ...
+  // 💡 QA FIX: was an empty stub — daily claims never awarded guild XP
+  const guildName = info.memberGuilds[userJid];
+  if (!guildName) return;
+  return addGuildPoints(guildName, 5, activity || 'activity');
 }
 
 function upgradeGuildBuilding(userJid, buildingId) {
@@ -1336,7 +1369,7 @@ function getGuildGuide(prefix) {
   msg += `• \`${prefix} guild info\` — Full guild status dashboard\n\n`;
 
   msg += `*GUILD MANAGEMENT*\n`;
-  msg += `• \`${prefix} guild invite @user\` — Send invite (120s to accept)\n`;
+  msg += `• \`${prefix} guild invite @user\` — Send invite (1 hour to accept)\n`;
   msg += `• \`${prefix} guild promote @user\` — Promote to officer\n`;
   msg += `• \`${prefix} guild demote @user\` — Demote officer\n`;
   msg += `• \`${prefix} guild kick @user\` — Remove member\n`;
@@ -1425,7 +1458,7 @@ setInterval(() => {
     const invites = globalGuildData.guildInvites || {};
     let changed = false;
     for (const [jid, invite] of Object.entries(invites)) {
-      if (now - invite.timestamp > 120000) {
+      if (now - invite.timestamp > 60 * 60 * 1000) { // QA FIX: was 2min, now 1hr
         delete invites[jid];
         changed = true;
       }
