@@ -120,6 +120,19 @@ const ALL_CARDS     = () => getInst().ALL_CARDS;
 const CARD_INDEX    = () => getInst().CARD_INDEX;
 const CARDS_BY_TIER = () => getInst().CARDS_BY_TIER;
 
+// 💡 Helper: identify event cards by ID prefix (E-XXXXX).
+// Event cards now have real tiers (1-6, S) extracted from shoob.gg,
+// so we can't rely on tier === 'E' anymore. The ID prefix 'E-' is
+// the reliable way to identify event cards.
+function isEventCard(card) {
+  return card && card.id && String(card.id).startsWith('E-');
+}
+
+// 💡 Helper: get all event cards (by ID prefix, not tier)
+function getEventCards() {
+  return ALL_CARDS().filter(c => isEventCard(c));
+}
+
 function loadCardsDB() {
   const inst = getInst();
   try {
@@ -129,14 +142,19 @@ function loadCardsDB() {
     inst.ALL_CARDS     = cards;
     inst.CARD_INDEX    = {};
     inst.CARDS_BY_TIER = {};
+    inst.EVENT_CARDS   = []; // 💡 Event cards by ID prefix (E-XXXXX)
     
     for (const card of inst.ALL_CARDS) {
       inst.CARD_INDEX[card.id] = card;
       const t = String(card.tier);
       if (!inst.CARDS_BY_TIER[t]) inst.CARDS_BY_TIER[t] = [];
       inst.CARDS_BY_TIER[t].push(card);
+      // 💡 Track event cards by ID prefix
+      if (isEventCard(card)) {
+        inst.EVENT_CARDS.push(card);
+      }
     }
-    console.log(`[CardSystem][${botConfig.getBotId()}] Loaded ${inst.ALL_CARDS.length} cards across ${Object.keys(inst.CARDS_BY_TIER).length} tiers.`);
+    console.log(`[CardSystem][${botConfig.getBotId()}] Loaded ${inst.ALL_CARDS.length} cards across ${Object.keys(inst.CARDS_BY_TIER).length} tiers (${inst.EVENT_CARDS.length} event cards).`);
   } catch (e) {
     console.error('[CardSystem] Failed to load cards_data.json:', e.message);
   }
@@ -431,10 +449,18 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
   // that instead. Otherwise, for event cards, show "Event: <eventName>"
   // so it's clear this is an event card, not a regular anime card.
   let seriesDisplay = card.animeName || 'Unknown';
+  let eventLine = '';
   if (card.series) {
     seriesDisplay = card.series;
-  } else if (tier === 'E' && card.eventName && card.eventName !== card.animeName) {
-    seriesDisplay = `${card.animeName} (${card.eventName})`;
+  }
+  if (isEventCard(card)) {
+    // Event cards: show event name separately
+    seriesDisplay = card.animeName || 'Unknown';
+    if (card.eventName && card.eventName !== card.animeName) {
+      eventLine = `\n🎪  *Event:* ${card.eventName}`;
+    } else {
+      eventLine = `\n🎪  *Event:* ${card.animeName}`;
+    }
   }
 
   // 💡 FIX: Show the card's description if available (event cards have
@@ -450,7 +476,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 🏷️  *Name:* ${card.cardName}
 📺  *Series:* ${seriesDisplay}
 ${stars}  *Tier:* ${label}  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}${descLine}${copyInfo}${ownerTag}
+🎨  *Artist:* ${card.creator || 'Unknown'}${eventLine}${descLine}${copyInfo}${ownerTag}
 
 📍  *Location:* ${locStr}
 
@@ -465,10 +491,18 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 
   // Use same series display logic as buildCardDetailCaption
   let seriesDisplay = card.animeName || 'Unknown';
+  let eventLine = '';
   if (card.series) {
     seriesDisplay = card.series;
-  } else if (tier === 'E' && card.eventName && card.eventName !== card.animeName) {
-    seriesDisplay = `${card.animeName} (${card.eventName})`;
+  }
+  if (isEventCard(card)) {
+    // Event cards: show event name separately
+    seriesDisplay = card.animeName || 'Unknown';
+    if (card.eventName && card.eventName !== card.animeName) {
+      eventLine = `\n🎪  *Event:* ${card.eventName}`;
+    } else {
+      eventLine = `\n🎪  *Event:* ${card.animeName}`;
+    }
   }
 
   return (
@@ -478,7 +512,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${seriesDisplay}
 ${stars}  Tier ›  ${label}  ${stars}
-🎨  Art ›  ${card.creator || 'Unknown'}
+🎨  Art ›  ${card.creator || 'Unknown'}${eventLine ? '\n🎪  Event ›  ' + card.eventName : ''}
 ▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
 ⌨️  Type  ${P()} claim ${card.id}  
@@ -563,7 +597,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   const caption = buildSpawnCaption(card, stat.totalSpawned, stat.maxCopies, price);
 
   try {
-    if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
+    if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
       const gifBuffer = await goService.convertCardImage(card.imageUrl);
       if (gifBuffer) {
         await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
@@ -857,7 +891,7 @@ async function generateEShopDeckImage() {
  */
 async function searchEventCards(nameQuery, animeQuery) {
   const inst = getInst();
-  const eventCards = inst.CARDS_BY_TIER['E'] || [];
+  const eventCards = inst.EVENT_CARDS || [];
 
   let results = eventCards;
 
@@ -995,7 +1029,7 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      animated: String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E'
+      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)
     };
   }).filter(Boolean);
 }
@@ -1105,7 +1139,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection', collIndex, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
+        if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1173,7 +1207,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             const ownerName = await getUserName(uc.userId);
             const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot, ownerName);
             try {
-                if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
+                if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
                     const gifBuffer = await goService.convertCardImage(card.imageUrl);
                     if (gifBuffer) {
                         return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1553,7 +1587,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // mod permissions (prevents non-mods from viewing event card details).
   if (query && !eventMode) {
     const exactCard = CARD_INDEX()[query];
-    if (exactCard && String(exactCard.tier).toUpperCase() === 'E' && !canViewEvents) {
+    if (exactCard && isEventCard(exactCard) && !canViewEvents) {
       return reply(`❌ Event card details are for moderators and above only.\n\nThis is an event-tier card. Use \`${p} eshop\` to buy event cards during active token events.`);
     }
   }
@@ -1565,12 +1599,12 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     // 💡 FIX: Check if query is an exact E-XXXXX ID first
     if (query) {
       const exactEventCard = CARD_INDEX()[query];
-      if (exactEventCard && String(exactEventCard.tier).toUpperCase() === 'E') {
+      if (exactEventCard && isEventCard(exactEventCard)) {
         // Found by exact ID — show details directly
         const stat = await CardStat.findOne({ cardId: exactEventCard.id });
         const caption = buildCardDetailCaption(exactEventCard, null, stat, 'Event Database');
         try {
-          if (String(exactEventCard.tier) === '6' || String(exactEventCard.tier) === 'S' || String(exactEventCard.tier) === 'E') {
+          if (String(exactEventCard.tier) === '6' || String(exactEventCard.tier) === 'S' || isEventCard(exactEventCard)) {
             const gifBuffer = await goService.convertCardImage(exactEventCard.imageUrl);
             if (gifBuffer) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -1604,7 +1638,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
-      if (String(exact.tier) === '6' || String(exact.tier) === 'S' || String(exact.tier) === 'E') {
+      if (String(exact.tier) === '6' || String(exact.tier) === 'S' || isEventCard(exact)) {
         const gifBuffer = await goService.convertCardImage(exact.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -1628,7 +1662,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     const stat = await CardStat.findOne({ cardId: card.id });
     const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
     try {
-      if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
+      if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
         const gifBuffer = await goService.convertCardImage(card.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2067,17 +2101,23 @@ async function cmdCS(reply, args = [], perms = {}) {
   );
 
   if (tierFilter) {
-    // 💡 MOD-ONLY GATE: Non-mods cannot search for E-tier (event) cards.
+    // 💡 MOD-ONLY GATE: Non-mods cannot search for event cards.
     if (tierFilter === 'E' && !canViewEvents) {
       return reply(`❌ Event card search is for moderators and above only.`);
     }
-    matches = matches.filter(c => String(c.tier) === tierFilter);
+    // For event card filter, match by ID prefix since event cards now
+    // have real tiers (1-6, S) instead of tier 'E'
+    if (tierFilter === 'E') {
+      matches = matches.filter(c => isEventCard(c));
+    } else {
+      matches = matches.filter(c => String(c.tier) === tierFilter);
+    }
   }
 
   // 💡 MOD-ONLY GATE: Filter out E-tier cards from non-mod search results
   // entirely (even when no tier filter is specified).
   if (!canViewEvents) {
-    matches = matches.filter(c => String(c.tier).toUpperCase() !== 'E');
+    matches = matches.filter(c => !isEventCard(c));  // Hide event cards from non-mods
   }
   
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
@@ -2366,7 +2406,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S' || String(card.tier) === 'E') {
+        if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2876,7 +2916,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       const espawnQuery = args.join(' ').trim();
       if (!espawnQuery) {
         // No args → list all available event cards, grouped by event
-        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        const eventCards = getInst().EVENT_CARDS || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.\n\nEvent cards have tier "E" in cards_data.json.`), true;
         }
@@ -2903,7 +2943,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
       const espawnRes = await doSpawn(espawnQuery, 'E', true, chatId);
       if (!espawnRes) {
-        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        const eventCards = getInst().EVENT_CARDS || [];
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
       }
       return true;
@@ -2917,7 +2957,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         const before = inst.ALL_CARDS.length;
         loadCardsDB();
         const after = getInst().ALL_CARDS.length;
-        const eventCount = (getInst().CARDS_BY_TIER['E'] || []).length;
+        const eventCount = (getInst().EVENT_CARDS || []).length;
         return reply(
           `✅ *Card database reloaded!*\n\n` +
           `📦 Before: ${before} cards\n` +
@@ -2937,7 +2977,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       const einfoQuery = args.join(' ').trim();
       if (!einfoQuery) {
         // No args → list all event cards
-        const eventCards = getInst().CARDS_BY_TIER['E'] || [];
+        const eventCards = getInst().EVENT_CARDS || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.`), true;
         }
@@ -2969,7 +3009,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         const stat = await CardStat.findOne({ cardId: directCard.id });
         const caption = buildCardDetailCaption(directCard, null, stat, 'Event Database');
         try {
-          if (String(directCard.tier) === '6' || String(directCard.tier) === 'S' || String(directCard.tier) === 'E') {
+          if (String(directCard.tier) === '6' || String(directCard.tier) === 'S' || isEventCard(directCard)) {
             const gifBuffer = await goService.convertCardImage(directCard.imageUrl);
             if (gifBuffer) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -3204,7 +3244,7 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod) {
 async function cmdT2EColl(senderJid, reply, args) {
   const p = P();
   const inst = getInst();
-  const eventCards = inst.CARDS_BY_TIER['E'] || [];
+  const eventCards = inst.EVENT_CARDS || [];
 
   if (eventCards.length === 0) {
     return reply(`📭 No event cards exist in the database yet.\n\nEvent cards are added to cards_data.json by the owner and have tier "E".`);
