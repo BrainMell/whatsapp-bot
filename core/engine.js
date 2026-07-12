@@ -4271,6 +4271,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     prefix: botConfig.getPrefix(),
                     siblings: siblings,
                     pid: process.pid,
+                    ramUsage: Math.round(process.memoryUsage().rss / 1024 / 1024),
                   });
                 } catch (e) {
                   // Silent fail — heartbeat is best-effort
@@ -5813,6 +5814,24 @@ _💡 Reply with another number from your search list!_`.trim();
                         return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
                       }
 
+                      // Write our own fresh heartbeat immediately before querying
+                      try {
+                        const siblings = botConfig.getSiblings();
+                        await system.set('heartbeat_' + BOT_ID, {
+                          botId: BOT_ID,
+                          name: BOT_NAME,
+                          status: 'connected',
+                          lastSeen: Date.now(),
+                          startedAt: botStartTime || Date.now(),
+                          uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
+                          version: botConfig.getVersion(),
+                          prefix: botConfig.getPrefix(),
+                          siblings: siblings,
+                          pid: process.pid,
+                          ramUsage: Math.round(process.memoryUsage().rss / 1024 / 1024),
+                        });
+                      } catch (e) {}
+
                       try {
                         // 💡 AUTO-DISCOVER all instances from the database.
                         // Instead of relying on the `siblings` array in botConfig
@@ -5930,7 +5949,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               deadCount++;
                             }
 
-                            lastSeenStr = hb.lastSeen
+                          lastSeenStr = hb.lastSeen
                               ? `${Math.floor((now - hb.lastSeen) / 1000)}s ago`
                               : '—';
                             uptimeStr = hb.startedAt
@@ -5942,6 +5961,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           out += `   Status: ${statusLabel}\n`;
                           out += `   Last seen: ${lastSeenStr}\n`;
                           if (uptimeStr && uptimeStr !== '—') out += `   Uptime: ${uptimeStr}\n`;
+                          if (hb?.ramUsage) out += `   RAM Usage: ${hb.ramUsage} MB\n`;
                           if (hb?.version) out += `   Version: ${hb.version}\n`;
                           if (hb?.prefix) out += `   Prefix: ${hb.prefix}\n`;
                           if (detailStr) out += `   ⚠️ ${detailStr}\n`;
