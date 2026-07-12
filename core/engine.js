@@ -2174,6 +2174,14 @@ What to do:
           const buffer = fs.readFileSync(pfpJpg);
           await sock.updateProfilePicture(sock.user.id, buffer);
           console.log(`✅ [${BOT_ID}] Bot profile picture updated.`);
+          
+          try {
+            console.log(`🔒 [${BOT_ID}] Setting PFP privacy to 'Everyone'...`);
+            await sock.updateProfilePicturePrivacy('all');
+            console.log(`✅ [${BOT_ID}] PFP privacy set to 'Everyone'.`);
+          } catch (privErr) {
+            console.log(`⚠️  [${BOT_ID}] Could not set PFP privacy:`, privErr.message);
+          }
         } catch (e) {
           console.error(`❌ [${BOT_ID}] PFP Helper Error:`, e.message);
         }
