@@ -244,6 +244,10 @@ const NodeCache = require("node-cache");
 const REACTIONS = require("../reactions/config");
 const { handleReaction } = require("../reactions/handler");
 
+// Global tracker for active WhatsApp connections (all instances share this)
+if (!global.waConnectionCount) global.waConnectionCount = 0;
+if (!global.waConnectionLog) global.waConnectionLog = true;
+
 async function startBot(configInstance) {
   let sock;
   let qrShown = false;
@@ -4270,6 +4274,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             }
 
             if (connection === "open") {
+              global.waConnectionCount++;
+              console.log(`🔗 [${BOT_ID}] WhatsApp connected. Total active connections from this server: ${global.waConnectionCount}`);
+              if (global.waConnectionCount >= 3 && global.waConnectionLog) {
+                console.log(`⚠️ [${BOT_ID}] WARNING: ${global.waConnectionCount} WhatsApp connections active from the same IP. WhatsApp may throttle or silently drop messages when 3+ linked devices connect from the same server. If bots intermittently stop responding, consider reducing to 2 active instances.`);
+                global.waConnectionLog = false; // Log once per process
+              }
               botInstancesHealth.set(BOT_ID, {
                 name: BOT_NAME,
                 status: "connected",
@@ -4388,6 +4398,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 error: statusCode ? `Closed (Status Code: ${statusCode})` : (lastDisconnect?.error?.message || "Connection closed"),
               });
               console.log(`🔻 [${BOT_ID}] Connection closed. Status code:`, statusCode);
+              global.waConnectionCount = Math.max(0, global.waConnectionCount - 1);
+              console.log(`🔗 [${BOT_ID}] Disconnected. Remaining active connections: ${global.waConnectionCount}`);
               botStarting = false; // CLEAR GUARD
 
               // 💡 Write a disconnected heartbeat so other instances see we're
@@ -6063,6 +6075,10 @@ _💡 Reply with another number from your search list!_`.trim();
                       dbg += `⏱️ Last status update: ${selfHealth?.lastUpdated ? Math.floor((Date.now() - selfHealth.lastUpdated) / 1000) + 's ago' : 'never'}\n`;
                       dbg += `📨 Send queue size: ${queueSize}\n`;
                       dbg += `⏱️ Bot uptime: ${botStartTime ? Math.floor((Date.now() - botStartTime) / 1000) + 's' : 'not started'}\n`;
+                      dbg += `🔗 Total WA connections from this server: ${global.waConnectionCount || 0}\n`;
+                      if ((global.waConnectionCount || 0) >= 3) {
+                        dbg += `⚠️ 3+ connections from same IP — WhatsApp may be throttling. Try reducing active instances.\n`;
+                      }
                       dbg += `🆔 BOT_ID: ${BOT_ID}\n`;
                       dbg += `📱 Bot JID: ${sock?.user?.id || 'unknown'}\n`;
                       dbg += `🏷️ Prefix: ${botConfig.getPrefix()}\n`;
