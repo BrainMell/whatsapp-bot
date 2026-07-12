@@ -22382,7 +22382,11 @@ _(Or reply to their message)_
                         user.profile.nickname = senderPushName;
                         user.profile.whatsappName = senderPushName;
                         if (!user.profile.relationships) user.profile.relationships = {};
-                        user.profile.relationships[botConfig.getBotName()] = "friend";
+                        if (typeof user.profile.relationships.set === 'function') {
+                          user.profile.relationships.set(botJid, 50);
+                        } else {
+                          user.profile.relationships[botJid] = 50;
+                        }
                         economy.scheduleSave(senderJid);
                         // Don't return — let the conversation continue naturally
                       } else {
