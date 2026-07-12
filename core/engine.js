@@ -2243,21 +2243,6 @@ What to do:
           );
           await sock.updateProfileName(configName);
           console.log(`✅ [${BOT_ID}] WhatsApp profile name updated.`);
-
-          // 💡 FIX: Update creds.me.name to match the new profile name.
-          // Baileys uses creds.me.name in EVERY presence update (chats.js:613).
-          // If me.name contains fancy unicode (e.g. "𝙴𝚂𝙳𝙴𝙰𝚃𝙷 ¹³"), WhatsApp
-          // may silently reject presence updates, causing the connection to
-          // enter a degraded state where outgoing messages also fail silently.
-          // This is especially problematic with markOnlineOnConnect: true,
-          // which sends frequent presence updates.
-          if (sock.authState?.creds?.me) {
-            const oldName = sock.authState.creds.me.name;
-            sock.authState.creds.me.name = configName;
-            if (oldName !== configName) {
-              console.log(`📝 [${BOT_ID}] Updated creds.me.name from "${oldName}" to "${configName}" (fixes presence update failures)`);
-            }
-          }
         } catch (e) {
           if (e.message.includes("myAppStateKey")) {
             if (retryCount < 1) {
@@ -2279,6 +2264,25 @@ What to do:
               e.message,
             );
           }
+        }
+      }
+
+      // 💡 CRITICAL FIX: Always sync creds.me.name to the config name, EVERY boot.
+      // Baileys uses creds.me.name in EVERY presence update (chats.js:613).
+      // If me.name contains fancy unicode (e.g. "𝙴𝚂𝙳𝙴𝙰𝚃𝙷 ¹³"), WhatsApp
+      // silently rejects presence updates, causing the connection to enter
+      // a degraded state where outgoing messages fail silently.
+      //
+      // This must run OUTSIDE the "if (currentName !== configName)" block
+      // because the WhatsApp profile may already be "Esdeath" (updated in
+      // a previous boot), but creds.me.name can still be the fancy unicode
+      // that was set when the account was paired. The profile name check
+      // (sock.user.name) reads from WhatsApp's servers, NOT from creds.me.name.
+      if (sock.authState?.creds?.me) {
+        const credsName = sock.authState.creds.me.name;
+        if (credsName && credsName !== configName) {
+          console.log(`📝 [${BOT_ID}] Fixing creds.me.name: "${credsName}" → "${configName}" (presence update fix)`);
+          sock.authState.creds.me.name = configName;
         }
       }
     }
