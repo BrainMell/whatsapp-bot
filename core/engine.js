@@ -2166,36 +2166,19 @@ What to do:
      * Helper to update bot profile picture
      */
     async function updateBotPFP(sock) {
-      const pfpPng = botConfig.getAssetPath("pfp.png");
       const pfpJpg = botConfig.getAssetPath("pfp.jpg");
-      const pfpPath = fs.existsSync(pfpPng)
-        ? pfpPng
-        : fs.existsSync(pfpJpg)
-          ? pfpJpg
-          : null;
 
-      if (pfpPath) {
+      if (fs.existsSync(pfpJpg)) {
         try {
-          console.log(`🖼️  [${BOT_ID}] Updating PFP: ${pfpPath}...`);
-
-          const tempPfp = `./temp/pfp_convert_${Date.now()}.jpg`;
-          if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
-
-          // Use a robust conversion command to standard JPG
-          const cmd = `"${FFMPEG_PATH}" -i "${pfpPath}" -q:v 1 -vframes 1 -vf "scale=640:640:force_original_aspect_ratio=increase,crop=640:640" -y "${tempPfp}"`;
-
-          try {
-            await execPromise(cmd);
-            const buffer = fs.readFileSync(tempPfp);
-            await sock.updateProfilePicture(sock.user.id, buffer);
-            console.log(`✅ [${BOT_ID}] Bot profile picture updated.`);
-            if (fs.existsSync(tempPfp)) fs.unlinkSync(tempPfp);
-          } catch (convErr) {
-            console.error(`❌ [${BOT_ID}] PFP Sync Error:`, convErr.message);
-          }
+          console.log(`🖼️  [${BOT_ID}] Updating PFP from: ${pfpJpg}...`);
+          const buffer = fs.readFileSync(pfpJpg);
+          await sock.updateProfilePicture(sock.user.id, buffer);
+          console.log(`✅ [${BOT_ID}] Bot profile picture updated.`);
         } catch (e) {
           console.error(`❌ [${BOT_ID}] PFP Helper Error:`, e.message);
         }
+      } else {
+        console.log(`⚠️  [${BOT_ID}] No pfp.jpg found in assets, skipping PFP sync.`);
       }
     }
 
