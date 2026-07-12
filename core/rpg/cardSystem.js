@@ -406,17 +406,36 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
   const stars  = TIER_STARS[tier]  || '✦';
-  
-  let locStr = `📦 *${ownerName}'s Coll*`;
-  if (index !== null) locStr += ` (#${index})`;
-  
+
+  // 💡 FIX: Only show "Player's Coll" when there IS an owner (uc != null).
+  // For database lookups (info command, no owner), use the location
+  // parameter directly — defaults to 'Global Database' or 'Event Database'.
+  let locStr;
   if (uc) {
+    // Player owns this card — show their collection/deck info
+    locStr = `📦 *${ownerName}'s Coll*`;
+    if (index !== null) locStr += ` (#${index})`;
     if (uc.inMainDeck) locStr = `🎴 *${ownerName}'s Main Deck* (Slot #${uc.mainDeckSlot})`;
     else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
+  } else {
+    // No owner — this is a database lookup, not a player's card
+    locStr = `🗄️ *${location}*`;
   }
 
   const copyInfo = uc ? `\n📋  *Copy:* #${uc.copyNumber} / ${stat?.maxCopies || '?'}` : '';
   const ownerTag = uc ? `\n👤  *Owner:* @${uc.userId.split('@')[0]}` : '';
+
+  // 💡 FIX: For event cards, show the actual anime series if available.
+  // The animeName field currently stores the event name (e.g., "Chinese
+  // New Year") for event cards. If the card has a 'series' field, use
+  // that instead. Otherwise, for event cards, show "Event: <eventName>"
+  // so it's clear this is an event card, not a regular anime card.
+  let seriesDisplay = card.animeName || 'Unknown';
+  if (card.series) {
+    seriesDisplay = card.series;
+  } else if (tier === 'E' && card.eventName && card.eventName !== card.animeName) {
+    seriesDisplay = `${card.animeName} (${card.eventName})`;
+  }
 
   return (
 `╔═════════════════╗
@@ -424,7 +443,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 ╚═════════════════╝
 
 🏷️  *Name:* ${card.cardName}
-📺  *Series:* ${card.animeName}
+📺  *Series:* ${seriesDisplay}
 ${stars}  *${label}*  ${stars}
 🎨  *Artist:* ${card.creator || 'Unknown'}${copyInfo}${ownerTag}
 
@@ -437,13 +456,23 @@ ${stars}  *${label}*  ${stars}
 function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier   = String(card.tier);
   const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
+  const stars  = TIER_STARS[tier]  || '✆';
+
+  // Use same series display logic as buildCardDetailCaption
+  let seriesDisplay = card.animeName || 'Unknown';
+  if (card.series) {
+    seriesDisplay = card.series;
+  } else if (tier === 'E' && card.eventName && card.eventName !== card.animeName) {
+    seriesDisplay = `${card.animeName} (${card.eventName})`;
+  }
+
   return (
 `▬▬▬▬▬▬▬▬▬▬▬▬
 🎴  CARD APPEARED!
 ▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
-📺  Series ›  ${card.animeName}
-✦  ${label}  ✦
+📺  Series ›  ${seriesDisplay}
+${stars}  ${label}  ${stars}
 🎨  Art ›  ${card.creator || 'Unknown'}
 ▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
@@ -779,7 +808,7 @@ async function eshopBuy(senderJid, slot) {
       success: true,
       message: `✅ *PURCHASE COMPLETE!*\n\n` +
         `🎁 *${entry.cardName}* — _${entry.anime}_\n` +
-        `📋 Copy #${copyNumber} (T${entry.tier})\n\n` +
+        `${TIER_STARS[String(entry.tier)] || '✆'} ${TIER_LABEL[String(entry.tier)] || 'TIER ' + entry.tier} | Copy #${copyNumber}\n\n` +
         `🎫 Spent: ${entry.price} tokens\n` +
         `🎫 Remaining: ${newBalance} tokens\n\n` +
         `_Added to your collection!_`
@@ -930,7 +959,9 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     }
 
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
-    return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_${tokenMsg}`);
+    const _claimTier = String(spawn.card.tier);
+      const _claimLabel = TIER_LABEL[_claimTier] || `TIER ${_claimTier}`;
+      return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n${TIER_STARS[_claimTier] || '✆'} ${_claimLabel} | Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_${tokenMsg}`);
   } catch (err) {
     console.error('[Claim Error]', err);
     return reply('❌ Claim failed.');
@@ -1556,7 +1587,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
     msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}:\n\n`;
     results.forEach(c => {
-      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Series: _${c.animeName}_\n`;
+      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.animeName}_\n`;
     });
     msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
     return reply(msg);
@@ -1705,7 +1736,9 @@ async function cmdESummon(senderJid, reply) {
   const stat = await CardStat.findOne({ cardId: uc.cardId });
   const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[String(card.tier)] || 200);
 
-  return reply(`🎉 *EVENT SUMMON!* 🎉\n\nYou pulled *${card.cardName}* — _${card.animeName}_\n📋 Copy *#${uc.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
+  const _summonTier = String(card.tier);
+    const _summonLabel = TIER_LABEL[_summonTier] || `TIER ${_summonTier}`;
+    return reply(`🎉 *EVENT SUMMON!* 🎉\n\nYou pulled *${card.cardName}* — _${card.animeName}_\n${TIER_STARS[_summonTier] || '✆'} ${_summonLabel} | Copy *#${uc.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
 }
 
 async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
@@ -2854,7 +2887,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         for (const [ev, cards] of Object.entries(byEvent)) {
           listMsg += `📺 *${ev}* (${cards.length} cards)\n`;
           cards.slice(0, 20).forEach(c => {  // Show first 20 per event
-            listMsg += `  ▫️ ${c.cardName} — \`${c.id}\`\n`;
+            listMsg += `  ▫️ ${c.cardName} (T${c.tier}) — \`${c.id}\`\n   _${c.animeName}_\n`;
           });
           if (cards.length > 20) {
             listMsg += `  ... and ${cards.length - 20} more\n`;
@@ -2915,7 +2948,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         for (const [ev, cards] of Object.entries(byEvent)) {
           listMsg += `📺 *${ev}* (${cards.length} cards)\n`;
           cards.forEach(c => {
-            listMsg += `  ▫️ ${c.cardName} — \`${c.id}\`\n`;
+            listMsg += `  ▫️ ${c.cardName} (T${c.tier}) — \`${c.id}\`\n   _${c.animeName}_\n`;
           });
           listMsg += `\n`;
         }
