@@ -17,7 +17,8 @@ class BotConfig {
         symbol: "Ꞩ",
         name: "Zeni"
       },
-      contentDescription: "You are Joker from Persona 5."
+      contentDescription: "You are Joker from Persona 5.",
+      fastResponses: ["hmm.","yeah.","lol.","nah.","facts.","true.","say less.","noted.","sus.","idk man.","real.","ight.","💀","😐","bruh.","wild.","ok.","👀","lmao.","bet."]
     };
     this.config = this.loadConfig();
   }
@@ -39,6 +40,7 @@ class BotConfig {
   getCurrency() { return this.config.currency; }
   getSymbol() { return this.config.symbol; }
   getContentDescription() { return this.config.contentDescription; }
+  getFastResponses() { return Array.isArray(this.config.fastResponses) ? this.config.fastResponses : this.defaults.fastResponses; }
   getSiblings() { return Array.isArray(this.config.siblings) ? this.config.siblings : []; }
   getAssetPath(subPath = '') { 
     const sharedFiles = ['scores.png', 'zeni.png', 'placeholder.png'];
@@ -73,6 +75,7 @@ module.exports = {
   getCurrency: () => (storage.getStore()?.getCurrency() || { symbol: "Ꞩ", name: "Zeni" }),
   getSymbol: () => (storage.getStore()?.getSymbol() || "."),
   getContentDescription: () => (storage.getStore()?.getContentDescription() || ""),
+  getFastResponses: () => (storage.getStore()?.getFastResponses() || ["hmm.", "yeah.", "ok."]),
   getAssetPath: (p) => storage.getStore()?.getAssetPath(p),
   getStickerPath: (p) => storage.getStore()?.getStickerPath(p),
   getAuthPath: () => storage.getStore()?.getAuthPath(),

@@ -22448,8 +22448,18 @@ _(Or reply to their message)_
                     const _pWords = prompt.trim().split(/\s+/);
                     const _isShort = _pWords.length <= 2 && !prompt.includes('?') && !(mentionedJids && mentionedJids.length);
                     if (_isShort && Math.random() < 0.6) {
-                      const _qr = ["hmm.","yeah.","lol.","nah.","facts.","true.","say less.","noted.","sus.","idk man.","real.","ight.","💀","😐","bruh.","wild.","ok.","👀","lmao.","bet."];
+                      const _qr = botConfig.getFastResponses();
                       await reply(BOT_MARKER + _qr[Math.floor(Math.random() * _qr.length)]);
+                      
+                      // Also occasionally send a sticker with the fast response
+                      const fastMood = await detectMood(prompt);
+                      const fastStickerPath = getRandomSticker(fastMood);
+                      const fastStickerChance = fastMood === "neutral" ? 0.15 : 0.40;
+                      if (fastStickerPath && fs.existsSync(fastStickerPath) && Math.random() < fastStickerChance) {
+                        try {
+                          await sock.sendMessage(chatId, { sticker: fs.readFileSync(fastStickerPath) });
+                        } catch (e) {}
+                      }
                       return;
                     }
 
