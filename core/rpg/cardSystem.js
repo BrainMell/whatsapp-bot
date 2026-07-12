@@ -1524,7 +1524,30 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
   // 💡 EVENT CARD SEARCH MODE
   // `info <name> event | <anime>` → search event-tier cards by name and anime
+  // `info E-00001 event` → also check exact ID first
   if (eventMode) {
+    // 💡 FIX: Check if query is an exact E-XXXXX ID first
+    if (query) {
+      const exactEventCard = CARD_INDEX()[query];
+      if (exactEventCard && String(exactEventCard.tier).toUpperCase() === 'E') {
+        // Found by exact ID — show details directly
+        const stat = await CardStat.findOne({ cardId: exactEventCard.id });
+        const caption = buildCardDetailCaption(exactEventCard, null, stat, 'Event Database');
+        try {
+          if (String(exactEventCard.tier) === '6' || String(exactEventCard.tier) === 'S' || String(exactEventCard.tier) === 'E') {
+            const gifBuffer = await goService.convertCardImage(exactEventCard.imageUrl);
+            if (gifBuffer) {
+              return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+            }
+          }
+          const res = await axios.get(exactEventCard.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+        } catch (e) {
+          return reply(caption);
+        }
+      }
+    }
+
     const results = await searchEventCards(query, animeFilter);
     if (results.length === 0) {
       return reply(`❌ No event cards found${query ? ` matching "${query}"` : ''}${animeFilter ? ` in anime "${animeFilter}"` : ''}.\n\nEvent cards are special and don't spawn naturally. They're only available during token events via the eShop.`);
@@ -2814,16 +2837,30 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       if (!isCardMod) return reply('❌ No permission.'), true;
       const espawnQuery = args.join(' ').trim();
       if (!espawnQuery) {
-        // No args → list all available event cards
+        // No args → list all available event cards, grouped by event
         const eventCards = getInst().CARDS_BY_TIER['E'] || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.\n\nEvent cards have tier "E" in cards_data.json.`), true;
         }
         let listMsg = `🎁 *EVENT CARDS — ${eventCards.length} available*\n\n`;
         listMsg += `Usage: \`${p} espawn <name or id>\`\n\n`;
+        // Group by event name for readability
+        const byEvent = {};
         eventCards.forEach(c => {
-          listMsg += `▫️ *${c.cardName}* — \`${c.id}\`\n   _${c.animeName}_\n`;
+          const ev = c.eventName || c.animeName || 'Unknown Event';
+          if (!byEvent[ev]) byEvent[ev] = [];
+          byEvent[ev].push(c);
         });
+        for (const [ev, cards] of Object.entries(byEvent)) {
+          listMsg += `📺 *${ev}* (${cards.length} cards)\n`;
+          cards.slice(0, 20).forEach(c => {  // Show first 20 per event
+            listMsg += `  ▫️ ${c.cardName} — \`${c.id}\`\n`;
+          });
+          if (cards.length > 20) {
+            listMsg += `  ... and ${cards.length - 20} more\n`;
+          }
+          listMsg += `\n`;
+        }
         return reply(listMsg), true;
       }
       const espawnRes = await doSpawn(espawnQuery, 'E', true, chatId);
@@ -2832,6 +2869,27 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
       }
       return true;
+
+    // 💡 .g reloadcards — reload cards_data.json without restarting the bot.
+    // Mod-only. Use after updating cards_data.json (e.g. after merging new
+    // event cards) so the bot picks up the changes immediately.
+    case 'reloadcards':
+      if (!isCardMod) return reply('❌ Only moderators and above can reload the card database.'), true;
+      try {
+        const before = inst.ALL_CARDS.length;
+        loadCardsDB();
+        const after = getInst().ALL_CARDS.length;
+        const eventCount = (getInst().CARDS_BY_TIER['E'] || []).length;
+        return reply(
+          `✅ *Card database reloaded!*\n\n` +
+          `📦 Before: ${before} cards\n` +
+          `📦 After: ${after} cards\n` +
+          `🎁 Event cards: ${eventCount}\n\n` +
+          `The new cards are now available for spawn/info/claim.`
+        ), true;
+      } catch (err) {
+        return reply(`❌ Failed to reload: ${err.message}`), true;
+      }
 
     // 💡 .g einfo <name or id> — look up an event card's details.
     // Mod-only shortcut for `.g info <name> event` or `.g info <E-XXXXX>`.
@@ -2863,7 +2921,30 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
         return reply(listMsg), true;
       }
-      // Delegate to cmdInfo with event mode forced on
+
+      // 💡 FIX: If the query is an E-XXXXX ID, look it up directly in
+      // CARD_INDEX instead of delegating to cmdInfo with the "event"
+      // keyword (which does a NAME search, not an ID lookup).
+      const directCard = CARD_INDEX()[einfoQuery];
+      if (directCard) {
+        // Found by exact ID — show card details directly
+        const stat = await CardStat.findOne({ cardId: directCard.id });
+        const caption = buildCardDetailCaption(directCard, null, stat, 'Event Database');
+        try {
+          if (String(directCard.tier) === '6' || String(directCard.tier) === 'S' || String(directCard.tier) === 'E') {
+            const gifBuffer = await goService.convertCardImage(directCard.imageUrl);
+            if (gifBuffer) {
+              return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
+            }
+          }
+          const res = await axios.get(directCard.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+        } catch (e) {
+          return reply(caption);
+        }
+      }
+
+      // Not an exact ID — delegate to cmdInfo with event mode for name search
       await cmdInfo(reply, chatId, [einfoQuery, 'event'], { isOwner, isCardMod: true, p });
       return true;
 
