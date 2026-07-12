@@ -437,6 +437,11 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     seriesDisplay = `${card.animeName} (${card.eventName})`;
   }
 
+  // 💡 FIX: Show the card's description if available (event cards have
+  // a description like "Albedo from Chinese New Year"). This gives more
+  // context about the card.
+  const descLine = card.description ? `\n📝  *Description:* ${card.description}` : '';
+
   return (
 `╔═════════════════╗
       🎴  *CARD DETAIL*
@@ -444,8 +449,8 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 
 🏷️  *Name:* ${card.cardName}
 📺  *Series:* ${seriesDisplay}
-${stars}  *${label}*  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}${copyInfo}${ownerTag}
+${stars}  *Tier:* ${label}  ${stars}
+🎨  *Artist:* ${card.creator || 'Unknown'}${descLine}${copyInfo}${ownerTag}
 
 📍  *Location:* ${locStr}
 
@@ -472,7 +477,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 ▬▬▬▬▬▬▬▬▬▬▬▬
 🏷️  Name ›  ${card.cardName}
 📺  Series ›  ${seriesDisplay}
-${stars}  ${label}  ${stars}
+${stars}  Tier ›  ${label}  ${stars}
 🎨  Art ›  ${card.creator || 'Unknown'}
 ▬▬▬▬▬▬▬▬▬▬▬▬
 🆔  ${card.id}
