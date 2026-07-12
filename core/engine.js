@@ -22449,10 +22449,15 @@ _(Or reply to their message)_
                         user.profile.nickname = senderPushName;
                         user.profile.whatsappName = senderPushName;
                         if (!user.profile.relationships) user.profile.relationships = {};
+                        // 💡 FIX: Mongoose Maps do not support keys that contain "."
+                        // JIDs like "2348086616347@s.whatsapp.net" have "." in the
+                        // domain part. Sanitize by replacing "." with "_" (same
+                        // pattern used by socialSystem.js).
+                        const relKey = (botJid || '').replace(/\./g, '_');
                         if (typeof user.profile.relationships.set === 'function') {
-                          user.profile.relationships.set(botJid, 50);
+                          user.profile.relationships.set(relKey, 50);
                         } else {
-                          user.profile.relationships[botJid] = 50;
+                          user.profile.relationships[relKey] = 50;
                         }
                         economy.scheduleSave(senderJid);
                         // Don't return — let the conversation continue naturally
