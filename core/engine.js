@@ -2243,6 +2243,21 @@ What to do:
           );
           await sock.updateProfileName(configName);
           console.log(`✅ [${BOT_ID}] WhatsApp profile name updated.`);
+
+          // 💡 FIX: Update creds.me.name to match the new profile name.
+          // Baileys uses creds.me.name in EVERY presence update (chats.js:613).
+          // If me.name contains fancy unicode (e.g. "𝙴𝚂𝙳𝙴𝙰𝚃𝙷 ¹³"), WhatsApp
+          // may silently reject presence updates, causing the connection to
+          // enter a degraded state where outgoing messages also fail silently.
+          // This is especially problematic with markOnlineOnConnect: true,
+          // which sends frequent presence updates.
+          if (sock.authState?.creds?.me) {
+            const oldName = sock.authState.creds.me.name;
+            sock.authState.creds.me.name = configName;
+            if (oldName !== configName) {
+              console.log(`📝 [${BOT_ID}] Updated creds.me.name from "${oldName}" to "${configName}" (fixes presence update failures)`);
+            }
+          }
         } catch (e) {
           if (e.message.includes("myAppStateKey")) {
             if (retryCount < 1) {
