@@ -649,6 +649,10 @@ async function boot() {
         if (fs.existsSync(configPath)) {
             // Create a dedicated config instance for this bot
             const config = new BotConfig(instancePath);
+            if (!config.isEnabled()) {
+                console.log(`🔇 Skipping disabled bot: ${config.getBotName()} [${config.getBotId()}]`);
+                continue;
+            }
             console.log(`📡 Spawning bot: ${config.getBotName()} [${config.getBotId()}]`);
             startBot(config);
 

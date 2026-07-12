@@ -18,7 +18,8 @@ class BotConfig {
         name: "Zeni"
       },
       contentDescription: "You are Joker from Persona 5.",
-      fastResponses: ["hmm.","yeah.","lol.","nah.","facts.","true.","say less.","noted.","sus.","idk man.","real.","ight.","💀","😐","bruh.","wild.","ok.","👀","lmao.","bet."]
+      fastResponses: ["hmm.","yeah.","lol.","nah.","facts.","true.","say less.","noted.","sus.","idk man.","real.","ight.","💀","😐","bruh.","wild.","ok.","👀","lmao.","bet."],
+      enabled: true
     };
     this.config = this.loadConfig();
   }
@@ -33,6 +34,7 @@ class BotConfig {
     return this.defaults;
   }
 
+  isEnabled() { return this.config.enabled !== false; }
   getBotId() { return this.config.botId; }
   getBotName() { return this.config.botName; }
   getPrefix() { return this.config.prefix; }
