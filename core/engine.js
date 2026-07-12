@@ -5007,7 +5007,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // ============================================
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
           if (type !== "notify" && type !== "append") return;
-          if (isRekeying) return;
+          if (isRekeying) {
+            // 💡 DIAGNOSTIC: log when messages are dropped due to rekeying.
+            // If this fires constantly, the bot is churning (rapid
+            // connect/disconnect) and needs auth refresh.
+            console.log(`⏭️ [${BOT_ID}] Dropping ${messages.length} message(s) — isRekeying=true (connection churning)`);
+            return;
+          }
 
           // Process batch in parallel so one slow group doesn't block the bot
           await Promise.all(
@@ -6023,6 +6029,38 @@ _💡 Reply with another number from your search list!_`.trim();
                         console.error('[instances] error:', err);
                         return reply(BOT_MARKER + '❌ Failed to query instance health: ' + (err.message || 'unknown error'));
                       }
+                    }
+
+                    // 💡 .g debug — show internal connection state for this bot instance.
+                    // Mod-only. Helps diagnose why a bot isn't responding.
+                    if (primaryCmd === "debug") {
+                      const isSenderOwnerDbg = isOwner;
+                      const isSenderGModDbg = isGlobalMod(senderJid);
+                      const isSenderModDbg = overrideUsers.has(senderJid) || isSenderGModDbg || isSenderOwnerDbg;
+                      if (!isSenderModDbg) {
+                        return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
+                      }
+                      const selfHealth = botInstancesHealth.get(BOT_ID);
+                      const wsOpen = sock?.ws ? (typeof sock.ws.isOpen === 'boolean' ? sock.ws.isOpen : (sock.ws.readyState ?? sock.ws.socket?.readyState) === 1) : false;
+                      const queueSize = sendQueue.size();
+                      let dbg = `🔧 *DEBUG — ${BOT_ID}*\n\n`;
+                      dbg += `📡 isRekeying: ${isRekeying ? '⚠️ TRUE (messages being dropped!)' : '✅ false'}\n`;
+                      dbg += `🔌 WebSocket open: ${wsOpen ? '✅ yes' : '❌ no'}\n`;
+                      dbg += `🤖 Connection status: ${selfHealth?.status || 'unknown'}\n`;
+                      dbg += `⏱️ Last status update: ${selfHealth?.lastUpdated ? Math.floor((Date.now() - selfHealth.lastUpdated) / 1000) + 's ago' : 'never'}\n`;
+                      dbg += `📨 Send queue size: ${queueSize}\n`;
+                      dbg += `⏱️ Bot uptime: ${botStartTime ? Math.floor((Date.now() - botStartTime) / 1000) + 's' : 'not started'}\n`;
+                      dbg += `🆔 BOT_ID: ${BOT_ID}\n`;
+                      dbg += `📱 Bot JID: ${sock?.user?.id || 'unknown'}\n`;
+                      dbg += `🏷️ Prefix: ${botConfig.getPrefix()}\n`;
+                      if (selfHealth?.error) dbg += `❌ Last error: ${selfHealth.error}\n`;
+                      if (isRekeying) {
+                        dbg += `\n⚠️ *DIAGNOSIS:* This bot is in rekeying state — ALL incoming messages are being silently dropped. The connection is likely churning (rapid connect/disconnect). Try:\n`;
+                        dbg += `1. Delete the auth folder and re-scan QR\n`;
+                        dbg += `2. Check for conflicting instances running the same auth\n`;
+                        dbg += `3. Check server logs for "Connection closed" spam\n`;
+                      }
+                      return reply(BOT_MARKER + dbg);
                     }
 
                     if (
