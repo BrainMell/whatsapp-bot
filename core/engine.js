@@ -251,6 +251,7 @@ async function startBot(configInstance) {
   let reconnectTimer;
   let botStarting = false;
   let isNewLogin = false;
+  let pfpSynced = false;
   let isRekeying = true;
   let botStartTime;
   let heartbeatInterval = null; // 💡 cross-instance heartbeat timer
@@ -4318,18 +4319,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 console.log(`✅ [${BOT_ID}] Data loaded. Bot is fully ready.`);
               }
 
-              // --- SYNC BOT IDENTITY TO WHATSAPP (Only on fresh login) ---
-              if (isNewLogin) {
-                console.log("✨ Fresh login detected. Syncing PFP and Name...");
-                // PFP usually works immediately
+              // --- SYNC BOT IDENTITY TO WHATSAPP (Runs once per startup/connect) ---
+              if (!pfpSynced) {
+                pfpSynced = true;
+                console.log("✨ Bot connected. Syncing PFP and Name/Bio...");
                 await updateBotPFP(sock);
 
                 // Name update needs a few seconds for app state keys to sync
                 setTimeout(async () => {
                   await updateBotNameOnWhatsApp(sock);
                 }, 10000);
-
-                isNewLogin = false; // Reset flag after sync
               }
 
               retryCount = 0;
