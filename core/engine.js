@@ -2163,6 +2163,26 @@ What to do:
     }
 
     /*
+     * Helper to get bot identity signature (combining PFP stats and config settings)
+     * to prevent redundant profile updates on startup.
+     */
+    function getIdentitySignature() {
+      try {
+        const pfpJpg = botConfig.getAssetPath("pfp.jpg");
+        let pfpStat = "no_pfp";
+        if (fs.existsSync(pfpJpg)) {
+          const stat = fs.statSync(pfpJpg);
+          pfpStat = `${stat.size}_${stat.mtimeMs}`;
+        }
+        const name = botConfig.getBotName();
+        const prefix = botConfig.getPrefix();
+        return `${pfpStat}_${name}_${prefix}`;
+      } catch (e) {
+        return "error_" + Date.now();
+      }
+    }
+
+    /*
      * Helper to update bot profile picture
      */
     async function updateBotPFP(sock) {
@@ -4314,13 +4334,22 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // --- SYNC BOT IDENTITY TO WHATSAPP (Runs once per startup/connect) ---
               if (!pfpSynced) {
                 pfpSynced = true;
-                console.log("✨ Bot connected. Syncing PFP and Name/Bio...");
-                await updateBotPFP(sock);
+                const currentSig = getIdentitySignature();
+                const savedSig = system.get(BOT_ID + '_identity_signature');
 
-                // Name update needs a few seconds for app state keys to sync
-                setTimeout(async () => {
-                  await updateBotNameOnWhatsApp(sock);
-                }, 10000);
+                if (savedSig === currentSig) {
+                  console.log(`✨ [${BOT_ID}] Identity (PFP, Name, Bio) is already synced with database signature. Skipping profile update.`);
+                } else {
+                  console.log(`✨ [${BOT_ID}] Identity change detected or first boot. Syncing PFP and Name/Bio...`);
+                  await updateBotPFP(sock);
+
+                  // Name update needs a few seconds for app state keys to sync
+                  setTimeout(async () => {
+                    await updateBotNameOnWhatsApp(sock);
+                    await system.set(BOT_ID + '_identity_signature', currentSig);
+                    console.log(`✅ [${BOT_ID}] Identity signature successfully saved to MongoDB.`);
+                  }, 10000);
+                }
               }
 
               retryCount = 0;
