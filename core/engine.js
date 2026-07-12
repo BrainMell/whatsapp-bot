@@ -5395,14 +5395,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     return true;
                   };
 
-                  if (await handlePendingNameReply()) return;
+                  // 💡 DIAGNOSTIC: log if handlePendingNameReply consumes a message,
+                  // so we can see when commands are being eaten as name replies.
+                  const _pendingResult = await handlePendingNameReply();
+                  if (_pendingResult) {
+                    console.log(`⏭️ [${BOT_ID}] Message "${txt.slice(0, 40)}" consumed by handlePendingNameReply (treated as name reply) — command NOT processed`);
+                    return;
+                  }
 
                   // 🚨 HARD-PING TEST (Bypasses everything)
-                  if (
-                    txt.toLowerCase() === "ping" ||
-                    txt.toLowerCase() ===
-                      `${botConfig.getPrefix().toLowerCase()} ping`
-                  ) {
+                  const _isPing = txt.toLowerCase() === "ping" ||
+                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`;
+                  if (_isPing) {
+                    console.log(`🏓 [${BOT_ID}] Ping test matched: "${txt}"`);
+                  }
+                  if (_isPing) {
                     const msgTime = (typeof m.messageTimestamp === 'number' ? m.messageTimestamp : m.messageTimestamp?.low || m.messageTimestamp) * 1000;
                     const diffMs = Date.now() - msgTime;
                     const diffSec = (diffMs / 1000).toFixed(2);
