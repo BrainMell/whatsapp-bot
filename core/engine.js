@@ -1979,6 +1979,7 @@ What to do:
 
           // Drop expired messages
           if (Date.now() - item.ts > MSG_TTL_MS) {
+            console.error(`⏰ [${BOT_ID}] Send queue: TTL EXPIRED for message to ${item.jid?.split('@')[0]} (age: ${Math.floor((Date.now() - item.ts) / 1000)}s). Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
             queue.shift();
             item.reject(new Error("Send queue TTL expired"));
             continue;
@@ -1994,16 +1995,21 @@ What to do:
 
             // Connection issues: pause and wait for reconnect; keep message at front
             if (isConnError(err)) {
+              console.log(`📨 [${BOT_ID}] Send queue: connection error (retry ${item.retries}), pausing. Error: ${err.message?.slice(0, 100)}`);
               await sleep(Math.min(1000 * Math.pow(2, item.retries - 1), 5000));
               return;
             }
 
             // Non-connection error: retry a little then drop
+            console.log(`⚠️ [${BOT_ID}] Send queue: non-connection error (retry ${item.retries}/${MAX_RETRIES}) to ${item.jid?.split('@')[0]}: ${err.message?.slice(0, 150)}`);
+
             if (item.retries < MAX_RETRIES) {
               await sleep(Math.min(500 * item.retries, 1500));
               continue;
             }
 
+            // 💡 DIAGNOSTIC: log when a message is permanently dropped
+            console.error(`❌ [${BOT_ID}] Send queue: DROPPED message to ${item.jid?.split('@')[0]} after ${MAX_RETRIES} retries. Error: ${err.message?.slice(0, 200)}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
             queue.shift();
             item.reject(err);
           }
