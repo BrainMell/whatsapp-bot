@@ -4822,7 +4822,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     let allowed = hasActionPermission(id, author, cmdKey);
                     if (allowed) {
                       for (const target of participants) {
-                        if (!canActOnMember(id, author, target, isOwner, isGlobal)) {
+                        const targetJid = normalizeParticipantJid(target);
+                        if (!targetJid) continue;
+                        if (!canActOnMember(id, author, targetJid, isOwner, isGlobal)) {
                           allowed = false;
                           break;
                         }

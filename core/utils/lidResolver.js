@@ -199,6 +199,14 @@ setInterval(async () => {
     }
 }, 5 * 60 * 1000); // every 5 minutes
 
+function safeStringJid(jid) {
+    if (!jid) return '';
+    if (typeof jid === 'string') return jid;
+    const extracted = jid.id || String(jid);
+    if (extracted.includes("[object") || extracted === "undefined") return '';
+    return extracted;
+}
+
 // Synchronous mapping lookup from caches — strictly in-memory O(1)
 // FIX: Strip the ":device" suffix BEFORE cache lookup. Previously
 // "1234567890:1@s.whatsapp.net" was split on "@" → "1234567890:1", which
@@ -206,6 +214,8 @@ setInterval(async () => {
 function getMapping(jid) {
     let lid = null;
     let phone = null;
+    jid = safeStringJid(jid);
+    if (!jid) return { lid, phone };
 
     if (jid.endsWith("@lid")) {
         lid = jid.split("@")[0];
@@ -232,6 +242,9 @@ function getMapping(jid) {
 // Bi-directional resolver that maps incoming JID to the canonical JID registered in database
 function resolveLidToPhone(jid, authPath) {
     if (!jid) return jid;
+    const originalJid = jid;
+    jid = safeStringJid(jid);
+    if (!jid) return originalJid;
     const { lid, phone } = getMapping(jid);
 
     const lidJid = lid ? `${lid}@lid` : null;
@@ -247,12 +260,15 @@ function resolveLidToPhone(jid, authPath) {
     }
 
     // Default to Phone JID if available, else keep incoming
-    return phoneJid || jid;
+    return phoneJid || originalJid;
 }
 
 // Maps incoming JID to the canonical JID registered in database
 function resolveJid(jid, authPath) {
     if (!jid) return jid;
+    const originalJid = jid;
+    jid = safeStringJid(jid);
+    if (!jid) return originalJid;
     const { lid, phone } = getMapping(jid);
     
     const lidJid = lid ? `${lid}@lid` : null;
@@ -268,7 +284,7 @@ function resolveJid(jid, authPath) {
     }
     
     // Default to the original JID if neither is registered
-    return jid;
+    return originalJid;
 }
 
 // Helper to resolve any JID to phone number JID format (for comparing admin lists)
@@ -277,6 +293,9 @@ function resolveJid(jid, authPath) {
 // Now we always normalize: strip ":device" and return the bare phone JID.
 function resolveToPhone(jid, authPath) {
     if (!jid) return jid;
+    const originalJid = jid;
+    jid = safeStringJid(jid);
+    if (!jid) return originalJid;
     if (jid.endsWith("@s.whatsapp.net")) {
         // Strip any ":device" suffix so the result is canonical
         const phone = jid.split("@")[0];
@@ -287,7 +306,7 @@ function resolveToPhone(jid, authPath) {
         return jid;
     }
     const { phone } = getMapping(jid);
-    return phone ? `${phone}@s.whatsapp.net` : jid;
+    return phone ? `${phone}@s.whatsapp.net` : originalJid;
 }
 
 // Canonical rank key — the single source of truth for what JID format
@@ -300,6 +319,9 @@ function resolveToPhone(jid, authPath) {
 // an LID and no mapping is cached. Always strips ":device" suffixes.
 function canonicalRankKey(jid) {
     if (!jid) return jid;
+    const originalJid = jid;
+    jid = safeStringJid(jid);
+    if (!jid) return originalJid;
     if (jid.endsWith("@s.whatsapp.net")) {
         const phone = jid.split("@")[0];
         const colonIdx = phone.indexOf(":");
@@ -315,7 +337,7 @@ function canonicalRankKey(jid) {
         if (colonIdx > 0) return lid.substring(0, colonIdx) + "@lid";
         return jid;
     }
-    return jid;
+    return originalJid;
 }
 
 module.exports = {
