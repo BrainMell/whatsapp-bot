@@ -1330,10 +1330,18 @@ async function addQuestProgress(userId, amount, won = true) {
   // calculations between players who did the same dungeon but had
   // different numbers of combat encounters (more encounters = more
   // questsCompleted = higher calculated rank).
-  // Math.round(0.05) = 0, so fractional progress only accumulates
-  // meaningfully across multiple encounters (5 × 0.05 = 0.25 → 0,
-  // 20 × 0.05 = 1.0 → 1). Boss kills (1.0) and final victories
-  // (0.2) still round correctly.
+  //
+  // ⚠️ NOTE: Because the rounded value is written back to
+  // user.questsCompleted each call, the running total is ALWAYS an
+  // integer. Each call recomputes Math.round(integer + 0.05) = integer.
+  // The fractional part is discarded every call — it does NOT
+  // accumulate. 20 × addQuestProgress(0.05) yields 0, not 1. Only
+  // calls with amount >= 0.5 (e.g. 1.0 for boss kills, 0.2 doesn't
+  // round up) actually move the counter. This is under-counting
+  // fractional progress, which is acceptable — questsCompleted is
+  // meant to track COMPLETED quests, not partial progress. The
+  // questsWon counter (incremented by 1 on every win) is the
+  // authoritative metric for rank missions.
   user.questsCompleted = Math.round((parseFloat(user.questsCompleted) || 0) + amount);
   if (won) {
     user.questsWon = (user.questsWon || 0) + 1;

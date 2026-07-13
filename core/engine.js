@@ -8706,7 +8706,7 @@ Usage: ${newUsage}/5${warningText}`;
                     msg += `⭐ GP: ${(gp || 0).toLocaleString()}\n`;
                     msg += `🗡️ Quests Completed: ${user.questsCompleted || 0}\n`;
                     msg += `✅ Quests Won: ${user.questsWon || 0}\n`;
-                    msg += `❌ Quests❌ Failed: ${user.questsFailed || 0}\n\n`;
+                    msg += `❌ Quests Failed: ${user.questsFailed || 0}\n\n`;
                     msg += `💰 *Benefits:*\n`;
                     msg += `+${rankData.benefits.questRewardBonus}% Quest Rewards\n\n`;
 

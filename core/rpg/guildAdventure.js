@@ -2923,7 +2923,13 @@ async function checkCombatEnd(sock, state, sessionKey) {
       clearTimeout(state.timers.turn);
       state.timers.turn = null;
     }
-    await endCombat(sock, enemiesDead, sessionKey);
+    // 💡 FIX: if BOTH sides die on the same turn (mutual destruction),
+    // the original code passed `enemiesDead=true` as victory — treating
+    // a party wipe as a win. Now: if the party is also dead, it's a
+    // defeat regardless of enemy state. Only count as victory if the
+    // party has at least one survivor.
+    const victory = enemiesDead && !playersDead;
+    await endCombat(sock, victory, sessionKey);
     return true;
   }
   return false;
@@ -4786,6 +4792,23 @@ async function endCombat(sock, victory, sessionKey) {
       return;
     }
 
+    // 💡 FIX #3: Genuine combat defeat (party wipe in combat) was never
+    // incrementing questsFailed — the code just cleaned up the game state
+    // without calling addQuestProgress. So the displayed "❌ Failed"
+    // counter never moved for real combat deaths, only for event-wipes
+    // and dead-but-carried (which was itself a bug). Now we record the
+    // fail for every player in the party so the counter is accurate.
+    // Skip TRIAL mode (it has its own fail handling in endAdventure).
+    if (state.mode !== 'TRIAL') {
+      for (const p of state.players) {
+        try {
+          economy.addQuestProgress(p.jid, 0, false);
+        } catch (e) {
+          console.error('[endCombat] Failed to record quest fail for', p.jid, ':', e.message);
+        }
+      }
+    }
+
     state.active = false;
     state.phase = "IDLE";
     deleteGameState(sessionKey); // Full cleanup on defeat
@@ -6051,9 +6074,20 @@ async function endAdventure(sock, sessionKey, victory = true) {
     return;
   }
 
-  let msg = `\n🎉 *QUEST COMPLETE!* 🎉\n\n`;
-  msg += `📜 ${narration}\n\n`;
-  msg += `The party has conquered all challenges!\n\n`;
+  let msg = '';
+  // 💡 FIX: branch the header on `victory` for ALL modes (was only TRIAL).
+  // Previously, fleeing (victory=false) and event-wipe (victory=false)
+  // both showed "🎉 QUEST COMPLETE! The party has conquered all challenges!"
+  // which was confusingly wrong.
+  if (victory) {
+    msg += `\n🎉 *QUEST COMPLETE!* 🎉\n\n`;
+    msg += `📜 ${narration}\n\n`;
+    msg += `The party has conquered all challenges!\n\n`;
+  } else {
+    msg += `\n💨 *QUEST ENDED* 💨\n\n`;
+    msg += `📜 ${narration}\n\n`;
+    msg += `The party did not complete the quest.\n\n`;
+  }
   msg += `📊 *FINAL STATS:*\n`;
   msg += `☠️ Monsters Slain: ${state.stats.monstersKilled}\n`;
   msg += `👑 Bosses Defeated: ${state.stats.bossesDefeated}\n`;
@@ -6397,7 +6431,17 @@ async function endAdventure(sock, sessionKey, victory = true) {
       }
 
       economy.addMoney(player.jid, totalGoldThisRun);
-      economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
+      // 💡 FIX #2: Fleeing (victory=false) was hitting this alive path and
+      // calling addQuestProgress(jid, 0.2, true) → questsWon++ — so fleeing
+      // a dungeon counted as a WIN. Players could farm the Trial of Combat
+      // "Win 20 quests" objective by just fleeing 20 dungeons. Now only
+      // counts as a win if the party actually won.
+      if (victory) {
+        economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
+      } else {
+        // Party fled or was wiped by event — alive but no win credit.
+        // Don't increment questsWon OR questsFailed (fleeing is neither).
+      }
       // Award GP — adventurer rank progression needs this
       if (gpGain > 0) {
         try { progression.awardGP(player.jid, gpGain); } catch (e) {}
@@ -6421,7 +6465,18 @@ async function endAdventure(sock, sessionKey, victory = true) {
     } else {
       // Dead player — no gold, no guild bonus
       msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: 0\n  🏅 GP: +0\n  💀 Fallen\n\n`;
-      economy.addQuestProgress(player.jid, 0, false); // No progress on death
+      // 💡 FIX #1 (PRIMARY BUG): Dead-but-carried player was ALWAYS getting
+      // questsFailed++ here — even when the party WON. A player who died
+      // in encounter 2 but was carried to victory by their party would
+      // log in to find their questsFailed counter had gone up on a WIN.
+      // This is the "falsely calculates failed quests" bug.
+      // Now: only count as a fail if the party actually LOST. If the party
+      // won but this player died, they were carried — neither won nor
+      // failed (they get partial XP/gold above as a consolation).
+      if (!victory) {
+        economy.addQuestProgress(player.jid, 0, false); // Genuine fail
+      }
+      // If victory=true and player is dead: carried to victory, no fail.
     }
 
     // 💡 Phase 2: Apply guild XP multiplier to the XP award
