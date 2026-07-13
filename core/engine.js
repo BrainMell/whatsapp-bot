@@ -14586,6 +14586,16 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const warArgs = txt.trim().split(/\s+/).slice(2);
                       const warSub = warArgs[0]?.toLowerCase();
                       const guildWars = require('./rpg/guildWars');
+                      const isSenderAdmin = isOwner || isGlobalMod(senderJid);
+
+                      // Helper: check if sender is leader/officer of their guild
+                      const getSenderGuildRole = () => {
+                        const gName = guilds.getUserGuild(senderJid);
+                        if (!gName) return null;
+                        const member = guilds.getGuildMember(gName, senderJid);
+                        if (!member) return null;
+                        return { guildName: gName, role: member.role, member };
+                      };
 
                       // .g war — help
                       if (!warSub || warSub === 'help') {
@@ -14608,10 +14618,15 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         msg += `• 1st: 5M Zeni + 10% XP/gold buff for members\n`;
                         msg += `• 2nd-3rd: 2M Zeni + 5% buff\n`;
                         msg += `• 4th-8th: 500K Zeni\n\n`;
-                        msg += `*Commands:*\n`;
+                        msg += `*Member Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} war status\` — view current war\n`;
+                        msg += `• \`${botConfig.getPrefix()} war my\` — your guild's war setup, rank, points\n`;
                         msg += `• \`${botConfig.getPrefix()} war leaderboard\` — this week's rankings\n`;
+                        msg += `• \`${botConfig.getPrefix()} war bracket\` — tournament bracket / clash matchups\n`;
+                        msg += `• \`${botConfig.getPrefix()} war schedule\` — upcoming event rotation\n`;
                         msg += `• \`${botConfig.getPrefix()} war history\` — all-time top guilds\n`;
+                        msg += `• \`${botConfig.getPrefix()} war champion @user\` — set your guild's champion (leader/officer, tournament weeks)\n`;
+                        msg += `• \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\` — set 3 guardians (leader/officer, clash weeks)\n`;
                         msg += `• \`${botConfig.getPrefix()} war admin\` — admin commands`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
@@ -14656,6 +14671,54 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
+                      // .g war my — full info about YOUR guild's war setup
+                      if (warSub === 'my' || warSub === 'me' || warSub === 'mywar') {
+                        try {
+                          const userGuild = guilds.getUserGuild(senderJid);
+                          if (!userGuild) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild. Use `.g guild create <name>` or ask an officer to invite you.' });
+                          }
+                          const info = await guildWars.getMyWarInfo(userGuild);
+                          if (!info) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
+                          }
+                          const { war, participant, rank, total } = info;
+                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
+                          let msg = `${event?.icon || '⚔️'} *${userGuild} — WAR DASHBOARD*\n\n`;
+                          msg += `*Event:* ${war.eventName}\n`;
+                          msg += `*Rank:* ${rank} / ${total}\n`;
+                          msg += `*Points:* ${participant.points.toLocaleString()}\n`;
+                          if (event?.id === 'champion_tournament') {
+                            msg += `*Champion:* ${participant.championJid ? '✅ ' + participant.championJid.split('@')[0] : '⚠️ Not set — use `.g war champion @user`'}\n`;
+                            msg += `*Champion wins:* ${participant.championWins || 0}\n`;
+                          } else if (event?.id === 'guardian_clash') {
+                            msg += `*Guardians:* `;
+                            if (participant.guardians && participant.guardians.length > 0) {
+                              msg += participant.guardians.map(g => g.split('@')[0]).join(', ') + '\n';
+                            } else {
+                              msg += `⚠️ Not set — use \`.g war guardian @u1 @u2 @u3\`\n`;
+                            }
+                            msg += `*Guardian wins:* ${participant.guardianWins || 0}\n`;
+                          } else if (event?.id === 'stronghold_siege') {
+                            msg += `*Stronghold:* Level ${participant.strongholdLevel || 1}\n`;
+                            msg += `*Defended:* ${participant.strongholdDefended ? '🛡️ Yes' : '⚔️ Overrun'}\n`;
+                          }
+                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
+                          msg += `*Time left:* ${hoursLeft}h\n\n`;
+                          // Show neighbors in leaderboard (rank-1, rank, rank+1)
+                          const sorted = [...war.participants].sort((a, b) => b.points - a.points);
+                          msg += `*Nearby Guilds:*\n`;
+                          for (let i = Math.max(0, rank - 2); i < Math.min(sorted.length, rank + 1); i++) {
+                            const arrow = sorted[i].guildName === userGuild ? '👉' : '  ';
+                            msg += `${arrow} ${i + 1}. ${sorted[i].guildName} — ${sorted[i].points.toLocaleString()} pts\n`;
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
                       // .g war leaderboard
                       if (warSub === 'leaderboard' || warSub === 'lb') {
                         try {
@@ -14669,6 +14732,84 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
                             msg += `${medal} ${entry.guildName} — ${entry.points.toLocaleString()} pts\n`;
                           }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g war bracket — tournament bracket or clash matchups
+                      if (warSub === 'bracket' || warSub === 'matches' || warSub === 'matchups') {
+                        try {
+                          const war = await guildWars.getWarStatus();
+                          if (!war) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
+                          }
+                          const bracket = await guildWars.getBracket();
+                          if (!bracket) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No bracket data.' });
+                          }
+                          if (bracket.type === 'none' || bracket.data.length === 0) {
+                            let msg = `📋 *${war.eventName}*\n\n`;
+                            msg += `_This event type has no bracket/matchups. Points are earned from regular activities (dungeons, bosses, PvP, raids, Abyss)._\n`;
+                            msg += `\nFinal rankings will be determined when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left).`;
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          }
+                          let msg = '';
+                          if (bracket.type === 'bracket') {
+                            msg = `⚔️ *CHAMPION TOURNAMENT BRACKET* ⚔️\n\n`;
+                            if (war.status === 'active' && bracket.data.length === 0) {
+                              msg += `_Bracket will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
+                              msg += `\n_Set your champion with_ \`${botConfig.getPrefix()} war champion @user\``;
+                            } else {
+                              // Group by round
+                              const byRound = {};
+                              for (const m of bracket.data) {
+                                if (!byRound[m.round]) byRound[m.round] = [];
+                                byRound[m.round].push(m);
+                              }
+                              for (const r of Object.keys(byRound).sort((a, b) => a - b)) {
+                                msg += `*Round ${r}:*\n`;
+                                for (const m of byRound[r]) {
+                                  const winA = m.winner === m.guildA;
+                                  msg += `  ${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
+                                }
+                                msg += `\n`;
+                              }
+                            }
+                          } else if (bracket.type === 'clash') {
+                            msg = `🛡️ *GUARDIAN CLASH MATCHUPS* 🛡️\n\n`;
+                            if (war.status === 'active' && bracket.data.length === 0) {
+                              msg += `_Matchups will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
+                              msg += `\n_Set your 3 guardians with_ \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\``;
+                            } else {
+                              for (const m of bracket.data) {
+                                const winA = m.winner === m.guildA;
+                                msg += `${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
+                              }
+                            }
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g war schedule — upcoming event rotation
+                      if (warSub === 'schedule' || warSub === 'calendar') {
+                        try {
+                          const schedule = guildWars.getWarSchedule(8);
+                          let msg = `📅 *WAR EVENT SCHEDULE* 📅\n\n`;
+                          for (const s of schedule) {
+                            const marker = s.label === 'This week' ? '👉 ' : '   ';
+                            msg += `${marker}${s.label}: ${s.event.icon} ${s.event.name}\n`;
+                            if (s.label === 'This week') {
+                              msg += `      _${s.event.desc}_\n`;
+                            }
+                          }
+                          msg += `\n_Events rotate every Monday 00:00 UTC._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -14696,19 +14837,97 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
+                      // .g war champion @user — set YOUR guild's champion (leader/officer only)
+                      if (warSub === 'champion') {
+                        try {
+                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                          if (!targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war champion @user\`\n\n_Mentions your guild member to designate them as champion for the tournament._` });
+                          }
+                          const senderRole = getSenderGuildRole();
+                          if (!senderRole) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          }
+                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set the champion.' });
+                          }
+                          const result = await guildWars.setChampion(senderRole.guildName, targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g war guardian @u1 @u2 @u3 — set YOUR guild's guardians (leader/officer)
+                      if (warSub === 'guardian' || warSub === 'guardians') {
+                        try {
+                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                          if (mentions.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\`\n\n_Set 1-3 guardians for the 3v3 Guardian Clash._` });
+                          }
+                          const senderRole = getSenderGuildRole();
+                          if (!senderRole) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          }
+                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set guardians.' });
+                          }
+                          const result = await guildWars.setGuardians(senderRole.guildName, mentions);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // .g war clear — clear champion or guardians from your guild
+                      if (warSub === 'clear') {
+                        try {
+                          const clearWhat = warArgs[1]?.toLowerCase();
+                          if (!clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war clear <champion|guardians>\`` });
+                          }
+                          const senderRole = getSenderGuildRole();
+                          if (!senderRole) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          }
+                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can clear.' });
+                          }
+                          let result;
+                          if (clearWhat === 'champion') {
+                            result = await guildWars.clearChampion(senderRole.guildName);
+                          } else {
+                            result = await guildWars.clearGuardians(senderRole.guildName);
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
                       // .g war admin
                       if (warSub === 'admin' || warSub === 'mod') {
-                        if (!isOwner && !isGlobalMod(senderJid)) {
+                        if (!isSenderAdmin) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
                         }
                         const adminSub = warArgs[1]?.toLowerCase();
                         if (!adminSub) {
-                          let msg = `🔧 *GUILD WAR ADMIN COMMANDS*\n\n`;
+                          let msg = `🔧 *GUILD WAR ADMIN COMMANDS* 🔧\n\n`;
+                          msg += `*War Management:*\n`;
                           msg += `• \`${botConfig.getPrefix()} war admin spawn\` — force-spawn the weekly war\n`;
                           msg += `• \`${botConfig.getPrefix()} war admin resolve\` — force-resolve the war (distribute rewards)\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin champion @user\` — set your guild's champion (tournament weeks)\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin purge\` — delete ALL war data\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin sync\` — force-sync war points from guild data`;
+                          msg += `• \`${botConfig.getPrefix()} war admin sync\` — force-sync war points from guild data\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin purge\` — delete ALL war data\n\n`;
+                          msg += `*Event Control:*\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\` — override this week's event\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin schedule\` — preview upcoming events\n\n`;
+                          msg += `*Guild Management:*\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin addguild <name>\` — add a guild to the current war\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin removeguild <name>\` — remove a guild from the war\n\n`;
+                          msg += `*Champion/Guardian Override (any guild):*\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin champion <guildName> @user\` — set champion for any guild\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\` — set guardians for any guild\n`;
+                          msg += `• \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\` — clear for any guild`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
@@ -14728,19 +14947,75 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           await guildWars.syncWarPointsToActiveWar();
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Synced war points from guild data.' });
                         }
+                        if (adminSub === 'event') {
+                          const eventId = warArgs[2]?.toLowerCase();
+                          if (!eventId) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\`` });
+                          }
+                          const result = await guildWars.adminSetEventType(eventId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'addguild') {
+                          const gName = warArgs[2];
+                          if (!gName) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin addguild <guildName>\`` });
+                          }
+                          const result = await guildWars.adminAddGuild(gName);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'removeguild') {
+                          const gName = warArgs[2];
+                          if (!gName) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin removeguild <guildName>\`` });
+                          }
+                          const result = await guildWars.adminRemoveGuild(gName);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        if (adminSub === 'schedule') {
+                          const schedule = guildWars.getWarSchedule(8);
+                          let msg = `📅 *WAR EVENT SCHEDULE (ADMIN)* 📅\n\n`;
+                          for (const s of schedule) {
+                            const marker = s.label === 'This week' ? '👉 ' : '   ';
+                            msg += `${marker}${s.label} [${s.weekKey}]: ${s.event.icon} ${s.event.name} (${s.event.id})\n`;
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        }
                         if (adminSub === 'champion') {
+                          // .g war admin champion <guildName> @user
+                          const gName = warArgs[2];
                           const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                          if (!targetJid) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion @user\`` });
+                          if (!gName || !targetJid) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion <guildName> @user\`` });
                           }
-                          const userGuild = guilds.getUserGuild(targetJid);
-                          if (!userGuild) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ That user is not in a guild.' });
-                          }
-                          const result = await guildWars.setChampion(userGuild, targetJid);
+                          const result = await guildWars.setChampion(gName, targetJid);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
                         }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand.` });
+                        if (adminSub === 'guardian' || adminSub === 'guardians') {
+                          // .g war admin guardian <guildName> @u1 @u2 @u3
+                          const gName = warArgs[2];
+                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                          if (!gName || mentions.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\`` });
+                          }
+                          const result = await guildWars.setGuardians(gName, mentions);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
+                        }
+                        if (adminSub === 'clear') {
+                          // .g war admin clear <guildName> <champion|guardians>
+                          const gName = warArgs[2];
+                          const clearWhat = warArgs[3]?.toLowerCase();
+                          if (!gName || !clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\`` });
+                          }
+                          let result;
+                          if (clearWhat === 'champion') {
+                            result = await guildWars.clearChampion(gName);
+                          } else {
+                            result = await guildWars.clearGuardians(gName);
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} war admin\` for the menu.` });
                       }
 
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown war subcommand. Use \`${botConfig.getPrefix()} war help\` for usage.` });

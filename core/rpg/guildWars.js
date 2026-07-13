@@ -421,7 +421,11 @@ async function distributeWarRewards(war, sorted) {
   return { summary };
 }
 
-// ─── SET CHAMPION (admin: set a guild's champion for the tournament) ──────
+// ─── SET CHAMPION ─────────────────────────────────────────────────────────
+// Called by .g war champion @user (self-set by guild leader/officer) OR by
+// .g war admin champion <guildName> @user (admin override for any guild).
+// Validates: war exists, event is champion_tournament, target is a member
+// of the guild, and the caller has permission (officer+ OR admin).
 async function setChampion(guildName, championJid) {
   const weekKey = getWeekKey();
   const war = await GuildWar.findOne({ weekKey, status: 'active' });
@@ -431,12 +435,26 @@ async function setChampion(guildName, championJid) {
   }
   const participant = war.participants.find(p => p.guildName === guildName);
   if (!participant) return { success: false, message: `❌ Guild ${guildName} not in the war.` };
-  participant.championJid = championJid;
+
+  // Verify champion is actually a member of this guild
+  const member = guilds.getGuildMember(guildName, championJid);
+  if (!member) {
+    return { success: false, message: `❌ That user is not a member of ${guildName}.` };
+  }
+
+  participant.championJid = member.jid; // use canonical JID from guild
   await war.save();
-  return { success: true, message: `✅ Set ${championJid.split('@')[0]} as the champion for ${guildName}.` };
+  return {
+    success: true,
+    message: `✅ Set *${member.jid.split('@')[0]}* as the champion for *${guildName}*.\nThey will represent the guild in the 1v1 tournament bracket.`,
+  };
 }
 
-// ─── SET GUARDIANS (admin: set a guild's 3 guardians for the clash) ───────
+// ─── SET GUARDIANS ────────────────────────────────────────────────────────
+// Called by .g war guardian @u1 @u2 @u3 (self-set by guild leader/officer)
+// OR .g war admin guardian <guildName> @u1 @u2 @u3 (admin override).
+// Validates: war exists, event is guardian_clash, 1-3 unique guardians,
+// all guardians are members of the guild.
 async function setGuardians(guildName, guardianJids) {
   const weekKey = getWeekKey();
   const war = await GuildWar.findOne({ weekKey, status: 'active' });
@@ -446,10 +464,171 @@ async function setGuardians(guildName, guardianJids) {
   }
   const participant = war.participants.find(p => p.guildName === guildName);
   if (!participant) return { success: false, message: `❌ Guild ${guildName} not in the war.` };
+  if (!Array.isArray(guardianJids) || guardianJids.length === 0) {
+    return { success: false, message: '❌ Must provide at least 1 guardian (max 3).' };
+  }
   if (guardianJids.length > 3) return { success: false, message: '❌ Max 3 guardians.' };
-  participant.guardians = guardianJids;
+
+  // Validate all guardians are members; dedupe by canonical JID
+  const canonical = [];
+  const seen = new Set();
+  for (const jid of guardianJids) {
+    const member = guilds.getGuildMember(guildName, jid);
+    if (!member) {
+      return { success: false, message: `❌ ${jid.split('@')[0]} is not a member of ${guildName}.` };
+    }
+    if (seen.has(member.jid)) continue; // dedupe
+    seen.add(member.jid);
+    canonical.push(member.jid);
+  }
+  if (canonical.length === 0) {
+    return { success: false, message: '❌ No valid guardians after dedup.' };
+  }
+
+  participant.guardians = canonical;
   await war.save();
-  return { success: true, message: `✅ Set ${guardianJids.length} guardians for ${guildName}.` };
+  const list = canonical.map((j, i) => `  ${i + 1}. ${j.split('@')[0]}`).join('\n');
+  return {
+    success: true,
+    message: `✅ Set *${canonical.length} guardian${canonical.length > 1 ? 's' : ''}* for *${guildName}*:\n${list}\n\nThey will represent the guild in the 3v3 Guardian Clash.`,
+  };
+}
+
+// ─── CLEAR CHAMPION / GUARDIANS ───────────────────────────────────────────
+async function clearChampion(guildName) {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey, status: 'active' });
+  if (!war) return { success: false, message: '❌ No active war.' };
+  const participant = war.participants.find(p => p.guildName === guildName);
+  if (!participant) return { success: false, message: `❌ Guild ${guildName} not in the war.` };
+  if (!participant.championJid) return { success: false, message: 'ℹ️ No champion set.' };
+  participant.championJid = null;
+  await war.save();
+  return { success: true, message: `✅ Cleared champion for ${guildName}.` };
+}
+
+async function clearGuardians(guildName) {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey, status: 'active' });
+  if (!war) return { success: false, message: '❌ No active war.' };
+  const participant = war.participants.find(p => p.guildName === guildName);
+  if (!participant) return { success: false, message: `❌ Guild ${guildName} not in the war.` };
+  if (!participant.guardians || participant.guardians.length === 0) {
+    return { success: false, message: 'ℹ️ No guardians set.' };
+  }
+  participant.guardians = [];
+  await war.save();
+  return { success: true, message: `✅ Cleared guardians for ${guildName}.` };
+}
+
+// ─── GET MY WAR INFO (a single guild's full war setup) ────────────────────
+async function getMyWarInfo(guildName) {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey });
+  if (!war) return null;
+  const participant = war.participants.find(p => p.guildName === guildName);
+  if (!participant) return null;
+  const sorted = [...war.participants].sort((a, b) => b.points - a.points);
+  const rank = sorted.findIndex(p => p.guildName === guildName) + 1;
+  return { war, participant, rank, total: war.participants.length };
+}
+
+// ─── GET BRACKET / MATCHUPS ───────────────────────────────────────────────
+// For champion_tournament: returns the bracket array (resolved if completed).
+// For guardian_clash: returns clashMatchups.
+// For other events: returns null (no bracket).
+async function getBracket() {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey });
+  if (!war) return null;
+  if (war.eventType === 'champion_tournament') {
+    return { type: 'bracket', data: war.bracket || [] };
+  }
+  if (war.eventType === 'guardian_clash') {
+    return { type: 'clash', data: war.clashMatchups || [] };
+  }
+  return { type: 'none', data: [] };
+}
+
+// ─── GET WAR SCHEDULE (next N weeks of events) ────────────────────────────
+function getWarSchedule(weeksAhead = 8) {
+  const weekKey = getWeekKey();
+  const m = weekKey.match(/W(\d+)$/);
+  const curWeek = m ? parseInt(m[1], 10) : 1;
+  const schedule = [];
+  for (let i = 0; i < weeksAhead; i++) {
+    const wkNum = ((curWeek - 1 + i) % 4);
+    const ev = WAR_EVENTS.find(e => e.weekIndex === wkNum) || WAR_EVENTS[0];
+    const weekOffset = i;
+    const targetWeek = curWeek + i;
+    let label;
+    if (i === 0) label = 'This week';
+    else if (i === 1) label = 'Next week';
+    else label = `In ${i} weeks`;
+    schedule.push({
+      label,
+      weekKey: `${weekKey.split('-W')[0]}-W${String(targetWeek).padStart(2, '0')}`,
+      event: ev,
+    });
+  }
+  return schedule;
+}
+
+// ─── ADMIN: SET EVENT TYPE FOR CURRENT WEEK ───────────────────────────────
+// Overrides the rotating event. Useful for testing or themed weeks.
+async function adminSetEventType(eventId) {
+  const valid = WAR_EVENTS.find(e => e.id === eventId);
+  if (!valid) {
+    return { success: false, message: `❌ Invalid event ID. Valid: ${WAR_EVENTS.map(e => e.id).join(', ')}` };
+  }
+  const weekKey = getWeekKey();
+  let war = await GuildWar.findOne({ weekKey });
+  if (!war) {
+    // Spawn first if missing
+    const spawn = await spawnWeeklyWar();
+    if (!spawn.success) return spawn;
+    war = spawn.war;
+  }
+  war.eventType = valid.id;
+  war.eventName = valid.name;
+  await war.save();
+  return { success: true, message: `✅ Event for ${weekKey} set to *${valid.name}* (${valid.id}).` };
+}
+
+// ─── ADMIN: ADD A GUILD TO CURRENT WAR ────────────────────────────────────
+// For guilds created mid-week that weren't included at spawn time.
+async function adminAddGuild(guildName) {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey, status: 'active' });
+  if (!war) return { success: false, message: '❌ No active war.' };
+  const guild = guilds.getGuild(guildName);
+  if (!guild) return { success: false, message: `❌ Guild ${guildName} does not exist.` };
+  if (war.participants.find(p => p.guildName === guildName)) {
+    return { success: false, message: `ℹ️ ${guildName} is already in the war.` };
+  }
+  war.participants.push({
+    guildName,
+    points: 0,
+    bracket: guild.level >= 5 ? 'champion' : 'open',
+    eliminated: false,
+    strongholdLevel: 1 + Math.floor((guild.level || 1) / 5),
+  });
+  await war.save();
+  return { success: true, message: `✅ Added *${guildName}* to the war.` };
+}
+
+// ─── ADMIN: REMOVE A GUILD FROM CURRENT WAR ───────────────────────────────
+async function adminRemoveGuild(guildName) {
+  const weekKey = getWeekKey();
+  const war = await GuildWar.findOne({ weekKey, status: 'active' });
+  if (!war) return { success: false, message: '❌ No active war.' };
+  const before = war.participants.length;
+  war.participants = war.participants.filter(p => p.guildName !== guildName);
+  if (war.participants.length === before) {
+    return { success: false, message: `ℹ️ ${guildName} was not in the war.` };
+  }
+  await war.save();
+  return { success: true, message: `✅ Removed *${guildName}* from the war.` };
 }
 
 module.exports = {
@@ -462,12 +641,20 @@ module.exports = {
   resolveWeeklyWar,
   setChampion,
   setGuardians,
+  clearChampion,
+  clearGuardians,
+  getMyWarInfo,
+  getBracket,
+  getWarSchedule,
   getCurrentEvent,
   getWeekKey,
   // Admin functions
   adminForceSpawn,
   adminForceResolve,
   adminPurgeAllWars,
+  adminSetEventType,
+  adminAddGuild,
+  adminRemoveGuild,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
