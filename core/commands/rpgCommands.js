@@ -1136,7 +1136,19 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     
     // Add output
     await inventorySystem.addItem(senderJid, recipe.output.itemId, recipe.output.qty);
-    
+
+    // 💡 FIX: track itemsCrafted for rank missions. handleCraftCommand is a
+    // SEPARATE craft path from craftItem() — it does its own ingredient
+    // deduction and item add, but was missing the rank-mission tracking
+    // call. Players crafting the 8 legacy recipes (rusty_dagger, iron_sword,
+    // steel_sabre, mythril_staff, chainmail, iron_plate, reinforced_plate,
+    // dragon_scale_armor) were getting ZERO itemsCrafted credit toward
+    // the Trial of Mastery (15 items) and Trial of Divinity (50 items)
+    // rank missions. craftItem() already had this via craftingSystem.performCraft.
+    try {
+        economy.trackMissionStat(senderJid, 'itemsCrafted', recipe.output.qty || 1);
+    } catch (e) {}
+
     // Generate transaction card image if possible
     try {
         const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);

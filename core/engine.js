@@ -10491,7 +10491,11 @@ Commands:
                     const status = economy.getRankMissionStatus(senderJid);
 
                     if (missionSub === 'claim') {
-                      const result = economy.claimRankMission(senderJid);
+                      // 💡 FIX: claimRankMission is async — was missing `await`,
+                      // so `result` was a Promise and `.message` was undefined.
+                      // The claim silently did nothing (no confirmation, no
+                      // rank-up), even when all objectives were complete.
+                      const result = await economy.claimRankMission(senderJid);
                       return reply(BOT_MARKER + result.message);
                     }
 

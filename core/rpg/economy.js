@@ -1268,7 +1268,14 @@ function trackMissionStat(userId, statKey, amount = 1) {
   const user = getUser(userId);
   if (!user || !user.stats) return;
   user.stats[statKey] = (user.stats[statKey] || 0) + amount;
-  scheduleSave(userId);
+  // 💡 FIX: was scheduleSave(userId) — debounced 500ms. If the bot
+  // restarted within 500ms of the stat increment, the DB write was
+  // lost and the player's progress vanished on next load. Rank-mission
+  // stats (itemsCrafted, itemsEquipped, bossesDefeated, etc.) are
+  // high-stakes — losing them means re-doing the work. Use immediate
+  // saveUser (which is async but we don't need to await it here — the
+  // in-memory mutation is already done, the DB write is just persistence).
+  saveUser(userId).catch(e => console.error(`[trackMissionStat] saveUser failed for ${userId}:`, e.message));
 }
 
 function addStatBonus(userId, stat, value) {
