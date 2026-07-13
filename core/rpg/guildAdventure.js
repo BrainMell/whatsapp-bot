@@ -4915,16 +4915,27 @@ const initAdventure = async (
       // Locking non-Fighter classes out makes those evolutions impossible.
       // All classes can now enter the Dragon Dungeon (with a dragon key).
 
-      // Check Key
-      if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
+      // 💡 DRAGON KEY CHECK: Key is consumed on entry UNLESS the player
+      // has a Dragon Seal Ring equipped (reusable — the ring's magic
+      // reforms the key after each use). Also check if they have the
+      // new "dragon_key_reusable" item (master key, never consumed).
+      const equip = inventorySystem.getEquipment(senderJid) || {};
+      const hasSealRingEquipped = equip?.ring?.id === 'dragon_seal_ring' || equip?.ring === 'dragon_seal_ring';
+      const hasReusableKey = inventorySystem.hasItem(senderJid, 'dragon_key_reusable');
+
+      if (hasSealRingEquipped) {
+        // Ring equipped — free entry, no key consumed
+      } else if (hasReusableKey) {
+        // Master key — never consumed
+      } else if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
         return {
           success: false,
-          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Buy one from the shop or find it as a rare drop.`,
+          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`.g craft dragon_key_repair\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
         };
+      } else {
+        // Consume Key
+        inventorySystem.removeItem(senderJid, "dragon_key", 1);
       }
-
-      // Consume Key
-      inventorySystem.removeItem(senderJid, "dragon_key", 1);
     }
   }
 

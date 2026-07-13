@@ -282,6 +282,18 @@ const CRAFTING_RECIPES = {
         result: { id: 'legendary_shard' }
     },
 
+    // --- DRAGON KEY REPAIR ---
+    // 💡 Dragon Keys are consumed on dungeon entry. This recipe lets
+    // players craft a new key from dragon materials instead of buying
+    // from the shop every time. Makes dragon farming sustainable.
+    'dragon_key_repair': {
+        name: 'Dragon Hunter Key', category: 'CRAFT', id: 'dragon_key',
+        desc: 'Forge a new Dragon Hunter Key from dragon remains. Reusable alternative to buying from the shop.',
+        ingredients: { 'dragon_scale': 2, 'iron_shard': 3, 'refined_steel': 1 },
+        goldCost: 5000,
+        result: { id: 'dragon_key' }
+    },
+
     // --- NEW RARE-MATERIAL CONVERSION (chaos → null → abyssal ladder) ---
     // Each tier's raw ore can be refined into a workable form for forging.
     'chaos_ingot_conv': {

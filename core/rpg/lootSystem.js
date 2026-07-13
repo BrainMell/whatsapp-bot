@@ -745,7 +745,8 @@ const ITEM_DATABASE = {
     'ascension_stone': { name: 'Ascension Stone (T3)', description: 'Triggers ascension to T3 class.', rarity: 'EPIC', value: 50000, type: 'MATERIAL', reqLevel: 50 },
 
     // --- KEY ITEMS ---
-    'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragon’s Lair.', rarity: 'RARE', value: 15000, type: 'ITEM' },
+    'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragons Lair. Consumed on use.', rarity: 'RARE', value: 15000, type: 'ITEM' },
+    'dragon_key_reusable': { name: 'Master Dragon Key', description: 'A permanently enchanted key. Never consumed — unlimited Dragon Dungeon entry.', rarity: 'LEGENDARY', value: 100000, type: 'ITEM' },
     'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated Hive essence.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
     'rare_gem': { name: 'Rare Gem', description: 'A sparkling gemstone of immense value.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
