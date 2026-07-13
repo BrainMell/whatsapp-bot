@@ -4930,7 +4930,7 @@ const initAdventure = async (
       } else if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
         return {
           success: false,
-          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`.g craft dragon_key_repair\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
+          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`.g craft dragon_key\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
         };
       } else {
         // Consume Key

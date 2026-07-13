@@ -5874,24 +5874,12 @@ _💡 Reply with another number from your search list!_`.trim();
                       msg += `• \`${botConfig.getPrefix()} abyss\` — endless dungeon\n`;
                       msg += `• \`${botConfig.getPrefix()} raid\` — weekly avatar raid\n`;
                       msg += `• \`${botConfig.getPrefix()} bounty\` — PvP bounty system\n`;
+                      msg += `• \`${botConfig.getPrefix()} war\` — guild wars (status, my, bracket, champion, guardian, schedule, history)\n`;
                       msg += `• \`${botConfig.getPrefix()} rune\` — rune socketing system\n`;
                       msg += `• \`${botConfig.getPrefix()} guild perks\` — view guild perks\n`;
                       msg += `• \`${botConfig.getPrefix()} guild info\` — guild status\n`;
                       msg += `• \`${botConfig.getPrefix()} guild donate <amount>\` — donate to guild\n`;
-                      msg += `• \`${botConfig.getPrefix()} guild loan <amount>\` — borrow from guild\n\n`;
-
-                      msg += `┌─ *⚔️ GUILD WARS* ─┐\n`;
-                      msg += `• \`${botConfig.getPrefix()} war\` — war help & current event\n`;
-                      msg += `• \`${botConfig.getPrefix()} war status\` — current war overview\n`;
-                      msg += `• \`${botConfig.getPrefix()} war my\` — your guild's war dashboard\n`;
-                      msg += `• \`${botConfig.getPrefix()} war leaderboard\` — this week's rankings\n`;
-                      msg += `• \`${botConfig.getPrefix()} war bracket\` — tournament bracket / clash matchups\n`;
-                      msg += `• \`${botConfig.getPrefix()} war schedule\` — upcoming event rotation\n`;
-                      msg += `• \`${botConfig.getPrefix()} war history\` — all-time top guilds\n`;
-                      msg += `• \`${botConfig.getPrefix()} war champion @user\` — set your guild's champion (officer+)\n`;
-                      msg += `• \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\` — set 3 guardians (officer+)\n`;
-                      msg += `• \`${botConfig.getPrefix()} war clear <champion|guardians>\` — clear setup\n`;
-                      msg += `• \`${botConfig.getPrefix()} war admin\` — admin commands\n`;
+                      msg += `• \`${botConfig.getPrefix()} guild loan <amount>\` — borrow from guild\n`;
 
                       await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       return;

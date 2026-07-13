@@ -526,7 +526,35 @@ function getMiningLocations() {
 }
 function getRecipeById(id) {
     const all = getRecipes();
-    return all[id] || null;
+    if (!id) return null;
+    const needle = String(id).toLowerCase().trim();
+
+    // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
+    //    'dragon_key_repair', etc. — keeps backward compat).
+    if (all[needle]) return all[needle];
+
+    // 2) Match by result.id — so users can type the item name they want
+    //    to make: `.g craft refined_steel` finds the `refined_steel_conv`
+    //    recipe whose result.id is 'refined_steel'. This is the most
+    //    intuitive lookup and was previously failing as "Recipe not found."
+    for (const key of Object.keys(all)) {
+        const r = all[key];
+        if (r && r.result && r.result.id && String(r.result.id).toLowerCase() === needle) {
+            return r;
+        }
+    }
+
+    // 3) Match by recipe name (normalized: lowercase, spaces → underscores).
+    //    Lets users type `.g craft refined steel` or `.g craft Refined Steel`.
+    const normalized = needle.replace(/\s+/g, '_');
+    for (const key of Object.keys(all)) {
+        const r = all[key];
+        if (r && r.name && String(r.name).toLowerCase().replace(/\s+/g, '_') === normalized) {
+            return r;
+        }
+    }
+
+    return null;
 }
 
 function canCraft(userId, recipeId) {
