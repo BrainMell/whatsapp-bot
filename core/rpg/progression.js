@@ -420,10 +420,28 @@ function allocateStatPoint(userId, stat, amount = 1) {
 function resetStats(userId) {
     const user = getUser(userId);
     if (!user) return { success: false, message: "User not found" };
-    // Use tracked points spent if available; fall back to legacy approximation
-    const totalPointsSpent = user.allocatedStatPoints
-        ? Object.values(user.allocatedStatPoints).reduce((sum, v) => sum + v, 0)
-        : Object.values(user.allocatedStats).reduce((sum, val) => sum + Math.floor(val / 3), 0);
+
+    // 💡 FIX: Use tracked points spent (allocatedStatPoints) for accurate
+    // refund. The old fallback divided allocatedStats values by 3, but the
+    // actual conversion rate varies per stat (hp=15, atk=3, def=2, mag=3,
+    // spd=2, luck=2, crit=1). Dividing by 3 massively undercounted HP
+    // (15/3=5 instead of 1) and overcounted crit (1/3=0).
+    //
+    // If allocatedStatPoints is missing (legacy user), reconstruct it from
+    // allocatedStats using the CORRECT reverse conversion rates.
+    const BASE_STAT_VALUES = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+
+    let totalPointsSpent = 0;
+    if (user.allocatedStatPoints) {
+        totalPointsSpent = Object.values(user.allocatedStatPoints).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    } else if (user.allocatedStats) {
+        // Legacy fallback: reverse-calculate points from stat values
+        for (const [stat, value] of Object.entries(user.allocatedStats)) {
+            const baseVal = BASE_STAT_VALUES[stat] || 3;
+            totalPointsSpent += Math.floor((Number(value) || 0) / baseVal);
+        }
+    }
+
     user.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
     user.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
     user.statPoints += totalPointsSpent;

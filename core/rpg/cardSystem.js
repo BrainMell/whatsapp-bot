@@ -566,7 +566,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       return entries[0][0];
     })();
     
-    const pool = [...(CARDS_BY_TIER()[tier] || [])];
+    const pool = [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -578,8 +578,8 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
     
     if (!card) {
-        // T1 Fallback
-        const t1 = [...(CARDS_BY_TIER()['1'] || [])];
+        // T1 Fallback — exclude event cards
+        const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c));
         for (const c of t1) {
             const s = await getOrInitStat(c.id, '1');
             if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
