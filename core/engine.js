@@ -14106,7 +14106,6 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       // .g abyss enter — start a run
                       if (abyssSub === 'enter' || abyssSub === 'start') {
                         try {
-                          // Get player stats
                           const economy = require('./rpg/economy');
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
@@ -14127,33 +14126,30 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             def: baseStats.def || 5,
                           };
                           const result = await abyssSystem.startRun(senderJid, playerStats);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          if (!result.success) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
+                          // If first floor is combat, start real combat engine
+                          const run = result.run;
+                          if (run.currentEncounterType === 'combat' && run.currentEnemy) {
+                            try {
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                              await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
+                            } catch (combatErr) {
+                              console.error('[Abyss] Failed to start combat:', combatErr.message);
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize.' });
+                            }
+                          } else {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss attack — attack current enemy
+                      // .g abyss attack — redirect to combat (Abyss uses real combat now)
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
-                        try {
-                          const run = await abyssSystem.getRunStatus(senderJid);
-                          if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run. Start one with `.g abyss enter`.' });
-                          }
-                          // Calculate player damage based on class + level
-                          const economy = require('./rpg/economy');
-                          const progression = require('./rpg/progression');
-                          const user = economy.getUser(senderJid);
-                          if (!user) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Account not found. Use `.g register`.' });
-                          }
-                          const baseStats = progression.getBaseStats(senderJid, user.class);
-                          const playerDamage = Math.floor((baseStats.atk || 10) * (1 + (progression.getLevel(senderJid) * 0.1)) * (0.8 + Math.random() * 0.4));
-                          const result = await abyssSystem.processAttack(senderJid, playerDamage, baseStats);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `.g combat attack` to fight.' });
                       }
 
                       // .g abyss status — view active run

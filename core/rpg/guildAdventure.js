@@ -4315,6 +4315,233 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
 }
 
+// ==========================================
+// 🕳️ ABYSS COMBAT INTEGRATION
+// ==========================================
+
+/**
+ * Start an Abyss combat encounter using the real combat engine.
+ */
+async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor) {
+  const sessionKey = `${chatId}_${senderJid}`;
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '❌ You are already in combat.' };
+    }
+  }
+
+  const user = economy.getUser(senderJid);
+  if (!user) return { success: false, message: '❌ You need to register first.' };
+
+  const userClass = user.class || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+  const baseStats = progression.getBaseStats(senderJid, userClass.id || userClass.name?.toUpperCase());
+
+  const player = {
+    jid: senderJid,
+    name: user.nickname || user.profile?.nickname || senderJid.split('@')[0],
+    class: userClass,
+    isDead: false,
+    stats: {
+      hp: baseStats.hp,
+      maxHp: baseStats.hp,
+      atk: baseStats.atk,
+      def: baseStats.def,
+      mag: baseStats.mag,
+      spd: baseStats.spd,
+      luck: baseStats.luck,
+      crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0,
+      evasion: baseStats.evasion || 0,
+      energy: baseStats.maxEnergy || 100,
+      maxEnergy: baseStats.maxEnergy || 100,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    adventurerRank: user.adventurerRank || 'F',
+    level: progression.getLevel(senderJid),
+    currentHP: baseStats.hp,
+    mana: 100,
+    maxMana: 100,
+    xpEarned: 0,
+    goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+    pendingActions: {},
+    buffs: [],
+    statusEffects: [],
+    actionGauge: 0,
+  };
+
+  // Carry over HP/energy from Abyss run
+  if (abyssRun.currentHp) {
+    player.stats.hp = Math.max(1, abyssRun.currentHp);
+    player.currentHP = player.stats.hp;
+  }
+  if (abyssRun.currentEnergy) {
+    player.stats.energy = Math.max(0, abyssRun.currentEnergy);
+  }
+
+  const combatEnemy = {
+    id: enemy.id || `abyss_${floor}`,
+    name: enemy.name,
+    icon: enemy.isBoss ? '👹' : '👾',
+    isEnemy: true,
+    isBoss: enemy.isBoss || false,
+    level: enemy.level || floor,
+    stats: {
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+      atk: enemy.atk,
+      def: enemy.def,
+      spd: enemy.spd,
+      mag: enemy.atk,
+    },
+    currentHP: enemy.hp,
+    maxHP: enemy.maxHp,
+    mana: 100,
+    maxMana: 100,
+    archetype: enemy.isBoss ? 'BOSS' : 'BRUTE',
+    abilities: [],
+    statusEffects: [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: 0,
+    goldReward: 0,
+    isDead: false,
+    justDied: false,
+  };
+
+  const state = {
+    chatId,
+    players: [player],
+    enemies: [combatEnemy],
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: true,
+    mode: 'ABYSS',
+    isAbyss: true,
+    abyssRun: abyssRun,
+    abyssFloor: floor,
+    encounter: 1,
+    maxEncounters: 1,
+    currentEncounterType: 'COMBAT',
+    combatRound: 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock_ref: sock,
+    dungeonRank: 0,
+    difficulty: 0,
+    isProcessing: false,
+    isEndingCombat: false,
+  };
+
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
+
+  return { success: true };
+}
+
+/**
+ * Handle Abyss victory — advance to next floor with new encounter.
+ */
+async function handleAbyssVictory(sock, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state || !state.isAbyss) return;
+
+  const senderJid = state.players[0]?.jid;
+  if (!senderJid) return;
+
+  const abyssSystem = require('./abyssSystem');
+  const run = state.abyssRun;
+  if (!run) { deleteGameState(sessionKey); return; }
+
+  // Update run with current HP/energy
+  const player = state.players[0];
+  run.currentHp = Math.max(1, player.stats.hp);
+  run.currentEnergy = player.stats.energy || 0;
+  run.monstersKilled = (run.monstersKilled || 0) + 1;
+  if (state.enemies[0]?.isBoss) run.bossesKilled = (run.bossesKilled || 0) + 1;
+
+  // Award rewards
+  const rewards = abyssSystem.getFloorRewards(state.abyssFloor, state.enemies[0]?.isBoss);
+  run.lootAccumulator.xp += rewards.xp;
+  run.lootAccumulator.gold += rewards.gold;
+
+  try {
+    economy.trackMissionStat(senderJid, 'kills', 1);
+    if (state.enemies[0]?.isBoss) economy.trackMissionStat(senderJid, 'bossesDefeated', 1);
+  } catch (e) {}
+
+  // Rune drop
+  let runeMsg = '';
+  if (state.enemies[0]?.isBoss && state.abyssFloor >= 21) {
+    try {
+      const runeSystem = require('./runeSystem');
+      const dropChance = state.abyssFloor >= 50 ? 0.30 : 0.15;
+      const drop = runeSystem.rollRuneDrop(dropChance);
+      if (drop) {
+        const runeResult = await runeSystem.awardRune(senderJid, drop.type, drop.tier, `abyss_floor_${state.abyssFloor}`);
+        if (runeResult.success) {
+          run.lootAccumulator.runes.push(runeResult.rune.runeId);
+          runeMsg = '\n' + runeResult.message;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Advance floor
+  run.currentFloor = (run.currentFloor || state.abyssFloor) + 1;
+  const newFloor = run.currentFloor;
+  run.currentEnergy = Math.min(run.playerSnapshot?.maxEnergy || 100, run.currentEnergy + 20);
+
+  // Generate next encounter
+  const encounter = abyssSystem.generateFloorEncounter(newFloor);
+  if (encounter.type === 'combat') {
+    run.currentEnemy = encounter.enemy;
+    run.currentEncounterType = 'combat';
+    run.currentEncounterData = null;
+  } else {
+    run.currentEnemy = null;
+    run.currentEncounterType = encounter.type;
+    run.currentEncounterData = encounter.treasure || encounter.event;
+  }
+  await run.save();
+
+  // Clean up old state
+  deleteGameState(sessionKey);
+
+  // Build and send message
+  let msg = `✅ *Floor ${state.abyssFloor} cleared!*\n`;
+  msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}\n`;
+  msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot?.maxHp || '?'}\n\n`;
+
+  if (encounter.type === 'combat') {
+    msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;
+    msg += `HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}\n`;
+    msg += `_Use \`.g combat attack\` to fight!_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+  } else if (encounter.type === 'treasure') {
+    msg += `${encounter.treasure.icon} *Floor ${newFloor}* — ${encounter.treasure.name}\n`;
+    msg += `_${encounter.treasure.desc}_\n\n`;
+    msg += `_Collect with \`.g abyss collect\` | Skip with \`.g abyss skip\`_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+  } else if (encounter.type === 'event') {
+    msg += `${encounter.event.icon} *Floor ${newFloor}* — ${encounter.event.name}\n`;
+    msg += `_${encounter.event.desc}_\n\n`;
+    encounter.event.choices.forEach(c => { msg += `\`${c.id}\` — ${c.text}\n`; });
+    msg += `\n_Choose with \`.g abyss choose <1/2>\`_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+  }
+}
+
 async function endCombat(sock, victory, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
@@ -4450,6 +4677,15 @@ async function endCombat(sock, victory, sessionKey) {
     setTimeout(
       () => {
         state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
+
+        // 💡 ABYSS MODE: On victory, advance Abyss floor instead of nextStage
+        if (state.isAbyss) {
+          handleAbyssVictory(sock, sessionKey).catch(e =>
+            console.error('[Abyss] victory handler error:', e?.message || e)
+          );
+          return;
+        }
+
         nextStage(sock, state.groq, sessionKey).catch((e) =>
           console.error("[Quest] nextStage error:", e?.message || e),
         );
@@ -4458,6 +4694,23 @@ async function endCombat(sock, victory, sessionKey) {
     ); // Added 1s delay for solo
   } else {
     state.isEndingCombat = false;
+
+    // 💡 ABYSS MODE: On defeat, call Abyss processDeath instead of just
+    // cleaning up. The Abyss has its own death handling (lose 90% loot,
+    // update leaderboard, set cooldown).
+    if (state.isAbyss) {
+      try {
+        const abyssSystem = require('./abyssSystem');
+        // Build a death message from the combat state
+        const deathMsg = `💀 Defeated on Abyss floor ${state.abyssFloor || 1}!`;
+        await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
+      } catch (e) {
+        console.error('[Abyss] processDeath after combat failed:', e.message);
+      }
+      deleteGameState(sessionKey);
+      return;
+    }
+
     state.active = false;
     state.phase = "IDLE";
     deleteGameState(sessionKey); // Full cleanup on defeat
@@ -7349,4 +7602,5 @@ module.exports = {
   CONSUMABLES,
   EQUIPMENT,
   GAME_CONFIG,
+  startAbyssCombat,
 };
