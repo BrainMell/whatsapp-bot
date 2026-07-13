@@ -6168,11 +6168,23 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // for free. Now if either deduction fails, we abort the evolution.
       const inventorySystem = require("./inventorySystem");
       const stoneRemoved = inventorySystem.removeItem(player.jid, trialData.stoneId, 1);
-      const moneyRemoved = economy.removeMoney(
-        player.jid,
-        trialData.cost,
-        `Evolved to ${nextClass.name}`,
-      );
+      // 💡 FIX: 17 T2 classes have evolutionCost: 0 (Warrior, Berserker,
+      // Paladin, Rogue, Monk, Samurai, Ninja, Mage, Warlock, Elementalist,
+      // Necromancer, Chronomancer, Cleric, Druid, Merchant, Bard, Artificer).
+      // economy.removeMoney returns FALSE when amount <= 0 (line 449 of
+      // economy.js: `if (!Number.isFinite(val) || val <= 0) return false;`).
+      // So every free T2 evolution was being aborted after the trial boss
+      // was defeated — "Required: 0 Zeni + 1× evolution stone". Skip the
+      // money deduction entirely when cost is 0; nothing to deduct.
+      const needsMoney = Number(trialData.cost) > 0;
+      let moneyRemoved = true; // default true — no deduction needed
+      if (needsMoney) {
+        moneyRemoved = economy.removeMoney(
+          player.jid,
+          trialData.cost,
+          `Evolved to ${nextClass.name}`,
+        );
+      }
 
       // Verify both deductions actually succeeded
       // 💡 QA FIX: removeItem returns {success: true/false, ...}, not a
@@ -6180,7 +6192,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // was always true (objects are neither false nor undefined), allowing
       // free evolutions and stone duplication on rollback.
       const stoneOk = stoneRemoved && stoneRemoved.success === true;
-      const moneyOk = moneyRemoved === true || moneyRemoved === undefined;
+      const moneyOk = needsMoney ? (moneyRemoved === true || moneyRemoved === undefined) : true;
 
       if (!stoneOk || !moneyOk) {
         // Rollback — re-add what we did remove

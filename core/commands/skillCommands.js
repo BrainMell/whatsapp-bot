@@ -758,7 +758,11 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             });
         }
     }
-    const paid = economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`);
+    const paid = chosen.evolutionCost > 0
+      ? economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`)
+      : true; // 💡 FIX: 17 T2 classes have evolutionCost: 0. removeMoney
+              // returns false for amount <= 0, which aborted every free
+              // T2 evolution. Skip the call entirely when cost is 0.
     if (!paid) {
         // Roll back the item removals
         await inventorySystem.addItem(senderJid, requiredStone, 1);
