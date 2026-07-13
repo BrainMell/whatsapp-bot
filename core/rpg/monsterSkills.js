@@ -688,8 +688,17 @@ function evaluateAction(enemy, players, allies = []) {
         }
 
         // Priority 3: Null Field to adapt resist
+        // 💡 FIX: was checking enemy.statusEffects for 'dmgReduction', but
+        // applyBuff() stores buffs in enemy.buffs (not statusEffects). The
+        // check never matched, so the AI re-cast Null Field every turn
+        // (wasting its action) and the buff stacked infinitely on the
+        // buffs array. Now checks enemy.buffs and respects the buff's
+        // remaining duration.
         const nullField = available.find(s => s.id === 'null_field');
-        if (nullField && !enemy.statusEffects?.some(e => e.type === 'dmgReduction') && Math.random() > 0.20) {
+        const hasActiveDmgReduction = (enemy.buffs || []).some(b =>
+            (b.type === 'dmgReduction' || b.type === 'all') && (b.duration || 0) > 0
+        );
+        if (nullField && !hasActiveDmgReduction && Math.random() > 0.20) {
             return { action: 'skill', skill: nullField, target: enemy, targetType: 'self' };
         }
 

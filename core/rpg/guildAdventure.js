@@ -2189,8 +2189,27 @@ function calculateDamage(
   // Flat defense mitigation occurs before percentage damage reduction
   damage -= def * 0.5;
 
-  const dr = Number(target.stats.dmgReduction) || 0;
-  damage = damage * (1 - dr / 100);
+  // 💡 FIX: dmgReduction buffs (e.g. Null Field from Nemesis AI) were
+  // applied to target.buffs but never read here. Only the permanent
+  // target.stats.dmgReduction was being used. Enemies that buffed
+  // themselves with dmgReduction showed "+X% dmgReduction!" in combat
+  // log but took full damage anyway — the buff was visual-only.
+  // Now we sum the permanent stat + all active dmgReduction buffs.
+  let totalDmgReduction = Number(target.stats.dmgReduction) || 0;
+  if (target.buffs) {
+    for (const buff of target.buffs) {
+      if (buff.type === 'dmgReduction') {
+        totalDmgReduction += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        // 'all' buffs also grant dmgReduction (in addition to defense,
+        // which is already applied above as def multiplier).
+        totalDmgReduction += (buff.value || 0);
+      }
+    }
+  }
+  // Cap at 90% so enemies/bosses can't become fully immune via stacking.
+  totalDmgReduction = Math.min(90, Math.max(0, totalDmgReduction));
+  damage = damage * (1 - totalDmgReduction / 100);
 
   // Random variance (±10%)
   const variance = 0.9 + Math.random() * 0.2;
