@@ -6061,6 +6061,78 @@ async function endAdventure(sock, sessionKey, victory = true) {
     const classSystem = require("./classSystem");
     const nextClass = classSystem.getClassById(trialData.targetClass);
 
+    // ─────────────────────────────────────────────────────────────────────
+    //  💡 DRAGON GOD UNIQUENESS — last-line defense.
+    //  The check in skillCommands.handleEvolve should have already blocked
+    //  latecomers before the trial started. But we ALSO check here, after
+    //  the boss is dead, because:
+    //    1. Two players could have started the Leviathan trial in parallel
+    //       before either won — only the FIRST to win should get the title.
+    //    2. We can't trust the pre-check alone; the trial takes time.
+    //
+    //  Atomic crown via findOneAndUpdate({upsert:true, $setOnInsert}) —
+    //  Mongoose's unique index on bossId guarantees only one insert wins
+    //  even under concurrent racing. If we lose the race, we redirect the
+    //  player to DRAGON_LORD instead (resources are NOT consumed).
+    // ─────────────────────────────────────────────────────────────────────
+    if (trialData.targetClass === 'DRAGON_GOD') {
+      try {
+        const DragonGod = require('../models/DragonGod');
+        // Try to resolve the player's display name for the historical record.
+        let displayName = player.name || player.pushName || player.jid.split('@')[0];
+        if (!displayName || displayName === 'Unknown') {
+          try { displayName = await sock.profilePictureUrl?.(player.jid) ? player.jid.split('@')[0] : player.jid.split('@')[0]; } catch {}
+          displayName = displayName || player.jid.split('@')[0];
+        }
+        // Also try to fetch the actual WhatsApp pushName from the message
+        // (sock might have it cached). Fall back to JID phone number.
+        try {
+          const pushName = player.pushName || (state.pushNames && state.pushNames[player.jid]);
+          if (pushName) displayName = pushName;
+        } catch {}
+
+        // 💡 Atomic check-and-crown. If two players race, the unique index
+        // on `bossId` ensures only ONE upsert actually inserts. The second
+        // findOneAndUpdate will simply return the existing record (because
+        // the filter matches the just-inserted doc) without modifying it.
+        const crowned = await DragonGod.crown(player.jid, displayName, sessionKey);
+        if (crowned.dragonGodJid !== player.jid) {
+          // We lost the race. Another player was crowned first.
+          // Roll back: do NOT deduct resources, do NOT change class.
+          // Tell the player they will become a Dragon Lord instead.
+          const winnerName = crowned.dragonGodName || crowned.dragonGodJid.split('@')[0];
+          let raceLostMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          raceLostMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
+          raceLostMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          raceLostMsg    += `You defeated the Leviathan — but you were not the first.\n\n`;
+          raceLostMsg    += `Its soul recognized *${winnerName}*, who slew it moments before you. The title of Dragon God has been claimed.\n\n`;
+          raceLostMsg    += `Your resources have *not* been consumed. Your class has *not* changed.\n\n`;
+          raceLostMsg    += `Those who seek the Leviathan's power may instead ascend as a *Dragon Lord*. Use \`${botConfig.getPrefix()} evolve\` and pick the Dragon Lord path to face its surviving spawn.`;
+
+          try { await sock.sendMessage(chatId, { text: raceLostMsg }); } catch (e) {}
+
+          state.active = false;
+          deleteGameState(sessionKey);
+          return;
+        }
+        // We won the race! We are now the one true Dragon God.
+        // Continue with normal evolution flow below, but flag this so we
+        // can add a global announcement after the success message.
+        state.isFirstDragonGod = true;
+      } catch (e) {
+        console.error('[DragonGod] Crown check failed:', e.message, e.stack);
+        // Fail-closed: do NOT grant Dragon God if we can't verify uniqueness.
+        try {
+          await sock.sendMessage(chatId, {
+            text: `❌ *EVOLUTION BLOCKED*\n\nYou defeated the Leviathan, but the Dragon God uniqueness check failed: ${e.message}\n\nYour resources have *not* been consumed. Please contact an admin — this is a rare error and your victory will be honored manually if needed.`
+          });
+        } catch {}
+        state.active = false;
+        deleteGameState(sessionKey);
+        return;
+      }
+    }
+
     if (user && nextClass) {
       const oldClassName =
         classSystem.getClassById(user.class)?.name || "Unknown";
@@ -6175,6 +6247,32 @@ async function endAdventure(sock, sessionKey, victory = true) {
       trialSuccessMsg += `🌳 \`${botConfig.getPrefix()} skill tree\` to continue your path!`;
 
       await sock.sendMessage(chatId, { text: trialSuccessMsg });
+
+      // ─────────────────────────────────────────────────────────────────
+      //  💡 GLOBAL ANNOUNCEMENT — first Dragon God ascension.
+      //  Broadcast to the chat where it happened + (if available) the
+      //  bot's primary community chat. This is a once-per-server event.
+      // ─────────────────────────────────────────────────────────────────
+      if (state.isFirstDragonGod) {
+        try {
+          const DragonGod = require('../models/DragonGod');
+          const record = await DragonGod.getCurrent();
+          const godName = (record && record.dragonGodName) || player.name || player.jid.split('@')[0];
+
+          let announce = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          announce    += `┃  🌊🐲 *THE LEVIATHAN HAS FALLEN* 🐲🌊  ┃\n`;
+          announce    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          announce    += `*${godName}* has slain the Leviathan and ascended as the *one true Dragon God* 🐲👑.\n\n`;
+          announce    += `The age of mortals ends. The age of the Dragon God begins.\n\n`;
+          announce    += `The path to Dragon God is now closed forever. Future seekers of draconic power must walk the path of the *Dragon Lord* 🐉⚔️ — command the Leviathan's surviving children, for the original is no more.\n\n`;
+          announce    += `_This title is held by one, and one alone. There will never be another._`;
+
+          // Announce in the chat where the trial happened.
+          try { await sock.sendMessage(chatId, { text: announce }); } catch {}
+        } catch (e) {
+          console.error('[DragonGod] Announcement failed:', e.message);
+        }
+      }
 
       state.active = false;
       deleteGameState(sessionKey);

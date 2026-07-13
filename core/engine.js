@@ -6356,6 +6356,224 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // ============================================
+                    // 💡 .g trial — Class Trial manager
+                    // ============================================
+                    // Shows pending trials for the player's class line and
+                    // lets them start one. Replaces the old ".g trial" hint
+                    // that pointed at a non-existent command.
+                    //
+                    // Usage:
+                    //   .g trial            — list pending trials for your class
+                    //   .g trial <number>   — start trial #N (same as .g evolve N)
+                    //   .g trial status     — show your completedTrials history
+                    //   .g trial info <bossId> — info about a specific trial boss
+                    if (primaryCmd === "trial") {
+                      const trialArgs = cmdArgs.slice(1);
+                      const trialSub = trialArgs[0]?.toLowerCase();
+
+                      // .g trial status — show completed trials
+                      if (trialSub === 'status' || trialSub === 'history') {
+                        try {
+                          const user = economy.getUser(senderJid);
+                          const completed = (user && user.completedTrials) || [];
+                          if (completed.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `📜 *Trial History*\n\nYou have not completed any class trials yet.\n\nUse \`${botConfig.getPrefix()} trial\` to see available trials.` });
+                          }
+                          let msg = `📜 *TRIAL HISTORY — ${senderName}*\n\n`;
+                          msg += `*Completed Trials (${completed.length}):*\n`;
+                          for (const bossId of completed) {
+                            msg += `• ✅ ${bossId.replace(/_/g, ' ')}\n`;
+                          }
+                          msg += `\n_Use \`${botConfig.getPrefix()} trial info <bossId>\` for details on a specific trial._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g trial info <bossId> — info about a specific trial boss
+                      if (trialSub === 'info' || trialSub === 'boss') {
+                        const bossId = (trialArgs[1] || '').toUpperCase().replace(/\s+/g, '_');
+                        if (!bossId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} trial info <bossId>\`\nExample: \`${botConfig.getPrefix()} trial info LEVIATHAN\`` });
+                        }
+                        try {
+                          const classEncounters = require('./rpg/classEncounters');
+                          const selectBoss = classEncounters.selectBoss;
+                          const boss = selectBoss ? selectBoss(50, bossId) : null;
+                          if (!boss) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Trial boss *${bossId}* not found.` });
+                          }
+                          let msg = `⚔️ *TRIAL BOSS INFO* ⚔️\n\n`;
+                          msg += `${boss.icon || '👹'} *${boss.name}*\n`;
+                          msg += `ID: \`${boss.id}\`\n\n`;
+                          msg += `*Stats:*\n`;
+                          if (boss.stats) {
+                            for (const [k, v] of Object.entries(boss.stats)) {
+                              msg += `• ${k.toUpperCase()}: ${v.toLocaleString()}\n`;
+                            }
+                          }
+                          // Find which class(es) require this boss
+                          const classSystem = require('./rpg/classSystem');
+                          const allClasses = classSystem.getAllClasses ? classSystem.getAllClasses() : Object.values(classSystem.CLASSES || {});
+                          const requires = (Array.isArray(allClasses) ? allClasses : []).filter(c => c && c.requirement && c.requirement.trialBoss === boss.id);
+                          if (requires.length > 0) {
+                            msg += `\n*Required for:*\n`;
+                            for (const c of requires) {
+                              msg += `• ${c.icon || '🔹'} ${c.name} (${c.tier})\n`;
+                            }
+                          }
+                          // Check if Dragon God is taken (only for LEVIATHAN)
+                          if (bossId === 'LEVIATHAN') {
+                            try {
+                              const DragonGod = require('./models/DragonGod');
+                              const existing = await DragonGod.getCurrent();
+                              if (existing) {
+                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                                msg += `\n🌊 *The Leviathan has already been slain.*\n`;
+                                msg += `Dragon God: *${godName}* (crowned ${new Date(existing.ascendedAt).toLocaleDateString()})\n`;
+                                msg += `_The path to Dragon God is closed. Seek the Dragon Lord path instead._\n`;
+                              } else {
+                                msg += `\n🌊 *The Leviathan lives.* No Dragon God has been crowned yet.\n`;
+                                msg += `_The first to slay it becomes the one true Dragon God._\n`;
+                              }
+                            } catch (e) {
+                              msg += `\n_(Could not check Dragon God status: ${e.message})_\n`;
+                            }
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // .g trial <number> — start trial #N (delegates to evolve)
+                      if (trialSub && /^\d+$/.test(trialSub)) {
+                        // Delegate to handleEvolve with the number arg
+                        await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, [trialSub]);
+                        return;
+                      }
+
+                      // .g trial (no args) — list pending trials
+                      try {
+                        const user = economy.getUser(senderJid);
+                        if (!user) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Use `.g register` first.' });
+                        }
+                        const userClass = user.class;
+                        if (!userClass) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You don't have a class yet. Use \`${botConfig.getPrefix()} class\` to pick one.` });
+                        }
+                        const classSystem = require('./rpg/classSystem');
+                        const currentClass = classSystem.getClassById(userClass);
+                        if (!currentClass) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Could not find your current class.' });
+                        }
+
+                        // Find evolution paths
+                        const evolvesInto = currentClass.evolves_into || [];
+                        const completed = (user.completedTrials) || [];
+
+                        let msg = `⚔️ *CLASS TRIALS* ⚔️\n\n`;
+                        msg += `Your class: ${currentClass.icon} *${currentClass.name}* (${currentClass.tier})\n`;
+                        msg += `Completed trials: ${completed.length}\n\n`;
+
+                        if (evolvesInto.length === 0) {
+                          msg += `_This class has no further evolutions._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+
+                        msg += `*Available Evolution Paths:*\n\n`;
+                        let pathNum = 1;
+                        for (const evoId of evolvesInto) {
+                          const evoClass = classSystem.getClassById(evoId);
+                          if (!evoClass) continue;
+                          const req = evoClass.requirement || {};
+                          const trialBoss = req.trialBoss;
+                          const isCompleted = trialBoss && completed.includes(trialBoss);
+                          const isUnique = evoClass.isUnique;
+
+                          msg += `${pathNum}. ${evoClass.icon} *${evoClass.name}*`;
+                          if (isUnique) msg += ` [UNIQUE]`;
+                          if (isCompleted) msg += ` ✅ Trial complete`;
+                          msg += `\n`;
+                          if (trialBoss) {
+                            msg += `   ⚔️ Trial: ${trialBoss.replace(/_/g, ' ')}\n`;
+                          }
+                          if (req.level) msg += `   📊 Level: ${req.level}\n`;
+                          if (req.gold) msg += `   💰 Zeni: ${req.gold.toLocaleString()}\n`;
+                          if (req.questsCompleted) msg += `   📜 Quests: ${req.questsCompleted}\n`;
+                          if (req.dragonsKilled) msg += `   🐲 Dragons: ${req.dragonsKilled}\n`;
+
+                          // Special Dragon God status
+                          if (evoId === 'DRAGON_GOD') {
+                            try {
+                              const DragonGod = require('./models/DragonGod');
+                              const existing = await DragonGod.getCurrent();
+                              if (existing) {
+                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                                msg += `   🌊 *CLOSED* — Dragon God: ${godName}\n`;
+                                msg += `   _Use the Dragon Lord path instead._\n`;
+                              } else {
+                                msg += `   🌊 *OPEN* — No Dragon God yet. First to slay Leviathan wins.\n`;
+                              }
+                            } catch (e) {}
+                          }
+                          msg += `\n`;
+                          pathNum++;
+                        }
+
+                        msg += `*Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} trial <number>\` — start trial #N\n`;
+                        msg += `• \`${botConfig.getPrefix()} trial status\` — view completed trials\n`;
+                        msg += `• \`${botConfig.getPrefix()} trial info <bossId>\` — boss info\n`;
+                        msg += `• \`${botConfig.getPrefix()} evolve\` — full evolution menu`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      } catch (e) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
+                    // ============================================
+                    // 💡 .g dragongod — view the one true Dragon God
+                    // ============================================
+                    if (primaryCmd === "dragongod" || primaryCmd === "dglord") {
+                      try {
+                        const DragonGod = require('./models/DragonGod');
+                        const existing = await DragonGod.getCurrent();
+                        if (!existing) {
+                          let msg = `🌊 *The Leviathan Lives* 🌊\n\n`;
+                          msg += `No Dragon God has been crowned yet.\n\n`;
+                          msg += `The first player to defeat the *Leviathan* in a Class Trial will ascend as the *one and only* Dragon God 🐲👑.\n\n`;
+                          msg += `Once crowned, the path closes forever. All future Dragon-class ascenders become *Dragon Lords* 🐉⚔️ instead.\n\n`;
+                          msg += `_The Leviathan stirs in the deep, waiting for a champion._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          return;
+                        }
+                        const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                        const ascendedAt = new Date(existing.ascendedAt);
+                        let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                        msg    += `┃  🐲👑 *THE ONE TRUE DRAGON GOD* 👑🐲  ┃\n`;
+                        msg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                        msg    += `*${godName}*\n`;
+                        msg    += `Crowned: ${ascendedAt.toLocaleString()}\n`;
+                        msg    += `Trial boss slain: ${existing.bossId.replace(/_/g, ' ')}\n\n`;
+                        msg    += `_This title is held by one, and one alone. There will never be another Dragon God._\n\n`;
+                        msg    += `*Successor class:* Dragon Lord 🐉⚔️\n`;
+                        msg    += `Future Dragon-class ascensions become Dragon Lord, NOT Dragon God.\n`;
+                        msg    += `Use \`${botConfig.getPrefix()} trial\` to view your path.`;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                      } catch (e) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                      }
+                      return;
+                    }
+
                     // .j skill up/upgrade/learn/reset
                     if (primaryCmd === "skill") {
                       const action = cmdArgs[1];

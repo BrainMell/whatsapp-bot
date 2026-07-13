@@ -4003,6 +4003,265 @@ const SKILL_TREES = {
                         description: 'Incinerate foes with dragon fire',
                         animation: '🐲🔥💨',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    leviathans_bane: {
+                        id: 'leviathans_bane',
+                        name: "Leviathan's Bane",
+                        tier: 2,
+                        requiredLevel: 50,
+                        maxLevel: 5,
+                        energyCost: [40, 38, 36, 34, 32],
+                        cooldown: 3,
+                        damageMultiplier: [5.5, 6.0, 6.5, 7.0, 7.5],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        description: 'Channel the memory of the slain Leviathan. Ignores 60% of target DEF. Bonus 3× damage vs aquatic enemies.',
+                        animation: '🌊🐲⚔️',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    dragonform: {
+                        id: 'dragonform',
+                        name: 'Dragonform',
+                        tier: 3,
+                        requiredLevel: 70,
+                        maxLevel: 3,
+                        energyCost: [80, 75, 70],
+                        cooldown: 6,
+                        buffType: 'TRANSFORM',
+                        buffDuration: [3, 4, 5],
+                        buffs: [
+                            { stat: 'atk', multiplier: 1.5 },
+                            { stat: 'def', multiplier: 1.5 },
+                            { stat: 'mag', multiplier: 1.5 },
+                        ],
+                        targeting: 'SELF',
+                        description: 'Transform into full dragon form for 3-5 turns. +50% ATK/DEF/MAG. All attacks gain fire element.',
+                        animation: '🐲✨🔥',
+                        skillPointCost: [6, 8, 10]
+                    },
+                    apocalypse_wing: {
+                        id: 'apocalypse_wing',
+                        name: 'Apocalypse Wing',
+                        tier: 4,
+                        requiredLevel: 80,
+                        maxLevel: 3,
+                        energyCost: [120, 110, 100],
+                        cooldown: 8,
+                        damageMultiplier: [9.0, 10.0, 11.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_ALL',
+                        isUltimate: true,
+                        isAscended: true,
+                        description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
+                        animation: '🌋🌊🐉🔥',
+                        skillPointCost: [8, 10, 12]
+                    }
+                }
+            },
+            ASCENDANCY: {
+                name: 'Divine Scales',
+                icon: '👑',
+                skills: {
+                    empyreal_ward: {
+                        id: 'empyreal_ward',
+                        name: 'Empyreal Ward',
+                        tier: 1,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 4,
+                        buffType: 'SHIELD',
+                        shieldMultiplier: [2.0, 2.5, 3.0, 3.5, 4.0],
+                        buffDuration: [2, 2, 3, 3, 4],
+                        targeting: 'SELF',
+                        description: 'Weave dragon scales into a shield. Absorbs 2-4× MAG damage. Cannot be dispelled.',
+                        animation: '🐲🛡️✨',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    soul_of_the_deep: {
+                        id: 'soul_of_the_deep',
+                        name: 'Soul of the Deep',
+                        tier: 2,
+                        requiredLevel: 55,
+                        maxLevel: 5,
+                        passive: true,
+                        passiveEffects: {
+                            hpRegenPerTurn: [0.02, 0.03, 0.04, 0.05, 0.06],
+                            manaRegenPerTurn: [0.05, 0.07, 0.09, 0.11, 0.13],
+                            statusImmunity: ['DROWN', 'FREEZE', 'POISON'],
+                        },
+                        description: 'Passive: The Leviathan\'s soul sustains you. Regen 2-6% HP and 5-13% MP per turn. Immune to Drown/Freeze/Poison.',
+                        skillPointCost: [5, 6, 7, 8, 9]
+                    },
+                    dragon_gods_decree: {
+                        id: 'dragon_gods_decree',
+                        name: "Dragon God's Decree",
+                        tier: 3,
+                        requiredLevel: 75,
+                        maxLevel: 3,
+                        energyCost: [60, 55, 50],
+                        cooldown: 5,
+                        debuffType: 'SUPPRESS',
+                        debuffDuration: [2, 3, 4],
+                        targeting: 'AOE_ALL',
+                        description: 'All enemies are silenced and pacified for 2-4 turns. Their buffs are stripped. "Kneel," you say. They kneel.',
+                        animation: '🐲👑⚡',
+                        skillPointCost: [7, 9, 11]
+                    }
+                }
+            }
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  DRAGON LORD — successor class skill tree.
+    //  Distinct identity: where Dragon God channels the slain Leviathan's
+    //  oceanic apocalypse, Dragon Lord COMMANDS its surviving children.
+    //  Dragon God = solitary divine power. Dragon Lord = pack leader.
+    //  Mechanics: summons, pack buffs, more aggressive / less defensive.
+    // ═══════════════════════════════════════════════════════════════════════
+    DRAGON_LORD: {
+        name: 'Dragon Lord',
+        icon: '🐉⚔️',
+        skillPointsPerLevel: 3,
+        trees: {
+            DOMINION: {
+                name: 'Wyrmlord',
+                icon: '🐉',
+                skills: {
+                    wyrm_call: {
+                        id: 'wyrm_call',
+                        name: 'Wyrm Call',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [28, 26, 24, 22, 20],
+                        cooldown: 3,
+                        summon: {
+                            type: 'WYRMLING',
+                            count: [1, 1, 2, 2, 3],
+                            hpPerLevel: [200, 280, 360, 440, 520],
+                            atkPerLevel: [40, 55, 70, 85, 100],
+                            duration: 3,
+                        },
+                        targeting: 'SELF',
+                        description: 'Summon 1-3 wyrmlings to fight alongside you for 3 turns. They breathe fire on your targets.',
+                        animation: '🥚🐉孵化',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    scale_storm: {
+                        id: 'scale_storm',
+                        name: 'Scale Storm',
+                        tier: 2,
+                        requiredLevel: 50,
+                        maxLevel: 5,
+                        energyCost: [38, 36, 34, 32, 30],
+                        cooldown: 3,
+                        damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_SMALL',
+                        bleedPerTurn: [0.05, 0.07, 0.09, 0.11, 0.13],
+                        bleedDuration: 3,
+                        description: 'Launch a storm of shed dragon scales. 4-6× PHYS damage to all enemies + 5-13% bleed for 3 turns.',
+                        animation: '🌪️🐉⚔️',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    lords_decree: {
+                        id: 'lords_decree',
+                        name: "Lord's Decree",
+                        tier: 3,
+                        requiredLevel: 70,
+                        maxLevel: 3,
+                        energyCost: [70, 65, 60],
+                        cooldown: 5,
+                        buffType: 'PARTY_BUFF',
+                        buffDuration: [3, 4, 5],
+                        buffs: [
+                            { stat: 'atk', multiplier: 1.3 },
+                            { stat: 'spd', multiplier: 1.2 },
+                            { stat: 'crit', flatBonus: 15 },
+                        ],
+                        targeting: 'PARTY',
+                        description: 'All party members gain +30% ATK, +20% SPD, +15% CRIT for 3-5 turns. "For the Lord!"',
+                        animation: '🐉👑⚔️',
+                        skillPointCost: [6, 8, 10]
+                    },
+                    flight_of_the_wyrms: {
+                        id: 'flight_of_the_wyrms',
+                        name: 'Flight of the Wyrms',
+                        tier: 4,
+                        requiredLevel: 80,
+                        maxLevel: 3,
+                        energyCost: [110, 100, 90],
+                        cooldown: 8,
+                        damageMultiplier: [8.5, 9.5, 10.5],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_ALL',
+                        isUltimate: true,
+                        isAscended: true,
+                        summonsWave: {
+                            type: 'WYRMLING',
+                            count: 3,
+                            hpPerLevel: 400,
+                            atkPerLevel: 80,
+                            duration: 3,
+                        },
+                        description: 'Call down a flight of wyrms. 8.5-10.5× PHYS to all enemies + 3 wyrmlings join you. The sky IS yours.',
+                        animation: '🐉🐉🐉🔥',
+                        skillPointCost: [8, 10, 12]
+                    }
+                }
+            },
+            BROOD: {
+                name: 'Broodmother',
+                icon: '🥚',
+                skills: {
+                    draconic_vitality: {
+                        id: 'draconic_vitality',
+                        name: 'Draconic Vitality',
+                        tier: 1,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        passive: true,
+                        passiveEffects: {
+                            maxHpBonus: [0.10, 0.15, 0.20, 0.25, 0.30],
+                            hpRegenPerTurn: [0.03, 0.04, 0.05, 0.06, 0.07],
+                            summonHpBonus: [0.15, 0.20, 0.25, 0.30, 0.35],
+                        },
+                        description: 'Passive: +10-30% Max HP, regen 3-7% HP/turn, your summons gain +15-35% HP. The bloodline runs deep.',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    empathic_scales: {
+                        id: 'empathic_scales',
+                        name: 'Empathic Scales',
+                        tier: 2,
+                        requiredLevel: 55,
+                        maxLevel: 5,
+                        energyCost: [30, 28, 26, 24, 22],
+                        cooldown: 4,
+                        buffType: 'DAMAGE_SHARE',
+                        buffDuration: [2, 2, 3, 3, 4],
+                        damageRedirection: [0.30, 0.35, 0.40, 0.45, 0.50],
+                        targeting: 'PARTY',
+                        description: 'For 2-4 turns, 30-50% of damage dealt to party members is redirected to your wyrmlings instead. The Lord protects.',
+                        animation: '🐉🛡️✨',
+                        skillPointCost: [5, 6, 7, 8, 9]
+                    },
+                    dragon_lords_aegis: {
+                        id: 'dragon_lords_aegis',
+                        name: "Dragon Lord's Aegis",
+                        tier: 3,
+                        requiredLevel: 75,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        cooldown: 5,
+                        buffType: 'COUNTER',
+                        buffDuration: [2, 3, 4],
+                        counterDamageMultiplier: [1.5, 2.0, 2.5],
+                        targeting: 'SELF',
+                        description: 'For 2-4 turns, anyone who attacks you takes 1.5-2.5× counter damage. Your wyrmlings also gain this effect.',
+                        animation: '🐉🛡️⚔️',
+                        skillPointCost: [7, 9, 11]
                     }
                 }
             }

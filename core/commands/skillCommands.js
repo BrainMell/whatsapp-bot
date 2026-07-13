@@ -633,9 +633,64 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     if (chosen.requirement?.trialBoss && !(user.completedTrials || []).includes(chosen.requirement.trialBoss)) {
         const guildAdventure = require('../rpg/guildAdventure');
         const sessionKey = `${chatId}_${senderJid}`;
-        
+
         if (guildAdventure.isUserInAdventure(sessionKey)) {
             return sock.sendMessage(chatId, { text: `❌ Finish your current adventure before starting your Class Trial!` });
+        }
+
+        // ───────────────────────────────────────────────────────────────────
+        //  💡 DRAGON GOD UNIQUENESS GATE
+        //  Only ONE player may ever hold the DRAGON_GOD class — the first
+        //  to defeat the Leviathan. Once crowned, the path closes forever
+        //  and all future Dragon-class ascenders become DRAGON_LORD instead.
+        //  We check here BEFORE the trial starts so we can redirect them
+        //  to the Dragon Lord path (Leviathan Spawn Alpha trial) rather
+        //  than waste their time fighting an unwinnable-for-the-title boss.
+        // ───────────────────────────────────────────────────────────────────
+        if (chosen.id === 'DRAGON_GOD') {
+            try {
+                const DragonGod = require('../models/DragonGod');
+                const existing = await DragonGod.getCurrent();
+                if (existing) {
+                    // The Leviathan is dead. The path is closed.
+                    // Find the Dragon Lord class definition so we can show
+                    // the player their alternative path.
+                    const dragonLord = classSystem.getClassById('DRAGON_LORD');
+                    const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                    let redirectMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                    redirectMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
+                    redirectMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                    redirectMsg    += `The Leviathan's soul recognized a single champion — *${godName}* — the one true Dragon God. The path has closed forever.\n\n`;
+                    redirectMsg    += `Those who seek its power may instead ascend as a *Dragon Lord*, commanding the Leviathan's surviving children.\n\n`;
+                    if (dragonLord) {
+                        redirectMsg += `🐉 *Dragon Lord* ${dragonLord.icon}\n`;
+                        redirectMsg += `_${dragonLord.desc}_\n`;
+                        redirectMsg += `\n*Requirements:*\n`;
+                        redirectMsg += `• Level ${dragonLord.requirement.level}\n`;
+                        redirectMsg += `• ${dragonLord.requirement.questsCompleted} quests completed\n`;
+                        redirectMsg += `• ${dragonLord.requirement.dragonsKilled} dragons killed\n`;
+                        redirectMsg += `• ${dragonLord.requirement.gold.toLocaleString()} Zeni\n`;
+                        redirectMsg += `• Trial: ${dragonLord.requirement.trialBoss.replace(/_/g, ' ')}\n\n`;
+                        redirectMsg += `Use \`${getPrefix()} evolve\` and pick the Dragon Lord path to begin your trial.`;
+                    } else {
+                        redirectMsg += `_Dragon Lord path is being prepared. Try again soon._`;
+                    }
+                    return sock.sendMessage(chatId, { text: redirectMsg });
+                }
+                // No existing Dragon God — this player is attempting the
+                // FIRST ascension. Let them proceed, but flag it.
+                await sock.sendMessage(chatId, {
+                    text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God — forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
+                });
+            } catch (e) {
+                console.error('[DragonGod] Uniqueness check failed:', e.message);
+                // Fail-open is dangerous here — if the DB check errors, we
+                // could accidentally let two players race to Dragon God.
+                // Fail-closed: block the trial until the check works.
+                return sock.sendMessage(chatId, {
+                    text: `❌ Could not verify Dragon God uniqueness. Please try again in a moment.\n_Error: ${e.message}_`
+                });
+            }
         }
 
         const trialMsg = `⚔️ *CLASS TRIAL INITIATED* ⚔️\n\nTo evolve into a *${chosen.name}*, you must first defeat the **${chosen.requirement.trialBoss.replace('_', ' ')}**!\n\nPrepare yourself... the battle begins in 5 seconds.`;

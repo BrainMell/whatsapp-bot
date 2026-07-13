@@ -905,7 +905,13 @@ const BOSS_ENCOUNTERS = {
         { id: 'ETERNAL_DRAGON',      name: 'Eternal Dragon',      icon: '🐉✨', stats: { hp: 92000, atk: 800, def: 200, mag: 950, spd: 55 }, levelRange: [1, 100] },
         { id: 'SHADOW_LORD',         name: 'Shadow Lord',         icon: '🌑👑', stats: { hp: 38000, atk: 540, def: 70,  mag: 620, spd: 80 }, levelRange: [1, 100] },
         { id: 'PRIMORDIAL_EVIL',     name: 'Primordial Evil',     icon: '💫👹', stats: { hp: 72000, atk: 760, def: 110, mag: 980, spd: 60 }, levelRange: [1, 100] },
-        { id: 'GRAVEYARD_LORD',      name: 'Graveyard Lord',      icon: '🪦💀', stats: { hp: 41000, atk: 480, def: 90,  mag: 700, spd: 35 }, levelRange: [1, 100] }
+        { id: 'GRAVEYARD_LORD',      name: 'Graveyard Lord',      icon: '🪦💀', stats: { hp: 41000, atk: 480, def: 90,  mag: 700, spd: 35 }, levelRange: [1, 100] },
+        // 💡 Dragon Lord successor trial boss — a stronger Leviathan Spawn
+        // that emerged after the original Leviathan was slain. Used for
+        // post-first-kill Dragon-class ascensions. NOT the same as the
+        // LEVIATHAN_SPAWN that spawns naturally in the Toxic Cave dungeon
+        // (which has only 350 HP).
+        { id: 'LEVIATHAN_SPAWN_ALPHA', name: 'Leviathan Spawn Alpha', icon: '🌊🐉', stats: { hp: 78000, atk: 680, def: 160, mag: 850, spd: 50 }, levelRange: [1, 100] },
     ]
 };
 

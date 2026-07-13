@@ -161,13 +161,13 @@ const EVOLVED_CLASSES = {
         requirement: { level: 40, questsCompleted: 30, gold: 150000, trialBoss: 'ELDER_FLAME' },
         evolutionCost: 150000,
         passive: { name: 'Dragon Bane', desc: `Deal 3× damage to dragon-type enemies. Immune to fire DoT.` },
-        evolves_into: ['DRAGON_GOD'],
+        evolves_into: ['DRAGON_GOD', 'DRAGON_LORD'],
     },
     DRAGON_GOD: {
         id: 'DRAGON_GOD',
         name: 'Dragon God',
         icon: '🐲👑',
-        desc: `They did not slay the dragon. They became it.`,
+        desc: `They did not slay the dragon. They became it. *One-of-one — the first to fall the Leviathan, forever.*`,
         tier: 'ASCENDED',
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
@@ -175,6 +175,31 @@ const EVOLVED_CLASSES = {
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 100, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 QA: reduced from 200 to 100
         evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.` },
+        isUnique: true, // 💡 Only ONE player may hold this class — ever.
+        uniqueLockId: 'LEVIATHAN', // matches DragonGod model's bossId
+    },
+    // ────────────────────────────────────────────────────────────────────────
+    //  DRAGON LORD — successor class to Dragon God.
+    //  Once the Leviathan has been slain and a Dragon God crowned, every
+    //  future Dragonslayer who completes their ascension becomes a Dragon
+    //  Lord instead. Same tier, similar power curve, distinct mechanics.
+    //  Trial boss: LEVIATHAN_SPAWN_ALPHA — a stronger Leviathan Spawn
+    //  (NOT the original Leviathan, who has been defeated forever).
+    // ────────────────────────────────────────────────────────────────────────
+    DRAGON_LORD: {
+        id: 'DRAGON_LORD',
+        name: 'Dragon Lord',
+        icon: '🐉⚔️',
+        desc: `The Leviathan is gone, but its children remain. A Lord rules them.`,
+        tier: 'ASCENDED',
+        evolvedFrom: 'DRAGONSLAYER',
+        role: 'TANK',
+        stats: { hp: 540, atk: 48, def: 38, mag: 30, spd: 18, luck: 22, crit: 22 },
+        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 100, gold: 500000, trialBoss: 'LEVIATHAN_SPAWN_ALPHA' },
+        evolutionCost: 500000,
+        passive: { name: 'Wyrmguard', desc: `Immune to fear and stun. Reflects 25% of melee damage as fire damage. Damage taken from non-dragons reduced by 35%.` },
+        isSuccessor: true,    // marks this as the post-first-Leviathan-kill path
+        succeeds: 'DRAGON_GOD', // documents the lineage
     },
 
     // ─── SCOUT LINE ──────────────────────────────
@@ -886,7 +911,13 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
 
             // Trial boss must be in completedTrials
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
-                missing.push(`Defeat ${req.trialBoss} (${require('../../botConfig').getPrefix()} trial)`);
+                // 💡 FIX: hint used to say '.g trial' — but that command did
+                // not exist. The actual trigger is `.g evolve <number>` which
+                // auto-starts the trial boss fight when the player picks an
+                // evolution that requires one. `.g trial` is now a real
+                // command (see engine.js) that lists pending trials and can
+                // also start them.
+                missing.push(`Defeat ${req.trialBoss} (use ${require('../../botConfig').getPrefix()} evolve or ${require('../../botConfig').getPrefix()} trial)`);
             }
 
             evolutions.push({
