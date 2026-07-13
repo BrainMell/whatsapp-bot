@@ -2766,8 +2766,17 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     ...state.enemies,
   ];
 
+  // 💡 FIRST-TURN GUARANTEE: Give players a head start so they always get
+  // at least 1 turn before any enemy acts. Players get full speed as
+  // initial gauge, enemies get 0. This means the fastest player will
+  // always reach the threshold first, giving them a chance to buff,
+  // heal, or attack before the boss responds.
   allCombatants.forEach((c) => {
-    c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Initial headstart based on speed
+    if (c.isEnemy || c.isBoss) {
+      c.actionGauge = 0; // Enemies start with 0 gauge
+    } else {
+      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players get headstart
+    }
   });
 
   state.turnOrder = allCombatants;
@@ -3003,13 +3012,19 @@ async function processCombatTurn(sock, sessionKey) {
             `⚠️ *${activeActor.name}* grows more violent!`;
         }
         if (state.turnCount > 30) {
-          await sock.sendMessage(state.chatId, {
-            text: `💀 *${activeActor.name}* UNLEASHING TOTAL ANNIHILATION!`,
-          });
+          // 💡 FIX: Show damage values instead of silently setting HP to 0.
+          // Calculate overkill damage so players can see what happened.
+          let annihilationMsg = `💀 *${activeActor.name}* UNLEASHING TOTAL ANNIHILATION!\n\n`;
           state.players.forEach((p) => {
+            if (p.stats.hp <= 0) return; // already dead
+            const damage = p.stats.hp + Math.floor(p.stats.maxHp * 0.5); // overkill
             p.stats.hp = 0;
             p.isDead = true;
+            annihilationMsg += `💥 ${p.name} takes *${damage}* damage! (HP: 0)\n`;
           });
+          try {
+            await sock.sendMessage(state.chatId, { text: annihilationMsg });
+          } catch (e) {}
           await endCombat(sock, false, sessionKey);
           return;
         }
@@ -4860,6 +4875,14 @@ async function startJourney(sock, sessionKey) {
     p.stats.spd = baseStats.spd;
     p.stats.luck = baseStats.luck;
     p.stats.crit = baseStats.crit;
+    // 💡 CRITICAL FIX: Copy secondary stats that were calculated by
+    // progression.getBaseStats() but never assigned to the combat player.
+    // Without these, damage reduction was always 0 (players took full
+    // damage from boss ultimates) and evasion was always 0 (players
+    // could never dodge). This was the root cause of the "defense is
+    // ignored" and "one-shot by boss" complaints.
+    p.stats.dmgReduction = baseStats.dmgReduction || 0;
+    p.stats.evasion = baseStats.evasion || 0;
 
     // NEW: Combat system requirements
     p.currentHP = p.stats.hp;
@@ -6471,12 +6494,22 @@ async function applyAbilityEffect(
         }
       }
 
-      // Ignore defense bonus (adds back a % of DEF as bonus damage)
+      // 💡 FIX: ignoreDefense now REDUCES the defense mitigation that was
+      // already applied by calculateDamage(), instead of adding bonus damage.
+      // The old code added def*(ignoreDefense/100) as BONUS damage, which
+      // meant a skill with ignoreDefense:60 against a target with 8000 DEF
+      // would deal MORE damage than against a target with 0 DEF. That's
+      // backwards — ignoreDefense should reduce how much defense matters,
+      // not punish high-DEF targets.
+      //
+      // calculateDamage already subtracted def*0.5. We add back a fraction
+      // of that subtraction proportional to ignoreDefense:
+      //   ignoreDefense:50 → adds back 50% of what DEF subtracted
+      //   ignoreDefense:100 → adds back 100% (full defense bypass)
       if (effect.ignoreDefense) {
-        const defReduction = Math.floor(
-          target.stats.def * (effect.ignoreDefense / 100),
-        );
-        damage += defReduction;
+        const defSubtracted = Math.floor((target.stats.def || 0) * 0.5);
+        const refund = Math.floor(defSubtracted * (effect.ignoreDefense / 100));
+        damage += refund;
       }
 
       // Execute mechanics

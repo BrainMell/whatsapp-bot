@@ -21,6 +21,7 @@ const mongoose = require('mongoose');
 
 // ─── FLOOR TIER DEFINITIONS ───────────────────────────────────────────────
 function getFloorTier(floor) {
+  if (floor >= 200) return 'GOD';
   if (floor >= 100) return 'ABYSSAL_GOD';
   if (floor >= 50) return 'SSS';
   if (floor >= 21) return 'SS';
@@ -52,8 +53,9 @@ const ABYSS_ENEMY_POOLS = {
   A: ['STORM_CALLER', 'VOID_HARBINGER', 'BLOOD_REAVER', 'ANCIENT_GUARDIAN'],
   S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
   SS: ['VOID_TITAN', 'MUTATION_PRIME', 'ELEMENTAL_ARCHON'],
-  SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'], // SSS mixes all
+  SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'],
   ABYSSAL_GOD: ['ABYSSAL_GOD'],
+  GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
 };
 
 const ABYSS_BOSS_POOL = {
@@ -65,12 +67,13 @@ const ABYSS_BOSS_POOL = {
   SS: 'VOID_TITAN',
   SSS: 'ABYSSAL_GOD',
   ABYSSAL_GOD: 'ABYSSAL_GOD',
+  GOD: 'ABYSSAL_GOD',
 };
 
 // ─── REWARDS PER FLOOR ────────────────────────────────────────────────────
 function getFloorRewards(floor, isBoss) {
   const tier = getFloorTier(floor);
-  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000 };
+  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
   const mult = tierMult[tier] || 1;
   const bossMult = isBoss ? 5 : 1;
   return {
@@ -136,6 +139,125 @@ async function startRun(userId, playerStats) {
     run,
     message: `🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n_Floor 1 — ${enemy.name}_\n_HP: ${enemy.hp}/${enemy.maxHp}_\n\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`,
   };
+}
+
+// ─── GENERATE FLOOR ENCOUNTER ─────────────────────────────────────────────
+// 20% chance of treasure/event instead of combat on non-boss floors.
+function generateFloorEncounter(floor) {
+  const isBoss = isBossFloor(floor);
+  
+  // Boss floors are always combat
+  if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor) };
+  
+  // Non-boss floors: 20% chance of treasure, 10% chance of event, 70% combat
+  const roll = Math.random();
+  if (roll < 0.20) {
+    return generateTreasureEncounter(floor);
+  } else if (roll < 0.30) {
+    return generateEventEncounter(floor);
+  }
+  return { type: 'combat', enemy: generateFloorEnemy(floor) };
+}
+
+// ─── TREASURE ENCOUNTERS ──────────────────────────────────────────────────
+function generateTreasureEncounter(floor) {
+  const tier = getFloorTier(floor);
+  const mult = getFloorMultiplier(floor);
+  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
+  const tm = tierMult[tier] || 1;
+  
+  const treasures = [
+    {
+      type: 'GOLD_CACHE',
+      name: 'Gold Cache',
+      icon: '💰',
+      desc: 'A glittering pile of ancient coins!',
+      gold: Math.floor(200 * tm * mult),
+    },
+    {
+      type: 'XP_SHRINE',
+      name: 'Experience Shrine',
+      icon: '✨',
+      desc: 'A mystical shrine radiating power.',
+      xp: Math.floor(100 * tm * mult),
+    },
+    {
+      type: 'HEALING_FOUNTAIN',
+      name: 'Healing Fountain',
+      icon: '💚',
+      desc: 'A crystal-clear fountain that restores vitality.',
+      healPercent: 0.50, // 50% HP restore
+    },
+    {
+      type: 'ENERGY_CRYSTAL',
+      name: 'Energy Crystal',
+      icon: '⚡',
+      desc: 'A pulsating crystal full of raw energy.',
+      energyRestore: 50,
+    },
+    {
+      type: 'MYSTERY_CHEST',
+      name: 'Mystery Chest',
+      icon: '🎁',
+      desc: 'An ornate chest — what could be inside?',
+      // Random reward: gold, XP, or rune drop chance
+      randomReward: true,
+      gold: Math.floor(500 * tm * mult),
+      xp: Math.floor(300 * tm * mult),
+      runeDropChance: floor >= 11 ? 0.25 : 0,
+    },
+  ];
+  
+  const treasure = treasures[Math.floor(Math.random() * treasures.length)];
+  return { type: 'treasure', treasure, floor };
+}
+
+// ─── EVENT ENCOUNTERS ─────────────────────────────────────────────────────
+function generateEventEncounter(floor) {
+  const events = [
+    {
+      type: 'TRAP',
+      name: 'Ancient Trap',
+      icon: '⚠️',
+      desc: 'A pressure plate clicks under your foot!',
+      choices: [
+        { id: '1', text: 'Endure it (HP check)', stat: 'def', difficulty: 10 + floor, 
+          success: { desc: 'You tank the hit!', damage: Math.floor(50 * getFloorMultiplier(floor) * 0.3) },
+          failure: { desc: 'The trap bites deep!', damage: Math.floor(50 * getFloorMultiplier(floor) * 0.8) } },
+        { id: '2', text: 'Dodge it (SPD check)', stat: 'spd', difficulty: 15 + floor,
+          success: { desc: 'You slip past!', damage: 0 },
+          failure: { desc: 'Too slow!', damage: Math.floor(50 * getFloorMultiplier(floor) * 0.5) } },
+      ],
+    },
+    {
+      type: 'CROSSROADS',
+      name: 'Mysterious Crossroads',
+      icon: '🗺️',
+      desc: 'Two paths lie before you.',
+      choices: [
+        { id: '1', text: 'Left path (risky, better rewards)', risk: 'high',
+          rewards: { gold: Math.floor(300 * getFloorMultiplier(floor)), xp: Math.floor(200 * getFloorMultiplier(floor)) },
+          danger: Math.floor(100 * getFloorMultiplier(floor)) },
+        { id: '2', text: 'Right path (safe, lesser rewards)', risk: 'low',
+          rewards: { gold: Math.floor(100 * getFloorMultiplier(floor)), xp: Math.floor(50 * getFloorMultiplier(floor)) },
+          danger: 0 },
+      ],
+    },
+    {
+      type: 'SHRINE',
+      name: 'Forgotten Shrine',
+      icon: '⛪',
+      desc: 'A shrine offers a blessing — for a price.',
+      choices: [
+        { id: '1', text: 'Pray (sacrifice HP for XP)', sacrifice: 'hp', amount: '20%',
+          reward: { xp: Math.floor(500 * getFloorMultiplier(floor)) } },
+        { id: '2', text: 'Leave it', nothing: true },
+      ],
+    },
+  ];
+  
+  const event = events[Math.floor(Math.random() * events.length)];
+  return { type: 'event', event, floor };
 }
 
 // ─── GENERATE FLOOR ENEMY ─────────────────────────────────────────────────
@@ -446,6 +568,9 @@ module.exports = {
   getFloorMultiplier,
   getFloorRewards,
   generateFloorEnemy,
+  generateFloorEncounter,
+  generateTreasureEncounter,
+  generateEventEncounter,
   RUN_COOLDOWN_MS,
   // 💡 Admin functions
   adminResetCooldown,

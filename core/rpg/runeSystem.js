@@ -93,8 +93,23 @@ function getSkillSlotCount(skill) {
 }
 
 // ─── GENERATE RUNE ID ─────────────────────────────────────────────────────
-function generateRuneId() {
-  return `rune_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+// 💡 FIX: Short sequential IDs instead of long timestamps+random strings.
+// Old format: "rune_1700000000_abc12345" (28 chars)
+// New format: "R-001" through "R-999999" (3-8 chars)
+// Uses a counter from MongoDB to ensure uniqueness.
+let _runeCounter = null;
+async function generateRuneId() {
+  if (_runeCounter === null) {
+    // Initialize counter from existing runes
+    try {
+      const count = await Rune.countDocuments();
+      _runeCounter = count;
+    } catch (e) {
+      _runeCounter = 0;
+    }
+  }
+  _runeCounter++;
+  return `R-${String(_runeCounter).padStart(4, '0')}`;
 }
 
 // ─── CREATE A RUNE INSTANCE ───────────────────────────────────────────────
@@ -103,7 +118,7 @@ async function createRune(ownerJid, type, tier, obtainedFrom = null) {
   if (!RUNE_TIERS[tier]) throw new Error(`Invalid rune tier: ${tier}`);
 
   const rune = new Rune({
-    runeId: generateRuneId(),
+    runeId: await generateRuneId(),
     ownerJid,
     type,
     tier,
