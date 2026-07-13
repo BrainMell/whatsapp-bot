@@ -1272,12 +1272,15 @@ function upgradeGuildBuilding(userJid, buildingId) {
   }
 
   const cost = upgrade.baseCost * (currentLevel + 1);
-  if ((guild.points || 0) < cost) {
-    return { success: false, message: `❌ Not enough Guild Points! Need: ${cost}, Have: ${guild.points}` };
+  // 💡 FIX #45: Building upgrades were consuming guild POINTS (XP) instead
+  // of guild BALANCE (gold/Zeni). Guild XP is for leveling the guild itself;
+  // building upgrades should use the guild bank balance.
+  if ((guild.balance || 0) < cost) {
+    return { success: false, message: `❌ Not enough guild funds! Need: ${cost.toLocaleString()} Zeni, Have: ${(guild.balance || 0).toLocaleString()} Zeni` };
   }
 
-  // Deduct points and level up
-  guild.points -= cost;
+  // Deduct from guild BALANCE (not points/XP) and level up
+  guild.balance = (guild.balance || 0) - cost;
   if (!guild.buildings[buildingId]) {
       guild.buildings[buildingId] = { level: 0, name: upgrade.name };
   }

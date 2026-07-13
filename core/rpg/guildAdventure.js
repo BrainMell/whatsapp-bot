@@ -3418,7 +3418,9 @@ async function performAction(sock, player, action, sessionKey) {
           }
         } else if (weaponId === "crystal_staff" || weaponId === "arcane_wand") {
           if (Math.random() < 0.20) {
-            player.stats.energy = Math.min(player.stats.maxEnergy, (player.stats.energy || 0) + 15);
+            const safeMaxEn = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+            const safeCurEn = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+            player.stats.energy = Math.min(safeMaxEn, safeCurEn + 15);
             resultMsg += `\n✨ *Mana Siphon:* Restored 15 energy!`;
           }
         } else if (weaponId === "greatsword") {
@@ -3636,7 +3638,9 @@ async function performAction(sock, player, action, sessionKey) {
             const enVal = item.effectValue || 0.4;
             const maxEn = target.stats.maxEnergy || 100;
             const enAmt = Math.floor(maxEn * enVal);
-            target.stats.energy = Math.min(maxEn, target.stats.energy + enAmt);
+            const safeMaxEn2 = Number.isFinite(target.stats.maxEnergy) ? target.stats.maxEnergy : 100;
+            const safeCurEn2 = Number.isFinite(target.stats.energy) ? target.stats.energy : 0;
+            target.stats.energy = Math.min(safeMaxEn2, safeCurEn2 + enAmt);
             target.currentEnergy = target.stats.energy;
             resultMsg += `\n⚡ Restored ${enAmt} energy to ${target.name}! (${Math.round(enVal * 100)}%)`;
             break;
@@ -7200,12 +7204,17 @@ async function applyAbilityEffect(
       // but had no handler — Mana Drain dealt damage but never restored energy.
       else if (effId === "energyRestore") {
         if (!player.isEnemy) {
+          // 💡 FIX #51: Validate all inputs to prevent NaN energy (infinite mana).
+          // Same bug class as P2 (infinite HP via NaN propagation).
+          const safeMaxEnergy = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+          const safeCurrentEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+          const safeValue = Number.isFinite(effData.value) ? effData.value : 0;
           const restore = Math.min(
-            Math.floor(effData.value),
-            (player.stats.maxEnergy || 100) - (player.stats.energy || 0),
+            Math.floor(safeValue),
+            safeMaxEnergy - safeCurrentEnergy,
           );
           if (restore > 0) {
-            player.stats.energy = (player.stats.energy || 0) + restore;
+            player.stats.energy = safeCurrentEnergy + restore;
             msg += `⚡ ${player.name} restores ${restore} energy!\n`;
           }
         }
