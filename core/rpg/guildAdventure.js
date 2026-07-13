@@ -2937,6 +2937,18 @@ async function processCombatTurn(sock, sessionKey) {
         }
       });
 
+      // 💡 FIX #36: Also tick down PLAYER skill cooldowns each turn.
+      // Previously player cooldowns were never tracked or decremented,
+      // so once a skill was used it stayed on "cooldown" forever (or
+      // was never enforced at all). Now we track and decrement them.
+      state.players.forEach((p) => {
+        if (!p.skillCooldowns) return;
+        for (const k of Object.keys(p.skillCooldowns)) {
+          p.skillCooldowns[k] = Math.max(0, (p.skillCooldowns[k] || 0) - 1);
+          if (p.skillCooldowns[k] <= 0) delete p.skillCooldowns[k];
+        }
+      });
+
       let activeActor = null;
       let ticks = 0;
       const maxTicks = 1000;
@@ -2991,6 +3003,46 @@ async function processCombatTurn(sock, sessionKey) {
       }
 
       if (!activeActor) break;
+
+      // 💡 FIX #37: Prevent same actor from acting twice in a row. After
+      // acting, the actor's gauge resets to 0. But if their speed is high
+      // enough, they can re-qualify on the very next tick before any other
+      // combatant reaches the threshold. This is especially common for
+      // high-speed bosses (S+ rank at 126%+ of player speed). The fix:
+      // if the same actor was just selected, skip them and let the gauge
+      // loop continue until a DIFFERENT combatant qualifies.
+      if (state.lastActorId && activeActor.id === state.lastActorId) {
+        // Same actor would act again — check if ANY other combatant also
+        // qualifies. If yes, let them go instead. If no, allow the repeat
+        // (otherwise combat could soft-lock with only one qualifying actor).
+        let alternativeFound = false;
+        for (const c of state.turnOrder) {
+          if (c.stats.hp <= 0) continue;
+          if (c.id === activeActor.id) continue;
+          if (c.actionGauge >= gaugeThreshold) {
+            alternativeFound = true;
+            activeActor = c;
+            highestGauge = c.actionGauge;
+            break;
+          }
+        }
+        // If no alternative, check if any other combatant is close to
+        // qualifying (within 1 tick). If so, give them that tick instead.
+        if (!alternativeFound) {
+          for (const c of state.turnOrder) {
+            if (c.stats.hp <= 0) continue;
+            if (c.id === activeActor.id) continue;
+            const cSpeed = c.stats.spd || 10;
+            if (c.actionGauge + cSpeed >= gaugeThreshold) {
+              // They'd qualify next tick — give them this tick
+              activeActor = null; // Force the loop to tick once more
+              break;
+            }
+          }
+          if (!activeActor) continue; // Re-enter the while loop for another tick
+        }
+      }
+      state.lastActorId = activeActor.id;
 
       // 💡 QA FIX: reset gauge to 0 (was -= 100). With -= 100, a fast
       // player's gauge stayed above 100 permanently, preventing enemies
@@ -5819,19 +5871,18 @@ async function processVotes(sock, encounter, sessionKey) {
     const rawBestStat = Math.max(
       ...state.players.map((p) => p.stats[choice.stat.toLowerCase()] || 0),
     );
-    // ⚠️ FIX (audit Task 4): previously 'total = roll + partyBestStat' which
-    // made the d20 roll irrelevant at high stats (DEF=471 → +471 bonus,
-    // always beat any reasonable difficulty). Now the stat bonus is CAPPED
-    // at +10 and scales at 1 bonus per 20 stat points, so:
-    //   stat 0-19  → +0 bonus (pure d20 roll)
-    //   stat 20-39 → +1 bonus
-    //   stat 100   → +5 bonus
-    //   stat 200+  → +10 bonus (capped)
-    // The d20 roll (1-20) now matters again — a low roll can still fail
-    // even with maxed stats, and a high roll can succeed with low stats.
-    // This restores the RNG element that makes stat checks feel like
-    // 'checks' instead of auto-pass/auto-fail.
-    const statBonus = Math.min(10, Math.floor(rawBestStat / 20));
+    // ⚠️ FIX (#44): previously stat bonus was capped at +10 (1 per 20 stat
+    // points), making high stats irrelevant. With difficulty values of 12-25+
+    // and a d20 roll, max total was 30 — but low rolls (1-5) + 10 bonus = 6-15,
+    // failing against difficulty 19+ at high ranks.
+    // Now: stat bonus scales at 1 per 10 stat points, capped at +25.
+    //   stat 0-9   → +0 bonus (pure d20 roll)
+    //   stat 10-19 → +1 bonus
+    //   stat 50    → +5 bonus
+    //   stat 100   → +10 bonus
+    //   stat 250+  → +25 bonus (capped)
+    // This makes high stats feel meaningful while keeping the d20 relevant.
+    const statBonus = Math.min(25, Math.floor(rawBestStat / 10));
     const total = roll + statBonus;
     const success = total >= choice.difficulty;
 
@@ -6585,6 +6636,20 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     // Rune system is optional — fall through with unmodified effect
   }
 
+  // 💡 FIX #36: Check and enforce skill cooldowns. Previously cooldowns
+  // were defined in skill data but never tracked or checked — players
+  // could spam any skill every turn. Now we track per-player cooldowns.
+  if (ability.cooldown && ability.cooldown > 0) {
+    if (!player.skillCooldowns) player.skillCooldowns = {};
+    const cd = player.skillCooldowns[ability.id];
+    if (cd && cd > 0) {
+      return {
+        success: false,
+        message: `❌ *${ability.name}* is on cooldown! (${cd} turn${cd > 1 ? 's' : ''} remaining)`,
+      };
+    }
+  }
+
   // 💡 QA FIX: use runeModifiedEffect.cost (if available) instead of ability.cost
   // so POWER/EFFICIENCY runes actually affect energy consumption.
   const effectiveCost = Number.isFinite(runeModifiedEffect.cost) ? runeModifiedEffect.cost
@@ -6599,6 +6664,12 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
 
   // Consume energy (clamped to 0 — never let NaN/Infinity sneak through)
   player.stats.energy = Math.max(0, (player.stats.energy || 0) - (effectiveCost === Infinity ? 0 : effectiveCost));
+
+  // 💡 FIX #36: Set skill cooldown after use
+  if (ability.cooldown && ability.cooldown > 0) {
+    if (!player.skillCooldowns) player.skillCooldowns = {};
+    player.skillCooldowns[ability.id] = ability.cooldown;
+  }
 
   // Apply ability effect (using rune-modified effect if runes are socketed)
   const result = await applyAbilityEffect(
