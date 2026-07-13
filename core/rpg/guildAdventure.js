@@ -6123,6 +6123,11 @@ async function endAdventure(sock, sessionKey, victory = true) {
       if (trialData.trialBoss && !user.completedTrials.includes(trialData.trialBoss)) {
         user.completedTrials.push(trialData.trialBoss);
       }
+      // 💡 FIX #40: Explicitly save immediately so completedTrials is
+      // persisted before any subsequent evolution attempt reads it.
+      // The debounced scheduleSave (500ms) could lose the data if the
+      // bot restarts or the user queries before the save fires.
+      economy.saveUser(player.jid);
 
       const level = progression.getLevel(player.jid);
 
@@ -6600,9 +6605,17 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     });
   }
 
+  // 💡 FIX #39: Deduplicate borrowed skills against learned abilities.
+  // If a player mirrored 'cleave' from WARRIOR but already has 'cleave'
+  // from FIGHTER, the mirrored copy would appear as a duplicate in the
+  // abilities list. Filter them out here.
+  const dedupedAbilities = learnedAbilities.filter((a, idx, arr) => 
+    arr.findIndex(x => x.id === a.id) === idx
+  );
+
   // Get the ability
   const index = parseInt(abilityIndex) - 1;
-  const ability = learnedAbilities[index];
+  const ability = dedupedAbilities[index];
 
   if (!ability) {
     return {
