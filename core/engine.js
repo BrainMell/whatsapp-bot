@@ -14090,6 +14090,9 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         msg += `*Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss attack\` — attack current floor enemy\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure on current floor\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — respond to event encounter\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss skip\` — skip treasure/event floor\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss status\` — view your active run\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss retreat\` — extract with 100% loot\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs this week\n`;
@@ -14187,6 +14190,37 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // 💡 .g abyss collect — collect treasure on current floor
+                      if (abyssSub === 'collect' || abyssSub === 'take' || abyssSub === 'loot') {
+                        try {
+                          const result = await abyssSystem.processTreasure(senderJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // 💡 .g abyss choose <1/2> — make a choice in event encounters
+                      if (abyssSub === 'choose' || abyssSub === 'pick' || abyssSub === 'select') {
+                        try {
+                          const choiceId = abyssArgs[1] || '1';
+                          const result = await abyssSystem.processEventChoice(senderJid, choiceId);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // 💡 .g abyss skip — skip treasure/event floor
+                      if (abyssSub === 'skip' || abyssSub === 'next') {
+                        try {
+                          const result = await abyssSystem.processSkip(senderJid);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
