@@ -973,7 +973,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     //      grant a guaranteed token (no RNG). ~1 guaranteed token per hour
     //      at 3 spawns/hour.
     //   2) RNG FALLBACK: non-token-bearing spawns (the other 2/3) still have
-    //      a 25% chance to drop a token. This keeps the old RNG excitement
+    //      a chance to drop a token. This keeps the old RNG excitement
     //      without the old inconsistency (the guaranteed layer ensures a
     //      steady baseline). Net result: ~1.5 tokens/hour during events.
     let tokenMsg = '';
