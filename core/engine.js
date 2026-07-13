@@ -12865,9 +12865,7 @@ _Sorted by guild level + XP_
                           const xp = guild.points || guild.xp || 0;
                           const xpNeeded = level * 1000;
                           const bank = guild.balance || 0;
-                          // 💡 QA FIX: getGuildPointsLeaderboard returns members as a COUNT (number),
-                          // not an array. Was doing (number).length → undefined.
-                          const members = typeof guild.members === 'number' ? guild.members : (guild.members || []).length;
+                          const members = typeof guild.members === 'number' ? guild.members : (Array.isArray(guild.members) ? guild.members.length : 0);
                           const archetype = guild.type || 'ADVENTURER';
                           const mg = miniGameMap.get(name);
 
@@ -13010,9 +13008,12 @@ _Sorted by guild level + XP_
                                 : i === 2
                                   ? "🥉"
                                   : `${i + 1}.`;
-                          text += `${medal} *${guild.name}*\n`;
-                          text += `   📊 ${guild.points.toLocaleString()} points\n`;
-                          text += `   👥 ${guild.members} members\n`;
+                          text += `${medal} *${guild.name}* [${guild.type || 'ADVENTURER'}]\n`;
+                          text += `   📊 Lv ${guild.level || 1} | XP ${guild.points.toLocaleString()}\n`;
+                          text += `   💰 Bank: ${(guild.balance || 0).toLocaleString()} | 👥 ${guild.members} members\n`;
+                          if (guild.warPoints > 0) {
+                            text += `   ⚔️ War Points: ${guild.warPoints}\n`;
+                          }
                           text += `━━━━━━━━━━━━━━━━\n`;
                         });
 

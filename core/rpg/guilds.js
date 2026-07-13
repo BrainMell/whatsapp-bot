@@ -1236,9 +1236,17 @@ function getGuildPointsLeaderboard(limit = 10) {
     .map(([name, guild]) => ({
       name,
       points: guild.points || 0,
-      members: guild.members.length
+      level: guild.level || 1,
+      balance: guild.balance || 0,
+      members: Array.isArray(guild.members) ? guild.members.length : 0,
+      type: guild.type || 'ADVENTURER',
+      warPoints: guild.warPoints || 0,
     }))
-    .sort((a, b) => b.points - a.points)
+    .sort((a, b) => {
+      // Sort by level first, then by XP within same level
+      if (b.level !== a.level) return b.level - a.level;
+      return b.points - a.points;
+    })
     .slice(0, limit);
 }
 
