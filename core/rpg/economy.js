@@ -1082,7 +1082,7 @@ ${starterClass.icon} Back to *${starterClass.name}*
   };
 }
 
-function updateAdventurerRank(userId) {
+async function updateAdventurerRank(userId) {
   const user = getUser(userId);
   if (!user) return null;
 
@@ -1119,7 +1119,10 @@ function updateAdventurerRank(userId) {
 
     // Mission completed (or no mission required) → promote!
     user.adventurerRank = calculatedRank;
-    scheduleSave(userId);
+    // 💡 FIX #50: Use saveUser (immediate MongoDB write) instead of
+    // scheduleSave (debounced 500ms). If the bot restarts before the
+    // debounced save fires, the rank promotion is lost.
+    await saveUser(userId);
 
     const rankData = classSystem.ADVENTURER_RANKS[calculatedRank];
     return {
@@ -1198,7 +1201,7 @@ function getRankMissionStatus(userId) {
  * Claim a completed rank mission. Marks it as completed on the user
  * and triggers a rank update check.
  */
-function claimRankMission(userId) {
+async function claimRankMission(userId) {
   const user = getUser(userId);
   if (!user) return { success: false, message: 'User not found.' };
 
@@ -1235,10 +1238,11 @@ function claimRankMission(userId) {
 
   // Mark mission as completed
   user.completedRankMissions.push(gateMission.id);
-  scheduleSave(userId);
+  // 💡 FIX #50: immediate save, same as rank promotion
+  await saveUser(userId);
 
   // Now try to promote (this will check mission eligibility — which should pass now)
-  const rankResult = updateAdventurerRank(userId);
+  const rankResult = await updateAdventurerRank(userId);
 
   let msg = `🎉 *MISSION COMPLETE!* 🎉\n\n`;
   msg += `${gateMission.icon} *${gateMission.name}*\n`;
@@ -1308,11 +1312,22 @@ function incrementDragonKills(userId, amount = 1) {
   scheduleSave(userId);
 }
 
-function addQuestProgress(userId, amount, won = true) {
+async function addQuestProgress(userId, amount, won = true) {
   const user = getUser(userId);
   if (!user) return;
 
-  user.questsCompleted = Math.ceil((parseFloat(user.questsCompleted) || 0) + amount);
+  // 💡 FIX #41: Use Math.round instead of Math.ceil for fractional
+  // quest progress. Math.ceil(0.05) = 1, meaning every combat
+  // encounter in a dungeon added 1 to questsCompleted — the same
+  // as completing a full quest. This caused inconsistent rank
+  // calculations between players who did the same dungeon but had
+  // different numbers of combat encounters (more encounters = more
+  // questsCompleted = higher calculated rank).
+  // Math.round(0.05) = 0, so fractional progress only accumulates
+  // meaningfully across multiple encounters (5 × 0.05 = 0.25 → 0,
+  // 20 × 0.05 = 1.0 → 1). Boss kills (1.0) and final victories
+  // (0.2) still round correctly.
+  user.questsCompleted = Math.round((parseFloat(user.questsCompleted) || 0) + amount);
   if (won) {
     user.questsWon = (user.questsWon || 0) + 1;
     // 💡 Track for rank missions
@@ -1330,7 +1345,7 @@ function addQuestProgress(userId, amount, won = true) {
 
   scheduleSave(userId);
   
-  return updateAdventurerRank(userId);
+  return await updateAdventurerRank(userId);
 }
 
 function hasItem(userId, itemId) {

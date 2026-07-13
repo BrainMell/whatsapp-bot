@@ -12925,11 +12925,13 @@ _Sorted by guild level + XP_
                         }
 
                         let text = `╔═══════════════════╗
-   🏆 GUILD POINTS 🏆
+   🏆 GUILD INFO 🏆
 ╚═══════════════════╝
 
 🏰 *${userGuild}*
-📊 Total Points: ${pointsData.points.toLocaleString()}
+📊 Level: ${info.guilds[userGuild]?.level || 1}
+⭐ XP: ${pointsData.points.toLocaleString()}/${((info.guilds[userGuild]?.level || 1) * 1000).toLocaleString()}
+💰 Guild Funds: ${(info.guilds[userGuild]?.balance || 0).toLocaleString()} Zeni
 
 ━━━━━━━━━━━━━━━━
 📈 Recent Activity:
