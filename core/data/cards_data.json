@@ -1,6 +1,6 @@
 {
-  "totalCards": 36872,
-  "uniqueCards": 36872,
+  "totalCards": 36491,
+  "uniqueCards": 36491,
   "processedPages": [
     "1-10",
     "1-100",
@@ -2323,7 +2323,7 @@
     "S-7",
     "S-8"
   ],
-  "lastUpdated": "2026-07-14T17:57:30.179Z",
+  "lastUpdated": "2026-07-14T18:15:46.405Z",
   "cards": [
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/697e9780068f310078aa5582?size=400",
@@ -435270,17 +435270,6 @@
       "id": "E-01864"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e4d?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e4d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01865"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/6/0fc311573598d6a780efc7b8a7d9a14d66a0e5bed542a547ffe89bee5e4eda19.gif",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e49",
       "animeName": "Maid Day",
@@ -435325,17 +435314,6 @@
       "id": "E-01869"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e39?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e39",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01870"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/daa10564d749b19cf30d89a07885e20e5b8e2c923557e7b7bfc67f6c529735d6.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e35",
       "animeName": "Maid Day",
@@ -435345,39 +435323,6 @@
       "cardName": "Rimuru Tempest",
       "description": "Rimuru Tempest from Maid Day",
       "id": "E-01871"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e31?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e31",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01872"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e2d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e2d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01873"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e29?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e29",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01874"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/c2174d617d90d6a9d317ee9ba4e5e49c21e0af560ae00d8fa2b04055cd172d00.png",
@@ -435400,17 +435345,6 @@
       "cardName": "Kaguya Shinomiya",
       "description": "Kaguya Shinomiya from Maid Day",
       "id": "E-01876"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e1d?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e1d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01877"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/f8cdc42289207b0f0a71739440d3fa8d07296266ddcb92fed28e9f98c6f65f5f.png",
@@ -435457,17 +435391,6 @@
       "id": "E-01881"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e09?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e09",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01882"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/59e153ff84dc774ab68838bf2e8c131f5db24e8159682f642e6b3534c444d05c.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e05",
       "animeName": "Maid Day",
@@ -435477,17 +435400,6 @@
       "cardName": "Kanna Kamui",
       "description": "Kanna Kamui from Maid Day",
       "id": "E-01883"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742e01?size=100",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742e01",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01884"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/970965d3b7b572a5fc6f591a3af010092a8c02d45b514320c71b270f50e138fb.png",
@@ -435512,28 +435424,6 @@
       "id": "E-01886"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742df5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742df5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01887"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742df1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742df1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01888"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/f3a5d15d92c9f1dc526c9415376a266a1edec895c2fae5c6480706261be48f3b.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ded",
       "animeName": "Maid Day",
@@ -435543,61 +435433,6 @@
       "cardName": "Rinne Ohara",
       "description": "Rinne Ohara from Maid Day",
       "id": "E-01889"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742de9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742de9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01890"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742de5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742de5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01891"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742de1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742de1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01892"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ddd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ddd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01893"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dd9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dd9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01894"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/746ce30e061f2fef7c1187e4652064ca57c0bb69b188a041e0f6bc78e97bd1c7.png",
@@ -435611,39 +435446,6 @@
       "id": "E-01895"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dd1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dd1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01896"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dcd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dcd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01897"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dc9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dc9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01898"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/a5372f49d17df8c86ccd891a2cf3f11c8999a31d0784ec8714f48fd9c164db15.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dc5",
       "animeName": "Maid Day",
@@ -435653,61 +435455,6 @@
       "cardName": "Seraphim",
       "description": "Seraphim from Maid Day",
       "id": "E-01899"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dc1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dc1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01900"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742dbd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742dbd",
-      "animeName": "konosuba",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Chris",
-      "description": "Chris from Maid Day",
-      "id": "E-01901"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742db9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742db9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01902"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742db5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742db5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01903"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742db1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742db1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01904"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/38a0ca38504aed5a233ce00348fddd2223e869282110d82357fe34c1d54bbce7.png",
@@ -435721,28 +435468,6 @@
       "id": "E-01905"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742da9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742da9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01906"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742da5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742da5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01907"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/d878d23b09d212b643efe1c71474451ba10d446bc12952c7fd71454730c3e56e.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742da1",
       "animeName": "Maid Day",
@@ -435752,28 +435477,6 @@
       "cardName": "Hestia and Bell Cranel",
       "description": "Hestia and Bell Cranel from Maid Day",
       "id": "E-01908"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d9d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d9d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01909"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d99?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d99",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01910"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/4a85138dca24f9b06fb2a8889714727f57af4ab23ec4a4040e4ee83dcaaff549.png",
@@ -435787,61 +435490,6 @@
       "id": "E-01911"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d91?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d91",
-      "animeName": "owari no seraph",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Shinoa Hiiragi",
-      "description": "Shinoa Hiiragi from Maid Day",
-      "id": "E-01912"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d8d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d8d",
-      "animeName": "owari no seraph",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Krul Tepes",
-      "description": "Krul Tepes from Maid Day",
-      "id": "E-01913"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d89?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d89",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01914"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d85?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d85",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01915"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d81?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d81",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01916"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/5c3cccb1ab0bd6a6a265b8120c97c4726c97fc9a0a4182c6f52ee4f33847afa8.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d7d",
       "animeName": "Maid Day",
@@ -435851,17 +435499,6 @@
       "cardName": "Kotori Shirakawa",
       "description": "Kotori Shirakawa from Maid Day",
       "id": "E-01917"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d79?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d79",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01918"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/18669d98fd0a4eb1d39fada170f8896f732355e1927d8358af5239831e046b08.png",
@@ -435875,39 +435512,6 @@
       "id": "E-01919"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d71?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d71",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01920"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d6d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d6d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01921"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d69?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d69",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01922"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/a5758cdf3fef4fbef5174cce422d356d04ae117dea16f74b9be357018a7b5baa.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d65",
       "animeName": "Maid Day",
@@ -435917,39 +435521,6 @@
       "cardName": "Chifuyu Orimura",
       "description": "Chifuyu Orimura from Maid Day",
       "id": "E-01923"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d61?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d61",
-      "animeName": "shounen maid",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Hiroshi And Yukito",
-      "description": "Hiroshi And Yukito from Maid Day",
-      "id": "E-01924"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d5d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d5d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01925"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d59?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d59",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01926"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/83b5d08c50dbf6dc117b72ec7f218b052486c001d3d9e85840ffded24d918a7d.png",
@@ -435963,39 +435534,6 @@
       "id": "E-01927"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d51?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d51",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01928"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d4d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d4d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01929"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d49?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d49",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01930"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/7b114b866deb3ebb7267b923efaf5b70405adf14d829dd6f50f631a2b5b472c7.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d45",
       "animeName": "Maid Day",
@@ -436005,39 +435543,6 @@
       "cardName": "Rosalie",
       "description": "Rosalie from Maid Day",
       "id": "E-01931"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d41?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d41",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01932"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d3d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d3d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01933"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d39?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d39",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01934"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/1469516133766eb0359d7a45dcf668e16f79817aeccd38690b4a21dda64ee866.png",
@@ -436051,50 +435556,6 @@
       "id": "E-01935"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d31?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d31",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01936"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d2d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d2d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01937"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d29?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d29",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01938"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d25?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d25",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01939"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/edbdabad7a89fed965f743d167394c3872c1a09c12347d54d1c3cc5d70dae45f.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d21",
       "animeName": "Maid Day",
@@ -436106,17 +435567,6 @@
       "id": "E-01940"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d1d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d1d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "Loading",
-      "creator": "Anonymous",
-      "cardName": "Loading",
-      "description": "Loading from Maid Day",
-      "id": "E-01941"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d19?size=400",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d19",
       "animeName": "hyperdimension neptunia",
@@ -436126,17 +435576,6 @@
       "cardName": "Ram, Rom, And Nepgear",
       "description": "Ram, Rom, And Nepgear from Maid Day",
       "id": "E-01942"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d15?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d15",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01943"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d11?size=400",
@@ -436161,28 +435600,6 @@
       "id": "E-01945"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d09?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d09",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01946"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742d05?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d05",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01947"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/1a692cc5f4f6e89bb9ba3eeccea5a061e57baf85a31a0e1f73578329345a806d.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742d01",
       "animeName": "Maid Day",
@@ -436192,28 +435609,6 @@
       "cardName": "Rin Tohsaka",
       "description": "Rin Tohsaka from Maid Day",
       "id": "E-01948"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cfd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742cfd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01949"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cf9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742cf9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01950"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cf5?size=400",
@@ -436236,50 +435631,6 @@
       "cardName": "Gowther and Elizabeth",
       "description": "Gowther and Elizabeth from Maid Day",
       "id": "E-01952"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ced?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ced",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01953"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ce9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ce9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01954"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ce5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ce5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01955"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ce1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ce1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01956"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/51aa7757ca9177d5d23573fe87ef86930214d593dcfccad1e59e05f9179ccec6.png",
@@ -436315,17 +435666,6 @@
       "id": "E-01959"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cd1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742cd1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01960"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/53cef6968f3410e6f0f063deff833ec3bdae84d3b8fb1a6d63062685cf9092b4.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ccd",
       "animeName": "Maid Day",
@@ -436335,17 +435675,6 @@
       "cardName": "Index and Misaka",
       "description": "Index and Misaka from Maid Day",
       "id": "E-01961"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cc9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742cc9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01962"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742cc5?size=400",
@@ -436447,17 +435776,6 @@
       "id": "E-01971"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ca1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ca1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01972"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c9d?size=400",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c9d",
       "animeName": "assault Lily: Bouquet",
@@ -436513,28 +435831,6 @@
       "id": "E-01977"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c89?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c89",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01978"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c85?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c85",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01979"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/3/ca9b30a75986eca85f44e572e023ec6ff591648126dd6cf7c9354f3458e35a12.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c81",
       "animeName": "Maid Day",
@@ -436544,17 +435840,6 @@
       "cardName": "Saika Totsuka",
       "description": "Saika Totsuka from Maid Day",
       "id": "E-01980"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c7d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c7d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01981"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c79?size=400",
@@ -436601,17 +435886,6 @@
       "id": "E-01985"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c69?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c69",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01986"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c65?size=400",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c65",
       "animeName": "Miss Kobayashi's Dragon Maid",
@@ -436632,28 +435906,6 @@
       "cardName": "Quetzalcoatl",
       "description": "Quetzalcoatl from Maid Day",
       "id": "E-01988"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c5d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c5d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01989"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c59?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c59",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01990"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c55?size=400",
@@ -436711,39 +435963,6 @@
       "id": "E-01995"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c41?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c41",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01996"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c3d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c3d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01997"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c39?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c39",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-01998"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/daa6d0f308d932438eff2f291bb643d3e704b00cfbf4ec636943e07920526ae0.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c35",
       "animeName": "Maid Day",
@@ -436753,28 +435972,6 @@
       "cardName": "Shimei Ryomou",
       "description": "Shimei Ryomou from Maid Day",
       "id": "E-01999"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c31?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c31",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02000"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c2d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c2d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02001"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c29?size=400",
@@ -436810,39 +436007,6 @@
       "id": "E-02004"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c1d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c1d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02005"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c19?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c19",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02006"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c15?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c15",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02007"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/9a839c4b1dd819b61d3f80438514e159530fbc418530b51ab7aa3ecc66944b52.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c11",
       "animeName": "Maid Day",
@@ -436852,28 +436016,6 @@
       "cardName": "Mafuyu Hoshikawa",
       "description": "Mafuyu Hoshikawa from Maid Day",
       "id": "E-02008"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c0d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c0d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02009"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742c09?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742c09",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02010"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/9d3715e288383a14a09fddfb76a3aadcad8856b4a49bad34b956bf4dcdfcde94.png",
@@ -436898,28 +436040,6 @@
       "id": "E-02012"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bfd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bfd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02013"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bf9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bf9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02014"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/68b742ce8cd9a6b0b0957d7f6fe06f8d241904a9f5174a01e4dd9dd57534045d.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bf5",
       "animeName": "Maid Day",
@@ -436929,50 +436049,6 @@
       "cardName": "Tohka Yatogami",
       "description": "Tohka Yatogami from Maid Day",
       "id": "E-02015"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bf1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bf1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02016"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bed?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bed",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02017"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742be9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742be9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02018"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742be5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742be5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02019"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/27ec652f0ba0b10c32cdee4684827840931a668956da6dc499aea2edface760b.png",
@@ -436986,72 +436062,6 @@
       "id": "E-02020"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bdd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bdd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02021"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bd9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bd9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02022"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bd5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bd5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02023"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bd1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bd1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02024"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bcd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bcd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02025"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bc9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bc9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02026"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/4078360e26c3797ce5608fb598627973554267ad77be6e5615b8f532b670bace.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bc5",
       "animeName": "Maid Day",
@@ -437061,17 +436071,6 @@
       "cardName": "Ana Coppola",
       "description": "Ana Coppola from Maid Day",
       "id": "E-02027"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bc1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bc1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02028"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/7fcd6d9bf4ccbbd2344f904786462704f37efec3ed4d61d69690531b29c0f175.png",
@@ -437085,28 +436084,6 @@
       "id": "E-02029"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bb9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bb9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02030"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bb5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bb5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02031"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/4ed915206ad4d67a5b8aeecbd9334cc255620a0e3356b8ac280412e2f4b69a7f.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bb1",
       "animeName": "Maid Day",
@@ -437116,28 +436093,6 @@
       "cardName": "Maria",
       "description": "Maria from Maid Day",
       "id": "E-02032"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742bad?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742bad",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02033"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ba9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ba9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02034"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/c96cc2e17c1c63868e8e238c0b830276272646f0b0c6767a2cb02f029f12fa56.png",
@@ -437151,28 +436106,6 @@
       "id": "E-02035"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ba1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ba1",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02036"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b9d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b9d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02037"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/34cffbc5963d520b4860ea58db3ffe9ed17155170dfc76076ab0d089b2660881.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b99",
       "animeName": "Maid Day",
@@ -437182,17 +436115,6 @@
       "cardName": "Yume Hinata",
       "description": "Yume Hinata from Maid Day",
       "id": "E-02038"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b95?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b95",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02039"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/10262c065834a6cb64cfb2f968b092018ffd64ab6f64f41cd2ac6bd1e17e7b7c.png",
@@ -437206,28 +436128,6 @@
       "id": "E-02040"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b8d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b8d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02041"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b89?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b89",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02042"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/c4e6f721bb384103c90af04975e354e079fc0efed07b3f15e4c768512f00756f.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b85",
       "animeName": "Maid Day",
@@ -437237,17 +436137,6 @@
       "cardName": "Hakufu Sonsaku",
       "description": "Hakufu Sonsaku from Maid Day",
       "id": "E-02043"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b81?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b81",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02044"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/972a04d8ae81180c17e240a75579d37473895933cec39a8c483bddd18970848f.png",
@@ -437261,17 +436150,6 @@
       "id": "E-02045"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b79?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b79",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02046"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/791c3336b515dc985f7fd00fa2d96e0c9044c68963b7adc2b0a8b2cb1169b22e.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b75",
       "animeName": "Maid Day",
@@ -437283,39 +436161,6 @@
       "id": "E-02047"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b71?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b71",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02048"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b6d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b6d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02049"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b69?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b69",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02050"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/dfb7652e2644e298e83725de9c1e8c12c1c33c7a804572d61cc119df98c0d314.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b61",
       "animeName": "Maid Day",
@@ -437325,28 +436170,6 @@
       "cardName": "Rumiho Akiha",
       "description": "Rumiho Akiha from Maid Day",
       "id": "E-02051"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b5d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b5d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02052"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b59?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b59",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02053"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/b4821e2f937e245ecfae69b27f8e41272875484852068fc6ceed9504db0eaa1f.png",
@@ -437391,17 +436214,6 @@
       "cardName": "Rika Furude",
       "description": "Rika Furude from Maid Day",
       "id": "E-02057"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b45?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b45",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02058"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/4654a2de652b1e31d079cda64930a335c62c44b7ba82f78d269ec84daefb939b.png",
@@ -437558,28 +436370,6 @@
       "id": "E-02072"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b09?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b09",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02073"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742b05?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b05",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02074"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/c46f34a4619c86e158f952a412024a449a072f410fdcadc1a3ed900cdfd12a79.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742b01",
       "animeName": "Maid Day",
@@ -437589,17 +436379,6 @@
       "cardName": "Kaede Mizuno",
       "description": "Kaede Mizuno from Maid Day",
       "id": "E-02075"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742afd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742afd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02076"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/c8cefc8f76f30216f1b20d56dec633461cb51108e2f0388420472671b9de9341.png",
@@ -437613,17 +436392,6 @@
       "id": "E-02077"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742af5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742af5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02078"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/5a59b0a358980398f3d1372d36ec26f7fdee8f0e77d98fe604449992aeb7c8ff.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742af1",
       "animeName": "Maid Day",
@@ -437633,39 +436401,6 @@
       "cardName": "Maple",
       "description": "Maple from Maid Day",
       "id": "E-02079"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742aed?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742aed",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02080"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ae9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ae9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02081"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ae5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ae5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02082"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/6e51691359cce3a41d2427dc2a83d35de2a99e9192b1cc0ff5cffb3cecc5abe7.png",
@@ -437679,39 +436414,6 @@
       "id": "E-02083"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742add?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742add",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02084"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ad9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ad9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02085"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ad5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ad5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02086"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/34ae2042cbd5e813f606da67b52ec7485d5a0101ff921717cc417087395bec71.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ad1",
       "animeName": "Maid Day",
@@ -437721,39 +436423,6 @@
       "cardName": "Aletta",
       "description": "Aletta from Maid Day",
       "id": "E-02087"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742acd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742acd",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02088"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ac9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ac9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02089"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ac5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ac5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02090"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/eaebffa25e4ab257018082ad9f7babf1866107410dfdcf81b965964acbbaf97c.png",
@@ -437776,17 +436445,6 @@
       "cardName": "Maika Sakuranomiya",
       "description": "Maika Sakuranomiya from Maid Day",
       "id": "E-02092"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742ab9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742ab9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02093"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/9b318caf1913599d82e4710b8d55fcc5ecdbd0ef4d39123dc1e7cc5a2d30853f.png",
@@ -437822,28 +436480,6 @@
       "id": "E-02096"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742aa9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742aa9",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02097"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742aa5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742aa5",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02098"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/acdb56a729c68aab9de57e18a8df2e5ff3748b211600a1c3ac042488871e70b3.png",
       "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742aa1",
       "animeName": "Maid Day",
@@ -437853,39 +436489,6 @@
       "cardName": "Kyouka Izumi",
       "description": "Kyouka Izumi from Maid Day",
       "id": "E-02099"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742a9d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742a9d",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02100"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742a99?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742a99",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02101"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6277ee15360fcbed9f742a95?size=400",
-      "detailUrl": "https://shoob.gg/card-events/maid-day/6277ee15360fcbed9f742a95",
-      "animeName": "Maid Day",
-      "eventName": "Maid Day",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Maid Day",
-      "id": "E-02102"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/5f15fdc7a710b21e4dbd21f0bb0833b5d7eb83da72f26386ae603b19d3079757.png",
@@ -437921,28 +436524,6 @@
       "id": "E-02105"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6393b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6393b",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02106"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63937?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63937",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02107"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/4fdfb1ce655a8f89b0ab9a6521ed68255ce74fe2fba72dfa472802189f04a017.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63933",
       "animeName": "Summer",
@@ -437963,28 +436544,6 @@
       "cardName": "Xenovia Quarta",
       "description": "Xenovia Quarta from Summer",
       "id": "E-02109"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6392b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6392b",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02110"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63927?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63927",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02111"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/84eb478e83bdfe4ba2560ed975a4840f09e09e308a33a9e59cdb03b0a0290221.png",
@@ -438009,28 +436568,6 @@
       "id": "E-02113"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6391a?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6391a",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02114"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63916?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63916",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02115"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/1/3d3b200fcf6480be8a600701ce95c5e602616187408b739cc88ace2a2eeda907.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63912",
       "animeName": "Summer",
@@ -438042,17 +436579,6 @@
       "id": "E-02116"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6390e?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6390e",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02117"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/486691271761622014efe8713a85c4e74274590fba8ea01db27ba4ee00b3b39c.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6390a",
       "animeName": "Summer",
@@ -438062,28 +436588,6 @@
       "cardName": "Edith Synthesis Ten",
       "description": "Edith Synthesis Ten from Summer",
       "id": "E-02118"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63906?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63906",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02119"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63902?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63902",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02120"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/a64185087fcc21a410d0dd5ce42ee8e64cf90a834a9fa77efb4dd999079649e0.png",
@@ -438108,39 +436612,6 @@
       "id": "E-02122"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638f6?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638f6",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02123"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638f2?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638f2",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02124"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638ee?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638ee",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02125"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/9293f116842ae1569fc05714befd9e61f63dc5f191e8de7588acbc5c65d1fe8c.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638ea",
       "animeName": "Summer",
@@ -438150,39 +436621,6 @@
       "cardName": "Priscilla Barielle",
       "description": "Priscilla Barielle from Summer",
       "id": "E-02126"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638e6?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638e6",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02127"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638e1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638e1",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02128"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638dd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638dd",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02129"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/2/4ebb9db9d7d2c1ac75fdb49567c66da6078396e68c82a1f7b4e647dc2c762858.png",
@@ -438196,17 +436634,6 @@
       "id": "E-02130"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638d5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638d5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02131"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/ca0fd94f362febf33f70aa743234db0ed9e72480e2c5ef2d18754ddf59d9b9ad.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638d1",
       "animeName": "Summer",
@@ -438216,39 +436643,6 @@
       "cardName": "Gangplank",
       "description": "Gangplank from Summer",
       "id": "E-02132"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638cd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638cd",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02133"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638c9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638c9",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02134"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638c5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638c5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02135"
     },
     {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/4df06a14378812c27fe8d7f35f8eda4d08cdfe2593334accbb1c1537d224d0df.png",
@@ -438262,446 +436656,6 @@
       "id": "E-02136"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638bd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638bd",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02137"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638b9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638b9",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02138"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638b5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638b5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02139"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638b1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638b1",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02140"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638ad?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638ad",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02141"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638a9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638a9",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02142"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638a5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638a5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02143"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb638a1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb638a1",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02144"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6389d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6389d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02145"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63899?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63899",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02146"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63895?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63895",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02147"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63891?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63891",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02148"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6388d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6388d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02149"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63889?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63889",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02150"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63885?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63885",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02151"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63881?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63881",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02152"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6387d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6387d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02153"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63879?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63879",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02154"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63875?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63875",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02155"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63871?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63871",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02156"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6386d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6386d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02157"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63868?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63868",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02158"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63864?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63864",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02159"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63860?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63860",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02160"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6385c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6385c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02161"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63858?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63858",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02162"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63854?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63854",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02163"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63850?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63850",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02164"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6384c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6384c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02165"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63848?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63848",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02166"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63844?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63844",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02167"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63840?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63840",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02168"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6383c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6383c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02169"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63838?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63838",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02170"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63834?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63834",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02171"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63830?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63830",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02172"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6382c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6382c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02173"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63828?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63828",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02174"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63824?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63824",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02175"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63820?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63820",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02176"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6381c?size=400",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6381c",
       "animeName": "Oshi no ko",
@@ -438711,61 +436665,6 @@
       "cardName": "Mem-cho",
       "description": "Mem-cho from Summer",
       "id": "E-02177"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63818?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63818",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02178"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63814?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63814",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02179"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63810?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63810",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02180"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6380c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6380c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02181"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63808?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63808",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02182"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63804?size=400",
@@ -438779,105 +436678,6 @@
       "id": "E-02183"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb63800?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb63800",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02184"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb637fc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb637fc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02185"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb637f8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb637f8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02186"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb637f4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb637f4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02187"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb637f0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb637f0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02188"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb637ec?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb637ec",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02189"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637e8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637e8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02190"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637e4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637e4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02191"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637e0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637e0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02192"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637dc?size=400",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637dc",
       "animeName": "Re:Zero",
@@ -438889,39 +436689,6 @@
       "id": "E-02193"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637d8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637d8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02194"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637d4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637d4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02195"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637d0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637d0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02196"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637cc?size=400",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637cc",
       "animeName": "Solo Leveling",
@@ -438931,28 +436698,6 @@
       "cardName": "Sung Jin-Woo",
       "description": "Sung Jin-Woo from Summer",
       "id": "E-02197"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637c8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637c8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02198"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637c4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637c4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02199"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637c0?size=400",
@@ -439021,61 +436766,6 @@
       "id": "E-02205"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637a8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637a8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02206"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637a4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637a4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02207"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb637a0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb637a0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02208"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6379c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6379c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02209"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63798?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63798",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02210"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63794?size=400",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63794",
       "animeName": "league of legends",
@@ -439085,83 +436775,6 @@
       "cardName": "Caitlyn Kiramman",
       "description": "Caitlyn Kiramman from Summer",
       "id": "E-02211"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63790?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63790",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02212"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6378c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6378c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02213"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63788?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63788",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02214"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63784?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63784",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02215"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63780?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63780",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02216"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6377c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6377c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02217"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63778?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63778",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02218"
     },
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63774?size=400",
@@ -439186,479 +436799,6 @@
       "id": "E-02220"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6376c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6376c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02221"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63768?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63768",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02222"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63764?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63764",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02223"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63760?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63760",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02224"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6375c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6375c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02225"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63757?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63757",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02226"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63752?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63752",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02227"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6374d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6374d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02228"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63749?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63749",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02229"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63745?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63745",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02230"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63741?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63741",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02231"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6373d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6373d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02232"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63739?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63739",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02233"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63735?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63735",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02234"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63731?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63731",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02235"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6372d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6372d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02236"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63729?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63729",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02237"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63725?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63725",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02238"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63721?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63721",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02239"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6371d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6371d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02240"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63719?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63719",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02241"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63715?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63715",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02242"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63711?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63711",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02243"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb6370d?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb6370d",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02244"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63709?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63709",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02245"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63705?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63705",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02246"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb63701?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb63701",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02247"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636fd?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636fd",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02248"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636f9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636f9",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02249"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636f5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636f5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02250"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636f1?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636f1",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02251"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636ed?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636ed",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02252"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636e9?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636e9",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02253"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636e5?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636e5",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02254"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636e0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636e0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02255"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636dc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636dc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02256"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636d8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636d8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02257"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636d4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636d4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02258"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb2ea6a7200bcb636d0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/68739eb2ea6a7200bcb636d0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02259"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e012c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e012c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02260"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0128?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0128",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02261"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0124?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0124",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02262"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0120?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0120",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "6",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02263"
-    },
-    {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e011c?size=400",
       "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e011c",
       "animeName": "âNo matter how hot it gets, my ninja way wonât waver! Iâll keep going, believe it!â",
@@ -439681,974 +436821,6 @@
       "id": "E-02265"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0114?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0114",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02266"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0110?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0110",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02267"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e010c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e010c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02268"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0108?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0108",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02269"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0104?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0104",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02270"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0100?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0100",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02271"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00fc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00fc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02272"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00f8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00f8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02273"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00f4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00f4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02274"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00f0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00f0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02275"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00ec?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00ec",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02276"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00e8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00e8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02277"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00e4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00e4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02278"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00e0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00e0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02279"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00dc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00dc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02280"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00d8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00d8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02281"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00d4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00d4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02282"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00d0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00d0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02283"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00cc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00cc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02284"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00c8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00c8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02285"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00c4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00c4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02286"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00c0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00c0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02287"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00bc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00bc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02288"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00b8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00b8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02289"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00b4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00b4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "6",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02290"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00b0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00b0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02291"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00ac?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00ac",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02292"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00a8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00a8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02293"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00a4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00a4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02294"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e00a0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e00a0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02295"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e009c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e009c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "6",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02296"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0098?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0098",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02297"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0094?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0094",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02298"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0090?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0090",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02299"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e008c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e008c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02300"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0088?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0088",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02301"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0084?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0084",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02302"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0080?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0080",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02303"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e007c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e007c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02304"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0078?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0078",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02305"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0074?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0074",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02306"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0070?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0070",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02307"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e006c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e006c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02308"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0068?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0068",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02309"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0064?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0064",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "6",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02310"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0060?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0060",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "6",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02311"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e005c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e005c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02312"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0058?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0058",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02313"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0054?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0054",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02314"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0050?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0050",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02315"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e004c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e004c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02316"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0048?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0048",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02317"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0044?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0044",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02318"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0040?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0040",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02319"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e003c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e003c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02320"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0038?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0038",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02321"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0034?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0034",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02322"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0030?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0030",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02323"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e002c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e002c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02324"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0028?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0028",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02325"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0024?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0024",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02326"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0020?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0020",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02327"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e001c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e001c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02328"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0018?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0018",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02329"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0014?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0014",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02330"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0010?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0010",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02331"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e000c?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e000c",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02332"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0008?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0008",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02333"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0004?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0004",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02334"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0000?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0000",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02335"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dfffc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dfffc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02336"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dfff8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dfff8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02337"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dfff4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dfff4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02338"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dfff0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dfff0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02339"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffec?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffec",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02340"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffe8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffe8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "4",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02341"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffe4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffe4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02342"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffe0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffe0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02343"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffdc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffdc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02344"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffd8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffd8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02345"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffd4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffd4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02346"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffd0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffd0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02347"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffcc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffcc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02348"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffc8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffc8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02349"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffc4?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffc4",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02350"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffc0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffc0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02351"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffbc?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffbc",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02352"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffb8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffb8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02353"
-    },
-    {
       "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/46bf33fda0c5dbc9fa4367b8f6739c2189325967fbcb47f89697137a99963843.png",
       "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffb4",
       "animeName": "Summer",
@@ -440658,369 +436830,6 @@
       "cardName": "Tsunade",
       "description": "Tsunade from Summer",
       "id": "E-02354"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffb0?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffb0",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02355"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffac?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffac",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02356"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffa8?size=400",
-      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffa8",
-      "animeName": "Summer",
-      "eventName": "Summer",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
-      "id": "E-02357"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a197?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a197",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02358"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a193?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a193",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02359"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a18f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a18f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02360"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a18b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a18b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02361"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a187?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a187",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02362"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a183?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a183",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02363"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a17f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a17f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02364"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a17b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a17b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02365"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a177?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a177",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02366"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a173?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a173",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02367"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a16f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a16f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02368"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a16b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a16b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02369"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a167?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a167",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02370"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a163?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a163",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02371"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a15f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a15f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02372"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a15b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a15b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02373"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a157?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a157",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02374"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a153?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a153",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02375"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a14f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a14f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02376"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a14b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a14b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02377"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a147?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a147",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02378"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a143?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a143",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02379"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a13f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a13f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02380"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a13b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a13b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02381"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a137?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a137",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02382"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a133?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a133",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "5",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02383"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a12f?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a12f",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02384"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a12b?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a12b",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "3",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02385"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a127?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a127",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02386"
-    },
-    {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68077ea06849bd006652a123?size=400",
-      "detailUrl": "https://shoob.gg/card-events/gala/68077ea06849bd006652a123",
-      "animeName": "Gala",
-      "eventName": "Gala",
-      "tier": "2",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Gala",
-      "id": "E-02387"
     },
     {
       "id": "E-02388",
