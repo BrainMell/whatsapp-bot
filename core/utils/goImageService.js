@@ -203,6 +203,33 @@ class GoImageService {
   }
 
   /*
+   * Generate Card Collection/Deck Grid (static PNG, same style as eShop)
+   * Uses /api/cards/grid endpoint — no GIF/MP4, just a 4×4 PNG grid.
+   * Works on 500MB/0.1CPU servers (sequential downloads, NearestNeighbor).
+   */
+  async generateCardGrid(imageUrls, title) {
+    try {
+      const response = await this.client.post(
+        "/api/cards/grid",
+        {
+          images: imageUrls,
+          title: title,
+        },
+        {
+          responseType: "arraybuffer",
+          timeout: 60000, // 60s — sequential downloads of up to 16 cards
+        },
+      );
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Card Grid Error:", error.message);
+      return null;
+    }
+  }
+
+  /*
    * Generate Card Collection/Deck GIF
    */
   async generateCardGif(imageUrls, title) {

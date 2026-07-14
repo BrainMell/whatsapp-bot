@@ -1020,9 +1020,8 @@ function getTopCards(cards) {
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-    // 💡 Reduced from 15 to 12 — the optimized Go grid renderer uses a
-    // 3×4 grid (12 cards max) to fit within 500MB RAM on Render free tier.
-  }).slice(0, 12);
+    // 💡 Top 16 cards for the 4×4 grid (matches Go grid renderer)
+  }).slice(0, 16);
 }
 
 function getTopImageUrls(topCards) {
@@ -1110,12 +1109,12 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS");
+        gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION HIGHLIGHTS");
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
-      return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, finalMsg);
+      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: finalMsg });
     }
   }
 
@@ -1187,13 +1186,13 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, "COLLECTION HIGHLIGHTS (TOP 15)");
+        gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-      return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, fullText);
+      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
     }
   }
 
@@ -1258,12 +1257,12 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, "DECK HIGHLIGHTS (TOP 15)");
+        gifBuffer = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
         if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
-        return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, msg);
+        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 
@@ -2451,12 +2450,12 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     if (cached && cached.hash === currentHash) {
         gifBuffer = cached.buffer;
     } else {
-        gifBuffer = await goService.generateCardGif(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
+        gifBuffer = await goService.generateCardGrid(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
         if (gifBuffer) gifCache.decks.set(`${senderJid}_${deck.name}`, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
-        return await sendCardMedia(inst.sock_ref, chatId, gifBuffer, msg);
+        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 
