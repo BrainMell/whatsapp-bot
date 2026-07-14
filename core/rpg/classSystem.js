@@ -172,7 +172,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
         stats: { hp: 550, atk: 45, def: 40, mag: 35, spd: 15, luck: 25, crit: 20 },
-        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 100, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 QA: reduced from 200 to 100
+        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 reduced from 100 to 25
         evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.` },
         isUnique: true, // 💡 Only ONE player may hold this class — ever.
@@ -195,7 +195,7 @@ const EVOLVED_CLASSES = {
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
         stats: { hp: 540, atk: 48, def: 38, mag: 30, spd: 18, luck: 22, crit: 22 },
-        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 100, gold: 500000, trialBoss: 'LEVIATHAN_SPAWN_ALPHA' },
+        requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN_SPAWN_ALPHA' },
         evolutionCost: 500000,
         passive: { name: 'Wyrmguard', desc: `Immune to fear and stun. Reflects 25% of melee damage as fire damage. Damage taken from non-dragons reduced by 35%.` },
         isSuccessor: true,    // marks this as the post-first-Leviathan-kill path
