@@ -1020,7 +1020,9 @@ function getTopCards(cards) {
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-  }).slice(0, 15);
+    // 💡 Reduced from 15 to 12 — the optimized Go grid renderer uses a
+    // 3×4 grid (12 cards max) to fit within 500MB RAM on Render free tier.
+  }).slice(0, 12);
 }
 
 function getTopImageUrls(topCards) {
@@ -1029,18 +1031,24 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)
+      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card),
+      // 💡 Pass card name + tier so the Go grid renderer can overlay them
+      name: card.cardName || '',
+      tier: String(card.tier || ''),
     };
   }).filter(Boolean);
 }
 
 /**
- * Detects whether the Go server returned an MP4 (Cloudinary slideshow)
- * or a PNG (lightweight grid fallback image) and sends it appropriately.
+ * Detects whether the Go server returned:
+ *   - MP4 (Cloudinary slideshow) → send as video/gif
+ *   - PNG (old grid fallback) → send as image
+ *   - JPEG (new optimized grid) → send as image
  */
 async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
   const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-  if (isPng) {
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  if (isPng || isJpeg) {
     return await sock.sendMessage(chatId, {
       image: buffer,
       caption,
