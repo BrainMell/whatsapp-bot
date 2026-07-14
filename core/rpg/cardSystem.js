@@ -1020,8 +1020,8 @@ function getTopCards(cards) {
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-    // 💡 Top 16 cards for the 4×4 grid (matches Go grid renderer)
-  }).slice(0, 16);
+    // 💡 Top 12 cards for the 4×3 grid (matches Go grid renderer)
+  }).slice(0, 12);
 }
 
 function getTopImageUrls(topCards) {
