@@ -1,6 +1,6 @@
 {
-  "totalCards": 36757,
-  "uniqueCards": 36232,
+  "totalCards": 36763,
+  "uniqueCards": 36763,
   "processedPages": [
     "1-10",
     "1-100",
@@ -2323,7 +2323,7 @@
     "S-7",
     "S-8"
   ],
-  "lastUpdated": "2026-07-12T16:46:58.629Z",
+  "lastUpdated": "2026-07-14T00:30:14.283Z",
   "cards": [
     {
       "imageUrl": "https://api.shoob.gg/site/api/cardr/697e9780068f310078aa5582?size=400",
@@ -437888,14 +437888,14 @@
       "id": "E-02102"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/6878ee7c9df910007719b9ad?size=400",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/5f15fdc7a710b21e4dbd21f0bb0833b5d7eb83da72f26386ae603b19d3079757.png",
       "detailUrl": "https://shoob.gg/card-events/summer/6878ee7c9df910007719b9ad",
       "animeName": "Summer",
       "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
+      "tier": "5",
+      "creator": "sunnyxxbee",
+      "cardName": "The Herta",
+      "description": "The Herta from Summer",
       "id": "E-02103"
     },
     {
@@ -437910,14 +437910,14 @@
       "id": "E-02104"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6393f?size=400",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/1a6117c1934a273133c54c63aae710a0b37807d350c29e7510d66d6d9f9885bc.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6393f",
       "animeName": "Summer",
       "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
+      "tier": "5",
+      "creator": "sunnyxxbee",
+      "cardName": "Mitsuri Kanroji",
+      "description": "Mitsuri Kanroji from Summer",
       "id": "E-02105"
     },
     {
@@ -437998,14 +437998,14 @@
       "id": "E-02112"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/68739eb3ea6a7200bcb6391e?size=400",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/1b854e383ba4bbd90e9136786b09a528d405e75c7052529d24101a383258ef6c.png",
       "detailUrl": "https://shoob.gg/card-events/summer/68739eb3ea6a7200bcb6391e",
       "animeName": "Summer",
       "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
+      "tier": "5",
+      "creator": "sunnyxxbee",
+      "cardName": "Cantarella",
+      "description": "Cantarella from Summer",
       "id": "E-02113"
     },
     {
@@ -439670,14 +439670,14 @@
       "id": "E-02264"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2e0118?size=400",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/ef7df1ee99f4b839e797a56bdfdcf3241bbd910f14617dc8f3c3dd25cec9de6c.png",
       "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2e0118",
       "animeName": "Summer",
       "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
+      "tier": "5",
+      "creator": "anes_.",
+      "cardName": "Lakyus Alvein Dale Aindra",
+      "description": "Lakyus Alvein Dale Aindra from Summer",
       "id": "E-02265"
     },
     {
@@ -440649,14 +440649,14 @@
       "id": "E-02353"
     },
     {
-      "imageUrl": "https://api.shoob.gg/site/api/cardr/66b22197d20a4f8a7f2dffb4?size=400",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/46bf33fda0c5dbc9fa4367b8f6739c2189325967fbcb47f89697137a99963843.png",
       "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dffb4",
       "animeName": "Summer",
       "eventName": "Summer",
-      "tier": "1",
-      "creator": "Anonymous",
-      "cardName": "Unknown",
-      "description": "Event card from Summer",
+      "tier": "5",
+      "creator": "mafara.png",
+      "cardName": "Tsunade",
+      "description": "Tsunade from Summer",
       "id": "E-02354"
     },
     {
@@ -441021,20 +441021,92 @@
       "cardName": "Unknown",
       "description": "Event card from Gala",
       "id": "E-02387"
+    },
+    {
+      "id": "E-02388",
+      "cardName": "Yunyun",
+      "animeName": "Halloween",
+      "eventName": "Halloween",
+      "tier": "5",
+      "creator": "Jaum",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/21e43f57abb104a42047201d9913f477f6d2ae9f194199680f59b5249b73f136.png",
+      "detailUrl": "https://shoob.gg/card-events/halloween/635fb925e292704d23811d31",
+      "description": "Yunyun from Halloween",
+      "scrapedAt": "2026-07-14T00:19:15.511Z"
+    },
+    {
+      "id": "E-02389",
+      "cardName": "Winry Rockbell",
+      "animeName": "Summer",
+      "eventName": "Summer",
+      "tier": "5",
+      "creator": "_taki_",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/b3863bf645fb55fed1e4bd1d0f52775cfe115970558c06a5d9366271d57208a8.png",
+      "detailUrl": "https://shoob.gg/card-events/summer/66b22197d20a4f8a7f2dff70",
+      "description": "Winry Rockbell from Summer",
+      "scrapedAt": "2026-07-14T00:27:32.352Z"
+    },
+    {
+      "id": "E-02390",
+      "cardName": "Frieren",
+      "animeName": "Halloween",
+      "eventName": "Halloween",
+      "tier": "5",
+      "creator": ".animeblaze",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/72e141f1732074fef15461e113d27d252f7759b4165b8b9bb733c0479f59185f.png",
+      "detailUrl": "https://shoob.gg/card-events/halloween/6540ebe8c14b66a9f7a1ed2c",
+      "description": "Frieren from Halloween",
+      "scrapedAt": "2026-07-14T00:27:47.259Z"
+    },
+    {
+      "id": "E-02391",
+      "cardName": "Elsa Granhiert",
+      "animeName": "Halloween",
+      "eventName": "Halloween",
+      "tier": "5",
+      "creator": "aymnaric",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/5/05a68747ccc2b73242823c621ae2bb1589db2aa8ea4989a583aaf5c1ab5a5ad1.png",
+      "detailUrl": "https://shoob.gg/card-events/halloween/6540ebe8c14b66a9f7a1eade",
+      "description": "Elsa Granhiert from Halloween",
+      "scrapedAt": "2026-07-14T00:28:02.260Z"
+    },
+    {
+      "id": "E-02392",
+      "cardName": "Lust",
+      "animeName": "Halloween",
+      "eventName": "Halloween",
+      "tier": "6",
+      "creator": "Derkieswa",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/6/0b2b45979112e6367530724b7e3e19818ca64baf64799efb021beb9273e826be.gif",
+      "detailUrl": "https://shoob.gg/card-events/halloween/635fb925e292704d23811de1",
+      "description": "Lust from Halloween",
+      "scrapedAt": "2026-07-14T00:28:29.240Z"
+    },
+    {
+      "id": "E-02393",
+      "cardName": "Nobara Kugisaki",
+      "animeName": "Summer",
+      "eventName": "Summer",
+      "tier": "4",
+      "creator": "robbyjayfox",
+      "imageUrl": "https://cdn.shoob.gg/images/eventcards/4/896ea03ec2b2425e548a2ce86ee295535576891a3cba768f5bcbafa41b4e5c29.png",
+      "detailUrl": "https://shoob.gg/card-events/summer/64dcbb2218f13d156f1bc8e2",
+      "description": "Nobara Kugisaki from Summer",
+      "scrapedAt": "2026-07-14T00:29:53.730Z"
     }
   ],
   "metadata": {
     "organized": true,
     "totalAnimes": 1880,
     "tierBreakdown": {
-      "1": 11768,
-      "2": 8213,
-      "3": 6574,
-      "4": 5397,
-      "5": 2060,
-      "6": 320,
-      "S": 38,
-      "E": 1862
-    }
+      "1": 12767,
+      "2": 8651,
+      "3": 6918,
+      "4": 5725,
+      "5": 2257,
+      "6": 399,
+      "S": 46
+    },
+    "lastUpdated": "2026-07-14T00:30:14.284Z"
   }
 }
