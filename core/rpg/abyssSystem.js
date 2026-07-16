@@ -226,6 +226,13 @@ function generateTreasureEncounter(floor) {
       xp: Math.floor(300 * tm * mult),
       runeDropChance: floor >= 11 ? 0.25 : 0,
     },
+    {
+      type: 'RUNE_SHRINE',
+      name: 'Rune Shrine',
+      icon: '💎',
+      desc: 'A glowing shrine radiating ancient power. A rune is guaranteed!',
+      guaranteedRune: true,
+    },
   ];
   
   const treasure = treasures[Math.floor(Math.random() * treasures.length)];
@@ -365,11 +372,14 @@ async function processAttack(userId, playerDamage, playerStats) {
     attackMsg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni\n`;
 
     // Rune drop chance on boss floors 21+
-    if (enemy.isBoss && run.currentFloor >= 21) {
+    if (enemy.isBoss && run.currentFloor >= 11) {
       try {
         const runeSystem = require('./runeSystem');
-        const dropChance = run.currentFloor >= 50 ? 0.30 : 0.15;
-        const drop = runeSystem.rollRuneDrop(dropChance);
+        const dropChance = run.currentFloor >= 50 ? 0.50 : 0.35;
+        let drop = runeSystem.rollRuneDrop(dropChance);
+        if (drop && run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') {
+          drop = runeSystem.rollAbyssalRuneDrop(run.currentFloor);
+        }
         if (drop) {
           const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_floor_${run.currentFloor}`);
           if (runeResult.success) {
@@ -490,6 +500,25 @@ async function processTreasure(userId) {
     }
   }
 
+  if (treasure.guaranteedRune) {
+    try {
+      const runeSystem = require('./runeSystem');
+      const drop = (run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') 
+        ? runeSystem.rollAbyssalRuneDrop(run.currentFloor)
+        : { type: Object.keys(runeSystem.RUNE_TYPES)[Math.floor(Math.random() * 6)], tier: 'GREATER' };
+        
+      const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
+      if (runeResult.success) {
+        run.lootAccumulator.runes.push(runeResult.rune.runeId);
+        msg += runeResult.message + '
+';
+      }
+    } catch (e) {
+      msg += `💎 The shrine is dormant. (Rune system error)
+`;
+    }
+  }
+
   // Advance to next floor
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
@@ -584,6 +613,25 @@ async function processEventChoice(userId, choiceId) {
   // Check death
   if (run.currentHp <= 0) {
     return await processDeath(userId, run, msg);
+  }
+
+  if (treasure.guaranteedRune) {
+    try {
+      const runeSystem = require('./runeSystem');
+      const drop = (run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') 
+        ? runeSystem.rollAbyssalRuneDrop(run.currentFloor)
+        : { type: Object.keys(runeSystem.RUNE_TYPES)[Math.floor(Math.random() * 6)], tier: 'GREATER' };
+        
+      const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
+      if (runeResult.success) {
+        run.lootAccumulator.runes.push(runeResult.rune.runeId);
+        msg += runeResult.message + '
+';
+      }
+    } catch (e) {
+      msg += `💎 The shrine is dormant. (Rune system error)
+`;
+    }
   }
 
   // Advance to next floor

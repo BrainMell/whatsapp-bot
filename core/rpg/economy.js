@@ -651,7 +651,7 @@ function sellItem(userId, itemId, quantity = 1) {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        const contribution = Math.floor(value * 0.05); // 5% goes to guild
+        const contribution = Math.floor(value / 1000); // 1 XP per 1000 Zeni // 5% goes to guild
         guilds.addGuildPoints(userGuild, contribution, `item sold: ${itemId}`);
         guilds.addGuildBalance(userGuild, Math.floor(contribution / 2));
         guilds.updateBoardProgress(userGuild, 'EARN_ZENI', value); // Track earning progress

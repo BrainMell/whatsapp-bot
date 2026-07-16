@@ -1011,12 +1011,20 @@ function getGuildLeaderboard(wordle, tictactoe, economyModule) {
       tttWins,
       gamblingWins,
       totalWins: wordleWins + tttWins + gamblingWins,
-      memberCount: members.length
+      memberCount: members.length,
+      level: guild.level || 1,
+      points: guild.points || 0
     };
   });
 
   return Object.entries(guildScores)
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => {
+      const la = a[1].level || 1, lb2 = b[1].level || 1;
+      if (lb2 !== la) return lb2 - la;
+      const pa = a[1].points || 0, pb = b[1].points || 0;
+      if (pb !== pa) return pb - pa;
+      return b[1].score - a[1].score;
+    })
     .map(([name, data]) => ({ name, ...data }));
 }
 
@@ -1053,7 +1061,10 @@ ${message || 'Guild members, gather!'}
     const authPath = sock.authState?.creds?.me
       ? (sock.user?.id?.split('@')[0] ? null : null) // can't easily get authPath here
       : null;
-    const mentionJids = members.filter(j => j && typeof j === 'string' && j.includes('@'));
+    const mentionJids = members.map(j => {
+      if (!j || typeof j !== 'string') return null;
+      return j.includes('@') ? j : `${j}@s.whatsapp.net`;
+    }).filter(Boolean);
 
     await sock.sendMessage(chatId, {
       text: BOT_MARKER + announcement,

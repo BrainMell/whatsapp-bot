@@ -29,8 +29,8 @@ const RUNE_TYPES = {
     name: 'Power Rune',
     icon: '⚡',
     desc: 'Increases skill damage at the cost of higher energy cost',
-    damageMult: [1.15, 1.25, 1.40],   // +15/25/40% damage
-    energyCostMult: [1.10, 1.15, 1.20], // +10/15/20% energy cost
+    damageMult: [1.15, 1.25, 1.40, 1.60],   // +15/25/40% damage
+    energyCostMult: [1.10, 1.15, 1.20, 1.30], // +10/15/20% energy cost
   },
   EFFICIENCY: {
     id: 'EFFICIENCY',
@@ -38,14 +38,14 @@ const RUNE_TYPES = {
     icon: '🔵',
     desc: 'Reduces energy cost at the cost of lower damage',
     damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage
-    energyCostMult: [0.80, 0.70, 0.60], // -20/30/40% energy cost
+    energyCostMult: [0.80, 0.70, 0.60, 0.40], // -20/30/40% energy cost
   },
   SPREAD: {
     id: 'SPREAD',
     name: 'Spread Rune',
     icon: '🌐',
     desc: 'Increases AOE target count at the cost of per-target damage',
-    targetBonus: [1, 2, 3],           // +1/2/3 targets
+    targetBonus: [1, 2, 3, 4],           // +1/2/3 targets
     damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage per target
   },
   FOCUS: {
@@ -53,7 +53,7 @@ const RUNE_TYPES = {
     name: 'Focus Rune',
     icon: '🎯',
     desc: 'Increases crit chance at the cost of lower base damage',
-    critBonus: [5, 10, 15],           // +5/10/15% crit chance
+    critBonus: [5, 10, 15, 25],           // +5/10/15% crit chance
     damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage
   },
   ENDURANCE: {
@@ -61,7 +61,7 @@ const RUNE_TYPES = {
     name: 'Endurance Rune',
     icon: '🛡️',
     desc: 'Skill ignores target DEF at the cost of lower damage',
-    defIgnorePct: [0.20, 0.30, 0.40], // ignores 20/30/40% of target DEF
+    defIgnorePct: [0.20, 0.30, 0.40, 0.60], // ignores 20/30/40% of target DEF
     damageMult: [0.95, 0.90, 0.85],   // -5/10/15% damage
   },
   PIERCE: {
@@ -79,6 +79,8 @@ const RUNE_TIERS = {
   LESSER: { id: 'LESSER', name: 'Lesser', multIndex: 0, dropWeight: 60 },
   NORMAL: { id: 'NORMAL', name: 'Normal', multIndex: 1, dropWeight: 30 },
   GREATER: { id: 'GREATER', name: 'Greater', multIndex: 2, dropWeight: 10 },
+},
+  ABYSSAL: { id: 'ABYSSAL', name: 'Abyssal', multIndex: 3, dropWeight: 0 },
 };
 
 // ─── SKILL SLOT CAPACITY ──────────────────────────────────────────────────
@@ -341,6 +343,16 @@ async function awardRune(userJid, type, tier, obtainedFrom = null) {
   }
 }
 
+
+function rollAbyssalRuneDrop(floor) {
+  let tier = RUNE_TIERS.GREATER;
+  if (floor >= 100) tier = RUNE_TIERS.ABYSSAL;
+  else if (floor >= 50) tier = Math.random() < 0.25 ? RUNE_TIERS.ABYSSAL : RUNE_TIERS.GREATER;
+  const typeKeys = Object.keys(RUNE_TYPES);
+  const type = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+  return { type, tier: tier.id };
+}
+
 module.exports = {
   RUNE_TYPES,
   RUNE_TIERS,
@@ -354,4 +366,5 @@ module.exports = {
   applyRuneModifiers,
   rollRuneDrop,
   awardRune,
+  rollAbyssalRuneDrop,
 };
