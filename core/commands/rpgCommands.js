@@ -22,6 +22,7 @@ const getCurrency = () => botConfig.getCurrency();
 // ========================================== 
 
 async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
+    inventorySystem.repairUserEquipmentStats(senderJid);
     const sheet = progression.getCharacterSheet(senderJid);
     const economyUser = economy.getUser(senderJid);
     
@@ -198,6 +199,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
 // ========================================== 
 
 async function displayInventory(sock, chatId, senderJid, page = 1) {
+  inventorySystem.repairUserEquipmentStats(senderJid);
   const formatted = inventorySystem.formatInventory(senderJid);
   const equipment = inventorySystem.getEquipment(senderJid);
   const equippedIds = Object.values(equipment).filter(i => i !== null).map(i => i.id);

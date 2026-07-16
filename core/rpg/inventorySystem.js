@@ -638,50 +638,66 @@ function getEquipmentStats(userId) {
     return totalStats;
 }
 
+// Enhancement stones: percentage each stone adds to the TOTAL bonus pool (not compounded)
+const ENHANCEMENT_BONUS_MAP = {
+    'minor_enhancement_stone': 0.05,
+    'rare_enhancement_stone': 0.15,
+    'legendary_enhancement_stone': 0.35
+};
+
+const MAX_ENHANCEMENT_LEVEL = 5;      // hard cap on number of enhancements
+const MAX_ENHANCEMENT_BONUS = 1.0;    // hard cap on cumulative stat bonus (100%), regardless of stone mix
+
+// Ensures item.baseStats exists (the pristine, never-enhanced stat block).
+// Stats are always recalculated FROM this each time, so repeated enhancement
+// can never compound on top of an already-boosted value.
+function hydrateBaseStats(item, itemId) {
+    if (item.baseStats && Object.keys(item.baseStats).length > 0) return;
+
+    const source = (item.stats && Object.keys(item.stats).length > 0)
+        ? item.stats
+        : lootSystem.getItemInfo(item.id || itemId)?.stats;
+
+    item.baseStats = source ? JSON.parse(JSON.stringify(source)) : {};
+}
+
+// Recomputes item.stats = baseStats * (1 + cumulative bonus), rounded to integers.
+function recalculateEnhancedStats(item) {
+    const bonus = Math.min(item.enhancementBonus || 0, MAX_ENHANCEMENT_BONUS);
+    const newStats = {};
+    for (const stat in item.baseStats) {
+        newStats[stat] = Math.ceil(item.baseStats[stat] * (1 + bonus));
+    }
+    item.stats = newStats;
+}
+
 function enhanceItem(userId, itemId, stoneId) {
     const inventory = getInventory(userId);
     if (!inventory[itemId]) return { success: false, message: '❌ Item not found in inventory!' };
     if (!inventory[stoneId]) return { success: false, message: '❌ Enhancement stone not found!' };
 
     const item = inventory[itemId];
-    const stoneInfo = lootSystem.getItemInfo(stoneId);
-    
+
     if (item.type !== 'EQUIPMENT') return { success: false, message: '❌ You can only enhance equipment!' };
     if (!stoneId.includes('enhancement_stone')) return { success: false, message: '❌ That is not an enhancement stone!' };
 
-    // Enhancement logic
-    const bonusMap = {
-        'minor_enhancement_stone': 0.05,
-        'rare_enhancement_stone': 0.15,
-        'legendary_enhancement_stone': 0.35
-    };
+    if ((item.enhancementLevel || 0) >= MAX_ENHANCEMENT_LEVEL) {
+        return { success: false, message: `❌ *${item.name || itemId}* is already at max enhancement level (${MAX_ENHANCEMENT_LEVEL})!` };
+    }
 
-    const multiplier = bonusMap[stoneId] || 0.05;
+    const stoneBonus = ENHANCEMENT_BONUS_MAP[stoneId] || 0.05;
+
+    hydrateBaseStats(item, itemId);
+
     item.enhancementLevel = (item.enhancementLevel || 0) + 1;
-    
-    // Hydrate stats if not already set (fixes items dropping without explicitly cloned stats)
-    if (!item.stats || Object.keys(item.stats).length === 0) {
-        const baseItem = lootSystem.getItemInfo(item.id || itemId);
-        if (baseItem && baseItem.stats) {
-            item.stats = JSON.parse(JSON.stringify(baseItem.stats));
-        } else {
-            item.stats = {};
-        }
-    }
+    item.enhancementBonus = Math.min((item.enhancementBonus || 0) + stoneBonus, MAX_ENHANCEMENT_BONUS);
 
-    // Apply bonus to stats
-    if (item.stats) {
-        // Deep clone to prevent mutating the global ITEM_DATABASE reference
-        item.stats = JSON.parse(JSON.stringify(item.stats));
-        for (const stat in item.stats) {
-            item.stats[stat] = Math.ceil(item.stats[stat] * (1 + multiplier));
-        }
-    }
+    recalculateEnhancedStats(item);
 
     // Add prefix
     const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
     const prefix = prefixes[Math.min(item.enhancementLevel - 1, prefixes.length - 1)];
-    
+
     // Ensure item has a name to avoid crash
     if (!item.name) item.name = itemId;
 
@@ -694,8 +710,66 @@ function enhanceItem(userId, itemId, stoneId) {
 
     return {
         success: true,
-        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}!\nStats boosted by ${Math.round(multiplier * 100)}%.`
+        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}/${MAX_ENHANCEMENT_LEVEL}!\nTotal stat bonus: ${Math.round(item.enhancementBonus * 100)}%.`
     };
+}
+
+// Repairs items corrupted by the old compounding-multiplier bug (stats blown up
+// to absurd values by repeated enhancement). Safe to call repeatedly / on items
+// that were never enhanced — it's a no-op for anything that isn't inflated.
+// Since the old system didn't record which stones were used historically, this
+// is a best-effort reconstruction: it assumes the strongest stone (legendary,
+// 0.35) was used for every prior level, capped the same way new enhancements
+// are capped, then recalculates stats from base. That's the same worst-case
+// assumption the original exponential bug scenario was diagnosed under.
+function repairItemStats(item, itemId) {
+    if (!item || item.type !== 'EQUIPMENT') return false;
+    if (!(item.enhancementLevel > 0)) return false; // never enhanced, nothing to repair
+
+    const baseItem = lootSystem.getItemInfo(item.id || itemId);
+    const baseStatsRef = baseItem?.stats;
+    if (!baseStatsRef) return false;
+
+    // Corruption check: any current stat wildly exceeds what's possible under the new cap
+    const maxPossibleMultiplier = 1 + MAX_ENHANCEMENT_BONUS;
+    let corrupted = false;
+    for (const stat in item.stats || {}) {
+        const base = baseStatsRef[stat];
+        if (base && item.stats[stat] > base * maxPossibleMultiplier * 1.05) {
+            corrupted = true;
+            break;
+        }
+    }
+    // Also treat missing/negative baseStats bookkeeping as corrupted
+    if (!item.baseStats || Object.keys(item.baseStats).length === 0) corrupted = true;
+
+    if (!corrupted) return false;
+
+    item.baseStats = JSON.parse(JSON.stringify(baseStatsRef));
+    item.enhancementLevel = Math.min(item.enhancementLevel, MAX_ENHANCEMENT_LEVEL);
+    item.enhancementBonus = Math.min(item.enhancementLevel * 0.35, MAX_ENHANCEMENT_BONUS);
+    recalculateEnhancedStats(item);
+    return true;
+}
+
+// Sweeps a user's full inventory + equipped items and repairs any corrupted
+// equipment stats in place. Returns the number of items repaired.
+function repairUserEquipmentStats(userId) {
+    let repairedCount = 0;
+
+    const inventory = getInventory(userId);
+    for (const [itemId, item] of Object.entries(inventory || {})) {
+        if (repairItemStats(item, itemId)) repairedCount++;
+    }
+
+    const equipment = getEquipment(userId);
+    for (const item of Object.values(equipment || {})) {
+        if (!item) continue;
+        if (repairItemStats(item, item.id)) repairedCount++;
+    }
+
+    if (repairedCount > 0) economy.saveUser(userId);
+    return repairedCount;
 }
 
 // ==========================================
@@ -1063,6 +1137,8 @@ module.exports = {
     getEquipmentStats,
     enhanceItem,
     useItem,
+    repairItemStats,
+    repairUserEquipmentStats,
     
     // Selling
     sellItem,
@@ -1070,5 +1146,7 @@ module.exports = {
     // Config
     INVENTORY_CONFIG,
     ITEM_RARITY,
-    EQUIPMENT_SLOTS
+    EQUIPMENT_SLOTS,
+    MAX_ENHANCEMENT_LEVEL,
+    MAX_ENHANCEMENT_BONUS
 };
