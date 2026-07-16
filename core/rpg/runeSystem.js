@@ -37,7 +37,7 @@ const RUNE_TYPES = {
     name: 'Efficiency Rune',
     icon: '🔵',
     desc: 'Reduces energy cost at the cost of lower damage',
-    damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage
+    damageMult: [0.90, 0.85, 0.80, 0.75],   // -10/15/20% damage
     energyCostMult: [0.80, 0.70, 0.60, 0.40], // -20/30/40% energy cost
   },
   SPREAD: {
@@ -46,7 +46,7 @@ const RUNE_TYPES = {
     icon: '🌐',
     desc: 'Increases AOE target count at the cost of per-target damage',
     targetBonus: [1, 2, 3, 4],           // +1/2/3 targets
-    damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage per target
+    damageMult: [0.90, 0.85, 0.80, 0.75],   // -10/15/20% damage per target
   },
   FOCUS: {
     id: 'FOCUS',
@@ -54,7 +54,7 @@ const RUNE_TYPES = {
     icon: '🎯',
     desc: 'Increases crit chance at the cost of lower base damage',
     critBonus: [5, 10, 15, 25],           // +5/10/15% crit chance
-    damageMult: [0.90, 0.85, 0.80],   // -10/15/20% damage
+    damageMult: [0.90, 0.85, 0.80, 0.75],   // -10/15/20% damage
   },
   ENDURANCE: {
     id: 'ENDURANCE',
