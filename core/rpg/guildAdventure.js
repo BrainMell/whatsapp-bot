@@ -6411,6 +6411,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
         guildXpMult = guildPerks.getXpMultiplier(player.jid);
       } catch (e) {}
 
+      // 💡 FIX: Calculate guild bonuses that were completely missing!
+      let guildBonusGold = 0;
+      let guildBonusXp = 0;
+      if (guildGoldMult > 1.0) guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
+      if (guildXpMult > 1.0) guildBonusXp = Math.floor(finalXP * (guildXpMult - 1.0));
+
       // 💡 QA FIX: apply guild bonus BEFORE the gold cap, not after.
       // Previously the cap applied to base gold, then guild bonus was
       // added on top — allowing the total to exceed the cap.
