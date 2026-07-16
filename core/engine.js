@@ -4269,7 +4269,26 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         });
 
         sendQueue.bind(sock);
-        sock.sendMessage = (j, m, o = {}) => sendQueue.send(j, m, o);
+        const originalQueueSend = sendQueue.send.bind(sendQueue);
+        sock.sendMessage = (j, m, o = {}) => {
+          if (m && typeof m === 'object') {
+            const mediaKeys = ['image', 'video', 'audio', 'document', 'sticker'];
+            for (const key of mediaKeys) {
+              if (m[key]) {
+                const media = m[key];
+                const hasUrl = media.url && typeof media.url === 'string';
+                const hasBuffer = media.buffer && Buffer.isBuffer(media.buffer);
+                const isStream = media.stream || media instanceof require('stream');
+                
+                if (!hasUrl && !hasBuffer && !isStream && !Buffer.isBuffer(media)) {
+                  console.warn(`[Validation] Dropping invalid ${key} payload for ${j} (missing url/buffer)`);
+                  return Promise.resolve({ status: 'dropped', reason: 'invalid_media' });
+                }
+              }
+            }
+          }
+          return originalQueueSend(j, m, o);
+        };
 
         // Wrap event registrations in the storage context to ensure isolation
         await botConfig.storage.run(configInstance, async () => {
