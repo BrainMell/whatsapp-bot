@@ -63,7 +63,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 25,
-                        cooldown: 5,
+                        cooldown: 2,
                         desc: 'Finish off low HP enemies',
                         requires: { cleave: 3 },
                         effect: (level) => ({
@@ -2266,7 +2266,7 @@ const SKILL_TREES = {
                         requiredLevel: 30,
                         maxLevel: 5,
                         energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.75, 3.0, 3.25, 3.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2281,7 +2281,7 @@ const SKILL_TREES = {
                         requiredLevel: 32,
                         maxLevel: 5,
                         energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        cooldown: 3,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'defense', value: [30, 40, 50, 65, 80], duration: 3 }
@@ -2297,7 +2297,7 @@ const SKILL_TREES = {
                         requiredLevel: 34,
                         maxLevel: 5,
                         energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 6,
+                        cooldown: 3,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [20, 25, 30, 35, 45], duration: 3 },
@@ -2314,7 +2314,7 @@ const SKILL_TREES = {
                         requiredLevel: 37,
                         maxLevel: 5,
                         energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 4,
+                        cooldown: 2,
                         targeting: 'TEAM',
                         effects: {
                             haste: { value: [20, 25, 30, 35, 45], duration: 3 }
@@ -2332,13 +2332,74 @@ const SKILL_TREES = {
                         isUltimate: true,
                         isAscended: true,
                         energyCost: [100, 90, 80],
-                        cooldown: 10,
+                        cooldown: 6,
                         damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Unleash total warfare upon all enemies.',
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
+                    }
+                }
+            },
+            // ─── NEW: WARRIOR PATH tree — 3 AOE skills as requested ───
+            WARRIOR_PATH: {
+                name: 'Warrior Path',
+                icon: '⚔️',
+                skills: {
+                    // AOE #1: Wide Cleave — early AOE, low cooldown
+                    wide_cleave: {
+                        id: 'wide_cleave',
+                        name: 'Wide Cleave',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 17],
+                        cooldown: 2,
+                        damageMultiplier: [2.0, 2.3, 2.6, 2.9, 3.2],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_SMALL',
+                        description: 'Sweeping strike hitting 3 adjacent enemies.',
+                        animation: '⚔️🌀💥',
+                        skillPointCost: [2, 3, 4, 5, 6]
+                    },
+                    // AOE #2: Shockwave Stomp — medium AOE with stun chance
+                    shockwave_stomp: {
+                        id: 'shockwave_stomp',
+                        name: 'Shockwave Stomp',
+                        tier: 2,
+                        requiredLevel: 35,
+                        maxLevel: 5,
+                        energyCost: [35, 32, 29, 26, 23],
+                        cooldown: 3,
+                        damageMultiplier: [3.0, 3.4, 3.8, 4.2, 4.6],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_ALL',
+                        cc: 'stun',
+                        ccChance: [20, 25, 30, 35, 40],
+                        ccDuration: 1,
+                        description: 'Slam the ground, damaging all enemies with a 20-40% chance to stun.',
+                        animation: '💥👊🌊',
+                        skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    // AOE #3: Warbanner Charge — buff + AOE damage combo
+                    warbanner_charge: {
+                        id: 'warbanner_charge',
+                        name: 'Warbanner Charge',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 5,
+                        energyCost: [50, 45, 40, 35, 30],
+                        cooldown: 4,
+                        damageMultiplier: [4.5, 5.0, 5.5, 6.0, 6.5],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_ALL',
+                        buffs: [
+                            { stat: 'atk', value: [15, 20, 25, 30, 35], duration: 2 }
+                        ],
+                        description: 'Charge with your warbanner, dealing 4.5-6.5× AOE damage and boosting your ATK by 15-35% for 2 turns.',
+                        animation: '🚩⚔️💥🔥',
+                        skillPointCost: [5, 6, 7, 8, 9]
                     }
                 }
             }

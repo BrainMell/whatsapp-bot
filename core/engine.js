@@ -14458,7 +14458,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           for (let i = 0; i < leaderboard.length; i++) {
                             const entry = leaderboard[i];
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry.userId.split('@')[0]}\n`;
+                            // 💡 FIX: show nickname instead of raw user ID
+                            const lbUser = economy.getUser(entry.userId);
+                            const displayName = (lbUser && lbUser.nickname) ? lbUser.nickname : entry.userId.split('@')[0];
+                            msg += `${medal} ${displayName}\n`;
                             msg += `   🕳️ Floor ${entry.deepestFloor} | ☠️ ${entry.monstersKilled} kills | 📊 ${entry.score} pts\n`;
                             msg += `   ${entry.result === 'retreat' ? '🏃 Retreated' : '💀 Died'}\n`;
                           }

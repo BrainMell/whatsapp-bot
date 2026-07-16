@@ -6414,10 +6414,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // 💡 QA FIX: apply guild bonus BEFORE the gold cap, not after.
       // Previously the cap applied to base gold, then guild bonus was
       // added on top — allowing the total to exceed the cap.
-      const guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
-      const guildBonusXp = Math.floor(finalXP * (guildXpMult - 1.0));
-
-      // 💡 QA FIX: apply gold cap to the COMBINED total (base + guild bonus)
+      // 💡 FIX: Display TOTAL XP (per-combat XP + completion bonus).
+      // Previously only showed completion bonus, making it look like the
+      // player earned way less XP than they actually did. The per-combat
+      // XP was already awarded via progression.addXP during each fight,
+      // but never shown in the final summary.
+      const totalXpEarned = (player.xpEarned || 0) + finalXP + guildBonusXp;
       let totalGoldThisRun = finalGold + bonusGold + guildBonusGold;
       if (totalGoldThisRun > _runGoldCap) {
         const cut = totalGoldThisRun - _runGoldCap;
@@ -6425,9 +6427,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
         finalGold = Math.floor(finalGold * ratio);
         bonusGold = Math.floor(bonusGold * ratio);
         totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP + guildBonusXp}\n  💰 Gold: ${totalGoldThisRun} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       } else {
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP + guildBonusXp}\n  💰 Gold: ${totalGoldThisRun}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       }
 
       economy.addMoney(player.jid, totalGoldThisRun);
