@@ -645,8 +645,41 @@ const ENHANCEMENT_BONUS_MAP = {
     'legendary_enhancement_stone': 0.35
 };
 
-const MAX_ENHANCEMENT_LEVEL = 5;      // hard cap on number of enhancements
+// Rarity-based enhancement level cap. Higher-rarity gear has more headroom
+// so Common trash can't be enhanced into endgame gear, while Mythic items can
+// be pushed much further. The global MAX_ENHANCEMENT_BONUS cap (100% bonus,
+// = 2x base stats) still applies on top, so even a level-30 Mythic item stops
+// scaling once it hits that ceiling.
+const MAX_ENHANCEMENT_LEVEL_BY_RARITY = {
+    COMMON: 5,
+    UNCOMMON: 10,
+    RARE: 15,
+    EPIC: 20,
+    LEGENDARY: 25,
+    MYTHIC: 30,
+};
+const DEFAULT_MAX_ENHANCEMENT_LEVEL = 5;  // fallback for items with unknown/missing rarity
+
+// Legacy single value kept for backward-compat with any external code that still
+// references it. Internally, always use getMaxEnhancementLevel(item) instead.
+const MAX_ENHANCEMENT_LEVEL = 5;
+
 const MAX_ENHANCEMENT_BONUS = 1.0;    // hard cap on cumulative stat bonus (100%), regardless of stone mix
+
+// Resolves the per-item enhancement level cap based on its rarity. Falls back
+// to DEFAULT_MAX_ENHANCEMENT_LEVEL if the item or its rarity is unknown. The
+// rarity is read from the item instance first, then from the loot database as
+// a fallback (some legacy items don't carry rarity on the instance).
+function getMaxEnhancementLevel(item, itemId) {
+    if (!item) return DEFAULT_MAX_ENHANCEMENT_LEVEL;
+    let rarity = item.rarity;
+    if (!rarity) {
+        const baseItem = lootSystem.getItemInfo(item.id || itemId);
+        rarity = baseItem?.rarity;
+    }
+    if (!rarity) return DEFAULT_MAX_ENHANCEMENT_LEVEL;
+    return MAX_ENHANCEMENT_LEVEL_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_LEVEL;
+}
 
 // Ensures item.baseStats exists (the pristine, never-enhanced stat block).
 // Stats are always recalculated FROM this each time, so repeated enhancement
@@ -681,8 +714,9 @@ function enhanceItem(userId, itemId, stoneId) {
     if (item.type !== 'EQUIPMENT') return { success: false, message: '❌ You can only enhance equipment!' };
     if (!stoneId.includes('enhancement_stone')) return { success: false, message: '❌ That is not an enhancement stone!' };
 
-    if ((item.enhancementLevel || 0) >= MAX_ENHANCEMENT_LEVEL) {
-        return { success: false, message: `❌ *${item.name || itemId}* is already at max enhancement level (${MAX_ENHANCEMENT_LEVEL})!` };
+    const maxLevel = getMaxEnhancementLevel(item, itemId);
+    if ((item.enhancementLevel || 0) >= maxLevel) {
+        return { success: false, message: `❌ *${item.name || itemId}* is already at max enhancement level (${maxLevel}) for its rarity!` };
     }
 
     const stoneBonus = ENHANCEMENT_BONUS_MAP[stoneId] || 0.05;
@@ -710,7 +744,7 @@ function enhanceItem(userId, itemId, stoneId) {
 
     return {
         success: true,
-        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}/${MAX_ENHANCEMENT_LEVEL}!\nTotal stat bonus: ${Math.round(item.enhancementBonus * 100)}%.`
+        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}/${maxLevel}!\nTotal stat bonus: ${Math.round(item.enhancementBonus * 100)}%.`
     };
 }
 
@@ -746,7 +780,13 @@ function repairItemStats(item, itemId) {
     if (!corrupted) return false;
 
     item.baseStats = JSON.parse(JSON.stringify(baseStatsRef));
-    item.enhancementLevel = Math.min(item.enhancementLevel, MAX_ENHANCEMENT_LEVEL);
+    // Use rarity-aware cap so a legitimately-enhanced Mythic item at level 20
+    // isn't clamped back down to 5 by the repair sweep. Only genuinely corrupted
+    // items (stats wildly exceeding what's possible under the rarity cap) get
+    // healed, and they're healed to the rarity-appropriate ceiling, not the old
+    // flat 5-level cap.
+    const maxLevel = getMaxEnhancementLevel(item, itemId);
+    item.enhancementLevel = Math.min(item.enhancementLevel, maxLevel);
     item.enhancementBonus = Math.min(item.enhancementLevel * 0.35, MAX_ENHANCEMENT_BONUS);
     recalculateEnhancedStats(item);
     return true;
@@ -1139,6 +1179,7 @@ module.exports = {
     useItem,
     repairItemStats,
     repairUserEquipmentStats,
+    getMaxEnhancementLevel,
     
     // Selling
     sellItem,
@@ -1148,5 +1189,7 @@ module.exports = {
     ITEM_RARITY,
     EQUIPMENT_SLOTS,
     MAX_ENHANCEMENT_LEVEL,
+    MAX_ENHANCEMENT_LEVEL_BY_RARITY,
+    DEFAULT_MAX_ENHANCEMENT_LEVEL,
     MAX_ENHANCEMENT_BONUS
 };

@@ -510,12 +510,10 @@ async function processTreasure(userId) {
       const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
       if (runeResult.success) {
         run.lootAccumulator.runes.push(runeResult.rune.runeId);
-        msg += runeResult.message + '
-';
+        msg += runeResult.message + '\n';
       }
     } catch (e) {
-      msg += `💎 The shrine is dormant. (Rune system error)
-`;
+      msg += `💎 The shrine is dormant. (Rune system error)\n`;
     }
   }
 
@@ -625,12 +623,10 @@ async function processEventChoice(userId, choiceId) {
       const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
       if (runeResult.success) {
         run.lootAccumulator.runes.push(runeResult.rune.runeId);
-        msg += runeResult.message + '
-';
+        msg += runeResult.message + '\n';
       }
     } catch (e) {
-      msg += `💎 The shrine is dormant. (Rune system error)
-`;
+      msg += `💎 The shrine is dormant. (Rune system error)\n`;
     }
   }
 

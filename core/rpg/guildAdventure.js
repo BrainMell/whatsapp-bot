@@ -4249,7 +4249,14 @@ function recordEnemyKill(state, entity) {
       } catch (e) {}
 
       // 💡 Phase 3: Roll for rune drop on S+ bosses
-      // S: 10%, SS: 15%, SSS: 25%, Dragon: 20%
+      // ⚠️ DISABLED 2026-07-17 — Runes are now Abyss-exclusive. The boss-drop
+      // path was the only non-Abyss source of runes from regular dungeons.
+      // Abyss-floor rune drops (around line 4565, gated on state.abyssFloor
+      // >= 21) still fire as before. Existing runes in player inventories
+      // are untouched — only new boss-drop rolls are skipped.
+      //
+      // To re-enable: uncomment the block below.
+      /*
       try {
         const runeSystem = require('./runeSystem');
         const bossLevel = entity.level || entity.stats?.level || 1;
@@ -4282,6 +4289,7 @@ function recordEnemyKill(state, entity) {
       } catch (e) {
         console.error('[RuneDrop] Failed to roll rune drop:', e.message);
       }
+      */
     }
     // Total lifetime kills — required for DOOMSLAYER (req.kills: 500)
     economy.trackMissionStat(p.jid, 'kills', 1);
@@ -6877,7 +6885,16 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   // 💡 FIX #36: Check and enforce skill cooldowns. Previously cooldowns
   // were defined in skill data but never tracked or checked — players
   // could spam any skill every turn. Now we track per-player cooldowns.
-  if (ability.cooldown && ability.cooldown > 0) {
+  //
+  // 💡 COOLDOWN RUNE: apply runeModifiedEffect.cooldownMult if a COOLDOWN
+  // rune is socketed in this skill. cooldownMult of 0 = no cooldown at all
+  // (ABYSSAL tier), 0.5 = half cooldown (NORMAL tier), etc. Falls back to
+  // 1.0 (unchanged) if no cooldown rune is socketed.
+  const cooldownMult = Number(runeModifiedEffect.cooldownMult) || 1;
+  const effectiveCooldown = ability.cooldown && ability.cooldown > 0
+    ? Math.max(0, Math.ceil(ability.cooldown * cooldownMult))
+    : 0;
+  if (effectiveCooldown > 0) {
     if (!player.skillCooldowns) player.skillCooldowns = {};
     const cd = player.skillCooldowns[ability.id];
     if (cd && cd > 0) {
@@ -6903,10 +6920,11 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   // Consume energy (clamped to 0 — never let NaN/Infinity sneak through)
   player.stats.energy = Math.max(0, (player.stats.energy || 0) - (effectiveCost === Infinity ? 0 : effectiveCost));
 
-  // 💡 FIX #36: Set skill cooldown after use
-  if (ability.cooldown && ability.cooldown > 0) {
+  // 💡 FIX #36: Set skill cooldown after use (already multiplied by any
+  // socketed COOLDOWN rune via effectiveCooldown computed above).
+  if (effectiveCooldown > 0) {
     if (!player.skillCooldowns) player.skillCooldowns = {};
-    player.skillCooldowns[ability.id] = ability.cooldown;
+    player.skillCooldowns[ability.id] = effectiveCooldown;
   }
 
   // Apply ability effect (using rune-modified effect if runes are socketed)

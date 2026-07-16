@@ -72,6 +72,17 @@ const RUNE_TYPES = {
     cannotEvade: true,
     damageMult: [0.95, 0.90, 0.85],   // -5/10/15% damage
   },
+  COOLDOWN: {
+    id: 'COOLDOWN',
+    name: 'Cooldown Rune',
+    icon: '⏱️',
+    desc: 'Reduces skill cooldown. Higher tiers can halve or remove it entirely.',
+    // Per-tier cooldown multiplier: LESSER 0.75, NORMAL 0.50, GREATER 0.25, ABYSSAL 0.00
+    // (ABYSSAL = no cooldown at all — skill usable every turn)
+    cooldownMult: [0.75, 0.50, 0.25, 0.00],
+    // Small energy cost penalty so cooldown runes aren't strictly free
+    energyCostMult: [1.15, 1.20, 1.25, 1.30],
+  },
 };
 
 // ─── TIER DEFINITIONS ─────────────────────────────────────────────────────
@@ -79,7 +90,6 @@ const RUNE_TIERS = {
   LESSER: { id: 'LESSER', name: 'Lesser', multIndex: 0, dropWeight: 60 },
   NORMAL: { id: 'NORMAL', name: 'Normal', multIndex: 1, dropWeight: 30 },
   GREATER: { id: 'GREATER', name: 'Greater', multIndex: 2, dropWeight: 10 },
-},
   ABYSSAL: { id: 'ABYSSAL', name: 'Abyssal', multIndex: 3, dropWeight: 0 },
 };
 
@@ -261,6 +271,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   let critBonus = 0;
   let defIgnorePct = 0;
   let cannotEvade = false;
+  let cooldownMult = 1.0;
 
   for (const rune of socketedRunes) {
     const runeType = RUNE_TYPES[rune.type];
@@ -273,6 +284,7 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (runeType.critBonus) critBonus += runeType.critBonus[tierIdx];
     if (runeType.defIgnorePct) defIgnorePct += runeType.defIgnorePct[tierIdx];
     if (runeType.cannotEvade) cannotEvade = true;
+    if (runeType.cooldownMult) cooldownMult *= runeType.cooldownMult[tierIdx];
   }
 
   // Apply damage multiplier
@@ -299,6 +311,12 @@ function applyRuneModifiers(effect, socketedRunes) {
   // Apply cannot-evade flag
   if (cannotEvade) {
     modifiedEffect.cannotEvade = true;
+  }
+  // Apply cooldown multiplier (COOLDOWN rune). Multiple cooldown runes multiply,
+  // so two LESSER (0.75 × 0.75 = 0.5625) is roughly equivalent to one NORMAL
+  // (0.50) — diminishing returns on stacking.
+  if (cooldownMult !== 1.0) {
+    modifiedEffect.cooldownMult = (modifiedEffect.cooldownMult ?? 1) * cooldownMult;
   }
 
   return modifiedEffect;

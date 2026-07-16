@@ -520,23 +520,17 @@ async function distributeRewards(raid) {
       // Top 3
       xpReward = 500000;
       goldReward = 200000;
-      // Guaranteed greater rune
-      try {
-        const runeResult = await runeSystem.awardRune(a.jid, 'POWER', 'GREATER', 'raid_top3');
-        if (runeResult.success) runeDrop = runeResult.rune;
-      } catch (e) {}
+      // 💡 Runes are now Abyss-exclusive drops. Raid rewards were the only
+      // non-Abyss rune source, so the previously-guaranteed greater rune
+      // reward for top 3 is removed. Players chasing runes should descend
+      // into the Abyss instead. Existing runes in player inventories are
+      // untouched.
       label = `🥇🥈🥉 Top ${i + 1}`;
     } else if (i < 10) {
       // Top 10
       xpReward = 200000;
       goldReward = 100000;
-      // Guaranteed normal rune
-      try {
-        const types = ['POWER', 'EFFICIENCY', 'SPREAD', 'FOCUS'];
-        const t = types[Math.floor(Math.random() * types.length)];
-        const runeResult = await runeSystem.awardRune(a.jid, t, 'NORMAL', 'raid_top10');
-        if (runeResult.success) runeDrop = runeResult.rune;
-      } catch (e) {}
+      // (Runes removed — Abyss-exclusive now, see comment above.)
       label = `🏆 Top 10`;
     } else if (i < 50) {
       // Top 50
