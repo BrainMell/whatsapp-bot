@@ -6395,6 +6395,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
   const _baseGp = rankGpMap[state.dungeonRank] || 1;
 
   for (const player of state.players) {
+   try {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
     let finalGold = Math.floor(player.goldEarned * multiplier);
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
@@ -6500,6 +6501,23 @@ async function endAdventure(sock, sessionKey, victory = true) {
     if (rankUpdate && rankUpdate.ranked_up) {
       msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
     }
+   } catch (playerRewardErr) {
+    // 💡 FIX: Root cause of "combat doesn't end" bug — if ANYTHING in this
+    // per-player reward loop throws (e.g. the guildBonusXp ReferenceError,
+    // or any future undefined-var/null-access bug), the exception used to
+    // propagate straight out of endAdventure(), skipping the cleanup below
+    // (state.active = false; deleteGameState(sessionKey)). That left a
+    // stale gameStates entry: inCombat was already false (set earlier in
+    // endCombat), but active was still true and the entry was never
+    // deleted. Symptom: `.g combat <x>` says "Not in combat!" (inCombat
+    // false) while starting a new solo raid says "You already have an
+    // active Solo raid!" (active still true) — both contradictory messages
+    // pointing at the same leftover state object. Catching here guarantees
+    // we always reach the cleanup at the bottom of this function, even if
+    // one player's reward math blows up.
+    console.error(`[Quest] endAdventure reward error for ${player.jid}:`, playerRewardErr.message, playerRewardErr.stack);
+    msg += `${player.class?.icon || ''} *${player.name}*\n  ⚠️ _Reward calculation failed — contact an admin if this persists._\n\n`;
+   }
   }
 
   if (state.mode === "PERMADEATH") {
