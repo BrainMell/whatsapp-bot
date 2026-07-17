@@ -1245,6 +1245,39 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     else if (rankIndex > 7.0)  { bossHpFactor = 0.26; bossHpQuadFactor = 0.003; }  // B
 
     scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * bossHpFactor) + (rankIndex * rankIndex * bossHpQuadFactor)));
+
+    // 💡 FIX 2026-07-17: Boss HP floor. At low ranks (F/E/D), the boss base
+    // HP (e.g. Infected Colossus = 300) combined with the low rank scaling
+    // produced bosses with FEWER HP than regular trash mobs (372 HP boss vs
+    // 1865 HP regular enemy at F-rank). This was backwards — the boss should
+    // always be the climax of the dungeon.
+    //
+    // Fix: compute what a regular enemy's HP would be at this rank using the
+    // SAME formula as scaleEnemyStats, then ensure the boss has at least 2×
+    // that. This guarantees the boss is always the tankiest enemy in the
+    // dungeon, regardless of rank or base HP differences.
+    let regularHpFactor, regularHpQuadFactor;
+    if (rankIndex <= 1.0) {
+        regularHpFactor = 0.12; regularHpQuadFactor = 0.002;
+    } else if (rankIndex <= 4.0) {
+        regularHpFactor = 0.18; regularHpQuadFactor = 0.003;
+    } else if (rankIndex <= 7.0) {
+        regularHpFactor = 0.22; regularHpQuadFactor = 0.004;
+    } else if (rankIndex <= 13.0) {
+        regularHpFactor = 0.20; regularHpQuadFactor = 0.003;
+    } else if (rankIndex <= 25.0) {
+        regularHpFactor = 0.24; regularHpQuadFactor = 0.004;
+    } else {
+        regularHpFactor = 0.28; regularHpQuadFactor = 0.0045;
+    }
+    const regularHpMult = 1 + (rankIndex * regularHpFactor) + (rankIndex * rankIndex * regularHpQuadFactor);
+    // 💡 Use 1500 as the baseline regular enemy HP (most templates are
+    // 1000-2000). Boss should be at least 1.5× a regular enemy's HP.
+    const minBossHp = Math.floor(1500 * partyFactor * regularHpMult * 1.5);
+    if (scaled.stats.hp < minBossHp) {
+        scaled.stats.hp = minBossHp;
+    }
+
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     

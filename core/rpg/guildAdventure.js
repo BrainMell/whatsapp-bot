@@ -6058,7 +6058,11 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
         const bossEnemy = encounter.enemies && encounter.enemies[0];
         if (bossEnemy) {
           // Determine tier label for color theme
-          let tierLabel = "S";
+          // 💡 FIX: default was "S" — every rank below S (F, E, D, C, B, A)
+          // that didn't match the if/else chain showed "S-RANK BOSS". Now
+          // defaults to the actual dungeon rank, falling back to "F" if
+          // somehow missing.
+          let tierLabel = state.dungeonRank || "F";
           if (state.mode === "TRIAL") {
             tierLabel = "TRIAL";
           } else if (state.dungeonRank === "DRAGON") {
