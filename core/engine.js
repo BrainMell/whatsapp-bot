@@ -1069,8 +1069,11 @@ async function startBot(configInstance) {
       let isGroupSuperadmin = false;
       if (meta && meta.participants) {
         const p = meta.participants.find(x => {
-          const pid = x.id || x;
-          return pid === userJid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+          const pid = jidNormalizedUser(x.id || x);
+          const normJid = jidNormalizedUser(userJid);
+          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+          return pid === normJid || pid === normPhone || pid === normCan;
         });
         if (p) {
           if (p.admin === 'superadmin') isGroupSuperadmin = true;
@@ -1151,8 +1154,11 @@ async function startBot(configInstance) {
       let isGroupSuperadmin = false;
       if (meta && meta.participants) {
         const p = meta.participants.find(x => {
-          const pid = x.id || x;
-          return pid === jid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+          const pid = jidNormalizedUser(x.id || x);
+          const normJid = jidNormalizedUser(jid);
+          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+          return pid === normJid || pid === normPhone || pid === normCan;
         });
         if (p) {
           if (p.admin === 'superadmin') isGroupSuperadmin = true;
@@ -1240,14 +1246,20 @@ async function startBot(configInstance) {
       const meta = groupMetadataCache.get(chatId);
       if (meta && meta.participants) {
         const actorPart = meta.participants.find(x => {
-          const pid = x.id || x;
-          return pid === actorJid || (actorPhone && pid === actorPhone) || (actorCanonical && pid === actorCanonical);
+          const pid = jidNormalizedUser(x.id || x);
+          const normActor = jidNormalizedUser(actorJid);
+          const normPhone = actorPhone ? jidNormalizedUser(actorPhone) : null;
+          const normCan = actorCanonical ? jidNormalizedUser(actorCanonical) : null;
+          return pid === normActor || pid === normPhone || pid === normCan;
         });
         if (actorPart) actorAdminStatus = actorPart.admin;
 
         const targetPart = meta.participants.find(x => {
-          const pid = x.id || x;
-          return pid === targetJid || (targetPhone && pid === targetPhone) || (targetCanonical && pid === targetCanonical);
+          const pid = jidNormalizedUser(x.id || x);
+          const normTarget = jidNormalizedUser(targetJid);
+          const normPhone = targetPhone ? jidNormalizedUser(targetPhone) : null;
+          const normCan = targetCanonical ? jidNormalizedUser(targetCanonical) : null;
+          return pid === normTarget || pid === normPhone || pid === normCan;
         });
         if (targetPart) targetAdminStatus = targetPart.admin;
       }
@@ -1294,8 +1306,11 @@ async function startBot(configInstance) {
 
       if (groupMetadata?.participants) {
         const p = groupMetadata.participants.find(x => {
-          const pid = x.id || x;
-          return pid === senderJid || (phoneJid && pid === phoneJid) || (canonicalJid && pid === canonicalJid);
+          const pid = jidNormalizedUser(x.id || x);
+          const normSender = jidNormalizedUser(senderJid);
+          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+          return pid === normSender || pid === normPhone || pid === normCan;
         });
         if (p?.admin === 'superadmin' || p?.admin === 'admin') return true;
       }
@@ -4533,7 +4548,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (action === "add") {
                 for (const p of pArray) {
                   const pId = normalizeParticipantJid(p);
-                  if (pId && !groupMetadata.participants.some(x => (x.id || x) === pId)) {
+                  if (pId && !groupMetadata.participants.some(x => jidNormalizedUser(x.id || x) === jidNormalizedUser(pId))) {
                     groupMetadata.participants.push({ id: pId, admin: null });
                   }
                 }
@@ -9549,7 +9564,16 @@ Commands:
                       return reply(`❌ Usage: \`${P} set rank @user <level>\` or reply to a message with \`${P} set rank <level>\``);
                     }
 
-                    const isTargetAdmin = meta?.participants?.some(p => (p.id || p) === target && (p.admin === 'admin' || p.admin === 'superadmin'));
+                    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+                    const targetPhone = resolveToPhone(target, configInstance.getAuthPath());
+                    const targetCanonical = resolveJid(target, configInstance.getAuthPath());
+                    const isTargetAdmin = meta?.participants?.some(p => {
+                      const pid = jidNormalizedUser(p.id || p);
+                      const normTarget = jidNormalizedUser(target);
+                      const normPhone = targetPhone ? jidNormalizedUser(targetPhone) : null;
+                      const normCan = targetCanonical ? jidNormalizedUser(targetCanonical) : null;
+                      return (pid === normTarget || pid === normPhone || pid === normCan) && (p.admin === 'admin' || p.admin === 'superadmin');
+                    });
                     const targetIsOwner = _isBotOwner(target);
                     const targetIsGlobal = isGlobalMod && isGlobalMod(target);
                     if (!isTargetAdmin && !targetIsOwner && !targetIsGlobal) {
@@ -19710,16 +19734,27 @@ _(Or reply to their message)_
 
                   // --- Return by Death Logic for Subaru ---
                   if (botConfig.getBotName().toLowerCase() === "subaru") {
-                    const rbdKeywords = ["return by death", "return to death", "death ability", "rewind time"];
+                    const rbdKeywords = [
+                      "return by death", "return to death", "death ability", "rewind time",
+                      "ability", "secret", "power", "future sight", "time control", "hiding something",
+                      "spill", "talk", "tell me"
+                    ];
+                    // Also check if they are aggressively questioning him
                     const isRbdTrigger = rbdKeywords.some(kw => lowerTxt.includes(kw));
 
                     if (isRbdTrigger) {
                       const count = (returnByDeathCounters.get(chatId) || 0) + 1;
                       returnByDeathCounters.set(chatId, count);
+                      
+                      console.log(`[RBD] Trigger detected in chat: ${chatId}`);
+                      console.log(`[RBD] Counter: ${count}/6`);
 
                       if (count >= 6) {
+                        console.log(`[RBD] Threshold reached`);
                         const videoPath = require("path").join(__dirname, '..', 'instances', 'Subaru', 'assets', 'subaru_rbd.mp4');
                         if (require("fs").existsSync(videoPath)) {
+                          console.log(`[RBD] Sending video`);
+                          // Sending MP4 with gifPlayback: true is how WhatsApp natively handles GIFs
                           await sock.sendMessage(chatId, { video: require("fs").readFileSync(videoPath), gifPlayback: true });
                         }
                         
@@ -19736,9 +19771,11 @@ _(Or reply to their message)_
                         await reply(BOT_MARKER + panicMsg);
                         await reply(BOT_MARKER + "_Subaru has completely broken down. He won't be responding for a couple of minutes._");
                         
+                        console.log(`[RBD] Disabling chatbot`);
                         enabledChats.delete(chatId);
                         if (typeof saveEnabledChats === 'function') saveEnabledChats();
                         
+                        console.log(`[RBD] Cooldown started`);
                         const COOLDOWN_MS = 2 * 60 * 1000;
                         setTimeout(() => {
                           enabledChats.add(chatId);
