@@ -5556,6 +5556,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       .trim();
 
                     if (chosenName.length < 2 || chosenName.length > 20) {
+                      // 💡 FIX §1.1: Rate-limit the nickname prompt to prevent
+                      // cross-bot infinite loops. If we've sent this prompt to
+                      // this chat in the last 60 seconds, don't send it again —
+                      // just silently consume the message. This breaks the
+                      // feedback loop where two bots keep prompting each other.
+                      const lastPrompt = pendingNameRequests.get(senderJid + '_rateLimit_' + chatId);
+                      if (lastPrompt && Date.now() - lastPrompt < 60000) {
+                        return true; // consume silently, don't send another prompt
+                      }
+                      pendingNameRequests.set(senderJid + '_rateLimit_' + chatId, Date.now());
                       await reply(
                         `Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`,
                       );
@@ -8841,11 +8851,31 @@ Usage: ${newUsage}/5${warningText}`;
                       if (args.length > 0) {
                         let targetClassId = args[0];
                         if (targetClassId.toLowerCase() === "info") {
+                          // 💡 FIX: .g class info — was silently failing when
+                          // getCharacterSheet returned null (unregistered user)
+                          // or sheet.class was null (no class assigned). Now
+                          // we explicitly check and send an error message
+                          // instead of falling through to displayCharacterSheet
+                          // (which made it look like the command was ignored).
                           const sheet = progression.getCharacterSheet(senderJid);
-                          targetClassId = sheet ? sheet.class : null;
+                          if (!sheet || !sheet.class) {
+                            return await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `❌ You don't have a class yet! Use \`${botConfig.getPrefix()} register\` to get started, then \`${botConfig.getPrefix()} class\` to pick a class.`
+                            });
+                          }
+                          targetClassId = sheet.class;
                         }
                         if (targetClassId) {
                           await classCommands.displayEvolutionTree(sock, chatId, targetClassId);
+                          return;
+                        }
+                      } else {
+                        // 💡 FIX: .g class with no args — show the player's
+                        // current class evolution tree if they have a class,
+                        // otherwise show the character sheet (class picker).
+                        const sheet = progression.getCharacterSheet(senderJid);
+                        if (sheet && sheet.class) {
+                          await classCommands.displayEvolutionTree(sock, chatId, sheet.class);
                           return;
                         }
                       }
@@ -18900,6 +18930,21 @@ ${senderName} said y'all should know:
                       getMentionOrReply(m) &&
                       !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[2])
                     );
+
+                    // 💡 FIX §2.2: .g pvp with no @mention — was falling through
+                    // to the general unknown-command handler. Now shows the
+                    // correct usage for the current duel-challenge system.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
+                      (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pvp `) &&
+                       !getMentionOrReply(m) &&
+                       !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[2]))
+                    ) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER +
+                          `⚔️ *PVP DUEL*\n\nTo challenge someone:\n\`${botConfig.getPrefix()} pvp @user [wager]\`\n\`${botConfig.getPrefix()} duel @user [wager]\`\n\nExample: \`${botConfig.getPrefix()} pvp @friend 500\``,
+                      });
+                    }
 
                     // duel @user [stake] / challenge @user [stake] - Challenge someone to a duel
                     if (

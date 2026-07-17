@@ -315,9 +315,14 @@ async function handleEquipment(senderJid, item) {
     });
     
     if (result.success) {
+        // 💡 FIX §2.1: item.slot was undefined for some shop items, producing
+        // "Use .e equip abyssal_carapace undefined to wear it." Now omits
+        // the slot hint entirely if slot is missing — the player can just
+        // use .e equip <id> without a slot argument.
+        const slotHint = item.slot ? ` ${item.slot}` : '';
         return {
             success: true,
-            message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use \`${getPrefix()} equip ${item.id} ${item.slot}\` to wear it.`
+            message: `${item.icon} *${item.name}* added to your bag!\n\n💡 Use \`${getPrefix()} equip ${item.id}${slotHint}\` to wear it.`
         };
     }
     return result;

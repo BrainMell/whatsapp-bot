@@ -337,13 +337,20 @@ async function acceptChallenge(sock, chatId, targetJid) {
 function buildDuelPlayer(jid, userData, stats, idx) {
     const classData = economy.getUserClass(jid);
     const progData = progression.getUser(jid);
+    // 💡 FIX §2.9: was capping energy at 100 in PvP, but several ultimate
+    // abilities (Singularity, Total War, etc.) cost 110-162 energy — making
+    // them permanently unusable in PvP. Now uses the player's actual
+    // maxEnergy from their stats (which accounts for level + MAG scaling
+    // via progression.getBaseStats). Falls back to 200 if missing so all
+    // ultimates are castable.
+    const maxEnergy = stats.maxEnergy || 200;
     return {
         jid,
         name: userData.nickname || jid.split('@')[0],
         hp: stats.maxHp || stats.hp,
         maxHp: stats.maxHp || stats.hp,
-        energy: 100,
-        maxEnergy: 100,
+        energy: maxEnergy,
+        maxEnergy: maxEnergy,
         stats,
         level: progData?.level || 1,
         class: classData,
