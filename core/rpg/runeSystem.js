@@ -72,6 +72,298 @@ const RUNE_TYPES = {
     cannotEvade: true,
     damageMult: [0.95, 0.90, 0.85],   // -5/10/15% damage
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🎨 BEHAVIOR-MODIFYING RUNES (Phase 4 — Skill Customization System)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // These runes don't just tweak numbers — they fundamentally alter how a
+  // skill behaves. Each adds one or more fields to modifiedEffect that the
+  // combat resolution code (applyAbilityEffect / calculateDamage) reads and
+  // honors. Post-compute patching architecture: skills expose editable
+  // properties, runes mutate them, no skill rewrites required.
+  //
+  // Categories:
+  //   1. Element Conversion (3)
+  //   2. Targeting (4)
+  //   3. Hit Splitting (2)
+  //   4. Ground Effects (3)
+  //   5. Status Addition (10)
+  //   6. Lifesteal / Drain (3)
+  //   7. Knockback / Control (3)
+  //   8. Casting / Cost (2)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── 1. ELEMENT CONVERSION ────────────────────────────────────────────────
+  FROST_CONVERSION: {
+    id: 'FROST_CONVERSION',
+    name: 'Frost Conversion Rune',
+    icon: '❄️🔥',
+    desc: 'Converts any elemental skill to Frost. Burn effects become Freeze.',
+    convertElement: 'ICE',
+    convertBurnToFreeze: true,
+    damageMult: [0.90, 0.92, 0.95, 0.98],
+  },
+  SHOCK_CONVERSION: {
+    id: 'SHOCK_CONVERSION',
+    name: 'Shock Conversion Rune',
+    icon: '⚡🔮',
+    desc: 'Converts any skill to Lightning. Adds WET synergy priming.',
+    convertElement: 'LIGHTNING',
+    applyWet: true,
+    damageMult: [0.92, 0.94, 0.96, 0.98],
+  },
+  VOID_CONVERSION: {
+    id: 'VOID_CONVERSION',
+    name: 'Void Conversion Rune',
+    icon: '🌌',
+    desc: 'Converts damage to TRUE, ignoring target DEF entirely.',
+    convertDamageType: 'TRUE',
+    ignoreDefense: 100,
+    damageMult: [0.80, 0.85, 0.90, 0.95],
+  },
+
+  // ─── 2. TARGETING ─────────────────────────────────────────────────────────
+  MULTI_SHOT: {
+    id: 'MULTI_SHOT',
+    name: 'Multi-Shot Rune',
+    icon: '🏹🎯',
+    desc: 'Single-target skill hits +2 additional targets.',
+    targetBonus: [1, 2, 2, 3],
+    convertSingleToAOE: true,
+    damageMult: [0.85, 0.88, 0.92, 0.95],
+  },
+  CHAIN_BOUNCE: {
+    id: 'CHAIN_BOUNCE',
+    name: 'Chain Bounce Rune',
+    icon: '⚡🔗',
+    desc: 'Skill arcs to additional targets. +1/2/3 bounces.',
+    chainBounces: [1, 2, 3, 4],
+    chainDecayPerBounce: 0.75,  // each bounce deals 75% of previous
+    damageMult: [0.90, 0.92, 0.95, 0.98],
+  },
+  SPREAD_BLAST: {
+    id: 'SPREAD_BLAST',
+    name: 'Spread Blast Rune',
+    icon: '💥🌐',
+    desc: 'Upgrades single-target to AOE_LARGE.',
+    convertTargeting: 'AOE_LARGE',
+    damageMult: [0.70, 0.75, 0.80, 0.85],
+  },
+  PRECISE_FOCUS: {
+    id: 'PRECISE_FOCUS',
+    name: 'Precise Focus Rune',
+    icon: '🎯',
+    desc: 'AOE skill becomes single-target with massive damage boost.',
+    convertTargeting: 'SINGLE',
+    damageMult: [1.40, 1.55, 1.70, 1.90],
+    guaranteedCrit: true,
+  },
+
+  // ─── 3. HIT SPLITTING ─────────────────────────────────────────────────────
+  FRAGMENT: {
+    id: 'FRAGMENT',
+    name: 'Fragment Rune',
+    icon: '💎',
+    desc: 'Splits one hit into 3 weaker hits (0.4x each).',
+    splitIntoHits: [2, 3, 3, 4],
+    splitDamageMult: 0.40,
+    damageMult: [1.0, 1.0, 1.0, 1.0],
+  },
+  BARRAGE: {
+    id: 'BARRAGE',
+    name: 'Barrage Rune',
+    icon: '🏹',
+    desc: 'Splits one hit into 5 very weak hits (0.25x each). Great vs shields.',
+    splitIntoHits: [3, 4, 5, 6],
+    splitDamageMult: 0.25,
+    bypassShield: true,
+    damageMult: [1.0, 1.0, 1.0, 1.0],
+  },
+
+  // ─── 4. GROUND EFFECTS ────────────────────────────────────────────────────
+  GROUND_FIRE: {
+    id: 'GROUND_FIRE',
+    name: 'Ground Fire Rune',
+    icon: '🔥',
+    desc: 'Leaves burning ground at target location. Burns enemies for 2 turns.',
+    groundEffect: { type: 'burn', value: [15, 25, 35, 50], duration: 2 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  FROST_PATCH: {
+    id: 'FROST_PATCH',
+    name: 'Frost Patch Rune',
+    icon: '❄️',
+    desc: 'Leaves a frost patch that slows all enemies for 2 turns.',
+    groundEffect: { type: 'slow', value: [20, 30, 40, 50], duration: 2 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  POISON_CLOUD: {
+    id: 'POISON_CLOUD',
+    name: 'Poison Cloud Rune',
+    icon: '☠️',
+    desc: 'Leaves a poisonous cloud that damages enemies for 3 turns.',
+    groundEffect: { type: 'poison', value: [12, 20, 30, 45], duration: 3 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+
+  // ─── 5. STATUS ADDITION ───────────────────────────────────────────────────
+  POISON_INFUSION: {
+    id: 'POISON_INFUSION',
+    name: 'Poison Infusion Rune',
+    icon: '🧪',
+    desc: 'Adds poison to any skill.',
+    addStatus: { type: 'poison', value: [15, 25, 40, 60], duration: 4 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  BLEED_INFUSION: {
+    id: 'BLEED_INFUSION',
+    name: 'Bleed Infusion Rune',
+    icon: '🩸',
+    desc: 'Adds bleed to any skill.',
+    addStatus: { type: 'bleed', value: [12, 20, 30, 45], duration: 3 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  BURN_INFUSION: {
+    id: 'BURN_INFUSION',
+    name: 'Burn Infusion Rune',
+    icon: '🔥',
+    desc: 'Adds burn to any skill.',
+    addStatus: { type: 'burn', value: [15, 25, 35, 50], duration: 3 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  FREEZE_INFUSION: {
+    id: 'FREEZE_INFUSION',
+    name: 'Freeze Infusion Rune',
+    icon: '🧊',
+    desc: 'Adds a chance to freeze the target.',
+    addStatus: { type: 'freeze', chance: [15, 25, 35, 50], duration: 1 },
+    damageMult: [0.92, 0.94, 0.96, 0.98],
+  },
+  SHOCK_INFUSION: {
+    id: 'SHOCK_INFUSION',
+    name: 'Shock Infusion Rune',
+    icon: '⚡',
+    desc: 'Adds shock status. Combines with WET for automatic stun.',
+    addStatus: { type: 'shock', value: [10, 15, 25, 35], duration: 2 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  STUN_INFUSION: {
+    id: 'STUN_INFUSION',
+    name: 'Stun Infusion Rune',
+    icon: '💫',
+    desc: 'Adds a chance to stun the target.',
+    addStatus: { type: 'stun', chance: [10, 20, 30, 40], duration: 1 },
+    damageMult: [0.85, 0.88, 0.92, 0.95],
+  },
+  SILENCE_INFUSION: {
+    id: 'SILENCE_INFUSION',
+    name: 'Silence Infusion Rune',
+    icon: '🤐',
+    desc: 'Silences the target — cannot use abilities.',
+    addStatus: { type: 'silence', duration: 2 },
+    damageMult: [0.90, 0.92, 0.95, 0.98],
+  },
+  BLIND_INFUSION: {
+    id: 'BLIND_INFUSION',
+    name: 'Blind Infusion Rune',
+    icon: '👁️',
+    desc: 'Blinds the target — reduces accuracy.',
+    addStatus: { type: 'blind', value: [25, 40, 55, 70], duration: 2 },
+    damageMult: [0.92, 0.94, 0.96, 0.98],
+  },
+  CURSE_INFUSION: {
+    id: 'CURSE_INFUSION',
+    name: 'Curse Infusion Rune',
+    icon: '💀',
+    desc: 'Curses the target — reduces all stats.',
+    addStatus: { type: 'curse', value: [15, 25, 35, 50], duration: 3 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  FEAR_INFUSION: {
+    id: 'FEAR_INFUSION',
+    name: 'Fear Infusion Rune',
+    icon: '😱',
+    desc: 'Slows target and has a small chance to stun from terror.',
+    addStatus: [
+      { type: 'slow', value: [20, 30, 40, 50], duration: 2 },
+      { type: 'stun', chance: [5, 10, 15, 20], duration: 1 },
+    ],
+    damageMult: [0.92, 0.94, 0.96, 0.98],
+  },
+
+  // ─── 6. LIFESTEAL / DRAIN ─────────────────────────────────────────────────
+  LIFESTEAL: {
+    id: 'LIFESTEAL',
+    name: 'Lifesteal Rune',
+    icon: '🩸💚',
+    desc: 'Heal for 25% of damage dealt.',
+    lifestealPercent: [15, 25, 35, 50],
+    damageMult: [0.92, 0.94, 0.96, 0.98],
+  },
+  MANA_DRAIN: {
+    id: 'MANA_DRAIN',
+    name: 'Mana Drain Rune',
+    icon: '🔵',
+    desc: 'Restore energy on hit.',
+    energyRestore: [10, 15, 25, 40],
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  SOUL_RIP: {
+    id: 'SOUL_RIP',
+    name: 'Soul Rip Rune',
+    icon: '💀💚',
+    desc: 'Lifesteal 50% + executes targets below 20% HP (true damage).',
+    lifestealPercent: [30, 40, 50, 65],
+    executeThreshold: 20,  // % HP
+    executeBonus: [2.0, 2.5, 3.0, 4.0],
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+
+  // ─── 7. KNOCKBACK / CONTROL ───────────────────────────────────────────────
+  KNOCKBACK: {
+    id: 'KNOCKBACK',
+    name: 'Knockback Rune',
+    icon: '👊',
+    desc: 'Knocks the target back, applying slow.',
+    addStatus: { type: 'slow', value: [15, 25, 35, 50], duration: 2 },
+    damageMult: [1.0, 1.0, 1.0, 1.0],
+  },
+  PULL: {
+    id: 'PULL',
+    name: 'Pull Rune',
+    icon: '🪝',
+    desc: 'Pulls the target, with a chance to root.',
+    addStatus: { type: 'root', chance: [20, 30, 40, 55], duration: 1 },
+    damageMult: [1.0, 1.0, 1.0, 1.0],
+  },
+  TAUNT: {
+    id: 'TAUNT',
+    name: 'Taunt Rune',
+    icon: '😠',
+    desc: 'Forces target to attack you next turn.',
+    addStatus: { type: 'taunt', duration: 1 },
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+
+  // ─── 8. CASTING / COST ────────────────────────────────────────────────────
+  QUICK_CAST: {
+    id: 'QUICK_CAST',
+    name: 'Quick Cast Rune',
+    icon: '⏩',
+    desc: 'Cooldown -1 turn (min 0), but +25% energy cost.',
+    cooldownFlatReduction: 1,
+    energyCostMult: [1.15, 1.20, 1.25, 1.30],
+    damageMult: [1.0, 1.0, 1.0, 1.0],
+  },
+  EFFICIENT_CAST: {
+    id: 'EFFICIENT_CAST',
+    name: 'Efficient Cast Rune',
+    icon: '💫',
+    desc: 'Energy cost -40%, but -15% damage.',
+    energyCostMult: [0.80, 0.70, 0.65, 0.60],
+    damageMult: [0.95, 0.92, 0.88, 0.85],
+  },
+
   COOLDOWN: {
     id: 'COOLDOWN',
     name: 'Cooldown Rune',
@@ -265,6 +557,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   if (!effect || !socketedRunes || socketedRunes.length === 0) return effect;
 
   let modifiedEffect = { ...effect };
+  // Classic numeric modifiers (from original 7 runes)
   let damageMult = 1.0;
   let energyCostMult = 1.0;
   let targetBonus = 0;
@@ -273,11 +566,33 @@ function applyRuneModifiers(effect, socketedRunes) {
   let cannotEvade = false;
   let cooldownMult = 1.0;
 
+  // Phase 4 behavior-modifying accumulators
+  let convertElement = null;
+  let convertDamageType = null;
+  let convertTargeting = null;
+  let convertSingleToAOE = false;
+  let convertBurnToFreeze = false;
+  let applyWet = false;
+  let chainBounces = 0;
+  let chainDecayPerBounce = 0.75;
+  let splitIntoHits = 0;
+  let splitDamageMult = 1.0;
+  let bypassShield = false;
+  let groundEffect = null;
+  let lifestealPercent = 0;
+  let energyRestore = 0;
+  let executeThreshold = 0;
+  let executeBonus = 1.0;
+  let cooldownFlatReduction = 0;
+  let guaranteedCrit = false;
+  const addStatuses = [];  // collected status effects to apply
+
   for (const rune of socketedRunes) {
     const runeType = RUNE_TYPES[rune.type];
     if (!runeType) continue;
     const tierIdx = RUNE_TIERS[rune.tier]?.multIndex ?? 0;
 
+    // Classic modifiers
     if (runeType.damageMult) damageMult *= runeType.damageMult[tierIdx];
     if (runeType.energyCostMult) energyCostMult *= runeType.energyCostMult[tierIdx];
     if (runeType.targetBonus) targetBonus += runeType.targetBonus[tierIdx];
@@ -285,6 +600,53 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (runeType.defIgnorePct) defIgnorePct += runeType.defIgnorePct[tierIdx];
     if (runeType.cannotEvade) cannotEvade = true;
     if (runeType.cooldownMult) cooldownMult *= runeType.cooldownMult[tierIdx];
+
+    // Phase 4 modifiers
+    if (runeType.convertElement) convertElement = runeType.convertElement;
+    if (runeType.convertDamageType) convertDamageType = runeType.convertDamageType;
+    if (runeType.convertTargeting) convertTargeting = runeType.convertTargeting;
+    if (runeType.convertSingleToAOE) convertSingleToAOE = true;
+    if (runeType.convertBurnToFreeze) convertBurnToFreeze = true;
+    if (runeType.applyWet) applyWet = true;
+    if (runeType.chainBounces) chainBounces = Math.max(chainBounces, runeType.chainBounces[tierIdx]);
+    if (typeof runeType.chainDecayPerBounce === 'number') chainDecayPerBounce = runeType.chainDecayPerBounce;
+    if (runeType.splitIntoHits) splitIntoHits = Math.max(splitIntoHits, runeType.splitIntoHits[tierIdx]);
+    if (typeof runeType.splitDamageMult === 'number') splitDamageMult = runeType.splitDamageMult;
+    if (runeType.bypassShield) bypassShield = true;
+    if (runeType.guaranteedCrit) guaranteedCrit = true;
+    if (runeType.cooldownFlatReduction) cooldownFlatReduction += runeType.cooldownFlatReduction;
+    if (runeType.ignoreDefense) defIgnorePct = Math.max(defIgnorePct, runeType.ignoreDefense);
+
+    if (runeType.groundEffect) {
+      // Latest ground effect wins (don't stack multiple ground types)
+      groundEffect = {
+        type: runeType.groundEffect.type,
+        value: Array.isArray(runeType.groundEffect.value)
+          ? runeType.groundEffect.value[tierIdx]
+          : runeType.groundEffect.value,
+        duration: runeType.groundEffect.duration,
+      };
+    }
+    if (runeType.lifestealPercent) lifestealPercent = Math.max(lifestealPercent, runeType.lifestealPercent[tierIdx]);
+    if (runeType.energyRestore) energyRestore += runeType.energyRestore[tierIdx];
+    if (runeType.executeThreshold) executeThreshold = runeType.executeThreshold;
+    if (runeType.executeBonus) executeBonus = Math.max(executeBonus, runeType.executeBonus[tierIdx]);
+
+    // Collect addStatus entries (may be single object or array)
+    if (runeType.addStatus) {
+      const statuses = Array.isArray(runeType.addStatus) ? runeType.addStatus : [runeType.addStatus];
+      for (const s of statuses) {
+        // Resolve tier-indexed values
+        const resolved = { type: s.type, duration: s.duration || 1 };
+        if (s.value !== undefined) {
+          resolved.value = Array.isArray(s.value) ? s.value[tierIdx] : s.value;
+        }
+        if (s.chance !== undefined) {
+          resolved.chance = Array.isArray(s.chance) ? s.chance[tierIdx] : s.chance;
+        }
+        addStatuses.push(resolved);
+      }
+    }
   }
 
   // Apply damage multiplier
@@ -306,17 +668,50 @@ function applyRuneModifiers(effect, socketedRunes) {
   }
   // Apply DEF ignore
   if (defIgnorePct > 0) {
-    modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(80, defIgnorePct); // cap at 80%
+    modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(100, defIgnorePct);
   }
   // Apply cannot-evade flag
   if (cannotEvade) {
     modifiedEffect.cannotEvade = true;
   }
-  // Apply cooldown multiplier (COOLDOWN rune). Multiple cooldown runes multiply,
-  // so two LESSER (0.75 × 0.75 = 0.5625) is roughly equivalent to one NORMAL
-  // (0.50) — diminishing returns on stacking.
+  // Apply cooldown multiplier
   if (cooldownMult !== 1.0) {
     modifiedEffect.cooldownMult = (modifiedEffect.cooldownMult ?? 1) * cooldownMult;
+  }
+  // Apply flat cooldown reduction (QUICK_CAST) — applied IN ADDITION to mult
+  if (cooldownFlatReduction > 0) {
+    modifiedEffect.cooldownFlatReduction = (modifiedEffect.cooldownFlatReduction || 0) + cooldownFlatReduction;
+  }
+
+  // Phase 4 behavior patches
+  if (convertElement) modifiedEffect.element = convertElement;
+  if (convertDamageType) modifiedEffect.damageType = convertDamageType;
+  if (convertTargeting) modifiedEffect.targeting = convertTargeting;
+  if (convertSingleToAOE && (!modifiedEffect.targeting || modifiedEffect.targeting === 'SINGLE')) {
+    modifiedEffect.targeting = 'AOE_SMALL';
+    modifiedEffect.targets = Math.max(2, modifiedEffect.targets || 1);
+  }
+  if (convertBurnToFreeze) modifiedEffect.convertBurnToFreeze = true;
+  if (applyWet) modifiedEffect.applyWet = true;
+  if (chainBounces > 0) {
+    modifiedEffect.chainBounces = chainBounces;
+    modifiedEffect.chainDecayPerBounce = chainDecayPerBounce;
+  }
+  if (splitIntoHits > 0) {
+    modifiedEffect.splitIntoHits = splitIntoHits;
+    modifiedEffect.splitDamageMult = splitDamageMult;
+  }
+  if (bypassShield) modifiedEffect.bypassShield = true;
+  if (groundEffect) modifiedEffect.groundEffect = groundEffect;
+  if (lifestealPercent > 0) modifiedEffect.lifestealPercent = lifestealPercent;
+  if (energyRestore > 0) modifiedEffect.energyRestore = (modifiedEffect.energyRestore || 0) + energyRestore;
+  if (executeThreshold > 0) {
+    modifiedEffect.executeThreshold = executeThreshold;
+    modifiedEffect.executeBonus = executeBonus;
+  }
+  if (guaranteedCrit) modifiedEffect.guaranteedCrit = true;
+  if (addStatuses.length > 0) {
+    modifiedEffect.addStatuses = (modifiedEffect.addStatuses || []).concat(addStatuses);
   }
 
   return modifiedEffect;

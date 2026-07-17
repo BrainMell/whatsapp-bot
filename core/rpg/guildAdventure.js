@@ -7311,8 +7311,9 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   // (ABYSSAL tier), 0.5 = half cooldown (NORMAL tier), etc. Falls back to
   // 1.0 (unchanged) if no cooldown rune is socketed.
   const cooldownMult = Number(runeModifiedEffect.cooldownMult) || 1;
+  const cooldownFlatReduction = Number(runeModifiedEffect.cooldownFlatReduction) || 0;
   const effectiveCooldown = ability.cooldown && ability.cooldown > 0
-    ? Math.max(0, Math.ceil(ability.cooldown * cooldownMult))
+    ? Math.max(0, Math.ceil(ability.cooldown * cooldownMult) - cooldownFlatReduction)
     : 0;
   if (effectiveCooldown > 0) {
     if (!player.skillCooldowns) player.skillCooldowns = {};
@@ -8142,6 +8143,121 @@ async function applyAbilityEffect(
         }
       }
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 💡 PHASE 4 RUNE POST-PROCESSING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Apply behavior-modifying rune effects that need to fire AFTER all damage
+  // has been dealt. These come from socketed runes via applyRuneModifiers,
+  // which sets fields on the `effect` object that we read here.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // 💡 RUNE: LIFESTEAL — heal attacker for X% of damage dealt this cast
+  if (effect.lifestealPercent && totalDamage > 0 && !player.isDead) {
+    const healAmount = Math.floor(totalDamage * effect.lifestealPercent / 100);
+    if (healAmount > 0) {
+      const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+      player.stats.hp = Math.min(maxHpVal, (player.stats.hp || 0) + healAmount);
+      player.currentHP = player.stats.hp;
+      totalHealing += healAmount;
+      msg += `🩸💚 ${player.name} drains ${healAmount} HP from the damage dealt!\n`;
+    }
+  }
+
+  // 💡 RUNE: MANA_DRAIN / energyRestore — restore energy on hit
+  if (effect.energyRestore && effect.energyRestore > 0 && !player.isEnemy) {
+    const safeMaxEnergy = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+    const safeCurrentEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+    const restore = Math.min(effect.energyRestore, safeMaxEnergy - safeCurrentEnergy);
+    if (restore > 0) {
+      player.stats.energy = safeCurrentEnergy + restore;
+      msg += `🔵 ${player.name} drains ${restore} energy from the target!\n`;
+    }
+  }
+
+  // 💡 RUNE: SOUL_RIP execute — if target HP below executeThreshold %, boost damage
+  // (Applied retroactively as bonus damage since we already dealt damage —
+  // simpler than rewriting the damage loop. This gives a follow-up true-damage
+  // proc when the target is execution-eligible.)
+  if (effect.executeThreshold && effect.executeBonus > 1) {
+    const targets = getTargets(player, effect, targetIndex, chatId);
+    for (const target of targets) {
+      if (!target || target.isDead || !target.stats || !target.stats.maxHp) continue;
+      const hpPct = (target.stats.hp / target.stats.maxHp) * 100;
+      if (hpPct > 0 && hpPct <= effect.executeThreshold) {
+        const executeDmg = Math.floor(totalDamage * (effect.executeBonus - 1));
+        target.stats.hp = Math.max(0, target.stats.hp - executeDmg);
+        target.currentHP = target.stats.hp;
+        msg += `💀⚔️ SOUL RIP! ${target.name} is executed for ${executeDmg} bonus true damage!\n`;
+        if (target.stats.hp <= 0 && !target.isDead) {
+          target.isDead = true;
+          msg += `💀 ${target.name} is destroyed by Soul Rip!\n`;
+          if (state) recordEnemyKill(state, target);
+        }
+      }
+    }
+  }
+
+  // 💡 RUNE: addStatuses — apply extra status effects from infusion runes
+  // (POISON_INFUSION, BLEED_INFUSION, BURN_INFUSION, FREEZE_INFUSION, etc.)
+  if (effect.addStatuses && effect.addStatuses.length > 0) {
+    const targets = getTargets(player, effect, targetIndex, chatId);
+    for (const statusDef of effect.addStatuses) {
+      // Roll chance if defined
+      if (statusDef.chance !== undefined && Math.random() * 100 >= statusDef.chance) continue;
+      for (const target of targets) {
+        if (!target || target.isDead) continue;
+        const sRes = applyStatusEffect(target, statusDef.type, statusDef.duration || 1, statusDef.value || 0, player.name);
+        if (sRes.synergyMsg) msg += `\n✨ ${sRes.synergyMsg}`;
+        msg += `✨ ${target.name} is afflicted with ${statusDef.type.toUpperCase()}!\n`;
+      }
+    }
+  }
+
+  // 💡 RUNE: GROUND_EFFECT — leave a damaging ground effect on the battlefield
+  // (simplified: applies the status to all living enemies as if they walked
+  // into it. A full ground-effect system would track tiles/positions, but
+  // this gives the same gameplay effect with minimal code changes.)
+  if (effect.groundEffect) {
+    const ge = effect.groundEffect;
+    const opponentSide = player.isEnemy
+      ? state.players.filter((p) => !p.isDead)
+      : state.enemies.filter((e) => e.stats.hp > 0);
+    for (const target of opponentSide) {
+      const sRes = applyStatusEffect(target, ge.type, ge.duration || 2, ge.value || 10, player.name);
+      if (sRes.synergyMsg) msg += `\n✨ ${sRes.synergyMsg}`;
+    }
+    msg += `🌪️ A ${ge.type} ground effect spreads across the battlefield!\n`;
+  }
+
+  // 💡 RUNE: convertBurnToFreeze — if skill applied burn and rune converts it,
+  // swap burn → freeze on all targets
+  if (effect.convertBurnToFreeze) {
+    const opponentSide = player.isEnemy
+      ? state.players.filter((p) => !p.isDead)
+      : state.enemies.filter((e) => e.stats.hp > 0);
+    for (const target of opponentSide) {
+      if (!target.statusEffects) continue;
+      for (let i = target.statusEffects.length - 1; i >= 0; i--) {
+        if (target.statusEffects[i].type === 'burn') {
+          target.statusEffects.splice(i, 1);
+          applyStatusEffect(target, 'freeze', 1, 0, player.name);
+          msg += `❄️🔥 ${target.name}'s burn flash-freezes into Frostbite!\n`;
+          break;
+        }
+      }
+    }
+  }
+
+  // 💡 RUNE: applyWet — prime targets for SHOCK synergy (WET + SHOCK = STUN)
+  if (effect.applyWet) {
+    const targets = getTargets(player, effect, targetIndex, chatId);
+    for (const target of targets) {
+      if (!target || target.isDead) continue;
+      applyStatusEffect(target, 'wet', 2, 0, player.name);
+    }
+    msg += `💧 Targets are soaked — primed for SHOCK synergy!\n`;
   }
 
   return { message: msg, damage: totalDamage, healing: totalHealing };
