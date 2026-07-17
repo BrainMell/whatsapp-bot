@@ -7249,6 +7249,50 @@ const handleCombatAction = async (
 // 🎯 USE ABILITY IN COMBAT
 // ==========================================
 
+// 💡 Helper: resolve ability index (from .g abilities list) to skill object.
+// Used by .g rune socket <runeId> <#> so players can socket by number.
+function getAbilityByIndex(userId, index) {
+  const economy = require('./economy');
+  const classSystem = require('./classSystem');
+  const skillTree = require('./skillTree');
+  const userClass = economy.getUserClass(userId);
+  if (!userClass) return null;
+  const lineage = classSystem.getLineage(userClass.id);
+  const user = economy.getUser(userId);
+  if (!user || !user.skills) return null;
+  const learnedAbilities = [];
+  const seen = new Set();
+  for (const cId of lineage) {
+    const tree = skillTree.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees)) {
+      for (const [skillId, skill] of Object.entries(treeData.skills)) {
+        const level = user.skills[skillId] || 0;
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
+          learnedAbilities.push({ ...skill, id: skillId, level });
+        }
+      }
+    }
+  }
+  // Also check all trees as fallback
+  for (const [, tree] of Object.entries(skillTree.SKILL_TREES)) {
+    for (const [, treeData] of Object.entries(tree.trees || {})) {
+      for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+        const level = user.skills[skillId] || 0;
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
+          learnedAbilities.push({ ...skill, id: skillId, level });
+        }
+      }
+    }
+  }
+  if (index >= 0 && index < learnedAbilities.length) {
+    return learnedAbilities[index];
+  }
+  return null;
+}
+
 async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   const user = economy.getUser(player.jid);
   const userClass = economy.getUserClass(player.jid);
@@ -8639,6 +8683,7 @@ module.exports = {
   stopQuest,
   handleBuy,
   handleCombatAction,
+  getAbilityByIndex,
   handleVote: (chatId, jid, vote) => {
     const state = getGameState(chatId, jid);
     if (!state) return "❌ No active adventure!";

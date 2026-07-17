@@ -143,12 +143,12 @@ const SKILL_TREES = {
                 skills: {
                     rally: {
                         id: 'rally',
-                        name: 'Battle Cry',
+                        name: 'Rally',
                         tier: 1,
                         maxLevel: 5,
                         cost: 12,
                         cooldown: 1,
-                        desc: 'Inspire allies with a war cry',
+                        desc: 'Inspire allies with a war cry, boosting ATK',
                         requires: null,
                         effect: (level) => ({
                             type: 'buff_team',
@@ -442,21 +442,16 @@ const SKILL_TREES = {
                         name: 'Meteor Strike',
                         tier: 3,
                         maxLevel: 3,
-                        cost: 35,
+                        energyCost: [35, 32, 28],
                         cooldown: 1,
-                        desc: 'Call down a meteor',
-                        requires: { fireball: 3 },
-                        effect: (level) => ({
-                            type: 'aoe',
-                            multiplier: 2.5 + (level * 0.5),
-                            targets: 99,
-                            dot: 'burn',
-                            dotDamage: 15 + (level * 10),
-                            dotDuration: 4,
-                            damageType: 'magic',
-                            element: 'fire',
-                            animation: '🔥☄️'
-                        })
+                        damageMultiplier: [5.5, 6.0, 6.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { burn: { value: [25, 35, 45], duration: 3 } },
+                        description: 'Call down a meteor, burning all enemies',
+                        animation: '🔥☄️',
+                        skillPointCost: [4, 6, 8],
+                        requires: { fireball: 3 }
                     }
                 }
             },
@@ -3903,10 +3898,10 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [162, 141, 118],
                         cooldown: 2,
-                        damageMultiplier: [3.5, 4.0, 5.0], // was [20.0, 25.0, 30.0] — nerfed ALL_ENEMIES TRUE ult
+                        damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Create singularity consuming all',
+                        description: 'Create a singularity consuming all enemies',
                         animation: '⚫🔮✨',
                         isUltimate: true,
                         isAscended: true,

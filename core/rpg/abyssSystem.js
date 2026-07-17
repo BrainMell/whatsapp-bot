@@ -87,17 +87,27 @@ const RUN_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ─── START A NEW ABYSS RUN ────────────────────────────────────────────────
 async function startRun(userId, playerStats) {
-  // 💡 QA FIX: atomic check-and-create to prevent race condition.
-  // Use findOneAndUpdate with upsert — if a run already exists for this user
-  // with status 'active', it returns the existing run (upserted=false).
-  // If not, it creates a new one (upserted=true).
-  // First check for existing active run (non-atomic but catches 99% of cases)
+  // 💡 AUTO-RETREAT: if the player has an existing active run that's been
+  // inactive for more than 30 minutes, auto-retreat it so they can start
+  // a new one. Previously, stale runs would block new entries indefinitely
+  // — the player had to manually run .g abyss retreat first.
+  const ABYSS_STALE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const existing = await AbyssRun.findOne({ userId, status: 'active' });
   if (existing) {
-    return {
-      success: false,
-      message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`.g abyss status\` or retreat with \`.g abyss retreat\`._`,
-    };
+    const lastActivity = new Date(existing.updatedAt).getTime();
+    const age = Date.now() - lastActivity;
+    if (age > ABYSS_STALE_TIMEOUT_MS) {
+      // Auto-retreat the stale run
+      existing.status = 'completed';
+      existing.completedAt = new Date();
+      await existing.save();
+      console.log(`[Abyss] Auto-retreated stale run for ${userId} (age: ${Math.floor(age / 60000)}min)`);
+    } else {
+      return {
+        success: false,
+        message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`.g abyss status\` or retreat with \`.g abyss retreat\`._`,
+      };
+    }
   }
 
   // Check cooldown — look at most recent completed/failed run
