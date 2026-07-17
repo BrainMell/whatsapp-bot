@@ -115,6 +115,12 @@ const blockedUsers = createInstanceBoundSet(blockedUsersByBot);
 const globalMods = createInstanceBoundSet(globalModsByBot);
 const overrideUsers = createInstanceBoundSet(overrideUsersByBot);
 
+// 💡 PERMA-BAN system: separate from block. Only mods (General/RPG/Cards)
+// can ban, and only mods can unban. WA group admins CANNOT unban. The ban
+// is global and permanent until a mod reverses it.
+const bannedUsersByBot = new Map();
+const bannedUsers = createInstanceBoundSet(bannedUsersByBot);
+
 // Concurrency lock – prevents double-spend from firing two money commands at once
 const busyUsers = createInstanceBoundSet(busyUsersByBot);
 
@@ -161,6 +167,60 @@ function isBlocked(userId) {
   const loans = require('./rpg/loans');
   if (loans.isLoanBlocked(userId)) return true;
   return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 PERMA-BAN SYSTEM — mod-only, global, permanent
+// ═══════════════════════════════════════════════════════════════════════════
+// Separate from block. WA group admins can block/unblock (per-group, can be
+// self-unblocked via the exploit we just patched). Perma-ban is stricter:
+//   - Only mods (General/RPG/Cards) or owner can ban
+//   - Only mods or owner can unban
+//   - WA group admins CANNOT ban or unban
+//   - Banned users cannot use ANY bot command, in ANY group
+//   - The ban persists across bot restarts (stored in MongoDB)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadBannedUsers() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  try {
+    const data = system.get(botConfig.getBotId() + "_banned_users", []);
+    data.forEach((userId) => bannedUsers.add(userId));
+    console.log(`🚫 [${botConfig.getBotId()}] Loaded ${bannedUsers.size} banned users from MongoDB`);
+  } catch (err) {
+    console.error("Error loading banned users:", err.message);
+  }
+}
+
+function saveBannedUsers() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  system.set(botConfig.getBotId() + "_banned_users", Array.from(bannedUsers));
+}
+
+function banUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  bannedUsers.add(normalized);
+  saveBannedUsers();
+}
+
+function unbanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  bannedUsers.delete(normalized);
+  saveBannedUsers();
+}
+
+function isBanned(userId) {
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    return bannedUsers.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
 }
 
 // Load global mods from DB
@@ -4415,6 +4475,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
           await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
           await loadBlockedUsers();
+          await loadBannedUsers();
 
           await Promise.all([
             system.loadSystemData(),
@@ -4566,6 +4627,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
                 await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
                 await loadBlockedUsers();
+          await loadBannedUsers();
                 await Promise.all([
                   system.loadSystemData(),
                   economy.loadEconomy(),
@@ -6082,6 +6144,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       msg += `• \`${botConfig.getPrefix()} kick @user\` — kick from group\n`;
                       msg += `• \`${botConfig.getPrefix()} block @user\` — block from using bot\n`;
                       msg += `• \`${botConfig.getPrefix()} unblock @user\` — unblock\n`;
+                      msg += `• \`${botConfig.getPrefix()} ban @user\` — perma-ban (mod only)\n`;
+                      msg += `• \`${botConfig.getPrefix()} unban @user\` — reverse perma-ban (mod only)\n`;
+                      msg += `• \`${botConfig.getPrefix()} banlist\` — list perma-banned users (mod only)\n`;
                       msg += `• \`${botConfig.getPrefix()} glock\` — lock group (admin only)\n`;
                       msg += `• \`${botConfig.getPrefix()} gunlock\` — unlock group\n`;
                       msg += `• \`${botConfig.getPrefix()} glock rank <N>\` — rank-locked group\n`;
@@ -7820,6 +7885,16 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                   }
 
+                  // 💡 CHECK IF USER IS PERMA-BANNED — mod-issued, global, permanent
+                  // Banned users get NO response, same as blocked. But unlike block,
+                  // WA group admins CANNOT unban — only mods can.
+                  if (isBanned(senderJid)) {
+                    console.log(
+                      `🚫 Perma-banned user tried to use bot: ${senderJid}`,
+                    );
+                    return;
+                  }
+
                   // Override command - allows user to bypass admin checks
                   if (
                     lowerTxt ===
@@ -8107,6 +8182,98 @@ Usage: ${newUsage}/5${warningText}`;
                       mentions: blockedArray.slice(0, 20),
                     });
                     return;
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 PERMA-BAN SYSTEM — mod-only
+                  // .g ban @user    — permanently ban (mod+ only)
+                  // .g unban @user  — lift perma-ban (mod+ only)
+                  // .g banlist      — list all banned users (mod+ only)
+                  // ═══════════════════════════════════════════════════════════
+
+                  // .g ban @user
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} ban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ban `)
+                  ) {
+                    // Only mods (General/RPG/Cards) or owner can ban
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can use the perma-ban command. WA group admins should use `.g block` instead.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} ban @user\`\n\n_Permanently bans the user from using the bot in ALL groups. Only mods can reverse this with_ \`${botConfig.getPrefix()} unban\``,
+                      });
+                    }
+                    // Can't ban yourself
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban yourself." });
+                    }
+                    // Can't ban other mods or owner
+                    if (isOwner || isGlobalMod(targetUser) || isRpgMod(targetUser) || isCardsMod(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban a moderator or the owner." });
+                    }
+                    if (isBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user is already perma-banned." });
+                    }
+                    banUser(targetUser);
+                    console.log(`🚫 [PermaBan] ${senderJid} banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🚫 @${targetUser.split("@")[0]} has been *permanently banned*.\n\nThey can no longer use the bot in ANY group. Only a moderator can reverse this with \`${botConfig.getPrefix()} unban\`.`,
+                      mentions: [targetUser],
+                    });
+                  }
+
+                  // .g unban @user
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unban `)
+                  ) {
+                    // Only mods or owner can unban
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reverse a perma-ban.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unban @user\``,
+                      });
+                    }
+                    if (!isBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't perma-banned." });
+                    }
+                    unbanUser(targetUser);
+                    console.log(`✅ [PermaBan] ${senderJid} unbanned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${targetUser.split("@")[0]} has been unbanned. They can use the bot again.`,
+                      mentions: [targetUser],
+                    });
+                  }
+
+                  // .g banlist
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} banlist`) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can view the ban list.",
+                      });
+                    }
+                    const bannedArray = Array.from(bannedUsers);
+                    if (bannedArray.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 *Banned Users (0)*\n\n_No users are currently perma-banned._" });
+                    }
+                    let text = BOT_MARKER + `🚫 *Perma-Banned Users (${bannedArray.length})*\n\n`;
+                    bannedArray.slice(0, 20).forEach((userId, i) => {
+                      text += `${i + 1}. ${userId.split("@")[0]}\n`;
+                    });
+                    if (bannedArray.length > 20) {
+                      text += `\n... and ${bannedArray.length - 20} more`;
+                    }
+                    return await sock.sendMessage(chatId, { text });
                   }
 
                   // ============================================
@@ -23862,5 +24029,10 @@ module.exports = {
   loadCardsMods,
   hasModPermission,
   isBotOwner,
+  // Perma-ban system
+  banUser,
+  unbanUser,
+  isBanned,
+  loadBannedUsers,
   getBotInstancesHealth: () => botInstancesHealth,
 };
