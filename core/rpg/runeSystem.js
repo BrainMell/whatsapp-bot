@@ -390,10 +390,15 @@ const RUNE_TIERS = {
 // Starter skills: 0, Evolved: 1, Ascended: 2, Ultimate: 3
 function getSkillSlotCount(skill) {
   if (!skill) return 0;
-  if (skill.isUltimate) return 3;
-  if (skill.tier >= 4) return 2;   // ascended-tier skills
-  if (skill.tier >= 2) return 1;   // evolved-tier skills
-  return 0;                        // starter skills
+  // 💡 UPDATED 2026-07-17: rune slots now scale with skill tier directly.
+  // T1 = 1 slot, T2 = 2 slots, T3 = 3 slots, T4 (ultimate) = 3 slots.
+  // Previously: starter=0, evolved=1, ascended=2, ultimate=3 — which meant
+  // T1 starter skills had ZERO slots, making them un-runeable.
+  if (skill.isUltimate || skill.tier >= 4) return 3;
+  if (skill.tier >= 3) return 3;   // T3 skills
+  if (skill.tier >= 2) return 2;   // T2 skills
+  if (skill.tier >= 1) return 1;   // T1 skills
+  return 1;                        // fallback: at least 1 slot
 }
 
 // ─── GENERATE RUNE ID ─────────────────────────────────────────────────────

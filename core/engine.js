@@ -14444,22 +14444,46 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g rune inv — inventory
+                      // .g rune inv — inventory (stacked by type + tier)
                       if (runeSub === 'inv' || runeSub === 'inventory') {
                         try {
                           const runes = await runeSystem.getRuneInventory(senderJid);
                           if (runes.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Your Rune Inventory*\n\n_No runes yet. Defeat S+ bosses, join weekly raids, or descend into the Abyss to find some._' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Your Rune Inventory*\n\n_No runes yet. Descend into the Abyss (Floor 21+) to find some._' });
                           }
-                          let msg = `💎 *Your Rune Inventory* (${runes.length} runes)\n\n`;
+                          // 💡 Group runes by type+tier for stacking display
+                          const stacks = {};
                           for (const r of runes) {
-                            const rt = runeSystem.RUNE_TYPES[r.type];
-                            const tt = runeSystem.RUNE_TIERS[r.tier];
-                            msg += `${rt.icon} *${rt.name}* (${tt.name})\n`;
-                            msg += `  ID: \`${r.runeId}\`\n`;
+                            const key = `${r.type}_${r.tier}`;
+                            if (!stacks[key]) {
+                              stacks[key] = { type: r.type, tier: r.tier, count: 0, runeIds: [] };
+                            }
+                            stacks[key].count++;
+                            stacks[key].runeIds.push(r.runeId);
+                          }
+                          const stackList = Object.values(stacks).sort((a, b) => {
+                            // Sort by type name then tier (LESSER < NORMAL < GREATER < ABYSSAL)
+                            const tierOrder = ['LESSER', 'NORMAL', 'GREATER', 'ABYSSAL'];
+                            const tDiff = tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier);
+                            if (tDiff !== 0) return tDiff;
+                            return a.type.localeCompare(b.type);
+                          });
+                          let msg = `💎 *Your Rune Inventory* (${runes.length} runes, ${stackList.length} types)\n\n`;
+                          for (const s of stackList) {
+                            const rt = runeSystem.RUNE_TYPES[s.type];
+                            const tt = runeSystem.RUNE_TIERS[s.tier];
+                            msg += `${rt.icon} *${rt.name}* (${tt.name}) ×${s.count}\n`;
+                            // Show all IDs for stacking (so players can still socket individually)
+                            if (s.count <= 3) {
+                              msg += `  IDs: ${s.runeIds.map(id => '`' + id + '`').join(', ')}\n`;
+                            } else {
+                              // For large stacks, show first 3 + "and N more"
+                              msg += `  IDs: ${s.runeIds.slice(0, 3).map(id => '`' + id + '`').join(', ')}, _+${s.count - 3} more_\n`;
+                            }
                             msg += `  ${rt.desc}\n\n`;
                           }
-                          msg += `_Use \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\` to socket a rune._`;
+                          msg += `_Use \`${botConfig.getPrefix()} rune socket <runeId> <skillId or #>\` to socket a rune._`;
+                          msg += `\n_Use \`${botConfig.getPrefix()} rune fuse <id1> <id2>\` to fuse 2 same-type same-tier runes._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to load rune inventory: ' + e.message });
@@ -14473,8 +14497,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         for (const [id, rt] of Object.entries(runeSystem.RUNE_TYPES)) {
                           msg += `${rt.icon} *${rt.name}*\n  ${rt.desc}\n\n`;
                         }
-                        msg += `*Tiers:* Lesser < Normal < Greater\n`;
-                        msg += `_Socket slots: Starter=0, Evolved=1, Ascended=2, Ultimate=3_`;
+                        msg += `*Tiers:* Lesser < Normal < Greater < Abyssal\n`;
+                        msg += `_Socket slots: T1=1, T2=2, T3=3, Ultimate=3_`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
                       }
