@@ -4108,7 +4108,44 @@ ${targetCategory}`;
       }
 
       mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
-      mainMsg += `\n\n💡 *Tip:* Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`;
+
+      // 💡 ROTATING TIPS: 30 tips, one randomly chosen each time the menu opens.
+      // Covers blacksmith, crafting, combat, cards, guilds, economy, PvP, Abyss,
+      // and general gameplay. Keeps the menu feeling fresh + teaches mechanics.
+      const TIPS = [
+        `Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`,
+        `Enhancement stones stack additively, not multiplicatively. A Legendary Stone (+35%) is always better than 3 Minor Stones (+15%).`,
+        `Mythic items can be enhanced up to Level 30 — that's 11.5× base stats. Don't waste Legendary Stones on Common gear!`,
+        `Socket a COOLDOWN Rune (Abyss drop) into your ultimate to cast it every turn. ABYSSAL tier = no cooldown at all.`,
+        `Status effects stack! WET + SHOCK = automatic stun. Use SHOCK_INFUSION rune on a water skill for free CC.`,
+        `BARRAGE rune splits one hit into 5 weaker hits that bypass shields — perfect against tanky bosses with active shields.`,
+        `SOUL_RIP rune executes enemies below 20% HP for up to 4× bonus true damage. Pair with LIFESTEAL for maximum sustain.`,
+        `Chain Lightning (Elementalist) arcs to 3 enemies. Socket MULTI_SHOT rune to hit even more targets.`,
+        `Defend gives you a shield equal to 1.5× your DEF. Use it when enemies are charging up a big attack.`,
+        `Your MAG stat affects magical skills. If your class uses magic (Mage, Warlock, Elementalist), invest in MAG not ATK.`,
+        `Crit chance is capped at 100%. Beyond that, invest in CRIT damage via equipment and runes.`,
+        `Evasion caps at 75%. Beyond that, stack DEF and damage reduction instead.`,
+        `Runes only drop in the Abyss (Floor 21+). The deeper you go, the better the tier.`,
+        `Abyss Floor 50+ can drop ABYSSAL-tier runes — the strongest in the game.`,
+        `Use \`${prefix} rune inv\` to see your rune inventory and \`${prefix} rune socket <runeId> <skillId>\` to socket them.`,
+        `Ultimate skills have 3 rune slots. Regular skills have 1-2. Plan your socketing accordingly.`,
+        `Guild bank balance is used for building upgrades, not guild XP. Donate Zeni to fund your guild's growth.`,
+        `Rank missions unlock every 2 rank promotions. Complete them via \`${prefix} rank mission\` to advance past D, B, S, and SSS rank.`,
+        `PvP duels use your actual maxEnergy, not a capped 100. Ultimates like Singularity (162 energy) are fully castable.`,
+        `Weapons with elemental damage (e.g. Hellfire Greatmaul) can proc bonus status effects on basic attacks.`,
+        `Durability decreases with each hit. A broken weapon does ZERO damage — always carry a repair kit!`,
+        `Crafting recipes often require materials from specific dungeon ranks. Check \`${prefix} craft\` for the full recipe list.`,
+        `The Dragon Seal Ring is required to damage dragons. Keep it in your bag OR equipped — both work.`,
+        `Boss HP scales with dungeon rank AND party size. A solo F-rank boss has ~2500 HP; a 5-player S-rank boss has millions.`,
+        `Overkill damage (2× the killing blow) grants bonus Zeni. Save your ultimates for the killing blow!`,
+        `Skills don't reset between floors in the Abyss. If you used your ultimate on Floor 1, it's on cooldown for Floor 2.`,
+        `Cards spawn every 20 minutes in enabled chats. Use \`${prefix} spawninfo\` to check the timer.`,
+        `Event cards (E-tier) never spawn naturally — they're only available via \`${prefix} eshop\` or admin \`${prefix} espawn\`.`,
+        `Investment system offers 5-80% interest rates. Higher risk = higher reward, but you can lose your principal.`,
+        `Wealth tax runs every 72 hours. Keep your wallet balanced or the taxman cometh.`,
+      ];
+      const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+      mainMsg += `\n\n💡 *Tip:* ${tip}`;
 
       return await sendMenuWithBanner(sock, chatId, mainMsg);
     }
@@ -14685,8 +14722,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g bounty admin — admin commands
                       if (bountySub === 'admin' || bountySub === 'mod') {
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = bountyArgs[1]?.toLowerCase();
                         if (!adminSub) {
@@ -14918,9 +14955,9 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // ── ABYSS ADMIN COMMANDS (owner / global mod only) ──
                       if (abyssSub === 'admin' || abyssSub === 'mod') {
-                        // Permission check
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        // Permission check — RPG Mods can also use abyss admin
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = abyssArgs[1]?.toLowerCase();
                         if (!adminSub) {
@@ -15146,9 +15183,9 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // ── RAID ADMIN COMMANDS (owner / global mod only) ──
                       if (raidSub === 'admin' || raidSub === 'mod') {
-                        // Permission check
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        // Permission check — RPG Mods can also use raid admin
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = raidArgs[1]?.toLowerCase();
                         if (!adminSub) {
@@ -23692,5 +23729,16 @@ module.exports = {
   delGlobalMod,
   isGlobalMod,
   loadGlobalMods,
+  // 💡 3-tier mod system exports
+  addRpgMod,
+  delRpgMod,
+  isRpgMod,
+  loadRpgMods,
+  addCardsMod,
+  delCardsMod,
+  isCardsMod,
+  loadCardsMods,
+  hasModPermission,
+  isBotOwner,
   getBotInstancesHealth: () => botInstancesHealth,
 };

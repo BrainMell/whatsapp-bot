@@ -2659,7 +2659,16 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   if (!cmd) return false;
 
   // Mod check helper
-  const isCardMod = isOwner || inst.modJids.has(senderJid) || isMod;
+  // 💡 POLISH 2026-07-17: now also checks isCardsMod() from the 3-tier mod
+  // system. Cards Mods can use espawn, einfo, eshop, esummon, etc. but NOT
+  // RPG admin commands. General Mods (isMod) and owner still have full access.
+  // isCardsMod is imported lazily to avoid circular dependency at load time.
+  let isCardsMod = false;
+  try {
+    const engine = require('../engine');
+    isCardsMod = (typeof engine.isCardsMod === 'function') ? engine.isCardsMod(senderJid) : false;
+  } catch (e) { /* engine not loaded yet — skip */ }
+  const isCardMod = isOwner || inst.modJids.has(senderJid) || isMod || isCardsMod;
 
   switch (cmd) {
     case 'cardmod':
