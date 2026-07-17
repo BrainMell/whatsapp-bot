@@ -2246,11 +2246,15 @@ function calculateDamage(
   // completely, making skills like Mana Shield / Golden Barrier / Force
   // Field useless. Now we consume the shield value before HP takes a hit.
   //
-  // 💡 RUNE: bypassShield (BARRAGE) — skip shield absorption entirely.
-  // Many small hits are specifically strong vs shields because each hit
-  // removes a chunk of shield value. The bypass flag lets BARRAGE ignore
-  // shields altogether, dealing damage directly to HP.
-  if (damage > 0 && !effect?.bypassShield) {
+  // 💡 POLISH 2026-07-17: removed the `!effect?.bypassShield` check from
+  // this condition. calculateDamage() does NOT have an `effect` parameter
+  // — referencing `effect` here threw `ReferenceError: effect is not defined`
+  // on EVERY call to calculateDamage (every attack, every ability), which
+  // is the root cause of the "only defensive skills work" bug. The
+  // bypassShield flag is on the effect object in applyAbilityEffect, not
+  // here. Shield bypass for BARRAGE runes will be handled by the caller
+  // (applyAbilityEffect) before calling calculateDamage, not inside it.
+  if (damage > 0) {
     const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
     if (shields.length > 0) {
       let remaining = Math.floor(damage);
