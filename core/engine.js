@@ -14292,11 +14292,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         helpMsg += `*Commands:*\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune inv\` — view your rune inventory\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune list\` — list all rune types\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune socket <runeId> <skillId or #>\` — socket a rune\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeId>\` — remove a rune (needs scroll)\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeId>\` — destroy a socketed rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune socket <runeName> <skillId or #>\` — socket a rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeName>\` — remove a rune (needs scroll)\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeName>\` — destroy a socketed rune\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune slots <skillId>\` — check slot capacity for a skill\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune fuse <runeId1> <runeId2>\` — fuse 2 same-type same-tier runes\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune fuse <type> [count|all]\` — fuse same-type same-tier runes\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune sell <runeId> <price>\` — list a rune for sale\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune buy <listingId>\` — buy a listed rune\n`;
                         helpMsg += `• \`${botConfig.getPrefix()} rune market\` — browse runes for sale\n`;
@@ -14473,17 +14473,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             const rt = runeSystem.RUNE_TYPES[s.type];
                             const tt = runeSystem.RUNE_TIERS[s.tier];
                             msg += `${rt.icon} *${rt.name}* (${tt.name}) ×${s.count}\n`;
-                            // Show all IDs for stacking (so players can still socket individually)
-                            if (s.count <= 3) {
-                              msg += `  IDs: ${s.runeIds.map(id => '`' + id + '`').join(', ')}\n`;
-                            } else {
-                              // For large stacks, show first 3 + "and N more"
-                              msg += `  IDs: ${s.runeIds.slice(0, 3).map(id => '`' + id + '`').join(', ')}, _+${s.count - 3} more_\n`;
-                            }
+                            // 💡 Show name-based reference for socketing
+                            msg += `  Ref: \`${s.type}-${s.tier}\` or \`${s.type}\`\n`;
                             msg += `  ${rt.desc}\n\n`;
                           }
-                          msg += `_Use \`${botConfig.getPrefix()} rune socket <runeId> <skillId or #>\` to socket a rune._`;
-                          msg += `\n_Use \`${botConfig.getPrefix()} rune fuse <id1> <id2>\` to fuse 2 same-type same-tier runes._`;
+                          msg += `_Use \`${botConfig.getPrefix()} rune socket <type> <skillId or #>\` to socket._`;
+                          msg += `\n_Example: \`${botConfig.getPrefix()} rune socket power total_war\`_`;
+                          msg += `\n_Use \`${botConfig.getPrefix()} rune fuse <type> [count|all]\` to fuse._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to load rune inventory: ' + e.message });
@@ -14505,13 +14501,12 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g rune socket <runeId> <skillId>
                       if (runeSub === 'socket') {
-                        const runeId = runeArgs[1];
+                        const runeQuery = runeArgs[1];
                         let skillId = runeArgs[2]?.toLowerCase();
-                        if (!runeId || !skillId) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune socket <runeId> <skillId or #>\`\nExample: \`${botConfig.getPrefix()} rune socket R-0001 total_war\`\nExample: \`${botConfig.getPrefix()} rune socket R-0001 3\`` });
+                        if (!runeQuery || !skillId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune socket <runeName> <skillId or #>\`\nExample: \`${botConfig.getPrefix()} rune socket power total_war\`\nExample: \`${botConfig.getPrefix()} rune socket POWER-LESSER 3\`` });
                         }
                         // 💡 FIX: accept skill index number (from .g abilities list)
-                        // and resolve to the actual skill ID
                         if (!isNaN(parseInt(skillId))) {
                           try {
                             const guildAdventure = require('./rpg/guildAdventure');
@@ -14521,59 +14516,33 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             } else {
                               return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill #${skillId} not found. Use \`${botConfig.getPrefix()} abilities\` to see your skill list with numbers.` });
                             }
-                          } catch (e) {
-                            // getAbilityByIndex might not exist — fall through with numeric skillId
-                          }
+                          } catch (e) {}
                         }
                         try {
-                          const result = await runeSystem.socketRune(senderJid, runeId, skillId);
+                          // 💡 Use resolveRune to accept name-based queries
+                          const rune = await runeSystem.resolveRune(senderJid, runeQuery);
+                          if (!rune) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Rune "${runeQuery}" not found. Use \`${botConfig.getPrefix()} rune inv\` to see available runes.` });
+                          }
+                          const result = await runeSystem.socketRune(senderJid, rune.runeId, skillId);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // 💡 RUNE FUSION: fuse 2 runes of same type + same tier → next tier
-                      // .g rune fuse <runeId1> <runeId2>
+                      // 💡 RUNE FUSION by name + count
+                      // .g rune fuse <type> [count|all]
+                      // Examples: .g rune fuse power 2, .g rune fuse POWER all, .g rune fuse cooldown
                       if (runeSub === 'fuse' || runeSub === 'fusion') {
-                        const runeId1 = runeArgs[1];
-                        const runeId2 = runeArgs[2];
-                        if (!runeId1 || !runeId2) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune fuse <runeId1> <runeId2>\`\n\n_Fuses 2 runes of the same type and tier into a higher tier._\n_Lesser + Lesser → Normal, Normal + Normal → Greater, Greater + Greater → Abyssal_` });
+                        const typeQuery = runeArgs[1];
+                        const countQuery = runeArgs[2] || 'all';
+                        if (!typeQuery) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune fuse <type> [count|all]\`\n\nExample: \`${botConfig.getPrefix()} rune fuse power 2\`\nExample: \`${botConfig.getPrefix()} rune fuse POWER all\`\n\n_Fuses pairs of same-type same-tier runes into the next tier up._\n_Lesser+Lesser → Normal, Normal+Normal → Greater, Greater+Greater → Abyssal_` });
                         }
                         try {
-                          const Rune = require('./models/Rune');
-                          const r1 = await Rune.findOne({ runeId: runeId1, ownerJid: senderJid });
-                          const r2 = await Rune.findOne({ runeId: runeId2, ownerJid: senderJid });
-                          if (!r1 || !r2) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ One or both runes not found in your inventory.' });
-                          }
-                          if (r1.socketedSkillId || r2.socketedSkillId) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Cannot fuse socketed runes. Remove them first.' });
-                          }
-                          if (r1.onMarket || r2.onMarket) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Cannot fuse runes listed on the market.' });
-                          }
-                          if (r1.type !== r2.type) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Runes must be the same type. Got ${r1.type} and ${r2.type}.` });
-                          }
-                          if (r1.tier !== r2.tier) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Runes must be the same tier. Got ${r1.tier} and ${r2.tier}.` });
-                          }
-                          const tierOrder = ['LESSER', 'NORMAL', 'GREATER', 'ABYSSAL'];
-                          const currentTierIdx = tierOrder.indexOf(r1.tier);
-                          if (currentTierIdx === -1 || currentTierIdx >= tierOrder.length - 1) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${r1.tier} is already the highest tier. Cannot fuse further.` });
-                          }
-                          const newTier = tierOrder[currentTierIdx + 1];
-                          // Consume both runes
-                          await Rune.deleteOne({ runeId: runeId1 });
-                          await Rune.deleteOne({ runeId: runeId2 });
-                          // Create the fused rune
-                          const fusedRune = await runeSystem.awardRune(senderJid, r1.type, newTier, `fusion_${r1.type}_${r1.tier}`);
-                          const runeType = runeSystem.RUNE_TYPES[r1.type];
-                          const tierName = runeSystem.RUNE_TIERS[newTier].name;
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `🔮 *FUSION SUCCESS!*\n\nCombined 2× ${runeType.icon} ${runeType.name} (${runeSystem.RUNE_TIERS[r1.tier].name}) → ${runeType.icon} ${runeType.name} (${tierName})!\n\nNew Rune ID: \`${fusedRune.rune?.runeId || 'unknown'}\`\nUse \`${botConfig.getPrefix()} rune inv\` to see it.` });
+                          const result = await runeSystem.fuseRunesByName(senderJid, typeQuery, countQuery);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Fusion failed: ' + e.message });
                         }

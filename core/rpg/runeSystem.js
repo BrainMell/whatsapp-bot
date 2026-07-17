@@ -446,6 +446,154 @@ async function getRuneInventory(userJid) {
   }).sort({ type: 1, tier: 1, obtainedAt: -1 });
 }
 
+// ─── RESOLVE RUNE BY NAME ─────────────────────────────────────────────────
+// 💡 Allows players to reference runes by type name instead of ugly IDs.
+// Accepts:
+//   "POWER"          → first available POWER rune (any tier)
+//   "POWER-LESSER"   → first available POWER rune of LESSER tier
+//   "power"          → case-insensitive
+//   "R-0001"         → old-style ID (backwards compat)
+//   "rune_1783..."   → legacy ID (backwards compat)
+//
+// Returns the Rune document, or null if not found.
+async function resolveRune(userJid, query) {
+  if (!query) return null;
+  const q = query.toUpperCase().trim();
+
+  // 1. Old-style ID (R-XXXX or rune_XXXX)
+  if (q.startsWith('R-') || q.startsWith('RUNE_')) {
+    return await Rune.findOne({ ownerJid: userJid, runeId: query, onMarket: false, socketedSkillId: null });
+  }
+
+  // 2. Type-Tier format (e.g. "POWER-LESSER")
+  if (q.includes('-')) {
+    const [typePart, tierPart] = q.split('-');
+    const type = typePart.trim();
+    const tier = tierPart.trim();
+    // Validate type exists
+    const matchedType = Object.keys(RUNE_TYPES).find(t => t === type || t.replace('_', '') === type);
+    if (matchedType && RUNE_TIERS[tier]) {
+      return await Rune.findOne({
+        ownerJid: userJid, type: matchedType, tier,
+        onMarket: false, socketedSkillId: null,
+      }).sort({ obtainedAt: 1 }); // oldest first (FIFO)
+    }
+  }
+
+  // 3. Just type name (e.g. "POWER" or "COOLDOWN")
+  const matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
+  if (matchedType) {
+    return await Rune.findOne({
+      ownerJid: userJid, type: matchedType,
+      onMarket: false, socketedSkillId: null,
+    }).sort({ tier: 1, obtainedAt: 1 }); // lowest tier first, oldest first
+  }
+
+  // 4. Try matching by rune type NAME (display name, e.g. "Power Rune" → POWER)
+  for (const [id, rt] of Object.entries(RUNE_TYPES)) {
+    if (rt.name.toUpperCase() === q || rt.name.toUpperCase().includes(q)) {
+      return await Rune.findOne({
+        ownerJid: userJid, type: id,
+        onMarket: false, socketedSkillId: null,
+      }).sort({ tier: 1, obtainedAt: 1 });
+    }
+  }
+
+  return null;
+}
+
+// ─── FUSE RUNES BY NAME + COUNT ───────────────────────────────────────────
+// 💡 Fuses N runes of the same type + same tier into fewer higher-tier runes.
+// Each pair of same-type same-tier runes → 1 rune of the next tier up.
+//
+// @param userJid
+// @param typeQuery  — e.g. "POWER", "power", "Power Rune"
+// @param countQuery — number (2, 4, 6...) or "all"
+// @returns { success, message, fusedCount }
+async function fuseRunesByName(userJid, typeQuery, countQuery) {
+  if (!typeQuery) return { success: false, message: '❌ Specify a rune type to fuse.' };
+  const q = typeQuery.toUpperCase().trim();
+
+  // Resolve type
+  let matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
+  if (!matchedType) {
+    for (const [id, rt] of Object.entries(RUNE_TYPES)) {
+      if (rt.name.toUpperCase() === q || rt.name.toUpperCase().includes(q)) {
+        matchedType = id;
+        break;
+      }
+    }
+  }
+  if (!matchedType) return { success: false, message: `❌ Unknown rune type: "${typeQuery}"` };
+
+  // Get all unsocketed, off-market runes of this type
+  const allRunes = await Rune.find({
+    ownerJid: userJid, type: matchedType,
+    onMarket: false, socketedSkillId: null,
+  }).sort({ tier: 1, obtainedAt: 1 });
+
+  if (allRunes.length < 2) {
+    return { success: false, message: `❌ Need at least 2 ${RUNE_TYPES[matchedType].name} runes to fuse. You have ${allRunes.length}.` };
+  }
+
+  // Group by tier
+  const tierOrder = ['LESSER', 'NORMAL', 'GREATER', 'ABYSSAL'];
+  const byTier = {};
+  for (const r of allRunes) {
+    if (!byTier[r.tier]) byTier[r.tier] = [];
+    byTier[r.tier].push(r);
+  }
+
+  // Determine how many to fuse
+  let maxPairs = 0;
+  for (const tier of tierOrder) {
+    if (tier === 'ABYSSAL') continue; // can't fuse ABYSSAL
+    const count = (byTier[tier] || []).length;
+    maxPairs += Math.floor(count / 2);
+  }
+
+  if (maxPairs === 0) {
+    return { success: false, message: `❌ No fuseable pairs. Need 2+ of the same tier (not ABYSSAL).` };
+  }
+
+  let pairsToFuse;
+  if (countQuery === 'all' || !countQuery) {
+    pairsToFuse = maxPairs;
+  } else {
+    pairsToFuse = Math.min(parseInt(countQuery) || 0, maxPairs);
+    if (pairsToFuse < 1) {
+      return { success: false, message: `❌ Invalid count. You can fuse up to ${maxPairs} pair(s).` };
+    }
+  }
+
+  // Execute fusion
+  let fusedCount = 0;
+  const results = [];
+  for (const tier of tierOrder) {
+    if (tier === 'ABYSSAL') continue;
+    if (pairsToFuse <= 0) break;
+    const runes = byTier[tier] || [];
+    const tierIdx = tierOrder.indexOf(tier);
+    const newTier = tierOrder[tierIdx + 1];
+
+    while (pairsToFuse > 0 && runes.length >= 2) {
+      const r1 = runes.shift();
+      const r2 = runes.shift();
+      await Rune.deleteOne({ _id: r1._id });
+      await Rune.deleteOne({ _id: r2._id });
+      const fused = await createRune(userJid, matchedType, newTier, `fusion_${tier}`);
+      fusedCount++;
+      pairsToFuse--;
+      results.push(`${RUNE_TYPES[matchedType].icon} ${RUNE_TYPES[matchedType].name} (${RUNE_TIERS[tier].name}+${RUNE_TIERS[tier].name} → ${RUNE_TIERS[newTier].name})`);
+    }
+  }
+
+  let msg = `🔮 *FUSION COMPLETE!*\n\nFused ${fusedCount} pair(s) of ${RUNE_TYPES[matchedType].name}:\n`;
+  for (const r of results) msg += `  ✅ ${r}\n`;
+  msg += `\nUse \`${require('../../botConfig').getPrefix()} rune inv\` to see your upgraded runes.`;
+  return { success: true, message: msg, fusedCount };
+}
+
 // ─── GET RUNES SOCKETED IN A SKILL ────────────────────────────────────────
 async function getSocketedRunes(userJid, skillId) {
   return await Rune.find({
@@ -777,6 +925,8 @@ module.exports = {
   getSkillSlotCount,
   createRune,
   getRuneInventory,
+  resolveRune,
+  fuseRunesByName,
   getSocketedRunes,
   socketRune,
   removeRune,
