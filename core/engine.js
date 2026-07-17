@@ -11849,7 +11849,48 @@ Members are assigned to Rank Tiers (1 to 5).
                       return;
                     }
 
+                    // 💡 FIX 2026-07-17: prevent self-unmute exploit.
+                    // A user muted in Group A could go to Group B (where they're
+                    // WA admin) and unmute themselves. Even though the mute is
+                    // per-chat, this prevents the edge case where:
+                    // 1. The mute was stored with a different JID format (LID vs phone)
+                    // 2. The mute was a DM-based global mute (key = userId only)
+                    // 3. Any future global-mute feature
+                    // Rule: you cannot unmute yourself, period. Ask another admin.
+                    if (targetUser === senderJid ||
+                        jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ You cannot unmute yourself. Ask another admin to unmute you.",
+                      });
+                      return;
+                    }
+
+                    // 💡 FIX: also check if the target is muted in ANY group (not
+                    // just this one). If they're muted elsewhere, warn the admin
+                    // but still allow the unmute in THIS chat (since the admin
+                    // has authority here). This prevents cross-group mute bypass
+                    // where a user muted in Group A gets unmuted in Group B
+                    // through a JID-format mismatch.
                     if (!isMuted(targetUser, chatId)) {
+                      // Check if muted in ANY group by scanning mutedUsers
+                      let mutedElsewhere = false;
+                      let mutedGroups = [];
+                      for (const [key, data] of mutedUsers.entries()) {
+                        if (data.userId === targetUser || data.userId === jidNormalizedUser(targetUser)) {
+                          if (Date.now() < data.until) {
+                            mutedElsewhere = true;
+                            if (data.chatId && data.chatId !== chatId) {
+                              mutedGroups.push(data.chatId);
+                            }
+                          }
+                        }
+                      }
+                      if (mutedElsewhere && mutedGroups.length > 0) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `⚠️ That user isn't muted in *this* group, but they ARE muted in ${mutedGroups.length} other group(s). The mute there remains active — this unmute only applies here.`,
+                        });
+                        return;
+                      }
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "that user isn't muted.",
                       });
