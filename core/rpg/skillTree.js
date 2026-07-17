@@ -846,8 +846,12 @@ const SKILL_TREES = {
                         cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
-                            atkBuff: { value: [20, 25, 30, 35, 40], duration: 3 },
-                            defBuff: { value: [10, 12, 15, 18, 20], duration: 3 }
+                            // 💡 POLISH 2026-07-17: was atkBuff/defBuff (non-standard
+                            // effect IDs that no handler recognized). Changed to
+                            // buff_team with stat field so applyAbilityEffect can
+                            // process them. Applies BOTH ATK and DEF buffs to team.
+                            buff_team_atk: { stat: 'attack', value: [20, 25, 30, 35, 40], duration: 3 },
+                            buff_team_def: { stat: 'defense', value: [10, 12, 15, 18, 20], duration: 3 }
                         },
                         description: 'Rally team, boost ATK and DEF',
                         animation: '📢✨',
@@ -2538,15 +2542,15 @@ const SKILL_TREES = {
                     wide_cleave: {
                         id: 'wide_cleave',
                         name: 'Wide Cleave',
-                        tier: 2,
+                        tier: 3,
                         requiredLevel: 33,
                         maxLevel: 3,
                         energyCost: [70, 65, 60],
                         cooldown: 1,
                         damageMultiplier: [2.5, 2.8, 3.1],
                         damageType: 'PHYSICAL',
-                        targeting: 'AOE_SMALL',
-                        description: 'A sweeping cleave that strikes 2 enemies at once.',
+                        targeting: 'AOE',
+                        description: 'A sweeping cleave that strikes ALL enemies at once.',
                         animation: '⚔️🌀',
                         skillPointCost: [4, 6, 8]
                     },

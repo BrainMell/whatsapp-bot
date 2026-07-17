@@ -7459,6 +7459,19 @@ async function applyAbilityEffect(
     state.sessionKey ||
     (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
   const icon = player.class?.icon || "👤";
+  // 💡 POLISH 2026-07-17: guard against undefined effect. If getSkillEffect
+  // returned undefined (e.g. skill has no effect function and no
+  // energyCost/damageMultiplier), the old code would throw "effect is not
+  // defined" or "Cannot read properties of undefined (reading 'type')" —
+  // which propagated up and left pendingActions stuck (the "Action already
+  // chosen!" soft-lock). Now we return a clean error message instead.
+  if (!effect || typeof effect !== 'object') {
+    return {
+      message: `❌ *${ability?.name || 'Unknown'}* has no valid effect definition. This is a skill data bug — report it. (Skill ID: ${ability?.id || 'unknown'})`,
+      damage: 0,
+      healing: 0,
+    };
+  }
   let animation = ability.animation || effect?.animation || "";
   if (animation === "undefined") animation = "";
   const animStr = animation ? `${animation} ` : "";
@@ -7471,8 +7484,8 @@ async function applyAbilityEffect(
   // abilities to run BOTH the generic single-target damage block AND the
   // dedicated multi_hit block, dealing damage twice and double-counting kills.
   const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
-  const isDamageType = damageKeywords.some((t) => effect.type && effect.type.includes(t));
-  if (isDamageType && !effect.type.includes("heal_team")) {
+  const isDamageType = damageKeywords.some((t) => effect.type && typeof effect.type === 'string' && effect.type.includes(t));
+  if (isDamageType && !(typeof effect.type === 'string' && effect.type.includes("heal_team"))) {
     if (!player.isEnemy) {
         const durabilitySystem = require('./durabilitySystem');
         durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
@@ -7910,6 +7923,29 @@ async function applyAbilityEffect(
           applyBuff(ally, effData.stat, effData.value, effData.duration);
         }
         msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effData.value}% ${effData.stat} for ${effData.duration} turns!\n`;
+      }
+      // 💡 POLISH 2026-07-17: buff_team_atk / buff_team_def — convenience
+      // variants for skills that buff multiple stats at once (e.g. WARRIOR's
+      // Battle Cry buffs both ATK and DEF). Each one is just buff_team with
+      // a fixed stat. Avoids the object-key-collision problem (can't have
+      // two 'buff_team' keys in the same effects object).
+      else if (effId === "buff_team_atk") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, 'attack', effData.value, effData.duration);
+        }
+        msg += `✨ Team gains +${effData.value}% ATK for ${effData.duration} turns!\n`;
+      }
+      else if (effId === "buff_team_def") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, 'defense', effData.value, effData.duration);
+        }
+        msg += `✨ Team gains +${effData.value}% DEF for ${effData.duration} turns!\n`;
       }
       else if (effId === "buff_target") {
         const target = getHealTarget(player, targetIndex, chatId);
