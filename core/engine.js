@@ -8901,8 +8901,39 @@ Usage: ${newUsage}/5${warningText}`;
                       msg += `🎯 *Next Rank:* ${nextRank.rank}\n`;
                       const req = nextRank.requirements;
                       msg += `Requirements:\n`;
-                      msg += `  • Level: ${req.level} (You: ${level})\n`;
-                      msg += `  • Quests: ${req.questsCompleted} (You: ${user.questsCompleted || 0})\n`;
+                      const levelMet = level >= req.level;
+                      const questsMet = (user.questsCompleted || 0) >= req.questsCompleted;
+                      msg += `  ${levelMet ? '✅' : '❌'} Level: ${req.level} (You: ${level})\n`;
+                      msg += `  ${questsMet ? '✅' : '❌'} Quests: ${req.questsCompleted} (You: ${user.questsCompleted || 0})\n`;
+
+                      // 💡 POLISH 2026-07-17: show rank mission gate status.
+                      // Previously the rank command only showed numeric requirements
+                      // (Level + Quests) but didn't mention the mission gate.
+                      // Players would meet the numeric requirements but still not
+                      // get promoted because they hadn't completed the rank mission.
+                      // This caused confusion — the display looked like the rank
+                      // system was bugged when it was actually a UI communication
+                      // issue. Now we show the mission status inline.
+                      const gateMission = classSystem.getGateMissionForRank(rank);
+                      if (gateMission) {
+                        const completedMissions = user.completedRankMissions || [];
+                        const missionCompleted = completedMissions.includes(gateMission.id);
+                        if (missionCompleted) {
+                          msg += `  ✅ Rank Mission: ${gateMission.name} (Completed)\n`;
+                        } else {
+                          // Show mission progress
+                          const playerStats = user.stats || {};
+                          const progressResult = classSystem.checkMissionProgress(gateMission.id, playerStats);
+                          const completedObjs = progressResult.progress.filter(p => p.done).length;
+                          const totalObjs = progressResult.progress.length;
+                          msg += `  ⚠️ Rank Mission: ${gateMission.name} (${completedObjs}/${totalObjs} objectives)\n`;
+                          // Show each objective with progress
+                          for (const p of progressResult.progress) {
+                            msg += `      ${p.done ? '✅' : '⬜'} ${p.label} (${p.current}/${p.target})\n`;
+                          }
+                          msg += `\n  _Use \`${botConfig.getPrefix()} rank mission\` for details._\n`;
+                        }
+                      }
                     } else {
                       msg += `━━━━━━━━━━━━━━━\n`;
                       msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;
