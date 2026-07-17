@@ -664,7 +664,39 @@ const DEFAULT_MAX_ENHANCEMENT_LEVEL = 5;  // fallback for items with unknown/mis
 // references it. Internally, always use getMaxEnhancementLevel(item) instead.
 const MAX_ENHANCEMENT_LEVEL = 5;
 
-const MAX_ENHANCEMENT_BONUS = 1.0;    // hard cap on cumulative stat bonus (100%), regardless of stone mix
+// 💡 POLISH 2026-07-17: rarity-aware bonus cap. Previously MAX_ENHANCEMENT_BONUS
+// was a flat 1.0 (= 2x base stats) regardless of rarity. This meant a Mythic
+// item enhanced to level 30 was still capped at 2x base — exactly the same as
+// a Common item at level 5. The rarity cap was meaningless for actual stat
+// output, only the LEVEL was bounded.
+//
+// Now each rarity has its own bonus cap = maxLevel × 0.35 (assuming legendary
+// stones used at every level). This restores the meaningful stat gap between
+// rarities that the original exponential system had:
+//   COMMON  max +1.75 (5 × 0.35)   → 2.75x base
+//   UNCOMMON max +3.50 (10 × 0.35)  → 4.50x base
+//   RARE    max +5.25 (15 × 0.35)   → 6.25x base
+//   EPIC    max +7.00 (20 × 0.35)   → 8.00x base
+//   LEGENDARY max +8.75 (25 × 0.35) → 9.75x base
+//   MYTHIC  max +10.50 (30 × 0.35)  → 11.50x base
+//
+// This is more generous than the original exponential system at high levels
+// (intentional — players lost stats when the flat cap was added and we want
+// to make them whole), but bounded so a single Common trash item can't be
+// enhanced into endgame gear.
+const MAX_ENHANCEMENT_BONUS_BY_RARITY = {
+    COMMON: 1.75,
+    UNCOMMON: 3.50,
+    RARE: 5.25,
+    EPIC: 7.00,
+    LEGENDARY: 8.75,
+    MYTHIC: 10.50,
+};
+const DEFAULT_MAX_ENHANCEMENT_BONUS = 1.75;  // fallback for unknown rarity
+
+// Legacy flat value kept for backward-compat. Use getMaxEnhancementBonus(item)
+// internally.
+const MAX_ENHANCEMENT_BONUS = 1.0;
 
 // Resolves the per-item enhancement level cap based on its rarity. Falls back
 // to DEFAULT_MAX_ENHANCEMENT_LEVEL if the item or its rarity is unknown. The
@@ -681,6 +713,21 @@ function getMaxEnhancementLevel(item, itemId) {
     return MAX_ENHANCEMENT_LEVEL_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_LEVEL;
 }
 
+// 💡 POLISH 2026-07-17: resolves the per-item enhancement BONUS cap based on
+// its rarity. Same rarity lookup as getMaxEnhancementLevel — used by
+// recalculateEnhancedStats, enhanceItem, and repairItemStats so a Mythic
+// item can actually reach 11.5x base stats, not just 2x.
+function getMaxEnhancementBonus(item, itemId) {
+    if (!item) return DEFAULT_MAX_ENHANCEMENT_BONUS;
+    let rarity = item.rarity;
+    if (!rarity) {
+        const baseItem = lootSystem.getItemInfo(item.id || itemId);
+        rarity = baseItem?.rarity;
+    }
+    if (!rarity) return DEFAULT_MAX_ENHANCEMENT_BONUS;
+    return MAX_ENHANCEMENT_BONUS_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_BONUS;
+}
+
 // Ensures item.baseStats exists (the pristine, never-enhanced stat block).
 // Stats are always recalculated FROM this each time, so repeated enhancement
 // can never compound on top of an already-boosted value.
@@ -695,8 +742,13 @@ function hydrateBaseStats(item, itemId) {
 }
 
 // Recomputes item.stats = baseStats * (1 + cumulative bonus), rounded to integers.
-function recalculateEnhancedStats(item) {
-    const bonus = Math.min(item.enhancementBonus || 0, MAX_ENHANCEMENT_BONUS);
+// 💡 POLISH 2026-07-17: uses rarity-aware bonus cap (getMaxEnhancementBonus)
+// instead of the flat MAX_ENHANCEMENT_BONUS = 1.0. This is the actual fix
+// for the "stats still haven't changed" complaint — items can now exceed
+// 2x base when their rarity allows it.
+function recalculateEnhancedStats(item, itemId) {
+    const maxBonus = getMaxEnhancementBonus(item, itemId);
+    const bonus = Math.min(item.enhancementBonus || 0, maxBonus);
     const newStats = {};
     for (const stat in item.baseStats) {
         newStats[stat] = Math.ceil(item.baseStats[stat] * (1 + bonus));
@@ -724,9 +776,11 @@ function enhanceItem(userId, itemId, stoneId) {
     hydrateBaseStats(item, itemId);
 
     item.enhancementLevel = (item.enhancementLevel || 0) + 1;
-    item.enhancementBonus = Math.min((item.enhancementBonus || 0) + stoneBonus, MAX_ENHANCEMENT_BONUS);
+    // 💡 POLISH 2026-07-17: cap bonus at rarity-aware max (not flat 1.0)
+    const maxBonus = getMaxEnhancementBonus(item, itemId);
+    item.enhancementBonus = Math.min((item.enhancementBonus || 0) + stoneBonus, maxBonus);
 
-    recalculateEnhancedStats(item);
+    recalculateEnhancedStats(item, itemId);
 
     // Add prefix
     const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
@@ -764,8 +818,12 @@ function repairItemStats(item, itemId) {
     const baseStatsRef = baseItem?.stats;
     if (!baseStatsRef) return false;
 
-    // Corruption check: any current stat wildly exceeds what's possible under the new cap
-    const maxPossibleMultiplier = 1 + MAX_ENHANCEMENT_BONUS;
+    // Corruption check: any current stat wildly exceeds what's possible under
+    // the rarity-aware cap. 💡 POLISH 2026-07-17: was using flat
+    // MAX_ENHANCEMENT_BONUS = 1.0 which meant every Mythic item at level 20+
+    // was flagged as "corrupted" and re-nerfed to 2x base on every bag open.
+    const maxBonus = getMaxEnhancementBonus(item, itemId);
+    const maxPossibleMultiplier = 1 + maxBonus;
     let corrupted = false;
     for (const stat in item.stats || {}) {
         const base = baseStatsRef[stat];
@@ -787,8 +845,9 @@ function repairItemStats(item, itemId) {
     // flat 5-level cap.
     const maxLevel = getMaxEnhancementLevel(item, itemId);
     item.enhancementLevel = Math.min(item.enhancementLevel, maxLevel);
-    item.enhancementBonus = Math.min(item.enhancementLevel * 0.35, MAX_ENHANCEMENT_BONUS);
-    recalculateEnhancedStats(item);
+    // 💡 POLISH 2026-07-17: bonus capped at rarity-aware max (not flat 1.0)
+    item.enhancementBonus = Math.min(item.enhancementLevel * 0.35, maxBonus);
+    recalculateEnhancedStats(item, itemId);
     return true;
 }
 
@@ -1191,5 +1250,9 @@ module.exports = {
     MAX_ENHANCEMENT_LEVEL,
     MAX_ENHANCEMENT_LEVEL_BY_RARITY,
     DEFAULT_MAX_ENHANCEMENT_LEVEL,
-    MAX_ENHANCEMENT_BONUS
+    MAX_ENHANCEMENT_BONUS,
+    MAX_ENHANCEMENT_BONUS_BY_RARITY,
+    DEFAULT_MAX_ENHANCEMENT_BONUS,
+    getMaxEnhancementLevel,
+    getMaxEnhancementBonus
 };

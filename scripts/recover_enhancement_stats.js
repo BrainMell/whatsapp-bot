@@ -70,20 +70,38 @@ const MAX_ENHANCEMENT_LEVEL_BY_RARITY = {
   COMMON: 5, UNCOMMON: 10, RARE: 15, EPIC: 20, LEGENDARY: 25, MYTHIC: 30,
 };
 const DEFAULT_MAX_ENHANCEMENT_LEVEL = 5;
-const MAX_ENHANCEMENT_BONUS = 1.0;
+// 💡 POLISH 2026-07-17: rarity-aware BONUS cap (was flat 1.0 before —
+// items were stuck at 2x base max regardless of rarity). Now matches
+// inventorySystem.js's MAX_ENHANCEMENT_BONUS_BY_RARITY so the recovery
+// actually grants the higher caps players have been waiting for.
+const MAX_ENHANCEMENT_BONUS_BY_RARITY = {
+  COMMON: 1.75, UNCOMMON: 3.50, RARE: 5.25, EPIC: 7.00, LEGENDARY: 8.75, MYTHIC: 10.50,
+};
+const DEFAULT_MAX_ENHANCEMENT_BONUS = 1.75;
 
 function getMaxLevel(rarity) {
   if (!rarity) return DEFAULT_MAX_ENHANCEMENT_LEVEL;
   return MAX_ENHANCEMENT_LEVEL_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_LEVEL;
 }
+function getMaxBonus(rarity) {
+  if (!rarity) return DEFAULT_MAX_ENHANCEMENT_BONUS;
+  return MAX_ENHANCEMENT_BONUS_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_BONUS;
+}
 
 // Recalculate stats using the rarity-aware formula. Returns the new stats
 // object, or null if no change needed.
+// 💡 POLISH 2026-07-17: now uses rarity-aware bonus cap, not flat 1.0.
+// Items that were previously stuck at 2x base (flat cap) will now be
+// re-evaluated against the rarity-specific ceiling (e.g. Mythic = 11.5x).
 function recalcStats(item, baseStatsRef) {
   if (!item || !baseStatsRef) return null;
   if (!(item.enhancementLevel > 0)) return null;
 
-  const bonus = Math.min(item.enhancementLevel * 0.35, MAX_ENHANCEMENT_BONUS);
+  // Look up rarity: prefer item.rarity, fall back to baseItem.rarity via the
+  // caller (we receive baseStatsRef but not the full baseItem here — assume
+  // caller has already stamped item.rarity if it was missing).
+  const maxBonus = getMaxBonus(item.rarity);
+  const bonus = Math.min(item.enhancementLevel * 0.35, maxBonus);
   const newStats = {};
   for (const stat in baseStatsRef) {
     newStats[stat] = Math.ceil(baseStatsRef[stat] * (1 + bonus));
@@ -171,6 +189,11 @@ async function main() {
       const baseItem = lootSystem.getItemInfo(item.id || itemId);
       if (!baseItem || !baseItem.stats) continue;
 
+      // 💡 Stamp rarity onto item so recalcStats can look up the rarity-aware
+      // bonus cap. Falls back to baseItem.rarity if item.rarity is missing
+      // (some legacy items don't carry rarity on the instance).
+      if (!item.rarity && baseItem.rarity) item.rarity = baseItem.rarity;
+
       const result = recalcStats(item, baseItem.stats);
       if (!result) continue;
 
@@ -181,6 +204,8 @@ async function main() {
       setFields[`inventory.${itemId}.stats`] = result.stats;
       setFields[`inventory.${itemId}.enhancementBonus`] = result.enhancementBonus;
       setFields[`inventory.${itemId}.baseStats`] = result.baseStats;
+      // 💡 Persist rarity stamp so future repair sweeps don't have to re-look-up
+      if (item.rarity) setFields[`inventory.${itemId}.rarity`] = item.rarity;
     }
 
     // 3b. Equipment slots
@@ -193,6 +218,9 @@ async function main() {
       const baseItem = lootSystem.getItemInfo(item.id);
       if (!baseItem || !baseItem.stats) continue;
 
+      // 💡 Stamp rarity (same as inventory path above)
+      if (!item.rarity && baseItem.rarity) item.rarity = baseItem.rarity;
+
       const result = recalcStats(item, baseItem.stats);
       if (!result) continue;
 
@@ -203,6 +231,8 @@ async function main() {
       setFields[`equipment.${slot}.stats`] = result.stats;
       setFields[`equipment.${slot}.enhancementBonus`] = result.enhancementBonus;
       setFields[`equipment.${slot}.baseStats`] = result.baseStats;
+      // 💡 Persist rarity stamp
+      if (item.rarity) setFields[`equipment.${slot}.rarity`] = item.rarity;
     }
 
     if (Object.keys(setFields).length > 0) {

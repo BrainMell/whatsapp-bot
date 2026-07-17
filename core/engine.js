@@ -61,6 +61,13 @@ const blockedUsersByBot = new Map();
 const globalModsByBot = new Map();
 const overrideUsersByBot = new Map();
 const busyUsersByBot = new Map();
+// 💡 POLISH 2026-07-17: 3-tier moderator role system
+//   - General Mod (globalMods) — unrestricted, all commands
+//   - RPG Mod (rpgMods) — RPG commands only (combat, classes, items, etc.)
+//   - Cards Mod (cardsMods) — Cards commands only (spawn, market, deck, etc.)
+// Each Set is instance-bound (per botId) just like globalMods.
+const rpgModsByBot = new Map();
+const cardsModsByBot = new Map();
 
 function createInstanceBoundSet(map) {
   return {
@@ -110,6 +117,10 @@ const overrideUsers = createInstanceBoundSet(overrideUsersByBot);
 
 // Concurrency lock – prevents double-spend from firing two money commands at once
 const busyUsers = createInstanceBoundSet(busyUsersByBot);
+
+// 💡 POLISH 2026-07-17: 3-tier mod role sets
+const rpgMods = createInstanceBoundSet(rpgModsByBot);
+const cardsMods = createInstanceBoundSet(cardsModsByBot);
 
 function resolveLidToPhone(jid, authPath) {
   return lidResolver.resolveLidToPhone(jid, authPath);
@@ -195,6 +206,138 @@ function isGlobalMod(userId) {
   } catch (err) {
     return false;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 POLISH 2026-07-17: 3-TIER MODERATOR ROLE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+// Three separate mod roles with cleanly separated permissions:
+//   - General Mod (globalMods)  — all commands, all systems
+//   - RPG Mod (rpgMods)         — RPG commands only (combat, classes, items,
+//                                  dungeons, abyss, runes, economy, etc.)
+//   - Cards Mod (cardsMods)     — Cards commands only (spawn, market, deck,
+//                                  eshop, espawn, einfo, etc.)
+//
+// hasModPermission(jid, category) is the single entry point for permission
+// checks. Category is 'rpg' or 'cards'. General Mods always return true.
+// Owner is treated as a General Mod (returns true for any category).
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadRpgMods() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  try {
+    const data = system.get(botConfig.getBotId() + "_rpg_mods", []);
+    data.forEach((userId) => rpgMods.add(userId));
+    console.log(`⚔️ [${botConfig.getBotId()}] Loaded ${rpgMods.size} RPG moderators from MongoDB`);
+  } catch (err) {
+    console.error("Error loading RPG mods:", err.message);
+  }
+}
+
+function saveRpgMods() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  system.set(botConfig.getBotId() + "_rpg_mods", Array.from(rpgMods));
+}
+
+async function loadCardsMods() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  try {
+    const data = system.get(botConfig.getBotId() + "_cards_mods", []);
+    data.forEach((userId) => cardsMods.add(userId));
+    console.log(`🃏 [${botConfig.getBotId()}] Loaded ${cardsMods.size} Cards moderators from MongoDB`);
+  } catch (err) {
+    console.error("Error loading Cards mods:", err.message);
+  }
+}
+
+function saveCardsMods() {
+  const system = require('./utils/system');
+  const botConfig = require("../botConfig");
+  system.set(botConfig.getBotId() + "_cards_mods", Array.from(cardsMods));
+}
+
+function addRpgMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  rpgMods.add(normalized);
+  saveRpgMods();
+}
+
+function delRpgMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  rpgMods.delete(normalized);
+  saveRpgMods();
+}
+
+function isRpgMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    return rpgMods.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
+}
+
+function addCardsMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  cardsMods.add(normalized);
+  saveCardsMods();
+}
+
+function delCardsMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  cardsMods.delete(normalized);
+  saveCardsMods();
+}
+
+function isCardsMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    return cardsMods.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
+}
+
+// Unified permission check. Returns true if the user has the requested category
+// of mod permission. General Mods and the owner always pass.
+//
+// @param userId — the JID to check
+// @param category — 'rpg' | 'cards' | 'general' (any other value defaults to
+//                   'general' which means only General Mods / owner can use it)
+//
+// 💡 NOTE: owner check uses the module-level isBotOwner() helper below.
+function hasModPermission(userId, category) {
+  if (!userId) return false;
+  if (isBotOwner(userId)) return true;
+  if (isGlobalMod(userId)) return true;  // General Mod = unrestricted
+  if (category === 'rpg') return isRpgMod(userId);
+  if (category === 'cards') return isCardsMod(userId);
+  // 'general' or unknown category — General Mods only (already checked above)
+  return false;
+}
+
+// 💡 POLISH 2026-07-17: moved owner check to module scope so it can be used
+// by hasModPermission and other module-level helpers. Previously was a
+// closure-local `_isBotOwner` inside spawnBot — couldn't be referenced from
+// module-scope functions. The closure-local version is kept as an alias
+// for backwards-compat with existing call sites.
+const BOT_OWNER_PHONES = [
+  '233201487480',  // primary owner
+  '251453323092189',
+  '105712667648066',
+];
+function isBotOwner(jid) {
+  if (!jid || typeof jid !== 'string') return false;
+  return BOT_OWNER_PHONES.some(phone => jid.startsWith(phone) || jid.includes(phone));
 }
 
 // Helper for dynamic ESM import of got-scraping
@@ -1091,7 +1234,10 @@ async function startBot(configInstance) {
       }
     }
 
-    const _isBotOwner = (jid) => typeof jid === 'string' && (jid.startsWith("233201487480") || jid.includes("251453323092189") || jid.includes("105712667648066"));
+    // 💡 POLISH 2026-07-17: _isBotOwner is now an alias of the module-scope
+    // isBotOwner(). Kept for backwards-compat with all existing call sites
+    // inside spawnBot that reference _isBotOwner directly.
+    const _isBotOwner = isBotOwner;
 
     function hasActionPermission(chatId, userJid, cmdKey) {
       if (!userJid || typeof userJid !== 'string') return false;
@@ -4229,6 +4375,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         if (!isFreshLogin) {
           // Existing session — load everything before connecting (normal path)
           await loadGlobalMods();
+          await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
+          await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
           await loadBlockedUsers();
 
           await Promise.all([
@@ -4265,7 +4413,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           logger: P({ level: "silent" }),
           syncFullHistory: false,       // skip loading old message history on boot
           shouldSyncHistoryMessage: () => false, // ⚡ SKIP downloading/decrypting history sync messages
-          markOnlineOnConnect: true,    // broadcast online status to keep connection active and warm
+          // 💡 POLISH 2026-07-17: markOnlineOnConnect=false — Baileys 7.x was
+          // broadcasting the bot's online presence every few seconds AND
+          // auto-subscribing to other users' presence updates. This caused
+          // excessive traffic, made the bot appear "noisy" to WhatsApp's
+          // servers, and may have contributed to soft-fail / shadow-ban
+          // patterns where the bot connects but doesn't receive messages.
+          // Disabling means the bot won't appear "online" in chat lists,
+          // but it also won't trigger the presence-subscription storm.
+          markOnlineOnConnect: false,
+          // 💡 POLISH 2026-07-17: explicit defaultQueryTimeout to avoid
+          // hanging on stalled queries (presence fetches, group metadata
+          // fetches, etc). 10s is generous but bounded.
+          defaultQueryTimeout: 10000,
         });
 
         sendQueue.bind(sock);
@@ -4366,6 +4526,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (isFreshLogin) {
                 console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
                 await loadGlobalMods();
+                await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
+                await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
                 await loadBlockedUsers();
                 await Promise.all([
                   system.loadSystemData(),
@@ -5826,6 +5988,11 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `• \`${botConfig.getPrefix()} addmod @user\` — promote to global mod\n`;
                         msg += `• \`${botConfig.getPrefix()} delmod @user\` — demote global mod\n`;
                         msg += `• \`${botConfig.getPrefix()} mods\` — list all global mods\n`;
+                        msg += `• \`${botConfig.getPrefix()} addrpgmod @user\` — promote to RPG mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} delrpgmod @user\` — demote RPG mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} addcardsmod @user\` — promote to Cards mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} delcardsmod @user\` — demote Cards mod\n`;
+                        msg += `• \`${botConfig.getPrefix()} listmods\` — list all 3 mod categories\n`;
                         msg += `• \`${botConfig.getPrefix()} updateall [message]\` — broadcast to all groups\n`;
                         msg += `• \`${botConfig.getPrefix()} setpack <name>\` — set sticker pack name\n`;
                         msg += `• \`${botConfig.getPrefix()} setauthor <name>\` — set sticker author\n`;
@@ -9117,6 +9284,185 @@ Usage: ${newUsage}/5${warningText}`;
                         `✅ @${target.split("@")[0]} has been removed from Global Moderators.`,
                       mentions: [target],
                     });
+                    return;
+                  }
+
+                  // ═══════════════════════════════════════════════════════════════════
+                  // 💡 POLISH 2026-07-17: 3-TIER MODERATOR ROLE COMMANDS
+                  // ═══════════════════════════════════════════════════════════════════
+                  // .g addrpgmod @user  — promote to RPG Moderator (RPG cmds only)
+                  // .g delrpgmod @user  — demote RPG Moderator
+                  // .g addcardsmod @user — promote to Cards Moderator (Cards cmds only)
+                  // .g delcardsmod @user — demote Cards Moderator
+                  // .g listmods         — list all 3 mod categories
+                  //
+                  // Only the owner or a General (global) Mod can promote/demote
+                  // any mod role. RPG Mods cannot promote other RPG Mods. Cards
+                  // Mods cannot promote other Cards Mods. This keeps the
+                  // permission hierarchy clean.
+                  // ═══════════════════════════════════════════════════════════════════
+
+                  // .g addrpgmod - Add an RPG Moderator (Owner or General Mod only)
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addrpgmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add RPG moderators. RPG Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as an RPG Moderator.",
+                      });
+
+                    addRpgMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${target.split("@")[0]} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
+                      mentions: [target],
+                    });
+                    return;
+                  }
+
+                  // .g delrpgmod - Remove an RPG Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delrpgmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove RPG moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from RPG Moderators.",
+                      });
+
+                    delRpgMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${target.split("@")[0]} has been removed from RPG Moderators.`,
+                      mentions: [target],
+                    });
+                    return;
+                  }
+
+                  // .g addcardsmod - Add a Cards Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addcardsmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add Cards moderators. Cards Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a Cards Moderator.",
+                      });
+
+                    addCardsMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${target.split("@")[0]} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
+                      mentions: [target],
+                    });
+                    return;
+                  }
+
+                  // .g delcardsmod - Remove a Cards Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delcardsmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove Cards moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from Cards Moderators.",
+                      });
+
+                    delCardsMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${target.split("@")[0]} has been removed from Cards Moderators.`,
+                      mentions: [target],
+                    });
+                    return;
+                  }
+
+                  // .g listmods - List all moderators across all 3 categories
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} listmods` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listmods `)
+                  ) {
+                    // Any mod can view the mod list — but only see phone numbers
+                    // (LID privacy). Owner sees full JIDs.
+                    const canSeeFull = isOwner;
+                    const formatJid = (jid) => canSeeFull ? jid : jid.split('@')[0];
+
+                    let listMsg = `🛡️ *MODERATOR ROSTER*\n\n`;
+                    listMsg += `*General Mods* (${globalMods.size}):\n`;
+                    if (globalMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of globalMods) listMsg += `  • ${formatJid(jid)}\n`;
+
+                    listMsg += `\n*RPG Mods* (${rpgMods.size}):\n`;
+                    if (rpgMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of rpgMods) listMsg += `  • ${formatJid(jid)}\n`;
+
+                    listMsg += `\n*Cards Mods* (${cardsMods.size}):\n`;
+                    if (cardsMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of cardsMods) listMsg += `  • ${formatJid(jid)}\n`;
+
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)`;
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + listMsg });
                     return;
                   }
 
