@@ -3099,7 +3099,10 @@ async function promptPlayerAction(sock, player, sessionKey) {
   if (usableItems.length > 0) {
     msg += `\n*BAG:*\n`;
     usableItems.slice(0, 3).forEach((item, i) => {
-      const info = lootSystem.getItemInfo(item.id);
+      const info = {
+        ...lootSystem.getItemInfo(item.id),
+        ...(CONSUMABLES[item.id] || {})
+      };
       msg += `${i + 1}. ${info.name} x${item.quantity}\n`;
     });
     if (usableItems.length > 3)
@@ -5603,7 +5606,10 @@ const handleCombatAction = async (
     if (!target || target.trim() === "") {
       let msg = `🎒 *USABLE COMBAT ITEMS* 🎒\n━━━━━━━━━━━━━━━━\n`;
       usableItems.forEach((item, i) => {
-        const info = lootSystem.getItemInfo(item.id);
+        const info = {
+          ...lootSystem.getItemInfo(item.id),
+          ...(CONSUMABLES[item.id] || {})
+        };
         msg += `*${i + 1}.* ${info.name} x${item.quantity}\n_${info.description || ''}_\n\n`;
       });
       msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
@@ -5775,7 +5781,8 @@ async function applyAbilityEffect(
     state.sessionKey ||
     (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
   const icon = player.class?.icon || "👤";
-  const animation = ability.animation || effect?.animation || "";
+  let animation = ability.animation || effect?.animation || "";
+  if (animation === "undefined") animation = "";
   const animStr = animation ? `${animation} ` : "";
   let msg = `${icon} ${player.name} uses ${animStr}*${ability.name}*!\n\n`;
   let totalDamage = 0;

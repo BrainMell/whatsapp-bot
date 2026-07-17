@@ -500,8 +500,15 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             // Partial defense mitigation
             const defReduction = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
             damage = Math.max(20, Math.floor(damage - defReduction));
+            // Crit Check
+            isCrit = Math.random() * 100 < (attackerStats.crit || 5);
+            if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
             opponent.hp -= damage;
-            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            if (isCrit) {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💢 ★ *CRITICAL HIT!* ★ — Deals *${damage}* damage to *${opponent.name}*!`;
+            } else {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            }
         } else if (effect?.type === 'execute') {
             const hpPercent = (opponent.hp / opponent.maxHp) * 100;
             const mult = hpPercent <= (effect.threshold || 30) ? 2.5 : 1.0;
@@ -509,8 +516,15 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * mult * PVP_ABILITY_MULT);
             const defReduction = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
             damage = Math.max(20, Math.floor(damage - defReduction));
+            // Crit Check
+            isCrit = Math.random() * 100 < (attackerStats.crit || 5);
+            if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
             opponent.hp -= damage;
-            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            if (isCrit) {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💢 ★ *CRITICAL HIT!* ★ — Deals *${damage}* damage to *${opponent.name}*!`;
+            } else {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            }
             if (mult > 1.0) {
                 actionResult += `\n⚡ *EXECUTE THRESHOLD TRIGGERED!* ⚡`;
             }
@@ -518,8 +532,15 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             const statBase = attackerStats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.0) * PVP_ABILITY_MULT);
             damage = Math.max(15, damage - Math.floor(defenderStats.def * 0.15));
+            // Crit Check
+            isCrit = Math.random() * 100 < (attackerStats.crit || 5);
+            if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
             opponent.hp -= damage;
-            actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 *${damage}* damage`;
+            if (isCrit) {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💢 ★ *CRITICAL HIT!* ★ — *${damage}* damage`;
+            } else {
+                actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 *${damage}* damage`;
+            }
         } else {
             actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!`;
         }

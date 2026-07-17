@@ -619,6 +619,8 @@ function enhanceItem(userId, itemId, stoneId) {
 
     // Apply bonus to stats
     if (item.stats) {
+        // Deep clone to prevent mutating the global ITEM_DATABASE reference
+        item.stats = JSON.parse(JSON.stringify(item.stats));
         for (const stat in item.stats) {
             item.stats[stat] = Math.ceil(item.stats[stat] * (1 + multiplier));
         }

@@ -547,13 +547,6 @@ async function distributeLoot(players, encounterType, enemyName = null, difficul
         }
     }
 
-    if (goldPerPlayer > 0) {
-        for (const player of players) {
-            const economy = require('./economy');
-            economy.addMoney(player.jid, goldPerPlayer);
-        }
-    }
-    
     return results;
 }
 
@@ -3090,6 +3083,42 @@ Object.assign(ITEM_DATABASE, {
         "reqLevel": 1
     }
 });
+
+// ==========================================
+// 💡 BUG FIX: Inject Crafted Items into ITEM_DATABASE
+// ==========================================
+// Done via setTimeout to prevent circular dependency with craftingSystem.js
+setTimeout(() => {
+    try {
+        const crafting = require('./craftingSystem');
+        const injectRecipes = (recipes) => {
+            if (!recipes) return;
+            for (const [key, recipe] of Object.entries(recipes)) {
+                if (recipe.result && recipe.result.id && !ITEM_DATABASE[recipe.result.id]) {
+                    ITEM_DATABASE[recipe.result.id] = {
+                        name: recipe.name,
+                        description: recipe.desc || 'Crafted item.',
+                        rarity: recipe.result.rarity || 'RARE',
+                        value: recipe.result.value || 100,
+                        type: recipe.result.stats ? 'EQUIPMENT' : (recipe.result.usable ? 'CONSUMABLE' : 'ITEM'),
+                        stats: recipe.result.stats,
+                        slot: recipe.result.slot,
+                        reqLevel: recipe.result.reqLevel || 1,
+                        usable: recipe.result.usable || false,
+                        effect: recipe.result.effect,
+                        effectValue: recipe.result.effectValue,
+                        duration: recipe.result.duration
+                    };
+                }
+            }
+        };
+        injectRecipes(crafting.CRAFTING_RECIPES);
+        injectRecipes(crafting.BREWING_RECIPES);
+        injectRecipes(crafting.COOKING_RECIPES);
+    } catch(e) {
+        console.log("[lootSystem] Deferred crafting load failed:", e.message);
+    }
+}, 0);
 
 // ==========================================
 // 📤 EXPORTS
