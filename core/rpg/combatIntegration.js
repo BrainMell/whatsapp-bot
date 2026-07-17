@@ -79,10 +79,23 @@ function generateStartCaption(players, enemies, encounterInfo) {
 function generateTurnCaption(players, enemies, turnInfo) {
     const actor = turnInfo.actor;
     
-    // Dynamic action verb based on weapon/actor type
+    // Dynamic action verb based on weapon/actor type.
+    // ⚠️ FIX 2026-07-17: only use weapon-flavored verbs (SMASHES/SLASHES/PIERCES/
+    // CASTS/SHOOTS) for *basic attacks*. For named skills (Tactical Strike,
+    // Cleave, Fireball, etc.) the verb should be neutral "uses" — otherwise
+    // a player with a spear-equipped weapon would see "PIERCES with Fireball"
+    // which makes no sense and led to user reports of "everything pierces".
+    // The skill itself determines its own behavior; the weapon is irrelevant
+    // when a skill is being cast.
     let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
-    if (actor?.equipment?.main_hand) {
-        const wName = actor.equipment.main_hand.name?.toLowerCase() || '';
+    const actionName = turnInfo?.action?.name || '';
+    const isBasicAttack = (
+        actionName === 'Basic Attack' ||
+        actionName === 'Failed Attack' ||
+        actionName === 'Missed Attack'
+    );
+    if (isBasicAttack && actor?.equipment?.main_hand) {
+        const wName = (actor.equipment.main_hand.name || '').toLowerCase();
         if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
         else if (/sword|blade|sabre|falchion/.test(wName)) actionVerb = '⚔️ *SLASHES* with';
         else if (/dagger|knife|spear|lance/.test(wName)) actionVerb = '🗡️ *PIERCES* with';

@@ -20,4 +20,4 @@ ImageGenScrapes
 
 # Assets and Generated
 *.exe
-*.log
+*.logscripts/backups/

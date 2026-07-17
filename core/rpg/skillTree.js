@@ -1910,6 +1910,54 @@ const SKILL_TREES = {
                         animation: '⚡✨💥😇',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Cleric skills (was 2 — only Heal + ult)
+                    smite: {
+                        id: 'smite',
+                        name: 'Smite',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [18, 17, 16, 15, 13],
+                        cooldown: 1,
+                        damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        bonusVsUndead: [3.0, 3.3, 3.6, 4.0, 4.5],
+                        description: 'Call down divine light to strike a single foe. Deals bonus damage to undead.',
+                        animation: '✨⚡',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    blessing: {
+                        id: 'blessing',
+                        name: 'Blessing',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 36, 32],
+                        cooldown: 1,
+                        targeting: 'TEAM',
+                        effects: { buff_team: { stat: 'all', value: [15, 20, 25], duration: 3 } },
+                        description: 'Bless the entire party, boosting all stats.',
+                        animation: '✨🙏',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    cleanse: {
+                        id: 'cleanse',
+                        name: 'Cleanse',
+                        tier: 2,
+                        requiredLevel: 6,
+                        maxLevel: 3,
+                        energyCost: [30, 26, 22],
+                        cooldown: 1,
+                        targeting: 'TEAM_ALLY',
+                        effects: {
+                            cleanse: { value: 1 },
+                            heal: { value: [40, 55, 70] }
+                        },
+                        description: 'Purify all negative status effects from the party and restore a small amount of HP.',
+                        animation: '💧✨',
+                        skillPointCost: [3, 5, 7]
                     }
                 }
             }
@@ -1956,6 +2004,55 @@ const SKILL_TREES = {
                         animation: '🌑💀⚡✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Ninja skills (was 2 — only Shuriken + ult)
+                    shadow_clone_jutsu: {
+                        id: 'shadow_clone_jutsu',
+                        name: 'Shadow Clone Jutsu',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [35, 32, 28],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [40, 50, 60], duration: 2 },
+                            counterattack: { chance: [15, 20, 25], value: [1.0, 1.2, 1.4] }
+                        },
+                        description: 'Create a shadow clone that boosts evasion and has a chance to counterattack when struck.',
+                        animation: '🥷👥',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    poison_kunai: {
+                        id: 'poison_kunai',
+                        name: 'Poison Kunai',
+                        tier: 1,
+                        requiredLevel: 5,
+                        maxLevel: 5,
+                        energyCost: [22, 20, 18, 16, 14],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { poison: { value: [25, 35, 45, 60, 80], duration: 4 } },
+                        description: 'Throw a poisoned kunai that deals damage over time.',
+                        animation: '🗡️🧪',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    kunai_storm: {
+                        id: 'kunai_storm',
+                        name: 'Kunai Storm',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.5, 1.7, 1.9],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Unleash a storm of kunai at all enemies.',
+                        animation: '🗡️🌪️',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2001,6 +2098,55 @@ const SKILL_TREES = {
                         animation: '🧘✨🌟💫',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Monk skills (was 2 — only Palm Strike + ult)
+                    ki_blast: {
+                        id: 'ki_blast',
+                        name: 'Ki Blast',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 1,
+                        damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'Release a concentrated burst of inner ki energy.',
+                        animation: '👊💥',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    whirlwind_kick: {
+                        id: 'whirlwind_kick',
+                        name: 'Whirlwind Kick',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [38, 34, 30],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.6, 1.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        effects: { slow: { chance: [30, 40, 50], value: 30, duration: 2 } },
+                        description: 'Spin in a wide arc, striking all enemies with a chance to slow them.',
+                        animation: '🦵🌀',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    meditation: {
+                        id: 'meditation',
+                        name: 'Meditation',
+                        tier: 2,
+                        requiredLevel: 6,
+                        maxLevel: 3,
+                        energyCost: [25, 22, 18],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'crit', value: [30, 40, 50], duration: 3 },
+                            restore_energy: { value: [20, 30, 40] }
+                        },
+                        description: 'Focus your mind to restore energy and sharpen your critical strikes.',
+                        animation: '🧘💭',
+                        skillPointCost: [3, 5, 7]
                     }
                 }
             }
@@ -2244,6 +2390,54 @@ const SKILL_TREES = {
                         animation: '🌋🌊⚡🧊💥',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Elementalist skills (was 2 — only Elemental Bolt + ult)
+                    flame_burst: {
+                        id: 'flame_burst',
+                        name: 'Flame Burst',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 16],
+                        cooldown: 1,
+                        damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_SMALL',
+                        effects: { burn: { value: [15, 20, 25, 30, 40], duration: 3 } },
+                        description: 'Erupt a burst of flame at 2 enemies, applying burn.',
+                        animation: '🔥💥',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    frost_nova: {
+                        id: 'frost_nova',
+                        name: 'Frost Nova',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [42, 38, 34],
+                        cooldown: 1,
+                        damageMultiplier: [1.2, 1.4, 1.6],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { freeze: { chance: [25, 35, 45], duration: 1 } },
+                        description: 'Explode frost outward, damaging all enemies with a chance to freeze.',
+                        animation: '❄️💥',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    chain_lightning: {
+                        id: 'chain_lightning',
+                        name: 'Chain Lightning',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.8, 2.0, 2.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'CHAIN',
+                        description: 'Fire a bolt of lightning that arcs between up to 3 enemies.',
+                        animation: '⚡🔗',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2339,6 +2533,57 @@ const SKILL_TREES = {
                         description: 'Unleash total warfare upon all enemies.',
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlord skills (class had only 2 damaging skills — Tactical Strike + Total War ult)
+                    wide_cleave: {
+                        id: 'wide_cleave',
+                        name: 'Wide Cleave',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [70, 65, 60],
+                        cooldown: 1,
+                        damageMultiplier: [2.5, 2.8, 3.1],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE_SMALL',
+                        description: 'A sweeping cleave that strikes 2 enemies at once.',
+                        animation: '⚔️🌀',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    shield_bash: {
+                        id: 'shield_bash',
+                        name: 'Shield Bash',
+                        tier: 2,
+                        requiredLevel: 35,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [2.0, 2.3, 2.6],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            stun: { chance: [40, 50, 60], duration: 1 },
+                            shield: { value: [50, 75, 100], duration: 2 }
+                        },
+                        description: 'Bash with your shield, stunning the target and gaining a shield.',
+                        animation: '🛡️💥',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    banner_charge: {
+                        id: 'banner_charge',
+                        name: 'Banner Charge',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 3,
+                        energyCost: [90, 82, 73],
+                        cooldown: 1,
+                        damageMultiplier: [3.0, 3.4, 3.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        effects: { buff_team: { stat: 'attack', value: [15, 20, 25], duration: 2 } },
+                        description: 'Plant your banner and charge, dealing AOE damage and inspiring your party.',
+                        animation: '🚩⚔️',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }
@@ -2557,6 +2802,54 @@ const SKILL_TREES = {
                         animation: '💀🌑✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlock skills (was 2 — only Shadow Bolt + ult)
+                    curse_of_agony: {
+                        id: 'curse_of_agony',
+                        name: 'Curse of Agony',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [35, 30, 26],
+                        cooldown: 1,
+                        targeting: 'SINGLE',
+                        effects: { vulnerability: { value: [15, 20, 25], duration: 3 } },
+                        description: 'Curse a foe with agonizing pain, increasing all damage they take.',
+                        animation: '💀🔮',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    demon_armor: {
+                        id: 'demon_armor',
+                        name: 'Demon Armor',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 35, 30],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'def', value: [40, 55, 70], duration: 3 },
+                            thorns: { value: [15, 20, 25], duration: 3 }
+                        },
+                        description: 'Encase yourself in demonic armor, boosting DEF and reflecting melee damage.',
+                        animation: '👹🛡️',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    hellfire: {
+                        id: 'hellfire',
+                        name: 'Hellfire',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [60, 55, 50],
+                        cooldown: 1,
+                        damageMultiplier: [1.7, 1.9, 2.1],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { burn: { value: [25, 35, 45], duration: 3 } },
+                        description: 'Call down hellfire that scorches all enemies and applies burn.',
+                        animation: '🔥👹',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2602,6 +2895,54 @@ const SKILL_TREES = {
                         animation: '🌿🌳⚡💚',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Druid skills (was 2 — only Nature's Wrath + ult)
+                    entangle: {
+                        id: 'entangle',
+                        name: 'Entangle',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [32, 28, 24],
+                        cooldown: 1,
+                        targeting: 'AOE',
+                        effects: { root: { chance: [40, 55, 70], duration: 2 } },
+                        description: 'Summon vines to entangle all enemies, rooting many in place.',
+                        animation: '🌿🔗',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    healing_bloom: {
+                        id: 'healing_bloom',
+                        name: 'Healing Bloom',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 35, 30],
+                        cooldown: 1,
+                        targeting: 'TEAM_ALLY',
+                        effects: {
+                            heal: { value: [80, 110, 140] },
+                            regen: { value: [15, 20, 25], duration: 3 }
+                        },
+                        description: 'Bloom healing flowers across the party, restoring HP now and over time.',
+                        animation: '🌸💚',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    thorn_surge: {
+                        id: 'thorn_surge',
+                        name: 'Thorn Surge',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        cooldown: 1,
+                        damageMultiplier: [1.6, 1.8, 2.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { bleed: { value: [15, 20, 30], duration: 3 } },
+                        description: 'Erupt a wave of thorns at all enemies, causing bleed.',
+                        animation: '🌿💥',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2885,6 +3226,52 @@ const SKILL_TREES = {
                         animation: '⚔️✨💫🌸',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Samurai skills (was 2 — only Iaido + ult)
+                    frontal_cut: {
+                        id: 'frontal_cut',
+                        name: 'Frontal Cut',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 1,
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { ignoreDefense: { value: 30 } },
+                        description: 'A clean downward cut that ignores 30% of target DEF.',
+                        animation: '⚔️⬇️',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    mindful_stance: {
+                        id: 'mindful_stance',
+                        name: 'Mindful Stance',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [30, 26, 22],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: { counterattack: { chance: [35, 45, 55], value: [1.0, 1.2, 1.4], duration: 3 } },
+                        description: 'Enter a defensive stance with a high chance to counterattack when struck.',
+                        animation: '🧘⚔️',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    whirlwind_blade: {
+                        id: 'whirlwind_blade',
+                        name: 'Whirlwind Blade',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.6, 1.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Spin with blade outstretched, striking all enemies.',
+                        animation: '🌪️⚔️',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -4643,6 +5030,57 @@ const SKILL_TREES = {
                         description: 'A punch that can break the stars',
                         animation: '👊🌌💥',
                         skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Divine Fist skills (was 1 — only Star Shatterer ult)
+                    iron_palm: {
+                        id: 'iron_palm',
+                        name: 'Iron Palm',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [60, 55, 50, 45, 40],
+                        cooldown: 1,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { stun: { chance: [20, 25, 30, 35, 40], duration: 1 } },
+                        description: 'A devastating palm strike with a chance to stun.',
+                        animation: '✋💥',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    heavenly_step: {
+                        id: 'heavenly_step',
+                        name: 'Heavenly Step',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [50, 65, 80], duration: 2 },
+                            cleanse: { value: 1 }
+                        },
+                        description: 'Step between dimensions, boosting evasion and cleansing negative effects.',
+                        animation: '👣✨',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    eight_gates: {
+                        id: 'eight_gates',
+                        name: 'Eight Gates',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 3,
+                        energyCost: [80, 70, 60],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'attack', value: [80, 110, 140], duration: 3 },
+                            selfDamage: { value: [10, 12, 15] }
+                        },
+                        description: 'Open the eight inner gates, massively boosting ATK but losing HP each turn.',
+                        animation: '🚪💥',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }
@@ -4828,6 +5266,51 @@ const SKILL_TREES = {
                         description: 'Reap the souls of the living',
                         animation: '💀⌛🌑',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Death Lord skills (was 1 — only Soul Reaping)
+                    raise_dead: {
+                        id: 'raise_dead',
+                        name: 'Raise Dead',
+                        tier: 2,
+                        requiredLevel: 30,
+                        maxLevel: 3,
+                        energyCost: [70, 60, 50],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: { summon: { type: 'skeleton', count: [1, 2, 2], atkPercent: [30, 35, 40], duration: 4 } },
+                        description: 'Raise skeleton allies from the grave to fight alongside you.',
+                        animation: '💀Summon',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    death_aura: {
+                        id: 'death_aura',
+                        name: 'Death Aura',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [60, 55, 50],
+                        cooldown: 1,
+                        targeting: 'AOE',
+                        effects: { debuff: { stat: 'all', value: [15, 20, 25], duration: 3 } },
+                        description: 'Project an aura of decay that weakens all enemies.',
+                        animation: '💀🌫️',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    soul_tether: {
+                        id: 'soul_tether',
+                        name: 'Soul Tether',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 3,
+                        energyCost: [80, 72, 65],
+                        cooldown: 1,
+                        damageMultiplier: [4.0, 4.5, 5.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: { heal: { value: [60, 80, 100], lifestealPercent: 75 } },
+                        description: 'Tether a foe\'s soul to your own, draining 75% of damage dealt as HP.',
+                        animation: '💀🔗💚',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }

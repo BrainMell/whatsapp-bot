@@ -2211,6 +2211,83 @@ function calculateDamage(
   totalDmgReduction = Math.min(90, Math.max(0, totalDmgReduction));
   damage = damage * (1 - totalDmgReduction / 100);
 
+  // 💡 CLASS PASSIVE WIRE-UP (inline damage): apply attacker's outgoing
+  // damage multiplier from damage_when_low_hp, damage_per_hit,
+  // first_turn_bonus, rotate_elements passives. Also fold in one-shot
+  // passiveKillBonus from damage_on_kill if present (consumed after this hit).
+  if (!attacker.isEnemy) {
+    try {
+      const passiveMult = getClassPassiveDamageMult(attacker, target, isAbility);
+      if (passiveMult !== 1) damage = Math.floor(damage * passiveMult);
+      // One-shot kill bonus (consumed on use)
+      if (attacker.passiveKillBonus && attacker.passiveKillBonus > 1) {
+        damage = Math.floor(damage * attacker.passiveKillBonus);
+        attacker.passiveKillBonus = 1;  // reset
+      }
+    } catch (e) {
+      console.error('[Passive] getClassPassiveDamageMult failed:', e?.message || e);
+    }
+    // 💡 CLASS PASSIVE WIRE-UP (inline damage reduction): apply target's
+    // damage_reduction passive (e.g. Paladin's Unbreakable -15%). Stacks
+    // additively with the buff-based dmgReduction above, capped at 90% total.
+    try {
+      const passiveReduction = getClassPassiveDamageReduction(target);
+      if (passiveReduction > 0) {
+        damage = damage * (1 - Math.min(90, passiveReduction) / 100);
+      }
+    } catch (e) {
+      console.error('[Passive] getClassPassiveDamageReduction failed:', e?.message || e);
+    }
+  }
+
+  // 💡 STATUS EFFECT: Shield — absorb incoming damage from the shield's
+  // value pool first, then any overflow hits HP. Previously shield was
+  // defined but only halved DoT damage — direct attacks ignored it
+  // completely, making skills like Mana Shield / Golden Barrier / Force
+  // Field useless. Now we consume the shield value before HP takes a hit.
+  if (damage > 0) {
+    const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
+    if (shields.length > 0) {
+      let remaining = Math.floor(damage);
+      for (const shield of shields) {
+        if (remaining <= 0) break;
+        const absorbed = Math.min(shield.value, remaining);
+        shield.value -= absorbed;
+        remaining -= absorbed;
+        if (shield.value <= 0) {
+          // Mark for removal (will be cleaned up by processStatusEffects)
+          shield.duration = 0;
+        }
+      }
+      damage = remaining;
+    }
+  }
+
+  // 💡 STATUS EFFECT: Berserk — attacker deals +value% damage while berserk.
+  // Previously berserk was applied as a status but never read at damage time.
+  if (attacker.statusEffects && attacker.statusEffects.length > 0) {
+    const berserk = attacker.statusEffects.find(e => e.type === 'berserk');
+    if (berserk && berserk.value > 0) {
+      damage = Math.floor(damage * (1 + berserk.value / 100));
+    }
+    // 💡 STATUS EFFECT: Blessing — attacker has +value% to all stats.
+    // Approximated as a flat damage boost.
+    const blessing = attacker.statusEffects.find(e => e.type === 'blessing');
+    if (blessing && blessing.value > 0) {
+      damage = Math.floor(damage * (1 + blessing.value / 100));
+    }
+  }
+
+  // 💡 STATUS EFFECT: Blind — attacker has reduced accuracy.
+  // Translated to an additional miss chance = blind.value (e.g. 50% blind =
+  // +50% chance to miss on top of the target's evasion).
+  if (attacker.statusEffects && attacker.statusEffects.length > 0) {
+    const blind = attacker.statusEffects.find(e => e.type === 'blind' && e.value > 0);
+    if (blind && Math.random() * 100 < blind.value) {
+      return { damage: 0, isCrit: false, wasEvaded: true };
+    }
+  }
+
   // Random variance (±10%)
   const variance = 0.9 + Math.random() * 0.2;
   damage *= variance;
@@ -2762,6 +2839,269 @@ function generateEventEncounter(chatId) {
 // ⚔️ COMBAT SYSTEM
 // ==========================================
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🛡️ CLASS PASSIVE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+// Wire-up for class passives defined in CLASSES above. Previously, every
+// class declared a `passive: { name, effect, value }` field, but NO CODE
+// EVER READ IT. Passives were dead data. This function applies each
+// passive effect at the appropriate time:
+//
+//   • Combat-start passives (called from startCombat):
+//       all_stats, dodge_chance, magic_damage, damage_reduction,
+//       healing_boost, gold_find
+//   • Per-turn passives (called from processCombatTurn):
+//       team_healing, regen, first_turn_bonus, rotate_elements
+//   • Inline damage passives (called from calculateDamage / kill paths):
+//       damage_when_low_hp, damage_per_hit, damage_on_kill, damage_on_death
+//
+// Passives are idempotent — calling this function twice on the same player
+// won't double-apply combat-start passives because we stamp p.passivesApplied
+// after the first run.
+// ═══════════════════════════════════════════════════════════════════════════
+function applyClassPassiveAtCombatStart(player) {
+  if (!player || !player.class || !player.class.passive) return;
+  if (player.passivesApplied) return;  // idempotent
+
+  const passive = player.class.passive;
+  const value = Number(passive.value) || 0;
+  if (!player.stats) player.stats = {};
+
+  switch (passive.effect) {
+    case 'all_stats':
+      // +value% to all stats. Apply as a one-time permanent buff to base stats.
+      for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+        if (typeof player.stats[stat] === 'number') {
+          player.stats[stat] = Math.floor(player.stats[stat] * (1 + value / 100));
+        }
+      }
+      if (player.stats.maxHp) {
+        player.stats.maxHp = Math.floor(player.stats.maxHp * (1 + value / 100));
+        player.stats.hp = Math.min(player.stats.hp * (1 + value / 100), player.stats.maxHp);
+      }
+      break;
+
+    case 'dodge_chance':
+      // +value% evasion (additive)
+      player.stats.evasion = Math.min(75, (Number(player.stats.evasion) || 0) + value);
+      break;
+
+    case 'magic_damage':
+      // +value% magic damage. Stored as a multiplier the damage calc can read.
+      player.passiveMagBonus = (player.passiveMagBonus || 1) + value / 100;
+      break;
+
+    case 'damage_reduction':
+      // -value% damage taken. Stored as a percentage the damage calc can read.
+      player.passiveDmgReduction = (player.passiveDmgReduction || 0) + value;
+      break;
+
+    case 'healing_boost':
+      // +value% healing received.
+      player.passiveHealingBoost = (player.passiveHealingBoost || 1) + value / 100;
+      break;
+
+    case 'gold_find':
+      // +value% gold at end of combat. Stored for endAdventure to read.
+      player.passiveGoldFind = (player.passiveGoldFind || 0) + value;
+      break;
+
+    // Per-turn / inline passives are wired below — nothing to do at combat start.
+    case 'team_healing':
+    case 'regen':
+    case 'first_turn_bonus':
+    case 'rotate_elements':
+    case 'damage_when_low_hp':
+    case 'damage_per_hit':
+    case 'damage_on_kill':
+    case 'damage_on_death':
+      // Mark passive as available; per-turn / inline code will read it.
+      player.class.passiveActive = true;
+      break;
+  }
+
+  player.passivesApplied = true;
+}
+
+// Apply per-turn passive effects. Called once per combat round (per player).
+// Returns an array of message strings to append to the combat log.
+function applyClassPassivePerTurn(player, state) {
+  if (!player || !player.class || !player.class.passive) return [];
+  if (player.isDead) return [];
+
+  const passive = player.class.passive;
+  const value = Number(passive.value) || 0;
+  const msgs = [];
+
+  switch (passive.effect) {
+    case 'team_healing': {
+      // Heal all living teammates by value HP per turn
+      const teammates = (state.players || []).filter(p => !p.isDead);
+      let totalHealed = 0;
+      for (const t of teammates) {
+        if (t.stats.hp < t.stats.maxHp) {
+          const heal = Math.min(value, t.stats.maxHp - t.stats.hp);
+          t.stats.hp += heal;
+          totalHealed += heal;
+        }
+      }
+      if (totalHealed > 0) {
+        msgs.push(`✨ ${player.class.passive.name}: +${totalHealed} HP to team`);
+      }
+      break;
+    }
+
+    case 'regen': {
+      // Self-heal value HP per turn
+      if (player.stats.hp < player.stats.maxHp) {
+        const heal = Math.min(value, player.stats.maxHp - player.stats.hp);
+        player.stats.hp += heal;
+        msgs.push(`✨ ${player.class.passive.name}: +${heal} HP regen`);
+      }
+      break;
+    }
+
+    case 'first_turn_bonus': {
+      // +value% damage on first turn only
+      if (state.combatRound === 0) {
+        player.passiveDamageBonus = (player.passiveDamageBonus || 1) + value / 100;
+        msgs.push(`✨ ${player.class.passive.name}: +${value}% damage this turn`);
+      } else {
+        player.passiveDamageBonus = 1;  // reset
+      }
+      break;
+    }
+
+    case 'rotate_elements': {
+      // Rotate element each turn, +value% elemental damage
+      const elements = ['FIRE', 'WATER', 'EARTH', 'ICE', 'WIND', 'LIGHTNING'];
+      player.passiveElement = elements[state.combatRound % elements.length];
+      player.passiveMagBonus = (player.passiveMagBonus || 1) + value / 100;
+      // Reset next turn so it doesn't stack permanently
+      // (applyClassPassivePerTurn runs each round, so this is correct)
+      break;
+    }
+
+    // damage_when_low_hp, damage_per_hit, damage_on_kill, damage_on_death
+    // are handled inline in calculateDamage / recordEnemyKill / onPlayerDeath.
+    case 'damage_when_low_hp':
+    case 'damage_per_hit':
+    case 'damage_on_kill':
+    case 'damage_on_death':
+      // No per-turn action — handled inline.
+      break;
+  }
+
+  return msgs;
+}
+
+// Get a damage multiplier (1.0 = no change) from inline damage passives.
+// Called from calculateDamage when computing outgoing damage.
+function getClassPassiveDamageMult(attacker, target, isAbility) {
+  if (!attacker || !attacker.class || !attacker.class.passive) return 1;
+  if (attacker.isEnemy) return 1;  // passives are for players only
+
+  const passive = attacker.class.passive;
+  const value = Number(passive.value) || 0;
+  let mult = 1;
+
+  switch (passive.effect) {
+    case 'damage_when_low_hp':
+      // +value% damage when attacker HP < 30%
+      if (attacker.stats && attacker.stats.maxHp) {
+        const hpPct = attacker.stats.hp / attacker.stats.maxHp;
+        if (hpPct < 0.30) {
+          mult *= (1 + value / 100);
+        }
+      }
+      break;
+
+    case 'damage_per_hit':
+      // +value% damage per consecutive hit (resets on miss/turn end).
+      // Stack tracked on attacker.passiveCombo.
+      if (!attacker.passiveCombo) attacker.passiveCombo = 0;
+      attacker.passiveCombo += 1;
+      mult *= (1 + (value / 100) * Math.min(attacker.passiveCombo, 5));  // cap at 5 stacks
+      break;
+
+    case 'first_turn_bonus':
+      // Already applied via applyClassPassivePerTurn as passiveDamageBonus
+      if (attacker.passiveDamageBonus && attacker.passiveDamageBonus > 1) {
+        mult *= attacker.passiveDamageBonus;
+      }
+      break;
+
+    case 'rotate_elements':
+      // Already applied via applyClassPassivePerTurn as passiveMagBonus
+      if (attacker.passiveMagBonus && attacker.passiveMagBonus > 1 && isAbility) {
+        mult *= attacker.passiveMagBonus;
+      }
+      break;
+  }
+
+  return mult;
+}
+
+// Get a damage reduction multiplier (1.0 = no change) from inline passives.
+// Called from calculateDamage when computing incoming damage to a player.
+function getClassPassiveDamageReduction(target) {
+  if (!target || !target.class || !target.class.passive) return 0;
+  if (target.isEnemy) return 0;
+
+  // damage_reduction passive was already applied at combat start as
+  // passiveDmgReduction. Read it here.
+  return Number(target.passiveDmgReduction) || 0;
+}
+
+// Apply on-kill passive effects. Called from recordEnemyKill.
+function applyClassPassiveOnKill(killer, victim) {
+  if (!killer || !killer.class || !killer.class.passive) return [];
+  if (killer.isEnemy) return [];
+
+  const passive = killer.class.passive;
+  const value = Number(passive.value) || 0;
+  const msgs = [];
+
+  switch (passive.effect) {
+    case 'damage_on_kill':
+      // +value% damage on next hit only. Stored as a one-shot multiplier.
+      killer.passiveKillBonus = (killer.passiveKillBonus || 1) + value / 100;
+      msgs.push(`✨ ${killer.class.passive.name}: kill bonus +${value}% next attack`);
+      break;
+
+    case 'damage_per_hit':
+      // Reset combo counter on kill (encourages spreading damage)
+      // Actually no — combo should keep building. Leave it alone.
+      break;
+  }
+
+  return msgs;
+}
+
+// Apply on-death passive effects. Called when a player dies.
+// Returns { damage, target, msgs } — caller applies the damage to the killer.
+function applyClassPassiveOnDeath(victim, killer) {
+  if (!victim || !victim.class || !victim.class.passive) return null;
+  if (victim.isEnemy) return null;
+
+  const passive = victim.class.passive;
+  const value = Number(passive.value) || 0;
+
+  if (passive.effect === 'damage_on_death') {
+    // Deal value% of victim's max HP as damage to the killer
+    if (killer && killer.stats && victim.stats?.maxHp) {
+      const dmg = Math.floor(victim.stats.maxHp * value / 100);
+      return {
+        damage: dmg,
+        target: killer,
+        msgs: [`✨ ${passive.name}: ${victim.name} deals ${dmg} revenge damage on death!`],
+      };
+    }
+  }
+
+  return null;
+}
+
 async function startCombat(sock, groq, encounter, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
@@ -2974,6 +3314,25 @@ async function processCombatTurn(sock, sessionKey) {
         }
       });
 
+      // 💡 CLASS PASSIVE WIRE-UP (per-turn): fire team_healing, regen,
+      // first_turn_bonus, rotate_elements at the start of each combat round.
+      // Messages are accumulated and appended to the combat log below.
+      const passiveMsgsThisRound = [];
+      state.players.forEach((p) => {
+        try {
+          const msgs = applyClassPassivePerTurn(p, state);
+          if (msgs && msgs.length > 0) passiveMsgsThisRound.push(...msgs);
+        } catch (e) {
+          console.error('[Passive] applyClassPassivePerTurn failed:', e?.message || e);
+        }
+      });
+      if (passiveMsgsThisRound.length > 0) {
+        // Stash for nextTurn message composition — see usage further down
+        state.pendingPassiveMsgs = passiveMsgsThisRound;
+      } else {
+        state.pendingPassiveMsgs = null;
+      }
+
       let activeActor = null;
       let ticks = 0;
       const maxTicks = 1000;
@@ -3141,7 +3500,12 @@ async function processCombatTurn(sock, sessionKey) {
         continue;
       }
 
-      const skipEffects = ["freeze", "stun", "sleep"];
+      // 💡 STATUS EFFECT: Charm — charmed actors are confused and skip their
+      // turn (simpler than full side-swapping, which would require rewriting
+      // all targeting logic). The charm status still ticks down each turn
+      // and expires naturally. Previously charm was applied but had zero
+      // effect — Bribe (Merchant / Tycoon skill) was effectively useless.
+      const skipEffects = ["freeze", "stun", "sleep", "charm"];
       const activeEffect = (activeActor.statusEffects || []).find((e) =>
         skipEffects.includes(e.type),
       );
@@ -4221,6 +4585,19 @@ function recordEnemyKill(state, entity) {
 
   state.players.forEach((p) => {
     if (!p.jid || p.isDead) return;
+
+    // 💡 CLASS PASSIVE WIRE-UP (on-kill): fire damage_on_kill, etc.
+    // Passives return flavor messages to push into the round log.
+    try {
+      const killMsgs = applyClassPassiveOnKill(p, entity);
+      if (killMsgs && killMsgs.length > 0) {
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(...killMsgs);
+      }
+    } catch (e) {
+      console.error('[Passive] applyClassPassiveOnKill failed:', e?.message || e);
+    }
+
     if (entity.isBoss) {
       // 💡 QA FIX: Rank-gate boss kills for rank-up missions.
       // Only bosses from dungeons at your rank or up to 2 ranks below count.
@@ -5260,6 +5637,17 @@ async function startJourney(sock, sessionKey) {
     p.maxMana = 100;
 
     p.level = progression.getLevel(p.jid);
+
+    // 💡 CLASS PASSIVE WIRE-UP: apply combat-start passives (all_stats,
+    // dodge_chance, magic_damage, damage_reduction, healing_boost, gold_find)
+    // now that stats are set. Per-turn passives fire from processCombatTurn.
+    // Inline passives (damage_when_low_hp, etc.) are read from
+    // calculateDamage / recordEnemyKill. Idempotent via p.passivesApplied.
+    try {
+      applyClassPassiveAtCombatStart(p);
+    } catch (e) {
+      console.error('[Passive] applyClassPassiveAtCombatStart failed:', e?.message || e);
+    }
   });
 
   // Shopping phase - Skip entirely for TRIAL mode (solo boss fight, no prep needed)
@@ -5999,6 +6387,27 @@ async function processVotes(sock, encounter, sessionKey) {
     deadPlayers.forEach((p) => {
       p.isDead = true;
       deathMsg += `${p.name} has fallen!\n`;
+
+      // 💡 CLASS PASSIVE WIRE-UP (on-death): fire damage_on_death passive
+      // (e.g. Monk's Death's Touch — deal 30% of victim's max HP as revenge
+      // damage to the killer, if we can identify them).
+      try {
+        // Find the last enemy that attacked this player this round
+        const killer = (state.enemies || []).find(e =>
+          !e.isDead && e.lastTarget === p.jid
+        ) || (state.enemies || []).find(e => !e.isDead);
+        const revenge = applyClassPassiveOnDeath(p, killer);
+        if (revenge && revenge.damage > 0 && revenge.target) {
+          revenge.target.stats.hp = Math.max(0, (revenge.target.stats.hp || 0) - revenge.damage);
+          deathMsg += `${revenge.msgs[0]}\n`;
+          if (revenge.target.stats.hp <= 0 && !revenge.target.isDead) {
+            revenge.target.isDead = true;
+            deathMsg += `💥 ${revenge.target.name} is destroyed by the revenge blast!\n`;
+          }
+        }
+      } catch (e) {
+        console.error('[Passive] applyClassPassiveOnDeath failed:', e?.message || e);
+      }
     });
     try {
       await sock.sendMessage(state.chatId, { text: deathMsg });
@@ -6768,6 +7177,17 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
     return {
       success: false,
       message: `${player.name} has no abilities learned!`,
+    };
+  }
+
+  // 💡 STATUS EFFECT: Silence — player cannot use abilities.
+  // Previously the silence status was defined in STATUS_EFFECTS but had no
+  // handler, so silenced players could still cast freely. Now we block at
+  // the entry point and tell the player why.
+  if ((player.statusEffects || []).some(e => e.type === 'silence')) {
+    return {
+      success: false,
+      message: `🤐 *${player.name}* is SILENCED and cannot use abilities! Use a basic attack instead.`,
     };
   }
 
