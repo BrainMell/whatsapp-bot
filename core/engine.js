@@ -906,6 +906,8 @@ async function startBot(configInstance) {
     if (!global.sharedGroupSettings) global.sharedGroupSettings = new Map();
     const groupSettings = global.sharedGroupSettings;
     const enabledChats = new Set();
+    const returnByDeathCounters = new Map();
+    const returnByDeathCooldowns = new Map();
     const supportUsage = new Map();
     const userWarnings = new Map();
     const groupMessageHistory = new Map();
@@ -19705,6 +19707,51 @@ _(Or reply to their message)_
                   const isBotEnabled = isDM || enabledChats.has(chatId);
 
                   if (!isBotEnabled || !hasTrigger) return;
+
+                  // --- Return by Death Logic for Subaru ---
+                  if (botConfig.getBotName().toLowerCase() === "subaru") {
+                    const rbdKeywords = ["return by death", "return to death", "death ability", "rewind time"];
+                    const isRbdTrigger = rbdKeywords.some(kw => lowerTxt.includes(kw));
+
+                    if (isRbdTrigger) {
+                      const count = (returnByDeathCounters.get(chatId) || 0) + 1;
+                      returnByDeathCounters.set(chatId, count);
+
+                      if (count >= 6) {
+                        const videoPath = require("path").join(__dirname, '..', 'instances', 'Subaru', 'assets', 'subaru_rbd.mp4');
+                        if (require("fs").existsSync(videoPath)) {
+                          await sock.sendMessage(chatId, { video: require("fs").readFileSync(videoPath), gifPlayback: true });
+                        }
+                        
+                        let panicMsg = "WHY?! Why do you keep asking me about that?! I can't... I can't talk about it! *clutches chest and falls to knees*";
+                        try {
+                           const panicPrompt = "System Override: User just pushed Subaru on his 'Return by Death' ability for the 6th time. Generate a completely unique, new, terrifying response where Subaru has a massive, hyperventilating panic attack breaking down over his repeated deaths, the shadow hands, and his inability to speak about it. Make it intense, desperate, and strictly in character as Subaru Natsuki. No pre-made messages. Keep it under 3 sentences.";
+                           const generatedPanic = await askAI(senderJid, panicPrompt, null, chatId, "System");
+                           if (generatedPanic && generatedPanic.trim().length > 0) {
+                               panicMsg = generatedPanic;
+                           }
+                        } catch (e) {
+                           console.error("Failed to generate panic msg", e);
+                        }
+                        await reply(BOT_MARKER + panicMsg);
+                        await reply(BOT_MARKER + "_Subaru has completely broken down. He won't be responding for a couple of minutes._");
+                        
+                        enabledChats.delete(chatId);
+                        if (typeof saveEnabledChats === 'function') saveEnabledChats();
+                        
+                        const COOLDOWN_MS = 2 * 60 * 1000;
+                        setTimeout(() => {
+                          enabledChats.add(chatId);
+                          if (typeof saveEnabledChats === 'function') saveEnabledChats();
+                          returnByDeathCounters.set(chatId, 0);
+                          sock.sendMessage(chatId, { text: BOT_MARKER + "🤖 *Subaru has caught his breath and the bot is now re-enabled.*" }).catch(() => {});
+                        }, COOLDOWN_MS);
+                        
+                        return; // Stop processing further
+                      }
+                    }
+                  }
+                  // -----------------------------------------
 
                   // Conversational nickname placeholder acquisition for unregistered users
                   if (!economy.isRegistered(senderJid)) {
