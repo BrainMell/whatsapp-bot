@@ -3676,6 +3676,17 @@ async function performAction(sock, player, action, sessionKey) {
 
   const chatId = state.chatId;
 
+  // 💡 POLISH 2026-07-17: wrap the ENTIRE performAction body in try/finally
+  // so that state.pendingActions[player.jid] is ALWAYS cleared, even if
+  // something throws mid-action. Previously, if calculateDamage or any
+  // downstream call threw, pendingActions stayed set — and the player got
+  // stuck with "❌ Action already chosen!" on every subsequent command,
+  // unable to act for the rest of combat. This was the root cause of the
+  // "only defensive skills work" complaint (defend happens to not call
+  // calculateDamage, so it never hit the throw path).
+  try {
+    // === ORIGINAL BODY BELOW ===
+
   // Clear the turn timer
   if (state.timers.combat) {
     clearTimeout(state.timers.combat);
@@ -4187,6 +4198,23 @@ async function performAction(sock, player, action, sessionKey) {
     const resolve = state.resolveTurn;
     state.resolveTurn = null;
     resolve();
+  }
+  } catch (err) {
+    // 💡 POLISH 2026-07-17: catch any error that escaped the inner try blocks.
+    // Log it so we can diagnose, but don't let it leave the player stuck.
+    console.error('[Combat] performAction threw — cleaning up state:', err?.message || err, err?.stack || '');
+    try {
+      await sock.sendMessage(state.chatId, { text: '⚠️ Action failed (error: ' + (err?.message || 'unknown') + '). Your turn has been reset — try again.' }).catch(() => {});
+    } catch (e) {}
+  } finally {
+    // 💡 GUARANTEE: always clear pendingActions, even if we threw somewhere.
+    // This is the fix for the "Action already chosen!" soft-lock bug.
+    // (Note: do NOT clear combatProcessing here — that's managed by
+    // processCombatTurn's own finally block. Prematurely clearing it could
+    // cause overlapping turn processing.)
+    if (state && player) {
+      try { delete state.pendingActions[player.jid]; } catch (e) {}
+    }
   }
 }
 async function performEnemyAction(sock, enemy, sessionKey) {

@@ -1,10 +1,11 @@
-// Grant 45 stat points to Mahxee specifically
+// Grant 45 stat points to Mahxee specifically (nickname = "The Alchemist")
 // Usage: MONGO_URI=... node scripts/grant_mahxee_45_points.js [--live]
 const mongoose = require('mongoose');
 
 const MONGO_URI = process.env.MONGO_URI;
 const LIVE = process.argv.includes('--live');
-const TARGET_NICKNAME = 'Mahxee';
+// Mahxee's in-game nickname is "The Alchemist"
+const TARGET_NICKNAMES = ['The Alchemist', 'the alchemist', 'alchemist', 'Alchemist'];
 const POINTS_TO_GRANT = 45;
 
 if (!MONGO_URI) {
@@ -13,7 +14,7 @@ if (!MONGO_URI) {
 }
 
 console.log(`\n══════════════════════════════════════════════════`);
-console.log(`  GRANT ${POINTS_TO_GRANT} STAT POINTS to "${TARGET_NICKNAME}" — ${LIVE ? '🔴 LIVE' : '🟡 DRY RUN'}`);
+console.log(`  GRANT ${POINTS_TO_GRANT} STAT POINTS to Mahxee (nicknames: ${TARGET_NICKNAMES.join(' / ')}) — ${LIVE ? '🔴 LIVE' : '🟡 DRY RUN'}`);
 console.log(`══════════════════════════════════════════════════\n`);
 
 async function main() {
@@ -21,33 +22,29 @@ async function main() {
   const db = mongoose.connection.db;
   const usersColl = db.collection('users');
 
-  // Search case-insensitively by nickname
+  // Search case-insensitively by nickname (any of the target variants)
+  // Use a combined regex matching any of the target nicknames
+  const escaped = TARGET_NICKNAMES.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const combinedRegex = escaped.join('|');
   const matches = await usersColl.find({
-    nickname: { $regex: `^${TARGET_NICKNAME}$`, $options: 'i' }
+    nickname: { $regex: combinedRegex, $options: 'i' }
   }).toArray();
 
-  console.log(`Found ${matches.length} user(s) matching nickname "${TARGET_NICKNAME}":`);
+  console.log(`Found ${matches.length} user(s) matching nicknames [${TARGET_NICKNAMES.join(', ')}]:`);
   for (const u of matches) {
     const currentPoints = u.progression?.statPoints ?? u.statPoints ?? 0;
     console.log(`  - ${u.userId} | nickname="${u.nickname}" | current statPoints=${currentPoints}`);
   }
 
   if (matches.length === 0) {
-    console.log('\n❌ No user found with that nickname. Searching phone-number variants...');
-    // Try searching by phone-pattern in userId (Mahxee might have a phone-based JID)
-    const phoneMatches = await usersColl.find({
-      userId: { $regex: 'mahxee', $options: 'i' }
-    }).toArray();
-    console.log(`Found ${phoneMatches.length} user(s) matching userId regex "mahxee":`);
-    for (const u of phoneMatches) {
-      console.log(`  - ${u.userId} | nickname="${u.nickname}"`);
-    }
-    if (phoneMatches.length === 0) {
-      console.log('\n❌ Could not find Mahxee. Ask the user for their exact nickname or JID.');
-      await mongoose.disconnect();
-      return;
-    }
-    matches.push(...phoneMatches);
+    console.log('\n❌ No user found with those nicknames. Cannot grant.');
+    await mongoose.disconnect();
+    return;
+  }
+  if (matches.length > 1) {
+    console.log(`\n⚠️ Multiple matches found. Aborting — please confirm exact user.`);
+    await mongoose.disconnect();
+    return;
   }
 
   if (!LIVE) {
