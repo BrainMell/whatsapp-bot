@@ -2142,7 +2142,7 @@ const SKILL_TREES = {
                         targeting: 'SELF',
                         effects: {
                             buff_self: { stat: 'crit', value: [30, 40, 50], duration: 3 },
-                            restore_energy: { value: [20, 30, 40] }
+                            energyRestore: { value: [20, 30, 40] }
                         },
                         description: 'Focus your mind to restore energy and sharpen your critical strikes.',
                         animation: '🧘💭',
@@ -5291,7 +5291,7 @@ const SKILL_TREES = {
                         energyCost: [60, 55, 50],
                         cooldown: 1,
                         targeting: 'AOE',
-                        effects: { debuff: { stat: 'all', value: [15, 20, 25], duration: 3 } },
+                        effects: { debuff_enemies: { stat: 'all', value: [15, 20, 25], duration: 3 } },
                         description: 'Project an aura of decay that weakens all enemies.',
                         animation: '💀🌫️',
                         skillPointCost: [4, 6, 8]
@@ -5307,7 +5307,10 @@ const SKILL_TREES = {
                         damageMultiplier: [4.0, 4.5, 5.0],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { heal: { value: [60, 80, 100], lifestealPercent: 75 } },
+                        effects: {
+                            heal: { value: [60, 80, 100] },
+                            lifestealPercent: { value: 75 }
+                        },
                         description: 'Tether a foe\'s soul to your own, draining 75% of damage dealt as HP.',
                         animation: '💀🔗💚',
                         skillPointCost: [6, 8, 10]

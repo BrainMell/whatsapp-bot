@@ -2245,7 +2245,12 @@ function calculateDamage(
   // defined but only halved DoT damage — direct attacks ignored it
   // completely, making skills like Mana Shield / Golden Barrier / Force
   // Field useless. Now we consume the shield value before HP takes a hit.
-  if (damage > 0) {
+  //
+  // 💡 RUNE: bypassShield (BARRAGE) — skip shield absorption entirely.
+  // Many small hits are specifically strong vs shields because each hit
+  // removes a chunk of shield value. The bypass flag lets BARRAGE ignore
+  // shields altogether, dealing damage directly to HP.
+  if (damage > 0 && !effect?.bypassShield) {
     const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
     if (shields.length > 0) {
       let remaining = Math.floor(damage);
@@ -4429,6 +4434,17 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       if (wasEvaded) {
         resultMsg += `attacks ${target.name} but 💨 MISSES!`;
       } else {
+        // 💡 POLISH 2026-07-17: EVASION BUFF — check target's evasion buff
+        // (set by NINJA.shadow_clone_jutsu, DIVINE_FIST.heavenly_step, etc.).
+        // This is separate from the base evasion stat — it's a temporary
+        // percentage boost that gives a chance to fully evade.
+        const evasionBuff = (target.buffs || []).find(b => b.type === 'evasion' && b.value > 0);
+        if (evasionBuff && Math.random() * 100 < evasionBuff.value) {
+          resultMsg += `attacks ${target.name} but 💨 EVADES (buff)!`;
+          // Buff still ticks down via processStatusEffects — no manual decrement
+          return;  // skip damage application
+        }
+
         target.stats.hp -= damage;
         target.currentHP = Math.max(0, target.stats.hp);
 
@@ -4437,6 +4453,34 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? " (CRIT!)" : ""}`;
         turnInfo.damage = damage;
         turnInfo.target = target;
+
+        // 💡 POLISH 2026-07-17: THORNS BUFF — reflect melee damage back to attacker.
+        // Set by WARLOCK.demon_armor and similar.
+        const thornsBuff = (target.buffs || []).find(b => b.type === 'thorns' && b.value > 0);
+        if (thornsBuff && !enemy.isEnemy === false) {  // enemy attacked player
+          const reflect = Math.floor(damage * thornsBuff.value / 100);
+          if (reflect > 0) {
+            enemy.stats.hp = Math.max(0, (enemy.stats.hp || 0) - reflect);
+            enemy.currentHP = enemy.stats.hp;
+            resultMsg += `\n🌵 THORNS! ${target.name} reflects ${reflect} damage back!`;
+          }
+        }
+
+        // 💡 POLISH 2026-07-17: COUNTERATTACK BUFF — chance to retaliate.
+        // Set by NINJA.shadow_clone_jutsu and SAMURAI.mindful_stance.
+        const counterBuff = (target.buffs || []).find(b => b.type === 'counterattack');
+        if (counterBuff && Math.random() * 100 < (counterBuff.chance || 25)) {
+          const counterDmg = Math.floor((target.stats.atk || 20) * (counterBuff.value || 1.0));
+          enemy.stats.hp = Math.max(0, (enemy.stats.hp || 0) - counterDmg);
+          enemy.currentHP = enemy.stats.hp;
+          resultMsg += `\n⚔️↩️ COUNTER! ${target.name} retaliates for ${counterDmg} damage!`;
+          if (enemy.stats.hp <= 0) {
+            enemy.isDead = true;
+            enemy.justDied = true;
+            resultMsg += `\n💀 ${enemy.name} is slain by the counterattack!`;
+            recordEnemyKill(state, enemy);
+          }
+        }
 
         // 🛡️ Player Equipment Passive Triggers on Hit (Defensive)
         const targetArmor = target.equipment?.armor?.id || target.equipment?.armor;
@@ -7442,10 +7486,20 @@ async function applyAbilityEffect(
       }
 
       const lvl = player.level || 1;
-      const damageTypeStr = effect.damageType === "magic" ? "magic" : "physical";
-      const baseStat = effect.damageType === "magic"
-        ? (player.stats.mag || player.stats.atk || lvl * 10)
-        : (player.stats.atk || lvl * 8);
+      // 💡 POLISH 2026-07-17: normalize damageType to lowercase for comparison.
+      // Skill definitions use 'MAGICAL'/'PHYSICAL'/'TRUE' (uppercase) but the
+      // old check compared to "magic" (lowercase) — meaning ALL magical skills
+      // were silently treated as physical and used ATK instead of MAG. This
+      // was a pre-existing bug that made MAGE / WARLOCK / etc. stats useless.
+      const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+      const damageTypeStr =
+        rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' :
+        rawDmgType === 'TRUE' ? 'true' :
+        'physical';
+      const baseStat =
+        damageTypeStr === 'magic'
+          ? (player.stats.mag || player.stats.atk || lvl * 10)
+          : (player.stats.atk || lvl * 8);
       let mult = Number(effect.multiplier) || 1.0;
       if (!player.isEnemy && player.equipment?.main_hand) {
           try {
@@ -7631,8 +7685,13 @@ async function applyAbilityEffect(
       }
 
       // Bug 2 fix (AOE block): route through calculateDamage() for DEF mitigation.
-      const aoeDmgTypeStr = effect.damageType === "magic" ? "magic" : "physical";
-      const aoeBaseStat = effect.damageType === "magic" ? player.stats.mag : player.stats.atk;
+      // 💡 POLISH 2026-07-17: same normalization as single-target path above.
+      const aoeRawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+      const aoeDmgTypeStr =
+        aoeRawDmgType === 'MAGICAL' || aoeRawDmgType === 'MAGIC' ? 'magic' :
+        aoeRawDmgType === 'TRUE' ? 'true' :
+        'physical';
+      const aoeBaseStat = aoeDmgTypeStr === 'magic' ? (player.stats.mag || player.stats.atk) : player.stats.atk;
       let aoeMult = effect.multiplier || 1.0;
       if (!player.isEnemy && player.equipment?.main_hand) {
           try {
@@ -7900,6 +7959,129 @@ async function applyAbilityEffect(
           applyDebuff(target, 'mag', effData.value, effData.duration || 2);
         }
         msg += `📉 Targets lose -${effData.value}% MAG for ${effData.duration || 2} turns!\n`;
+      }
+      // 💡 POLISH 2026-07-17: handlers for effect fields used by Phase 2
+      // new skills that were previously missing.
+
+      // CLEANSE — remove all negative status effects from target(s).
+      // Used by CLERIC.cleanse and DIVINE_FIST.heavenly_step.
+      else if (effId === "cleanse") {
+        const targets = getTargets(player, effect, targetIndex, chatId);
+        // For self-targeting skills, target the caster
+        const cleanseTargets = (effect.targeting || '').toUpperCase() === 'SELF'
+          ? [player]
+          : targets.length > 0 ? targets : [player];
+        const negativeEffects = ['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep',
+                                  'root', 'slow', 'curse', 'weak', 'vulnerability',
+                                  'blind', 'silence', 'shock', 'charm', 'fear'];
+        let totalCleansed = 0;
+        for (const t of cleanseTargets) {
+          if (!t.statusEffects) continue;
+          const before = t.statusEffects.length;
+          t.statusEffects = t.statusEffects.filter(e => !negativeEffects.includes(e.type));
+          totalCleansed += before - t.statusEffects.length;
+        }
+        msg += `💧 Purified ${totalCleansed} negative effect${totalCleansed !== 1 ? 's' : ''}!\n`;
+      }
+
+      // SELF_DAMAGE — caster takes a percentage of their max HP as recoil.
+      // Used by DIVINE_FIST.eight_gates (10-15% maxHp per turn while active).
+      else if (effId === "selfDamage") {
+        const recoilPct = Number(effData.value) || 10;
+        const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+        const recoil = Math.floor(maxHpVal * recoilPct / 100);
+        player.stats.hp = Math.max(1, (player.stats.hp || 0) - recoil);
+        player.currentHP = player.stats.hp;
+        msg += `💢 ${player.name} takes ${recoil} recoil damage from their technique!\n`;
+      }
+
+      // LIFESTEAL_PERCENT (as skill effect) — heal caster for X% of damage
+      // dealt this cast. Different from the rune lifestealPercent (which is
+      // a top-level effect field); this is a skill-declared effect that
+      // reads value from effects.lifestealPercent.value.
+      // Used by DEATH_LORD.soul_tether.
+      else if (effId === "lifestealPercent") {
+        const lsPct = Number(effData.value) || 0;
+        if (lsPct > 0 && totalDamage > 0) {
+          const healAmount = Math.floor(totalDamage * lsPct / 100);
+          if (healAmount > 0) {
+            const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+            player.stats.hp = Math.min(maxHpVal, (player.stats.hp || 0) + healAmount);
+            player.currentHP = player.stats.hp;
+            totalHealing += healAmount;
+            msg += `🩸💚 ${player.name} drains ${healAmount} HP!\n`;
+          }
+        }
+      }
+
+      // COUNTERATTACK — set a flag on the player that the damage-taken code
+      // reads. When struck, the player has a chance to retaliate.
+      // Used by NINJA.shadow_clone_jutsu and SAMURAI.mindful_stance.
+      else if (effId === "counterattack") {
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'counterattack',
+          chance: effData.chance || 25,
+          value: effData.value || 1.0,
+          duration: effData.duration || 3,
+          icon: '⚔️↩️',
+        });
+        msg += `⚔️ ${player.name} readies a counterattack!\n`;
+      }
+
+      // THORNS — set a flag on the player that reflects melee damage.
+      // Used by WARLOCK.demon_armor.
+      else if (effId === "thorns") {
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'thorns',
+          value: effData.value || 20,
+          duration: effData.duration || 3,
+          icon: '🌵',
+        });
+        msg += `🌵 ${player.name}'s armor sprouts damaging thorns!\n`;
+      }
+
+      // IGNORE_DEFENSE (as skill effect) — set flag on effect that
+      // calculateDamage reads to bypass target DEF.
+      // Used by SAMURAI.frontal_cut.
+      else if (effId === "ignoreDefense") {
+        effect.ignoreDefense = (effect.ignoreDefense || 0) + (effData.value || 30);
+        // No msg here — the damage calc will reflect it
+      }
+
+      // EVASION (as skill effect) — boost evasion stat temporarily.
+      // Used by NINJA.shadow_clone_jutsu, DIVINE_FIST.heavenly_step,
+      // KAGE.phantom_step (existing), and others.
+      else if (effId === "evasion") {
+        const boostValue = Number(effData.value) || 20;
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'evasion',
+          value: boostValue,
+          duration: effData.duration || 2,
+          icon: '💨',
+        });
+        msg += `💨 ${player.name} becomes harder to hit (+${boostValue}% evasion)!\n`;
+      }
+
+      // SUMMON — placeholder. Full summoning system is complex (would need
+      // to spawn allied combatants, manage their turns, etc.). For now,
+      // give the player a temporary damage-mitigation buff that represents
+      // the summoned allies drawing aggro. Marked as TODO for full impl.
+      // Used by DEATH_LORD.raise_dead.
+      else if (effId === "summon") {
+        const atkPct = Number(effData.atkPercent) || 30;
+        const count = Number(effData.count) || 1;
+        if (count > 0) {
+          // Approximate the summon's contribution as a one-time bonus damage
+          // proc equal to count × atkPct% of player's ATK.
+          const summonDmg = Math.floor((player.stats.atk || 50) * atkPct / 100) * count;
+          msg += `💀 ${player.name} raises ${count} skeleton all${count > 1 ? 'ies' : 'y'} dealing ${summonDmg} bonus damage!\n`;
+          // Add to total damage dealt this cast — will be applied via existing
+          // damage-dealt processing below
+          totalDamage += summonDmg;
+        }
       }
     }
     if (!player.isEnemy) {
