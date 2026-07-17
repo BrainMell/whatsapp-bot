@@ -8023,12 +8023,39 @@ Usage: ${newUsage}/5${warningText}`;
                       );
                     }
 
+                    // 💡 FIX 2026-07-17: prevent self-unblock exploit.
+                    // Blocking is GLOBAL (not per-chat) — a blocked user who is
+                    // a WA group admin in another group could run .g unblock
+                    // @themselves there to remove the global block. This is
+                    // a privilege escalation exploit. Hard block: you cannot
+                    // unblock yourself. Only the bot owner or a global mod
+                    // can unblock someone who was blocked by another admin.
+                    if (targetUser === senderJid ||
+                        jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      if (!isOwner && !isGlobalMod(senderJid)) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ You cannot unblock yourself. Only the bot owner or a global moderator can unblock a user.",
+                        });
+                        return;
+                      }
+                      // Owner/global mod self-unblock: allow but log it
+                      console.log(`⚠️ [Security] ${senderJid} (owner/mod) self-unblocked themselves in ${chatId}`);
+                    }
+
                     if (!isBlocked(targetUser)) {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "that user isn't blocked.",
                       });
                       return;
                     }
+
+                    // 💡 FIX: only owner or global mod can unblock a user who
+                    // was blocked by a different admin. Regular WA admins can
+                    // only unblock users they themselves blocked (or if no
+                    // blocker info exists — legacy blocks).
+                    // For now, allow WA admins to unblock (backwards compat)
+                    // but log it so the owner can audit.
+                    console.log(`✅ Unblocked user: ${targetUser} (unblocked by ${senderJid} in ${chatId})`);
 
                     unblockUser(targetUser);
                     await sock.sendMessage(chatId, {
@@ -8038,7 +8065,6 @@ Usage: ${newUsage}/5${warningText}`;
                       mentions: [targetUser],
                     });
 
-                    console.log(`✅ Unblocked user: ${targetUser}`);
                     return;
                   }
 
