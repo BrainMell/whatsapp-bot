@@ -19513,6 +19513,7 @@ _(Or reply to their message)_
                       "t2coll",
                       "swap",
                       "buycard",
+                      "esummon",
                       "sc",
                       "lock",
                       "merge",

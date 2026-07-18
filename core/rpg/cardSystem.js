@@ -32,17 +32,17 @@ const P          = () => botConfig.getPrefix().toLowerCase();
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CARDS_DB_PATH = path.join(__dirname, '..', 'data', 'cards_data.json');
-const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1 };
-const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999 };
+const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1, 'E': 1000 };
+const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999, 'E': 500 };
 
 const TIER_STARS = {
   '1': '✦', '2': '✦✦', '3': '✦✦✦',
-  '4': '✦✦✦✦', '5': '✦✦✦✦✦', '6': '❖❖❖❖❖❖', 'S': '👑'
+  '4': '✦✦✦✦', '5': '✦✦✦✦✦', '6': '❖❖❖❖❖❖', 'S': '👑', 'E': '🎁'
 };
 
 const TIER_LABEL = {
   '1': 'TIER  I',  '2': 'TIER  II',  '3': 'TIER  III',
-  '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S'
+  '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S', 'E': 'EVENT'
 };
 
 const SPAWN_WEIGHTS = [
@@ -262,7 +262,12 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   let stat = null;
 
   if (forceCardId) {
-    card = CARD_INDEX()[forceCardId] || ALL_CARDS().find(c => c.cardName.toLowerCase() === forceCardId.toLowerCase());
+    card = CARD_INDEX()[forceCardId];
+    if (!card) {
+      const q = forceCardId.toLowerCase();
+      card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && (!forceTier || String(c.tier) === String(forceTier)));
+      if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && (!forceTier || String(c.tier) === String(forceTier)));
+    }
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
   } else {
@@ -917,8 +922,14 @@ async function cmdFc(senderJid, reply, args = []) {
 
 async function cmdInfo(reply, chatId, args = []) {
   const p = P();
-  const query = args.join(' ').toLowerCase().trim();
-  if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id>`, `${p} info goku`);
+  let query = args.join(' ').toLowerCase().trim();
+  let animeFilter = null;
+  if (query.includes('|')) {
+    const parts = query.split('|');
+    query = parts[0].trim();
+    animeFilter = parts[1].trim();
+  }
+  if (!query) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
 
   // Exact ID check first
   const exact = CARD_INDEX()[query];
@@ -938,9 +949,12 @@ async function cmdInfo(reply, chatId, args = []) {
   }
 
   // Partial name search
-  const matches = ALL_CARDS().filter(c => c.cardName.toLowerCase().includes(query));
+  const matches = ALL_CARDS().filter(c => 
+    c.cardName.toLowerCase().includes(query) && 
+    (!animeFilter || c.animeName.toLowerCase().includes(animeFilter))
+  );
   
-  if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*`);
+  if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*${animeFilter ? ` in anime *"${animeFilter}"*` : ''}`);
   
   if (matches.length === 1) {
     const card = matches[0];
@@ -1030,6 +1044,37 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
 
   const card = CARD_INDEX()[uc.cardId];
   return reply(`✅ *${card.cardName}* moved to custom deck *"${targetDeck.name}"* (Slot #${uc.customDeckSlot}).`);
+}
+
+async function cmdESummon(senderJid, reply) {
+  const eventDeck = await CardDeck.findOne({ name: { $regex: /^(event shop|event deck)$/i } });
+  if (!eventDeck) return reply('❌ The event shop is currently closed.');
+  if (eventDeck.cards.length === 0) return reply('❌ The event shop is currently empty! All cards have been claimed.');
+
+  const randomIndex = Math.floor(Math.random() * eventDeck.cards.length);
+  const cardIdToPull = eventDeck.cards[randomIndex];
+
+  const uc = await UserCard.findById(cardIdToPull);
+  if (!uc) {
+     eventDeck.cards.splice(randomIndex, 1);
+     await eventDeck.save();
+     return reply('❌ Error fetching card. Please try again.');
+  }
+
+  uc.userId = senderJid;
+  uc.inCustomDeck = false;
+  uc.customDeckName = null;
+  uc.customDeckSlot = null;
+  await uc.save();
+
+  eventDeck.cards.splice(randomIndex, 1);
+  await eventDeck.save();
+
+  const card = CARD_INDEX()[uc.cardId];
+  const stat = await CardStat.findOne({ cardId: uc.cardId });
+  const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[String(card.tier)] || 200);
+
+  return reply(`🎉 *EVENT SUMMON!* 🎉\n\nYou pulled *${card.cardName}* — _${card.animeName}_\n📋 Copy *#${uc.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
 }
 
 async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
@@ -1866,6 +1911,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdEShop(senderJid, reply, chatId, args, isCardMod);
       return true;
 
+    case 'esummon':
+      await cmdESummon(senderJid, reply);
+      return true;
+
     case 'info':
       await cmdInfo(reply, chatId, args);
       return true;
@@ -1983,9 +2032,16 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'spawn':
       if (!isCardMod) return reply('❌ No permission.'), true;
       let spawnQuery = args.join(' ').trim();
-      if (spawnQuery.startsWith('|')) spawnQuery = spawnQuery.slice(1).trim();
-      if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id>`, `${p} spawn Goku`), true;
-      await doSpawn(spawnQuery, null, true, chatId);
+      let forceTier = null;
+      if (spawnQuery.includes('|')) {
+        const parts = spawnQuery.split('|');
+        spawnQuery = parts[0].trim();
+        forceTier = parts[1].trim();
+      }
+      if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id> | <tier>`, `${p} spawn Roy mustang | 5`), true;
+      
+      const spawnRes = await doSpawn(spawnQuery, forceTier, true, chatId);
+      if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
   }
 

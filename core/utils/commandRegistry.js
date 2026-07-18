@@ -225,6 +225,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'swap card', desc: 'Rearrange cards in your main deck.', usage: 'swap card <a> and <b>' },
     { cmd: 'buycard', desc: 'Browse the card market or buy a listing.', usage: 'buycard [n]' },
     { cmd: 'eshop', desc: 'Browse and buy custom card decks.', usage: 'eshop [buy/sell/list]' },
+    { cmd: 'esummon', desc: 'Pull a random card from the event deck.', usage: 'esummon' },
     { cmd: 'sc', desc: 'List a card from your deck for sale.', usage: 'sc <slot> <price>' },
     { cmd: 'auction', desc: 'Start a bidding war for a card in your deck.', usage: 'auction <slot> <min> <hrs>' },
     { cmd: 'bid', desc: 'Place a bid on an active card auction.', usage: 'bid <amount>' },
