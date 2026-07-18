@@ -402,23 +402,46 @@ function getSkillSlotCount(skill) {
 }
 
 // ─── GENERATE RUNE ID ─────────────────────────────────────────────────────
-// 💡 FIX: Short sequential IDs instead of long timestamps+random strings.
-// Old format: "rune_1700000000_abc12345" (28 chars)
-// New format: "R-001" through "R-999999" (3-8 chars)
-// Uses a counter from MongoDB to ensure uniqueness.
+// 💡 FIX: Short sequential IDs (R-0001 through R-999999).
+// 💡 CRITICAL FIX 2026-07-18: was initializing _runeCounter from
+// Rune.countDocuments(), which DECREASES when runes are deleted (fusion,
+// sell, destroy). After a restart, the counter would be lower than the
+// max existing R-XXXX ID, causing E11000 duplicate key errors.
+// Now finds the MAX numeric suffix from existing R-format runes and
+// starts from there + 1. Falls back to countDocuments only if no
+// R-format runes exist.
 let _runeCounter = null;
 async function generateRuneId() {
   if (_runeCounter === null) {
-    // Initialize counter from existing runes
     try {
-      const count = await Rune.countDocuments();
-      _runeCounter = count;
+      // Find the highest R-XXXX ID in the database
+      const allRunes = await Rune.find({}, { runeId: 1 }).lean();
+      let maxNum = 0;
+      for (const r of allRunes) {
+        const match = r.runeId && r.runeId.match(/^R-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      _runeCounter = maxNum > 0 ? maxNum : allRunes.length;
     } catch (e) {
       _runeCounter = 0;
     }
   }
   _runeCounter++;
-  return `R-${String(_runeCounter).padStart(4, '0')}`;
+  // 💡 Collision retry: if this ID already exists (race condition with
+  // another bot instance in the same process), keep incrementing.
+  let attempts = 0;
+  while (attempts < 100) {
+    const candidate = `R-${String(_runeCounter).padStart(4, '0')}`;
+    const exists = await Rune.findOne({ runeId: candidate }).lean();
+    if (!exists) return candidate;
+    _runeCounter++;
+    attempts++;
+  }
+  // Fallback: use timestamp-based ID if we somehow exhausted 100 attempts
+  return `R-${Date.now()}`;
 }
 
 // ─── CREATE A RUNE INSTANCE ───────────────────────────────────────────────
@@ -579,9 +602,23 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
     while (pairsToFuse > 0 && runes.length >= 2) {
       const r1 = runes.shift();
       const r2 = runes.shift();
+      // 💡 CRITICAL FIX: create the new rune FIRST, then delete the old ones.
+      // Was deleting first then creating — if createRune threw (e.g. duplicate
+      // key error), the deleted runes were lost permanently with no rollback.
+      // Now: if createRune fails, the old runes are still in the DB and the
+      // error propagates up to the caller. Nothing is consumed on failure.
+      let fused;
+      try {
+        fused = await createRune(userJid, matchedType, newTier, `fusion_${tier}`);
+      } catch (createErr) {
+        // Creation failed — don't delete the originals. Put them back.
+        runes.unshift(r2);
+        runes.unshift(r1);
+        throw createErr;
+      }
+      // Creation succeeded — now safe to delete the consumed runes.
       await Rune.deleteOne({ _id: r1._id });
       await Rune.deleteOne({ _id: r2._id });
-      const fused = await createRune(userJid, matchedType, newTier, `fusion_${tier}`);
       fusedCount++;
       pairsToFuse--;
       results.push(`${RUNE_TYPES[matchedType].icon} ${RUNE_TYPES[matchedType].name} (${RUNE_TIERS[tier].name}+${RUNE_TIERS[tier].name} → ${RUNE_TIERS[newTier].name})`);
