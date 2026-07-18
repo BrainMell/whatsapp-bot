@@ -20512,13 +20512,28 @@ ${senderName} said y'all should know:
                       return;
                     }
 
-                    // Check if target is the bot
+                    // Check if target is the bot (ANY bot instance, not just this one)
                     const botJid =
                       sock.user.id.split(":")[0] + "@s.whatsapp.net";
                     const botLid = sock.authState.creds?.me?.lid;
-                    if (victim === botJid || victim === botLid) {
+                    // 💡 FIX: also check all known bot instance JIDs. Previously
+                    // only checked THIS bot's JID — players could rob other bot
+                    // instances (Goten, Joker, Subaru) from a different bot's group.
+                    const allBotJids = [
+                      botJid, botLid,
+                      // Known bot phone numbers from BOT_OWNER_PHONES + instance configs
+                      ...Object.values(botInstancesHealth).map(h => h?.jid).filter(Boolean),
+                    ].filter(Boolean);
+                    const isBotTarget = allBotJids.some(jid => {
+                      if (!jid) return false;
+                      const norm = jidNormalizedUser(jid);
+                      const victimNorm = jidNormalizedUser(victim);
+                      return norm === victimNorm ||
+                             jid.split('@')[0] === victim.split('@')[0];
+                    });
+                    if (isBotTarget) {
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `❌ you cant rob the bot`,
+                        text: BOT_MARKER + `❌ You can't rob a bot! Nice try though 😏`,
                       });
                       return;
                     }

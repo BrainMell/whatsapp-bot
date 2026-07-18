@@ -571,21 +571,26 @@ function addItem(userId, itemId, quantity = 1) {
 function removeItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !user.inventory || !user.inventory[itemId]) return false;
-    
+
+    // 💡 FIX: reject negative/zero/NaN quantity — was exploitable to GAIN items
+    // by passing quantity=-N (the < check would pass, then -= would ADD)
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+
     let currentQty = 0;
     if (typeof user.inventory[itemId] === 'number') {
         currentQty = user.inventory[itemId];
     } else {
         currentQty = user.inventory[itemId].quantity || 0;
     }
-    
-    if (currentQty < quantity) return false;
-    
+
+    if (currentQty < qty) return false;
+
     if (typeof user.inventory[itemId] === 'number') {
-        user.inventory[itemId] -= quantity;
+        user.inventory[itemId] -= qty;
         if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
     } else {
-        user.inventory[itemId].quantity -= quantity;
+        user.inventory[itemId].quantity -= qty;
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
@@ -597,6 +602,11 @@ function removeItem(userId, itemId, quantity = 1) {
 function sellItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
+
+    // 💡 FIX: reject negative/zero/NaN quantity — was exploitable to gain items
+    // AND drain money by passing quantity=-N
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return { success: false, msg: '❌ Invalid quantity.' };
     
     if (itemId === 'all') {
         if (!user.inventory || Object.keys(user.inventory).length === 0) return { success: false, msg: "❌ Inventory is empty!" };
@@ -632,7 +642,7 @@ function sellItem(userId, itemId, quantity = 1) {
         currentQty = user.inventory[itemId].quantity || 0;
     }
 
-    if (currentQty < quantity) {
+    if (currentQty < qty) {
         return { success: false, msg: "❌ You don't have enough of that item!" };
     }
 
@@ -642,7 +652,7 @@ function sellItem(userId, itemId, quantity = 1) {
       const guildPerks = require('./guildPerks');
       sellMult = guildPerks.getSellMultiplier(userId);
     } catch (e) {}
-    const value = Math.floor(ITEMS[itemId].value * quantity * sellMult);
+    const value = Math.floor(ITEMS[itemId].value * qty * sellMult);
     user.wallet += value;
     user.stats.totalEarned += value;
     
@@ -659,15 +669,15 @@ function sellItem(userId, itemId, quantity = 1) {
     }
 
     if (typeof user.inventory[itemId] === 'number') {
-        user.inventory[itemId] -= quantity;
+        user.inventory[itemId] -= qty;
         if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
     } else {
-        user.inventory[itemId].quantity -= quantity;
+        user.inventory[itemId].quantity -= qty;
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
     scheduleSave(userId);
-    return { success: true, msg: `💰 Sold ${quantity}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
+    return { success: true, msg: `💰 Sold ${qty}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
 }
 
 // get user's bag

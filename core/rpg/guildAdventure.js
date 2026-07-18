@@ -2180,8 +2180,9 @@ function calculateDamage(
 
   // 💡 STATUS EFFECT MODIFIERS (Attack Power)
   const attackerEffects = attacker.statusEffects || [];
-  if (attackerEffects.some((e) => e.type === "blessing")) damage *= 1.2;
-  if (attackerEffects.some((e) => e.type === "berserk")) damage *= 1.5; // Berserk bonus
+  // 💡 REMOVED hardcoded berserk/blessing multipliers — they were double-applying
+  // with the value-based multipliers at lines ~2275-2288. Berserk was dealing
+  // 2.25x (1.5 × 1.5) instead of 1.5x. Blessing was dealing 1.44x instead of 1.2x.
   if (attackerEffects.some((e) => e.type === "curse" || e.type === "weak"))
     damage *= 0.8;
 
@@ -3444,6 +3445,13 @@ async function processCombatTurn(sock, sessionKey) {
       activeActor.actionGauge = 0;
       state.activeCombatant = activeActor;
       state.turnCount = (state.turnCount || 0) + 1;
+      // 💡 FIX: increment combatRound so first_turn_bonus and rotate_elements
+      // passives work correctly. Was never incremented — first_turn_bonus
+      // applied every turn, rotate_elements always picked element[0].
+      if (activeActor && !activeActor.isEnemy) {
+        // Increment round when a PLAYER acts (not enemy) so round = player turns
+        state.combatRound = (state.combatRound || 0) + 1;
+      }
 
       if (activeActor.isBoss) {
         if (
@@ -4473,8 +4481,14 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         const evasionBuff = (target.buffs || []).find(b => b.type === 'evasion' && b.value > 0);
         if (evasionBuff && Math.random() * 100 < evasionBuff.value) {
           resultMsg += `attacks ${target.name} but 💨 EVADES (buff)!`;
-          // Buff still ticks down via processStatusEffects — no manual decrement
-          return;  // skip damage application
+          // 💡 CRITICAL FIX: was `return;` which exited the Promise executor
+          // without calling resolve(), hanging combat forever. Now sends the
+          // message and resolves properly.
+          try {
+            await sock.sendMessage(chatId, { text: resultMsg });
+          } catch (e) {}
+          setTimeout(() => resolve(), turnDelay);
+          return;
         }
 
         target.stats.hp -= damage;
@@ -8205,7 +8219,11 @@ async function applyAbilityEffect(
     }
   } else {
     // HEALING ABILITIES
-    if (effect.type === "heal" || effect.type.includes("heal")) {
+    // 💡 FIX: was `effect.type === "heal" || effect.type.includes("heal")` which
+    // matched "heal_team" too, causing the caster to be healed twice (once here
+    // as single-target, once in the heal_team block below). Changed to strict
+    // equality so only pure "heal" type triggers this block.
+    if (effect.type === "heal") {
       const target = getHealTarget(player, targetIndex, chatId);
       if (target) {
         const hMult = getHealMult(chatId);
