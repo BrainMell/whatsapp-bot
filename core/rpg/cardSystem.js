@@ -1694,28 +1694,39 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
 async function cmdT2Deck(senderJid, reply, args = []) {
   const p = P();
-  const index = parseInt(args[0]);
-  if (isNaN(index)) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index>`, `${p} t2deck 1`);
+  if (!args.length) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index> [index2] [index3]...`, `${p} t2deck 1\n${p} t2deck 10 21 3`);
+
+  // Parse all indices (skip non-numbers)
+  const indices = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
+  if (!indices.length) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index> [index2] [index3]...`, `${p} t2deck 10 21 3`);
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  const uc = owned[index - 1];
-  if (!uc) return reply('❌ Card not found in your collection.');
+  const deck  = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
-  // Find next available slot
-  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
-  if (deck.length >= MAIN_DECK_SIZE) return reply(`❌ Your main deck is full (${MAIN_DECK_SIZE}/12)! Move a card to collection first.`);
+  const slotsAvailable = MAIN_DECK_SIZE - deck.length;
+  if (slotsAvailable <= 0) return reply(`❌ Your main deck is full (${MAIN_DECK_SIZE}/12)! Move a card to your collection first.`);
+  if (indices.length > slotsAvailable) return reply(`⚠️ Only *${slotsAvailable}* slot(s) left in your deck. You tried to add ${indices.length} cards — please reduce the number.`);
 
-  const usedSlots = deck.map(d => d.mainDeckSlot);
-  let slot = 1;
-  while (usedSlots.includes(slot)) slot++;
+  // Find next available slots
+  const usedSlots = new Set(deck.map(d => d.mainDeckSlot));
+  const getNextSlot = () => { let s = 1; while (usedSlots.has(s)) s++; usedSlots.add(s); return s; };
 
-  uc.inMainDeck = true;
-  uc.mainDeckSlot = slot;
-  await uc.save();
+  const results = [];
+  for (const idx of indices) {
+    const uc = owned[idx - 1];
+    if (!uc) { results.push(`❌ #${idx} — not found`); continue; }
+    const card = CARD_INDEX()[uc.cardId];
+    const slot = getNextSlot();
+    uc.inMainDeck = true;
+    uc.mainDeckSlot = slot;
+    await uc.save();
+    results.push(`✅ *${card?.cardName ?? uc.cardId}* → Slot #${slot}`);
+  }
 
-  const card = CARD_INDEX()[uc.cardId];
-  return reply(`✅ *${card.cardName}* moved to main deck (Slot #${slot}).`);
+  const header = indices.length === 1 ? '🎴 Card moved to main deck!' : `🎴 *${results.length}* card(s) moved to main deck!`;
+  return reply(`${header}\n\n${results.join('\n')}`);
 }
+
 
 async function cmdT2CDeck(senderJid, reply, args = []) {
   const p = P();
