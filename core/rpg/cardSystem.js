@@ -2015,19 +2015,27 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
 
 async function cmdT2Coll(senderJid, reply, args = []) {
   const p = P();
-  const slot = parseInt(args[0]);
-  if (isNaN(slot)) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot>`, `${p} t2coll 1`);
+  if (!args.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2] [slot3]...`, `${p} t2coll 1\n${p} t2coll 1 3 5`);
 
-  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
-  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
+  // Parse all slot numbers (skip non-numbers), deduplicate
+  const slots = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
+  if (!slots.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2] [slot3]...`, `${p} t2coll 1 3 5`);
 
-  uc.inMainDeck = false;
-  uc.mainDeckSlot = null;
-  await uc.save();
+  const results = [];
+  for (const slot of slots) {
+    const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+    if (!uc) { results.push(`❌ Slot #${slot} — empty`); continue; }
+    const card = CARD_INDEX()[uc.cardId];
+    uc.inMainDeck = false;
+    uc.mainDeckSlot = null;
+    await uc.save();
+    results.push(`✅ *${card?.cardName ?? uc.cardId}* ← Slot #${slot}`);
+  }
 
-  const card = CARD_INDEX()[uc.cardId];
-  return reply(`✅ *${card.cardName}* moved back to collection.`);
+  const header = slots.length === 1 ? '📦 Card moved to collection!' : `📦 *${results.filter(r => r.startsWith('✅')).length}* card(s) moved to collection!`;
+  return reply(`${header}\n\n${results.join('\n')}`);
 }
+
 
 async function cmdSwapCard(senderJid, reply, args = []) {
   const p = P();
