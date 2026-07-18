@@ -1264,8 +1264,19 @@ async function startBot(configInstance) {
         if (targetPart) targetAdminStatus = targetPart.admin;
       }
 
-      const actorIsAdmin = actorAdminStatus === 'admin' || actorAdminStatus === 'superadmin';
-      const targetIsAdmin = targetAdminStatus === 'admin' || targetAdminStatus === 'superadmin';
+      let actorIsAdmin = actorAdminStatus === 'admin' || actorAdminStatus === 'superadmin';
+      let targetIsAdmin = targetAdminStatus === 'admin' || targetAdminStatus === 'superadmin';
+
+      try {
+        if (!actorIsAdmin && (isAdminCached(chatId, actorJid) || (actorPhone && isAdminCached(chatId, actorPhone)))) {
+          actorIsAdmin = true;
+          if (!actorAdminStatus) actorAdminStatus = 'admin';
+        }
+        if (!targetIsAdmin && (isAdminCached(chatId, targetJid) || (targetPhone && isAdminCached(chatId, targetPhone)))) {
+          targetIsAdmin = true;
+          if (!targetAdminStatus) targetAdminStatus = 'admin';
+        }
+      } catch (e) {}
 
       // If actor is not an admin, they can't act on anyone
       if (!actorIsAdmin) return false;
@@ -1302,6 +1313,13 @@ async function startBot(configInstance) {
       
       const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
       const phoneJid = resolveToPhone(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+      
+      try {
+        if (isAdminCached(chatId, senderJid) || (phoneJid && isAdminCached(chatId, phoneJid))) {
+          return true;
+        }
+      } catch (e) {}
+
       const canonicalJid = resolveJid(senderJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
 
       if (groupMetadata?.participants) {
