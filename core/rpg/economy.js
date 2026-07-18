@@ -469,15 +469,20 @@ function getGold(userId) {
 function addGold(userId, amount) {
   const user = getUser(userId);
   if (!user) return false;
-  user.questGold = (user.questGold || 0) + amount;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.questGold = (user.questGold || 0) + val;
   scheduleSave(userId);
   return true;
 }
 
 function removeGold(userId, amount) {
   const user = getUser(userId);
-  if (!user || (user.questGold || 0) < amount) return false;
-  user.questGold -= amount;
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.questGold || 0) < val) return false;
+  user.questGold -= val;
   scheduleSave(userId);
   return true;
 }
@@ -533,6 +538,8 @@ const ITEMS = {
 function addItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user) return false;
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
     
     if (!user.inventory) user.inventory = {};
     
@@ -952,11 +959,13 @@ function getUserClass(userId) {
 function addProfessionXP(userId, profession, amount) {
     const user = getUser(userId);
     if (!user || !user.professions) return null;
+    const val = Math.floor(Number(amount));
+    if (!Number.isFinite(val) || val <= 0) return null;
     
     const prof = user.professions[profession];
     if (!prof) return null;
     
-    prof.xp += amount;
+    prof.xp += val;
     
     // Leveling logic: 100 * level^1.5
     const nextLevelXP = Math.floor(100 * Math.pow(prof.level, 1.5));
@@ -1277,7 +1286,9 @@ async function claimRankMission(userId) {
 function trackMissionStat(userId, statKey, amount = 1) {
   const user = getUser(userId);
   if (!user || !user.stats) return;
-  user.stats[statKey] = (user.stats[statKey] || 0) + amount;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
+  user.stats[statKey] = (user.stats[statKey] || 0) + val;
   // 💡 FIX: was scheduleSave(userId) — debounced 500ms. If the bot
   // restarted within 500ms of the stat increment, the DB write was
   // lost and the player's progress vanished on next load. Rank-mission
@@ -1324,14 +1335,18 @@ function incrementQuestCounter(userId, won = true) {
 function incrementDragonKills(userId, amount = 1) {
   const user = getUser(userId);
   if (!user) return;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
   if (!user.stats) user.stats = {};
-  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + amount;
+  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + val;
   scheduleSave(userId);
 }
 
 async function addQuestProgress(userId, amount, won = true) {
   const user = getUser(userId);
   if (!user) return;
+  const val = Number(amount);
+  if (!Number.isFinite(val)) return;
 
   // 💡 FIX #41: Use Math.round instead of Math.ceil for fractional
   // quest progress. Math.ceil(0.05) = 1, meaning every combat

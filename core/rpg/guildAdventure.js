@@ -2939,6 +2939,13 @@ function applyClassPassivePerTurn(player, state) {
   if (!player || !player.class || !player.class.passive) return [];
   if (player.isDead) return [];
 
+  // 💡 FIX: reset passiveCombo each round so damage_per_hit doesn't stack
+  // infinitely across turns. Was never reset — the combo counter grew
+  // unboundedly (though the mult was capped at 5 stacks, the counter itself
+  // was never cleared, meaning the first hit of each round already had a
+  // huge combo count).
+  player.passiveCombo = 0;
+
   const passive = player.class.passive;
   const value = Number(passive.value) || 0;
   const msgs = [];
@@ -6445,8 +6452,9 @@ async function processVotes(sock, encounter, sessionKey) {
     // Track treasure finds
     if (encounter.type === "TREASURE") state.stats.treasuresFound++;
 
-    // Apply rewards/penalties to all players
+    // Apply rewards/penalties to all LIVING players
     for (const player of state.players) {
+      if (player.isDead) continue;  // 💡 FIX: dead players don't receive encounter rewards
       if (finalOutcome.gold) {
         economy.addMoney(player.jid, finalOutcome.gold);
       }
@@ -7714,7 +7722,7 @@ async function applyAbilityEffect(
         // 💡 OVERKILL EXECUTION BONUS
         const overkillThreshold = target.stats.hp + damage;
         if (damage > overkillThreshold * 2.0) {
-          const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
+          const bonusGold = Math.floor((target.goldReward || target.gold || 500) * 0.1) || 50;
           if (!player.isEnemy) {
             player.goldEarned = (player.goldEarned || 0) + bonusGold;
           }
@@ -7912,7 +7920,7 @@ async function applyAbilityEffect(
         // 💡 OVERKILL EXECUTION BONUS
         const overkillThreshold = target.stats.hp + damage;
         if (damage > overkillThreshold * 2.0) {
-          const bonusGold = Math.floor(target.goldReward * 0.1) || 50;
+          const bonusGold = Math.floor((target.goldReward || target.gold || 500) * 0.1) || 50;
           if (!player.isEnemy) {
             player.goldEarned = (player.goldEarned || 0) + bonusGold;
           }
@@ -8393,8 +8401,11 @@ async function applyAbilityEffect(
           target.justDied = true;
         }
         msg += `⚡ Hit ${effect.hits} times for ${totalMultiDamage} total damage!\n`;
-        player.combatStats.damageDealt =
-          (player.combatStats.damageDealt || 0) + totalMultiDamage;
+        // 💡 FIX: guard combatStats — enemies don't have it and would crash here
+        if (player.combatStats) {
+          player.combatStats.damageDealt =
+            (player.combatStats.damageDealt || 0) + totalMultiDamage;
+        }
 
         if (target.stats.hp <= 0) {
           msg += `💀 ${target.name} defeated!\n`;
@@ -8408,7 +8419,7 @@ async function applyAbilityEffect(
 
           // 💡 CRITICAL FIX: Check if combat should end immediately
           if (await checkCombatEnd(sock, state, sessionKey))
-            return { applied: true, msg };
+            return { message: msg, damage: totalMultiDamage, healing: 0 };
         }
       }
     }
