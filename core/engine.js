@@ -134,13 +134,17 @@ function resolveLidToPhone(jid, authPath) {
 // Load blocked users from DB
 async function loadBlockedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_blocked_users", []);
-    data.forEach((userId) => blockedUsers.add(userId));
-    console.log(
-      `📛 [${botConfig.getBotId()}] Loaded ${blockedUsers.size} blocked users from MongoDB`,
-    );
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_blocked_users", null);
+    if (data) {
+      data.forEach((userId) => blockedUsers.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_blocked_users", []);
+      oldData.forEach((userId) => blockedUsers.add(userId));
+      if (oldData.length > 0) system.set("_shared_blocked_users", oldData);
+    }
+    console.log(`📛 [${botConfig.getBotId()}] Loaded ${blockedUsers.size} blocked users`);
   } catch (err) {
     console.error("Error loading blocked users:", err.message);
   }
@@ -148,25 +152,45 @@ async function loadBlockedUsers() {
 
 function saveBlockedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_blocked_users", Array.from(blockedUsers));
+  system.set("_shared_blocked_users", Array.from(blockedUsers));
 }
 
 function blockUser(userId) {
-  blockedUsers.add(userId);
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  blockedUsers.add(normalized);
+  // 💡 Also store the raw form for backwards compat with legacy checks
+  if (userId !== normalized) blockedUsers.add(userId);
   saveBlockedUsers();
 }
 
 function unblockUser(userId) {
-  blockedUsers.delete(userId);
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  blockedUsers.delete(normalized);
+  blockedUsers.delete(userId);  // also remove raw form if present
   saveBlockedUsers();
 }
 
 function isBlocked(userId) {
-  if (blockedUsers.has(userId)) return true;
-  const loans = require('./rpg/loans');
-  if (loans.isLoanBlocked(userId)) return true;
-  return false;
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const norm = jidNormalizedUser(userId);
+    // 💡 FIX: check both normalized AND raw — some legacy blocks were stored
+    // with raw JIDs. Also check the LID resolver for cross-format matches.
+    if (blockedUsers.has(norm) || blockedUsers.has(userId)) return true;
+    // Also try resolving LID ↔ phone
+    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+    const authPath = configInstance?.getAuthPath ? configInstance.getAuthPath() : null;
+    const phone = resolveToPhone(userId, authPath);
+    if (phone && blockedUsers.has(jidNormalizedUser(phone))) return true;
+    const loans = require('./rpg/loans');
+    if (loans.isLoanBlocked(userId)) return true;
+    return false;
+  } catch (err) {
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -183,11 +207,17 @@ function isBlocked(userId) {
 
 async function loadBannedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_banned_users", []);
-    data.forEach((userId) => bannedUsers.add(userId));
-    console.log(`🚫 [${botConfig.getBotId()}] Loaded ${bannedUsers.size} banned users from MongoDB`);
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_banned_users", null);
+    if (data) {
+      data.forEach((userId) => bannedUsers.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_banned_users", []);
+      oldData.forEach((userId) => bannedUsers.add(userId));
+      if (oldData.length > 0) system.set("_shared_banned_users", oldData);
+    }
+    console.log(`🚫 [${botConfig.getBotId()}] Loaded ${bannedUsers.size} banned users`);
   } catch (err) {
     console.error("Error loading banned users:", err.message);
   }
@@ -195,8 +225,7 @@ async function loadBannedUsers() {
 
 function saveBannedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_banned_users", Array.from(bannedUsers));
+  system.set("_shared_banned_users", Array.from(bannedUsers));
 }
 
 function banUser(userId) {
@@ -226,13 +255,24 @@ function isBanned(userId) {
 // Load global mods from DB
 async function loadGlobalMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_global_mods", []);
-    data.forEach((userId) => globalMods.add(userId));
-    console.log(
-      `🛡️ [${botConfig.getBotId()}] Loaded ${globalMods.size} global moderators from MongoDB`,
-    );
+    // 💡 FIX: use SHARED key "_global_mods" (not botId + "_global_mods")
+    // so mods added on one bot instance (e.g. Goten) also apply to other
+    // instances (Esdeath, Joker, Subaru). Was per-bot — a mod added via
+    // .g addmod only worked on Goten, not Esdeath.
+    const data = system.get("_shared_global_mods", null);
+    if (data) {
+      data.forEach((userId) => globalMods.add(userId));
+    } else {
+      // Migration: try old per-bot key, then copy to shared
+      const oldData = system.get(botConfig.getBotId() + "_global_mods", []);
+      oldData.forEach((userId) => globalMods.add(userId));
+      if (oldData.length > 0) {
+        system.set("_shared_global_mods", oldData);
+        console.log(`🔄 [${botConfig.getBotId()}] Migrated ${oldData.length} global mods to shared key`);
+      }
+    }
+    console.log(`🛡️ [${botConfig.getBotId()}] Loaded ${globalMods.size} global moderators`);
   } catch (err) {
     console.error("Error loading global mods:", err.message);
   }
@@ -240,8 +280,7 @@ async function loadGlobalMods() {
 
 function saveGlobalMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_global_mods", Array.from(globalMods));
+  system.set("_shared_global_mods", Array.from(globalMods));
 }
 
 function addGlobalMod(userId) {
@@ -285,11 +324,17 @@ function isGlobalMod(userId) {
 
 async function loadRpgMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_rpg_mods", []);
-    data.forEach((userId) => rpgMods.add(userId));
-    console.log(`⚔️ [${botConfig.getBotId()}] Loaded ${rpgMods.size} RPG moderators from MongoDB`);
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_rpg_mods", null);
+    if (data) {
+      data.forEach((userId) => rpgMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_rpg_mods", []);
+      oldData.forEach((userId) => rpgMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_rpg_mods", oldData);
+    }
+    console.log(`⚔️ [${botConfig.getBotId()}] Loaded ${rpgMods.size} RPG moderators`);
   } catch (err) {
     console.error("Error loading RPG mods:", err.message);
   }
@@ -297,17 +342,22 @@ async function loadRpgMods() {
 
 function saveRpgMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_rpg_mods", Array.from(rpgMods));
+  system.set("_shared_rpg_mods", Array.from(rpgMods));
 }
 
 async function loadCardsMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_cards_mods", []);
-    data.forEach((userId) => cardsMods.add(userId));
-    console.log(`🃏 [${botConfig.getBotId()}] Loaded ${cardsMods.size} Cards moderators from MongoDB`);
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_cards_mods", null);
+    if (data) {
+      data.forEach((userId) => cardsMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_cards_mods", []);
+      oldData.forEach((userId) => cardsMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_cards_mods", oldData);
+    }
+    console.log(`🃏 [${botConfig.getBotId()}] Loaded ${cardsMods.size} Cards moderators`);
   } catch (err) {
     console.error("Error loading Cards mods:", err.message);
   }
@@ -315,8 +365,7 @@ async function loadCardsMods() {
 
 function saveCardsMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_cards_mods", Array.from(cardsMods));
+  system.set("_shared_cards_mods", Array.from(cardsMods));
 }
 
 function addRpgMod(userId) {
@@ -3146,9 +3195,15 @@ What to do:
 
     // Helper to get chat-specific mute key
     function getMuteKey(userId, chatId) {
-      // If it's a private chat (DM), just use userId. Otherwise, use composite key.
-      if (!chatId || !chatId.endsWith("@g.us")) return userId;
-      return `${userId}_${chatId}`;
+      // 💡 FIX: normalize userId so mute works across LID/phone JID formats.
+      // Was using raw userId — if muted with @lid JID but message comes in
+      // with @s.whatsapp.net JID (or vice versa), the mute check would fail.
+      const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+      let normUser = userId;
+      try { normUser = jidNormalizedUser(userId); } catch (e) {}
+      // Also try LID resolver for cross-format matching
+      if (!chatId || !chatId.endsWith("@g.us")) return normUser;
+      return `${normUser}_${chatId}`;
     }
 
     // ✅ FIXED: Check if user is muted and auto-cleanup expired mutes
@@ -9755,6 +9810,45 @@ Usage: ${newUsage}/5${warningText}`;
                     listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)`;
                     await sock.sendMessage(chatId, { text: BOT_MARKER + listMsg });
                     return;
+                  }
+
+                  // .g reloaduser @user — force-reload user from DB (mod+ only)
+                  // 💡 Used when an external script modifies the DB directly
+                  // (stat point grants, enhancement recovery) and the bot's
+                  // in-memory cache is stale.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloaduser` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} reloaduser `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload users.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} reloaduser @user\``,
+                      });
+                    }
+                    try {
+                      const result = await economy.reloadUserFromDB(targetUser);
+                      if (result) {
+                        const user = economy.getUser(targetUser);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Reloaded @${targetUser.split("@")[0]} from DB.\nStat points: ${user?.progression?.statPoints ?? 'unknown'}\nWallet: ${(user?.wallet || 0).toLocaleString()}`,
+                          mentions: [targetUser],
+                        });
+                      } else {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ User not found in DB.`,
+                        });
+                      }
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ Reload failed: ' + e.message,
+                      });
+                    }
                   }
 
                   // .j category enable/disable/list & .j rank on/off commands

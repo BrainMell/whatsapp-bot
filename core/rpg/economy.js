@@ -87,6 +87,26 @@ async function saveUser(userId) {
         console.error(`❌ Failed to save user ${userId}:`, err.message);
     }
 }
+
+// 💡 Force-reload a user from MongoDB, overwriting the in-memory cache.
+// Used when an external script modifies the DB directly (e.g. stat point
+// grants, enhancement recovery) and the bot's in-memory cache is stale.
+// Without this, any saveUser() call would overwrite the DB change with
+// the stale in-memory value.
+async function reloadUserFromDB(userId) {
+    const resolvedId = resolveJidHelper(userId);
+    try {
+        const dbUser = await User.findOne({ userId: resolvedId });
+        if (!dbUser) return false;
+        const userData = dbUser.toObject();
+        economyData.set(resolvedId, userData);
+        console.log(`🔄 Reloaded user ${resolvedId} from DB (statPoints: ${userData?.progression?.statPoints})`);
+        return true;
+    } catch (err) {
+        console.error(`❌ Failed to reload user ${resolvedId} from DB:`, err.message);
+        return false;
+    }
+}
 //========================================
 
 //==================this part handles new players and thier classes==================
@@ -1707,6 +1727,7 @@ module.exports = {
   
   loadEconomy,
   saveUser,
+  reloadUserFromDB,
   scheduleSave,
   getUser,
   getOrCreateUser,
