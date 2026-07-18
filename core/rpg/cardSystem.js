@@ -1730,39 +1730,55 @@ async function cmdT2Deck(senderJid, reply, args = []) {
 
 async function cmdT2CDeck(senderJid, reply, args = []) {
   const p = P();
-  const index = parseInt(args[0]);
-  const deckNameQuery = args.slice(1).join(' ').trim();
 
-  if (isNaN(index) || !deckNameQuery) {
-    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
+  // 💡 UPDATED 2026-07-18: now supports multiple indices.
+  // Format: .g t2cdeck 1 5 10 Waifus   (moves cards #1, #5, #10 to "Waifus")
+  const indices = [];
+  let deckNameParts = [];
+  let foundNonNumeric = false;
+  for (const arg of args) {
+    if (!foundNonNumeric && /^\d+$/.test(arg)) {
+      indices.push(parseInt(arg));
+    } else {
+      foundNonNumeric = true;
+      deckNameParts.push(arg);
+    }
+  }
+  const deckNameQuery = deckNameParts.join(' ').trim();
+  const uniqueIndices = [...new Set(indices.filter(n => n > 0))];
+
+  if (!uniqueIndices.length || !deckNameQuery) {
+    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> [index2] [index3]... <deck_name>`, `${p} t2cdeck 1 Waifus\n${p} t2cdeck 5 10 21 Best Cards`);
   }
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  const uc = owned[index - 1];
-  if (!uc) return reply('❌ Card not found in your collection.');
-
-  // Fuzzy match deck name
   const decks = await CardDeck.find({ userId: senderJid });
   if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
-  if (!targetDeck) {
-    // Try includes
-    targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
-  }
-
+  if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
   if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
 
-  uc.inCustomDeck = true;
-  uc.customDeckName = targetDeck.name;
-  uc.customDeckSlot = targetDeck.cards.length + 1;
-  await uc.save();
-
-  targetDeck.cards.push(uc._id);
+  const results = [];
+  let nextSlot = targetDeck.cards.length;
+  for (const idx of uniqueIndices) {
+    const uc = owned[idx - 1];
+    if (!uc) { results.push(`❌ #${idx} — not found`); continue; }
+    uc.inCustomDeck = true;
+    uc.customDeckName = targetDeck.name;
+    nextSlot++;
+    uc.customDeckSlot = nextSlot;
+    await uc.save();
+    targetDeck.cards.push(uc._id);
+    const card = CARD_INDEX()[uc.cardId];
+    results.push(`✅ *${card?.cardName ?? uc.cardId}* → Slot #${nextSlot}`);
+  }
   await targetDeck.save();
 
-  const card = CARD_INDEX()[uc.cardId];
-  return reply(`✅ *${card.cardName}* moved to custom deck *"${targetDeck.name}"* (Slot #${uc.customDeckSlot}).`);
+  const header = uniqueIndices.length === 1
+    ? `✅ Card moved to custom deck *"${targetDeck.name}"*!`
+    : `✅ *${results.filter(r => r.startsWith('✅')).length}* card(s) moved to custom deck *"${targetDeck.name}"*!`;
+  return reply(`${header}\n\n${results.join('\n')}`);
 }
 
 async function cmdESummon(senderJid, reply) {
@@ -1978,39 +1994,55 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
 
 async function cmdT2CDeck(senderJid, reply, args = []) {
   const p = P();
-  const index = parseInt(args[0]);
-  const deckNameQuery = args.slice(1).join(' ').trim();
 
-  if (isNaN(index) || !deckNameQuery) {
-    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> <deck_name>`, `${p} t2cdeck 1 Waifus`);
+  // 💡 UPDATED 2026-07-18: now supports multiple indices.
+  // Format: .g t2cdeck 1 5 10 Waifus   (moves cards #1, #5, #10 to "Waifus")
+  const indices = [];
+  let deckNameParts = [];
+  let foundNonNumeric = false;
+  for (const arg of args) {
+    if (!foundNonNumeric && /^\d+$/.test(arg)) {
+      indices.push(parseInt(arg));
+    } else {
+      foundNonNumeric = true;
+      deckNameParts.push(arg);
+    }
+  }
+  const deckNameQuery = deckNameParts.join(' ').trim();
+  const uniqueIndices = [...new Set(indices.filter(n => n > 0))];
+
+  if (!uniqueIndices.length || !deckNameQuery) {
+    return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> [index2] [index3]... <deck_name>`, `${p} t2cdeck 1 Waifus\n${p} t2cdeck 5 10 21 Best Cards`);
   }
 
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  const uc = owned[index - 1];
-  if (!uc) return reply('❌ Card not found in your collection.');
-
-  // Fuzzy match deck name
   const decks = await CardDeck.find({ userId: senderJid });
   if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
-  if (!targetDeck) {
-    // Try includes
-    targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
-  }
-
+  if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
   if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
 
-  uc.inCustomDeck = true;
-  uc.customDeckName = targetDeck.name;
-  uc.customDeckSlot = targetDeck.cards.length + 1;
-  await uc.save();
-
-  targetDeck.cards.push(uc._id);
+  const results = [];
+  let nextSlot = targetDeck.cards.length;
+  for (const idx of uniqueIndices) {
+    const uc = owned[idx - 1];
+    if (!uc) { results.push(`❌ #${idx} — not found`); continue; }
+    uc.inCustomDeck = true;
+    uc.customDeckName = targetDeck.name;
+    nextSlot++;
+    uc.customDeckSlot = nextSlot;
+    await uc.save();
+    targetDeck.cards.push(uc._id);
+    const card = CARD_INDEX()[uc.cardId];
+    results.push(`✅ *${card?.cardName ?? uc.cardId}* → Slot #${nextSlot}`);
+  }
   await targetDeck.save();
 
-  const card = CARD_INDEX()[uc.cardId];
-  return reply(`✅ *${card.cardName}* moved to custom deck *"${targetDeck.name}"* (Slot #${uc.customDeckSlot}).`);
+  const header = uniqueIndices.length === 1
+    ? `✅ Card moved to custom deck *"${targetDeck.name}"*!`
+    : `✅ *${results.filter(r => r.startsWith('✅')).length}* card(s) moved to custom deck *"${targetDeck.name}"*!`;
+  return reply(`${header}\n\n${results.join('\n')}`);
 }
 
 async function cmdT2Coll(senderJid, reply, args = []) {
