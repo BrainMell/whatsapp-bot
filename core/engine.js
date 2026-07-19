@@ -5786,6 +5786,24 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     return;
                   }
 
+                  // 💡 SKILL/CLASS CREATION REPLY HANDLER — when a mod replies to
+                  // the template message from .g admin createskill/createclass
+                  const _quotedCtx = m.message?.extendedTextMessage?.contextInfo;
+                  const _quotedText = _quotedCtx?.quotedMessage?.conversation ||
+                    _quotedCtx?.quotedMessage?.extendedTextMessage?.text || '';
+                  if (_quotedText && (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid))) {
+                    if (_quotedText.includes('SKILL CREATOR')) {
+                      const adminConsole = require('./commands/adminConsole');
+                      await adminConsole.handleSkillCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                      return;
+                    }
+                    if (_quotedText.includes('CLASS CREATOR')) {
+                      const adminConsole = require('./commands/adminConsole');
+                      await adminConsole.handleClassCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                      return;
+                    }
+                  }
+
                   // 🚨 HARD-PING TEST (Bypasses everything)
                   const _isPing = txt.toLowerCase() === "ping" ||
                     txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`;
@@ -6168,6 +6186,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `• \`${botConfig.getPrefix()} raid admin\` — Raid management\n`;
                         msg += `• \`${botConfig.getPrefix()} bounty admin\` — Bounty management\n`;
                         msg += `• \`${botConfig.getPrefix()} war admin\` — Guild war management\n`;
+                        msg += `• \`${botConfig.getPrefix()} admin\` — GM Admin Console (player/content management)\n`;
+                        msg += `• \`${botConfig.getPrefix()} modclass <name>\` — Switch your class freely (mod only)\n`;
                         msg += `• \`${botConfig.getPrefix()} rank toggleperm <level>\` — grant toggle perm\n`;
                         msg += `• \`${botConfig.getPrefix()} rank togglelock on|off\` — lock rank toggle\n\n`;
                       }
@@ -9849,6 +9869,41 @@ Usage: ${newUsage}/5${warningText}`;
                         text: BOT_MARKER + '❌ Reload failed: ' + e.message,
                       });
                     }
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 GM ADMIN CONSOLE — .g admin <subcommand> + .g modclass
+                  // ═══════════════════════════════════════════════════════════
+                  const adminConsole = require('./commands/adminConsole');
+
+                  // .g modclass <name> — main-account class switch (mod+ only)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} modclass` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} modclass `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only RPG Mods, Global Mods, or the owner can use this command."
+                      });
+                    }
+                    const modArgs = txt.trim().split(/\s+/).slice(2);
+                    await adminConsole.handleModClass(sock, chatId, senderJid, modArgs, BOT_MARKER, botConfig.getPrefix());
+                    return;
+                  }
+
+                  // .g admin <subcommand> — GM admin console (mod+ only)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} admin` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} admin `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only RPG Mods, Global Mods, or the owner can use the admin console."
+                      });
+                    }
+                    const adminArgs = txt.trim().split(/\s+/).slice(2);
+                    await adminConsole.handleAdmin(sock, chatId, senderJid, adminArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                    return;
                   }
 
                   // .j category enable/disable/list & .j rank on/off commands
