@@ -161,33 +161,78 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return { target, remaining, isSelfTarget };
     }
 
-    // No subcommand — show menu
+    // No subcommand — show detailed help
     if (!sub || sub === 'help') {
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE*\n\n_Mod-only RPG moderation toolkit._\n\n` +
-                `💡 *Targeting:* @mention a user, reply to their message, or omit to target yourself.\n\n` +
-                `*Player Management:*\n` +
-                `• \`${prefix} admin setlevel <@user> <level>\` — set player level\n` +
-                `• \`${prefix} admin setstat <@user> <stat> <value>\` — set individual stat\n` +
-                `• \`${prefix} admin setwallet <@user> <amount>\` — set wallet balance\n` +
-                `• \`${prefix} admin giveitem <@user> <item_name> <qty>\` — give items\n` +
-                `• \`${prefix} admin takeitem <@user> <item_name> <qty>\` — remove items\n` +
-                `• \`${prefix} admin giveskill <@user> <skill_name> <level>\` — grant skill\n` +
-                `• \`${prefix} admin revokeskill <@user> <skill_name>\` — revoke skill\n` +
-                `• \`${prefix} admin resetplayer <@user>\` — full stat/skill reset\n` +
-                `• \`${prefix} admin forceevolve <@user> <class_name>\` — force evolve\n` +
-                `• \`${prefix} admin givepoints <@user> <amount>\` — give stat points\n` +
-                `• \`${prefix} admin givezeni <@user> <amount>\` — give Zeni\n` +
-                `• \`${prefix} admin setrank <@user> <rank>\` — set adventurer rank\n` +
-                `• \`${prefix} admin unstick <@user>\` — clear stuck combat state\n\n` +
-                `*Content Tools:*\n` +
-                `• \`${prefix} admin createskill\` — template-based skill creator\n` +
-                `• \`${prefix} admin createclass\` — template-based class creator\n` +
-                `• \`${prefix} admin disableskill <skill_name>\` — disable a skill\n` +
-                `• \`${prefix} admin enableskill <skill_name>\` — re-enable a skill\n` +
-                `• \`${prefix} admin inspect <@user>\` — full character inspection\n\n` +
-                `*Main-Account Class Switch (separate):*\n` +
-                `• \`${prefix} modclass <class_name>\` — switch your own class freely`
+            text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE — FULL GUIDE*\n\n` +
+                `_Mod-only RPG moderation toolkit. RPG Mods, Global Mods, and Owner only._\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `🎯 *HOW TO TARGET PLAYERS*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `All commands accept a target. 3 ways to specify:\n` +
+                `1️⃣ **@mention** — tag the player: \`${prefix} admin setlevel @friend 50\`\n` +
+                `2️⃣ **Reply** — reply to their message: \`${prefix} admin setlevel 50\`\n` +
+                `3️⃣ **Self** — no mention/reply = targets YOU: \`${prefix} admin setlevel 50\`\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `👤 *PLAYER MANAGEMENT*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} admin setlevel <@user> <1-100>\`\n` +
+                `  Sets level directly. Recalculates XP + grants stat points.\n` +
+                `  Example: \`${prefix} admin setlevel 75\` (sets YOUR level to 75)\n\n` +
+                `• \`${prefix} admin setstat <@user> <stat> <value>\`\n` +
+                `  Sets an individual stat (hp, atk, def, mag, spd, luck, crit).\n` +
+                `  Example: \`${prefix} admin setstat @friend hp 5000\`\n\n` +
+                `• \`${prefix} admin setwallet <@user> <amount>\`\n` +
+                `  Sets wallet balance directly (overwrites current).\n` +
+                `  Example: \`${prefix} admin setwallet 1000000\`\n\n` +
+                `• \`${prefix} admin giveitem <@user> <item_name> [qty]\`\n` +
+                `  Gives items by name (resolves automatically). Default qty = 1.\n` +
+                `  Example: \`${prefix} admin giveitem @friend legendary_enhancement_stone 10\`\n\n` +
+                `• \`${prefix} admin takeitem <@user> <item_name> [qty]\`\n` +
+                `  Removes items from inventory.\n\n` +
+                `• \`${prefix} admin giveskill <@user> <skill_name> [level]\`\n` +
+                `  Grants any skill regardless of class/level requirements.\n` +
+                `  Example: \`${prefix} admin giveskill @friend meteor 3\`\n\n` +
+                `• \`${prefix} admin revokeskill <@user> <skill_name>\`\n` +
+                `  Removes a skill from the player.\n\n` +
+                `• \`${prefix} admin resetplayer <@user>\`\n` +
+                `  Resets all stats to 0 and revokes all skills. Refunds stat points.\n` +
+                `  Keeps level, wallet, and items.\n\n` +
+                `• \`${prefix} admin forceevolve <@user> <class_name>\`\n` +
+                `  Force-evolves to any class, bypassing all requirements.\n` +
+                `  Example: \`${prefix} admin forceevolve @friend Warlord\`\n\n` +
+                `• \`${prefix} admin givepoints <@user> <amount>\`\n` +
+                `  Grants stat points (for compensation or testing).\n\n` +
+                `• \`${prefix} admin givezeni <@user> <amount>\`\n` +
+                `  Adds Zeni to wallet (does NOT overwrite — adds to existing).\n\n` +
+                `• \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
+                `  Sets adventurer rank directly.\n\n` +
+                `• \`${prefix} admin unstick <@user>\`\n` +
+                `  Clears stuck combat state (pendingActions, combatProcessing).\n` +
+                `  Use when someone is locked out of combat.\n\n` +
+                `• \`${prefix} admin inspect <@user>\`\n` +
+                `  Full character inspection: stats, equipment, skills, wallet, rank.\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `🔧 *CONTENT TOOLS*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} admin createskill\`\n` +
+                `  Sends a fill-in-the-blank template. Reply to it with the filled\n` +
+                `  version to create a real skill in the skill tree.\n\n` +
+                `• \`${prefix} admin createclass\`\n` +
+                `  Same template pattern for creating a new class.\n\n` +
+                `• \`${prefix} admin disableskill <skill_name>\`\n` +
+                `  Disables a skill (players can't learn it, equipped ones no-op).\n\n` +
+                `• \`${prefix} admin enableskill <skill_name>\`\n` +
+                `  Re-enables a disabled skill.\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `🎭 *MAIN-ACCOUNT CLASS SWITCH*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} modclass <class_name>\`\n` +
+                `  Switches YOUR class freely (bypasses evolution requirements).\n` +
+                `  All other stats/items/progress unchanged.\n` +
+                `  Example: \`${prefix} modclass Archmage\`\n` +
+                `  Use \`${prefix} modclass\` (no args) to see all available classes.\n\n` +
+                `_Non-mods cannot use any of these commands._`
         });
     }
 
