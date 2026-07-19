@@ -80,11 +80,29 @@ function resolveItem(query) {
     return null;
 }
 
-// ─── HELPER: resolve player JID from mention ──────────────────────────────
+// ─── HELPER: resolve player JID from mention/reply/self ───────────────────
+// 💡 FIX: WhatsApp doesn't let you @mention yourself. So if no mention is
+// provided, we check:
+//   1. Is there a replied message? Use the sender of that message.
+//   2. No reply? Default to the mod running the command (self-target).
+// This means:
+//   .g admin setlevel 50            → targets yourself (senderJid)
+//   .g admin setlevel 50 (replying) → targets the replied message's sender
+//   .g admin setlevel @friend 50    → targets @friend
 function resolveTargetJid(getMentionOrReply, m, senderJid) {
+    // 1. Try @mention first
     let target = getMentionOrReply(m);
-    if (!target) return null;
-    return target;
+    if (target) return target;
+
+    // 2. Try replied message's sender
+    const quotedCtx = m?.message?.extendedTextMessage?.contextInfo;
+    if (quotedCtx?.participant) {
+        const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+        return jidNormalizedUser(quotedCtx.participant);
+    }
+
+    // 3. Default to self (the mod running the command)
+    return senderJid;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -132,10 +150,22 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
 
+    // 💡 HELPER: parse admin args. When there's an @mention, it's the first
+    // arg. When there's no mention (self-target), the first arg IS the value.
+    // This function strips any mention-like args and returns {target, remaining}.
+    function parseAdminArgs(getMentionOrReply, m, senderJid, args) {
+        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
+        // Filter out mention-like args (contain @ or are phone numbers)
+        const remaining = args.filter(a => !a.includes('@') && !/^\d{10,}@/.test(a));
+        const isSelfTarget = target === senderJid && !getMentionOrReply(m);
+        return { target, remaining, isSelfTarget };
+    }
+
     // No subcommand — show menu
     if (!sub || sub === 'help') {
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE*\n\n_Mod-only RPG moderation toolkit._\n\n` +
+                `💡 *Targeting:* @mention a user, reply to their message, or omit to target yourself.\n\n` +
                 `*Player Management:*\n` +
                 `• \`${prefix} admin setlevel <@user> <level>\` — set player level\n` +
                 `• \`${prefix} admin setstat <@user> <stat> <value>\` — set individual stat\n` +
@@ -163,9 +193,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET LEVEL ──────────────────────────────────────────────────────────
     if (sub === 'setlevel') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const level = parseInt(args[1]) || parseInt(args[2]);
-        if (!target || !level || level < 1 || level > 100) {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const level = parseInt(remaining[0]);
+        if (!level || level < 1 || level > 100) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setlevel <@user> <1-100>\`` });
         }
         const user = economy.getUser(target);
@@ -185,9 +215,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET STAT ───────────────────────────────────────────────────────────
     if (sub === 'setstat') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const statName = (args[1] || args[2] || '').toLowerCase();
-        const value = parseInt(args[2] || args[3]);
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const statName = (remaining[0] || '').toLowerCase();
+        const value = parseInt(remaining[1]);
         const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
         if (!target || !validStats.includes(statName) || isNaN(value)) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setstat <@user> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
@@ -207,8 +237,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET WALLET ─────────────────────────────────────────────────────────
     if (sub === 'setwallet') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const amount = parseInt(args[1] || args[2]);
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const amount = parseInt(remaining[0]);
         if (!target || isNaN(amount) || amount < 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setwallet <@user> <amount>\`` });
         }
@@ -225,8 +255,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE ITEM ──────────────────────────────────────────────────────────
     if (sub === 'giveitem') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const itemName = args.slice(1).join(' ').replace(/@\d+/g, '').trim();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const itemName = remaining.join(' ').trim();
         // Try to parse "itemname qty" from the remaining args
         const parts = itemName.split(/\s+/);
         let qty = 1;
@@ -254,8 +284,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── TAKE ITEM ──────────────────────────────────────────────────────────
     if (sub === 'takeitem') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const itemName = args.slice(1).join(' ').replace(/@\d+/g, '').trim();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const itemName = remaining.join(' ').trim();
         const parts = itemName.split(/\s+/);
         let qty = 1;
         const lastPart = parseInt(parts[parts.length - 1]);
@@ -282,8 +312,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE SKILL ─────────────────────────────────────────────────────────
     if (sub === 'giveskill') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const skillQuery = args.slice(1).join(' ').replace(/@\d+/g, '').trim();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const skillQuery = remaining.join(' ').trim();
         const parts = skillQuery.split(/\s+/);
         let level = 1;
         const lastPart = parseInt(parts[parts.length - 1]);
@@ -313,8 +343,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── REVOKE SKILL ───────────────────────────────────────────────────────
     if (sub === 'revokeskill') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const skillName = args.slice(1).join(' ').replace(/@\d+/g, '').trim();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const skillName = remaining.join(' ').trim();
         if (!target || !skillName) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin revokeskill <@user> <skill_name>\`` });
         }
@@ -338,7 +368,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── RESET PLAYER ───────────────────────────────────────────────────────
     if (sub === 'resetplayer') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
+        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin resetplayer <@user>\`` });
         }
@@ -362,8 +392,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── FORCE EVOLVE ───────────────────────────────────────────────────────
     if (sub === 'forceevolve') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const className = args.slice(1).join(' ').replace(/@\d+/g, '').trim();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const className = remaining.join(' ').trim();
         if (!target || !className) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin forceevolve <@user> <class_name>\`` });
         }
@@ -385,8 +415,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE STAT POINTS ───────────────────────────────────────────────────
     if (sub === 'givepoints') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const amount = parseInt(args[1] || args[2]);
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const amount = parseInt(remaining[0]);
         if (!target || isNaN(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givepoints <@user> <amount>\`` });
         }
@@ -404,8 +434,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE ZENI ──────────────────────────────────────────────────────────
     if (sub === 'givezeni') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const amount = parseInt(args[1] || args[2]);
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const amount = parseInt(remaining[0]);
         if (!target || isNaN(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givezeni <@user> <amount>\`` });
         }
@@ -422,8 +452,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET RANK ───────────────────────────────────────────────────────────
     if (sub === 'setrank') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        const rank = (args[1] || args[2] || '').toUpperCase();
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const rank = (remaining[0] || '').toUpperCase();
         const validRanks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
         if (!target || !validRanks.includes(rank)) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`` });
@@ -441,7 +471,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── UNSTICK (clear stuck combat state) ─────────────────────────────────
     if (sub === 'unstick') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
+        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin unstick <@user>\`` });
         }
@@ -473,7 +503,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── INSPECT (full character inspection) ────────────────────────────────
     if (sub === 'inspect') {
-        const target = resolveTargetJid(getMentionOrReply, m, senderJid);
+        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin inspect <@user>\`` });
         }
