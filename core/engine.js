@@ -4613,14 +4613,53 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             if (qr && !qrShown) {
               qrShown = true;
-              botInstancesHealth.set(BOT_ID, {
-                name: BOT_NAME,
-                status: "needs_qr",
-                lastUpdated: Date.now(),
-                error: "Authentication QR code generated. Scan to login.",
-              });
-              console.log("📱 Scan this QR code to login:");
-              qrcode.generate(qr, { small: true });
+
+              // 💡 PAIRING CODE SUPPORT: if the instance config has a
+              // `pairingPhone` field, use phone-number pairing instead of
+              // QR code. The user enters an 8-digit code on their phone
+              // (WhatsApp → Settings → Linked Devices → Link a Device →
+              // "Link with phone number instead"). This is an alternative
+              // to scanning a QR code — useful when the QR is hard to scan
+              // (remote server, no camera, etc.).
+              //
+              // To enable: add "pairingPhone": "2348086616347" to the
+              // instance's botConfig.json. Remove the field or set to null
+              // to go back to QR code.
+              const pairingPhone = configInstance.pairingPhone || null;
+              if (pairingPhone && isFreshLogin) {
+                try {
+                  console.log(`📱 [${BOT_ID}] Requesting pairing code for ${pairingPhone}...`);
+                  const code = await sock.requestPairingCode(pairingPhone);
+                  console.log(`\n╔══════════════════════════════════════╗`);
+                  console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
+                  console.log(`╚══════════════════════════════════════╝`);
+                  console.log(`\n📱 On your phone:`);
+                  console.log(`   WhatsApp → Settings → Linked Devices`);
+                  console.log(`   → Link a Device`);
+                  console.log(`   → "Link with phone number instead"`);
+                  console.log(`   → Enter: ${code}\n`);
+
+                  botInstancesHealth.set(BOT_ID, {
+                    name: BOT_NAME,
+                    status: "needs_pairing",
+                    lastUpdated: Date.now(),
+                    error: `Pairing code: ${code}`,
+                  });
+                } catch (pairErr) {
+                  console.error(`❌ [${BOT_ID}] Pairing code failed:`, pairErr.message);
+                  console.log(`📱 Falling back to QR code:`);
+                  qrcode.generate(qr, { small: true });
+                }
+              } else {
+                botInstancesHealth.set(BOT_ID, {
+                  name: BOT_NAME,
+                  status: "needs_qr",
+                  lastUpdated: Date.now(),
+                  error: "Authentication QR code generated. Scan to login.",
+                });
+                console.log("📱 Scan this QR code to login:");
+                qrcode.generate(qr, { small: true });
+              }
             }
 
             if (connection === "open") {

@@ -297,6 +297,21 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Discards all runtime edits, reloads from source.\n\n` +
                 `_Edits are in-memory only — a restart reverts them. For permanent changes, edit classEncounters.js._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
+                `⚡ *ENEMY SKILL EDITOR (NEW)*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} admin enemyskills [archetype]\`\n` +
+                `  Lists all 63 monster skills across 12 archetypes with IDs.\n\n` +
+                `• \`${prefix} admin enemyskill info <archetype> <skillId>\`\n` +
+                `  Full skill details (cost, level req, type, chain).\n\n` +
+                `• \`${prefix} admin enemyskill setcost <arch> <skillId> <value>\`\n` +
+                `  Edit skill mana cost.\n\n` +
+                `• \`${prefix} admin enemyskill setlevel <arch> <skillId> <level>\`\n` +
+                `  Edit skill level requirement.\n\n` +
+                `• \`${prefix} admin enemyskill setname <arch> <skillId> <name>\`\n` +
+                `  Edit skill display name.\n\n` +
+                `• \`${prefix} admin enemyskill reset\`\n` +
+                `  Reload all monster skills from source.\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
                 `🧪 *SANDBOX TEST CHARACTER (NEW)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `Isolated test character stored in a separate DB collection. Test freely!\n\n` +
@@ -916,6 +931,121 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
 
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} admin enemy list\` to see bosses.` });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── ENEMY SKILL VIEWER/EDITOR ─────────────────────────────────────────
+    // .g admin enemyskills [archetype]
+    // .g admin enemyskill info <archetype> <skillId>
+    // .g admin enemyskill setcost <archetype> <skillId> <value>
+    // .g admin enemyskill setlevel <archetype> <skillId> <levelReq>
+    // .g admin enemyskill setname <archetype> <skillId> <new name>
+    // .g admin enemyskill reset
+    // ═══════════════════════════════════════════════════════════════════════
+    if (sub === 'enemyskills' || sub === 'enemyskill') {
+        const monsterSkills = require('../rpg/monsterSkills');
+        const { MONSTER_ARCHETYPES } = monsterSkills;
+
+        // ── enemyskills [archetype] — list all skills ──
+        if (sub === 'enemyskills') {
+            const archFilter = (args[1] || '').toUpperCase();
+            let msg = `👹 *ENEMY SKILL DATABASE*\n\n`;
+            const archetypes = Object.entries(MONSTER_ARCHETYPES);
+            for (const [archId, arch] of archetypes) {
+                if (archFilter && archId !== archFilter) continue;
+                const skillIds = Object.keys(arch.skills);
+                msg += `━ *${archId}* (${arch.name}) — ${skillIds.length} skills ━\n`;
+                for (const [sid, s] of Object.entries(arch.skills)) {
+                    msg += `  • \`${sid}\` — ${s.name} [${s.type}, cost=${s.cost}, lvl=${s.levelReq}]\n`;
+                }
+                msg += `\n`;
+            }
+            msg += `_Edit: \`${prefix} admin enemyskill info <arch> <skillId>\`\n_`;
+            msg += `_Reset: \`${prefix} admin enemyskill reset\`_`;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        }
+
+        // ── enemyskill <subcommand> ──
+        const skillSub = (args[1] || '').toLowerCase();
+        const archetype = (args[2] || '').toUpperCase();
+        const skillId = args[3]?.toLowerCase();
+        const arch = MONSTER_ARCHETYPES[archetype];
+
+        // ── enemyskill info <arch> <skillId> ──
+        if (skillSub === 'info') {
+            if (!archetype || !skillId) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill info <archetype> <skillId>\`\n\nExample: \`${prefix} admin enemyskill info TANK harden\`` });
+            }
+            if (!arch) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Archetype \`${archetype}\` not found. Use \`${prefix} admin enemyskills\` to see all.` });
+            const skill = arch.skills[skillId];
+            if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
+
+            let msg = `⚡ *ENEMY SKILL INFO*\n\n`;
+            msg += `📛 Name: ${skill.name}\n`;
+            msg += `🆔 ID: \`${skill.id}\`\n`;
+            msg += `📁 Archetype: ${archetype} (${arch.name})\n`;
+            msg += `📊 Type: ${skill.type}\n`;
+            msg += `💎 Mana Cost: ${skill.cost}\n`;
+            msg += `📈 Level Req: ${skill.levelReq}\n`;
+            msg += `📝 Message: _${skill.msg}_\n`;
+            if (skill.cooldown) msg += `⏳ Cooldown: ${skill.cooldown}\n`;
+            if (skill.nextSkill) msg += `🔗 Chains to: \`${skill.nextSkill}\`\n`;
+            msg += `\n_Edit cost: \`${prefix} admin enemyskill setcost ${archetype} ${skillId} <value>\`\n_`;
+            msg += `_Edit level req: \`${prefix} admin enemyskill setlevel ${archetype} ${skillId} <level>\`\n_`;
+            msg += `_Edit name: \`${prefix} admin enemyskill setname ${archetype} ${skillId} <new name>\`_`;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        }
+
+        // ── enemyskill setcost <arch> <skillId> <value> ──
+        if (skillSub === 'setcost') {
+            const value = parseInt(args[4]);
+            if (!arch || !skillId || isNaN(value) || value < 0) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setcost <archetype> <skillId> <value>\`` });
+            }
+            const skill = arch.skills[skillId];
+            if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
+            const oldCost = skill.cost;
+            skill.cost = value;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId} (${skill.name}): cost ${oldCost} → *${value}*` });
+        }
+
+        // ── enemyskill setlevel <arch> <skillId> <level> ──
+        if (skillSub === 'setlevel') {
+            const value = parseInt(args[4]);
+            if (!arch || !skillId || isNaN(value) || value < 1) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setlevel <archetype> <skillId> <level>\`` });
+            }
+            const skill = arch.skills[skillId];
+            if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
+            const oldLvl = skill.levelReq;
+            skill.levelReq = value;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId} (${skill.name}): level req ${oldLvl} → *${value}*` });
+        }
+
+        // ── enemyskill setname <arch> <skillId> <new name> ──
+        if (skillSub === 'setname') {
+            const newName = args.slice(4).join(' ');
+            if (!arch || !skillId || !newName) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setname <archetype> <skillId> <new name>\`` });
+            }
+            const skill = arch.skills[skillId];
+            if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
+            const oldName = skill.name;
+            skill.name = newName;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId}: name "${oldName}" → *"${newName}"*` });
+        }
+
+        // ── enemyskill reset ──
+        if (skillSub === 'reset') {
+            try {
+                delete require.cache[require.resolve('../rpg/monsterSkills')];
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ENEMY SKILLS RESET*\n\nAll monster skill edits reloaded from source.` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reset failed: ${e.message}` });
+            }
+        }
+
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemyskill subcommand. Use \`${prefix} admin enemyskills\` to list all.` });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
