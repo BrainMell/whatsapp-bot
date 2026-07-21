@@ -9945,26 +9945,39 @@ Usage: ${newUsage}/5${warningText}`;
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} listmods` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listmods `)
                   ) {
-                    // Any mod can view the mod list — but only see phone numbers
-                    // (LID privacy). Owner sees full JIDs.
-                    const canSeeFull = isOwner;
-                    const formatJid = (jid) => canSeeFull ? jid : jid.split('@')[0];
+                    // 💡 FIX: collect all mod JIDs so we can @mention them
+                    // (WhatsApp renders @phone as the person's name). Owner
+                    // also sees raw JIDs for debugging.
+                    const allModJids = new Set([
+                      ...globalMods,
+                      ...rpgMods,
+                      ...cardsMods,
+                    ]);
 
                     let listMsg = `🛡️ *MODERATOR ROSTER*\n\n`;
                     listMsg += `*General Mods* (${globalMods.size}):\n`;
                     if (globalMods.size === 0) listMsg += `  _none_\n`;
-                    for (const jid of globalMods) listMsg += `  • ${formatJid(jid)}\n`;
+                    for (const jid of globalMods) {
+                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                    }
 
                     listMsg += `\n*RPG Mods* (${rpgMods.size}):\n`;
                     if (rpgMods.size === 0) listMsg += `  _none_\n`;
-                    for (const jid of rpgMods) listMsg += `  • ${formatJid(jid)}\n`;
+                    for (const jid of rpgMods) {
+                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                    }
 
                     listMsg += `\n*Cards Mods* (${cardsMods.size}):\n`;
                     if (cardsMods.size === 0) listMsg += `  _none_\n`;
-                    for (const jid of cardsMods) listMsg += `  • ${formatJid(jid)}\n`;
+                    for (const jid of cardsMods) {
+                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                    }
 
                     listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + listMsg });
+                    await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + listMsg,
+                      mentions: Array.from(allModJids).filter(j => j && j.includes('@')),
+                    });
                     return;
                   }
 

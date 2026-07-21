@@ -138,8 +138,38 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     user.class = targetClass.id;
     economy.scheduleSave(senderJid);
 
+    // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
+    // at max level. Mods are testing — they shouldn't have to grind skills
+    // to test a class. This sets every skill in the class's skill tree to
+    // maxLevel so the mod can immediately use all abilities.
+    let unlockedCount = 0;
+    try {
+        const skillTree = require('../rpg/skillTree');
+        const progression = require('../rpg/progression');
+        const level = progression.getLevel(senderJid);
+        const SK = skillTree.SKILL_TREES || skillTree;
+        const tree = SK[targetClass.id.toUpperCase()];
+        if (tree && tree.trees) {
+            if (!user.skills) user.skills = {};
+            for (const [, treeData] of Object.entries(tree.trees)) {
+                if (!treeData.skills) continue;
+                for (const [skillId, skill] of Object.entries(treeData.skills)) {
+                    // Skip ascended skills (tier 4) unless mod explicitly wants them
+                    // — actually for mod testing, unlock everything
+                    user.skills[skillId] = skill.maxLevel || 1;
+                    unlockedCount++;
+                }
+            }
+            // Also grant bonus skill points so they can respec if needed
+            user.skillPoints = (user.skillPoints || 0) + 20;
+            economy.saveUser(senderJid);
+        }
+    } catch (e) {
+        console.error('[ModClass] skill unlock failed:', e.message);
+    }
+
     return await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `✅ *CLASS SWITCHED (MOD)*\n\n👤 Your character: *${user.nickname}*\n🔄 *${oldClassName}* → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n_All other stats, items, and progress unchanged._`
+        text: BOT_MARKER + `✅ *CLASS SWITCHED (MOD)*\n\n👤 Your character: *${user.nickname}*\n🔄 *${oldClassName}* → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n✨ *All ${unlockedCount} class skills unlocked at max level!*\n💎 +20 bonus skill points granted\n\n_All other stats, items, and progress unchanged._`
     });
 }
 
@@ -220,7 +250,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Force-evolves to any class, bypassing all requirements.\n` +
                 `  Example: \`${prefix} admin forceevolve @friend Warlord\`\n\n` +
                 `• \`${prefix} admin givepoints <@user> <amount>\`\n` +
-                `  Grants stat points (for compensation or testing).\n\n` +
+                `  Grants STAT points (for HP/ATK/DEF allocation).\n\n` +
+                `• \`${prefix} admin setskillpoints <@user> <amount>\`\n` +
+                `  Sets RPG SKILL points directly (for ability tree).\n\n` +
+                `• \`${prefix} admin giveskillpoints <@user> <amount>\`\n` +
+                `  Adds RPG SKILL points (does NOT overwrite).\n\n` +
+                `• \`${prefix} admin fightenemy <bossId|name>\`\n` +
+                `  Fight any boss for testing. Use \`admin enemy list\` to find IDs.\n\n` +
                 `• \`${prefix} admin givezeni <@user> <amount>\`\n` +
                 `  Adds Zeni to wallet (does NOT overwrite — adds to existing).\n\n` +
                 `• \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
@@ -880,6 +916,115 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
 
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} admin enemy list\` to see bosses.` });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── SET SKILL POINTS (admin gives RPG skill points to any account) ───
+    // ═══════════════════════════════════════════════════════════════════════
+    if (sub === 'setskillpoints') {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const amount = parseInt(remaining[0]);
+        if (!target || isNaN(amount) || amount < 0) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setskillpoints <@user> <amount>\`\n\n_Sets RPG skill points (used to unlock abilities). Use \`givepoints\` for stat points._` });
+        }
+        const user = economy.getUser(target);
+        if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
+        const oldPoints = user.skillPoints || 0;
+        user.skillPoints = amount;
+        economy.saveUser(target);
+        return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `✅ *SKILL POINTS SET*\n\n👤 @${target.split('@')[0]}\n💎 Skill Points: ${oldPoints} → *${amount}*\n\n_Use \`${prefix} skill tree\` to spend them on abilities._`,
+            mentions: [target]
+        });
+    }
+
+    // ── GIVE SKILL POINTS (admin adds RPG skill points) ───────────────────
+    if (sub === 'giveskillpoints') {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const amount = parseInt(remaining[0]);
+        if (!target || isNaN(amount) || amount <= 0) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveskillpoints <@user> <amount>\`` });
+        }
+        const user = economy.getUser(target);
+        if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
+        const oldPoints = user.skillPoints || 0;
+        user.skillPoints = oldPoints + amount;
+        economy.saveUser(target);
+        return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `✅ *SKILL POINTS GRANTED*\n\n👤 @${target.split('@')[0]}\n💎 Skill Points: ${oldPoints} → *${oldPoints + amount}* (+${amount})`,
+            mentions: [target]
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── FIGHT ANY ENEMY (mod testing tool) ───────────────────────────────
+    // .g admin fightenemy <bossId|enemyName>
+    // Starts a solo trial fight against a specific boss. Used for testing
+    // enemy stats after editing them with `admin enemy setstat`.
+    // ═══════════════════════════════════════════════════════════════════════
+    if (sub === 'fightenemy') {
+        const query = args.slice(1).join(' ').trim();
+        if (!query) {
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `❌ Usage: \`${prefix} admin fightenemy <bossId|name>\`\n\nExample: \`${prefix} admin fightenemy LEVIATHAN\`\nExample: \`${prefix} admin fightenemy ancient_dragon_boss\`\n\n_Use \`${prefix} admin enemy list\` to see all boss IDs._`
+            });
+        }
+
+        try {
+            const classEncounters = require('../rpg/classEncounters');
+            const guildAdventure = require('../rpg/guildAdventure');
+
+            // Find the boss by ID or name
+            let bossId = null;
+            const { BOSS_ENCOUNTERS } = classEncounters;
+            const allBosses = [];
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                for (const b of pool) allBosses.push(b);
+            }
+            const queryUpper = query.toUpperCase().replace(/ /g, '_');
+            for (const b of allBosses) {
+                if (b.id && (b.id.toUpperCase() === queryUpper || b.id.toUpperCase() === query.toUpperCase())) {
+                    bossId = b.id;
+                    break;
+                }
+            }
+            // Also check bossMechanics registry (lowercase IDs)
+            if (!bossId) {
+                try {
+                    const bossMechanics = require('../rpg/bossMechanics');
+                    if (bossMechanics.BOSS_REGISTRY) {
+                        for (const key of Object.keys(bossMechanics.BOSS_REGISTRY)) {
+                            if (key.toLowerCase() === query.toLowerCase() || key.toUpperCase() === queryUpper) {
+                                bossId = key;
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (!bossId) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Enemy "${query}" not found.\nUse \`${prefix} admin enemy list\` to see all boss IDs.` });
+            }
+
+            // Start a TRIAL-mode adventure with this boss
+            const result = await guildAdventure.initAdventure(
+                sock, chatId, null, 'TRIAL', true, null, senderJid, null,
+                {
+                    trialBoss: bossId,
+                    targetClass: economy.getUserClass(senderJid)?.id || 'FIGHTER',
+                    stoneId: 'evolution_stone',
+                    cost: 0,
+                }
+            );
+
+            if (result && result.msg) {
+                await sock.sendMessage(chatId, { text: BOT_MARKER + result.msg });
+            }
+            return;
+        } catch (e) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to start fight: ${e.message}` });
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
