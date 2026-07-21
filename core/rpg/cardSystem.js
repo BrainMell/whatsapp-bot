@@ -3191,6 +3191,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         if (!target) return reply(`❌ Tag someone to add as card mod.`), true;
         inst.modJids.add(target);
         await saveRoles();
+        // 💡 SECURITY FIX: ALSO add to engine's cardsMods Set so the two
+        // systems stay in sync. Previously cardmod add only added to the
+        // card system's modJids — the engine's isCardsMod() didn't see
+        // them, causing inconsistent permission checks.
+        try {
+          const engine = require('../engine');
+          if (typeof engine.addCardsMod === 'function') engine.addCardsMod(target);
+        } catch (e) {}
         return reply(`✅ @${target.split('@')[0]} is now a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'del' || sub === 'remove') {
@@ -3198,6 +3206,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         if (!target) return reply(`❌ Tag someone to remove.`), true;
         inst.modJids.delete(target);
         await saveRoles();
+        // 💡 SECURITY FIX: ALSO remove from engine's cardsMods Set. Without
+        // this, the ban protection (isCardsMod check) still sees them as a
+        // mod even after cardmod del — causing "can't ban a mod" for someone
+        // who was already removed.
+        try {
+          const engine = require('../engine');
+          if (typeof engine.delCardsMod === 'function') engine.delCardsMod(target);
+        } catch (e) {}
         return reply(`✅ @${target.split('@')[0]} is no longer a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'list') {
@@ -3671,10 +3687,13 @@ async function init(sock, admins = [], mods = [], owner = null) {
   const inst = getInst();
   inst.sock_ref  = sock;
   inst.ownerJid  = owner;
-  
-  // Grant mod access to the requester (both formats)
-  inst.modJids.add('251453323092189@lid');
-  inst.modJids.add('251453323092189@s.whatsapp.net');
+
+  // 💡 SECURITY FIX: Removed hardcoded backdoor JID that was permanently
+  // granting card mod access to '251453323092189' on every bot restart.
+  // This was a debug leftover that couldn't be removed via normal commands
+  // — delcardsmod/cardmod del removed it from the in-memory Set, but init()
+  // re-added it on the next restart. Anyone with this JID had permanent
+  // unrevokable card mod access.
 
   admins.forEach(a => inst.adminJids.add(a));
   mods.forEach(m => inst.modJids.add(m));

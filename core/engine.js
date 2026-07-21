@@ -8339,7 +8339,12 @@ Usage: ${newUsage}/5${warningText}`;
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban yourself." });
                     }
                     // Can't ban other mods or owner
-                    if (isOwner || isGlobalMod(targetUser) || isRpgMod(targetUser) || isCardsMod(targetUser)) {
+                    // 💡 CRITICAL FIX: was `isOwner ||` which checked the SENDER's
+                    // owner status. When the owner tried to ban ANYONE, isOwner
+                    // (sender) was true → condition always true → "can't ban a
+                    // mod" for every target. The owner literally could not ban
+                    // anyone. Now correctly checks if the TARGET is the owner.
+                    if (isBotOwner(targetUser) || isGlobalMod(targetUser) || isRpgMod(targetUser) || isCardsMod(targetUser)) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban a moderator or the owner." });
                     }
                     if (isBanned(targetUser)) {
@@ -9655,16 +9660,21 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // .j addmod - Add a global moderator (Owner Only)
+                  // 💡 SECURITY FIX: restricted to OWNER ONLY. Previously any
+                  // global mod could add more global mods — a privilege
+                  // escalation chain where one compromised mod account could
+                  // grant mod access to anyone. Now only the owner can add
+                  // global mods.
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a global mod can add global moderators.",
+                          "❌ Only the bot owner can add global moderators. (Mods can no longer add other mods — this was changed to prevent privilege escalation.)",
                       });
                     }
                     const target =
@@ -9714,10 +9724,26 @@ Usage: ${newUsage}/5${warningText}`;
                       });
 
                     delGlobalMod(target);
+                    // 💡 SECURITY FIX: Also clean up ALL other mod Sets.
+                    // Previously delmod only removed from globalMods — if the
+                    // person was also in rpgMods, cardsMods, or cardSystem's
+                    // modJids, they'd still have mod privileges and the ban
+                    // protection would still see them as a mod ("can't ban a
+                    // mod or owner" even after removal).
+                    delRpgMod(target);
+                    delCardsMod(target);
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} has been removed from Global Moderators.`,
+                        `✅ @${target.split("@")[0]} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
                       mentions: [target],
                     });
                     return;
@@ -9797,6 +9823,15 @@ Usage: ${newUsage}/5${warningText}`;
                       });
 
                     delRpgMod(target);
+                    // 💡 SECURITY FIX: also clean cardSystem modJids for full cleanup
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
@@ -9831,6 +9866,16 @@ Usage: ${newUsage}/5${warningText}`;
                       });
 
                     addCardsMod(target);
+                    // 💡 SECURITY FIX: ALSO add to cardSystem's modJids so the
+                    // two systems stay in sync.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.add(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
@@ -9865,6 +9910,18 @@ Usage: ${newUsage}/5${warningText}`;
                       });
 
                     delCardsMod(target);
+                    // 💡 SECURITY FIX: ALSO remove from cardSystem's modJids.
+                    // Without this, the card commands still see them as a
+                    // card mod (inst.modJids.has() check) even after
+                    // delcardsmod removed them from the engine's cardsMods.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
