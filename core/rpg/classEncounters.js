@@ -937,12 +937,41 @@ function getEnemyPoolByLevel(avgLevel) {
 // from environment.mobs instead of getEnemyPoolByLevel — which was ignoring
 // the dragon pool entirely and spawning generic FIRE/WATER/EARTH enemies
 // inside the Dragon's Lair.
+//
+// 💡 FIX (Item #2 — dragon quest progression): DUNGEON_ENVIRONMENTS.DRAGON_LAIR.mobs
+// is a flat string array (["DRAKE_SCOUT", "FIRE_BREATHER"]), NOT an object
+// with .COMMON/.ELITE sub-arrays. So the old `pool[difficulty]` lookup
+// returned undefined, fell through to getEnemyPoolByLevel, and spawned
+// generic non-dragon enemies. This meant dragons NEVER spawned as regular
+// mobs in the Dragon's Lair — only the boss counted toward dragonsKilled.
+// Players needed 25 dragon kills for DRAGON_GOD/DRAGON_LORD evolution but
+// could only get 1 per dungeon run (the boss), making progression
+// effectively impossible without hundreds of runs.
+//
+// Fix: when environment.mobs is a flat string array (legacy format), look
+// up the matching pool in INFECTED_POOLS by environment.id (e.g.,
+// "DRAGON_LAIR" → INFECTED_POOLS.DRAGON_LAIR), which has the proper
+// {COMMON:[], ELITE:[]} structure. This makes both regular drakes AND
+// the boss count toward dragonsKilled.
 function selectRandomEnemy(avgLevel, difficulty = 'COMMON', environment = null) {
     let pool;
     if (environment && environment.mobs && environment.isSpecial) {
-        // Use the environment's dedicated mob pool (DRAGON_LAIR, etc.)
-        // Reuse the same difficulty key for consistency.
-        pool = environment.mobs;
+        // Check if environment.mobs is the structured format ({COMMON:[], ELITE:[]})
+        // or the legacy flat string format (["DRAKE_SCOUT", "FIRE_BREATHER"]).
+        if (Array.isArray(environment.mobs)) {
+            // Legacy flat string format — look up the proper pool in INFECTED_POOLS
+            // by the environment's id (e.g., "DRAGON_LAIR").
+            const envId = environment.id;
+            if (envId && INFECTED_POOLS[envId]) {
+                pool = INFECTED_POOLS[envId];
+            } else {
+                // No matching pool in INFECTED_POOLS — fall back to level-based
+                pool = getEnemyPoolByLevel(avgLevel);
+            }
+        } else {
+            // Structured format — use directly
+            pool = environment.mobs;
+        }
         // If the environment pool doesn't have the requested difficulty tier,
         // fall back to COMMON within the same pool, then to level-based.
         if (!pool[difficulty] || pool[difficulty].length === 0) {

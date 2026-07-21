@@ -75,7 +75,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 220, atk: 18, def: 22, mag: 2, spd: 5, luck: 5, crit: 5 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'INFECTED_COLOSSUS' },
         evolutionCost: 0,
-        passive: { name: 'Tenacity', desc: `Regenerates 3% of max HP every 2 turns in combat.` },
+        passive: { name: 'Tenacity', desc: `Regenerates 3% of max HP every 2 turns in combat.`, effect: 'regen', value: 3 },
         evolves_into: ['WARLORD'],
     },
     WARLORD: {
@@ -89,7 +89,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 550, atk: 28, def: 48, mag: 5, spd: 12, luck: 10, crit: 12 },
         requirement: { level: 50, questsCompleted: 100, victories: 100, gold: 100000, trialBoss: 'VOID_CORRUPTED' },
         evolutionCost: 100000,
-        passive: { name: 'Iron Command', desc: `Reduces all incoming damage to party by 15% in multi-player quests.` },
+        passive: { name: 'Iron Command', desc: `Reduces all incoming damage to party by 15% in multi-player quests.`, effect: 'damage_reduction', value: 15 },
     },
     
     BERSERKER: {
@@ -103,7 +103,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 220, atk: 18, def: 12, mag: 1, spd: 6, luck: 4, crit: 15 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'MUTATION_PRIME' },
         evolutionCost: 0,
-        passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.` },
+        passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.`, effect: 'damage_when_low_hp', value: 20 },
         evolves_into: ['DOOMSLAYER'],
     },
     DOOMSLAYER: {
@@ -117,7 +117,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 600, atk: 55, def: 25, mag: 2, spd: 18, luck: 5, crit: 30 },
         requirement: { level: 50, questsCompleted: 100, kills: 500, gold: 100000, trialBoss: 'DEMON_LORD' },
         evolutionCost: 100000,
-        passive: { name: 'Hell-Walker', desc: `Damage increases by 2% for every 1% of HP missing. No cap.` },
+        passive: { name: 'Hell-Walker', desc: `Damage increases by 2% for every 1% of HP missing. No cap.`, effect: 'damage_when_low_hp', value: 50 },
     },
     
     PALADIN: {
@@ -132,7 +132,7 @@ const EVOLVED_CLASSES = {
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'CORRUPTED_GUARDIAN' },
         evolutionCost: 0,
 
-        passive: { name: 'Divine Shield', desc: `Reduces all damage taken by 10%. Undead enemies deal -50% damage.` },
+        passive: { name: 'Divine Shield', desc: `Reduces all damage taken by 10%. Undead enemies deal -50% damage.`, effect: 'damage_reduction', value: 10 },
         evolves_into: ['TEMPLAR'],
     },
     TEMPLAR: {
@@ -146,7 +146,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 460, atk: 22, def: 52, mag: 30, spd: 10, luck: 20, crit: 12 },
         requirement: { level: 50, questsCompleted: 100, undeadKills: 200, gold: 100000, trialBoss: 'PRIMORDIAL_CHAOS' },
         evolutionCost: 100000,
-        passive: { name: 'Holy Retribution', desc: `Reflects 20% of all damage received back at attackers as holy damage.` },
+        passive: { name: 'Holy Retribution', desc: `Reflects 20% of all damage received back at attackers as holy damage.`, effect: 'damage_reduction', value: 15 },
     },
     
     DRAGONSLAYER: {
@@ -160,7 +160,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 190, atk: 16, def: 15, mag: 4, spd: 8, luck: 8, crit: 12 },
         requirement: { level: 40, questsCompleted: 30, gold: 150000, trialBoss: 'ELDER_FLAME' },
         evolutionCost: 150000,
-        passive: { name: 'Dragon Bane', desc: `Deal 3× damage to dragon-type enemies. Immune to fire DoT.` },
+        passive: { name: 'Dragon Bane', desc: `Deal 3× damage to dragon-type enemies. Immune to fire DoT.`, effect: 'damage_per_hit', value: 15 },
         evolves_into: ['DRAGON_GOD', 'DRAGON_LORD'],
     },
     DRAGON_GOD: {
@@ -174,7 +174,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 550, atk: 45, def: 40, mag: 35, spd: 15, luck: 25, crit: 20 },
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 reduced from 100 to 25
         evolutionCost: 500000,
-        passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.` },
+        passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.`, effect: 'damage_reduction', value: 50 },
         isUnique: true, // 💡 Only ONE player may hold this class — ever.
         uniqueLockId: 'LEVIATHAN', // matches DragonGod model's bossId
     },
@@ -197,7 +197,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 540, atk: 48, def: 38, mag: 30, spd: 18, luck: 22, crit: 22 },
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN_SPAWN_ALPHA' },
         evolutionCost: 500000,
-        passive: { name: 'Wyrmguard', desc: `Immune to fear and stun. Reflects 25% of melee damage as fire damage. Damage taken from non-dragons reduced by 35%.` },
+        passive: { name: 'Wyrmguard', desc: `Immune to fear and stun. Reflects 25% of melee damage as fire damage. Damage taken from non-dragons reduced by 35%.`, effect: 'damage_reduction', value: 35 },
         isSuccessor: true,    // marks this as the post-first-Leviathan-kill path
         succeeds: 'DRAGON_GOD', // documents the lineage
     },
@@ -215,7 +215,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 18, def: 5, mag: 3, spd: 20, luck: 15, crit: 25 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SHADOW_STALKER' },
         evolutionCost: 0,
-        passive: { name: 'Shadow Step', desc: `Evasion increased by 15%.` },
+        passive: { name: 'Shadow Step', desc: `Evasion increased by 15%.`, effect: 'dodge_chance', value: 15 },
         evolves_into: ['NIGHTBLADE'],
     },
     NIGHTBLADE: {
@@ -229,7 +229,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 250, atk: 42, def: 12, mag: 15, spd: 50, luck: 35, crit: 45 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_ASSASSIN' },
         evolutionCost: 100000,
-        passive: { name: `Assassin's Mark`, desc: `10% chance on any attack to deal 10× damage.` },
+        passive: { name: `Assassin's Mark`, desc: `10% chance on any attack to deal 10× damage.`, effect: 'damage_per_hit', value: 25 },
     },
 
     MONK: {
@@ -243,7 +243,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 120, atk: 14, def: 8, mag: 6, spd: 18, luck: 10, crit: 15 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'IRON_BODY_GRANDMASTER' },
         evolutionCost: 0,
-        passive: { name: 'Inner Focus', desc: `+10% accuracy and +10% speed.` },
+        passive: { name: 'Inner Focus', desc: `+10% accuracy and +10% speed.`, effect: 'all_stats', value: 10 },
         evolves_into: ['ZENMASTER'],
     },
     ZENMASTER: {
@@ -257,7 +257,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 350, atk: 38, def: 22, mag: 35, spd: 45, luck: 25, crit: 30 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'ETERNAL_DRAGON' },
         evolutionCost: 100000,
-        passive: { name: 'Perfect Form', desc: `Immune to stun.` },
+        passive: { name: 'Perfect Form', desc: `Immune to stun.`, effect: 'dodge_chance', value: 10 },
     },
 
     SAMURAI: {
@@ -271,7 +271,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 130, atk: 17, def: 9, mag: 4, spd: 16, luck: 11, crit: 20 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'ANCIENT_WURM' },
         evolutionCost: 0,
-        passive: { name: 'Bushido', desc: `+20% ATK after standing still for a turn.` },
+        passive: { name: 'Bushido', desc: `+20% ATK after standing still for a turn.`, effect: 'first_turn_bonus', value: 20 },
         evolves_into: ['SHOGUN'],
     },
     SHOGUN: {
@@ -285,7 +285,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 320, atk: 50, def: 28, mag: 15, spd: 25, luck: 20, crit: 35 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_TITAN' },
         evolutionCost: 100000,
-        passive: { name: `Commander's Will`, desc: `Party deals +20% physical damage.` },
+        passive: { name: `Commander's Will`, desc: `Party deals +20% physical damage.`, effect: 'all_stats', value: 15 },
     },
 
     NINJA: {
@@ -299,7 +299,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 95, atk: 16, def: 4, mag: 5, spd: 22, luck: 16, crit: 28 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SHADOW_LORD' },
         evolutionCost: 0,
-        passive: { name: 'Opening Strike', desc: `The first attack is always a critical hit.` },
+        passive: { name: 'Opening Strike', desc: `The first attack is always a critical hit.`, effect: 'first_turn_bonus', value: 30 },
         evolves_into: ['KAGE'],
     },
     KAGE: {
@@ -313,7 +313,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 220, atk: 52, def: 15, mag: 20, spd: 55, luck: 30, crit: 50 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'PRIMORDIAL_EVIL' },
         evolutionCost: 100000,
-        passive: { name: 'Absolute Stealth', desc: `50% base Evasion.` },
+        passive: { name: 'Absolute Stealth', desc: `50% base Evasion.`, effect: 'dodge_chance', value: 50 },
     },
 
     // ─── APPRENTICE LINE ──────────────────────────
@@ -329,7 +329,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 110, atk: 8, def: 8, mag: 35, spd: 12, luck: 12, crit: 8 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'ARCANE_SENTINEL' },
         evolutionCost: 0,
-        passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn.` },
+        passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn.`, effect: 'magic_damage', value: 10 },
         evolves_into: ['ARCHMAGE'],
     },
     ARCHMAGE: {
@@ -343,7 +343,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 200, atk: 12, def: 18, mag: 75, spd: 22, luck: 22, crit: 22 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'LICH_KING' },
         evolutionCost: 100000,
-        passive: { name: 'Infinity Flow', desc: `Energy costs reduced by 50%.` },
+        passive: { name: 'Infinity Flow', desc: `Energy costs reduced by 50%.`, effect: 'magic_damage', value: 25 },
     },
 
     WARLOCK: {
@@ -357,7 +357,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 7, def: 6, mag: 26, spd: 8, luck: 10, crit: 12 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUL_EATER' },
         evolutionCost: 0,
-        passive: { name: 'Soul Siphon', desc: `Heals for 8% of magic damage dealt.` },
+        passive: { name: 'Soul Siphon', desc: `Heals for 8% of magic damage dealt.`, effect: 'healing_boost', value: 20 },
         evolves_into: ['VOIDWALKER'],
     },
     VOIDWALKER: {
@@ -371,7 +371,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 300, atk: 18, def: 25, mag: 65, spd: 18, luck: 15, crit: 18 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'ABYSSAL_WHISPER' },
         evolutionCost: 100000,
-        passive: { name: 'Abyssal Aura', desc: `Reduces nearby enemies' ATK and DEF by 15%.` },
+        passive: { name: 'Abyssal Aura', desc: `Reduces nearby enemies' ATK and DEF by 15%.`, effect: 'magic_damage', value: 20 },
     },
 
     ELEMENTALIST: {
@@ -385,7 +385,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 95, atk: 7, def: 6, mag: 28, spd: 10, luck: 11, crit: 13 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'ELEMENTAL_PRIMORDIAL' },
         evolutionCost: 0,
-        passive: { name: 'Elemental Harmony', desc: `Elemental damage increased by 15%.` },
+        passive: { name: 'Elemental Harmony', desc: `Elemental damage increased by 15%.`, effect: 'rotate_elements', value: 15 },
         evolves_into: ['AVATAR'],
     },
     AVATAR: {
@@ -399,7 +399,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 250, atk: 20, def: 22, mag: 70, spd: 28, luck: 25, crit: 25 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'PRIME_ELEMENT' },
         evolutionCost: 100000,
-        passive: { name: 'Elemental Avatar', desc: `Automatically match enemy weakness.` },
+        passive: { name: 'Elemental Avatar', desc: `Automatically match enemy weakness.`, effect: 'rotate_elements', value: 30 },
     },
 
     NECROMANCER: {
@@ -413,7 +413,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 92, atk: 6, def: 5, mag: 27, spd: 8, luck: 9, crit: 11 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'GRAVEYARD_LORD' },
         evolutionCost: 0,
-        passive: { name: `Death's Apprentice`, desc: `Summons have +30% stats.` },
+        passive: { name: `Death's Apprentice`, desc: `Summons have +30% stats.`, effect: 'magic_damage', value: 15 },
         evolves_into: ['LICH'],
     },
     LICH: {
@@ -427,7 +427,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 300, atk: 15, def: 25, mag: 68, spd: 20, luck: 18, crit: 20 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_NECROMANCER' },
         evolutionCost: 100000,
-        passive: { name: 'Phylactery', desc: `Revives at 50% HP once per quest.` },
+        passive: { name: 'Phylactery', desc: `Revives at 50% HP once per quest.`, effect: 'damage_reduction', value: 25 },
     },
 
     CHRONOMANCER: {
@@ -441,7 +441,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 88, atk: 6, def: 6, mag: 28, spd: 14, luck: 13, crit: 12 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'CHRONOS_WARDEN' },
         evolutionCost: 0,
-        passive: { name: 'Temporal Flow', desc: `Cooldowns reduced by 1.` },
+        passive: { name: 'Temporal Flow', desc: `Cooldowns reduced by 1.`, effect: 'magic_damage', value: 15 },
         evolves_into: ['TIMELORD'],
     },
     TIMELORD: {
@@ -455,7 +455,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 240, atk: 15, def: 20, mag: 72, spd: 60, luck: 30, crit: 25 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'TIME_EATER' },
         evolutionCost: 100000,
-        passive: { name: 'Temporal Mastery', desc: `Takes 2 actions per turn.` },
+        passive: { name: 'Temporal Mastery', desc: `Takes 2 actions per turn.`, effect: 'all_stats', value: 20 },
     },
 
     // ─── ACOLYTE LINE ────────────────────────────
@@ -472,7 +472,7 @@ const EVOLVED_CLASSES = {
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'CORRUPTED_GUARDIAN' },
         evolutionCost: 0,
 
-        passive: { name: 'Divine Grace', desc: `Healing spells heal 25% more.` },
+        passive: { name: 'Divine Grace', desc: `Healing spells heal 25% more.`, effect: 'healing_boost', value: 25 },
         evolves_into: ['SAINT'],
     },
     SAINT: {
@@ -486,7 +486,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 350, atk: 22, def: 40, mag: 65, spd: 22, luck: 35, crit: 18 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'SERAPHIM_PRIME' },
         evolutionCost: 100000,
-        passive: { name: 'Sainthood', desc: `All healing is doubled.` },
+        passive: { name: 'Sainthood', desc: `All healing is doubled.`, effect: 'healing_boost', value: 50 },
     },
 
     DRUID: {
@@ -500,7 +500,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 115, atk: 8, def: 10, mag: 18, spd: 11, luck: 12, crit: 8 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'FOREST_ANCESTOR' },
         evolutionCost: 0,
-        passive: { name: 'Wild Shape', desc: `Can transform each combat.` },
+        passive: { name: 'Wild Shape', desc: `Can transform each combat.`, effect: 'all_stats', value: 10 },
         evolves_into: ['ARCHDRUID'],
     },
     ARCHDRUID: {
@@ -514,7 +514,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 400, atk: 28, def: 38, mag: 60, spd: 28, luck: 30, crit: 22 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'GAIA_SENTINEL' },
         evolutionCost: 100000,
-        passive: { name: "Nature's Wrath", desc: `Regenerate 3% max HP per turn.` },
+        passive: { name: "Nature's Wrath", desc: `Regenerate 3% max HP per turn.`, effect: 'regen', value: 5 },
     },
 
     MERCHANT: {
@@ -528,7 +528,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 105, atk: 7, def: 8, mag: 12, spd: 10, luck: 25, crit: 9 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'GOLDEN_GOLEM' },
         evolutionCost: 0,
-        passive: { name: 'Market Advantage', desc: `Earn 50% more Zeni.` },
+        passive: { name: 'Market Advantage', desc: `Earn 50% more Zeni.`, effect: 'gold_find', value: 50 },
         evolves_into: ['TYCOON'],
     },
     TYCOON: {
@@ -542,7 +542,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 300, atk: 25, def: 30, mag: 40, spd: 25, luck: 100, crit: 30 },
         requirement: { level: 50, questsCompleted: 100, goldEarned: 500000, gold: 200000, trialBoss: 'TREASURE_HOARDER' },
         evolutionCost: 200000,
-        passive: { name: 'Infinite Capital', desc: `Earns Zeni each turn in combat.` },
+        passive: { name: 'Infinite Capital', desc: `Earns Zeni each turn in combat.`, effect: 'gold_find', value: 100 },
     },
 
     BARD: {
@@ -556,7 +556,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUND_REAPER' },
         evolutionCost: 0,
-        passive: { name: 'Inspiring Song', desc: `Party gain +10% to all stats.` },
+        passive: { name: 'Inspiring Song', desc: `Party gain +10% to all stats.`, effect: 'team_healing', value: 20 },
         evolves_into: ['VIRTUOSO'],
     },
     VIRTUOSO: {
@@ -570,7 +570,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 280, atk: 18, def: 20, mag: 55, spd: 30, luck: 40, crit: 25 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'MAESTRO_OF_VOID' },
         evolutionCost: 100000,
-        passive: { name: 'Grand Finale', desc: `Revive fallen allies.` },
+        passive: { name: 'Grand Finale', desc: `Revive fallen allies.`, effect: 'healing_boost', value: 30 },
     },
 
     ARTIFICER: {
@@ -584,7 +584,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 108, atk: 9, def: 9, mag: 15, spd: 11, luck: 11, crit: 11 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'CLOCKWORK_TITAN' },
         evolutionCost: 0,
-        passive: { name: 'Overclocked', desc: `Summons deal 40% more damage.` },
+        passive: { name: 'Overclocked', desc: `Summons deal 40% more damage.`, effect: 'damage_per_hit', value: 20 },
         evolves_into: ['GRAND_INVENTOR'],
     },
     GRAND_INVENTOR: {
@@ -598,7 +598,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 320, atk: 25, def: 35, mag: 35, spd: 22, luck: 25, crit: 20 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'MECH_GOD' },
         evolutionCost: 100000,
-        passive: { name: 'Master Craftsman', desc: `Double crafting output.` },
+        passive: { name: 'Master Craftsman', desc: `Double crafting output.`, effect: 'all_stats', value: 15 },
     },
 };
 

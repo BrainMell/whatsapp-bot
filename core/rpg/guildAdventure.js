@@ -2401,6 +2401,25 @@ function applyStatusEffect(
   if (!target) return { applied: false };
   if (!target.statusEffects) target.statusEffects = [];
 
+  // 💡 FIX (BUG 6: "Status effect ignored by boss"):
+  // Some bosses (e.g., IMMOVABLE archetype) grant themselves a `ccImmune`
+  // buff via the monster skill `immovable`. Previously this buff did
+  // NOTHING — applyStatusEffect never checked for it, so freeze/stun/etc.
+  // were applied anyway. Now we respect it: if the target has ccImmune
+  // AND the incoming effect is a CC type (freeze, stun, sleep, charm,
+  // slow, shock), the application is blocked and a message is returned
+  // so the player understands why their CC didn't land.
+  // Non-CC effects (burn, poison, bleed, bless, shield, regen, etc.)
+  // are NOT blocked — ccImmune only blocks crowd control.
+  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify'];
+  if (CC_TYPES.includes(effectType) && target.statusEffects.some(e => e.type === 'ccImmune')) {
+    return {
+      applied: false,
+      blockedByImmune: true,
+      synergyMsg: `🛡️ ${target.name} is CC-IMMUNE — ${effectType} was blocked!`,
+    };
+  }
+
   // 🧪 SYNERGY LOGIC
   const currentTypes = target.statusEffects.map((s) => s.type);
   let finalType = effectType;
@@ -3412,6 +3431,20 @@ async function processCombatTurn(sock, sessionKey) {
       // high-speed bosses (S+ rank at 126%+ of player speed). The fix:
       // if the same actor was just selected, skip them and let the gauge
       // loop continue until a DIFFERENT combatant qualifies.
+      //
+      // 💡 FIX (Item #3 — "boss attacks twice per player"): the original
+      // fix #37 had a hole. When the same actor was selected again and
+      // NO other combatant was close to qualifying (c.actionGauge + cSpeed
+      // < threshold for all), the code fell through and let the same
+      // actor act again. For a boss with speed 100 vs player speed 10
+      // and threshold 200, the boss would re-qualify every 2 ticks while
+      // the player's gauge crawled — causing the boss to attack 10x for
+      // every 1 player turn. Now: in the "no alternative close" case,
+      // we force `activeActor = null` and continue the gauge loop. The
+      // boss's gauge keeps accumulating (not reset since they didn't
+      // act), so eventually the player WILL qualify and get a turn.
+      // The maxTicks=1000 safety limit prevents infinite loops in
+      // degenerate cases (e.g. player speed 0).
       if (state.lastActorId && activeActor.id === state.lastActorId) {
         // Same actor would act again — check if ANY other combatant also
         // qualifies. If yes, let them go instead. If no, allow the repeat
@@ -3427,20 +3460,17 @@ async function processCombatTurn(sock, sessionKey) {
             break;
           }
         }
-        // If no alternative, check if any other combatant is close to
-        // qualifying (within 1 tick). If so, give them that tick instead.
+        // If no alternative qualifies, check if any other combatant is
+        // close to qualifying. If so, give them this tick. If NOT close,
+        // STILL force a tick — don't let the same actor act twice in a
+        // row just because others are far behind. The gauge loop will
+        // keep ticking until someone else qualifies or maxTicks is hit.
         if (!alternativeFound) {
-          for (const c of state.turnOrder) {
-            if (c.stats.hp <= 0) continue;
-            if (c.id === activeActor.id) continue;
-            const cSpeed = c.stats.spd || 10;
-            if (c.actionGauge + cSpeed >= gaugeThreshold) {
-              // They'd qualify next tick — give them this tick
-              activeActor = null; // Force the loop to tick once more
-              break;
-            }
-          }
-          if (!activeActor) continue; // Re-enter the while loop for another tick
+          // 💡 FIX (Item #3): previously only set activeActor=null if
+          // someone was close. Now ALWAYS set null and re-tick. This is
+          // the core fix for "boss attacks twice per player."
+          activeActor = null;
+          continue; // Re-enter the while loop for another tick
         }
       }
       state.lastActorId = activeActor.id;
@@ -5766,6 +5796,28 @@ async function startJourney(sock, sessionKey) {
   // Instant for solo, 1s delay for group
   if (state.mode === "TRIAL") {
     // For class trials, skip shopping and go straight to the boss fight
+    // 💡 FIX (Item #1 — "evolution trial hangs after shop"): defensively
+    // clear isProcessing + isEndingCombat before calling nextStage. If a
+    // prior crash or stuck-state left these flags dirty on the same
+    // sessionKey, nextStage would silently return early (line 5895-5906)
+    // and the trial would never start — the user sees "TRIAL-RANK"
+    // then nothing. Clearing here guarantees nextStage proceeds.
+    state.isProcessing = false;
+    state.isEndingCombat = false;
+    state.lastProcessTime = 0;
+
+    // 💡 FIX: send a "preparing boss fight" message so the user knows
+    // the trial is progressing. Without this, the user sees the
+    // "TRIAL-RANK" initAdventure message, then a long silence while
+    // the boss splash renders — perceiving it as a hang.
+    try {
+      await sock.sendMessage(chatId, {
+        text: `⚔️ *Boss fight starting...*\n\n_The arena materializes around you._`,
+      });
+    } catch (e) {
+      console.error('[Trial] preparatory message send failed:', e.message);
+    }
+
     setTimeout(() => {
       state.phase = "PLAYING";
       nextStage(sock, state.groq, sessionKey).catch((e) =>
@@ -6133,20 +6185,69 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
 
           // Resolve sprite filename — mirror the Go BossNameSprites map
           // so the splash shows the same image the combat scene will use.
+          // 💡 FIX (Item #9): expanded to mirror the Go-side BossNameSprites
+          // map so splash + combat render the same distinct sprite per boss.
           const BOSS_SPLASH_SPRITES = {
+            // S/SS/SSS-rank dungeon bosses
+            "PRIMORDIAL CHAOS": "calamaties (1).png",
             "ELDER CHAOS": "calamaties (1).png",
             "VOID TITAN": "calamaties (3).png",
             "ABYSSAL GOD": "calamaties (5).png",
+            "MUTATION PRIME": "calamaties (4).png",
+            "ELEMENTAL ARCHON": "calamaties (2).png",
+            // Mid-level bosses
+            "THE INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "CORRUPTED GUARDIAN": "midlevelbosses (2).png",
+            "STONE HULK": "midlevelbosses (3).png",
+            "CRYSTAL CORRUPTED": "midlevelbosses (4).png",
+            "EARTH WARDEN": "midlevelbosses (5).png",
+            "FROST GHOUL": "midlevelbosses (6).png",
+            "GLACIAL BEAST": "midlevelbosses (7).png",
+            // High-level bosses
+            "MAGMA BRUTE": "highlevelbosses (7).png",
+            "HELLFIRE DEMON": "highlevelbosses (8).png",
+            "ABYSSAL HORROR": "highlevelbosses (9).png",
+            "TSUNAMI WALKER": "highlevelbosses (10).png",
+            "BLIZZARD WRAITH": "highlevelbosses (11).png",
+            "GRAVEYARD LORD": "highlevelbosses (12).png",
+            "SHADOW LORD": "highlevelbosses (13).png",
+            // Dragon bosses
             "IGNEEL THE FIRE KING": "calamaties (2).png",
             "ANCIENT DRAGON": "calamaties (2).png",
-            "DEMON LORD": "calamaties (4).png",
-            "LEVIATHAN": "calamaties (6).png",
             "ETERNAL DRAGON": "calamaties (2).png",
-            "SHADOW LORD": "highlevelbosses (13).png",
-            "PRIMORDIAL EVIL": "calamaties (1).png",
-            "GRAVEYARD LORD": "highlevelbosses (12).png",
             "ELDER FLAME": "calamaties (2).png",
-            "PRIMORDIAL CHAOS": "calamaties (1).png",
+            // Trial bosses
+            "ARCANE SENTINEL": "midlevelbosses (4).png",
+            "LICH KING": "highlevelbosses (12).png",
+            "SHADOW STALKER": "highlevelbosses (13).png",
+            "VOID ASSASSIN": "highlevelbosses (9).png",
+            "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
+            "ANCIENT WURM": "calamaties (2).png",
+            "SOUL EATER": "mutated (3).png",
+            "ABYSSAL WHISPER": "calamaties (5).png",
+            "ELEMENTAL PRIMORDIAL": "calamaties (2).png",
+            "PRIME ELEMENT": "calamaties (2).png",
+            "VOID NECROMANCER": "mutated (5).png",
+            "CHRONOS WARDEN": "highlevelbosses (11).png",
+            "TIME EATER": "mutated (7).png",
+            "HEAVENLY GUARDIAN": "highlevelbosses (10).png",
+            "SERAPHIM PRIME": "calamaties (5).png",
+            "FOREST ANCESTOR": "midlevelbosses (5).png",
+            "GAIA SENTINEL": "midlevelbosses (5).png",
+            "GOLDEN GOLEM": "midlevelbosses (3).png",
+            "TREASURE HOARDER": "calamaties (2).png",
+            "SOUND REAPER": "mutated (4).png",
+            "MAESTRO OF VOID": "calamaties (3).png",
+            "CLOCKWORK TITAN": "highlevelbosses (7).png",
+            "MECH GOD": "calamaties (5).png",
+            "DEMON LORD": "calamaties (4).png",
+            "PRIMORDIAL EVIL": "calamaties (1).png",
+            "LEVIATHAN": "calamaties (6).png",
+            "LEVIATHAN SPAWN ALPHA": "calamaties (6).png",
+            "INFERNAL OVERLORD": "highlevelbosses (8).png",
+            "PRIMORDIAL FLAME": "calamaties (2).png",
+            "PERMAFROST TITAN": "highlevelbosses (11).png",
           };
           const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
 
@@ -6158,9 +6259,32 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
           };
 
           // Try to render splash
+          // 💡 FIX (Item #1 — "evolution trial hangs after shop"): the splash
+          // request goes through goImageService._enqueue, a SEQUENTIAL queue.
+          // If a heavy op (card spawn, 60s timeout) is ahead in the queue,
+          // the splash wait could exceed 60s — blocking executeEncounter,
+          // blocking nextStage, and freezing the trial. The user sees the
+          // "TRIAL-RANK" message from initAdventure, then nothing for a
+          // minute+, perceiving it as a hang after the (skipped) shop phase.
+          //
+          // Fix: race the splash generation against a hard 5s wall-clock
+          // timeout. If it loses, skip the splash and proceed to combat.
+          // Splash is cosmetic — combat must never wait on it.
           const goService = require('../utils/goImageService');
           const go = new goService();
-          const splashBuf = await go.generateBossSplash(splashPayload);
+          let splashBuf = null;
+          try {
+            const splashPromise = go.generateBossSplash(splashPayload);
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('__TIMEOUT__'), 5000));
+            const raceResult = await Promise.race([splashPromise, timeoutPromise]);
+            if (raceResult !== '__TIMEOUT__') {
+              splashBuf = raceResult;
+            } else {
+              console.warn('[BossSplash] Skipped — total time exceeded 5s (queue or render slow). Combat will proceed without splash.');
+            }
+          } catch (splashGenErr) {
+            console.error('[BossSplash] Generation threw (non-fatal):', splashGenErr.message);
+          }
           if (splashBuf && splashBuf.length > 100) {
             try {
               await sock.sendMessage(state.chatId, {
@@ -7785,7 +7909,13 @@ async function applyAbilityEffect(
           0,
           player.name,
         );
-        msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        // 💡 FIX (BUG 6): surface the ccImmune block message so players
+        // understand why their CC didn't land on a boss.
+        if (sRes.blockedByImmune) {
+          msg += `${sRes.synergyMsg}\n`;
+        } else if (sRes.applied) {
+          msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        }
       }
     }
 
@@ -7919,7 +8049,13 @@ async function applyAbilityEffect(
           0,
           player.name,
         );
-        msg += `💫 Applied ${effect.cc} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        // 💡 FIX (BUG 6): surface the ccImmune block message so players
+        // understand why their CC didn't land on a boss.
+        if (sRes.blockedByImmune) {
+          msg += `${sRes.synergyMsg}\n`;
+        } else if (sRes.applied) {
+          msg += `💫 Applied ${effect.cc} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        }
       }
       // Apply Specific Debuffs (Slow, etc found in keys)
       ["slow", "stun", "freeze", "burn", "shock", "poison"].forEach(

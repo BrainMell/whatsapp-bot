@@ -9424,6 +9424,25 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // 💡 ECONOMY SINK (Item #4): .g/.e/.j respec — reset allocated
+                  // stat points for a Zeni fee (100K × level). Previously stat
+                  // allocation was permanent; this gives players a way to undo
+                  // mistakes while draining Zeni from the economy.
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} respec` ||
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} respecialize`
+                  ) {
+                    await progressionCommands.handleRespecCommand(
+                      sock,
+                      chatId,
+                      senderJid,
+                      m,
+                    );
+                    return;
+                  }
+
                   // .j leaderboard - View leaderboard
                   if (
                     lowerTxt.startsWith(
@@ -14002,10 +14021,17 @@ _Sorted by guild level + XP_
                     }
 
                     // `${botConfig.getPrefix().toLowerCase()}` guild points - Show current guild points
+                    // 💡 AUDIT FIX: the previous handler used a regex literal
+                    // `/^\`...\`` with stray backtick escapes that never matched
+                    // real input (WhatsApp commands start with `.g`, not a backtick).
+                    // The command was effectively unreachable. Replaced with the
+                    // same string-comparison pattern used by every other guild
+                    // subcommand so `.g guild points` / `.g guild pts` now works.
                     if (
-                      /^\`${botConfig.getPrefix().toLowerCase()}`\s+guild\s+(points?|pts)$/.test(
-                        lowerTxt,
-                      )
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} guild points` ||
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} guild pts`
                     ) {
                       try {
                         const info = guilds.getGuildInfo();
@@ -23431,6 +23457,8 @@ _(Or reply to their message)_
                       "lore",
                       "allocate",
                       "alloc",
+                      "respec",
+                      "respecialize",
                       "leaderboard",
                       "top",
                       "rank",

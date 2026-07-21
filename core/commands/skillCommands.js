@@ -107,7 +107,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
 
     msg += `💡 *Commands:*\n`;
     msg += `• \`${getPrefix()} skill up <name>\` — Invest a point\n`;
-    msg += `• \`${getPrefix()} skill reset\` — Refund all points (500 Zeni)\n`;
+    msg += `• \`${getPrefix()} skill reset\` — Refund all points (cost scales with level²)\n`;
     msg += `• \`${getPrefix()} abilities\` — View combat ability list`;
     
     await sock.sendMessage(chatId, { text: msg });
@@ -140,9 +140,20 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const lineage = classSystem.getLineage(userClass.id);
     let targetSkill = null;
     let foundInClassName = null;
-    
+
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
-    
+
+    // 💡 FIX (BUG 5: "skill up rally" skilled up "rallying cry"):
+    // The old matcher used `cleanName.includes(cleanSearch)` which is a
+    // SUBSTRING match. "rally" matches "rallyingcry" (from "Rallying Cry"),
+    // so the wrong skill was returned. Now we do TWO passes:
+    //   Pass 1: EXACT match on skill id OR skill name (case-insensitive,
+    //           whitespace-insensitive).
+    //   Pass 2: Only if pass 1 finds nothing, fall back to substring match.
+    // This ensures `.g skill up rally` finds the skill literally named
+    // "Rally" before it considers "Rallying Cry".
+
+    // ── Pass 1: exact match ──
     for (const classId of lineage) {
         const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
         if (!tree) continue;
@@ -150,7 +161,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
                 const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
                 const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
-                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
+                if (cleanSId === cleanSearch || cleanName === cleanSearch) {
                     targetSkill = { ...skill, id: sId };
                     foundInClassName = classSystem.getClassById(classId)?.name || classId;
                     break;
@@ -159,6 +170,27 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             if (targetSkill) break;
         }
         if (targetSkill) break;
+    }
+
+    // ── Pass 2: substring fallback (only if no exact match) ──
+    if (!targetSkill) {
+        for (const classId of lineage) {
+            const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+            if (!tree) continue;
+            for (const [, treeData] of Object.entries(tree.trees)) {
+                for (const [sId, skill] of Object.entries(treeData.skills)) {
+                    const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                    const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                    if (cleanSId.includes(cleanSearch) || cleanName.includes(cleanSearch)) {
+                        targetSkill = { ...skill, id: sId };
+                        foundInClassName = classSystem.getClassById(classId)?.name || classId;
+                        break;
+                    }
+                }
+                if (targetSkill) break;
+            }
+            if (targetSkill) break;
+        }
     }
     
     if (!targetSkill) {
@@ -292,8 +324,14 @@ async function resetSkills(sock, chatId, senderJid) {
         await sock.sendMessage(chatId, { text: '❌ You have no skills to reset!' });
         return;
     }
-    
-    const RESET_COST = 500;
+
+    // 💡 ECONOMY SINK (Item #4): scale reset cost with level². Previously
+    // a flat 500 Zeni — trivially cheap for a level-100 player with
+    // millions of Zeni. Now: level 10 = 50K, level 50 = 1.25M, level 100
+    // = 5M. This makes skill resets a meaningful Zeni sink at high levels
+    // while staying accessible for low-level players experimenting with
+    // their first class.
+    const RESET_COST = 500 * Math.max(1, level * level);
     const balance = economy.getBalance(senderJid);
     
     if (balance < RESET_COST) {

@@ -793,6 +793,32 @@ function enhanceItem(userId, itemId, stoneId) {
         item.name = `${prefix} ${item.name.replace(/^(Polished|Strengthened|Reinforced|Masterwork|God-forged) /, '')}`;
     }
 
+    // 💡 FIX (BUG 4b: "enhanced a mythic weapon, no effect"):
+    // equipItem() stores a SHALLOW COPY of the item in the equipment slot
+    // (line 530: `equipment[slotName] = { ...itemToEquip }`). So when we
+    // enhance the inventory copy here, the equipped copy is a SEPARATE
+    // object that never gets updated. getEquipmentStats() then reads the
+    // OLD pre-enhancement stats from the equipped copy — making the
+    // enhancement appear to have "no effect" in combat.
+    //
+    // Fix: after enhancing the inventory copy, check if this item is
+    // equipped in any slot. If so, sync the enhanced fields (stats,
+    // enhancementLevel, enhancementBonus, name) to the equipped copy.
+    const equipment = getEquipment(userId);
+    if (equipment) {
+        for (const [slot, eqItem] of Object.entries(equipment)) {
+            if (eqItem && eqItem.id === itemId) {
+                // Sync the enhanced fields to the equipped copy
+                eqItem.stats = JSON.parse(JSON.stringify(item.stats));
+                eqItem.enhancementLevel = item.enhancementLevel;
+                eqItem.enhancementBonus = item.enhancementBonus;
+                eqItem.baseStats = item.baseStats ? JSON.parse(JSON.stringify(item.baseStats)) : undefined;
+                eqItem.name = item.name;
+                break; // an item can only be equipped in one slot
+            }
+        }
+    }
+
     removeItem(userId, stoneId, 1);
     economy.saveUser(userId);
 

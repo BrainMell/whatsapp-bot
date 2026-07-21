@@ -1201,12 +1201,46 @@ async function updateAdventurerRank(userId) {
     // debounced save fires, the rank promotion is lost.
     await saveUser(userId);
 
+    // 💡 AUDIT FIX (Item #5): Implement the L7 guild perk — "Guild L7+
+    // grants +1 skill point (GP) on adventurer rank-up". Previously the
+    // perk was declared in guildPerks.GUILD_LEVEL_PERKS[7] and shown in
+    // `.g guild info` / `.g guild perks`, but nothing actually awarded
+    // the GP. Now: if the user is in a guild whose level >= 7, they
+    // receive +1 GP on every rank promotion.
+    let guildBonusGP = 0;
+    try {
+      const guilds = require('./guilds');
+      const userGuildName = guilds.getUserGuild(userId);
+      if (userGuildName) {
+        const userGuild = guilds.getGuild(userGuildName);
+        if (userGuild && (userGuild.level || 1) >= 7) {
+          const progression = require('./progression');
+          const gpUser = progression.getUser ? progression.getUser(userId) : null;
+          // Use the same shape as progression.awardGP: bump gp + totalGP.
+          // We touch the user object directly here because progression
+          // caches its own copy and we already have `user` from this
+          // module's getUser — but GP lives in the progression cache.
+          if (gpUser) {
+            gpUser.gp = (gpUser.gp || 0) + 1;
+            gpUser.totalGP = (gpUser.totalGP || 0) + 1;
+            if (typeof progression.saveProgression === 'function') {
+              progression.saveProgression(userId);
+            }
+            guildBonusGP = 1;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[economy] L7 guild perk GP award failed:', e.message);
+    }
+
     const rankData = classSystem.ADVENTURER_RANKS[calculatedRank];
     return {
       ranked_up: true,
       old_rank: oldRank,
       new_rank: calculatedRank,
-      rank_data: rankData
+      rank_data: rankData,
+      guild_bonus_gp: guildBonusGP
     };
   }
 

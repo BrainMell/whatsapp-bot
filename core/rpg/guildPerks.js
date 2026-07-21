@@ -63,12 +63,18 @@ const BUILDING_PERKS = {
 // ─── GUILD LEVEL PERKS ────────────────────────────────────────────────────
 // Unlocked at specific guild levels. These are global perks that apply to
 // all members regardless of archetype.
+//
+// 💡 AUDIT FIX: descriptions now match the actual implemented behavior.
+// Previously L5 said "1% daily interest" but the real rate is 0.5% per
+// treasury level (max 2.5% at treasury L5). L10 said "Access to GUILD-rank
+// dungeon" but no such dungeon exists yet — desc now reflects that. L7 is
+// now actually wired up (see economy.js checkAndPromoteRank).
 const GUILD_LEVEL_PERKS = {
   2:  { xpBonus: 0.05, desc: '+5% XP for all members' },
   3:  { goldBonus: 0.05, desc: '+5% gold for all members' },
-  5:  { bankInterest: true, desc: 'Guild bank earns 1% daily interest' },
-  7:  { skillPointOnRankUp: 1, desc: '+1 skill point on adventurer rank-up' },
-  10: { guildDungeonAccess: true, desc: 'Access to GUILD-rank dungeon' },
+  5:  { bankInterest: true, desc: 'Unlocks guild bank interest (0.5% per Treasury level, max 2.5%)' },
+  7:  { skillPointOnRankUp: 1, desc: '+1 skill point (GP) on adventurer rank-up' },
+  10: { guildDungeonAccess: true, desc: 'GUILD-rank dungeon access (coming soon)' },
 };
 
 // ─── HELPER: get user's guild object ──────────────────────────────────────

@@ -30,7 +30,12 @@ const GUILD_ARCHETYPES = {
     name: 'Merchants Guild',
     icon: '💰',
     description: 'Focuses on commerce and wealth.',
-    perks: 'Increases item sell value by 10%.',
+    // 💡 AUDIT FIX: was "Increases item sell value by 10%" — only mentioned
+    // half the perk. ARCHETYPE_PERKS.MERCHANT in guildPerks.js gives BOTH
+    // +10% dungeon gold AND +10% sell value. Flavor text now matches the
+    // actual implementation so `.g guild info` doesn't contradict the
+    // multipliers shown by `.g guild perks`.
+    perks: 'Increases item sell value by 10% and dungeon gold by 10%.',
     questType: 'EARN'
   },
   RESEARCH: {

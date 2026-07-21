@@ -668,24 +668,38 @@ async function distributeLoot(players, encounterType, enemyName = null, difficul
     
     for (const drop of loot) {
         const itemInfo = getItemInfo(drop.id);
-        
+
         if (drop.announcement) {
             results.announcements.push(drop.announcement);
         }
-        
+
         const luckyPlayer = players[Math.floor(Math.random() * players.length)];
-        
+
+        // 💡 FIX (BUG 4: "equipments still not in their actual rank, all come
+        // as common, enhanced mythic weapon had no effect"):
+        // distributeLoot was passing itemInfo.name, itemInfo.stats, and
+        // itemInfo.value (the BASE item database values) to addItem —
+        // completely discarding the rolled name/stats/rarity/value from the
+        // loot generation (which includes prefix/suffix bonuses and rarity
+        // boosts). So a "Sturdy Sharp Iron Sword of Might" with MYTHIC
+        // rarity and +30 atk was stored as a plain "Iron Sword" with base
+        // +12 atk and the rolled rarity was overwritten by the base item's
+        // rarity (often COMMON/UNCOMMON).
+        //
+        // Fix: use the drop's own name/stats/value if present (they were
+        // already computed by rollDrop), falling back to itemInfo only for
+        // fields the drop didn't populate.
         const addResult = await inventorySystem.addItem(
             luckyPlayer.jid,
             drop.id,
             drop.quantity,
             {
-                name: itemInfo.name,
+                name: drop.name || itemInfo.name,
                 rarity: drop.rarity || itemInfo.rarity,
                 type: itemInfo.type || (drop.id.includes('fish') || drop.id.includes('hide') ? 'MATERIAL' : 'ITEM'),
-                value: itemInfo.value || drop.value || 100,
-                stats: itemInfo.stats,
-                slot: itemInfo.slot,
+                value: drop.value || itemInfo.value || 100,
+                stats: drop.stats || itemInfo.stats,
+                slot: drop.slot || itemInfo.slot,
                 source: drop.source || encounterType,
                 acquiredAt: Date.now()
             }

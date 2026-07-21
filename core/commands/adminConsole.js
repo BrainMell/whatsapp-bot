@@ -243,6 +243,49 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `• \`${prefix} admin enableskill <skill_name>\`\n` +
                 `  Re-enables a disabled skill.\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
+                `👹 *ENEMY EDITOR (NEW)*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} admin enemy list\`\n` +
+                `  Lists all bosses with HP/ATK/DEF/XP/Gold.\n\n` +
+                `• \`${prefix} admin enemy info <bossId>\`\n` +
+                `  Full stat block for one boss. Use list to find IDs.\n\n` +
+                `• \`${prefix} admin enemy setstat <bossId> <stat> <value>\`\n` +
+                `  Edit any stat (hp/atk/def/mag/spd/luck/crit). Applies immediately.\n\n` +
+                `• \`${prefix} admin enemy sethp|setatk|setdef <bossId> <value>\`\n` +
+                `  Shortcuts for the most-edited stats.\n\n` +
+                `• \`${prefix} admin enemy setxp <bossId> <value>\`\n` +
+                `  Set XP reward.\n\n` +
+                `• \`${prefix} admin enemy setgold <bossId> <min> <max>\`\n` +
+                `  Set gold reward range.\n\n` +
+                `• \`${prefix} admin enemy reset\`\n` +
+                `  Discards all runtime edits, reloads from source.\n\n` +
+                `_Edits are in-memory only — a restart reverts them. For permanent changes, edit classEncounters.js._\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `🧪 *SANDBOX TEST CHARACTER (NEW)*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `Isolated test character stored in a separate DB collection. Test freely!\n\n` +
+                `• \`${prefix} admin sandbox\`\n` +
+                `  Show your sandbox status (level, class, wallet, skills, inventory).\n\n` +
+                `• \`${prefix} admin sandbox reset\`\n` +
+                `  Wipe sandbox to fresh level-1 state. Increments reset counter.\n\n` +
+                `• \`${prefix} admin sandbox setlevel <1-100>\`\n` +
+                `  Set sandbox level (recalculates XP + grants stat points).\n\n` +
+                `• \`${prefix} admin sandbox setclass <name>\`\n` +
+                `  Set sandbox class — bypasses ALL requirements (level, trials, items).\n\n` +
+                `• \`${prefix} admin sandbox setrank <F-SSS|GOD>\`\n` +
+                `  Set sandbox adventurer rank.\n\n` +
+                `• \`${prefix} admin sandbox setwallet <amount>\`\n` +
+                `  Set sandbox wallet directly.\n\n` +
+                `• \`${prefix} admin sandbox givezeni <amount>\`\n` +
+                `  Add Zeni to sandbox wallet (does NOT overwrite).\n\n` +
+                `• \`${prefix} admin sandbox setstat <hp|atk|def|mag|spd|luck|crit> <value>\`\n` +
+                `  Set a sandbox stat bonus.\n\n` +
+                `• \`${prefix} admin sandbox giveitem <item_name> [qty]\`\n` +
+                `  Add items to sandbox inventory.\n\n` +
+                `• \`${prefix} admin sandbox giveskill <skill_name> [level]\`\n` +
+                `  Grant any skill to the sandbox (bypasses class/level requirements).\n\n` +
+                `_Sandbox data is ISOLATED — never appears in leaderboards, guild rosters, economy totals, or real-player queries._\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
                 `🎭 *MAIN-ACCOUNT CLASS SWITCH*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `• \`${prefix} modclass <class_name>\`\n` +
@@ -675,6 +718,406 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     if (sub === 'createclass') {
         const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|etc>\nPassiveValue: <number>\n\`\`\``;
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── ENEMY EDITOR (Item #12 — deeper admin console integration) ─────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Lets GMs inspect and edit boss/enemy stats at runtime. Changes apply
+    // to the in-memory BOSS_ENCOUNTERS registry (classEncounters.js), so
+    // they take effect immediately for all subsequent encounters. They are
+    // NOT persisted to MongoDB — a restart reverts them. This is by design:
+    // the editor is for live-tuning and testing, not permanent overrides.
+    // Permanent changes should go in the source file.
+    //
+    // Subcommands:
+    //   admin enemy list [pool]            — list all bosses (or one pool)
+    //   admin enemy info <bossId>          — show full boss stat block
+    //   admin enemy setstat <bossId> <stat> <value> — edit one stat
+    //   admin enemy sethp <bossId> <value> — shortcut for HP
+    //   admin enemy setatk <bossId> <value> — shortcut for ATK
+    //   admin enemy setxp <bossId> <value> — set XP reward
+    //   admin enemy setgold <bossId> <min> <max> — set gold reward range
+    //   admin enemy reset                  — reset all edits (reload from source)
+    if (sub === 'enemy') {
+        const classEncounters = require('../rpg/classEncounters');
+        const enemySub = (args[1] || '').toLowerCase();
+        const bossId = args[2]?.toUpperCase();
+        const { BOSS_ENCOUNTERS } = classEncounters;
+
+        // ── enemy list [pool] ──
+        if (!enemySub || enemySub === 'list') {
+            const poolFilter = (args[1] || '').toUpperCase();
+            let msg = `👹 *BOSS REGISTRY*\n\n`;
+            const pools = Object.keys(BOSS_ENCOUNTERS);
+            for (const pool of pools) {
+                if (poolFilter && pool !== poolFilter && poolFilter !== 'LIST') continue;
+                msg += `━ *${pool}* (${BOSS_ENCOUNTERS[pool].length} bosses) ━\n`;
+                for (const boss of BOSS_ENCOUNTERS[pool]) {
+                    msg += `  • ${boss.icon} *${boss.name}* — \`${boss.id}\`\n`;
+                    msg += `    ❤️ ${boss.stats.hp} | ⚔️ ${boss.stats.atk} | 🛡️ ${boss.stats.def}\n`;
+                    msg += `    ⭐ XP ${boss.xpReward} | 💰 ${(boss.goldReward?.[0] || 0)}-${(boss.goldReward?.[1] || 0)}\n`;
+                }
+                msg += `\n`;
+            }
+            msg += `_Edit with: \`${prefix} admin enemy setstat <bossId> <stat> <value>\`_\n`;
+            msg += `_Reset all edits: \`${prefix} admin enemy reset\`_`;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        }
+
+        // ── enemy reset ──
+        if (enemySub === 'reset') {
+            // Force-reload the module from source
+            try {
+                delete require.cache[require.resolve('../rpg/classEncounters')];
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ENEMY EDITS RESET*\n\nAll boss stats reloaded from source. Runtime edits discarded.` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reset failed: ${e.message}` });
+            }
+        }
+
+        // ── enemy info <bossId> ──
+        if (enemySub === 'info') {
+            if (!bossId) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy info <bossId>\`` });
+            let boss = null;
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                const found = pool.find(b => b.id === bossId);
+                if (found) { boss = found; break; }
+            }
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found. Use \`${prefix} admin enemy list\` to see IDs.` });
+            let msg = `${boss.icon} *${boss.name}*\n🆔 \`${boss.id}\`\n\n`;
+            msg += `📊 *Stats:*\n`;
+            for (const [stat, val] of Object.entries(boss.stats)) {
+                msg += `  • ${stat.toUpperCase()}: ${val}\n`;
+            }
+            msg += `\n⭐ XP: ${boss.xpReward}\n`;
+            msg += `💰 Gold: ${(boss.goldReward?.[0] || 0)}-${(boss.goldReward?.[1] || 0)}\n`;
+            msg += `🎯 Level Range: ${(boss.levelRange?.[0] || '?')}-${(boss.levelRange?.[1] || '?')}\n`;
+            if (boss.skills) msg += `⚡ Skills: ${boss.skills.join(', ')}\n`;
+            if (boss.phases) msg += `🎭 Phases: ${boss.phases.join(' → ')}\n`;
+            msg += `\n_Edit: \`${prefix} admin enemy setstat ${boss.id} <stat> <value>\`_`;
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+        }
+
+        // ── enemy setstat <bossId> <stat> <value> ──
+        if (enemySub === 'setstat') {
+            const statName = (args[3] || '').toLowerCase();
+            const value = parseInt(args[4]);
+            if (!bossId || !statName || isNaN(value)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setstat <bossId> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
+            }
+            let boss = null;
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                const found = pool.find(b => b.id === bossId);
+                if (found) { boss = found; break; }
+            }
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found.` });
+            const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+            if (!validStats.includes(statName)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid stat. Valid: ${validStats.join(', ')}` });
+            }
+            const oldValue = boss.stats[statName] || 0;
+            boss.stats[statName] = value;
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ *BOSS STAT UPDATED*\n\n${boss.icon} *${boss.name}*\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*\n\n_Applies immediately to all new encounters. Use \`${prefix} admin enemy reset\` to revert._`
+            });
+        }
+
+        // ── enemy sethp <bossId> <value> ── (shortcut)
+        if (enemySub === 'sethp' || enemySub === 'setatk' || enemySub === 'setdef') {
+            const statMap = { sethp: 'hp', setatk: 'atk', setdef: 'def' };
+            const statName = statMap[enemySub];
+            const value = parseInt(args[3]);
+            if (!bossId || isNaN(value)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy ${enemySub} <bossId> <value>\`` });
+            }
+            let boss = null;
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                const found = pool.find(b => b.id === bossId);
+                if (found) { boss = found; break; }
+            }
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found.` });
+            const oldValue = boss.stats[statName] || 0;
+            boss.stats[statName] = value;
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ ${boss.icon} *${boss.name}*: ${statName.toUpperCase()} ${oldValue} → *${value}*`
+            });
+        }
+
+        // ── enemy setxp <bossId> <value> ──
+        if (enemySub === 'setxp') {
+            const value = parseInt(args[3]);
+            if (!bossId || isNaN(value)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setxp <bossId> <value>\`` });
+            let boss = null;
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                const found = pool.find(b => b.id === bossId);
+                if (found) { boss = found; break; }
+            }
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found.` });
+            const oldValue = boss.xpReward || 0;
+            boss.xpReward = value;
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ ${boss.icon} *${boss.name}*: XP ${oldValue} → *${value}*`
+            });
+        }
+
+        // ── enemy setgold <bossId> <min> <max> ──
+        if (enemySub === 'setgold') {
+            const min = parseInt(args[3]);
+            const max = parseInt(args[4]);
+            if (!bossId || isNaN(min) || isNaN(max)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setgold <bossId> <min> <max>\`` });
+            let boss = null;
+            for (const pool of Object.values(BOSS_ENCOUNTERS)) {
+                const found = pool.find(b => b.id === bossId);
+                if (found) { boss = found; break; }
+            }
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found.` });
+            const oldGold = boss.goldReward || [0, 0];
+            boss.goldReward = [min, max];
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ ${boss.icon} *${boss.name}*: Gold ${oldGold[0]}-${oldGold[1]} → *${min}-${max}*`
+            });
+        }
+
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} admin enemy list\` to see bosses.` });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── ADMIN SANDBOX (Item #11 — isolated test character) ───────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Each mod gets ONE sandbox test character stored in a separate MongoDB
+    // collection (adminsandboxes). It has its own wallet, stats, class,
+    // skills, inventory — fully isolated from real player data. Mods can
+    // test combat/dungeons/evolutions/economy without risking real accounts.
+    //
+    // Subcommands:
+    //   admin sandbox                     — show your sandbox status
+    //   admin sandbox reset               — wipe sandbox to level-1 fresh state
+    //   admin sandbox setlevel <1-100>    — set sandbox level (recalcs XP)
+    //   admin sandbox setclass <name>     — set sandbox class (bypasses reqs)
+    //   admin sandbox setrank <F-SSS>     — set sandbox adventurer rank
+    //   admin sandbox setwallet <amount>  — set sandbox wallet
+    //   admin sandbox givezeni <amount>   — add Zeni to sandbox wallet
+    //   admin sandbox setstat <stat> <v>  — set a sandbox stat
+    //   admin sandbox giveitem <item> [n] — add items to sandbox inventory
+    //   admin sandbox giveskill <skill> [lvl] — grant a skill to sandbox
+    if (sub === 'sandbox') {
+        const AdminSandbox = require('../models/AdminSandbox');
+        const senderName = m?.pushName || senderJid.split('@')[0];
+        const sandboxSub = (args[1] || '').toLowerCase();
+
+        // ── sandbox (no args) — show status ──
+        if (!sandboxSub || sandboxSub === 'status') {
+            try {
+                const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
+                let msg = `🧪 *YOUR SANDBOX TEST CHARACTER*\n\n`;
+                msg += `📛 Name: ${sb.name}\n`;
+                msg += `📊 Level: ${sb.progression?.level || 1} | XP: ${(sb.progression?.xp || 0).toLocaleString()}\n`;
+                msg += `🏷️ Class: ${sb.class || 'FIGHTER'} | Rank: ${sb.adventurerRank || 'F'}\n`;
+                msg += `❤️ HP: ${sb.stats?.hp || 100}/${sb.stats?.maxHp || 100}\n`;
+                msg += `💰 Wallet: ${(sb.wallet || 0).toLocaleString()} Zeni\n`;
+                msg += `🏦 Bank: ${(sb.bank || 0).toLocaleString()} Zeni\n`;
+                msg += `💎 Skill Points: ${sb.skillPoints || 0}\n`;
+                msg += `🎒 Inventory: ${Object.keys(sb.inventory || {}).length}/${sb.inventorySlots || 50} slots\n`;
+                msg += `⚙️ Skills: ${Object.keys(sb.skills || {}).length} learned\n`;
+                msg += `⚔️ Trials: ${(sb.completedTrials || []).length} completed\n`;
+                msg += `🔄 Resets: ${sb.resetCount || 0}\n`;
+                msg += `📅 Created: ${new Date(sb.createdAt).toLocaleDateString()}\n`;
+                msg += `📅 Last Used: ${new Date(sb.lastUsedAt).toLocaleDateString()}\n\n`;
+                msg += `_Sandbox is ISOLATED from your real account. Test freely!_\n`;
+                msg += `Reset: \`${prefix} admin sandbox reset\` | Set level: \`${prefix} admin sandbox setlevel 50\``;
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to load sandbox: ${e.message}` });
+            }
+        }
+
+        // ── sandbox reset — wipe to fresh state ──
+        if (sandboxSub === 'reset') {
+            try {
+                // Ensure it exists first
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                const sb = await AdminSandbox.reset(senderJid);
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `🧹 *SANDBOX RESET*\n\nYour sandbox test character has been wiped to fresh level-1 state.\n\n📊 Level: 1\n💰 Wallet: 100,000 Zeni\n🏦 Bank: 1,000,000 Zeni\n🏷️ Class: FIGHTER\n\n_Reset count: ${sb.resetCount}_\n_Ready for testing!_`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reset failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox setlevel <1-100> ──
+        if (sandboxSub === 'setlevel') {
+            const level = parseInt(args[2]);
+            if (!level || level < 1 || level > 100) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setlevel <1-100>\`` });
+            }
+            try {
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                const progression = require('../rpg/progression');
+                const xpForLevel = progression.getXPForLevel(level);
+                const sb = await AdminSandbox.patch(senderJid, {
+                    'progression.level': level,
+                    'progression.xp': xpForLevel,
+                    'progression.statPoints': (level - 1) * 2,
+                    'stats.level': level,
+                    'stats.xp': xpForLevel,
+                    'stats.maxHp': 100 + (level - 1) * 15,
+                    'stats.hp': 100 + (level - 1) * 15,
+                });
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `✅ *SANDBOX LEVEL SET*\n\n📊 Level: ${level}\n⚡ XP: ${xpForLevel.toLocaleString()}\n💎 Stat Points: ${(level - 1) * 2}\n❤️ Max HP: ${100 + (level - 1) * 15}`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox setclass <name> ──
+        if (sandboxSub === 'setclass') {
+            const className = args[2];
+            if (!className) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setclass <class name or ID>\`` });
+            }
+            const cls = resolveClass(className);
+            if (!cls) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Class "${className}" not found.` });
+            }
+            try {
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                const sb = await AdminSandbox.patch(senderJid, {
+                    class: cls.id,
+                    'stats.maxHp': cls.stats?.hp || 100,
+                    'stats.hp': cls.stats?.hp || 100,
+                });
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `✅ *SANDBOX CLASS SET*\n\n${cls.icon} *${cls.name}*\n🆔 \`${cls.id}\`\n📊 Tier: ${cls.tier || 'STARTER'}\n\n_Sandbox now has this class for testing. No requirements were checked._`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox setrank <F-SSS|GOD> ──
+        if (sandboxSub === 'setrank') {
+            const rank = (args[2] || '').toUpperCase();
+            const validRanks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+            if (!validRanks.includes(rank)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid rank. Valid: ${validRanks.join(', ')}` });
+            }
+            try {
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                await AdminSandbox.patch(senderJid, { adventurerRank: rank });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Sandbox rank set to *${rank}*` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox setwallet <amount> ──
+        if (sandboxSub === 'setwallet') {
+            const amount = parseInt(args[2]);
+            if (isNaN(amount) || amount < 0) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setwallet <amount>\`` });
+            }
+            try {
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                await AdminSandbox.patch(senderJid, { wallet: amount });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Sandbox wallet set to *${amount.toLocaleString()}* Zeni` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox givezeni <amount> ──
+        if (sandboxSub === 'givezeni') {
+            const amount = parseInt(args[2]);
+            if (isNaN(amount) || amount <= 0) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox givezeni <amount>\`` });
+            }
+            try {
+                const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
+                const newWallet = (sb.wallet || 0) + amount;
+                await AdminSandbox.patch(senderJid, { wallet: newWallet });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Added *${amount.toLocaleString()}* Zeni to sandbox wallet.\n💰 New wallet: ${newWallet.toLocaleString()}` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox setstat <stat> <value> ──
+        if (sandboxSub === 'setstat') {
+            const statName = (args[2] || '').toLowerCase();
+            const value = parseInt(args[3]);
+            const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+            if (!validStats.includes(statName) || isNaN(value)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setstat <${validStats.join('|')}> <value>\`` });
+            }
+            try {
+                await AdminSandbox.getOrCreate(senderJid, senderName);
+                // Use Mongoose nested-path update
+                const update = {};
+                update[`statBonuses.${statName}`] = value;
+                if (statName === 'hp') {
+                    update['stats.maxHp'] = 100 + value;
+                    update['stats.hp'] = 100 + value;
+                }
+                await AdminSandbox.patch(senderJid, update);
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Sandbox ${statName.toUpperCase()} set to *${value}*` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox giveitem <item> [qty] ──
+        if (sandboxSub === 'giveitem') {
+            const itemName = args[2];
+            const qty = parseInt(args[3]) || 1;
+            if (!itemName) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox giveitem <item_name> [qty]\`` });
+            }
+            const item = resolveItem(itemName);
+            if (!item) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Item "${itemName}" not found.` });
+            }
+            try {
+                const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
+                const inventory = sb.inventory || {};
+                const existing = inventory[item.id] || { id: item.id, name: item.name, qty: 0, rarity: item.rarity || 'COMMON' };
+                existing.qty = (existing.qty || 0) + qty;
+                inventory[item.id] = existing;
+                await AdminSandbox.patch(senderJid, { inventory });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Added *${qty}× ${item.name}* to sandbox inventory.\n🎒 ${Object.keys(inventory).length}/${sb.inventorySlots || 50} slots used` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox giveskill <skill> [level] ──
+        if (sandboxSub === 'giveskill') {
+            const skillName = args[2];
+            const skillLvl = parseInt(args[3]) || 1;
+            if (!skillName) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox giveskill <skill_name> [level]\`` });
+            }
+            const skill = resolveSkill(skillName);
+            if (!skill) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill "${skillName}" not found.` });
+            }
+            try {
+                const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
+                const skills = sb.skills || {};
+                skills[skill.id] = skillLvl;
+                await AdminSandbox.patch(senderJid, { skills });
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `✅ *SANDBOX SKILL GRANTED*\n\n${skill.icon || '✨'} *${skill.name}*\n🆔 \`${skill.id}\`\n📊 Level: ${skillLvl}\n📋 Class: ${skill.classId || 'unknown'}\n\n_Sandbox now has this skill for testing. No requirements were checked._`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
+            }
+        }
+
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown sandbox subcommand: \`${sandboxSub}\`\nUse \`${prefix} admin sandbox\` to see status.` });
     }
 
     // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────

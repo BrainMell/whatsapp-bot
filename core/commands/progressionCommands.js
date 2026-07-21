@@ -411,6 +411,72 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
   }
 }
 
+/*
+ * Handle ${getPrefix()} respec — reset allocated stat points for Zeni
+ * 💡 ECONOMY SINK (Item #4): Previously stat allocation was permanent
+ * (no way to undo). Now players can pay Zeni to respec. Cost scales
+ * with level so it's a meaningful sink at high levels:
+ *   level 10 = 100K, level 50 = 5M, level 100 = 20M Zeni.
+ */
+async function handleRespecCommand(sock, chatId, senderJid, m) {
+  try {
+    const economy = require('../rpg/economy');
+    const level = progression.getLevel(senderJid);
+
+    // Check if there's anything to respec
+    const user = progression.getUser(senderJid);
+    if (!user) {
+      return await sock.sendMessage(chatId, {
+        text: getBotMarker() + '❌ User not found.'
+      }, { quoted: m });
+    }
+
+    const allocatedStats = user.allocatedStats || {};
+    const hasAllocated = Object.values(allocatedStats).some(v => (Number(v) || 0) > 0);
+    if (!hasAllocated) {
+      return await sock.sendMessage(chatId, {
+        text: getBotMarker() + '❌ You have no allocated stat points to respec.'
+      }, { quoted: m });
+    }
+
+    // Cost: 100K × level. Level 10 = 1M, level 50 = 5M, level 100 = 10M.
+    const RESPEC_COST = 100000 * Math.max(1, level);
+    const balance = economy.getBalance(senderJid);
+
+    if (balance < RESPEC_COST) {
+      return await sock.sendMessage(chatId, {
+        text: getBotMarker() + `❌ Not enough Zeni!\n\nRespec Cost: ${RESPEC_COST.toLocaleString()}\nYour Balance: ${balance.toLocaleString()}\n\n_Respec cost scales with level: 100K × level._`
+      }, { quoted: m });
+    }
+
+    // Deduct Zeni first (sink)
+    economy.removeMoney(senderJid, RESPEC_COST, 'Stat respec');
+
+    // Now reset stats
+    const result = progression.resetStats(senderJid);
+    if (!result.success) {
+      // Refund on failure
+      economy.addMoney(senderJid, RESPEC_COST, 'Respec refund');
+      return await sock.sendMessage(chatId, {
+        text: getBotMarker() + `❌ Respec failed: ${result.message}. Zeni refunded.`
+      }, { quoted: m });
+    }
+
+    let successMsg = `🔄 *STAT RESPEC COMPLETE!*\n\n`;
+    successMsg += `💰 Cost: ${RESPEC_COST.toLocaleString()} Zeni\n`;
+    successMsg += `📊 Points Refunded: ${result.pointsRefunded}\n`;
+    successMsg += `💎 Total Points Available: ${result.totalPoints}\n\n`;
+    successMsg += `Use \`${getPrefix()} allocate <stat> [amount]\` to reinvest.`;
+
+    await sock.sendMessage(chatId, { text: getBotMarker() + successMsg }, { quoted: m });
+  } catch (err) {
+    console.error('Error in handleRespecCommand:', err.message);
+    await sock.sendMessage(chatId, {
+      text: getBotMarker() + '❌ Error during respec.'
+    }, { quoted: m });
+  }
+}
+
 // ============================================
 // EXPORTS
 // ============================================
@@ -423,7 +489,8 @@ module.exports = {
   handleGPTopCommand,
   handleAchievementsCommand,
   handleRankCommand,
-  handleAllocateCommand
+  handleAllocateCommand,
+  handleRespecCommand
 };
 
 

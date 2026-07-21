@@ -209,6 +209,16 @@ function ensureTimerRunning() {
   // Previously, one timer rotated through groups, so each group only got
   // a spawn every interval × numberOfGroups. Now each group gets its own
   // independent timer at the configured interval.
+  //
+  // 💡 FIX (Item #13 — "card spawn hive mind"): stagger the first spawn
+  // for each group by a random offset within the interval, so groups
+  // don't all spawn at the same wall-clock minute. Without this, every
+  // group's setInterval fires at t=interval, t=2*interval, t=3*interval...
+  // all in lockstep — making the bot look like a single hive mind
+  // spawning cards simultaneously across every chat. Now the first
+  // fire is randomized within [0, interval), and subsequent fires
+  // follow at interval spacing — so over time, spawns distribute
+  // naturally across the clock minute.
   const intervalMs = inst.spawnIntervalMs || (20 * 60 * 1000);
 
   // Track per-group timers
@@ -217,31 +227,42 @@ function ensureTimerRunning() {
   // Start a timer for each active group
   for (const gid of inst.activeGroups) {
     if (inst.perGroupTimers.has(gid)) continue; // already has a timer
-    const timer = setInterval(() => {
-      // Check if group is still active
-      if (!inst.activeGroups.has(gid)) {
-        clearInterval(timer);
-        inst.perGroupTimers.delete(gid);
-        return;
-      }
-      doSpawn(null, null, false, gid);
-    }, intervalMs);
-    inst.perGroupTimers.set(gid, timer);
+
+    // Random initial delay in [0, intervalMs) so groups desync.
+    const initialDelay = Math.floor(Math.random() * intervalMs);
+
+    // Use a recursive setTimeout chain instead of setInterval so we can
+    // inject the random initial delay only on the FIRST fire. After that,
+    // spacing is exactly intervalMs (predictable cadence per group).
+    const scheduleNext = (delay) => {
+      const timer = setTimeout(() => {
+        // Check if group is still active
+        if (!inst.activeGroups.has(gid)) {
+          inst.perGroupTimers.delete(gid);
+          return;
+        }
+        doSpawn(null, null, false, gid);
+        // Schedule the next fire at the standard interval
+        scheduleNext(intervalMs);
+      }, delay);
+      inst.perGroupTimers.set(gid, timer);
+    };
+    scheduleNext(initialDelay);
   }
 
   // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
   inst.spawnTimer = true;
-  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=${Math.round(intervalMs/60000)}min each`);
+  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=${Math.round(intervalMs/60000)}min each (staggered first-fire)`);
 }
 
 // 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
 // Clears the existing timer and re-creates it with the new interval.
 function restartSpawnTimer() {
   const inst = getInst();
-  // Clear per-group timers
+  // Clear per-group timers (setTimeout chain — use clearTimeout, not clearInterval)
   if (inst.perGroupTimers) {
     for (const [gid, timer] of inst.perGroupTimers) {
-      clearInterval(timer);
+      clearTimeout(timer);
     }
     inst.perGroupTimers.clear();
   }
@@ -1289,7 +1310,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 async function cmdScc(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
-  
+
   let page = 1;
   const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
   if (pageIdx !== -1 && args[pageIdx+1]) {
@@ -1302,34 +1323,80 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
   const filtered = [];
-  
+
+  // 💡 FIX (BUG 3: "scc doesn't show coll numbers, gives random ones, needs
+  // redesign"). The old scc used a sequential `collIndex = i + 1` based on
+  // position in the OWNED array — but that index was only valid within the
+  // filtered chunk, not the actual collection. Now we compute the TRUE
+  // collection index by counting only non-deck, non-sale cards (matching
+  // the coll/coll display the user sees elsewhere). Also redesigned the
+  // output to match the user's requested format: grouped by tier with
+  // proper icons (👑 for S, 💎 for 6, ✨ for 5, etc.), tier S gets a crown,
+  // and it's a flex mechanism not a paginated list.
+  //
+  // The user's example format:
+  //   🔍 *Found 50 card(s)* with "log horizon":
+  //   💎 *Shiroe* (Tier 6) in 📜 *Collection*
+  //   ✨ *Akatsuki* (Tier 5) in 📜 *Collection*
+  //   ...grouped by tier descending...
+  //
+  // We also build a true coll-number map by sorting all owned cards
+  // (regardless of deck status) so the number is stable and meaningful.
+
+  // Build coll-number map: assign sequential numbers to ALL owned cards
+  // sorted by createdAt. This matches how `.g coll` numbers them.
+  const collNumberMap = new Map();
   owned.forEach((uc, i) => {
+    collNumberMap.set(uc._id.toString(), i + 1);
+  });
+
+  owned.forEach((uc) => {
     const card = CARD_INDEX()[uc.cardId];
     if (card?.animeName.toLowerCase().includes(animeQuery)) {
-        filtered.push({ uc, card, collIndex: i + 1 });
+      // Determine location
+      let location = '📜 Collection';
+      if (uc.inMainDeck) location = '🎴 Main Deck';
+      else if (uc.inCustomDeck) location = '📁 Custom Deck';
+      else if (uc.forSale) location = '🏷️ Market';
+
+      filtered.push({
+        uc,
+        card,
+        collNum: collNumberMap.get(uc._id.toString()) || '?',
+        location,
+      });
     }
   });
 
   if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
 
-  const pageSize = 15;
+  // Sort by tier descending (S > 6 > 5 > 4 > 3 > 2 > 1 > E), then by coll number
+  const tierOrder = { 'S': 100, '6': 90, '5': 80, '4': 70, '3': 60, '2': 50, '1': 40, 'E': 30 };
+  filtered.sort((a, b) => {
+    const ta = tierOrder[String(a.card.tier)] || 0;
+    const tb = tierOrder[String(b.card.tier)] || 0;
+    if (tb !== ta) return tb - ta;
+    return a.collNum - b.collNum;
+  });
+
+  // Pagination
+  const pageSize = 25;
   const totalPages = Math.ceil(filtered.length / pageSize);
   if (page > totalPages) page = totalPages;
   const start = (page - 1) * pageSize;
   const chunk = filtered.slice(start, start + pageSize);
 
-  let msg = `🃏 *Owned | ${animeQuery.toUpperCase()}*\n`;
-  msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total Found:* ${filtered.length}\n`;
-  msg += `📖 *Page:* ${page} / ${totalPages}\n\n`;
+  // 💡 Flex-style format matching the user's example
+  const tierIcons = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'E': '🎁' };
 
-  const lines = chunk.map((item) => {
-    return `🔹 *#${item.collIndex}*\n   🃏 *Name:* ${item.card.cardName}\n   ✨ *Tier:* ${item.card.tier}\n━━━━━━━━━━━━━━━`;
-  });
+  let msg = `🔍 *Found ${filtered.length} card(s)* with "${animeQuery}":\n\n`;
+  for (const item of chunk) {
+    const icon = tierIcons[String(item.card.tier)] || '🃏';
+    msg += `${icon} *${item.card.cardName}* (Tier ${item.card.tier}) in ${item.location}\n`;
+  }
 
-  msg += lines.join('\n');
   if (totalPages > 1) {
-    msg += `\n\n💡 Use \`${p} scc ${animeQuery} --page ${page + 1 <= totalPages ? page + 1 : 1}\` for more.`;
+    msg += `\n📖 Page ${page}/${totalPages} — \`${p} scc ${animeQuery} --page ${page + 1 <= totalPages ? page + 1 : 1}\` for more`;
   }
 
   return reply(msg);
@@ -1530,12 +1597,25 @@ async function cmdFc(senderJid, reply, args = []) {
   const query = args.join(' ').toLowerCase().trim();
   if (!query) return sendUsage(reply, `${p} fc`, `${p} fc <card_name or id>`, `${p} fc goku`);
 
+  // 💡 FIX (BUG 2: "fc command only shows one card if you have 2 of the same
+  // name, needs to show all and their coll number"):
+  // The old cmdFc used `return reply(...)` on the FIRST match in each
+  // location, so if you had 2 "Akatsuki" cards in your collection, only
+  // the first was shown. Now we collect ALL matches across all locations
+  // (main deck, custom decks, collection) and display them in a single
+  // message with their location + coll number.
+  const matches = [];
+
   // 1. Search Main Deck
   const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
   for (const uc of deck) {
     const card = CARD_INDEX()[uc.cardId];
-    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
-      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n🎴 Location: *Main Deck* (Slot #${uc.mainDeckSlot})`);
+    if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
+      matches.push({
+        card,
+        location: `Main Deck (Slot #${uc.mainDeckSlot})`,
+        ucId: uc._id,
+      });
     }
   }
 
@@ -1547,24 +1627,53 @@ async function cmdFc(senderJid, reply, args = []) {
       const uc = await UserCard.findById(ucId);
       if (uc) {
         const card = CARD_INDEX()[uc.cardId];
-        if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
-          return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📁 Location: *Deck: ${cd.name}* (Slot #${i + 1})`);
+        if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
+          matches.push({
+            card,
+            location: `Deck: ${cd.name} (Slot #${i + 1})`,
+            ucId: uc._id,
+          });
         }
       }
     }
   }
 
-  // 3. Search Collection
+  // 3. Search Collection (cards not in any deck, not for sale)
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   for (let i = 0; i < owned.length; i++) {
     const uc = owned[i];
     const card = CARD_INDEX()[uc.cardId];
-    if (uc.cardId.toLowerCase() === query || card?.cardName.toLowerCase().includes(query)) {
-      return reply(`📍 *Card Found!* \n\n🃏 *${card?.cardName}* (${card?.tier})\n📦 Location: *Collection* (Index #${i + 1})`);
+    if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
+      matches.push({
+        card,
+        location: `Collection (Coll #${i + 1})`,
+        ucId: uc._id,
+      });
     }
   }
 
-  return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
+  if (matches.length === 0) {
+    return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
+  }
+
+  // Build the result message
+  const tierIcons = { '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'S': '👑', 'E': '🎁' };
+  let msg = `🔍 *Found ${matches.length} card(s)* matching "${query}":\n\n`;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const icon = tierIcons[String(m.card?.tier)] || '🃏';
+    msg += `${icon} *${m.card?.cardName}* (Tier ${m.card?.tier})\n`;
+    msg += `   📍 ${m.location}\n`;
+    if (matches.length > 1) {
+      msg += `   🆔 \`${m.ucId}\`\n`;
+    }
+    msg += `\n`;
+  }
+  if (matches.length > 1) {
+    msg += `_Use the Coll # or card ID to reference a specific copy._`;
+  }
+
+  return reply(msg);
 }
 
 async function cmdInfo(reply, chatId, args = [], perms = {}) {
@@ -2085,6 +2194,324 @@ async function cmdT2Coll(senderJid, reply, args = []) {
   return reply(`${header}\n\n${results.join('\n')}`);
 }
 
+// 💡 FEATURE 7 (requested a year ago): t2ccoll — move a card FROM a custom
+// deck BACK to the collection by collection number.
+// Format: .g t2ccoll <coll_index> <deck_name>
+//   <coll_index> = the slot number of the card within the custom deck
+//   <deck_name>  = the name of the custom deck
+// Example: .g t2ccoll 3 Waifus   (removes slot #3 from "Waifus" deck)
+//
+// This is the inverse of t2cdeck. Previously users had to use
+// `cdeck <name> remove <slot>` which used deck-relative slots, not coll
+// numbers. The user explicitly asked for the t2ccoll interface.
+async function cmdT2CColl(senderJid, reply, args = []) {
+  const p = P();
+
+  // Parse: first arg(s) = slot numbers, last part = deck name
+  const indices = [];
+  let deckNameParts = [];
+  let foundNonNumeric = false;
+  for (const arg of args) {
+    if (!foundNonNumeric && /^\d+$/.test(arg)) {
+      indices.push(parseInt(arg));
+    } else {
+      foundNonNumeric = true;
+      deckNameParts.push(arg);
+    }
+  }
+  const deckNameQuery = deckNameParts.join(' ').trim();
+  const uniqueIndices = [...new Set(indices.filter(n => n > 0))];
+
+  if (!uniqueIndices.length || !deckNameQuery) {
+    return sendUsage(reply, `${p} t2ccoll`, `${p} t2ccoll <slot> [slot2]... <deck_name>`, `${p} t2ccoll 3 Waifus\n${p} t2ccoll 1 5 10 Best Cards`);
+  }
+
+  const decks = await CardDeck.find({ userId: senderJid });
+  if (decks.length === 0) return reply('❌ You have no custom decks.');
+
+  let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
+  if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
+  if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
+
+  // Sort indices descending so we splice from the end first — this keeps
+  // the remaining slot numbers stable as we remove cards.
+  const sortedIndices = uniqueIndices.sort((a, b) => b - a);
+  const results = [];
+
+  for (const slot of sortedIndices) {
+    const ucId = targetDeck.cards[slot - 1];
+    if (!ucId) { results.push(`❌ Slot #${slot} — empty`); continue; }
+
+    const uc = await UserCard.findById(ucId);
+    if (!uc) {
+      // Card doc missing — just remove from deck array
+      targetDeck.cards.splice(slot - 1, 1);
+      results.push(`⚠️ Slot #${slot} — card doc missing, removed from deck`);
+      continue;
+    }
+
+    const card = CARD_INDEX()[uc.cardId];
+    uc.inCustomDeck = false;
+    uc.customDeckName = null;
+    uc.customDeckSlot = null;
+    await uc.save();
+
+    targetDeck.cards.splice(slot - 1, 1);
+    results.push(`✅ *${card?.cardName ?? uc.cardId}* ← Slot #${slot} of "${targetDeck.name}"`);
+  }
+
+  await targetDeck.save();
+
+  // Re-sort results ascending for display
+  results.sort((a, b) => {
+    const aNum = parseInt(a.match(/#(\d+)/)?.[1] || '0');
+    const bNum = parseInt(b.match(/#(\d+)/)?.[1] || '0');
+    return aNum - bNum;
+  });
+
+  const header = uniqueIndices.length === 1
+    ? `📦 Card moved from custom deck to collection!`
+    : `📦 *${results.filter(r => r.startsWith('✅')).length}* card(s) moved from *"${targetDeck.name}"* to collection!`;
+  return reply(`${header}\n\n${results.join('\n')}`);
+}
+
+// 💡 FEATURE 8: Rc — admin/mod tool to FORCIBLY delete a card from ANY
+// player's collection. Used for regulation, cloning bugs, event duplication.
+// Format: .g rc @user <card_name> [tier]
+// The command searches the target's collection (including decks) for the
+// exact card name (+ optional tier) and deletes the FIRST match.
+// Permission: Owner / GlobalMod / CardMod only.
+async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
+  const p = P();
+  if (!isCardMod) return reply('❌ Rc (regulation card removal) is for moderators and above only.'), true;
+
+  // Parse: @mention or reply → target user, then card name (+ optional tier)
+  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  if (!mentioned) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\`\n\n_Tag the player whose card you want to delete._`), true;
+
+  // args after the mention
+  const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
+  if (parts.length === 0) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\``), true;
+
+  // Last part might be a tier (S, 6, 5, 4, 3, 2, 1, E)
+  const validTiers = ['S', '6', '5', '4', '3', '2', '1', 'E'];
+  let tierFilter = null;
+  if (parts.length > 1 && validTiers.includes(parts[parts.length - 1].toUpperCase())) {
+    tierFilter = parts.pop().toUpperCase();
+  }
+  const cardNameQuery = parts.join(' ').toLowerCase().trim();
+  if (!cardNameQuery) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\``), true;
+
+  // Search target's entire collection (main deck + custom decks + collection + market)
+  const allCards = await UserCard.find({ userId: mentioned }).sort({ createdAt: 1 });
+  let targetUc = null;
+  for (const uc of allCards) {
+    const card = CARD_INDEX()[uc.cardId];
+    if (!card) continue;
+    if (card.cardName && card.cardName.toLowerCase() === cardNameQuery) {
+      if (tierFilter && String(card.tier).toUpperCase() !== tierFilter) continue;
+      targetUc = uc;
+      break;
+    }
+  }
+  // Fallback: substring match
+  if (!targetUc) {
+    for (const uc of allCards) {
+      const card = CARD_INDEX()[uc.cardId];
+      if (!card) continue;
+      if (card.cardName && card.cardName.toLowerCase().includes(cardNameQuery)) {
+        if (tierFilter && String(card.tier).toUpperCase() !== tierFilter) continue;
+        targetUc = uc;
+        break;
+      }
+    }
+  }
+
+  if (!targetUc) {
+    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${mentioned.split('@')[0]}.`, { mentions: [mentioned] }), true;
+  }
+
+  const card = CARD_INDEX()[targetUc.cardId];
+  const location = targetUc.inMainDeck ? 'Main Deck' : (targetUc.inCustomDeck ? `Custom Deck: ${targetUc.customDeckName}` : (targetUc.forSale ? 'Market' : 'Collection'));
+
+  // If in a custom deck, remove from the deck's cards array
+  if (targetUc.inCustomDeck && targetUc.customDeckName) {
+    const deck = await CardDeck.findOne({ userId: mentioned, name: targetUc.customDeckName });
+    if (deck) {
+      deck.cards = deck.cards.filter(id => id.toString() !== targetUc._id.toString());
+      await deck.save();
+    }
+  }
+
+  await UserCard.findByIdAndDelete(targetUc._id);
+
+  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${mentioned.split('@')[0]}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [mentioned] }), true;
+}
+
+// 💡 FEATURE 9: Erc — same as Rc but for event cards. Searches by event
+// card ID prefix (E-XXXXX) or event card name.
+// Format: .g erc @user <event_card_name_or_id>
+async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
+  const p = P();
+  if (!isCardMod) return reply('❌ Erc (event regulation card removal) is for moderators and above only.'), true;
+
+  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  if (!mentioned) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
+
+  const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
+  if (parts.length === 0) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
+
+  const query = parts.join(' ').toLowerCase().trim();
+  const allCards = await UserCard.find({ userId: mentioned }).sort({ createdAt: 1 });
+  let targetUc = null;
+  for (const uc of allCards) {
+    const card = CARD_INDEX()[uc.cardId];
+    if (!card || !isEventCard(card)) continue;
+    if (uc.cardId.toLowerCase() === query || (card.cardName && card.cardName.toLowerCase() === query) || (card.cardName && card.cardName.toLowerCase().includes(query))) {
+      targetUc = uc;
+      break;
+    }
+  }
+
+  if (!targetUc) {
+    return reply(`❌ No event card matching "${query}" found for @${mentioned.split('@')[0]}.`, { mentions: [mentioned] }), true;
+  }
+
+  const card = CARD_INDEX()[targetUc.cardId];
+
+  // Remove from custom deck if applicable
+  if (targetUc.inCustomDeck && targetUc.customDeckName) {
+    const deck = await CardDeck.findOne({ userId: mentioned, name: targetUc.customDeckName });
+    if (deck) {
+      deck.cards = deck.cards.filter(id => id.toString() !== targetUc._id.toString());
+      await deck.save();
+    }
+  }
+
+  await UserCard.findByIdAndDelete(targetUc._id);
+
+  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${mentioned.split('@')[0]}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [mentioned] }), true;
+}
+
+// 💡 FEATURE 10: Tcoll — TRUE collection. Shows ALL cards the user owns,
+// including cards hidden in custom decks and event cards. The regular
+// `.g coll` only shows cards in the loose collection (not in any deck).
+// Format: .g tcoll  OR  .g tcoll --tier
+async function cmdTcoll(senderJid, reply, chatId, args = []) {
+  const inst = getInst();
+  const p = P();
+  const tierMode = args.includes('--tier');
+
+  // Fetch ALL cards regardless of deck/market status
+  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  if (!allOwned.length) return reply('📭 True collection empty.');
+
+  if (tierMode) {
+    // Tier-grouped view
+    const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
+    const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+
+    allOwned.forEach((uc, i) => {
+      const card = CARD_INDEX()[uc.cardId];
+      if (card) {
+        const t = String(card.tier);
+        if (tiers[t]) {
+          let loc = '📜';
+          if (uc.inMainDeck) loc = '🎴';
+          else if (uc.inCustomDeck) loc = '📁';
+          else if (uc.forSale) loc = '🏷️';
+          tiers[t].push({ name: card.cardName, index: i + 1, loc });
+        }
+      }
+    });
+
+    let msg = `🃏 *TRUE COLLECTION | Tier View*\n`;
+    msg += `📦 Total: ${allOwned.length} cards (including decks & market)\n\n`;
+    for (const t of ['S', 'E', '6', '5', '4', '3', '2', '1']) {
+      if (tiers[t].length > 0) {
+        const label = TIER_LABEL[t] || `TIER ${t}`;
+        msg += `${tierEmoji[t]} *${label}* (${tiers[t].length})\n`;
+        tiers[t].forEach((item) => {
+          msg += `  ${item.loc} #${item.index} ➳ ${item.name}\n`;
+        });
+        msg += `\n`;
+      }
+    }
+    msg += `_📂 = custom deck, 🎴 = main deck, 🏷️ = market, 📜 = collection_`;
+    return reply(msg);
+  }
+
+  // Flat list view
+  let msg = `🃏 *TRUE COLLECTION*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total:* ${allOwned.length} (including decks & market)\n\n`;
+
+  for (let i = 0; i < allOwned.length; i++) {
+    const card = CARD_INDEX()[allOwned[i].cardId];
+    if (card) {
+      let loc = '📜';
+      if (allOwned[i].inMainDeck) loc = '🎴';
+      else if (allOwned[i].inCustomDeck) loc = '📁';
+      else if (allOwned[i].forSale) loc = '🏷️';
+      msg += `${loc} *#${i + 1} ➳ ${card.cardName}* (${card.tier})\n`;
+    }
+  }
+  msg += `\n_📂 = custom deck, 🎴 = main deck, 🏷️ = market, 📜 = collection_\n`;
+  msg += `_Use \`${p} tcoll --tier\` for tier-grouped view._`;
+
+  return reply(msg);
+}
+
+// 💡 FEATURE 11: Ecoll — event collection. Shows ALL event cards the user
+// owns, separated by tier. For event flexing.
+// Format: .g ecoll  OR  .g ecoll --tier
+async function cmdEcoll(senderJid, reply, chatId, args = []) {
+  const p = P();
+
+  // Fetch ALL cards, filter to event cards only
+  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const eventCards = [];
+  allOwned.forEach((uc, i) => {
+    const card = CARD_INDEX()[uc.cardId];
+    if (card && isEventCard(card)) {
+      eventCards.push({ uc, card, collNum: i + 1 });
+    }
+  });
+
+  if (!eventCards.length) return reply('📭 No event cards in your collection.');
+
+  // Group by tier
+  const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [], 'E': [] };
+  const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'E': '🎁' };
+
+  eventCards.forEach(item => {
+    const t = String(item.card.tier);
+    if (tiers[t]) tiers[t].push(item);
+  });
+
+  let msg = `🎁 *EVENT COLLECTION*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 *Total Event Cards:* ${eventCards.length}\n\n`;
+
+  for (const t of ['S', '6', '5', '4', '3', '2', '1', 'E']) {
+    if (tiers[t].length > 0) {
+      const label = TIER_LABEL[t] || `TIER ${t}`;
+      msg += `${tierEmoji[t]} *${label}* (${tiers[t].length})\n`;
+      tiers[t].forEach((item) => {
+        let loc = '📜';
+        if (item.uc.inMainDeck) loc = '🎴';
+        else if (item.uc.inCustomDeck) loc = '📁';
+        else if (item.uc.forSale) loc = '🏷️';
+        msg += `  ${loc} *${item.card.cardName}* (#${item.collNum})\n`;
+      });
+      msg += `\n`;
+    }
+  }
+  msg += `_📂 = custom deck, 🎴 = main deck, 🏷️ = market, 📜 = collection_`;
+
+  return reply(msg);
+}
+
 
 async function cmdSwapCard(senderJid, reply, args = []) {
   const p = P();
@@ -2458,7 +2885,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   // Try to parse slot if last arg is a number
   let slot = null;
   let name = args.join(' ').trim();
-  
+
   if (args.length > 1) {
     const last = parseInt(args[args.length - 1]);
     if (!isNaN(last)) {
@@ -2467,7 +2894,24 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
   }
 
-  const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
+  // 💡 FIX (BUG 1: "custom decks don't summon/show anymore, even if u type
+  // it properly"). The old code used `new RegExp(`^${name}$`, 'i')` which
+  // breaks if the deck name contains regex special characters (parentheses,
+  // brackets, asterisks, plus signs, etc.). For example, a deck named
+  // "Best (Girls)" would throw a SyntaxError or fail to match. Now we:
+  //   1. Escape regex special chars in the name
+  //   2. Try exact (case-insensitive) match first
+  //   3. Fall back to substring match if no exact match
+  // This mirrors the more lenient matching in cmdT2CDeck.
+  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedName = escapeRegex(name);
+  let deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapedName}$`, 'i') } });
+  if (!deck) {
+    // Fallback: substring match
+    const allDecks = await CardDeck.find({ userId: senderJid });
+    deck = allDecks.find(d => d.name.toLowerCase() === name.toLowerCase())
+       || allDecks.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
+  }
   if (!deck) return reply(`❌ Custom deck *"${name}"* not found.`);
 
   if (slot !== null) {
@@ -2819,6 +3263,32 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 't2coll':
       await cmdT2Coll(senderJid, reply, args);
+      return true;
+
+    // 💡 FEATURE 7: t2ccoll — move card(s) FROM custom deck TO collection.
+    // Inverse of t2cdeck. Requested a year ago, finally added.
+    case 't2ccoll':
+      await cmdT2CColl(senderJid, reply, args);
+      return true;
+
+    // 💡 FEATURE 8: Rc — mod-only regulation card removal from any player.
+    case 'rc':
+      await cmdRc(senderJid, reply, args, isCardMod, m);
+      return true;
+
+    // 💡 FEATURE 9: Erc — mod-only event card regulation removal.
+    case 'erc':
+      await cmdErc(senderJid, reply, args, isCardMod, m);
+      return true;
+
+    // 💡 FEATURE 10: Tcoll — true collection (all cards including decks/market).
+    case 'tcoll':
+      await cmdTcoll(senderJid, reply, chatId, args);
+      return true;
+
+    // 💡 FEATURE 11: Ecoll — event collection separated by tier.
+    case 'ecoll':
+      await cmdEcoll(senderJid, reply, chatId, args);
       return true;
 
     // ── TOKEN EVENT & ESHOP COMMANDS ──────────────────
