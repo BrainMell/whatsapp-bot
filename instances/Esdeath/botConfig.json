@@ -41,5 +41,6 @@
     "Reassuringly confident, aren't you.",
     "Charitably speaking, not terrible."
   ],
-  "siblings": ["Joker", "Goten", "Subaru"]
+  "siblings": ["Joker", "Goten", "Subaru"],
+  "enabled": false
 }
