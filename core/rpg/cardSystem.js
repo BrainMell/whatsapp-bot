@@ -205,30 +205,47 @@ function ensureTimerRunning() {
   if (inst.spawnTimer) return; // already running
   if (inst.activeGroups.size === 0) return;
 
-  let groupIndex = 0;
-  // 💡 FIX: spawn interval is now per-bot configurable via '.g spawnset <minutes>'.
-  // Default 20 min = 3 spawns/hour. User asked for 3x/hour so card economy
-  // stays active. Combined with the token-on-every-3rd-spawn change, every
-  // 3rd spawn (~1/hour) grants a guaranteed event token during token events.
+  // 💡 FIX §8: per-group spawn timers instead of a single shared timer.
+  // Previously, one timer rotated through groups, so each group only got
+  // a spawn every interval × numberOfGroups. Now each group gets its own
+  // independent timer at the configured interval.
   const intervalMs = inst.spawnIntervalMs || (20 * 60 * 1000);
-  inst.spawnTimer = setInterval(() => {
-    const groups = Array.from(inst.activeGroups);
-    if (groups.length === 0) return;
-    const gid = groups[groupIndex % groups.length];
-    doSpawn(null, null, false, gid);
-    groupIndex++;
-  }, intervalMs);
-  console.log(`[CardSystem][${botConfig.getBotId()}] Spawn timer started: interval=${Math.round(intervalMs/60000)}min (${Math.round(3600000/intervalMs*10)/10} spawns/hour)`);
+
+  // Track per-group timers
+  if (!inst.perGroupTimers) inst.perGroupTimers = new Map();
+
+  // Start a timer for each active group
+  for (const gid of inst.activeGroups) {
+    if (inst.perGroupTimers.has(gid)) continue; // already has a timer
+    const timer = setInterval(() => {
+      // Check if group is still active
+      if (!inst.activeGroups.has(gid)) {
+        clearInterval(timer);
+        inst.perGroupTimers.delete(gid);
+        return;
+      }
+      doSpawn(null, null, false, gid);
+    }, intervalMs);
+    inst.perGroupTimers.set(gid, timer);
+  }
+
+  // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
+  inst.spawnTimer = true;
+  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=${Math.round(intervalMs/60000)}min each`);
 }
 
 // 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
 // Clears the existing timer and re-creates it with the new interval.
 function restartSpawnTimer() {
   const inst = getInst();
-  if (inst.spawnTimer) {
-    clearInterval(inst.spawnTimer);
-    inst.spawnTimer = null;
+  // Clear per-group timers
+  if (inst.perGroupTimers) {
+    for (const [gid, timer] of inst.perGroupTimers) {
+      clearInterval(timer);
+    }
+    inst.perGroupTimers.clear();
   }
+  inst.spawnTimer = null;
   ensureTimerRunning();
 }
 

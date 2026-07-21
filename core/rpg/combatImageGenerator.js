@@ -31,7 +31,13 @@ async function generateCombatImage(players, enemies, options = {}) {
                 maxHp: Math.floor(Number(e.stats?.maxHp || e.stats?.hp || 100)),
                 isBoss: Boolean(e.isBoss),
                 justDied: Boolean(e.justDied),
-                spriteIndex: Math.floor(Number(e.spriteIndex) || 0)
+                spriteIndex: Math.floor(Number(e.spriteIndex) || 0),
+                // 💡 FIX: pass bossId so the Go service can pick distinct sprites
+                // per boss name instead of only keying on level. Currently the Go
+                // service ignores this field, but adding it to the payload now
+                // means the Go side can use it without another JS change.
+                bossId: String(e.id || e.name || '').toUpperCase().replace(/\s+/g, '_'),
+                level: Math.floor(Number(e.level || e.stats?.level || 1))
             })),
             combatType: String(options.combatType || 'PVE'),
             rank: String(options.rank || 'F'),

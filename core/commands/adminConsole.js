@@ -150,6 +150,24 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
 
+    // 💡 LIVE MESSAGE EDITING: send a message, then edit it in-place as
+    // actions complete. Baileys supports this via { edit: messageKey }.
+    // Usage: const msgKey = await sendLive("Processing..."); then
+    //        await editLive(msgKey, "Done! Result: ...");
+    async function sendLive(text) {
+        const sent = await sock.sendMessage(chatId, { text: BOT_MARKER + text });
+        return sent?.key || null;
+    }
+    async function editLive(key, text) {
+        if (!key) return;
+        try {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + text, edit: key });
+        } catch (e) {
+            // Edit failed (old message, permissions, etc.) — send new message
+            try { await sock.sendMessage(chatId, { text: BOT_MARKER + text }); } catch (e2) {}
+        }
+    }
+
     // 💡 HELPER: parse admin args. When there's an @mention, it's the first
     // arg. When there's no mention (self-target), the first arg IS the value.
     // This function strips any mention-like args and returns {target, remaining}.

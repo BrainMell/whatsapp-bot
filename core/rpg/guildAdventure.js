@@ -6578,8 +6578,16 @@ async function endAdventure(sock, sessionKey, victory = true) {
       narration = completion.choices[0].message.content;
     }
   } catch (e) {
-    narration =
-      "The heroes return from the depths of the void, their names etched in history forever.";
+    // 💡 FIX §3.2: multiple fallback variants instead of one repeated string.
+    const fallbacks = [
+      "The heroes return from the depths of the void, their names etched in history forever.",
+      "As dawn breaks, the party emerges victorious, their legend spreading across the realm like wildfire.",
+      "The adventurers stand triumphant atop the fallen ruins, bathed in the golden light of victory.",
+      "Songs will be sung of this day — the day the party conquered the impossible and returned as legends.",
+      "With one final strike, the last challenge falls. The party walks into the sunset, heroes of the realm.",
+      "The echoes of battle fade as the party claims their hard-won victory. Their names shall not be forgotten.",
+    ];
+    narration = fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
 
   // 💡 FIX: branch on TRIAL mode BEFORE building the "QUEST COMPLETE!" header.

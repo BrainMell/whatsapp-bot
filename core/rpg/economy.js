@@ -337,6 +337,11 @@ function getUser(userId) {
   if (!user.stats) user.stats = {};
   if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
   if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
+
+  // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
+  // This catches any inflated values from past exploits or bugs.
+  clampWallet(user);
+  clampStats(user);
   if (user.stats.itemsCrafted === undefined) user.stats.itemsCrafted = 0;
   if (user.stats.itemsEquipped === undefined) user.stats.itemsEquipped = 0;
 
@@ -443,6 +448,37 @@ function getBalance(userId) {
   return user ? user.wallet : 0;
 }
 
+// 💡 ANTI-INFLATION CAPS: hard ceilings on wallet, bank, and stat values.
+// Prevents the runaway currency/stat inflation documented in the QA audit.
+// Players can still earn and spend normally — the caps are high enough that
+// only genuinely broken values (exploits, bugs) get clamped.
+const MAX_WALLET = 2_000_000_000;  // 2 billion Zeni
+const MAX_BANK = 10_000_000_000;   // 10 billion Zeni
+const MAX_STAT_VALUE = 1_000_000;  // 1 million per individual stat
+
+function clampWallet(user) {
+    if (!user) return;
+    if (typeof user.wallet === 'number' && user.wallet > MAX_WALLET) {
+        console.log(`[AntiInflation] Clamped wallet from ${user.wallet} to ${MAX_WALLET} for ${user.userId}`);
+        user.wallet = MAX_WALLET;
+    }
+    if (typeof user.bank === 'number' && user.bank > MAX_BANK) {
+        console.log(`[AntiInflation] Clamped bank from ${user.bank} to ${MAX_BANK} for ${user.userId}`);
+        user.bank = MAX_BANK;
+    }
+}
+
+function clampStats(user) {
+    if (!user || !user.progression || !user.progression.allocatedStats) return;
+    for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+        const val = user.progression.allocatedStats[stat];
+        if (typeof val === 'number' && val > MAX_STAT_VALUE) {
+            console.log(`[AntiInflation] Clamped ${stat} from ${val} to ${MAX_STAT_VALUE} for ${user.userId}`);
+            user.progression.allocatedStats[stat] = MAX_STAT_VALUE;
+        }
+    }
+}
+
 function addMoney(userId, amount, description = "Money Added") {
   const user = getUser(userId);
   if (!user) return false;
@@ -453,6 +489,8 @@ function addMoney(userId, amount, description = "Money Added") {
   if (!Number.isFinite(val) || val <= 0) return false;
 
   user.wallet += val;
+  // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
+  if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
   user.stats.totalEarned += val;
 
   logTransaction(userId, description, val, user.wallet);
@@ -1728,6 +1766,11 @@ module.exports = {
   loadEconomy,
   saveUser,
   reloadUserFromDB,
+  clampWallet,
+  clampStats,
+  MAX_WALLET,
+  MAX_BANK,
+  MAX_STAT_VALUE,
   scheduleSave,
   getUser,
   getOrCreateUser,
