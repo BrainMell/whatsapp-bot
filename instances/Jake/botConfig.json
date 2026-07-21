@@ -31,6 +31,6 @@
     "sounds about right.",
     "yeah buddy."
   ],
-  "enabled": false,
+  "enabled": true,
   "siblings": ["Joker", "Goten", "Subaru", "Esdeath"]
 }
