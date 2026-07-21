@@ -206,6 +206,7 @@ To adjust skill tree configurations or evolution criteria:
 - **Change Skill Costs / Damage Multipliers**: Edit files inside `core/rpg/skillTree.js` or `core/rpg/classSystem.js`.
 - **Evolve Milestone Tuning**: Change evolve requirements (such as minimum level or required items) in the classes data inside `core/rpg/classSystem.js`.
 - **Bonus Skill Points Interval**: Change the milestone XP leveling bonuses inside [core/rpg/progression.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/progression.js).
+- **Administrative Skill Management**: Game masters and owners can override learning/resetting flow for testing or player support using commands like `.j admin giveskill`, `.j admin revokeskill`, `.j admin disableskill`, and `.j admin enableskill` (see [Admin Subsystem commands](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/docs/admin/commands.md) for details).
 
 
 

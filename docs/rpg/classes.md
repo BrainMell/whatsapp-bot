@@ -1,3 +1,398 @@
+# 🎭 RPG Class and Skill Pipeline Guide
+
+This guide walks through the architecture, configuration, and execution pipeline of the RPG Character Classes and Abilities (Skills) system inside the `whatsapp-bot` project. 
+
+---
+
+## 🗺️ 1. System Architecture Overview
+
+The classes and skills system follows a modular pipeline spanning database layers, static configuration tables, user commands, and the combat execution engine.
+
+```mermaid
+graph TD
+    classSystem[classSystem.js] -->|Defines Class Stats & Hierarchy| skillTree[skillTree.js]
+    skillTree -->|Defines Skill Nodes & Effects| engine[engine.js / commands]
+    engine -->|Commands: upgrade, evolve, classes| db[(MongoDB / economy.js)]
+    engine -->|Triggers Combat Action| combat[guildAdventure.js]
+    combat -->|Fetches active skill effect| skillTree
+    combat -->|Calculates damage/healing/CC| combatCalc[calculateDamage / getTargets]
+```
+
+### Key Files Involved
+1. **[classSystem.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/rpg/classSystem.js)**: Configures all playable Starter, Evolved, and Ascended classes, stat templates, evolution requirements, and adventurer ranks.
+2. **[skillTree.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/rpg/skillTree.js)**: Holds the `SKILL_TREES` object defining every class's abilities, cooldowns, costs, and combat effects.
+3. **[progression.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/rpg/progression.js)**: Controls XP leveling calculations, stat growth per level, and class stat multipliers.
+4. **[classCommands.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/commands/classCommands.js)**: Code logic behind `.j classes` and `.j class <id>` (evolution tree display).
+5. **[skillCommands.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/commands/skillCommands.js)**: Controls `.j abilities`, `.j upgrade skill`, and `.j reset skills`.
+6. **[guildAdventure.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/rpg/guildAdventure.js)**: The turn-based multiplayer combat loop where skills are validated (energy, cooldowns), runes are applied, and damage calculation is executed.
+
+---
+
+## 🎭 2. Setting Up Character Classes (`classSystem.js`)
+
+Classes in the RPG are defined in `STARTER_CLASSES` and `EVOLVED_CLASSES` collections. They represent three progression tiers: **Starter** $\rightarrow$ **Evolved (Lv. 20)** $\rightarrow$ **Ascended (Lv. 50)**.
+
+### A. Starter Class Structure
+Starter classes have no predecessor and represent the root of an evolution tree:
+
+```javascript
+const STARTER_CLASSES = {
+    FIGHTER: {
+        id: 'FIGHTER',
+        name: 'Fighter',
+        icon: '⚔️',
+        desc: `A well-rounded warrior who has hardened their body through relentless training.`,
+        tier: 'STARTER',
+        role: 'TANK',
+        stats: { hp: 120, atk: 12, def: 10, mag: 4, spd: 8, luck: 6, crit: 8 },
+        evolves_into: ['WARRIOR', 'BERSERKER', 'PALADIN', 'DRAGONSLAYER'],
+    },
+    // ...
+};
+```
+
+### B. Evolved & Ascended Class Structure
+Evolved and Ascended classes require predecessor relationships and strict criteria gating their unlock.
+
+```javascript
+const EVOLVED_CLASSES = {
+    WARRIOR: {
+        id: 'WARRIOR',
+        name: 'Warrior',
+        icon: '⚔️',
+        desc: `A wall of iron and will. Warriors anchor the battlefield.`,
+        tier: 'EVOLVED',
+        evolvedFrom: 'FIGHTER',
+        role: 'TANK',
+        stats: { hp: 220, atk: 18, def: 22, mag: 2, spd: 5, luck: 5, crit: 5 },
+        requirement: { 
+            level: 15, 
+            questsCompleted: 15, 
+            trialBoss: 'INFECTED_COLOSSUS' 
+        },
+        evolutionCost: 0,
+        passive: { name: 'Tenacity', desc: `Regenerates 3% of max HP every 2 turns in combat.` },
+        evolves_into: ['WARLORD'],
+    },
+    // ...
+};
+```
+
+#### Key Fields for Evolution:
+- `evolvedFrom`: Parent class identifier (e.g. `FIGHTER`).
+- `requirement`: Object stating requirements checking player properties:
+  - `level`: Minimum character level.
+  - `questsCompleted`: Total lifetime quests.
+  - `trialBoss`: Boss ID they must defeat during evolution.
+  - `gold`/`goldEarned`/`kills`/`dragonsKilled`/`undeadKills`/`victories`: Specific achievements or currency gates.
+- `evolutionCost`: Zeni fee deducted upon evolution.
+
+---
+
+## 🌳 3. Defining Skills and Abilities (`skillTree.js`)
+
+Skills are stored in the global `SKILL_TREES` object. Each class maps to trees representing different stances/specializations containing individual skill nodes.
+
+### A. Skill Tree Structure Template
+
+```javascript
+const SKILL_TREES = {
+    FIGHTER: {
+        name: 'Fighter',
+        icon: '⚔️',
+        skillPointsPerLevel: 1,
+        trees: {
+            OFFENSE: {
+                name: 'Offensive Stance',
+                icon: '⚔️',
+                color: '🔴',
+                skills: {
+                    slash: {
+                        id: 'slash',
+                        name: 'Power Slash',
+                        tier: 1,
+                        maxLevel: 5,
+                        cost: 10,          // Deprecated in favor of energyCost array below
+                        cooldown: 1,       // Cooldown in turns
+                        desc: 'A powerful sword strike',
+                        requires: null,    // If prerequisite skills exist, e.g., { slash: 3 }
+                        effect: (level) => ({
+                            type: 'damage',
+                            multiplier: 1.2 + (level * 0.1),
+                            damageType: 'physical',
+                            animation: '⚔️💥'
+                        })
+                    },
+                    // ...
+                }
+            },
+            // ...
+        }
+    }
+};
+```
+
+### B. New Scaling Format (Arrays)
+Modern skills in the system define arrays for properties like `cooldown`, `energyCost`, `damageMultiplier`, and `effects` which scale progressively with the skill level:
+
+```javascript
+cleave: {
+    id: 'cleave',
+    name: 'Cleave',
+    tier: 2,
+    maxLevel: 5,
+    targeting: 'CLEAVE',
+    maxTargets: 2,
+    damageType: 'PHYSICAL',
+    cooldown: [2, 2, 2, 2, 2],
+    energyCost: [15, 18, 20, 22, 25],
+    damageMultiplier: [1.2, 1.35, 1.5, 1.65, 1.8],
+    description: 'Strikes up to 2 adjacent enemies with physical force.',
+    animation: '⚔️🌀',
+    requires: { slash: 3 }
+}
+```
+
+### C. Resolving Skill Effects in Combat
+The engine calls `skillTree.getSkillEffect(ability, level)` during battle. It resolves both callback functions `effect(level)` and array-based configs, normalizing them into a uniform payload:
+
+```javascript
+{
+    type: 'damage' | 'aoe' | 'execute' | 'buff_self' | 'buff_team' | 'heal' | 'heal_team' | 'revive' | 'damage_cc' | 'damage_dot' | 'passive',
+    damageType: 'physical' | 'magic' | 'true',
+    targets: Number | undefined,
+    multiplier: Number,
+    cost: Number,
+    cooldown: Number,
+    animation: String,
+    // CC / DOT / Buff fields flattened from skill.effects:
+    cc: String,          // e.g. 'stun'
+    ccChance: Number,    // e.g. 50 (%)
+    ccDuration: Number   // e.g. 1 (turn)
+}
+```
+
+---
+
+## ⚙️ 4. Class Progression & Evolution Pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player
+    participant Engine as core/engine.js
+    participant Controller as skillCommands.js
+    participant DB as economy.js (MongoDB)
+    participant ClassSys as classSystem.js
+
+    Player->>Engine: Send command ".j evolve warrior"
+    Engine->>Controller: Route to handleEvolve()
+    Controller->>ClassSys: check canEvolve(currentClass, lvl, quests, trials, context)
+    ClassSys-->>Controller: Return eligibility status (Meets Requirements)
+    alt Eligible
+        Controller->>DB: Mutate user.class = "WARRIOR", deduct fees
+        DB-->>Controller: Save Successful
+        Controller-->>Player: Send evolution success message
+    else Ineligible
+        Controller-->>Player: Send missing requirements warning
+    end
+```
+
+### Step 1: Upgrading a Skill
+1. When a player levels up, the XP loop in [progression.js](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/rpg/progression.js) awards skill points based on their class's `skillPointsPerLevel` property.
+2. The user runs `.j upgrade skill <skill_id>`.
+3. `skillCommands.js` calls `skillTree.ensureSkillPointsInitialized` to make sure spent + unspent points match the player's level-earned points.
+4. It traverses the player's class lineage (`classSystem.getLineage(userClass.id)`) to check if they have access to the skill.
+5. If prerequisites (`requires`) are met and points are available, the level is incremented in `user.skills[skillId]`, points are deducted, and `economy.saveUser()` commits it to MongoDB.
+
+### Step 2: Class Evolution Check
+1. The user runs `.j evolve <target_class>`.
+2. The code uses `classSystem.canEvolve(userClass, level, quests, dragonsKilled, trials, context)`.
+3. If they meet the prerequisites but lack the `trialBoss` flag in `completedTrials`, the evolution command locks.
+4. The user runs `.j evolve <target_class>` again. If they have all pre-requisites but the boss defeat, the engine triggers the solo **Trial Boss** fight.
+5. Once the trial boss is slain, the boss ID is appended to `user.completedTrials` and the user ascends to the chosen class on their next evolution attempt.
+
+---
+
+## ⚔️ 5. Combat Action Pipeline (`guildAdventure.js`)
+
+During a quest battle, when it is a player's turn to act, the system processes skill casting via the following sequence:
+
+```mermaid
+flowchart TD
+    A[Start Player Turn Action] --> B{Action is Skill?}
+    B -->|No| C[Execute Basic Attack]
+    B -->|Yes| D[Deduplicate Lineage & Mirrored Skills]
+    D --> E[Fetch Skill Details from Lineage Trees]
+    E --> F{Cooldown = 0 & Energy >= Cost?}
+    F -->|No| G[Cancel Turn: Prompt Error]
+    F -->|Yes| H[Load Socketed Runes from MongoDB]
+    H --> I[Apply Rune Modifiers to Skill Damage/Cost/Cooldown]
+    I --> J[Reduce Player Energy & Record Cooldown]
+    J --> K[Get Living Targets: getTargets]
+    K --> L[Resolve Damage Type: Magic/Physical/True]
+    L --> M[Fetch Base Stat: MAG for magic, ATK for physical]
+    M --> N[Apply Class Growth Multipliers from progression.js]
+    N --> O[Run evasion & ring checks]
+    O --> P[Calculate final damage with DEF/Buff mitigation]
+    P --> Q[Execute Status Effects / Buffs / Heals]
+    Q --> R[Render updated state to combat video/image]
+```
+
+### Critical Calculations in Combat:
+1. **Stat Scaling**: In-combat stats are calculated by multiplying the player's level-up base stats by their class's `STAT_GROWTH.CLASS_MODIFIERS` multipliers configured in `progression.js`.
+2. **Damage Scaling**:
+   ```javascript
+   const baseStat = damageType === 'magic' ? stats.mag : stats.atk;
+   const rawPower = Math.floor(baseStat * multiplier);
+   const finalDmg = calculateDamage(attacker, defender, rawPower, damageType, ...);
+   ```
+3. **Weapon Synergy**: Main-hand weapon types multiply damage if they match the skill's combat archetype (calculated in `weaponSynergy.js`).
+4. **AOE Crit Diminishing Returns**: To keep area-of-effect spells balanced, successive hits in a single multi-target skill cast penalize crit chance by $15\%$ per hit, preventing whole-board critical sweeps.
+
+---
+
+## 📝 6. Example: Adding a New Class and Skills
+
+Here is a step-by-step example of how you would configure a new evolution line starting from **SCOUT** into an evolved class **RANGER** and an ascended class **BEASTMASTER**.
+
+### Step 1: Register Classes in `classSystem.js`
+
+```javascript
+// 1. In STARTER_CLASSES under 'SCOUT', add 'RANGER' to evolves_into
+SCOUT: {
+    // ...
+    evolves_into: ['ROGUE', 'MONK', 'SAMURAI', 'NINJA', 'RANGER'],
+}
+
+// 2. In EVOLVED_CLASSES, append the new RANGER and BEASTMASTER entries
+const EVOLVED_CLASSES = {
+    // ...
+    RANGER: {
+        id: 'RANGER',
+        name: 'Ranger',
+        icon: '🏹',
+        desc: 'A wilderness hunter skilled at tracking and long-range archery.',
+        tier: 'EVOLVED',
+        evolvedFrom: 'SCOUT',
+        role: 'DPS',
+        stats: { hp: 190, atk: 22, def: 10, mag: 10, spd: 22, luck: 18, crit: 20 },
+        requirement: { level: 20, questsCompleted: 25, trialBoss: 'MUTATION_PRIME' },
+        evolutionCost: 5000,
+        passive: { name: 'Eagle Eye', desc: 'Increases accuracy by 15% and basic attack range.' },
+        evolves_into: ['BEASTMASTER']
+    },
+    
+    BEASTMASTER: {
+        id: 'BEASTMASTER',
+        name: 'Beastmaster',
+        icon: '🐾',
+        desc: 'Commands untamed predators of the wild to tear down foes.',
+        tier: 'ASCENDED',
+        evolvedFrom: 'RANGER',
+        role: 'DPS',
+        stats: { hp: 450, atk: 45, def: 20, mag: 30, spd: 40, luck: 30, crit: 35 },
+        requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'GAIA_SENTINEL' },
+        evolutionCost: 100000,
+        passive: { name: 'Pack Hunter', desc: 'Summons deal 25% extra damage. Party gains +10% Speed.' }
+    }
+};
+```
+
+### Step 2: Set Level Stat Growth in `progression.js`
+
+Under `STAT_GROWTH.CLASS_MODIFIERS`, configure how stats grow per level for the new classes:
+
+```javascript
+RANGER: { hp: 1.1, atk: 1.5, def: 0.9, mag: 0.8, spd: 1.8, luck: 1.4, crit: 2.0 },
+BEASTMASTER: { hp: 1.4, atk: 1.8, def: 1.2, mag: 1.5, spd: 2.2, luck: 1.8, crit: 2.5 }
+```
+
+### Step 3: Define Skills in `skillTree.js`
+
+Add the skill configurations inside `SKILL_TREES` mapping to the new class keys:
+
+```javascript
+const SKILL_TREES = {
+    // ...
+    RANGER: {
+        name: 'Ranger',
+        icon: '🏹',
+        skillPointsPerLevel: 1,
+        trees: {
+            ARCHERY: {
+                name: 'Archery Stance',
+                icon: '🏹',
+                color: '🟢',
+                skills: {
+                    steady_shot: {
+                        id: 'steady_shot',
+                        name: 'Steady Shot',
+                        tier: 1,
+                        maxLevel: 5,
+                        cooldown: [1, 1, 1, 1, 1],
+                        energyCost: [10, 12, 14, 16, 18],
+                        damageMultiplier: [1.3, 1.45, 1.6, 1.75, 1.9],
+                        damageType: 'PHYSICAL',
+                        description: 'A focused arrow shot dealing high physical damage.',
+                        animation: '🏹💥',
+                        requires: null
+                    },
+                    barrage: {
+                        id: 'barrage',
+                        name: 'Arrow Barrage',
+                        tier: 2,
+                        maxLevel: 5,
+                        targeting: 'AOE',
+                        targets: 3,
+                        cooldown: [3, 3, 3, 3, 3],
+                        energyCost: [20, 22, 24, 26, 28],
+                        damageMultiplier: [0.9, 1.05, 1.2, 1.35, 1.5],
+                        damageType: 'PHYSICAL',
+                        description: 'Fires a volley of arrows hitting up to 3 targets.',
+                        animation: '🏹🌀',
+                        requires: { steady_shot: 3 }
+                    }
+                }
+            }
+        }
+    },
+    
+    BEASTMASTER: {
+        name: 'Beastmaster',
+        icon: '🐾',
+        skillPointsPerLevel: 1,
+        trees: {
+            FERAL: {
+                name: 'Feral bond',
+                icon: '🐾',
+                color: '🔴',
+                skills: {
+                    summon_wolf: {
+                        id: 'summon_wolf',
+                        name: 'Summon Alpha Wolf',
+                        tier: 1,
+                        maxLevel: 3,
+                        cooldown: [5, 5, 5],
+                        energyCost: [30, 35, 40],
+                        description: 'Summons an Alpha Wolf to fight alongside the party.',
+                        animation: '🐺✨',
+                        requires: null,
+                        effect: (level) => ({
+                            type: 'buff_team',
+                            buffType: 'attack',
+                            value: 15 + (level * 5),
+                            duration: 3
+                        })
+                    }
+                }
+            }
+        }
+    }
+};
+```
+
+
 # Classes Command Flow (`classes`)
 
 ## 1. Description
@@ -235,6 +630,7 @@ To add a brand new playable starter class or advanced evolution:
 ### How to Configure Class Evolution Trees and Commands
 * **Modify Evolution Requirements**: Edit the `requirement` parameters in `EVOLVED_CLASSES` (e.g., `level`, `questsCompleted`, `victories`, `gold`, `trialBoss`). The evolution checks are automatically validated in [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js).
 * **Customize evolution branch symbols**: To change the formatting characters used in the tree graphics (`└─`, `├─`), modify the formatting loops in `printClassTree()` inside [core/commands/classCommands.js](https://github.com/BrainMell/whatsapp-bot/blob/main/core/commands/classCommands.js#L109).
+* **Administrative Evolution Overrides**: Admin-level users can bypass prerequisites to change classes using `.j admin forceevolve <@user> <class>` or switch their own class using `.j modclass <class>` (see [Admin Subsystem commands](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/docs/admin/commands.md)).
 
 
 
