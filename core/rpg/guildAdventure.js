@@ -5116,6 +5116,21 @@ async function endCombat(sock, victory, sessionKey) {
   );
   state.inCombat = false;
 
+  // 💡 FIX §2.8: Clean up per-player combat state so it doesn't bleed into
+  // the next fight. Previously, skillCooldowns, passiveCombo, passiveKillBonus,
+  // and passiveDamageBonus persisted across encounters within the same dungeon
+  // run because they were only cleared on gameState deletion (which happens at
+  // the end of the entire dungeon, not per-encounter).
+  if (state.players) {
+    state.players.forEach(p => {
+      if (p.skillCooldowns) p.skillCooldowns = {};
+      p.passiveCombo = 0;
+      p.passiveKillBonus = 1;
+      p.passiveDamageBonus = 1;
+      p.passiveMagBonus = 1;
+    });
+  }
+
   // Calculate rewards
   const totalXP = state.enemies.reduce((sum, e) => {
     const xpVal = Number(e.xp || e.xpReward || 0);
@@ -8227,6 +8242,116 @@ async function applyAbilityEffect(
     }
   } else {
     // HEALING ABILITIES
+
+    // 💡 RUNE: splitIntoHits (FRAGMENT/BARRAGE runes) — split one hit into
+    // multiple weaker hits. Each hit goes through calculateDamage separately,
+    // so crit/evasion/DEF apply per-hit. bypassShield (BARRAGE) skips shields.
+    if (effect.splitIntoHits && effect.splitIntoHits > 0) {
+      const targets = getTargets(player, effect, targetIndex, chatId);
+      const target = targets[0];
+      if (target && target.stats.hp > 0) {
+        const splitMult = effect.splitDamageMult || 0.4;
+        const numHits = effect.splitIntoHits;
+        const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+        const dType = rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' :
+                      rawDmgType === 'TRUE' ? 'true' : 'physical';
+        const baseStat = dType === 'magic' ? (player.stats.mag || 10) : (player.stats.atk || 10);
+        const element = effect.element || 'PHYSICAL';
+        let totalSplitDmg = 0;
+        msg += `💎 Hits ${numHits} times!\n`;
+        for (let i = 0; i < numHits; i++) {
+          if (target.stats.hp <= 0) break;
+          const perHitPower = Math.floor(baseStat * (effect.multiplier || 1) * splitMult);
+          const dmgResult = calculateDamage(player, target, perHitPower, dType, element, chatId, true);
+          if (dmgResult.wasEvaded) {
+            msg += `  ${i+1}. 💨 Miss!\n`;
+            continue;
+          }
+          if (dmgResult.noDamageReason) {
+            msg += `  ${i+1}. ${dmgResult.noDamageReason}\n`;
+            continue;
+          }
+          // 💡 bypassShield: skip shield absorption (BARRAGE rune)
+          if (!effect.bypassShield) {
+            const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
+            if (shields.length > 0) {
+              let remaining = dmgResult.damage;
+              for (const shield of shields) {
+                if (remaining <= 0) break;
+                const absorbed = Math.min(shield.value, remaining);
+                shield.value -= absorbed;
+                remaining -= absorbed;
+                if (shield.value <= 0) shield.duration = 0;
+              }
+              dmgResult.damage = remaining;
+            }
+          }
+          target.stats.hp = Math.max(0, target.stats.hp - dmgResult.damage);
+          target.currentHP = target.stats.hp;
+          totalSplitDmg += dmgResult.damage;
+          msg += `  ${i+1}. 💥 ${dmgResult.damage}${dmgResult.isCrit ? ' (CRIT!)' : ''}\n`;
+          if (target.stats.hp <= 0) {
+            target.isDead = true;
+            target.justDied = true;
+            msg += `  💀 ${target.name} defeated!\n`;
+            if (state) recordEnemyKill(state, target);
+            break;
+          }
+        }
+        totalDamage += totalSplitDmg;
+        if (player.combatStats) {
+          player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalSplitDmg;
+        }
+      }
+    }
+
+    // 💡 RUNE: chainBounces (CHAIN_BOUNCE rune) — hit primary target, then
+    // arc to nearby enemies with decay. Each bounce deals less damage.
+    if (effect.chainBounces && effect.chainBounces > 0) {
+      const targets = getTargets(player, effect, targetIndex, chatId);
+      const primaryTarget = targets[0];
+      if (primaryTarget && primaryTarget.stats.hp > 0) {
+        const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+        const dType = rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' : 'physical';
+        const baseStat = dType === 'magic' ? (player.stats.mag || 10) : (player.stats.atk || 10);
+        const element = effect.element || 'LIGHTNING';
+        const decay = effect.chainDecayPerBounce || 0.75;
+        const maxBounces = effect.chainBounces;
+        // Get all living enemies for bouncing
+        const opponentSide = player.isEnemy
+          ? state.players.filter(p => !p.isDead)
+          : state.enemies.filter(e => e.stats.hp > 0);
+        const bounceTargets = [primaryTarget, ...opponentSide.filter(t => t !== primaryTarget)];
+        let currentMult = effect.multiplier || 1.0;
+        let totalChainDmg = 0;
+        msg += `⚡ Chains to ${maxBounces + 1} targets!\n`;
+        for (let i = 0; i <= maxBounces && i < bounceTargets.length; i++) {
+          const t = bounceTargets[i];
+          if (!t || t.stats.hp <= 0) continue;
+          const power = Math.floor(baseStat * currentMult);
+          const dmgResult = calculateDamage(player, t, power, dType, element, chatId, true);
+          if (dmgResult.wasEvaded) {
+            msg += `  ${i+1}. 💨 ${t.name} evades!\n`;
+          } else {
+            t.stats.hp = Math.max(0, t.stats.hp - dmgResult.damage);
+            t.currentHP = t.stats.hp;
+            totalChainDmg += dmgResult.damage;
+            msg += `  ${i+1}. ⚡ ${t.name} -${dmgResult.damage}${dmgResult.isCrit ? ' (CRIT!)' : ''}\n`;
+            if (t.stats.hp <= 0) {
+              t.isDead = true;
+              t.justDied = true;
+              msg += `  💀 ${t.name} defeated!\n`;
+              if (state) recordEnemyKill(state, t);
+            }
+          }
+          currentMult *= decay;
+        }
+        totalDamage += totalChainDmg;
+        if (player.combatStats) {
+          player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalChainDmg;
+        }
+      }
+    }
     // 💡 FIX: was `effect.type === "heal" || effect.type.includes("heal")` which
     // matched "heal_team" too, causing the caster to be healed twice (once here
     // as single-target, once in the heal_team block below). Changed to strict

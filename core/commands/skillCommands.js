@@ -373,7 +373,13 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         }
     }
 
-    const mirroredAbilities = (user.borrowedSkills || []).map(s => ({ ...s, level: 1, isMirrored: true }));
+    // 💡 FIX §2.11: Deduplicate mirrored/borrowed abilities against learned ones.
+    // Previously, borrowedSkills were added without checking the `seen` Set,
+    // so a skill that was both learned (via skill tree) AND borrowed (via mirror)
+    // would appear twice in the abilities list.
+    const mirroredAbilities = (user.borrowedSkills || [])
+        .filter(s => !seen.has(s.id))  // Skip if already in learned abilities
+        .map(s => ({ ...s, level: 1, isMirrored: true }));
     const totalCount = abilityGroups.reduce((sum, g) => sum + g.skills.length, 0) + mirroredAbilities.length;
 
     if (totalCount === 0) {

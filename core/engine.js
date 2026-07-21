@@ -6060,9 +6060,15 @@ _💡 Reply with another number from your search list!_`.trim();
                   const currentPrefix = botConfig.getPrefix().toLowerCase();
 
                   if (lowerTxt.startsWith(currentPrefix)) {
-                    const cmdBody = lowerTxt
+                    let cmdBody = lowerTxt
                       .substring(currentPrefix.length)
                       .trim();
+
+                    // 💡 FIX §9: normalize common no-space command patterns.
+                    // ".e bag6" → ".e bag 6", ".e solo1" → ".e solo 1", etc.
+                    // Only applies to known multi-word commands followed by a number.
+                    cmdBody = cmdBody.replace(/^(bag|inv|inventory|coll|deck|solo|combat|skill|buy|equip|use|craft|info|coll)\s*(\d+)$/i, '$1 $2');
+
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
 
@@ -6275,18 +6281,49 @@ _💡 Reply with another number from your search list!_`.trim();
                     // Shows the status of ALL bot instances (self + siblings)
                     // by reading their heartbeats from the shared System collection.
                     // Mods/owner only — exposes operational info.
-                    if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health") {
-                      // 💡 FIX: `isMod` was never declared in this scope (it's only a
-                      // property key passed to cardSystem.handleCommand at L5423).
-                      // Referencing it threw ReferenceError, silently crashing the
-                      // command. Use overrideUsers / isGlobalMod directly instead.
+                    if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health" || primaryCmd === "bots") {
+                      // 💡 .g bots — simplified version for regular players
+                      if (primaryCmd === "bots") {
+                        try {
+                          const allHealth = botInstancesHealth;
+                          let msg = `🤖 *BOT STATUS*\n\n`;
+                          for (const [id, h] of allHealth.entries()) {
+                            const ageMs = Date.now() - (h.lastUpdated || 0);
+                            const isOnline = ageMs < 120000; // 2 min threshold
+                            const uptime = h.uptime ? formatUptime(h.uptime) : '—';
+                            msg += `${isOnline ? '🟢' : '🔴'} ${h.name || id} — ${isOnline ? 'Online' : 'Offline'}\n`;
+                            if (isOnline && h.uptime) msg += `   ⏱️ Uptime: ${uptime}\n`;
+                          }
+                          msg += `\n_Updated every 30s. Use \`${botConfig.getPrefix()} instances\` (mods only) for full details._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to fetch bot status.' });
+                        }
+                        return;
+                      }
+
+                      // 💡 .g instances / .g health — full version for mods
                       const isSenderOwner = isOwner;
                       const isSenderGMod = isGlobalMod(senderJid);
                       const isSenderOverride = overrideUsers.has(senderJid);
                       const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
 
                       if (!isSenderMod) {
-                        return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
+                        // 💡 FIX: regular players get the simplified view instead of a hard denial
+                        try {
+                          const allHealth = botInstancesHealth;
+                          let msg = `🤖 *BOT STATUS*\n\n`;
+                          for (const [id, h] of allHealth.entries()) {
+                            const ageMs = Date.now() - (h.lastUpdated || 0);
+                            const isOnline = ageMs < 120000;
+                            msg += `${isOnline ? '🟢' : '🔴'} ${h.name || id} — ${isOnline ? 'Online' : 'Offline'}\n`;
+                          }
+                          msg += `\n_Full details: \`${botConfig.getPrefix()} instances\` (mods only)_`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to fetch bot status.' });
+                        }
+                        return;
                       }
 
                       // Write our own fresh heartbeat immediately before querying

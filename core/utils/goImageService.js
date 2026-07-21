@@ -65,7 +65,12 @@ class GoImageService {
       try {
         const response = await this.client.post("/api/combat", data, {
           responseType: "arraybuffer",
-          timeout: 5000, // 5s timeout for fast fallback
+          timeout: 10000, // 💡 FIX: was 5000ms — too aggressive, caused recurring
+                          // "GoService Combat Error: timeout of 5000ms exceeded".
+                          // The Go service on Render (0.1 CPU) can take 6-8s for
+                          // complex combat scenes with multiple combatants. 10s
+                          // gives enough headroom while still falling back to
+                          // text-only if the service is truly unresponsive.
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -86,7 +91,7 @@ class GoImageService {
           { text },
           {
             responseType: "arraybuffer",
-            timeout: 5000, // 5s timeout for fast fallback
+            timeout: 10000, // 💡 FIX: was 5000ms — same issue as combat image
           },
         );
         return Buffer.from(response.data);
