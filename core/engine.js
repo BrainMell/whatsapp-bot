@@ -9688,6 +9688,15 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to add as a moderator.",
                       });
 
+                    // 💡 Prevent adding the owner as a mod — redundant (owner
+                    // already has all permissions) and makes the mod list
+                    // confusing (owner shows up as a mod).
+                    if (isBotOwner(target)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "⚠️ The owner doesn't need to be added as a moderator — owners already have full access to everything.\n\n_Add someone else, or use `.s listmods` to see current mods._",
+                      });
+                    }
+
                     addGlobalMod(target);
                     await sock.sendMessage(chatId, {
                       text:
@@ -9954,8 +9963,57 @@ Usage: ${newUsage}/5${warningText}`;
                     if (cardsMods.size === 0) listMsg += `  _none_\n`;
                     for (const jid of cardsMods) listMsg += `  • ${formatJid(jid)}\n`;
 
-                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)`;
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
                     await sock.sendMessage(chatId, { text: BOT_MARKER + listMsg });
+                    return;
+                  }
+
+                  // .g reloadmods — reload ALL mod lists from DB (owner/mod only)
+                  // 💡 Used when an external script (like clear_all_mods.js)
+                  // modifies the DB directly and the in-memory Sets are stale.
+                  // Without this, the bot must be restarted to pick up DB changes.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloadmods` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} reloadmods `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload mod lists.",
+                      });
+                    }
+                    try {
+                      // Clear all in-memory Sets and reload from DB
+                      globalMods.clear();
+                      rpgMods.clear();
+                      cardsMods.clear();
+                      await loadGlobalMods();
+                      await loadRpgMods();
+                      await loadCardsMods();
+
+                      // Also reload card system roles
+                      let cardModCount = 0;
+                      try {
+                        const cardSystem = require('./rpg/cardSystem');
+                        const inst = cardSystem.getInst();
+                        if (inst && inst.modJids) {
+                          inst.modJids.clear();
+                          if (typeof cardSystem.loadRoles === 'function') {
+                            await cardSystem.loadRoles();
+                          }
+                          cardModCount = inst.modJids.size;
+                        }
+                      } catch (e) {}
+
+                      let msg = `🔄 *MOD LISTS RELOADED FROM DB*\n\n`;
+                      msg += `🛡️ General Mods: ${globalMods.size}\n`;
+                      msg += `⚔️ RPG Mods: ${rpgMods.size}\n`;
+                      msg += `🃏 Cards Mods: ${cardsMods.size}\n`;
+                      msg += `🃏 Card System Mods: ${cardModCount}\n\n`;
+                      msg += `_In-memory mod Sets are now synced with the database._`;
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reload failed: ${e.message}` });
+                    }
                     return;
                   }
 
@@ -23599,6 +23657,12 @@ _(Or reply to their message)_
                       "mods",
                       "addmod",
                       "delmod",
+                      "addrpgmod",
+                      "delrpgmod",
+                      "addcardsmod",
+                      "delcardsmod",
+                      "listmods",
+                      "reloadmods",
                       "spawn",
                       "cardmod",
                       "eshop",
