@@ -24550,6 +24550,7 @@ _(Or reply to their message)_
                   )
                     return;
                   console.log("⚠️️ Skipping message:", err.message);
+                  console.log("⚠️️ Stack:", err.stack?.split('\n').slice(0, 5).join('\n'));
                 }
               }); // END storage.run
             }),
