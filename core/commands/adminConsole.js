@@ -1181,11 +1181,44 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const senderName = m?.pushName || senderJid.split('@')[0];
         const sandboxSub = (args[1] || '').toLowerCase();
 
-        // ── sandbox (no args) — show status ──
+        // ── sandbox on — activate sandbox mode ──
+        if (sandboxSub === 'on') {
+            try {
+                const engine = require('../engine');
+                const sb = await engine.enableSandbox(senderJid, senderName);
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `🧪 *SANDBOX MODE ON*\n\nYou are now using your sandbox test character.\n\n📊 Level: ${sb.progression?.level || 1}\n🏷️ Class: ${sb.class || 'FIGHTER'}\n💰 Wallet: ${(sb.wallet || 0).toLocaleString()} Zeni\n\n_All commands (.char, .bank, .solo, etc.) now use the sandbox account._\n_Use \`${prefix} admin sandbox off\` to return to your real account._`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to enable sandbox: ${e.message}` });
+            }
+        }
+
+        // ── sandbox off — deactivate sandbox mode ──
+        if (sandboxSub === 'off') {
+            try {
+                const engine = require('../engine');
+                const result = await engine.disableSandbox(senderJid);
+                if (result) {
+                    return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `✅ *SANDBOX MODE OFF*\n\nYou are back on your real account. Sandbox data has been saved.\n\n_Use \`${prefix} admin sandbox on\` to test again, or \`${prefix} admin sandbox reset\` to wipe._`
+                    });
+                } else {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not currently active.` });
+                }
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to disable sandbox: ${e.message}` });
+            }
+        }
+
+        // ── sandbox status (no args) — show status ──
         if (!sandboxSub || sandboxSub === 'status') {
             try {
+                const engine = require('../engine');
+                const isActive = engine.getSandboxJid(senderJid) !== null;
                 const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
-                let msg = `🧪 *YOUR SANDBOX TEST CHARACTER*\n\n`;
+                let msg = `🧪 *SANDBOX TEST CHARACTER*\n\n`;
+                msg += `🔄 Status: ${isActive ? '🟢 ACTIVE (commands use sandbox)' : '🔴 OFF (commands use real account)'}\n\n`;
                 msg += `📛 Name: ${sb.name}\n`;
                 msg += `📊 Level: ${sb.progression?.level || 1} | XP: ${(sb.progression?.xp || 0).toLocaleString()}\n`;
                 msg += `🏷️ Class: ${sb.class || 'FIGHTER'} | Rank: ${sb.adventurerRank || 'F'}\n`;
@@ -1193,14 +1226,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 msg += `💰 Wallet: ${(sb.wallet || 0).toLocaleString()} Zeni\n`;
                 msg += `🏦 Bank: ${(sb.bank || 0).toLocaleString()} Zeni\n`;
                 msg += `💎 Skill Points: ${sb.skillPoints || 0}\n`;
-                msg += `🎒 Inventory: ${Object.keys(sb.inventory || {}).length}/${sb.inventorySlots || 50} slots\n`;
-                msg += `⚙️ Skills: ${Object.keys(sb.skills || {}).length} learned\n`;
-                msg += `⚔️ Trials: ${(sb.completedTrials || []).length} completed\n`;
-                msg += `🔄 Resets: ${sb.resetCount || 0}\n`;
-                msg += `📅 Created: ${new Date(sb.createdAt).toLocaleDateString()}\n`;
-                msg += `📅 Last Used: ${new Date(sb.lastUsedAt).toLocaleDateString()}\n\n`;
-                msg += `_Sandbox is ISOLATED from your real account. Test freely!_\n`;
-                msg += `Reset: \`${prefix} admin sandbox reset\` | Set level: \`${prefix} admin sandbox setlevel 50\``;
+                msg += `🔄 Resets: ${sb.resetCount || 0}\n\n`;
+                msg += `_Toggle: \`${prefix} admin sandbox on/off\`_\n`;
+                msg += `_Reset: \`${prefix} admin sandbox reset\`_`;
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to load sandbox: ${e.message}` });

@@ -301,7 +301,9 @@ function isGlobalMod(userId) {
   if (!userId || typeof userId !== "string") return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
-    return globalMods.has(jidNormalizedUser(userId));
+    // 💡 SANDBOX: strip 'sandbox_' prefix so mod checks work on the real JID
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return globalMods.has(jidNormalizedUser(realJid));
   } catch (err) {
     return false;
   }
@@ -386,7 +388,8 @@ function isRpgMod(userId) {
   if (!userId || typeof userId !== "string") return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
-    return rpgMods.has(jidNormalizedUser(userId));
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return rpgMods.has(jidNormalizedUser(realJid));
   } catch (err) {
     return false;
   }
@@ -410,7 +413,8 @@ function isCardsMod(userId) {
   if (!userId || typeof userId !== "string") return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
-    return cardsMods.has(jidNormalizedUser(userId));
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return cardsMods.has(jidNormalizedUser(realJid));
   } catch (err) {
     return false;
   }
@@ -446,7 +450,9 @@ const BOT_OWNER_PHONES = [
 ];
 function isBotOwner(jid) {
   if (!jid || typeof jid !== 'string') return false;
-  return BOT_OWNER_PHONES.some(phone => jid.startsWith(phone) || jid.includes(phone));
+  // 💡 SANDBOX: strip 'sandbox_' prefix so owner checks work on the real JID
+  const realJid = jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+  return BOT_OWNER_PHONES.some(phone => realJid.startsWith(phone) || realJid.includes(phone));
 }
 
 // Helper for dynamic ESM import of got-scraping
@@ -499,6 +505,125 @@ const { handleReaction } = require("../reactions/handler");
 // Global tracker for active WhatsApp connections (all instances share this)
 if (!global.waConnectionCount) global.waConnectionCount = 0;
 if (!global.waConnectionLog) global.waConnectionLog = true;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 SANDBOX MODE — when active, the admin's commands use a test character
+// stored in the AdminSandbox collection instead of their real account.
+// Map: realJid → { backup: <cloned real user>, sandboxJid: <virtual JID> }
+// ═══════════════════════════════════════════════════════════════════════════
+const sandboxMode = new Map();
+
+// Check if a user has sandbox mode active. Returns the sandbox JID or null.
+function getSandboxJid(realJid) {
+  if (!realJid) return null;
+  return sandboxMode.has(realJid) ? sandboxMode.get(realJid).sandboxJid : null;
+}
+
+// Initialize sandbox: back up real user, load sandbox data into cache
+async function enableSandbox(realJid, senderName) {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  // Get or create the sandbox document
+  const sb = await AdminSandbox.getOrCreate(realJid, senderName);
+
+  // Back up the real user data (deep clone)
+  const realUser = economy.getUser(realJid);
+  const backup = realUser ? JSON.parse(JSON.stringify(realUser)) : null;
+
+  // Build a sandbox user object that looks like a normal economy user
+  const sandboxJid = `sandbox_${realJid}`;
+  const sandboxUser = {
+    userId: sandboxJid,
+    registered: true,
+    nickname: sb.name || `Sandbox (${senderName})`,
+    wallet: sb.wallet || 100000,
+    bank: sb.bank || 1000000,
+    class: sb.class || 'FIGHTER',
+    adventurerRank: sb.adventurerRank || 'F',
+    spriteIndex: sb.spriteIndex || 0,
+    stats: sb.stats || { hp: 100, maxHp: 100, xp: 0, level: 1 },
+    statBonuses: sb.statBonuses || { hp:0, atk:0, def:0, mag:0, spd:0, luck:0, crit:0 },
+    skillPoints: sb.skillPoints || 0,
+    skills: sb.skills || {},
+    completedTrials: sb.completedTrials || [],
+    evolutionHistory: sb.evolutionHistory || [],
+    evolvedAt: sb.evolvedAt || 0,
+    inventory: sb.inventory || {},
+    inventorySlots: sb.inventorySlots || 50,
+    equipment: sb.equipment || {},
+    progression: sb.progression || {
+      xp: 0, level: 1, gp: 0, totalGP: 0, statPoints: 0, totalXPEarned: 0,
+      commandsUsed: 0, allocatedStats: {hp:0,atk:0,def:0,mag:0,spd:0,luck:0,crit:0},
+      allocatedStatPoints: {hp:0,atk:0,def:0,mag:0,spd:0,luck:0,crit:0},
+      achievements: []
+    },
+    questsCompleted: sb.questsCompleted || 0,
+    questsWon: sb.questsWon || 0,
+    questsFailed: sb.questsFailed || 0,
+    bossesDefeated: sb.bossesDefeated || 0,
+    dragonsKilled: sb.dragonsKilled || 0,
+    pvpWins: sb.pvpWins || 0,
+    pvpLosses: sb.pvpLosses || 0,
+  };
+
+  // Put the sandbox user in the economy cache under the sandbox JID
+  economy.economyData.set(sandboxJid, sandboxUser);
+
+  sandboxMode.set(realJid, { backup, sandboxJid });
+  return sb;
+}
+
+// Disable sandbox: save sandbox data back to AdminSandbox, restore real user
+async function disableSandbox(realJid) {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  const entry = sandboxMode.get(realJid);
+  if (!entry) return false;
+
+  const { backup, sandboxJid } = entry;
+  const sandboxUser = economy.economyData.get(sandboxJid);
+
+  // Save sandbox data back to AdminSandbox document
+  if (sandboxUser) {
+    await AdminSandbox.patch(realJid, {
+      wallet: sandboxUser.wallet,
+      bank: sandboxUser.bank,
+      class: sandboxUser.class,
+      adventurerRank: sandboxUser.adventurerRank,
+      spriteIndex: sandboxUser.spriteIndex,
+      stats: sandboxUser.stats,
+      statBonuses: sandboxUser.statBonuses,
+      skillPoints: sandboxUser.skillPoints,
+      skills: sandboxUser.skills,
+      completedTrials: sandboxUser.completedTrials,
+      evolutionHistory: sandboxUser.evolutionHistory,
+      evolvedAt: sandboxUser.evolvedAt,
+      inventory: sandboxUser.inventory,
+      equipment: sandboxUser.equipment,
+      progression: sandboxUser.progression,
+      questsCompleted: sandboxUser.questsCompleted,
+      questsWon: sandboxUser.questsWon,
+      questsFailed: sandboxUser.questsFailed,
+      bossesDefeated: sandboxUser.bossesDefeated,
+      dragonsKilled: sandboxUser.dragonsKilled,
+      pvpWins: sandboxUser.pvpWins,
+      pvpLosses: sandboxUser.pvpLosses,
+    });
+  }
+
+  // Remove sandbox user from economy cache
+  economy.economyData.delete(sandboxJid);
+
+  // Restore real user data
+  if (backup) {
+    economy.economyData.set(realJid, backup);
+  }
+
+  sandboxMode.delete(realJid);
+  return true;
+}
 
 async function startBot(configInstance) {
   let sock;
@@ -5502,6 +5627,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     senderJid.startsWith("233201487480") ||
                     senderJid.includes("251453323092189") ||
                     senderJid.includes("105712667648066");
+
+                  // 💡 SANDBOX MODE: if the admin has sandbox mode active,
+                  // swap their JID to the sandbox JID so all commands
+                  // (.char, .bank, .solo, .skill, etc.) use the sandbox
+                  // account. The real JID is preserved in `realSenderJid`
+                  // for permission checks (isOwner, isGlobalMod, etc.).
+                  const realSenderJid = senderJid;
+                  const sandboxJid = getSandboxJid(realSenderJid);
+                  if (sandboxJid) {
+                    senderJid = sandboxJid;
+                  }
 
                   // --- 0. REPLY HELPER ---
                   const reply = async (content, options = {}) => {
@@ -24477,6 +24613,11 @@ module.exports = {
   delCardsMod,
   isCardsMod,
   loadCardsMods,
+  // 💡 Sandbox mode exports
+  getSandboxJid,
+  enableSandbox,
+  disableSandbox,
+  sandboxMode,
   hasModPermission,
   isBotOwner,
   // Perma-ban system
