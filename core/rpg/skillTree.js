@@ -2530,6 +2530,15 @@ const SKILL_TREES = {
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Unleash total warfare upon all enemies.',
+                        description: 'Unleash total warfare upon all enemies. Party gains +50% ATK for 3 turns.',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.0),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            partyBuff: { type: 'atk', value: 30 + (level * 10), duration: 3 },
+                            animation: '⚔️🎖️💥🔥✨'
+                        }),
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
                     },
@@ -2677,6 +2686,15 @@ const SKILL_TREES = {
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Ancient weapon of pure destruction.',
+                        description: 'Ancient weapon of pure destruction. Self: +100% ATK for 2 turns (bloodlust).',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 10.0 + (level * 2.5),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            selfBuff: { type: 'berserk', value: 100, duration: 2 },
+                            animation: '⚔️🔥💀⚡💥'
+                        }),
                         animation: '⚔️🔥💀⚡💥',
                         isUltimate: true,
                         isAscended: true,
@@ -2755,6 +2773,19 @@ const SKILL_TREES = {
                         animation: '🌋🌊⚡🌪️💥💀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 9.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'all',
+                            debuff: { type: 'vulnerability', value: 25 + (level * 10), duration: 3 },
+                            cc: 'burn',
+                            ccChance: 50 + (level * 15),
+                            ccDuration: 3,
+                            ccValue: 30 + (level * 15),
+                            animation: '🌊🔥⚡🌍💥✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3397,6 +3428,18 @@ const SKILL_TREES = {
                         animation: '💀☄️💥🌑🌌',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'curse',
+                            ccChance: 60 + (level * 10),
+                            ccDuration: 3,
+                            ccValue: 20 + (level * 10),
+                            summon: { type: 'undead', count: level, stats: 0.5 },
+                            animation: '💀👑💥🧟💀✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3491,6 +3534,18 @@ const SKILL_TREES = {
                         animation: '🌌⏳🌊💥💀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'slow',
+                            ccChance: 80 + (level * 5),
+                            ccDuration: 2,
+                            resetCooldowns: true,
+                            extraTurn: level >= 3,
+                            animation: '⏳🌀💥⏰✨💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3587,6 +3642,18 @@ const SKILL_TREES = {
                         animation: '⚡🔥⚖️☄️',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'holy',
+                            lifeSteal: 0.50 + (level * 0.15),
+                            cc: 'blind',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 2,
+                            animation: '😇✨💥🙏💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3686,6 +3753,19 @@ const SKILL_TREES = {
                         animation: '🌍💥🌋🌿',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'nature',
+                            cc: 'stun',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 1,
+                            partyHeal: 0.10 + (level * 0.05),
+                            partyRegen: 5 + (level * 3),
+                            animation: '🌳👑🌱💥🌍✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3780,6 +3860,18 @@ const SKILL_TREES = {
                         animation: '💰⛈️🌪️💥',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 5.0 + (level * 1.5),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            walletScaling: 0.001,
+                            goldSteal: 1000 + (level * 500),
+                            cc: 'blind',
+                            ccChance: 40 + (level * 10),
+                            ccDuration: 1,
+                            animation: '💰👑💥💸✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3905,6 +3997,17 @@ const SKILL_TREES = {
                         animation: '⚫🔮✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'stun',
+                            ccChance: 60 + (level * 10),
+                            ccDuration: 1,
+                            manaDrain: 50 + (level * 25),
+                            animation: '🧙✨🌀黑洞💥'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4033,6 +4136,17 @@ const SKILL_TREES = {
                         animation: '🌑💀⚫✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            dispel: true,
+                            cc: 'silence',
+                            ccChance: 70 + (level * 10),
+                            ccDuration: 2,
+                            animation: '🌑🧙💫💀✨'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4146,6 +4260,15 @@ const SKILL_TREES = {
                         },
                         description: 'Create a sanctuary of light, healing and buffing the team.',
                         animation: '🏰✨👼',
+                        effect: (level) => ({
+                            type: 'buff_team',
+                            buffType: 'shield',
+                            value: 200 + (level * 100),
+                            duration: 3,
+                            partyHeal: 0.20 + (level * 0.05),
+                            cleanse: true,
+                            animation: '⛪✨🛡️🙏💫'
+                        }),
                         isUltimate: true,
                         isAscended: true,
                         skillPointCost: [8, 12, 15]
@@ -4165,6 +4288,14 @@ const SKILL_TREES = {
                         },
                         description: 'A miraculous intervention that revives all fallen allies and shields the survivors.',
                         animation: '✨👼🕊️🛡️',
+                        effect: (level) => ({
+                            type: 'revive_team',
+                            reviveHP: 0.50 + (level * 0.10),
+                            partyHeal: 0.30,
+                            cleanse: true,
+                            partyBuff: { type: 'shield', value: 100 + (level * 50), duration: 2 },
+                            animation: '⛪✨😇🙏💫🌟'
+                        }),
                         isUltimate: true,
                         skillPointCost: [20]
                     }
@@ -4262,6 +4393,18 @@ const SKILL_TREES = {
                         animation: '🌑💀⚔️✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'execute',
+                            multiplier: 8.0 + (level * 2.0),
+                            damageType: 'physical',
+                            targeting: 'SINGLE',
+                            executeThreshold: 0.30,
+                            executeMultiplier: 3.0,
+                            cc: 'blind',
+                            ccChance: 75,
+                            ccDuration: 2,
+                            animation: '🌑🌑🌑🗡️'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4359,6 +4502,16 @@ const SKILL_TREES = {
                         animation: '🧘✨🌌💫',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'buff_team',
+                            buffType: 'invulnerable',
+                            value: 1,
+                            duration: 1,
+                            counterattack: true,
+                            counterMultiplier: 3.0 + level,
+                            healing: 0.15 + (level * 0.05),
+                            animation: '🧘✨🌌🙏💫'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4440,6 +4593,21 @@ const SKILL_TREES = {
                         isAscended: true,
                         description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
                         animation: '🌋🌊🐉🔥',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 10.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'fire',
+                            cc: 'burn',
+                            ccChance: 80,
+                            ccDuration: 3,
+                            ccValue: 50 + (level * 20),
+                            cc2: 'fear',
+                            cc2Chance: 40 + (level * 10),
+                            cc2Duration: 1,
+                            animation: '🐲👑🔥💥🌪️✨'
+                        }),
                         skillPointCost: [8, 10, 12]
                     }
                 }
@@ -4594,6 +4762,20 @@ const SKILL_TREES = {
                         },
                         description: 'Call down a flight of wyrms. 8.5-10.5× PHYS to all enemies + 3 wyrmlings join you. The sky IS yours.',
                         animation: '🐉🐉🐉🔥',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + (level * 1.5),
+                            damageType: 'physical',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'fire',
+                            cc: 'burn',
+                            ccChance: 60,
+                            ccDuration: 2,
+                            ccValue: 30 + (level * 10),
+                            summon: { type: 'dragon', count: level, stats: 0.6 },
+                            partyBuff: { type: 'atk', value: 20 + (level * 10), duration: 2 },
+                            animation: '🐉⚔️🐲🔥💥✨'
+                        }),
                         skillPointCost: [8, 10, 12]
                     }
                 }
@@ -4727,6 +4909,17 @@ const SKILL_TREES = {
                         animation: '🏯⚔️💥💨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'physical',
+                            targeting: 'ALL_ENEMIES',
+                            debuff: { type: 'weak', value: 30 + (level * 10), duration: 3 },
+                            cc: 'fear',
+                            ccChance: 40 + (level * 10),
+                            ccDuration: 1,
+                            animation: '🏯⚔️💥🏹🗡️'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4807,6 +5000,18 @@ const SKILL_TREES = {
                         animation: '🌑🥷⚔️🌀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'multi_hit',
+                            hits: 8 + level,
+                            multiplier: 1.5 + (level * 0.3),
+                            damageType: 'physical',
+                            targeting: 'SINGLE',
+                            comboBonus: 0.15,
+                            cc: 'stun',
+                            ccChance: 20 + (level * 10),
+                            ccDuration: 1,
+                            animation: '🌑🥷👤👤👤👤💀'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4905,6 +5110,17 @@ const SKILL_TREES = {
                         animation: '🎻🌑💀🌌',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'sleep',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 2,
+                            partyBuff: { type: 'haste', value: 30 + (level * 10), duration: 3 },
+                            animation: '🎻✨🌌🎶💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -4999,6 +5215,17 @@ const SKILL_TREES = {
                         animation: '🛰️⚡☄️💥',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'damage',
+                            multiplier: 12.0 + (level * 3.0),
+                            damageType: 'true',
+                            targeting: 'SINGLE',
+                            cc: 'stun',
+                            ccChance: 70 + (level * 10),
+                            ccDuration: 1,
+                            debuff: { type: 'defense_break', value: 50 + (level * 15), duration: 3 },
+                            animation: '🦾⚙️🛰️💥💀✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
