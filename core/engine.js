@@ -4629,44 +4629,45 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // Pre-configured in botConfig.json — use it directly
                 usePairing = true;
                 phoneForPairing = pairingPhoneConfig;
-              } else if (isFreshLogin && process.stdin.isTTY) {
-                // Interactive prompt — only on fresh login + terminal
+              } else if (isFreshLogin) {
+                // Interactive prompt — only on fresh login.
+                // Don't check process.stdin.isTTY — it may be false even
+                // in a real terminal (e.g. when running under dotenvx).
+                // Just try readline and catch if it fails.
                 console.log(`\n╔══════════════════════════════════════════════╗`);
-                console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(15)}             ║`);
+                console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(33)}║`);
                 console.log(`╠══════════════════════════════════════════════╣`);
                 console.log(`║  1️⃣  QR Code (scan with phone camera)        ║`);
                 console.log(`║  2️⃣  Pairing Code (enter code on phone)     ║`);
                 console.log(`╚══════════════════════════════════════════════╝`);
-                process.stdout.write(`Choose (1 or 2, default=1): `);
 
                 try {
                   const readline = require('readline');
-                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
                   const choice = await new Promise(resolve => {
-                    rl.question('', answer => { rl.close(); resolve(answer.trim()); });
+                    rl.question('Choose (1 or 2, default=1): ', answer => { rl.close(); resolve(answer.trim()); });
                   });
 
                   if (choice === '2') {
-                    process.stdout.write(`📱 Enter your phone number (with country code, no + or spaces, e.g. 2348086616347): `);
-                    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+                    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
                     const phone = await new Promise(resolve => {
-                      rl2.question('', answer => { rl2.close(); resolve(answer.trim()); });
+                      rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { rl2.close(); resolve(answer.trim()); });
                     });
                     if (phone && /^\d{8,15}$/.test(phone)) {
                       usePairing = true;
                       phoneForPairing = phone;
                     } else {
-                      console.log(`❌ Invalid phone number. Falling back to QR code.\n`);
+                      console.log('❌ Invalid phone number. Using QR code.\n');
                     }
                   }
                 } catch (e) {
-                  // stdin not available (non-interactive) — fall through to QR
+                  console.log('(stdin not available, using QR code)');
                 }
               }
 
               if (usePairing && phoneForPairing) {
                 try {
-                  console.log(`📱 [${BOT_ID}] Requesting pairing code for ${phoneForPairing}...`);
+                  console.log(`\n📱 [${BOT_ID}] Requesting pairing code for ${phoneForPairing}...`);
                   const code = await sock.requestPairingCode(phoneForPairing);
                   console.log(`\n╔══════════════════════════════════════╗`);
                   console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
