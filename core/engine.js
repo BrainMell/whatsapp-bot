@@ -6279,6 +6279,11 @@ _💡 Reply with another number from your search list!_`.trim();
                   // This block handles high-priority commands with robust parsing
                   const currentPrefix = botConfig.getPrefix().toLowerCase();
 
+                  // 💡 DIAG: log what we're about to check
+                  if (_looksLikeCmd) {
+                    console.log(`🔧 [Pipeline:CMD] lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))} | currentPrefix=${JSON.stringify(currentPrefix)} | startsWith=${lowerTxt.startsWith(currentPrefix)}`);
+                  }
+
                   if (lowerTxt.startsWith(currentPrefix)) {
                     let cmdBody = lowerTxt
                       .substring(currentPrefix.length)
