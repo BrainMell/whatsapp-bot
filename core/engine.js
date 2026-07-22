@@ -4645,7 +4645,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const readline = require('readline');
                   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
                   const choice = await new Promise(resolve => {
-                    rl.question('Choose (1 or 2, default=1): ', answer => { rl.close(); resolve(answer.trim()); });
+                    rl.question('Choose (1 or 2, default=2): ', answer => { rl.close(); resolve(answer.trim() || '2'); });
                   });
 
                   if (choice === '2') {
@@ -4657,7 +4657,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       usePairing = true;
                       phoneForPairing = phone;
                     } else {
-                      console.log('❌ Invalid phone number. Using QR code.\n');
+                      console.log('❌ Invalid phone number. Falling back to QR code.\n');
                     }
                   }
                 } catch (e) {
