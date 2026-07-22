@@ -62,6 +62,13 @@ const STARTER_CLASSES = {
 // ==========================================
 
 const EVOLVED_CLASSES = {
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 PEAK TIER CLASSES (contributed by @Daviddey — github.com/Daviddey)
+// PR #7: "Add new classes and evolution paths"
+// 19 new PEAK tier classes that evolve from ASCENDED classes.
+// Currently SHELVED — trial bosses, skill trees, and sprites not yet
+// implemented. Uncomment the shelved blocks below once content is ready.
+// ═══════════════════════════════════════════════════════════════════════════
     // ─── FIGHTER LINE ────────────────────────────
 
     WARRIOR: {
@@ -90,21 +97,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, victories: 100, gold: 100000, trialBoss: 'VOID_CORRUPTED' },
         evolutionCost: 100000,
         passive: { name: 'Iron Command', desc: `Reduces all incoming damage to party by 15% in multi-player quests.`, effect: 'damage_reduction', value: 15 },
-        evolves_into: ['WAREMPEROR'],
+        // SHELVED: evolves_into: ['WAREMPEROR'],
     },
-    WAREMPEROR: {
-        id: 'WAREMPEROR',
-        name: 'Waremperor',
-        icon: '🎖️',
-        desc: `The last war he loses hasn't been invented yet..`,
-        tier: 'PEAK',
-        evolvedFrom: 'WARLORD',
-        role: 'TANK',
-        stats: { hp: 900, atk: 40, def: 75, mag: 10, spd: 20, luck: 15, crit: 20 },
-        requirement: { level: 90, questsCompleted: 500, victories: 500, gold: 1000000, trialBoss: 'ETERNAL_CONQUEROR' },
-        evolutionCost: 1000000,
-        passive: { name: 'Absolute Command', desc: `Party immune to debuffs; -25% incoming damage to party at all times`, effect: 'damage_reduction', value: 25 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "WAREMPEROR" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // WAREMPEROR: {
+    //     id: 'WAREMPEROR',
+    //     name: 'Waremperor',
+    //     icon: '🎖️',
+    //     desc: `The last war he loses hasn't been invented yet..`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'WARLORD',
+    //     role: 'TANK',
+    //     stats: { hp: 900, atk: 40, def: 75, mag: 10, spd: 20, luck: 15, crit: 20 },
+    //     requirement: { level: 90, questsCompleted: 500, victories: 500, gold: 1000000, trialBoss: 'ETERNAL_CONQUEROR' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Absolute Command', desc: `Party immune to debuffs; -25% incoming damage to party at all times`, effect: 'damage_reduction', value: 25 },
+    // },
     BERSERKER: {
         id: 'BERSERKER',
         name: 'Berserker',
@@ -131,21 +144,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, kills: 500, gold: 100000, trialBoss: 'DEMON_LORD' },
         evolutionCost: 100000,
         passive: { name: 'Hell-Walker', desc: `Damage increases by 2% for every 1% of HP missing. No cap.`, effect: 'damage_when_low_hp', value: 50 },
-        evolves_into: ['ANNIHILATOR'],
+        // SHELVED: evolves_into: ['ANNIHILATOR'],
     },
-    ANNIHILATOR: {
-        id: 'ANNIHILATOR',
-        name: 'Annihilator',
-        icon: '🎖️',
-        desc: `There is no "too far." Only "not yet."`,
-        tier: 'PEAK',
-        evolvedFrom: 'DOOMSLAYER',
-        role: 'TANK',
-        stats: { hp: 950, atk: 80, def: 40, mag: 5, spd: 30, luck: 10, crit: 45 },
-        requirement: { level: 90, questsCompleted: 500, kills: 1000, gold: 1000000, trialBoss: 'APOCALYPSE_BRINGER' },
-        evolutionCost: 1000000,
-        passive: { name: 'Endless Wrath', desc: `Damage +3% per 1% HP missing + 20% lifesteal on all attacks`, effect: 'damage_when_low_hp', value: 75 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "ANNIHILATOR" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // ANNIHILATOR: {
+    //     id: 'ANNIHILATOR',
+    //     name: 'Annihilator',
+    //     icon: '🎖️',
+    //     desc: `There is no "too far." Only "not yet."`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'DOOMSLAYER',
+    //     role: 'TANK',
+    //     stats: { hp: 950, atk: 80, def: 40, mag: 5, spd: 30, luck: 10, crit: 45 },
+    //     requirement: { level: 90, questsCompleted: 500, kills: 1000, gold: 1000000, trialBoss: 'APOCALYPSE_BRINGER' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Endless Wrath', desc: `Damage +3% per 1% HP missing + 20% lifesteal on all attacks`, effect: 'damage_when_low_hp', value: 75 },
+    // },
     PALADIN: {
         id: 'PALADIN',
         name: 'Paladin',
@@ -173,21 +192,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, undeadKills: 200, gold: 100000, trialBoss: 'PRIMORDIAL_CHAOS' },
         evolutionCost: 100000,
         passive: { name: 'Holy Retribution', desc: `Reflects 20% of all damage received back at attackers as holy damage.`, effect: 'damage_reduction', value: 15 },
-        evolves_into: ['SERAPH']
+        // SHELVED: evolves_into: ['SERAPH']
     },
-    SERAPH: {
-        id: 'SERAPH',
-        name: 'Seraph',
-        icon: '🎖️',
-        desc: `Judgment doesn't ask permission.`,
-        tier: 'PEAK',
-        evolvedFrom: 'TEMPLAR',
-        role: 'TANK',
-        stats: { hp: 715, atk: 35, def: 80, mag: 45, spd: 15, luck: 30, crit: 20 },
-        requirement: { level: 90, questsCompleted: 500, undeadKills: 700, gold: 1000000, trialBoss: 'FALLEN_SERAPH' },
-        evolutionCost: 1000000,
-        passive: { name: 'Absolute Retribution', desc: `Reflect 40% damage received, immune to debuffs.`, effect: 'damage_reduction', value: 30 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "SERAPH" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // SERAPH: {
+    //     id: 'SERAPH',
+    //     name: 'Seraph',
+    //     icon: '🎖️',
+    //     desc: `Judgment doesn't ask permission.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'TEMPLAR',
+    //     role: 'TANK',
+    //     stats: { hp: 715, atk: 35, def: 80, mag: 45, spd: 15, luck: 30, crit: 20 },
+    //     requirement: { level: 90, questsCompleted: 500, undeadKills: 700, gold: 1000000, trialBoss: 'FALLEN_SERAPH' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Absolute Retribution', desc: `Reflect 40% damage received, immune to debuffs.`, effect: 'damage_reduction', value: 30 },
+    // },
     DRAGONSLAYER: {
         id: 'DRAGONSLAYER',
         name: 'Dragonslayer',
@@ -214,25 +239,31 @@ const EVOLVED_CLASSES = {
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 reduced from 100 to 25
         evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.`, effect: 'damage_reduction', value: 50 },
-        evolves_into: ['ASTRALWYRM'],
+        // SHELVED: evolves_into: ['ASTRALWYRM'],
         isUnique: true, // 💡 Only ONE player may hold this class — ever.
         uniqueLockId: 'LEVIATHAN', // matches DragonGod model's bossId
     },
-    ASTRALWYRM: {
-        id: 'ASTRALWYRM',
-        name: 'Astralwyrm',
-        icon: '🎖️',
-        desc: `Stars burn brighter just to stay out of his way.`,
-        tier: 'PEAK',
-        evolvedFrom: 'DRAGONGOD',
-        role: 'TANK',
-        stats: { hp: 850, atk: 70, def: 60, mag: 55, spd: 25, luck: 40, crit: 30 },
-        requirement: { level: 90, questsCompleted: 500, dragonsKilled: 100, gold: 2000000, trialBoss: 'PRIMORDIAL_WYRM' },
-        evolutionCost: 2000000,
-        passive: { name: 'Astral Dominion', desc: `Immune to all status, -65% damage taken, reflect 15% as dragonfire.`, effect: 'damage_reduction', value: 65 },
-        isUnique: true, // 💡 Only the Dragon God can ascend to this class
-        uniqueLockId: 'PRIMODIAL_WYRM',
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "ASTRALWYRM" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // ASTRALWYRM: {
+    //     id: 'ASTRALWYRM',
+    //     name: 'Astralwyrm',
+    //     icon: '🎖️',
+    //     desc: `Stars burn brighter just to stay out of his way.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'DRAGONGOD',
+    //     role: 'TANK',
+    //     stats: { hp: 850, atk: 70, def: 60, mag: 55, spd: 25, luck: 40, crit: 30 },
+    //     requirement: { level: 90, questsCompleted: 500, dragonsKilled: 100, gold: 2000000, trialBoss: 'PRIMORDIAL_WYRM' },
+    //     evolutionCost: 2000000,
+    //     passive: { name: 'Astral Dominion', desc: `Immune to all status, -65% damage taken, reflect 15% as dragonfire.`, effect: 'damage_reduction', value: 65 },
+    //     isUnique: true, // 💡 Only the Dragon God can ascend to this class
+    //     uniqueLockId: 'PRIMODIAL_WYRM',
+    // },
     // ────────────────────────────────────────────────────────────────────────
     //  DRAGON LORD — successor class to Dragon God.
     //  Once the Leviathan has been slain and a Dragon God crowned, every
@@ -253,25 +284,31 @@ const EVOLVED_CLASSES = {
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN_SPAWN_ALPHA' },
         evolutionCost: 500000,
         passive: { name: 'Wyrmguard', desc: `Immune to fear and stun. Reflects 25% of melee damage as fire damage. Damage taken from non-dragons reduced by 35%.`, effect: 'damage_reduction', value: 35 },
-        evolves_into: ['BROOD_SOVEREIGN'],
+        // SHELVED: evolves_into: ['BROOD_SOVEREIGN'],
         isSuccessor: true,    // marks this as the post-first-Leviathan-kill path
         succeeds: 'DRAGON_GOD', // documents the lineage
     },
-     BROOD_SOVEREIGN: {
-        id: 'BROOD_SOVEREIGN',
-        name: 'Brood_Sovereign',
-        icon: '🎖️',
-        desc: `Every dragon that draws breath answers to him.`,
-        tier: 'PEAK',
-        evolvedFrom: 'DRAGON_LORD',
-        role: 'TANK',
-        stats: { hp: 835, atk: 65, def: 50, mag: 45, spd: 25, luck: 35, crit: 20 },
-        requirement: { level: 90, questsCompleted: 500, dragonsKilled: 100, gold: 2000000, trialBoss: 'WYRM_EMPEROR' },
-        evolutionCost: 2000000,
-        passive: { name: 'Supreme Wyrmguard', desc: `Immune to fear/stun/Silence, reflect 40% melee as fire, -50% dmg from non dragons.`, effect: 'damage_reduction', value: 50 },
-         isSuccessor: true,
-         succeeds: 'ASTRALWYRM',
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "BROOD_SOVEREIGN" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  BROOD_SOVEREIGN: {
+    //     id: 'BROOD_SOVEREIGN',
+    //     name: 'Brood_Sovereign',
+    //     icon: '🎖️',
+    //     desc: `Every dragon that draws breath answers to him.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'DRAGON_LORD',
+    //     role: 'TANK',
+    //     stats: { hp: 835, atk: 65, def: 50, mag: 45, spd: 25, luck: 35, crit: 20 },
+    //     requirement: { level: 90, questsCompleted: 500, dragonsKilled: 100, gold: 2000000, trialBoss: 'WYRM_EMPEROR' },
+    //     evolutionCost: 2000000,
+    //     passive: { name: 'Supreme Wyrmguard', desc: `Immune to fear/stun/Silence, reflect 40% melee as fire, -50% dmg from non dragons.`, effect: 'damage_reduction', value: 50 },
+    //      isSuccessor: true,
+    //      succeeds: 'ASTRALWYRM',
+    // },
 
     // ─── SCOUT LINE ──────────────────────────────
 
@@ -301,21 +338,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_ASSASSIN' },
         evolutionCost: 100000,
         passive: { name: `Assassin's Mark`, desc: `10% chance on any attack to deal 10× damage.`, effect: 'damage_per_hit', value: 25 },
-        evolves_into: ['NEMESIS'],
+        // SHELVED: evolves_into: ['NEMESIS'],
     },
-     NEMESIS: {
-        id: 'NEMESIS',
-        name: 'Nemesis',
-        icon: '🎖️',
-        desc: `The last thing you'll never see coming.`,
-        tier: 'PEAK',
-        evolvedFrom: 'NIGHTBLADE',
-        role: 'DPS',
-        stats: { hp: 390, atk: 65, def: 20, mag: 25, spd: 80, luck: 55, crit: 70 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'VOID_SOVEREIGN' },
-        evolutionCost: 1000000,
-        passive: { name: 'Flawless Mark', desc: `25% chance any attack deals 15x more dmg.`, effect: 'damage_per_hit', value: 50 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "NEMESIS" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  NEMESIS: {
+    //     id: 'NEMESIS',
+    //     name: 'Nemesis',
+    //     icon: '🎖️',
+    //     desc: `The last thing you'll never see coming.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'NIGHTBLADE',
+    //     role: 'DPS',
+    //     stats: { hp: 390, atk: 65, def: 20, mag: 25, spd: 80, luck: 55, crit: 70 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'VOID_SOVEREIGN' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Flawless Mark', desc: `25% chance any attack deals 15x more dmg.`, effect: 'damage_per_hit', value: 50 },
+    // },
 
     MONK: {
         id: 'MONK',
@@ -343,21 +386,26 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'ETERNAL_DRAGON' },
         evolutionCost: 100000,
         passive: { name: 'Perfect Form', desc: `Immune to stun.`, effect: 'dodge_chance', value: 10 },
-        evolves_into: ['BUDDHA'],
+        // SHELVED: evolves_into: ['BUDDHA'],
     },
-     BUUDHA: {
-        id: 'BUDDHA',
-        name: 'Buddha',
-        icon: '🎖️',
-        desc: `One with the Universe.`,
-        tier: 'PEAK',
-        evolvedFrom: 'ZENMASTER',
-        role: 'DPS',
-        stats: { hp: 540, atk: 60, def: 35, mag: 55, spd: 70, luck: 40, crit: 45 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'BUDDHA' },
-        evolutionCost: 1000000,
-        passive: { name: 'Transcendence', desc: `Immune to stun/silence, all skills cost 0 EP.`, effect: 'all_stats', value: 25 },
-    },
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "BUDDHA" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // BUUDHA: {
+    //     id: 'BUDDHA',
+    //     name: 'Buddha',
+    //     icon: '🎖️',
+    //     desc: `One with the Universe.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'ZENMASTER',
+    //     role: 'DPS',
+    //     stats: { hp: 540, atk: 60, def: 35, mag: 55, spd: 70, luck: 40, crit: 45 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'BUDDHA' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Transcendence', desc: `Immune to stun/silence, all skills cost 0 EP.`, effect: 'all_stats', value: 25 },
+    // },
 
     SAMURAI: {
         id: 'SAMURAI',
@@ -385,21 +433,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_TITAN' },
         evolutionCost: 100000,
         passive: { name: `Commander's Will`, desc: `Party deals +20% physical damage.`, effect: 'all_stats', value: 15 },
-        evolves_into: ['TENNO'],
+        // SHELVED: evolves_into: ['TENNO'],
     },
-    TENNO: {
-        id: 'TENNO',
-        name: 'Tenno',
-        icon: '🎖️',
-        desc: `An empire, distilled into one blade.`,
-        tier: 'PEAK',
-        evolvedFrom: 'SHOGUN',
-        role: 'DPS',
-        stats: { hp: 495, atk: 80, def: 45, mag: 25, spd: 40, luck: 30, crit: 55 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'EMPEROR_OF_VOID' },
-        evolutionCost: 1000000,
-        passive: { name: 'Absolute Command', desc: `Party +35% physical dmg.`, effect: 'all_stats', value: 25 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "TENNO" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    // TENNO: {
+    //     id: 'TENNO',
+    //     name: 'Tenno',
+    //     icon: '🎖️',
+    //     desc: `An empire, distilled into one blade.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'SHOGUN',
+    //     role: 'DPS',
+    //     stats: { hp: 495, atk: 80, def: 45, mag: 25, spd: 40, luck: 30, crit: 55 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'EMPEROR_OF_VOID' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Absolute Command', desc: `Party +35% physical dmg.`, effect: 'all_stats', value: 25 },
+    // },
     NINJA: {
         id: 'NINJA',
         name: 'Ninja',
@@ -426,21 +480,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'PRIMORDIAL_EVIL' },
         evolutionCost: 100000,
         passive: { name: 'Absolute Stealth', desc: `50% base Evasion.`, effect: 'dodge_chance', value: 50 },
-        evolves_into: ['YAMI'],
+        // SHELVED: evolves_into: ['YAMI'],
     },
-     YAMI: {
-        id: 'YAMI',
-        name: 'Yami',
-        icon: '🎖️',
-        desc: `Darkness had a name before it had a shape. This is it.`,
-        tier: 'PEAK',
-        evolvedFrom: 'KAGE',
-        role: 'DPS',
-        stats: { hp: 340, atk: 80, def: 25, mag: 30, spd: 85, luck: 45, crit: 80 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SHADOW_GOD' },
-        evolutionCost: 1000000,
-        passive: { name: 'Complete Stealth', desc: `75% base evasion; first hit each combat is guaranteed instakill on non-boss enemies`, effect: 'dodge_chance', value: 75 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "YAMI" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  YAMI: {
+    //     id: 'YAMI',
+    //     name: 'Yami',
+    //     icon: '🎖️',
+    //     desc: `Darkness had a name before it had a shape. This is it.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'KAGE',
+    //     role: 'DPS',
+    //     stats: { hp: 340, atk: 80, def: 25, mag: 30, spd: 85, luck: 45, crit: 80 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SHADOW_GOD' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Complete Stealth', desc: `75% base evasion; first hit each combat is guaranteed instakill on non-boss enemies`, effect: 'dodge_chance', value: 75 },
+    // },
 
     // ─── APPRENTICE LINE ──────────────────────────
 
@@ -470,21 +530,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'LICH_KING' },
         evolutionCost: 100000,
         passive: { name: 'Infinity Flow', desc: `Energy costs reduced by 50%.`, effect: 'magic_damage', value: 25 },
-        evolves_into: ['DEMIURGE'],
+        // SHELVED: evolves_into: ['DEMIURGE'],
     },
-     DEMIURGE: {
-        id: 'DEMIURGE',
-        name: 'Demiurge',
-        icon: '🎖️',
-        desc: `Didn't learn the rules of magic. Wrote new ones.`,
-        tier: 'PEAK',
-        evolvedFrom: 'ARCHMAGE',
-        role: 'MAGIC_DPS',
-        stats: { hp: 310, atk: 20, def: 30, mag: 125, spd: 35, luck: 35, crit: 35 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'COSMIC_ARCHITECT' },
-        evolutionCost: 1000000,
-        passive: { name: 'Ominiscience', desc: `Energy costs reduced to 0; +30% MAG.`, effect: 'magic_damage', value: 40 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "DEMIURGE" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  DEMIURGE: {
+    //     id: 'DEMIURGE',
+    //     name: 'Demiurge',
+    //     icon: '🎖️',
+    //     desc: `Didn't learn the rules of magic. Wrote new ones.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'ARCHMAGE',
+    //     role: 'MAGIC_DPS',
+    //     stats: { hp: 310, atk: 20, def: 30, mag: 125, spd: 35, luck: 35, crit: 35 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'COSMIC_ARCHITECT' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Ominiscience', desc: `Energy costs reduced to 0; +30% MAG.`, effect: 'magic_damage', value: 40 },
+    // },
 
     WARLOCK: {
         id: 'WARLOCK',
@@ -512,21 +578,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'ABYSSAL_WHISPER' },
         evolutionCost: 100000,
         passive: { name: 'Abyssal Aura', desc: `Reduces nearby enemies' ATK and DEF by 15%.`, effect: 'magic_damage', value: 20 },
-        evolves_into: ['VOIDLORD'],
+        // SHELVED: evolves_into: ['VOIDLORD'],
     },
-     VOIDLORD: {
-        id: 'VOIDLORD',
-        name: 'VoidLord',
-        icon: '🎖️',
-        desc: `The void doesn't hunger anymore — it's full of him.`,
-        tier: 'PEAK',
-        evolvedFrom: 'VOIDWALKER',
-        role: 'MAGIC_DPS',
-        stats: { hp: 450, atk: 30, def: 40, mag: 90, spd: 30, luck: 25, crit: 30 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'ABYSS_RULER' },
-        evolutionCost: 1000000,
-        passive: { name: 'Total Darkness', desc: `-30% nearby enemy ATK/DEF; Immune to all CC.`, effect: 'magic_damage', value: 35 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "VOIDLORD" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  VOIDLORD: {
+    //     id: 'VOIDLORD',
+    //     name: 'VoidLord',
+    //     icon: '🎖️',
+    //     desc: `The void doesn't hunger anymore — it's full of him.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'VOIDWALKER',
+    //     role: 'MAGIC_DPS',
+    //     stats: { hp: 450, atk: 30, def: 40, mag: 90, spd: 30, luck: 25, crit: 30 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'ABYSS_RULER' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Total Darkness', desc: `-30% nearby enemy ATK/DEF; Immune to all CC.`, effect: 'magic_damage', value: 35 },
+    // },
 
     ELEMENTALIST: {
         id: 'ELEMENTALIST',
@@ -554,21 +626,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'PRIME_ELEMENT' },
         evolutionCost: 100000,
         passive: { name: 'Elemental Avatar', desc: `Automatically match enemy weakness.`, effect: 'rotate_elements', value: 30 },
-        evolves_into: ['PRIMORDIAL'],
+        // SHELVED: evolves_into: ['PRIMORDIAL'],
     },
-     PRIMORDIAL: {
-        id: 'PRIMORDIAL',
-        name: 'Primordial',
-        icon: '🎖️',
-        desc: `Before the elements had names, he had a shape.`,
-        tier: 'PEAK',
-        evolvedFrom: 'AVATAR',
-        role: 'MAGIC_DPS',
-        stats: { hp: 390, atk: 30, def: 35, mag: 100, spd: 45, luck: 35, crit: 40 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'ELEMENTAL_GOD' },
-        evolutionCost: 1000000,
-        passive: { name: 'Primordial Avatar', desc: `Immune to all elemental dmg; always crits enemy elemental weakness.`, effect: 'rotate_elements', value: 50 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "PRIMORDIAL" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  PRIMORDIAL: {
+    //     id: 'PRIMORDIAL',
+    //     name: 'Primordial',
+    //     icon: '🎖️',
+    //     desc: `Before the elements had names, he had a shape.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'AVATAR',
+    //     role: 'MAGIC_DPS',
+    //     stats: { hp: 390, atk: 30, def: 35, mag: 100, spd: 45, luck: 35, crit: 40 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'ELEMENTAL_GOD' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Primordial Avatar', desc: `Immune to all elemental dmg; always crits enemy elemental weakness.`, effect: 'rotate_elements', value: 50 },
+    // },
 
     NECROMANCER: {
         id: 'NECROMANCER',
@@ -596,21 +674,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_NECROMANCER' },
         evolutionCost: 100000,
         passive: { name: 'Phylactery', desc: `Revives at 50% HP once per quest.`, effect: 'damage_reduction', value: 25 },
-        evolves_into: ['NEKROS'],
+        // SHELVED: evolves_into: ['NEKROS'],
     },
-     NEKROS: {
-        id: 'NEKROS',
-        name: 'Nekros',
-        icon: '🎖️',
-        desc: `Death retired. He's covering the shift.`,
-        tier: 'PEAK',
-        evolvedFrom: 'LICH',
-        role: 'TANK',
-        stats: { hp: 465, atk: 25, def: 40, mag: 95, spd: 30, luck: 30, crit: 30 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'DEATH' },
-        evolutionCost: 1000000,
-        passive: { name: 'Undying Sovereign', desc: `Revives at full HP, twice per quest.`, effect: 'damage_reduction', value: 40 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "NEKROS" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  NEKROS: {
+    //     id: 'NEKROS',
+    //     name: 'Nekros',
+    //     icon: '🎖️',
+    //     desc: `Death retired. He's covering the shift.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'LICH',
+    //     role: 'TANK',
+    //     stats: { hp: 465, atk: 25, def: 40, mag: 95, spd: 30, luck: 30, crit: 30 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'DEATH' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Undying Sovereign', desc: `Revives at full HP, twice per quest.`, effect: 'damage_reduction', value: 40 },
+    // },
 
     CHRONOMANCER: {
         id: 'CHRONOMANCER',
@@ -638,21 +722,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'TIME_EATER' },
         evolutionCost: 100000,
         passive: { name: 'Temporal Mastery', desc: `Takes 2 actions per turn.`, effect: 'all_stats', value: 20 },
-        evolves_into: ['CHRONARCH'],
+        // SHELVED: evolves_into: ['CHRONARCH'],
     },
-     CHRONARCH: {
-        id: 'CHRONARCH',
-        name: 'Chronarch',
-        icon: '🎖️',
-        desc: `Every clock in existence answers to him.`,
-        tier: 'PEAK',
-        evolvedFrom: 'TIMELORD',
-        role: 'MAGIC_DPS',
-        stats: { hp: 370, atk: 25, def: 30, mag: 105, spd: 95, luck: 40, crit: 40 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'FATHER_TIME' },
-        evolutionCost: 1000000,
-        passive: { name: 'Ruler of Time', desc: `Takes 3 actions per turn; skills have no cooldown.`, effect: 'all_stats', value: 30 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "CHRONARCH" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  CHRONARCH: {
+    //     id: 'CHRONARCH',
+    //     name: 'Chronarch',
+    //     icon: '🎖️',
+    //     desc: `Every clock in existence answers to him.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'TIMELORD',
+    //     role: 'MAGIC_DPS',
+    //     stats: { hp: 370, atk: 25, def: 30, mag: 105, spd: 95, luck: 40, crit: 40 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'FATHER_TIME' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Ruler of Time', desc: `Takes 3 actions per turn; skills have no cooldown.`, effect: 'all_stats', value: 30 },
+    // },
 
     // ─── ACOLYTE LINE ────────────────────────────
 
@@ -683,21 +773,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'SERAPHIM_PRIME' },
         evolutionCost: 100000,
         passive: { name: 'Sainthood', desc: `All healing is doubled.`, effect: 'healing_boost', value: 50 },
-        evolves_into: ['EMPYREAN'],
+        // SHELVED: evolves_into: ['EMPYREAN'],
     },
-     EMPYREAN: {
-        id: 'EMPYREAN',
-        name: 'Empyrean',
-        icon: '🎖️',
-        desc: `Heaven sent one more, just in case.`,
-        tier: 'PEAK',
-        evolvedFrom: 'SAINT',
-        role: 'SUPPORT',
-        stats: { hp: 540, atk: 35, def: 60, mag: 100, spd: 35, luck: 55, crit: 20 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'FALLEN_AMGEL' },
-        evolutionCost: 1000000,
-        passive: { name: 'Pure Grace', desc: `Healing tripled; Party immune to death once per battle.`, effect: 'healing_boost', value: 75 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "EMPYREAN" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  EMPYREAN: {
+    //     id: 'EMPYREAN',
+    //     name: 'Empyrean',
+    //     icon: '🎖️',
+    //     desc: `Heaven sent one more, just in case.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'SAINT',
+    //     role: 'SUPPORT',
+    //     stats: { hp: 540, atk: 35, def: 60, mag: 100, spd: 35, luck: 55, crit: 20 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'FALLEN_AMGEL' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Pure Grace', desc: `Healing tripled; Party immune to death once per battle.`, effect: 'healing_boost', value: 75 },
+    // },
     DRUID: {
         id: 'DRUID',
         name: 'Druid',
@@ -724,21 +820,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'GAIA_SENTINEL' },
         evolutionCost: 100000,
         passive: { name: "Nature's Wrath", desc: `Regenerate 3% max HP per turn.`, effect: 'regen', value: 5 },
-        evolves_into: ['SYLVANUS'],
+        // SHELVED: evolves_into: ['SYLVANUS'],
     },
-     SYLVANUS: {
-        id: 'SYLVANUS',
-        name: 'Sylvanus',
-        icon: '🎖️',
-        desc: `The forest doesn't just obey him — it remembers him.`,
-        tier: 'PEAK',
-        evolvedFrom: 'ARCHDRUID',
-        role: 'SUPPORT',
-        stats: { hp: 620, atk: 45, def: 60, mag: 95, spd: 45, luck: 45, crit: 35 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'WORLD_TREE_GUARDIAN' },
-        evolutionCost: 1000000,
-        passive: { name: 'Worlds Will', desc: `Self regen 6% HP/turn; party regen 3% HP/turn.`, effect: 'regen', value: 8 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "SYLVANUS" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  SYLVANUS: {
+    //     id: 'SYLVANUS',
+    //     name: 'Sylvanus',
+    //     icon: '🎖️',
+    //     desc: `The forest doesn't just obey him — it remembers him.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'ARCHDRUID',
+    //     role: 'SUPPORT',
+    //     stats: { hp: 620, atk: 45, def: 60, mag: 95, spd: 45, luck: 45, crit: 35 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'WORLD_TREE_GUARDIAN' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Worlds Will', desc: `Self regen 6% HP/turn; party regen 3% HP/turn.`, effect: 'regen', value: 8 },
+    // },
 
     MERCHANT: {
         id: 'MERCHANT',
@@ -766,21 +868,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, goldEarned: 500000, gold: 200000, trialBoss: 'TREASURE_HOARDER' },
         evolutionCost: 200000,
         passive: { name: 'Infinite Capital', desc: `Earns Zeni each turn in combat.`, effect: 'gold_find', value: 100 },
-        evolves_into: ['PLUTOCRAT'],
+        // SHELVED: evolves_into: ['PLUTOCRAT'],
     },
-     PLUTOCRAT: {
-        id: 'PLUTOCRAT',
-        name: 'Plutocrat',
-        icon: '🎖️',
-        desc: `Owns the debt on every soul in the room.`,
-        tier: 'PEAK',
-        evolvedFrom: 'TYCOON',
-        role: 'SUPPORT',
-        stats: { hp: 465, atk: 40, def: 45, mag: 65, spd: 40, luck: 105, crit: 40 },
-        requirement: { level: 90, questsCompleted: 500, goldEarned: 2000000, gold: 3000000, trialBoss: 'KING_MIDAS' },
-        evolutionCost: 3000000,
-        passive: { name: 'MIDAS TOUCH', desc: `Gold never decreases; +100% zeni earned.`, effect: 'gold_find', value: 200 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "PLUTOCRAT" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  PLUTOCRAT: {
+    //     id: 'PLUTOCRAT',
+    //     name: 'Plutocrat',
+    //     icon: '🎖️',
+    //     desc: `Owns the debt on every soul in the room.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'TYCOON',
+    //     role: 'SUPPORT',
+    //     stats: { hp: 465, atk: 40, def: 45, mag: 65, spd: 40, luck: 105, crit: 40 },
+    //     requirement: { level: 90, questsCompleted: 500, goldEarned: 2000000, gold: 3000000, trialBoss: 'KING_MIDAS' },
+    //     evolutionCost: 3000000,
+    //     passive: { name: 'MIDAS TOUCH', desc: `Gold never decreases; +100% zeni earned.`, effect: 'gold_find', value: 200 },
+    // },
 
     BARD: {
         id: 'BARD',
@@ -808,21 +916,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'MAESTRO_OF_VOID' },
         evolutionCost: 100000,
         passive: { name: 'Grand Finale', desc: `Revive fallen allies.`, effect: 'healing_boost', value: 30 },
-        evolves_into: ['HARMONIA'],
+        // SHELVED: evolves_into: ['HARMONIA'],
     },
-     HARMONIA: {
-        id: 'HARMONIA',
-        name: 'Harmonia',
-        icon: '🎖️',
-        desc: `The song the universe hums when no one's listening.`,
-        tier: 'PEAK',
-        evolvedFrom: 'VIRTUOSO',
-        role: 'SUPPORT',
-        stats: { hp: 435, atk: 30, def: 30, mag: 85, spd: 45, luck: 60, crit: 40 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SILENCE_ITSELF' },
-        evolutionCost: 1000000,
-        passive: { name: 'Eternal Muse', desc: `Revives one fallen ally each turn automatically; party immune to silence.`, effect: 'healing_boost', value: 50 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "HARMONIA" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  HARMONIA: {
+    //     id: 'HARMONIA',
+    //     name: 'Harmonia',
+    //     icon: '🎖️',
+    //     desc: `The song the universe hums when no one's listening.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'VIRTUOSO',
+    //     role: 'SUPPORT',
+    //     stats: { hp: 435, atk: 30, def: 30, mag: 85, spd: 45, luck: 60, crit: 40 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SILENCE_ITSELF' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Eternal Muse', desc: `Revives one fallen ally each turn automatically; party immune to silence.`, effect: 'healing_boost', value: 50 },
+    // },
 
     ARTIFICER: {
         id: 'ARTIFICER',
@@ -850,21 +964,27 @@ const EVOLVED_CLASSES = {
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'MECH_GOD' },
         evolutionCost: 100000,
         passive: { name: 'Master Craftsman', desc: `Double crafting output.`, effect: 'all_stats', value: 15 },
-        evolves_into: ['TECHNARCH'],
+        // SHELVED: evolves_into: ['TECHNARCH'],
     },
-     TECHNARCH: {
-        id: 'TECHNARCH',
-        name: 'Technarch',
-        icon: '🎖️',
-        desc: `Built a machine that started building itself. On purpose.`,
-        tier: 'PEAK',
-        evolvedFrom: 'GRAND_INVENTOR',
-        role: 'SUPPORT',
-        stats: { hp: 495, atk: 40, def: 55, mag: 55, spd: 35, luck: 40, crit: 30 },
-        requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SINGULARITY_ENGINE' },
-        evolutionCost: 1000000,
-        passive: { name: 'Omega Craftsman', desc: `Triple crafting output; summons deal +80% dmg`, effect: 'damage_per_hit', value: 40 },
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🚧 SHELVED — PEAK tier class "TECHNARCH" (contributed by @Daviddey via PR #7)
+    // Trial bosses, skill trees, and Go sprites not yet implemented.
+    // Uncomment this block once content is ready.
+    // ═══════════════════════════════════════════════════════════════
+    //  TECHNARCH: {
+    //     id: 'TECHNARCH',
+    //     name: 'Technarch',
+    //     icon: '🎖️',
+    //     desc: `Built a machine that started building itself. On purpose.`,
+    //     tier: 'PEAK',
+    //     evolvedFrom: 'GRAND_INVENTOR',
+    //     role: 'SUPPORT',
+    //     stats: { hp: 495, atk: 40, def: 55, mag: 55, spd: 35, luck: 40, crit: 30 },
+    //     requirement: { level: 90, questsCompleted: 500, gold: 1000000, trialBoss: 'SINGULARITY_ENGINE' },
+    //     evolutionCost: 1000000,
+    //     passive: { name: 'Omega Craftsman', desc: `Triple crafting output; summons deal +80% dmg`, effect: 'damage_per_hit', value: 40 },
+    // },
 };
 
 // ==========================================
