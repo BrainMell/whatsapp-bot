@@ -4614,22 +4614,60 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             if (qr && !qrShown) {
               qrShown = true;
 
-              // 💡 PAIRING CODE SUPPORT: if the instance config has a
-              // `pairingPhone` field, use phone-number pairing instead of
-              // QR code. The user enters an 8-digit code on their phone
-              // (WhatsApp → Settings → Linked Devices → Link a Device →
-              // "Link with phone number instead"). This is an alternative
-              // to scanning a QR code — useful when the QR is hard to scan
-              // (remote server, no camera, etc.).
+              // 💡 INTERACTIVE LOGIN: on fresh login, ask the user in the
+              // terminal whether they want QR code or phone pairing code.
+              // No need to pre-configure anything in botConfig.json.
               //
-              // To enable: add "pairingPhone": "2348086616347" to the
-              // instance's botConfig.json. Remove the field or set to null
-              // to go back to QR code.
-              const pairingPhone = configInstance.pairingPhone || null;
-              if (pairingPhone && isFreshLogin) {
+              // If botConfig.json has "pairingPhone" set, that's used
+              // automatically (no prompt). Otherwise the terminal asks.
+              const pairingPhoneConfig = configInstance.pairingPhone || null;
+
+              let usePairing = false;
+              let phoneForPairing = null;
+
+              if (pairingPhoneConfig) {
+                // Pre-configured in botConfig.json — use it directly
+                usePairing = true;
+                phoneForPairing = pairingPhoneConfig;
+              } else if (isFreshLogin && process.stdin.isTTY) {
+                // Interactive prompt — only on fresh login + terminal
+                console.log(`\n╔══════════════════════════════════════════════╗`);
+                console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(15)}             ║`);
+                console.log(`╠══════════════════════════════════════════════╣`);
+                console.log(`║  1️⃣  QR Code (scan with phone camera)        ║`);
+                console.log(`║  2️⃣  Pairing Code (enter code on phone)     ║`);
+                console.log(`╚══════════════════════════════════════════════╝`);
+                process.stdout.write(`Choose (1 or 2, default=1): `);
+
                 try {
-                  console.log(`📱 [${BOT_ID}] Requesting pairing code for ${pairingPhone}...`);
-                  const code = await sock.requestPairingCode(pairingPhone);
+                  const readline = require('readline');
+                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                  const choice = await new Promise(resolve => {
+                    rl.question('', answer => { rl.close(); resolve(answer.trim()); });
+                  });
+
+                  if (choice === '2') {
+                    process.stdout.write(`📱 Enter your phone number (with country code, no + or spaces, e.g. 2348086616347): `);
+                    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+                    const phone = await new Promise(resolve => {
+                      rl2.question('', answer => { rl2.close(); resolve(answer.trim()); });
+                    });
+                    if (phone && /^\d{8,15}$/.test(phone)) {
+                      usePairing = true;
+                      phoneForPairing = phone;
+                    } else {
+                      console.log(`❌ Invalid phone number. Falling back to QR code.\n`);
+                    }
+                  }
+                } catch (e) {
+                  // stdin not available (non-interactive) — fall through to QR
+                }
+              }
+
+              if (usePairing && phoneForPairing) {
+                try {
+                  console.log(`📱 [${BOT_ID}] Requesting pairing code for ${phoneForPairing}...`);
+                  const code = await sock.requestPairingCode(phoneForPairing);
                   console.log(`\n╔══════════════════════════════════════╗`);
                   console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
                   console.log(`╚══════════════════════════════════════╝`);
@@ -4647,8 +4685,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   });
                 } catch (pairErr) {
                   console.error(`❌ [${BOT_ID}] Pairing code failed:`, pairErr.message);
-                  console.log(`📱 Falling back to QR code:`);
+                  console.log(`📱 Falling back to QR code:\n`);
                   qrcode.generate(qr, { small: true });
+                  botInstancesHealth.set(BOT_ID, {
+                    name: BOT_NAME,
+                    status: "needs_qr",
+                    lastUpdated: Date.now(),
+                    error: "Authentication QR code generated. Scan to login.",
+                  });
                 }
               } else {
                 botInstancesHealth.set(BOT_ID, {
@@ -4657,7 +4701,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   lastUpdated: Date.now(),
                   error: "Authentication QR code generated. Scan to login.",
                 });
-                console.log("📱 Scan this QR code to login:");
+                console.log(`\n📱 [${BOT_ID}] Scan this QR code to login:\n`);
                 qrcode.generate(qr, { small: true });
               }
             }
