@@ -312,30 +312,38 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `• \`${prefix} admin enemyskill reset\`\n` +
                 `  Reload all monster skills from source.\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `🧪 *SANDBOX TEST CHARACTER (NEW)*\n` +
+                `🧪 *SANDBOX MODE (FULL RPG TESTING)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `Isolated test character stored in a separate DB collection. Test freely!\n\n` +
-                `• \`${prefix} admin sandbox\`\n` +
-                `  Show your sandbox status (level, class, wallet, skills, inventory).\n\n` +
-                `• \`${prefix} admin sandbox reset\`\n` +
-                `  Wipe sandbox to fresh level-1 state. Increments reset counter.\n\n` +
+                `Fully stacked test character — Lv100, GOD rank, 1B Zeni, all trials done.\n` +
+                `When ON, ALL your commands use the sandbox account. Your real account is safe.\n\n` +
+                `*CORE:*\n` +
+                `• \`${prefix} admin sandbox on\` — activate (swap to sandbox character)\n` +
+                `• \`${prefix} admin sandbox off\` — deactivate (save + restore real account)\n` +
+                `• \`${prefix} admin sandbox\` — show status (active/inactive + stats)\n` +
+                `• \`${prefix} admin sandbox save\` — save sandbox data without turning off\n` +
+                `• \`${prefix} admin sandbox reset\` — wipe to fresh stacked state\n\n` +
+                `*COMBAT:*\n` +
+                `• \`${prefix} admin godmode on/off\` — 99999 dmg per hit, 0 dmg taken\n` +
+                `• \`${prefix} admin sandbox fightboss <bossId>\` — fight any boss\n\n` +
+                `*CLASS & SKILLS:*\n` +
+                `• \`${prefix} admin sandbox evolve <class>\` — switch to ANY class + unlock all skills\n` +
+                `• \`${prefix} admin sandbox giveskillsall\` — unlock ALL skills from ALL classes\n` +
+                `• \`${prefix} admin sandbox giveskill <skill> [level]\` — grant a specific skill\n\n` +
+                `*STATS:*\n` +
+                `• \`${prefix} admin sandbox maxstats\` — set all stats to 99999/9999\n` +
                 `• \`${prefix} admin sandbox setlevel <1-100>\`\n` +
-                `  Set sandbox level (recalculates XP + grants stat points).\n\n` +
-                `• \`${prefix} admin sandbox setclass <name>\`\n` +
-                `  Set sandbox class — bypasses ALL requirements (level, trials, items).\n\n` +
                 `• \`${prefix} admin sandbox setrank <F-SSS|GOD>\`\n` +
-                `  Set sandbox adventurer rank.\n\n` +
+                `• \`${prefix} admin sandbox setstat <stat> <value>\`\n\n` +
+                `*ECONOMY:*\n` +
                 `• \`${prefix} admin sandbox setwallet <amount>\`\n` +
-                `  Set sandbox wallet directly.\n\n` +
-                `• \`${prefix} admin sandbox givezeni <amount>\`\n` +
-                `  Add Zeni to sandbox wallet (does NOT overwrite).\n\n` +
-                `• \`${prefix} admin sandbox setstat <hp|atk|def|mag|spd|luck|crit> <value>\`\n` +
-                `  Set a sandbox stat bonus.\n\n` +
-                `• \`${prefix} admin sandbox giveitem <item_name> [qty]\`\n` +
-                `  Add items to sandbox inventory.\n\n` +
-                `• \`${prefix} admin sandbox giveskill <skill_name> [level]\`\n` +
-                `  Grant any skill to the sandbox (bypasses class/level requirements).\n\n` +
-                `_Sandbox data is ISOLATED — never appears in leaderboards, guild rosters, economy totals, or real-player queries._\n\n` +
+                `• \`${prefix} admin sandbox givezeni <amount>\`\n\n` +
+                `*INVENTORY:*\n` +
+                `• \`${prefix} admin sandbox giveall\` — grant 99× all stones, keys + every equipment\n` +
+                `• \`${prefix} admin sandbox giveitem <item> [qty]\`\n` +
+                `• \`${prefix} admin sandbox clearinv\` — clear sandbox inventory\n` +
+                `• \`${prefix} admin sandbox unequipall\` — unequip all equipment\n` +
+                `• \`${prefix} admin sandbox setclass <name>\`\n\n` +
+                `_Auto-saves after every command. Data persists in separate DB collection._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🎭 *MAIN-ACCOUNT CLASS SWITCH*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
