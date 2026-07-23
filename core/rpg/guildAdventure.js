@@ -2069,6 +2069,15 @@ function calculateDamage(
   // 🛡️ Guard against NaN
   let damage = Number(power) || 0;
 
+  // 💡 GODMODE: if the attacker is a godmode user, deal 99999 damage.
+  // If the TARGET is a godmode user, take 0 damage.
+  if (global.godModeUsers && attacker.jid && global.godModeUsers.has(attacker.jid)) {
+    return { damage: 99999, isCrit: true, wasEvaded: false };
+  }
+  if (global.godModeUsers && target.jid && global.godModeUsers.has(target.jid)) {
+    return { damage: 0, isCrit: false, wasEvaded: false };
+  }
+
   // 💡 DRAGON SEAL RING REQUIREMENT
   if (
     target.id &&
