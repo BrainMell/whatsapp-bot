@@ -1228,10 +1228,54 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 msg += `💎 Skill Points: ${sb.skillPoints || 0}\n`;
                 msg += `🔄 Resets: ${sb.resetCount || 0}\n\n`;
                 msg += `_Toggle: \`${prefix} admin sandbox on/off\`_\n`;
+                msg += `_Save: \`${prefix} admin sandbox save\`_\n`;
                 msg += `_Reset: \`${prefix} admin sandbox reset\`_`;
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to load sandbox: ${e.message}` });
+            }
+        }
+
+        // ── sandbox save — save sandbox data to DB without turning off ──
+        if (sandboxSub === 'save') {
+            try {
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                if (!sandboxJid) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                }
+                const economy = require('../rpg/economy');
+                const sandboxUser = economy.economyData.get(sandboxJid);
+                if (!sandboxUser) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox user data not found in cache.` });
+                }
+                await AdminSandbox.patch(senderJid, {
+                    wallet: sandboxUser.wallet,
+                    bank: sandboxUser.bank,
+                    class: sandboxUser.class,
+                    adventurerRank: sandboxUser.adventurerRank,
+                    spriteIndex: sandboxUser.spriteIndex,
+                    stats: sandboxUser.stats,
+                    statBonuses: sandboxUser.statBonuses,
+                    skillPoints: sandboxUser.skillPoints,
+                    skills: sandboxUser.skills,
+                    completedTrials: sandboxUser.completedTrials,
+                    evolutionHistory: sandboxUser.evolutionHistory,
+                    evolvedAt: sandboxUser.evolvedAt,
+                    inventory: sandboxUser.inventory,
+                    equipment: sandboxUser.equipment,
+                    progression: sandboxUser.progression,
+                    questsCompleted: sandboxUser.questsCompleted,
+                    questsWon: sandboxUser.questsWon,
+                    questsFailed: sandboxUser.questsFailed,
+                    bossesDefeated: sandboxUser.bossesDefeated,
+                    dragonsKilled: sandboxUser.dragonsKilled,
+                    pvpWins: sandboxUser.pvpWins,
+                    pvpLosses: sandboxUser.pvpLosses,
+                });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *Sandbox data saved.* Your progress has been persisted to the database.` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Save failed: ${e.message}` });
             }
         }
 

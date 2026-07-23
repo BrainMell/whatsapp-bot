@@ -27,6 +27,10 @@ const pendingSaves = new Set();
 let saveTimer = null;
 
 function scheduleSave(userId) {
+  // 💡 SANDBOX: skip sandbox JIDs — they're not in the User collection
+  if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
+    return;
+  }
   pendingSaves.add(userId);
   if (!saveTimer) {
     saveTimer = setTimeout(async () => {
@@ -76,6 +80,14 @@ function saveEconomy() {
 async function saveUser(userId) {
     const data = economyData.get(userId);
     if (!data) return;
+
+    // 💡 SANDBOX: never persist sandbox users to the User collection —
+    // they're stored in the AdminSandbox collection instead. Without this
+    // guard, every economy.saveUser('sandbox_...') call creates a junk
+    // document in the users collection that pollutes the cache on restart.
+    if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
+        return;
+    }
 
     try {
         await User.findOneAndUpdate(

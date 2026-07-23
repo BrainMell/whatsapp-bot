@@ -513,16 +513,38 @@ if (!global.waConnectionLog) global.waConnectionLog = true;
 // ═══════════════════════════════════════════════════════════════════════════
 const sandboxMode = new Map();
 
+// 💡 HELPER: strip 'sandbox_' prefix to get the real JID
+function stripSandboxPrefix(jid) {
+  if (!jid || typeof jid !== 'string') return jid;
+  return jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+}
+
 // Check if a user has sandbox mode active. Returns the sandbox JID or null.
 function getSandboxJid(realJid) {
   if (!realJid) return null;
-  return sandboxMode.has(realJid) ? sandboxMode.get(realJid).sandboxJid : null;
+  // 💡 FIX: strip sandbox_ prefix in case this is called with an already-swapped JID
+  const real = stripSandboxPrefix(realJid);
+  return sandboxMode.has(real) ? sandboxMode.get(real).sandboxJid : null;
+}
+
+// Check if a JID is a sandbox JID
+function isSandboxJid(jid) {
+  if (!jid) return false;
+  return jid.startsWith('sandbox_');
 }
 
 // Initialize sandbox: back up real user, load sandbox data into cache
 async function enableSandbox(realJid, senderName) {
   const AdminSandbox = require('./models/AdminSandbox');
   const economy = require('./rpg/economy');
+
+  // 💡 FIX: strip sandbox_ prefix in case this is called with an already-swapped JID
+  realJid = stripSandboxPrefix(realJid);
+
+  // Don't double-enable
+  if (sandboxMode.has(realJid)) {
+    return sandboxMode.get(realJid).sandboxDoc || null;
+  }
 
   // Get or create the sandbox document
   const sb = await AdminSandbox.getOrCreate(realJid, senderName);
@@ -532,6 +554,8 @@ async function enableSandbox(realJid, senderName) {
   const backup = realUser ? JSON.parse(JSON.stringify(realUser)) : null;
 
   // Build a sandbox user object that looks like a normal economy user
+  // 💡 FIX: include ALL fields that economy.getUser() lazily adds, plus
+  // fields that other systems (gambling, profile, etc.) expect.
   const sandboxJid = `sandbox_${realJid}`;
   const sandboxUser = {
     userId: sandboxJid,
@@ -542,7 +566,7 @@ async function enableSandbox(realJid, senderName) {
     class: sb.class || 'FIGHTER',
     adventurerRank: sb.adventurerRank || 'F',
     spriteIndex: sb.spriteIndex || 0,
-    stats: sb.stats || { hp: 100, maxHp: 100, xp: 0, level: 1 },
+    stats: sb.stats || { hp: 100, maxHp: 100, xp: 0, level: 1, totalEarned: 0, totalSpent: 0, kills: 0, undeadKills: 0 },
     statBonuses: sb.statBonuses || { hp:0, atk:0, def:0, mag:0, spd:0, luck:0, crit:0 },
     skillPoints: sb.skillPoints || 0,
     skills: sb.skills || {},
@@ -565,65 +589,173 @@ async function enableSandbox(realJid, senderName) {
     dragonsKilled: sb.dragonsKilled || 0,
     pvpWins: sb.pvpWins || 0,
     pvpLosses: sb.pvpLosses || 0,
+    // 💡 FIX: add fields that economy.getUser() and other systems expect
+    history: [],
+    lastDaily: 0,
+    lastRob: 0,
+    jailUntil: 0,
+    prisonUntil: 0,
+    robberyStrikes: 0,
+    lastClassChange: 0,
+    lastFishReset: 0,
+    fishCount: 0,
+    classChangeCount: 0,
+    lastClassChangeReset: 0,
+    questGold: 0,
+    gamblingProfile: {
+      dayKey: new Date().toISOString().split('T')[0],
+      roundsToday: 0,
+      entryWalletToday: sb.wallet || 100000,
+      withdrawnToday: 0,
+      netToday: 0
+    },
+    membership: { tier: 'BASIC', expires: 0 },
+    frozenAssets: { wallet: 0, bank: 0, reason: "" },
+    portfolio: {},
+    investments: [],
+    eventTokens: 0,
+    completedRankMissions: [],
+    profile: {
+      whatsappName: null,
+      nickname: sb.name || `Sandbox (${senderName})`,
+      notes: [],
+      memories: { likes: [], dislikes: [], hobbies: [], personal: [], other: [] },
+      stats: { firstSeen: new Date(), lastSeen: new Date(), messageCount: 0 },
+      relationships: {}
+    },
+    borrowedSkills: [],
   };
 
   // Put the sandbox user in the economy cache under the sandbox JID
   economy.economyData.set(sandboxJid, sandboxUser);
 
-  sandboxMode.set(realJid, { backup, sandboxJid });
+  sandboxMode.set(realJid, { backup, sandboxJid, sandboxDoc: sb });
+  console.log(`🧪 [Sandbox] Enabled for ${realJid} → ${sandboxJid}`);
   return sb;
 }
 
 // Disable sandbox: save sandbox data back to AdminSandbox, restore real user
-async function disableSandbox(realJid) {
+// 💡 FIX: use try/finally so cleanup ALWAYS happens, even if MongoDB fails.
+// 💡 FIX: accept both real and sandbox JIDs (strip prefix).
+async function disableSandbox(jid) {
   const AdminSandbox = require('./models/AdminSandbox');
   const economy = require('./rpg/economy');
 
+  // 💡 FIX: the admin console passes senderJid which may already be swapped
+  // to sandbox_<realJid>. Strip the prefix to get the real JID.
+  const realJid = stripSandboxPrefix(jid);
+
   const entry = sandboxMode.get(realJid);
-  if (!entry) return false;
+  if (!entry) {
+    console.log(`🧪 [Sandbox] disableSandbox: no active sandbox for ${realJid}`);
+    return false;
+  }
 
   const { backup, sandboxJid } = entry;
-  const sandboxUser = economy.economyData.get(sandboxJid);
 
-  // Save sandbox data back to AdminSandbox document
-  if (sandboxUser) {
-    await AdminSandbox.patch(realJid, {
-      wallet: sandboxUser.wallet,
-      bank: sandboxUser.bank,
-      class: sandboxUser.class,
-      adventurerRank: sandboxUser.adventurerRank,
-      spriteIndex: sandboxUser.spriteIndex,
-      stats: sandboxUser.stats,
-      statBonuses: sandboxUser.statBonuses,
-      skillPoints: sandboxUser.skillPoints,
-      skills: sandboxUser.skills,
-      completedTrials: sandboxUser.completedTrials,
-      evolutionHistory: sandboxUser.evolutionHistory,
-      evolvedAt: sandboxUser.evolvedAt,
-      inventory: sandboxUser.inventory,
-      equipment: sandboxUser.equipment,
-      progression: sandboxUser.progression,
-      questsCompleted: sandboxUser.questsCompleted,
-      questsWon: sandboxUser.questsWon,
-      questsFailed: sandboxUser.questsFailed,
-      bossesDefeated: sandboxUser.bossesDefeated,
-      dragonsKilled: sandboxUser.dragonsKilled,
-      pvpWins: sandboxUser.pvpWins,
-      pvpLosses: sandboxUser.pvpLosses,
-    });
+  try {
+    // Save sandbox data back to AdminSandbox document
+    const sandboxUser = economy.economyData.get(sandboxJid);
+    if (sandboxUser) {
+      try {
+        await AdminSandbox.patch(realJid, {
+          wallet: sandboxUser.wallet,
+          bank: sandboxUser.bank,
+          class: sandboxUser.class,
+          adventurerRank: sandboxUser.adventurerRank,
+          spriteIndex: sandboxUser.spriteIndex,
+          stats: sandboxUser.stats,
+          statBonuses: sandboxUser.statBonuses,
+          skillPoints: sandboxUser.skillPoints,
+          skills: sandboxUser.skills,
+          completedTrials: sandboxUser.completedTrials,
+          evolutionHistory: sandboxUser.evolutionHistory,
+          evolvedAt: sandboxUser.evolvedAt,
+          inventory: sandboxUser.inventory,
+          equipment: sandboxUser.equipment,
+          progression: sandboxUser.progression,
+          questsCompleted: sandboxUser.questsCompleted,
+          questsWon: sandboxUser.questsWon,
+          questsFailed: sandboxUser.questsFailed,
+          bossesDefeated: sandboxUser.bossesDefeated,
+          dragonsKilled: sandboxUser.dragonsKilled,
+          pvpWins: sandboxUser.pvpWins,
+          pvpLosses: sandboxUser.pvpLosses,
+        });
+        console.log(`🧪 [Sandbox] Saved sandbox data for ${realJid}`);
+      } catch (saveErr) {
+        console.error(`🧪 [Sandbox] Failed to save sandbox data: ${saveErr.message}`);
+        // Don't return — still clean up so the admin can revert
+      }
+    }
+
+    // Remove sandbox user from economy cache
+    economy.economyData.delete(sandboxJid);
+
+    // Restore real user data from backup
+    if (backup) {
+      economy.economyData.set(realJid, backup);
+      console.log(`🧪 [Sandbox] Restored real user data for ${realJid}`);
+    }
+  } finally {
+    // 💡 CRITICAL: ALWAYS remove from sandboxMode, even if save failed.
+    // This is the fix for "can't revert back" — the Map entry must be
+    // removed regardless of whether the MongoDB save succeeded.
+    sandboxMode.delete(realJid);
+    console.log(`🧪 [Sandbox] Disabled for ${realJid}`);
   }
 
-  // Remove sandbox user from economy cache
-  economy.economyData.delete(sandboxJid);
-
-  // Restore real user data
-  if (backup) {
-    economy.economyData.set(realJid, backup);
-  }
-
-  sandboxMode.delete(realJid);
   return true;
 }
+
+// 💡 Save all active sandbox data to MongoDB (called on bot shutdown/restart)
+async function saveAllSandboxes() {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  for (const [realJid, entry] of sandboxMode.entries()) {
+    try {
+      const sandboxUser = economy.economyData.get(entry.sandboxJid);
+      if (sandboxUser) {
+        await AdminSandbox.patch(realJid, {
+          wallet: sandboxUser.wallet,
+          bank: sandboxUser.bank,
+          class: sandboxUser.class,
+          adventurerRank: sandboxUser.adventurerRank,
+          spriteIndex: sandboxUser.spriteIndex,
+          stats: sandboxUser.stats,
+          statBonuses: sandboxUser.statBonuses,
+          skillPoints: sandboxUser.skillPoints,
+          skills: sandboxUser.skills,
+          completedTrials: sandboxUser.completedTrials,
+          evolutionHistory: sandboxUser.evolutionHistory,
+          evolvedAt: sandboxUser.evolvedAt,
+          inventory: sandboxUser.inventory,
+          equipment: sandboxUser.equipment,
+          progression: sandboxUser.progression,
+          questsCompleted: sandboxUser.questsCompleted,
+          questsWon: sandboxUser.questsWon,
+          questsFailed: sandboxUser.questsFailed,
+          bossesDefeated: sandboxUser.bossesDefeated,
+          dragonsKilled: sandboxUser.dragonsKilled,
+          pvpWins: sandboxUser.pvpWins,
+          pvpLosses: sandboxUser.pvpLosses,
+        });
+      }
+    } catch (e) {
+      console.error(`🧪 [Sandbox] Auto-save failed for ${realJid}: ${e.message}`);
+    }
+  }
+  console.log(`🧪 [Sandbox] Auto-saved ${sandboxMode.size} active sandbox(es)`);
+}
+
+// 💡 AUTO-SAVE TIMER: save active sandboxes every 5 minutes so data
+// isn't lost if the bot crashes or loses connection.
+setInterval(() => {
+  if (sandboxMode.size > 0) {
+    saveAllSandboxes().catch(e => console.error('[Sandbox] Periodic save failed:', e.message));
+  }
+}, 5 * 60 * 1000); // 5 minutes
 
 async function startBot(configInstance) {
   let sock;
@@ -24623,6 +24755,9 @@ module.exports = {
   getSandboxJid,
   enableSandbox,
   disableSandbox,
+  saveAllSandboxes,
+  isSandboxJid,
+  stripSandboxPrefix,
   sandboxMode,
   hasModPermission,
   isBotOwner,

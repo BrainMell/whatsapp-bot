@@ -482,6 +482,22 @@ async function boot() {
         process.exit(0);
     }
 
+    // 💡 SANDBOX AUTO-SAVE: save all active sandboxes on process exit
+    // so data isn't lost when the bot restarts.
+    async function gracefulShutdown() {
+        try {
+            const engine = require('./core/engine');
+            if (typeof engine.saveAllSandboxes === 'function') {
+                await engine.saveAllSandboxes();
+            }
+        } catch (e) {
+            console.error('🧪 [Sandbox] Graceful shutdown save failed:', e.message);
+        }
+        process.exit(0);
+    }
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+
     console.log(" Multi-Tenant Manager Booting...");
     
     // 1. Connect to Shared Database once
