@@ -1282,14 +1282,140 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // ── sandbox reset — wipe to fresh state ──
         if (sandboxSub === 'reset') {
             try {
+                // If sandbox is currently active, disable first so data is saved
+                const engine = require('../engine');
+                const isActive = engine.getSandboxJid(senderJid) !== null;
+                if (isActive) {
+                    await engine.disableSandbox(senderJid);
+                }
                 // Ensure it exists first
                 await AdminSandbox.getOrCreate(senderJid, senderName);
                 const sb = await AdminSandbox.reset(senderJid);
+                // If it was active, re-enable with fresh data
+                if (isActive) {
+                    await engine.enableSandbox(senderJid, senderName);
+                }
                 return await sock.sendMessage(chatId, {
-                    text: BOT_MARKER + `🧹 *SANDBOX RESET*\n\nYour sandbox test character has been wiped to fresh level-1 state.\n\n📊 Level: 1\n💰 Wallet: 100,000 Zeni\n🏦 Bank: 1,000,000 Zeni\n🏷️ Class: FIGHTER\n\n_Reset count: ${sb.resetCount}_\n_Ready for testing!_`
+                    text: BOT_MARKER + `🧹 *SANDBOX RESET*\n\nSandbox character wiped to fresh stacked state.\n\n📊 Level: 100\n💰 Wallet: 999,999,999 Zeni\n🏦 Bank: 999,999,999 Zeni\n🏷️ Class: WARLORD\n🏆 Rank: GOD\n\n_Reset count: ${sb.resetCount}_`
                 });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reset failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox giveall — grant all enhancement stones + key items ──
+        if (sandboxSub === 'giveall') {
+            try {
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                if (!sandboxJid) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                }
+                const economy = require('../rpg/economy');
+                const inventorySystem = require('../rpg/inventorySystem');
+                const lootSystem = require('../rpg/lootSystem');
+
+                // Grant all enhancement stones
+                const stones = ['minor_enhancement_stone', 'rare_enhancement_stone', 'legendary_enhancement_stone'];
+                // Grant key items
+                const keyItems = ['dragon_key', 'dragon_key_reusable', 'evolution_stone', 'ascension_stone', 'dragon_seal_ring'];
+                // Grant all equipment from ITEM_DATABASE
+                const allItems = { ...lootSystem.ITEM_DATABASE };
+                const equipItems = Object.entries(allItems).filter(([id, item]) => item.type === 'EQUIPMENT');
+
+                let granted = 0;
+                for (const stone of stones) {
+                    await inventorySystem.addItem(sandboxJid, stone, 99, { source: 'sandbox_giveall' });
+                    granted += 99;
+                }
+                for (const item of keyItems) {
+                    await inventorySystem.addItem(sandboxJid, item, 99, { source: 'sandbox_giveall' });
+                    granted += 99;
+                }
+                for (const [itemId, itemData] of equipItems) {
+                    await inventorySystem.addItem(sandboxJid, itemId, 1, { source: 'sandbox_giveall' });
+                    granted++;
+                }
+
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `🎁 *SANDBOX GIVEALL*\n\nGranted ${granted} items to sandbox:\n• 99× each enhancement stone\n• 99× dragon keys + seal ring\n• 99× evolution/ascension stones\n• 1× every equipment in the database\n\n_Use \`${prefix} inventory\` to see them._`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Giveall failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox evolve — switch to any class without trial/stones/Zeni ──
+        if (sandboxSub === 'evolve') {
+            try {
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                if (!sandboxJid) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                }
+                const className = args.slice(2).join(' ').trim();
+                if (!className) {
+                    const classSystem = require('../rpg/classSystem');
+                    const all = classSystem.getAllClasses();
+                    const classList = Object.values(all)
+                        .filter(c => c.tier !== 'STARTER')
+                        .map(c => `${c.icon} ${c.name} (\`${c.id}\`)`)
+                        .join('\n');
+                    return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🧬 *SANDBOX EVOLVE*\n\nUsage: \`${prefix} admin sandbox evolve <class name or ID>\`\n\n*Available Classes:*\n${classList}`
+                    });
+                }
+                const targetClass = resolveClass(className);
+                if (!targetClass) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Class "${className}" not found.` });
+                }
+                const economy = require('../rpg/economy');
+                const user = economy.getUser(sandboxJid);
+                if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
+                const oldClassName = user.class || 'None';
+                user.class = targetClass.id;
+                // Also unlock all skills for the new class
+                try {
+                    const skillTree = require('../rpg/skillTree');
+                    const SK = skillTree.SKILL_TREES || skillTree;
+                    const tree = SK[targetClass.id.toUpperCase()];
+                    if (tree && tree.trees) {
+                        if (!user.skills) user.skills = {};
+                        for (const [, treeData] of Object.entries(tree.trees)) {
+                            if (!treeData.skills) continue;
+                            for (const [skillId, skill] of Object.entries(treeData.skills)) {
+                                user.skills[skillId] = skill.maxLevel || 1;
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `🧬 *SANDBOX EVOLVED*\n\n🔄 ${oldClassName} → ${targetClass.icon} *${targetClass.name}*\n✨ All class skills unlocked at max level!\n\n_No trials, stones, or Zeni required in sandbox._`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Evolve failed: ${e.message}` });
+            }
+        }
+
+        // ── sandbox maxstats — set all stats to max ──
+        if (sandboxSub === 'maxstats') {
+            try {
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                if (!sandboxJid) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active.` });
+                }
+                const economy = require('../rpg/economy');
+                const user = economy.getUser(sandboxJid);
+                if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
+                user.statBonuses = { hp: 99999, atk: 9999, def: 9999, mag: 9999, spd: 9999, luck: 9999, crit: 999 };
+                user.stats.maxHp = 99999;
+                user.stats.hp = 99999;
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `💪 *SANDBOX MAX STATS*\n\nAll stats set to maximum for testing.\n❤️ HP: 99999\n⚔️ ATK: 9999\n🛡️ DEF: 9999\n🔮 MAG: 9999\n💨 SPD: 9999\n🍀 LUCK: 9999\n💥 CRIT: 999`
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
             }
         }
 

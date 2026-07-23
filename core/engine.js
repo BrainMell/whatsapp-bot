@@ -553,43 +553,93 @@ async function enableSandbox(realJid, senderName) {
   const realUser = economy.getUser(realJid);
   const backup = realUser ? JSON.parse(JSON.stringify(realUser)) : null;
 
-  // Build a sandbox user object that looks like a normal economy user
-  // 💡 FIX: include ALL fields that economy.getUser() lazily adds, plus
-  // fields that other systems (gambling, profile, etc.) expect.
+  // Build a FULLY STACKED sandbox user — no limitations whatsoever.
+  // Max level, max stats, unlimited Zeni, all classes available, GOD rank,
+  // all trials completed, massive inventory, etc. The goal is for admins
+  // to test EVERYTHING without grinding.
   const sandboxJid = `sandbox_${realJid}`;
   const sandboxUser = {
     userId: sandboxJid,
     registered: true,
     nickname: sb.name || `Sandbox (${senderName})`,
-    wallet: sb.wallet || 100000,
-    bank: sb.bank || 1000000,
-    class: sb.class || 'FIGHTER',
-    adventurerRank: sb.adventurerRank || 'F',
+
+    // 💰 UNLIMITED ECONOMY
+    wallet: sb.wallet != null ? sb.wallet : 999999999,  // ~1B Zeni
+    bank: sb.bank != null ? sb.bank : 999999999,
+
+    // 📊 MAX PROGRESSION
+    class: sb.class || 'WARLORD',
+    adventurerRank: sb.adventurerRank || 'GOD',
     spriteIndex: sb.spriteIndex || 0,
-    stats: sb.stats || { hp: 100, maxHp: 100, xp: 0, level: 1, totalEarned: 0, totalSpent: 0, kills: 0, undeadKills: 0 },
-    statBonuses: sb.statBonuses || { hp:0, atk:0, def:0, mag:0, spd:0, luck:0, crit:0 },
-    skillPoints: sb.skillPoints || 0,
-    skills: sb.skills || {},
-    completedTrials: sb.completedTrials || [],
-    evolutionHistory: sb.evolutionHistory || [],
-    evolvedAt: sb.evolvedAt || 0,
-    inventory: sb.inventory || {},
-    inventorySlots: sb.inventorySlots || 50,
-    equipment: sb.equipment || {},
-    progression: sb.progression || {
-      xp: 0, level: 1, gp: 0, totalGP: 0, statPoints: 0, totalXPEarned: 0,
-      commandsUsed: 0, allocatedStats: {hp:0,atk:0,def:0,mag:0,spd:0,luck:0,crit:0},
-      allocatedStatPoints: {hp:0,atk:0,def:0,mag:0,spd:0,luck:0,crit:0},
-      achievements: []
+    stats: sb.stats || {
+      hp: 99999, maxHp: 99999, xp: 0, level: 100,
+      totalEarned: 999999999, totalSpent: 0,
+      kills: 9999, undeadKills: 9999,
+      gamesPlayed: 0, gamesWon: 0, gamesLost: 0,
+      biggestWin: 0, biggestLoss: 0,
+      questsCompleted: 9999, questsWon: 9999,
+      bossesDefeated: 9999, dragonsKilled: 9999,
+      itemsCrafted: 9999, itemsEquipped: 9999,
     },
-    questsCompleted: sb.questsCompleted || 0,
-    questsWon: sb.questsWon || 0,
+
+    // 💪 MAX STAT BONUSES (high values for testing)
+    statBonuses: sb.statBonuses || { hp: 5000, atk: 5000, def: 5000, mag: 5000, spd: 5000, luck: 5000, crit: 500 },
+
+    // 🔮 SKILLS — all maxed if previously set, otherwise empty (admin can use modclass to unlock)
+    skillPoints: sb.skillPoints != null ? sb.skillPoints : 999,
+    skills: sb.skills || {},
+    completedTrials: sb.completedTrials || [
+      'INFECTED_COLOSSUS', 'MUTATION_PRIME', 'CORRUPTED_GUARDIAN',
+      'SHADOW_STALKER', 'IRON_BODY_GRANDMASTER', 'ANCIENT_WURM',
+      'SHADOW_LORD', 'ARCANE_SENTINEL', 'SOUL_EATER',
+      'ELEMENTAL_PRIMORDIAL', 'GRAVEYARD_LORD', 'CHRONOS_WARDEN',
+      'GOLDEN_GOLEM', 'SOUND_REAPER', 'CLOCKWORK_TITAN',
+      'ELDER_FLAME', 'LEVIATHAN', 'LEVIATHAN_SPAWN_ALPHA',
+      'LICH_KING', 'VOID_ASSASSIN', 'ETERNAL_DRAGON',
+      'VOID_TITAN', 'PRIMORDIAL_EVIL', 'PRIMORDIAL_CHAOS',
+      'DEMON_LORD', 'VOID_CORRUPTED', 'ABYSSAL_WHISPER',
+      'PRIME_ELEMENT', 'TIME_EATER', 'SERAPHIM_PRIME',
+      'GAIA_SENTINEL', 'TREASURE_HOARDER', 'MAESTRO_OF_VOID',
+      'MECH_GOD', 'VOID_NECROMANCER',
+    ],
+    evolutionHistory: sb.evolutionHistory || [
+      { from: 'Fighter', to: 'Warrior', level: 15, timestamp: Date.now() },
+      { from: 'Warrior', to: 'Warlord', level: 50, timestamp: Date.now() },
+    ],
+    evolvedAt: sb.evolvedAt || 50,
+
+    // 🎒 MASSIVE INVENTORY
+    inventory: sb.inventory || {},
+    inventorySlots: 999,  // effectively unlimited
+    equipment: sb.equipment || {},
+
+    // 📈 PROGRESSION
+    progression: sb.progression || {
+      xp: 0, level: 100, gp: 99999, totalGP: 99999,
+      statPoints: 999, totalXPEarned: 999999999, totalLevelsGained: 99,
+      commandsUsed: 0,
+      allocatedStats: { hp: 100, atk: 100, def: 100, mag: 100, spd: 100, luck: 100, crit: 100 },
+      allocatedStatPoints: { hp: 100, atk: 100, def: 100, mag: 100, spd: 100, luck: 100, crit: 100 },
+      achievements: [],
+    },
+
+    // 📋 QUEST TRACKING
+    questsCompleted: sb.questsCompleted || 9999,
+    questsWon: sb.questsWon || 9999,
     questsFailed: sb.questsFailed || 0,
-    bossesDefeated: sb.bossesDefeated || 0,
-    dragonsKilled: sb.dragonsKilled || 0,
-    pvpWins: sb.pvpWins || 0,
+    questGold: 0,
+    bossesDefeated: sb.bossesDefeated || 9999,
+    dragonsKilled: sb.dragonsKilled || 9999,
+    pvpWins: sb.pvpWins || 999,
     pvpLosses: sb.pvpLosses || 0,
-    // 💡 FIX: add fields that economy.getUser() and other systems expect
+
+    // 🎫 EVENT TOKENS
+    eventTokens: 9999,
+
+    // 🏆 RANK MISSIONS — all completed
+    completedRankMissions: [1, 2, 3, 4],
+
+    // 💡 FIX: add ALL fields that economy.getUser() and other systems expect
     history: [],
     lastDaily: 0,
     lastRob: 0,
@@ -601,20 +651,23 @@ async function enableSandbox(realJid, senderName) {
     fishCount: 0,
     classChangeCount: 0,
     lastClassChangeReset: 0,
-    questGold: 0,
     gamblingProfile: {
       dayKey: new Date().toISOString().split('T')[0],
       roundsToday: 0,
-      entryWalletToday: sb.wallet || 100000,
+      entryWalletToday: 999999999,
       withdrawnToday: 0,
       netToday: 0
     },
-    membership: { tier: 'BASIC', expires: 0 },
+    gamblingLimits: { roulette: { count: 0, startTime: 0 } },
+    membership: { tier: 'PREMIUM', expires: 0 },
     frozenAssets: { wallet: 0, bank: 0, reason: "" },
     portfolio: {},
     investments: [],
-    eventTokens: 0,
-    completedRankMissions: [],
+    borrowedSkills: [],
+    professions: {
+      mining: { level: 100, xp: 999999 },
+      crafting: { level: 100, xp: 999999 },
+    },
     profile: {
       whatsappName: null,
       nickname: sb.name || `Sandbox (${senderName})`,
@@ -623,14 +676,13 @@ async function enableSandbox(realJid, senderName) {
       stats: { firstSeen: new Date(), lastSeen: new Date(), messageCount: 0 },
       relationships: {}
     },
-    borrowedSkills: [],
   };
 
   // Put the sandbox user in the economy cache under the sandbox JID
   economy.economyData.set(sandboxJid, sandboxUser);
 
   sandboxMode.set(realJid, { backup, sandboxJid, sandboxDoc: sb });
-  console.log(`🧪 [Sandbox] Enabled for ${realJid} → ${sandboxJid}`);
+  console.log(`🧪 [Sandbox] Enabled for ${realJid} → ${sandboxJid} (STACKED: Lv100, GOD rank, 1B Zeni)`);
   return sb;
 }
 
@@ -6438,6 +6490,34 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // ── PIPELINE STAGE 4: CMD ROUTER ───────────
                     console.log(`⚡ [Pipeline:4] CMD DETECTED | cmd=${JSON.stringify(primaryCmd)} | sender=${senderJid.split('@')[0]} | chat=${chatId.split('@')[0]} | isSelf=${isSelf}`);
+
+                    // 💡 SANDBOX AUTO-SAVE: after every command, save the sandbox
+                    // data to AdminSandbox so nothing is lost. This runs
+                    // asynchronously (fire-and-forget) so it doesn't slow
+                    // down command processing.
+                    if (isSandboxJid(senderJid)) {
+                      const _realJid = stripSandboxPrefix(senderJid);
+                      const _sbUser = economy.economyData.get(senderJid);
+                      if (_sbUser) {
+                        const AdminSandbox = require('./models/AdminSandbox');
+                        AdminSandbox.patch(_realJid, {
+                          wallet: _sbUser.wallet, bank: _sbUser.bank,
+                          class: _sbUser.class, adventurerRank: _sbUser.adventurerRank,
+                          stats: _sbUser.stats, statBonuses: _sbUser.statBonuses,
+                          skillPoints: _sbUser.skillPoints, skills: _sbUser.skills,
+                          completedTrials: _sbUser.completedTrials,
+                          evolutionHistory: _sbUser.evolutionHistory,
+                          evolvedAt: _sbUser.evolvedAt,
+                          inventory: _sbUser.inventory, equipment: _sbUser.equipment,
+                          progression: _sbUser.progression,
+                          questsCompleted: _sbUser.questsCompleted,
+                          questsWon: _sbUser.questsWon, questsFailed: _sbUser.questsFailed,
+                          bossesDefeated: _sbUser.bossesDefeated,
+                          dragonsKilled: _sbUser.dragonsKilled,
+                          pvpWins: _sbUser.pvpWins, pvpLosses: _sbUser.pvpLosses,
+                        }).catch(e => console.error('[Sandbox] Auto-save failed:', e.message));
+                      }
+                    }
 
                     // --- REACTION COMMANDS ---
                     const reaction = REACTIONS.find((r) => r.type === primaryCmd);
