@@ -17800,6 +17800,30 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                       }
                     }
 
+                    // Minimal valid 1×1 white JPEG — used as thumbnail fallback
+                    // when sharp/jimp aren't available. WhatsApp just needs *any*
+                    // non-empty jpegThumbnail to show the blurred preview.
+                    const FALLBACK_THUMB = Buffer.from(
+                      '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=',
+                      'base64'
+                    );
+
+                    async function buildThumbnail(imgBuffer) {
+                      try {
+                        // Attempt sharp first (fastest)
+                        const sharp = require('sharp');
+                        return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
+                      } catch (_) {}
+                      try {
+                        // Attempt jimp fallback
+                        const Jimp = require('jimp');
+                        const img = await Jimp.read(imgBuffer);
+                        img.resize(32, Jimp.AUTO);
+                        return await img.getBufferAsync(Jimp.MIME_JPEG);
+                      } catch (_) {}
+                      return FALLBACK_THUMB;
+                    }
+
                     async function sendImageSafe(
                       sock,
                       chatId,
@@ -17808,32 +17832,44 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                       quotedMsg,
                     ) {
                       if (!imageUrl) throw new Error("No imageUrl provided");
+
+                      // Always download the buffer so we can generate a thumbnail
+                      // (WhatsApp requires jpegThumbnail for the blurred preview)
+                      let imgBuffer = null;
                       try {
-                        // try sending remote URL first
+                        const resp = await axios.get(imageUrl, {
+                          responseType: "arraybuffer",
+                          headers: { "User-Agent": "Mozilla/5.0" },
+                          timeout: 15000,
+                          maxContentLength: 10 * 1024 * 1024,
+                        });
+                        imgBuffer = Buffer.from(resp.data);
+                      } catch (_) {}
+
+                      const thumb = imgBuffer ? await buildThumbnail(imgBuffer) : FALLBACK_THUMB;
+
+                      try {
+                        if (imgBuffer) {
+                          await sock.sendMessage(
+                            chatId,
+                            { image: imgBuffer, caption, jpegThumbnail: thumb },
+                            { quoted: quotedMsg },
+                          );
+                        } else {
+                          // Couldn't download — send by URL with fallback thumb
+                          await sock.sendMessage(
+                            chatId,
+                            { image: { url: imageUrl }, caption, jpegThumbnail: thumb },
+                            { quoted: quotedMsg },
+                          );
+                        }
+                      } catch (err) {
+                        // Last resort: URL-only with no thumbnail
                         await sock.sendMessage(
                           chatId,
                           { image: { url: imageUrl }, caption },
                           { quoted: quotedMsg },
                         );
-                        return;
-                      } catch (err) {
-                        // fallback: download and send buffer
-                        try {
-                          const resp = await axios.get(imageUrl, {
-                            responseType: "arraybuffer",
-                            headers: { "User-Agent": "Mozilla/5.0" },
-                            timeout: 15000,
-                            maxContentLength: 10 * 1024 * 1024,
-                          });
-                          await sock.sendMessage(
-                            chatId,
-                            { image: Buffer.from(resp.data), caption },
-                            { quoted: quotedMsg },
-                          );
-                          return;
-                        } catch (err2) {
-                          throw err2;
-                        }
                       }
                     }
 
