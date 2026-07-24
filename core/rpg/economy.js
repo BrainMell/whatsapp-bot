@@ -1718,7 +1718,23 @@ async function syncUserFromDB(userId) {
   }
 
   try {
-    const user = await User.findOne({ userId: resolvedId }).lean();
+    // 💡 CRITICAL FIX: query MongoDB with BOTH the resolved JID and the
+    // original JID. All users in MongoDB are stored as @lid JIDs, but
+    // resolveJidHelper might return a @s.whatsapp.net JID (or vice versa).
+    // Without this, syncUserFromDB can't find the user → they stay
+    // unregistered in cache → every command fails.
+    let user = await User.findOne({ userId: resolvedId }).lean();
+    if (!user && typeof userId === 'string' && userId !== resolvedId) {
+      user = await User.findOne({ userId: userId }).lean();
+    }
+    // 💡 Also try @lid ↔ @s.whatsapp.net swap
+    if (!user && typeof resolvedId === 'string') {
+      if (resolvedId.endsWith('@lid')) {
+        user = await User.findOne({ userId: resolvedId.replace('@lid', '@s.whatsapp.net') }).lean();
+      } else if (resolvedId.endsWith('@s.whatsapp.net')) {
+        user = await User.findOne({ userId: resolvedId.replace('@s.whatsapp.net', '@lid') }).lean();
+      }
+    }
     if (user) {
       if (user.inventory && user.inventory instanceof Map) {
           user.inventory = Object.fromEntries(user.inventory);
@@ -1729,7 +1745,14 @@ async function syncUserFromDB(userId) {
       if (user.portfolio && user.portfolio instanceof Map) {
           user.portfolio = Object.fromEntries(user.portfolio);
       }
-      economyData.set(resolvedId, user);
+      // 💡 Store under the user's actual userId from DB, not the resolved ID
+      // (which might be a different format). This ensures future lookups
+      // with either JID format will find the user in cache.
+      economyData.set(user.userId, user);
+      // Also store under the resolved ID as an alias
+      if (user.userId !== resolvedId) {
+        economyData.set(resolvedId, user);
+      }
     }
   } catch (err) {
     console.error("Error syncing user from DB:", err.message);

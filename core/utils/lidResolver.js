@@ -251,6 +251,11 @@ function resolveLidToPhone(jid, authPath) {
     const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
 
     // Check if either JID is registered in database
+    // 💡 CRITICAL FIX: ALL users in MongoDB are stored with @lid JIDs.
+    // resolveLidToPhone was returning the phone JID even when the user
+    // was registered as a LID JID — causing every command to fail with
+    // "not registered" because getUser() couldn't find the phone JID.
+    // Now we check LID FIRST, then phone, then fall back.
     const economy = getEconomy();
     if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
         return lidJid;
@@ -259,8 +264,26 @@ function resolveLidToPhone(jid, authPath) {
         return phoneJid;
     }
 
-    // Default to Phone JID if available, else keep incoming
-    return phoneJid || originalJid;
+    // 💡 FIX: also try the ORIGINAL jid directly — if the user is already
+    // registered with their incoming JID (e.g. they registered as @lid and
+    // the incoming message is also @lid), no conversion is needed.
+    if (economy.economyData && economy.economyData.has(originalJid)) {
+        return originalJid;
+    }
+
+    // 💡 FIX: try swapping @lid ↔ @s.whatsapp.net as a last resort
+    if (typeof originalJid === 'string') {
+        if (originalJid.endsWith('@lid')) {
+            const alt = originalJid.replace('@lid', '@s.whatsapp.net');
+            if (economy.economyData && economy.economyData.has(alt)) return alt;
+        } else if (originalJid.endsWith('@s.whatsapp.net')) {
+            const alt = originalJid.replace('@s.whatsapp.net', '@lid');
+            if (economy.economyData && economy.economyData.has(alt)) return alt;
+        }
+    }
+
+    // Default to the original JID if nothing matched
+    return originalJid;
 }
 
 // Maps incoming JID to the canonical JID registered in database
@@ -274,13 +297,32 @@ function resolveJid(jid, authPath) {
     const lidJid = lid ? `${lid}@lid` : null;
     const phoneJid = phone ? `${phone}@s.whatsapp.net` : null;
     
-    // Check if either JID is registered in database
+    // 💡 CRITICAL FIX: check LID FIRST (all users in DB are @lid), then phone.
+    // Previously this checked in the same order but would fall through to
+    // originalJid when neither matched — now also tries @lid ↔ @s.whatsapp.net
+    // swap as a last resort.
     const economy = require('../rpg/economy');
     if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
         return lidJid;
     }
     if (phoneJid && economy.economyData && economy.economyData.has(phoneJid)) {
         return phoneJid;
+    }
+    
+    // Try the original JID directly
+    if (economy.economyData && economy.economyData.has(originalJid)) {
+        return originalJid;
+    }
+    
+    // Try swapping @lid ↔ @s.whatsapp.net
+    if (typeof originalJid === 'string') {
+        if (originalJid.endsWith('@lid')) {
+            const alt = originalJid.replace('@lid', '@s.whatsapp.net');
+            if (economy.economyData.has(alt)) return alt;
+        } else if (originalJid.endsWith('@s.whatsapp.net')) {
+            const alt = originalJid.replace('@s.whatsapp.net', '@lid');
+            if (economy.economyData.has(alt)) return alt;
+        }
     }
     
     // Default to the original JID if neither is registered
