@@ -4443,7 +4443,10 @@ What to do:
 
     // Replace with your own Channel JID (found by forwarding a message from channel to bot)
 
-    const NEWSLETTER_JID = "120363425532756870@newsletter";
+    const NEWSLETTER_JID = null; // 💡 FIX: was hardcoded "120363425532756870@newsletter"
+    // If Jake's WA account doesn't have access to that newsletter, WhatsApp
+    // silently rejects the ENTIRE message (not just the newsletter part).
+    // Setting to null disables the newsletter forwarding contextInfo entirely.
 
     /*
 
@@ -4455,7 +4458,11 @@ What to do:
 
     async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
       const imagePath = botConfig.getAssetPath("banner.png");
-      const contextInfo = {
+
+      // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
+      // If Jake's WA account doesn't have access to the newsletter,
+      // WhatsApp silently rejects the ENTIRE message.
+      const contextInfo = NEWSLETTER_JID ? {
         forwardingScore: 1,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
@@ -4463,7 +4470,7 @@ What to do:
           newsletterName: botConfig.getBotName() + " Official",
           serverMessageId: -1,
         },
-      };
+      } : {};
 
       if (fs.existsSync(imagePath)) {
         try {
