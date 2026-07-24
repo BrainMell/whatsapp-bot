@@ -1,0 +1,26 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - audit/fix-pass-1
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ubuntu
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script: |
+            export PATH=$PATH:/usr/local/go/bin
+            cd ~/whatsapp-bot
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git pull --ff-only origin ${{ github.ref_name }}
+            npm install --omit=optional
+            pm2 restart whatsapp-bot
