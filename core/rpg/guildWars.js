@@ -366,7 +366,7 @@ async function resolveMonsterHunt(war, sorted) {
 // ─── EVENT 4: STRONGHOLD SIEGE ────────────────────────────────────────────
 // Aggregate activity + RNG. Strongholds attack/defend based on points.
 async function resolveStrongholdSiege(war, sorted) {
-  let msg = `🏰 *STRONGHOLD SIEGE — FINAL RESULTS* 🏰\n\n`;
+  let msg = `🏰 *STRONGHOLD SIEGE , FINAL RESULTS* 🏰\n\n`;
 
   // Each guild's stronghold is attacked by virtual raiders
   // Defense success = points × stronghold level × RNG
