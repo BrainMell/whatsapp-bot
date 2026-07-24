@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - audit/fix-pass-1
-      - main
+
 
 jobs:
   deploy:
