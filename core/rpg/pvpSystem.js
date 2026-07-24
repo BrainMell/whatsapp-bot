@@ -22,7 +22,22 @@ function resolveJid(jid) {
     if (!jid) return jid;
     try {
         const lidResolver = require('../utils/lidResolver');
-        return lidResolver.resolveJid(jid);
+        const resolved = lidResolver.resolveJid(jid);
+        // 💡 FIX: if resolveJid returned the original (mapping miss), try
+        // the OTHER format in the economy cache. Fixes PvP after Oracle
+        // migration where LID mappings may be incomplete.
+        if (resolved === jid || !economy.economyData.has(resolved)) {
+            if (typeof jid === 'string') {
+                if (jid.endsWith('@lid')) {
+                    const phoneJid = jid.replace('@lid', '@s.whatsapp.net');
+                    if (economy.economyData.has(phoneJid)) return phoneJid;
+                } else if (jid.endsWith('@s.whatsapp.net')) {
+                    const lidJid = jid.replace('@s.whatsapp.net', '@lid');
+                    if (economy.economyData.has(lidJid)) return lidJid;
+                }
+            }
+        }
+        return resolved;
     } catch (e) {
         console.error("Error resolving JID in pvpSystem:", e.message);
         return jid;

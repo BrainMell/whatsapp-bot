@@ -5,7 +5,7 @@ class GoImageService {
     this.baseUrl =
       overrideUrl ||
       process.env.GO_IMAGE_SERVICE_URL ||
-      "https://mellow2006-mellowbotbackend.hf.space";
+      "http://127.0.0.1:7860"; // 💡 FIX: Oracle migration — Go service now runs locally
     
     if (!global.goServiceInitialized) {
       global.goServiceInitialized = true;

@@ -126,7 +126,27 @@ function resolveJidHelper(userId) {
   if (!userId) return userId;
   try {
     const lidResolver = require('../utils/lidResolver');
-    return lidResolver.resolveJid(userId);
+    const resolved = lidResolver.resolveJid(userId);
+    // 💡 FIX: if resolveJid returned the original (mapping miss), try the
+    // OTHER format directly in the economy cache. This fixes PvP after
+    // Oracle migration where LID mapping files may be incomplete — when
+    // someone tags a user in a group, WhatsApp sends a LID JID, but the
+    // user may have registered with a phone JID (or vice versa).
+    if (resolved === userId || !economyData.has(resolved)) {
+      // Try converting between LID and phone formats
+      if (typeof userId === 'string') {
+        if (userId.endsWith('@lid')) {
+          // LID → try phone format
+          const phoneJid = userId.replace('@lid', '@s.whatsapp.net');
+          if (economyData.has(phoneJid)) return phoneJid;
+        } else if (userId.endsWith('@s.whatsapp.net')) {
+          // Phone → try LID format
+          const lidJid = userId.replace('@s.whatsapp.net', '@lid');
+          if (economyData.has(lidJid)) return lidJid;
+        }
+      }
+    }
+    return resolved;
   } catch (e) {
     console.error("Error resolving JID in resolveJidHelper:", e.message);
     return userId;

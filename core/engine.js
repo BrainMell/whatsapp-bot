@@ -3369,21 +3369,72 @@ What to do:
       // Check mentions
       const mentioned =
         m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) return resolveLidToPhone(jidNormalizedUser(mentioned[0]), configInstance.getAuthPath());
+      if (mentioned.length > 0) {
+        const rawJid = jidNormalizedUser(mentioned[0]);
+        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
+        // 💡 FIX: if LID resolution failed (mapping miss after Oracle migration),
+        // try the OTHER format directly in the economy cache. When someone tags
+        // a user in a group, WhatsApp sends a LID JID, but the user may have
+        // registered with a phone JID.
+        const economy = require('./rpg/economy');
+        if (resolved && !economy.economyData.has(resolved)) {
+          if (typeof resolved === 'string') {
+            if (resolved.endsWith('@lid')) {
+              const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
+              if (economy.economyData.has(phoneJid)) return phoneJid;
+            } else if (resolved.endsWith('@s.whatsapp.net')) {
+              const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
+              if (economy.economyData.has(lidJid)) return lidJid;
+            }
+          }
+        }
+        return resolved;
+      }
 
       // Check direct reply participant
       const replyParticipant =
         m.message?.extendedTextMessage?.contextInfo?.participant;
-      if (replyParticipant) return resolveLidToPhone(jidNormalizedUser(replyParticipant), configInstance.getAuthPath());
+      if (replyParticipant) {
+        const rawJid = jidNormalizedUser(replyParticipant);
+        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
+        const economy = require('./rpg/economy');
+        if (resolved && !economy.economyData.has(resolved)) {
+          if (typeof resolved === 'string') {
+            if (resolved.endsWith('@lid')) {
+              const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
+              if (economy.economyData.has(phoneJid)) return phoneJid;
+            } else if (resolved.endsWith('@s.whatsapp.net')) {
+              const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
+              if (economy.economyData.has(lidJid)) return lidJid;
+            }
+          }
+        }
+        return resolved;
+      }
 
       // Baileys sometimes wraps the quoted message differently
       const quotedMessage =
         m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
       if (quotedMessage) {
-        // If we have a quoted message, the participant JID should be in contextInfo
         const participant =
           m.message?.extendedTextMessage?.contextInfo?.participant;
-        return participant ? resolveLidToPhone(jidNormalizedUser(participant), configInstance.getAuthPath()) : null;
+        if (participant) {
+          const rawJid = jidNormalizedUser(participant);
+          const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
+          const economy = require('./rpg/economy');
+          if (resolved && !economy.economyData.has(resolved)) {
+            if (typeof resolved === 'string') {
+              if (resolved.endsWith('@lid')) {
+                const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
+                if (economy.economyData.has(phoneJid)) return phoneJid;
+              } else if (resolved.endsWith('@s.whatsapp.net')) {
+                const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
+                if (economy.economyData.has(lidJid)) return lidJid;
+              }
+            }
+          }
+          return resolved;
+        }
       }
 
       return null;
