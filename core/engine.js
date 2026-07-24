@@ -4939,38 +4939,41 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 usePairing = true;
                 phoneForPairing = pairingPhoneConfig;
               } else if (isFreshLogin) {
-                // Interactive prompt — only on fresh login.
-                // Don't check process.stdin.isTTY — it may be false even
-                // in a real terminal (e.g. when running under dotenvx).
-                // Just try readline and catch if it fails.
-                console.log(`\n╔══════════════════════════════════════════════╗`);
-                console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(33)}║`);
-                console.log(`╠══════════════════════════════════════════════╣`);
-                console.log(`║  1️⃣  QR Code (scan with phone camera)        ║`);
-                console.log(`║  2️⃣  Pairing Code (enter code on phone)     ║`);
-                console.log(`╚══════════════════════════════════════════════╝`);
+                const isPM2 = Boolean(process.env.PM2_HOME || process.env.PM2_USAGE || !process.stdin.isTTY);
+                if (isPM2) {
+                  console.log(`📱 [${BOT_ID}] Non-interactive background mode detected. Rendering QR code...`);
+                } else {
+                  console.log(`\n╔══════════════════════════════════════════════╗`);
+                  console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(33)}║`);
+                  console.log(`╠══════════════════════════════════════════════╣`);
+                  console.log(`║  1️⃣  QR Code (scan with phone camera)        ║`);
+                  console.log(`║  2️⃣  Pairing Code (enter code on phone)     ║`);
+                  console.log(`╚══════════════════════════════════════════════╝`);
 
-                try {
-                  const readline = require('readline');
-                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
-                  const choice = await new Promise(resolve => {
-                    rl.question('Choose (1 or 2, default=2): ', answer => { rl.close(); resolve(answer.trim() || '2'); });
-                  });
-
-                  if (choice === '2') {
-                    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
-                    const phone = await new Promise(resolve => {
-                      rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { rl2.close(); resolve(answer.trim()); });
+                  try {
+                    const readline = require('readline');
+                    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                    const choice = await new Promise(resolve => {
+                      const timer = setTimeout(() => resolve('1'), 5000);
+                      rl.question('Choose (1 or 2, default=1): ', answer => { clearTimeout(timer); rl.close(); resolve(answer.trim() || '1'); });
                     });
-                    if (phone && /^\d{8,15}$/.test(phone)) {
-                      usePairing = true;
-                      phoneForPairing = phone;
-                    } else {
-                      console.log('❌ Invalid phone number. Falling back to QR code.\n');
+
+                    if (choice === '2') {
+                      const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+                      const phone = await new Promise(resolve => {
+                        const timer = setTimeout(() => resolve(''), 10000);
+                        rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { clearTimeout(timer); rl2.close(); resolve(answer.trim()); });
+                      });
+                      if (phone && /^\d{8,15}$/.test(phone)) {
+                        usePairing = true;
+                        phoneForPairing = phone;
+                      } else {
+                        console.log('❌ Invalid phone number. Falling back to QR code.\n');
+                      }
                     }
+                  } catch (e) {
+                    console.log('(stdin not available, using QR code)');
                   }
-                } catch (e) {
-                  console.log('(stdin not available, using QR code)');
                 }
               }
 
