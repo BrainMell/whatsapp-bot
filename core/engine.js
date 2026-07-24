@@ -4466,21 +4466,25 @@ What to do:
       };
 
       if (fs.existsSync(imagePath)) {
-        return await sock.sendMessage(chatId, {
-          image: { url: imagePath },
-          caption: text,
-          mentions,
-          contextInfo,
-        });
-      } else {
-        const botName = botConfig.getBotName();
-        const botMarker = `🃏 *${botName}*\n\n`;
-        return await sock.sendMessage(chatId, {
-          text: botMarker + text,
-          mentions,
-          contextInfo,
-        });
+        try {
+          return await sock.sendMessage(chatId, {
+            image: { url: imagePath },
+            caption: text,
+            mentions,
+            contextInfo,
+          });
+        } catch (imgErr) {
+          console.error("Banner image send failed, falling back to text:", imgErr.message);
+        }
       }
+      // 💡 FIX: always fall back to text if image doesn't exist OR image send fails
+      const botName = botConfig.getBotName();
+      const botMarker = `🃏 *${botName}*\n\n`;
+      return await sock.sendMessage(chatId, {
+        text: botMarker + text,
+        mentions,
+        contextInfo,
+      });
     }
 
     // New dynamic menu function

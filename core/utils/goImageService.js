@@ -462,7 +462,7 @@ class GoImageService {
     try {
       const response = await this.client.post("/api/cards/economy", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
       // Validate buffer (PNG header check + minimum size)
@@ -481,7 +481,7 @@ class GoImageService {
     try {
       const response = await this.client.post("/api/cards/transaction", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
       if (buf.length < 100) return null;
@@ -499,7 +499,7 @@ class GoImageService {
     try {
       const response = await this.client.post("/api/cards/profile", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
       if (buf.length < 100) return null;
