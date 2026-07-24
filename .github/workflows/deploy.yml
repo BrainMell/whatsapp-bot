@@ -22,5 +22,6 @@ jobs:
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull --ff-only origin ${{ github.ref_name }}
-            npm install --omit=optional
+            npm install
             pm2 restart whatsapp-bot
+
