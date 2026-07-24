@@ -21,3 +21,12 @@ ImageGenScrapes
 # Assets and Generated
 *.exe
 *.logscripts/backups/
+
+# ── WhatsApp Session Auth (CRITICAL — never delete these) ──────────────
+# Baileys stores session keys here. Deleting = all instances need QR re-scan.
+instances/*/auth/
+instances/*/auth/**
+
+# Runtime-generated per-instance data (safe to exclude from git)
+instances/*/database/
+instances/*/downloads/
