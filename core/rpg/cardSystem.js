@@ -13,53 +13,6 @@ const axios   = require('axios');
 const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 
-// 💡 CRITICAL FIX: helper to send images.
-// The banner (.jk menu) works because it uses `image: { url: filePath }`.
-// GoService images hang because they use `image: buffer`.
-// FIX: write the buffer to a temp file, then send via file path —
-// same code path as the working banner send.
-const FALLBACK_THUMB_BUFFER = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=', 'base64');
-const os = require('os');
-const pathMod = require('path');
-
-async function sendImageWithTimeout(sock, chatId, content, options = {}, timeoutMs = 15000) {
-  // Ensure jpegThumbnail is set to skip Baileys' sharp/jimp thumbnail generation
-  if (content.image && !content.jpegThumbnail) {
-    content.jpegThumbnail = FALLBACK_THUMB_BUFFER;
-  }
-
-  // 💡 KEY FIX: if image is a Buffer, write it to a temp file and send
-  // via { url: filePath } instead. The banner send works because it
-  // uses a file path. Buffer sends hang. Converting buffer→file→send
-  // uses the same (working) code path as the banner.
-  if (Buffer.isBuffer(content.image)) {
-    try {
-      const tmpPath = pathMod.join(os.tmpdir(), `wa_img_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`);
-      fs.writeFileSync(tmpPath, content.image);
-      const oldImage = content.image;
-      content.image = { url: tmpPath };
-      console.log(`[sendImageWithTimeout] converted buffer (${oldImage.length} bytes) to temp file: ${tmpPath}`);
-      const sendPromise = sock.sendMessage(chatId, content, options);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`image send timed out after ${timeoutMs}ms`)), timeoutMs)
-      );
-      const result = await Promise.race([sendPromise, timeoutPromise]);
-      // Clean up temp file
-      try { fs.unlinkSync(tmpPath); } catch (_) {}
-      return result;
-    } catch (e) {
-      console.error('[sendImageWithTimeout] buffer→file conversion failed, trying direct buffer send:', e.message);
-      // Fall through to direct buffer send below
-    }
-  }
-
-  const sendPromise = sock.sendMessage(chatId, content, options);
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`image send timed out after ${timeoutMs}ms`)), timeoutMs)
-  );
-  return Promise.race([sendPromise, timeoutPromise]);
-}
-
 // ── Mongoose Models ──────────────────────────────────────────────────────────
 const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
@@ -1199,11 +1152,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     }
 
     if (gifBuffer) {
-      try {
-        return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: finalMsg });
-      } catch (e) {
-        console.error('[cmdCards] image send failed, falling back to text:', e.message);
-      }
+      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: finalMsg });
     }
   }
 
@@ -1242,12 +1191,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
           }
         }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-        try {
-          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
-        } catch (e) {
-          console.error('[cmdColl] card detail image send failed, falling back to text:', e.message);
-          return reply(caption);
-        }
+        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
       } catch (e) { return reply(caption); }
     }
     return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
@@ -1286,11 +1230,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-      try {
-        return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: fullText });
-      } catch (e) {
-        console.error('[cmdColl] image send failed, falling back to text:', e.message);
-      }
+      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
     }
   }
 
@@ -1319,12 +1259,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
                     }
                 }
                 const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-                try {
-          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
-        } catch (e) {
-          console.error('[cmdColl] card detail image send failed, falling back to text:', e.message);
-          return reply(caption);
-        }
+                return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
             } catch (e) { return reply(caption); }
         }
     }
@@ -1365,11 +1300,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        try {
-          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: msg });
-        } catch (e) {
-          console.error('[cmdDeck] image send failed, falling back to text:', e.message);
-        }
+        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 
@@ -3036,11 +2967,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        try {
-          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: msg });
-        } catch (e) {
-          console.error('[cmdDeck] image send failed, falling back to text:', e.message);
-        }
+        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 

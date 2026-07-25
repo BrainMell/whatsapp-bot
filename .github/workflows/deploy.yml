@@ -55,14 +55,6 @@ jobs:
             fi
 
             npm install
-            # 💡 Force Baileys to the pinned version (7.0.0-rc.9).
-            # npm install says "up to date" if rc13 is already in node_modules
-            # even though package.json pins rc.9. Must remove and reinstall.
-            echo "=== Forcing Baileys rc9 install ==="
-            rm -rf node_modules/@whiskeysockets/baileys
-            npm install @whiskeysockets/baileys@7.0.0-rc.9 2>&1 | tail -5
-            echo "=== Installed Baileys version ==="
-            node -e "console.log('Baileys version:', require('@whiskeysockets/baileys/package.json').version)" 2>&1
             pm2 restart whatsapp-bot
 
             # ── VERIFY ───────────────────────────────────────────────────

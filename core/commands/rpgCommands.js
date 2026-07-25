@@ -95,32 +95,12 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 if (cardData.statPoints > 0) {
                     captionMsg += `\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.`;
                 }
-                // 💡 KEY FIX: write buffer to temp file, send via { url: path }.
-                // The banner (.jk menu) works because it uses a file path.
-                // Buffer sends hang. Converting to file uses the same working path.
-                try {
-                    const os = require('os');
-                    const path = require('path');
-                    const fs = require('fs');
-                    const tmpPath = path.join(os.tmpdir(), `wa_char_${Date.now()}.jpg`);
-                    fs.writeFileSync(tmpPath, cardBuffer);
-                    console.log(`[displayCharacterSheet] wrote card to temp file: ${tmpPath} (${cardBuffer.length} bytes)`);
-                    const sendPromise = sock.sendMessage(chatId, {
-                        image: { url: tmpPath },
-                        caption: captionMsg,
-                        jpegThumbnail: Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=', 'base64'),
-                        mentions: [senderJid]
-                    });
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('char image send timed out after 15s')), 15000)
-                    );
-                    await Promise.race([sendPromise, timeoutPromise]);
-                    try { fs.unlinkSync(tmpPath); } catch (_) {}
-                    return;
-                } catch (sendErr) {
-                    console.error('[displayCharacterSheet] image send failed, falling back to text:', sendErr.message);
-                    // Fall through to text fallback below
-                }
+                await sock.sendMessage(chatId, { 
+                    image: cardBuffer,
+                    caption: captionMsg,
+                    mentions: [senderJid]
+                });
+                return;
             }
         }
     } catch (err) {
