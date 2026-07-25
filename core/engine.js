@@ -5153,6 +5153,40 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // hanging on stalled queries (presence fetches, group metadata
           // fetches, etc). 10s is generous but bounded.
           defaultQueryTimeout: 10000,
+
+          // 💡 CRITICAL FIX (media upload hang): Baileys rc13's
+          // uploadWithNodeHttp passes `timeout: timeoutMs` to Node's
+          // https.request. If mediaUploadTimeoutMs is not set, timeoutMs
+          // is undefined → Node treats it as NO timeout → the upload
+          // hangs FOREVER if WhatsApp's media server doesn't respond.
+          // This is exactly what was happening: text sends work (they go
+          // over the WebSocket), but image sends hang (they require an
+          // HTTP POST to mmg.whatsapp.net which never completes).
+          // Setting this to 20s ensures the upload fails fast instead
+          // of hanging indefinitely, so the queue can move on and the
+          // text fallback can be sent.
+          mediaUploadTimeoutMs: 20000,
+
+          // 💡 CRITICAL FIX (IPv6 hang): Oracle Cloud instances have IPv6
+          // configured, but the IPv6 route to WhatsApp's media servers
+          // may not work. Node's default behavior is to try IPv6 first
+          // (happy eyeballs), which can cause the HTTPS connection to
+          // mmg.whatsapp.net to hang for 20+ seconds before falling back
+          // to IPv4. By passing a custom agent with family:4, we force
+          // IPv4 only — eliminating the IPv6 hang entirely.
+          // This agent is used by Baileys' uploadWithNodeHttp (line 555:
+          // `agent: fetchAgent`) for all media uploads.
+          fetchAgent: new (require('https').Agent)({
+            family: 4,           // force IPv4 — avoid IPv6 hang on Oracle
+            keepAlive: true,     // reuse connections for multiple uploads
+            timeout: 20000,      // socket timeout as a safety net
+          }),
+
+          // 💡 customUploadHosts is required by Baileys (used in
+          // getWAUploadToServer: `[...customUploadHosts, ...uploadInfo.hosts]`).
+          // If undefined, the spread throws "undefined is not iterable".
+          // Default to empty array — Baileys will use WhatsApp's hosts.
+          customUploadHosts: [],
         });
 
         sendQueue.bind(sock);

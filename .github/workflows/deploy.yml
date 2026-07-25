@@ -73,6 +73,37 @@ jobs:
             echo "=== SHARP CHECK ==="
             node -e "try { const s = require('sharp'); s({create:{width:1,height:1,channels:3,background:{r:255,g:255,b:255}}}).jpeg().toBuffer().then(b => console.log('sharp WORKS, test buffer:', b.length, 'bytes')).catch(e => console.log('sharp PROCESS FAIL:', e.message)); } catch(e) { console.log('sharp LOAD FAIL:', e.message); }" 2>&1
 
+            echo "=== MEDIA UPLOAD CONNECTIVITY TEST ==="
+            echo "--- DNS resolution of mmg.whatsapp.net ---"
+            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { all: true }, (err, addrs) => { if (err) console.log('DNS FAIL:', err.message); else console.log('DNS OK:', JSON.stringify(addrs)); });"
+            echo "--- DNS resolution of mmg.whatsapp.net (IPv4 only) ---"
+            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { family: 4 }, (err, addr) => { if (err) console.log('IPv4 DNS FAIL:', err.message); else console.log('IPv4 DNS OK:', addr); });"
+            echo "--- DNS resolution of mmg.whatsapp.net (IPv6 only) ---"
+            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { family: 6 }, (err, addr) => { if (err) console.log('IPv6 DNS FAIL:', err.message); else console.log('IPv6 DNS OK:', addr); });"
+            echo "--- HTTPS connectivity test (IPv4 forced, 10s timeout) ---"
+            node -e "
+              const https = require('https');
+              const agent = new https.Agent({ family: 4 });
+              const req = https.get('https://mmg.whatsapp.net/', { agent, timeout: 10000 }, (res) => {
+                console.log('IPv4 HTTPS OK: status', res.statusCode);
+                res.resume();
+              });
+              req.on('error', (e) => console.log('IPv4 HTTPS FAIL:', e.message));
+              req.on('timeout', () => { console.log('IPv4 HTTPS TIMEOUT (10s)'); req.destroy(); });
+            "
+            echo "--- HTTPS connectivity test (default, 10s timeout) ---"
+            node -e "
+              const https = require('https');
+              const req = https.get('https://mmg.whatsapp.net/', { timeout: 10000 }, (res) => {
+                console.log('Default HTTPS OK: status', res.statusCode);
+                res.resume();
+              });
+              req.on('error', (e) => console.log('Default HTTPS FAIL:', e.message));
+              req.on('timeout', () => { console.log('Default HTTPS TIMEOUT (10s)'); req.destroy(); });
+            "
+            echo "--- IPv6 check on this server ---"
+            ip -6 addr show 2>&1 | head -10 || echo "No IPv6 addresses"
+
             echo "=== SYNTAX CHECK ==="
             node -c core/engine.js 2>&1 && echo "engine.js syntax OK" || echo "engine.js SYNTAX ERROR"
 
