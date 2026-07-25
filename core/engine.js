@@ -5151,53 +5151,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           logger: P({ level: "silent" }),
           syncFullHistory: false,       // skip loading old message history on boot
           shouldSyncHistoryMessage: () => false, // ⚡ SKIP downloading/decrypting history sync messages
-          // 💡 POLISH 2026-07-17: markOnlineOnConnect=false — Baileys 7.x was
-          // broadcasting the bot's online presence every few seconds AND
-          // auto-subscribing to other users' presence updates. This caused
-          // excessive traffic, made the bot appear "noisy" to WhatsApp's
-          // servers, and may have contributed to soft-fail / shadow-ban
-          // patterns where the bot connects but doesn't receive messages.
-          // Disabling means the bot won't appear "online" in chat lists,
-          // but it also won't trigger the presence-subscription storm.
           markOnlineOnConnect: false,
-          // 💡 POLISH 2026-07-17: explicit defaultQueryTimeout to avoid
-          // hanging on stalled queries (presence fetches, group metadata
-          // fetches, etc). 10s is generous but bounded.
           defaultQueryTimeout: 10000,
 
-          // 💡 CRITICAL FIX (media upload hang): Baileys rc13's
-          // uploadWithNodeHttp passes `timeout: timeoutMs` to Node's
-          // https.request. If mediaUploadTimeoutMs is not set, timeoutMs
-          // is undefined → Node treats it as NO timeout → the upload
-          // hangs FOREVER if WhatsApp's media server doesn't respond.
-          // This is exactly what was happening: text sends work (they go
-          // over the WebSocket), but image sends hang (they require an
-          // HTTP POST to mmg.whatsapp.net which never completes).
-          // Setting this to 20s ensures the upload fails fast instead
-          // of hanging indefinitely, so the queue can move on and the
-          // text fallback can be sent.
-          mediaUploadTimeoutMs: 20000,
-
-          // 💡 CRITICAL FIX (IPv6 hang): Oracle Cloud instances have IPv6
-          // configured, but the IPv6 route to WhatsApp's media servers
-          // may not work. Node's default behavior is to try IPv6 first
-          // (happy eyeballs), which can cause the HTTPS connection to
-          // mmg.whatsapp.net to hang for 20+ seconds before falling back
-          // to IPv4. By passing a custom agent with family:4, we force
-          // IPv4 only — eliminating the IPv6 hang entirely.
-          // This agent is used by Baileys' uploadWithNodeHttp (line 555:
-          // `agent: fetchAgent`) for all media uploads.
-          fetchAgent: new (require('https').Agent)({
-            family: 4,           // force IPv4 — avoid IPv6 hang on Oracle
-            keepAlive: true,     // reuse connections for multiple uploads
-            timeout: 20000,      // socket timeout as a safety net
-          }),
-
-          // 💡 customUploadHosts is required by Baileys (used in
-          // getWAUploadToServer: `[...customUploadHosts, ...uploadInfo.hosts]`).
-          // If undefined, the spread throws "undefined is not iterable".
-          // Default to empty array — Baileys will use WhatsApp's hosts.
-          customUploadHosts: [],
+          // 💡 RC9 COMPATIBILITY: rc9 uses fetch() for media uploads which:
+          //   - Has built-in timeout (AbortSignal.timeout)
+          //   - Handles IPv4/IPv6 fallback gracefully (undici happy eyeballs)
+          //   - Was working before the rc13 update broke everything
+          // rc13's uploadWithNodeHttp (https.request) hangs with no timeout
+          // on Oracle's IPv6-less network. Downgrading to rc9 is the fix.
+          // These rc13-specific options are removed for compatibility:
+          //   mediaUploadTimeoutMs — not needed, rc9 fetch has its own timeout
+          //   fetchAgent — not needed, rc9 fetch handles IPv4/IPv6
+          //   customUploadHosts — not in rc9's types
         });
 
         sendQueue.bind(sock);
