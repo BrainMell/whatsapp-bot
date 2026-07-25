@@ -1,0 +1,25 @@
+diag: add .jk diag command + extreme logging in sendMenuWithBanner
+
+No more theorizing. This adds a real-time diagnostic command that tests
+every layer of image sending and reports back to the user in WhatsApp.
+
+.jk diag runs 9 tests:
+  1. Banner file exists + readable + magic bytes
+  2. Thumbnail generation (buildThumbnail)
+  3. Sharp load + process
+  4. Jimp load
+  5. Text send (baseline — should always work)
+  6. Banner image send WITH jpegThumbnail (the .jk menu path)
+  7. Banner image send WITHOUT jpegThumbnail (raw Baileys path)
+  8. URL image send via sendImageSafe (the anime/img path)
+  9. GoService health check
+
+Each test reports ✅/❌ + error message directly in WhatsApp. This will
+tell us EXACTLY where the pipeline breaks.
+
+Also added extreme console.log to sendMenuWithBanner so PM2 logs show
+every step: file exists check, thumbnail generation, image send attempt,
+success/failure with stack trace.
+
+The user runs .jk diag, screenshots the output, and we'll know the
+exact failure point. No more guessing.

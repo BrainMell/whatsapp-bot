@@ -4593,7 +4593,9 @@ What to do:
  */
 
     async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
+      console.log(`[sendMenuWithBanner] CALLED for chatId=${chatId?.split('@')[0]}, text length=${text?.length}`);
       const imagePath = botConfig.getAssetPath("banner.png");
+      console.log(`[sendMenuWithBanner] imagePath=${imagePath}, exists=${fs.existsSync(imagePath)}`);
 
       // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
       // An EMPTY contextInfo object (contextInfo: {}) can cause WhatsApp
@@ -4611,18 +4613,12 @@ What to do:
 
       if (fs.existsSync(imagePath)) {
         try {
-          // 💡 FIX: pass jpegThumbnail explicitly to skip Baileys' internal
-          // thumbnail generation. Baileys tries to generate a thumbnail using
-          // sharp/jimp, and if both fail (e.g. sharp native binary missing
-          // on the server), it throws "No image processing library available".
-          // Although Baileys catches this error, the thumbnail-less image
-          // can still fail to render on some WhatsApp clients. Passing a
-          // pre-generated thumbnail (even a 1×1 fallback) avoids the entire
-          // sharp/jimp code path.
+          console.log(`[sendMenuWithBanner] sending IMAGE...`);
           let thumb = FALLBACK_THUMB;
           try {
             const bannerBuf = fs.readFileSync(imagePath);
             thumb = await buildThumbnail(bannerBuf);
+            console.log(`[sendMenuWithBanner] thumbnail generated: ${thumb.length} bytes`);
           } catch (e) {
             console.warn('[sendMenuWithBanner] thumbnail generation failed, using fallback:', e.message);
           }
@@ -4633,13 +4629,19 @@ What to do:
             jpegThumbnail: thumb,
           };
           if (contextInfo) msg.contextInfo = contextInfo;
-          return await sock.sendMessage(chatId, msg);
+          const result = await sock.sendMessage(chatId, msg);
+          console.log(`[sendMenuWithBanner] IMAGE SENT OK:`, JSON.stringify(result?.key || result?.status || 'no key'));
+          return result;
         } catch (imgErr) {
-          console.error("Banner image send failed, falling back to text:", imgErr.message);
+          console.error("[sendMenuWithBanner] IMAGE SEND FAILED:", imgErr.message);
+          console.error("[sendMenuWithBanner] stack:", imgErr.stack?.split('\n').slice(0, 5).join('\n'));
         }
+      } else {
+        console.log(`[sendMenuWithBanner] banner file does NOT exist — skipping to text`);
       }
       // 💡 FIX: always fall back to text if image doesn't exist OR image send fails.
       // Don't include contextInfo if it's null (avoids empty-object rejection).
+      console.log(`[sendMenuWithBanner] falling back to TEXT`);
       const botName = botConfig.getBotName();
       const botMarker = `🃏 *${botName}*\n\n`;
       const textMsg = {
@@ -6799,6 +6801,127 @@ _💡 Reply with another number from your search list!_`.trim();
                         { text: BOT_MARKER + helpMessage },
                         { quoted: m }
                       );
+                      return;
+                    }
+
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 DIAGNOSTIC COMMAND — .j diag
+                    // Tests every layer of image sending and reports back.
+                    // Use this to debug image/media issues in real-time.
+                    // ═══════════════════════════════════════════════════════════
+                    if (primaryCmd === "diag") {
+                      const results = [];
+                      results.push("🔍 *IMAGE PIPELINE DIAGNOSTIC*");
+                      results.push("━━━━━━━━━━━━━━━━━━━");
+
+                      // Test 1: Banner file
+                      const bannerPath = botConfig.getAssetPath("banner.png");
+                      results.push(`*1. Banner file:*`);
+                      results.push(`   Path: \`${bannerPath}\``);
+                      results.push(`   Exists: ${fs.existsSync(bannerPath) ? "✅ YES" : "❌ NO"}`);
+                      if (fs.existsSync(bannerPath)) {
+                        try {
+                          const stat = fs.statSync(bannerPath);
+                          results.push(`   Size: ${stat.size} bytes`);
+                          const buf = fs.readFileSync(bannerPath);
+                          results.push(`   Readable: ✅ YES (${buf.length} bytes)`);
+                          results.push(`   Magic bytes: ${buf.slice(0, 4).toString('hex')}`);
+                          results.push(`   Is JPEG: ${buf.slice(0, 2).toString('hex') === 'ffd8' ? "✅ YES (despite .png extension)" : "NO"}`);
+                        } catch (e) {
+                          results.push(`   Readable: ❌ ${e.message}`);
+                        }
+                      }
+
+                      // Test 2: Thumbnail generation
+                      results.push(`*2. Thumbnail generation:*`);
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        results.push(`   buildThumbnail: ✅ ${thumb.length} bytes`);
+                      } catch (e) {
+                        results.push(`   buildThumbnail: ❌ ${e.message}`);
+                      }
+                      results.push(`   FALLBACK_THUMB: ${FALLBACK_THUMB.length} bytes`);
+
+                      // Test 3: Sharp
+                      results.push(`*3. Sharp:*`);
+                      try {
+                        const sharp = require('sharp');
+                        const testBuf = await sharp({ create: { width: 1, height: 1, channels: 3, background: { r: 255, g: 255, b: 255 } } }).jpeg().toBuffer();
+                        results.push(`   Load + process: ✅ ${testBuf.length} bytes`);
+                      } catch (e) {
+                        results.push(`   Load + process: ❌ ${e.message}`);
+                      }
+
+                      // Test 4: Jimp
+                      results.push(`*4. Jimp:*`);
+                      try {
+                        const Jimp = require('jimp');
+                        results.push(`   Load: ✅ (Jimp type: ${typeof Jimp.Jimp})`);
+                      } catch (e) {
+                        results.push(`   Load: ❌ ${e.message}`);
+                      }
+
+                      // Test 5: Text send (baseline — should always work)
+                      results.push(`*5. Text send:*`);
+                      try {
+                        await sock.sendMessage(chatId, { text: "📱 Test text message from .jk diag" });
+                        results.push(`   ✅ SUCCESS`);
+                      } catch (e) {
+                        results.push(`   ❌ ${e.message}`);
+                      }
+
+                      // Send the text diagnostic first
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + results.join("\n") });
+
+                      // Test 6: Banner image send (the actual .jk menu path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Now testing banner image send..." });
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (with jpegThumbnail)",
+                          jpegThumbnail: thumb,
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Banner image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `6. Banner image: ❌ ${e.message}` });
+                      }
+
+                      // Test 7: Banner image WITHOUT thumbnail (raw Baileys path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Testing banner WITHOUT jpegThumbnail..." });
+                      try {
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (NO thumbnail — raw Baileys path)",
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Banner (no thumb): ✅ SENT" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `7. Banner (no thumb): ❌ ${e.message}` });
+                      }
+
+                      // Test 8: URL image send (the anime/img path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "8. Testing URL image send..." });
+                      try {
+                        await sendImageSafe(sock, chatId, "https://cdn.myanimelist.net/images/anime/13/17465.jpg", "🖼️ URL image test (Jikan/MAL CDN)", m);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "8. URL image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `8. URL image: ❌ ${e.message}` });
+                      }
+
+                      // Test 9: GoService health
+                      results.push(`*9. GoService:*`);
+                      try {
+                        const health = await goService.healthCheck();
+                        results.push(`   Health: ${health ? "✅ " + JSON.stringify(health) : "❌ null (service down)"}`);
+                      } catch (e) {
+                        results.push(`   Health: ❌ ${e.message}`);
+                      }
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `9. GoService health: ${goService.baseUrl}` });
+
+                      // Final summary
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "━━━━━━━━━━━━━━━━━━━\n📋 Diagnostic complete. Check which tests passed/failed above and report back." });
                       return;
                     }
 
