@@ -13,6 +13,26 @@ const axios   = require('axios');
 const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 
+// 💡 CRITICAL FIX: helper to send images with a 15s timeout.
+// The GoService generates images fine, but sending them to WhatsApp
+// (media upload to mmg.whatsapp.net) can hang indefinitely.
+// This helper wraps sock.sendMessage in a 15s Promise.race timeout.
+// If the image doesn't send in 15s, it rejects so the caller can fall
+// back to text. Returns the send result on success.
+const FALLBACK_THUMB_BUFFER = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=', 'base64');
+
+async function sendImageWithTimeout(sock, chatId, content, options = {}, timeoutMs = 15000) {
+  // Ensure jpegThumbnail is set to skip Baileys' sharp/jimp thumbnail generation
+  if (content.image && !content.jpegThumbnail) {
+    content.jpegThumbnail = FALLBACK_THUMB_BUFFER;
+  }
+  const sendPromise = sock.sendMessage(chatId, content, options);
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`image send timed out after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([sendPromise, timeoutPromise]);
+}
+
 // ── Mongoose Models ──────────────────────────────────────────────────────────
 const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
@@ -1152,7 +1172,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     }
 
     if (gifBuffer) {
-      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: finalMsg });
+      try {
+        return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: finalMsg });
+      } catch (e) {
+        console.error('[cmdCards] image send failed, falling back to text:', e.message);
+      }
     }
   }
 
@@ -1191,7 +1215,12 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
           }
         }
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+        try {
+          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+        } catch (e) {
+          console.error('[cmdColl] card detail image send failed, falling back to text:', e.message);
+          return reply(caption);
+        }
       } catch (e) { return reply(caption); }
     }
     return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
@@ -1230,7 +1259,11 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
-      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
+      try {
+        return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: fullText });
+      } catch (e) {
+        console.error('[cmdColl] image send failed, falling back to text:', e.message);
+      }
     }
   }
 
@@ -1259,7 +1292,12 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
                     }
                 }
                 const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-                return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+                try {
+          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+        } catch (e) {
+          console.error('[cmdColl] card detail image send failed, falling back to text:', e.message);
+          return reply(caption);
+        }
             } catch (e) { return reply(caption); }
         }
     }
@@ -1300,7 +1338,11 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
+        try {
+          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: msg });
+        } catch (e) {
+          console.error('[cmdDeck] image send failed, falling back to text:', e.message);
+        }
     }
   }
 
@@ -2967,7 +3009,11 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
+        try {
+          return await sendImageWithTimeout(inst.sock_ref, chatId, { image: gifBuffer, caption: msg });
+        } catch (e) {
+          console.error('[cmdDeck] image send failed, falling back to text:', e.message);
+        }
     }
   }
 

@@ -95,12 +95,26 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 if (cardData.statPoints > 0) {
                     captionMsg += `\n✨ *${cardData.statPoints} Stat Points available!*\nUse \`${getPrefix()} allocate <stat> <amount>\` to assign them.`;
                 }
-                await sock.sendMessage(chatId, { 
-                    image: cardBuffer,
-                    caption: captionMsg,
-                    mentions: [senderJid]
-                });
-                return;
+                // 💡 CRITICAL FIX: wrap image send in 15s timeout.
+                // The GoService generates the image fine, but sending it
+                // to WhatsApp (media upload to mmg.whatsapp.net) hangs.
+                // If it doesn't send in 15s, fall through to text fallback.
+                try {
+                    const sendPromise = sock.sendMessage(chatId, {
+                        image: cardBuffer,
+                        caption: captionMsg,
+                        jpegThumbnail: Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=', 'base64'),
+                        mentions: [senderJid]
+                    });
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('char image send timed out after 15s')), 15000)
+                    );
+                    await Promise.race([sendPromise, timeoutPromise]);
+                    return;
+                } catch (sendErr) {
+                    console.error('[displayCharacterSheet] image send failed, falling back to text:', sendErr.message);
+                    // Fall through to text fallback below
+                }
             }
         }
     } catch (err) {
