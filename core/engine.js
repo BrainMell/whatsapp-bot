@@ -895,18 +895,28 @@ async function buildThumbnail(imgBuffer) {
 async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   if (!imageUrl) throw new Error("No imageUrl provided");
 
+  // 💡 CRITICAL: wrap all image sends in a 15s timeout.
+  // Baileys' media upload to mmg.whatsapp.net can hang indefinitely.
+  // Text sends work (WebSocket), but image sends require HTTP upload.
+  const withTimeout = (promise, ms = 15000, label = 'image send') =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms (media upload hung)`)), ms)
+      ),
+    ]);
+
   // Path 1 — URL send (fastest). Pass FALLBACK_THUMB as jpegThumbnail to
-  // skip Baileys' internal thumbnail generation. Baileys' thumbnail code
-  // requires sharp/jimp, and if both fail to load (e.g. sharp's native
-  // binary missing on the server), it throws "No image processing library
-  // available". Although Baileys catches this, passing a pre-made
-  // thumbnail avoids the entire code path and ensures the image renders
-  // with at least a placeholder blur preview.
+  // skip Baileys' internal thumbnail generation.
   try {
-    return await sock.sendMessage(
-      chatId,
-      { image: { url: imageUrl }, caption, jpegThumbnail: FALLBACK_THUMB },
-      { quoted: quotedMsg },
+    return await withTimeout(
+      sock.sendMessage(
+        chatId,
+        { image: { url: imageUrl }, caption, jpegThumbnail: FALLBACK_THUMB },
+        { quoted: quotedMsg },
+      ),
+      15000,
+      'sendImageSafe URL send'
     );
   } catch (urlErr) {
     console.warn(
@@ -935,10 +945,14 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   if (imgBuffer) {
     const thumb = await buildThumbnail(imgBuffer);
     try {
-      return await sock.sendMessage(
-        chatId,
-        { image: imgBuffer, caption, jpegThumbnail: thumb },
-        { quoted: quotedMsg },
+      return await withTimeout(
+        sock.sendMessage(
+          chatId,
+          { image: imgBuffer, caption, jpegThumbnail: thumb },
+          { quoted: quotedMsg },
+        ),
+        15000,
+        'sendImageSafe buffer send'
       );
     } catch (bufErr) {
       console.warn("[sendImageSafe] buffer send failed:", bufErr.message);
@@ -946,12 +960,14 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   }
 
   // Path 3 — last resort: retry URL send without thumbnail
-  // (the original URL send in path 1 may have failed due to a transient
-  // network issue; this gives it one more shot)
-  return await sock.sendMessage(
-    chatId,
-    { image: { url: imageUrl }, caption },
-    { quoted: quotedMsg },
+  return await withTimeout(
+    sock.sendMessage(
+      chatId,
+      { image: { url: imageUrl }, caption },
+      { quoted: quotedMsg },
+    ),
+    15000,
+    'sendImageSafe last-resort URL send'
   );
 }
 
@@ -4598,9 +4614,6 @@ What to do:
       console.log(`[sendMenuWithBanner] imagePath=${imagePath}, exists=${fs.existsSync(imagePath)}`);
 
       // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
-      // An EMPTY contextInfo object (contextInfo: {}) can cause WhatsApp
-      // to silently reject the message on some accounts. When
-      // NEWSLETTER_JID is null, we omit contextInfo entirely.
       const contextInfo = NEWSLETTER_JID ? {
         forwardingScore: 1,
         isForwarded: true,
@@ -4629,18 +4642,28 @@ What to do:
             jpegThumbnail: thumb,
           };
           if (contextInfo) msg.contextInfo = contextInfo;
-          const result = await sock.sendMessage(chatId, msg);
+
+          // 💡 CRITICAL FIX: wrap image send in a 15s timeout.
+          // The image send was HANGING indefinitely — Baileys' media
+          // upload to mmg.whatsapp.net never completes and never throws.
+          // Text sends work (they go over WebSocket), but image sends
+          // require an HTTP media upload that hangs. After 15s, give up
+          // and fall back to text so the user gets SOMETHING.
+          const sendPromise = sock.sendMessage(chatId, msg);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Image send timed out after 15s (media upload hung)')), 15000)
+          );
+          const result = await Promise.race([sendPromise, timeoutPromise]);
           console.log(`[sendMenuWithBanner] IMAGE SENT OK:`, JSON.stringify(result?.key || result?.status || 'no key'));
           return result;
         } catch (imgErr) {
           console.error("[sendMenuWithBanner] IMAGE SEND FAILED:", imgErr.message);
-          console.error("[sendMenuWithBanner] stack:", imgErr.stack?.split('\n').slice(0, 5).join('\n'));
+          console.error("[sendMenuWithBanner] falling back to TEXT");
         }
       } else {
         console.log(`[sendMenuWithBanner] banner file does NOT exist — skipping to text`);
       }
-      // 💡 FIX: always fall back to text if image doesn't exist OR image send fails.
-      // Don't include contextInfo if it's null (avoids empty-object rejection).
+      // Fall back to text
       console.log(`[sendMenuWithBanner] falling back to TEXT`);
       const botName = botConfig.getBotName();
       const botMarker = `🃏 *${botName}*\n\n`;
