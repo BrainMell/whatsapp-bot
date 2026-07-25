@@ -895,11 +895,17 @@ async function buildThumbnail(imgBuffer) {
 async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   if (!imageUrl) throw new Error("No imageUrl provided");
 
-  // Path 1 — URL send (fastest). Let WhatsApp fetch + Baileys thumbnail it.
+  // Path 1 — URL send (fastest). Pass FALLBACK_THUMB as jpegThumbnail to
+  // skip Baileys' internal thumbnail generation. Baileys' thumbnail code
+  // requires sharp/jimp, and if both fail to load (e.g. sharp's native
+  // binary missing on the server), it throws "No image processing library
+  // available". Although Baileys catches this, passing a pre-made
+  // thumbnail avoids the entire code path and ensures the image renders
+  // with at least a placeholder blur preview.
   try {
     return await sock.sendMessage(
       chatId,
-      { image: { url: imageUrl }, caption },
+      { image: { url: imageUrl }, caption, jpegThumbnail: FALLBACK_THUMB },
       { quoted: quotedMsg },
     );
   } catch (urlErr) {
@@ -1471,11 +1477,9 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 5)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          // 💡 FIX: route through sendImageSafe (passes jpegThumbnail to
+          // skip Baileys' sharp/jimp thumbnail generation, has fallbacks)
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -1496,11 +1500,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -1521,11 +1521,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -4600,8 +4596,9 @@ What to do:
       const imagePath = botConfig.getAssetPath("banner.png");
 
       // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
-      // If Jake's WA account doesn't have access to the newsletter,
-      // WhatsApp silently rejects the ENTIRE message.
+      // An EMPTY contextInfo object (contextInfo: {}) can cause WhatsApp
+      // to silently reject the message on some accounts. When
+      // NEWSLETTER_JID is null, we omit contextInfo entirely.
       const contextInfo = NEWSLETTER_JID ? {
         forwardingScore: 1,
         isForwarded: true,
@@ -4610,28 +4607,47 @@ What to do:
           newsletterName: botConfig.getBotName() + " Official",
           serverMessageId: -1,
         },
-      } : {};
+      } : null;
 
       if (fs.existsSync(imagePath)) {
         try {
-          return await sock.sendMessage(chatId, {
+          // 💡 FIX: pass jpegThumbnail explicitly to skip Baileys' internal
+          // thumbnail generation. Baileys tries to generate a thumbnail using
+          // sharp/jimp, and if both fail (e.g. sharp native binary missing
+          // on the server), it throws "No image processing library available".
+          // Although Baileys catches this error, the thumbnail-less image
+          // can still fail to render on some WhatsApp clients. Passing a
+          // pre-generated thumbnail (even a 1×1 fallback) avoids the entire
+          // sharp/jimp code path.
+          let thumb = FALLBACK_THUMB;
+          try {
+            const bannerBuf = fs.readFileSync(imagePath);
+            thumb = await buildThumbnail(bannerBuf);
+          } catch (e) {
+            console.warn('[sendMenuWithBanner] thumbnail generation failed, using fallback:', e.message);
+          }
+          const msg = {
             image: { url: imagePath },
             caption: text,
             mentions,
-            contextInfo,
-          });
+            jpegThumbnail: thumb,
+          };
+          if (contextInfo) msg.contextInfo = contextInfo;
+          return await sock.sendMessage(chatId, msg);
         } catch (imgErr) {
           console.error("Banner image send failed, falling back to text:", imgErr.message);
         }
       }
-      // 💡 FIX: always fall back to text if image doesn't exist OR image send fails
+      // 💡 FIX: always fall back to text if image doesn't exist OR image send fails.
+      // Don't include contextInfo if it's null (avoids empty-object rejection).
       const botName = botConfig.getBotName();
       const botMarker = `🃏 *${botName}*\n\n`;
-      return await sock.sendMessage(chatId, {
+      const textMsg = {
         text: botMarker + text,
         mentions,
-        contextInfo,
-      });
+      };
+      if (contextInfo) textMsg.contextInfo = contextInfo;
+      return await sock.sendMessage(chatId, textMsg);
     }
 
     // New dynamic menu function
@@ -4889,6 +4905,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await sock.sendMessage(chatId, {
                 image: { url: a.img },
                 caption: BOT_MARKER + message,
+                jpegThumbnail: FALLBACK_THUMB,
               });
               sent = true;
               console.log(`✅ Sent news IMAGE (via URL) to ${chatId}`);
@@ -17361,7 +17378,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           try {
                             await sock.sendMessage(
                               chatId,
-                              { image: { url: img } },
+                              { image: { url: img }, jpegThumbnail: FALLBACK_THUMB },
                               { quoted: m },
                             );
                             await new Promise((res) => setTimeout(res, 150));
@@ -17613,6 +17630,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                               chatId,
                               {
                                 image: { url: images[i] },
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17885,6 +17903,7 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: { url: imageUrl },
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17899,6 +17918,7 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: Buffer.from(imgRes.data),
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17959,6 +17979,7 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                               {
                                 image: { url: img },
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
