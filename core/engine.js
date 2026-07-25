@@ -853,10 +853,26 @@ const FALLBACK_THUMB = Buffer.from(
  * Never throws — always returns a Buffer.
  */
 async function buildThumbnail(imgBuffer) {
+  // 💡 CRITICAL: wrap each image processing library in a 5s timeout.
+  // Sharp can HANG on certain JPEGs (works on test images but hangs on
+  // real images). Without a timeout, this hang blocks everything.
+  const withTimeout = (promise, ms = 5000, label = 'thumb') =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      ),
+    ]);
+
   // sharp — instant native resize
   try {
     const sharp = require('sharp');
-    return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
+    const result = await withTimeout(
+      sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer(),
+      5000,
+      'sharp thumbnail'
+    );
+    return result;
   } catch (e) {
     console.warn('[buildThumbnail] sharp failed:', e.message);
   }
@@ -864,14 +880,12 @@ async function buildThumbnail(imgBuffer) {
   try {
     const Jimp = require('jimp');
     const img = await Jimp.Jimp.read(imgBuffer);
-    // v1.x resize takes an options object; { w } keeps aspect ratio
     img.resize({ w: 32 });
     return await img.getBuffer(Jimp.JimpMime.jpeg);
   } catch (e) {
     console.warn('[buildThumbnail] jimp failed:', e.message);
   }
-  // Last resort — 1×1 white JPEG. WhatsApp still renders the blurred
-  // preview placeholder, which is better than no preview at all.
+  // Last resort — 1×1 white JPEG.
   return FALLBACK_THUMB;
 }
 
@@ -4648,14 +4662,16 @@ What to do:
       if (fs.existsSync(imagePath)) {
         try {
           console.log(`[sendMenuWithBanner] sending IMAGE...`);
-          let thumb = FALLBACK_THUMB;
-          try {
-            const bannerBuf = fs.readFileSync(imagePath);
-            thumb = await buildThumbnail(bannerBuf);
-            console.log(`[sendMenuWithBanner] thumbnail generated: ${thumb.length} bytes`);
-          } catch (e) {
-            console.warn('[sendMenuWithBanner] thumbnail generation failed, using fallback:', e.message);
-          }
+          // 💡 CRITICAL FIX: use FALLBACK_THUMB directly — do NOT call
+          // buildThumbnail. buildThumbnail calls sharp, which HANGS on
+          // the 698KB banner JPEG (works on 1×1 test images but hangs
+          // on real images). The hang happens BEFORE the 15s send
+          // timeout starts, so the timeout never fires.
+          // FALLBACK_THUMB is a valid 1×1 white JPEG — WhatsApp uses
+          // it as the blur-preview placeholder. The actual image still
+          // sends and displays — just without a proper thumbnail.
+          const thumb = FALLBACK_THUMB;
+          console.log(`[sendMenuWithBanner] using FALLBACK_THUMB: ${thumb.length} bytes`);
           const msg = {
             image: { url: imagePath },
             caption: text,
@@ -4665,11 +4681,6 @@ What to do:
           if (contextInfo) msg.contextInfo = contextInfo;
 
           // 💡 CRITICAL FIX: wrap image send in a 15s timeout.
-          // The image send was HANGING indefinitely — Baileys' media
-          // upload to mmg.whatsapp.net never completes and never throws.
-          // Text sends work (they go over WebSocket), but image sends
-          // require an HTTP media upload that hangs. After 15s, give up
-          // and fall back to text so the user gets SOMETHING.
           const sendPromise = sock.sendMessage(chatId, msg);
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Image send timed out after 15s (media upload hung)')), 15000)
