@@ -13,19 +13,46 @@ const axios   = require('axios');
 const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 
-// 💡 CRITICAL FIX: helper to send images with a 15s timeout.
-// The GoService generates images fine, but sending them to WhatsApp
-// (media upload to mmg.whatsapp.net) can hang indefinitely.
-// This helper wraps sock.sendMessage in a 15s Promise.race timeout.
-// If the image doesn't send in 15s, it rejects so the caller can fall
-// back to text. Returns the send result on success.
+// 💡 CRITICAL FIX: helper to send images.
+// The banner (.jk menu) works because it uses `image: { url: filePath }`.
+// GoService images hang because they use `image: buffer`.
+// FIX: write the buffer to a temp file, then send via file path —
+// same code path as the working banner send.
 const FALLBACK_THUMB_BUFFER = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=', 'base64');
+const os = require('os');
+const pathMod = require('path');
 
 async function sendImageWithTimeout(sock, chatId, content, options = {}, timeoutMs = 15000) {
   // Ensure jpegThumbnail is set to skip Baileys' sharp/jimp thumbnail generation
   if (content.image && !content.jpegThumbnail) {
     content.jpegThumbnail = FALLBACK_THUMB_BUFFER;
   }
+
+  // 💡 KEY FIX: if image is a Buffer, write it to a temp file and send
+  // via { url: filePath } instead. The banner send works because it
+  // uses a file path. Buffer sends hang. Converting buffer→file→send
+  // uses the same (working) code path as the banner.
+  if (Buffer.isBuffer(content.image)) {
+    try {
+      const tmpPath = pathMod.join(os.tmpdir(), `wa_img_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`);
+      fs.writeFileSync(tmpPath, content.image);
+      const oldImage = content.image;
+      content.image = { url: tmpPath };
+      console.log(`[sendImageWithTimeout] converted buffer (${oldImage.length} bytes) to temp file: ${tmpPath}`);
+      const sendPromise = sock.sendMessage(chatId, content, options);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`image send timed out after ${timeoutMs}ms`)), timeoutMs)
+      );
+      const result = await Promise.race([sendPromise, timeoutPromise]);
+      // Clean up temp file
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      return result;
+    } catch (e) {
+      console.error('[sendImageWithTimeout] buffer→file conversion failed, trying direct buffer send:', e.message);
+      // Fall through to direct buffer send below
+    }
+  }
+
   const sendPromise = sock.sendMessage(chatId, content, options);
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`image send timed out after ${timeoutMs}ms`)), timeoutMs)
