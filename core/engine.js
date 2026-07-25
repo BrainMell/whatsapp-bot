@@ -2706,12 +2706,33 @@ What to do:
           }
 
           try {
-            const res = await rawSend(item.jid, item.content, item.options);
+            // 💡 CRITICAL FIX: wrap rawSend in a 20s timeout.
+            // Baileys' media upload to mmg.whatsapp.net can hang
+            // INDEFINITELY — never resolves, never rejects. This blocks
+            // the entire sequential queue, so all subsequent messages
+            // (including text fallbacks) never get sent.
+            // After 20s, treat it as a permanent error and move on.
+            const SEND_TIMEOUT_MS = 20000;
+            const sendPromise = rawSend(item.jid, item.content, item.options);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS}s (media upload hung — queue was blocked)`)), SEND_TIMEOUT_MS)
+            );
+            const res = await Promise.race([sendPromise, timeoutPromise]);
             queue.shift();
             item.resolve(res);
             await sleep(SEND_GAP_MS);
           } catch (err) {
             item.retries += 1;
+
+            // 💡 Timeout errors are NOT connection errors — don't retry.
+            // The media upload is permanently broken. Drop the message
+            // so the queue can process subsequent sends.
+            if (err.message?.includes('timed out')) {
+              console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
+              queue.shift();
+              item.reject(err);
+              continue;
+            }
 
             // Connection issues: pause and wait for reconnect; keep message at front
             if (isConnError(err)) {
