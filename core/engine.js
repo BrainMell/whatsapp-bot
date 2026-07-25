@@ -6006,7 +6006,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await botConfig.storage.run(configInstance, async () => {
                 try {
                   const rawChatId = m.key.remoteJid;
-                  const chatId = jidNormalizedUser(rawChatId);
+                  // 💡 CRITICAL FIX: resolve @lid → @s.whatsapp.net for DMs.
+                  // WhatsApp on Oracle uses LID (Linked Identity) for DMs.
+                  // Text messages deliver fine to @lid (WebSocket), but
+                  // media uploads (images) are accepted by WhatsApp but
+                  // NOT delivered to @lid addresses. Converting @lid →
+                  // @s.whatsapp.net ensures media actually reaches the user.
+                  // Groups (@g.us) are left as-is — LID doesn't apply.
+                  let chatId = jidNormalizedUser(rawChatId);
+                  if (chatId.endsWith('@lid')) {
+                    const phoneJid = resolveLidToPhone(chatId, configInstance.getAuthPath());
+                    if (phoneJid && phoneJid.endsWith('@s.whatsapp.net')) {
+                      console.log(`[chatId] resolved ${chatId} → ${phoneJid} (LID→phone for media delivery)`);
+                      chatId = phoneJid;
+                    }
+                  }
                   let senderJid = jidNormalizedUser(
                     m.key.participant || rawChatId,
                   );
