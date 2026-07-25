@@ -19,9 +19,41 @@ jobs:
           script: |
             export PATH=$PATH:/usr/local/go/bin
             cd ~/whatsapp-bot
+
+            # ── BACKUP AUTH FILES ────────────────────────────────────────
+            # Auth files (instances/*/auth/) are runtime-modified by the
+            # running bot and are NOT tracked in git (see .gitignore).
+            # But they WERE tracked until commit (this one), so on Oracle
+            # they're still in git's index. `git reset --hard` below would
+            # DELETE any file that was tracked at the old HEAD but is not
+            # in the new HEAD — including auth files. We back them up first
+            # and restore them after the reset so the bot keeps its session.
+            AUTH_BACKUP=/tmp/auth_backup_$(date +%s).tar.gz
+            if [ -d "instances/Jake/auth" ]; then
+              tar czf "$AUTH_BACKUP" instances/*/auth/ 2>/dev/null || true
+              echo "Backed up auth files to $AUTH_BACKUP"
+            fi
+
+            # ── FORCE-UPDATE CODE ────────────────────────────────────────
+            # `git pull --ff-only` was ABORTING on every previous deploy
+            # because auth files were tracked AND locally modified. This
+            # left the bot running stale code while GitHub Actions reported
+            # success. Switching to `git reset --hard` force-updates the
+            # working tree to match origin, discarding local changes.
             git fetch origin
-            git checkout ${{ github.ref_name }}
-            git pull --ff-only origin ${{ github.ref_name }}
+            git reset --hard "origin/${{ github.ref_name }}"
+            echo "Code updated to $(git rev-parse --short HEAD)"
+
+            # ── RESTORE AUTH FILES ───────────────────────────────────────
+            if [ -f "$AUTH_BACKUP" ]; then
+              tar xzf "$AUTH_BACKUP"
+              rm "$AUTH_BACKUP"
+              echo "Restored auth files"
+            fi
+
             npm install
             pm2 restart whatsapp-bot
 
+            # ── VERIFY ───────────────────────────────────────────────────
+            echo "Deployed HEAD: $(git rev-parse --short HEAD)"
+            echo "Deployed commit: $(git log -1 --format='%s')"

@@ -21,3 +21,17 @@ ImageGenScrapes
 # Assets and Generated
 *.exe
 *.logscripts/backups/
+
+# ── WhatsApp Session Auth (CRITICAL — never delete, never track) ───────
+# Baileys stores session keys here. These files are modified at runtime
+# by the running bot, so tracking them in git causes `git pull` to fail
+# on every deploy ("Your local changes would be overwritten by merge").
+# This is what broke every deploy since commit 72d980a1 — the bot was
+# stuck running old code while every "successful" GitHub Action was
+# actually a no-op deploy.
+instances/*/auth/
+instances/*/auth/**
+
+# Runtime-generated per-instance data (safe to exclude from git)
+instances/*/database/
+instances/*/downloads/
