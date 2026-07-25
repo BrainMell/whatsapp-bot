@@ -20,6 +20,21 @@ jobs:
             export PATH=$PATH:/usr/local/go/bin
             cd ~/whatsapp-bot
 
+            # ── DUMP EXISTING PM2 LOGS BEFORE RESTART ────────────────────
+            # PM2 log files persist across restarts. Dump them NOW so we
+            # can see what happened when the user sent commands before
+            # this deploy. Grep for relevant keywords.
+            echo "=============================================="
+            echo "=== PRE-RESTART PM2 LOGS (last 500 lines) ==="
+            echo "=== OUT LOG (last 500 lines) ==="
+            tail -500 ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -500
+            echo "=== ERR LOG (last 500 lines) ==="
+            tail -500 ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -500
+            echo "=== GREP: Skipping message / Pipeline:4 / sendMenuWithBanner / diag / CMD DETECTED ==="
+            grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -100
+            grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -100
+            echo "=============================================="
+
             # ── BACKUP AUTH FILES ────────────────────────────────────────
             AUTH_BACKUP=/tmp/auth_backup_$(date +%s).tar.gz
             if [ -d "instances/Jake/auth" ]; then
@@ -48,33 +63,15 @@ jobs:
             echo "Deployed HEAD: $(git rev-parse --short HEAD)"
             echo "Deployed commit: $(git log -1 --format='%s')"
 
-            # ── DIAGNOSTICS (wait for bot to boot, then dump state) ──────
             echo "=== Waiting 20s for bot to boot ==="
             sleep 20
 
-            echo "=== NODE VERSION ==="
-            node --version
-
-            echo "=== AUTH FILES (proof they're on the server) ==="
+            echo "=== AUTH FILES ==="
             echo "Auth dir exists: $(test -d instances/Jake/auth && echo YES || echo NO)"
             echo "Auth file count: $(ls instances/Jake/auth/ 2>/dev/null | wc -l)"
-            ls -la instances/Jake/auth/creds.json 2>&1
-            ls -la instances/Jake/auth/ 2>&1 | head -10
-
-            echo "=== BANNER FILE ==="
-            ls -la instances/Jake/assets/banner.png 2>&1
-            file instances/Jake/assets/banner.png 2>&1
-            echo "Banner size: $(wc -c < instances/Jake/assets/banner.png 2>/dev/null) bytes"
 
             echo "=== SHARP CHECK ==="
             node -e "try { const s = require('sharp'); s({create:{width:1,height:1,channels:3,background:{r:255,g:255,b:255}}}).jpeg().toBuffer().then(b => console.log('sharp WORKS, test buffer:', b.length, 'bytes')).catch(e => console.log('sharp PROCESS FAIL:', e.message)); } catch(e) { console.log('sharp LOAD FAIL:', e.message); }" 2>&1
-
-            echo "=== JIMP CHECK ==="
-            node -e "try { const j = require('jimp'); console.log('jimp loads OK, Jimp type:', typeof j.Jimp); } catch(e) { console.log('jimp FAIL:', e.message); }" 2>&1
-
-            echo "=== SHARP NATIVE BINARY CHECK ==="
-            ls -la node_modules/@img/sharp-linux-x64/ 2>&1 | head -5
-            ls -la node_modules/@img/sharp-libvips-linux-x64/ 2>&1 | head -5
 
             echo "=== SYNTAX CHECK ==="
             node -c core/engine.js 2>&1 && echo "engine.js syntax OK" || echo "engine.js SYNTAX ERROR"
@@ -82,8 +79,8 @@ jobs:
             echo "=== PM2 STATUS ==="
             pm2 list 2>&1
 
-            echo "=== PM2 LOGS (last 200 lines, combined out+err) ==="
-            pm2 logs whatsapp-bot --lines 200 --nostream 2>&1 | tail -200
+            echo "=== POST-RESTART PM2 LOGS (last 100 lines) ==="
+            pm2 logs whatsapp-bot --lines 100 --nostream 2>&1 | tail -100
 
             echo "=============================================="
             echo "✅ Diagnostics complete."

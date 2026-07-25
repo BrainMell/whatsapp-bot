@@ -6805,11 +6805,28 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // ═══════════════════════════════════════════════════════════
+                    // 💡 MINIMAL TEST — .j test
+                    // Simplest possible command. Just sends "test ok".
+                    // If THIS doesn't work, the issue is in command dispatch.
+                    // ═══════════════════════════════════════════════════════════
+                    if (primaryCmd === "test") {
+                      console.log(`🧪 [TEST] handler reached for primaryCmd="test"`);
+                      try {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ test ok — command dispatch works" });
+                      } catch (e) {
+                        console.error(`🧪 [TEST] send failed:`, e.message);
+                        return;
+                      }
+                    }
+
+                    // ═══════════════════════════════════════════════════════════
                     // 💡 DIAGNOSTIC COMMAND — .j diag
                     // Tests every layer of image sending and reports back.
                     // Use this to debug image/media issues in real-time.
                     // ═══════════════════════════════════════════════════════════
                     if (primaryCmd === "diag") {
+                      console.log(`🔍 [DIAG] handler reached for primaryCmd="diag"`);
+                      try {
                       const results = [];
                       results.push("🔍 *IMAGE PIPELINE DIAGNOSTIC*");
                       results.push("━━━━━━━━━━━━━━━━━━━");
@@ -6922,6 +6939,13 @@ _💡 Reply with another number from your search list!_`.trim();
 
                       // Final summary
                       await sock.sendMessage(chatId, { text: BOT_MARKER + "━━━━━━━━━━━━━━━━━━━\n📋 Diagnostic complete. Check which tests passed/failed above and report back." });
+                      } catch (diagErr) {
+                        console.error(`🔍 [DIAG] FATAL ERROR in diag handler:`, diagErr.message);
+                        console.error(`🔍 [DIAG] stack:`, diagErr.stack?.split('\n').slice(0, 8).join('\n'));
+                        try {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `🔍 DIAG FATAL ERROR: ${diagErr.message}` });
+                        } catch (_) {}
+                      }
                       return;
                     }
 
@@ -25084,8 +25108,14 @@ _(Or reply to their message)_
                     err.message?.includes("MAC")
                   )
                     return;
-                  console.log("⚠️️ Skipping message:", err.message);
-                  console.log("⚠️️ Stack:", err.stack?.split('\n').slice(0, 5).join('\n'));
+                  console.error("🔴🔴🔴 SKIPPING MESSAGE (FATAL):", err.message);
+                  console.error("🔴🔴🔴 FULL STACK:", err.stack);
+                  console.error("🔴🔴🔴 Message that caused this:", JSON.stringify(txt?.slice(0, 100)));
+                  console.error("🔴🔴🔴 Sender:", senderJid, "Chat:", chatId);
+                  // 💡 Also send the error to the user so they can see it
+                  try {
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
+                  } catch (_) {}
                 }
               }); // END storage.run
             }),
