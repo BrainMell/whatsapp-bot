@@ -809,6 +809,146 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // 5 minutes
 
+// ════════════════════════════════════════════════════════════════════════
+// 💡 MEDIA PIPELINE (module scope)
+// ════════════════════════════════════════════════════════════════════════
+// These helpers used to live INSIDE the message-upsert callback (deeply
+// nested at indent 20), which meant that top-level handlers like
+// `handleAnimeTrending`, `handleImgCommand`, etc. (defined at indent 4
+// inside the storage.run callback) COULD NOT SEE them. Any call to
+// `sendImageSafe(...)` from those handlers silently threw
+// `ReferenceError: sendImageSafe is not defined` — caught by the
+// outer try/catch and surfaced to the user as a generic
+// "Could not fetch..." error, with no image ever being sent.
+//
+// Moving them to module scope fixes every anime/img/nsfw/adult command
+// in one shot. They have no closure dependencies — only `axios`
+// (module-level import) and the parameters passed in.
+//
+// Additional fixes:
+//   • Jimp fallback was using the v0.x API (Jimp.read / Jimp.AUTO /
+//     Jimp.MIME_JPEG / img.resize(w, AUTO) / img.getBufferAsync) on a
+//     v1.x install — every call threw. Updated to the v1.x API
+//     (Jimp.Jimp.read / Jimp.JimpMime.jpeg / img.resize({w}) /
+//     img.getBuffer).
+//   • sendImageSafe now tries the URL send FIRST (fastest path, lets
+//     WhatsApp fetch the image directly), then falls back to
+//     download+buffer+thumbnail. The previous "always download first"
+//     behaviour added a 15s latency to every anime command.
+//   • Diagnostic logging on every fallback so failures are visible
+//     in the PM2 log instead of being silently swallowed.
+// ════════════════════════════════════════════════════════════════════════
+
+// Minimal valid 1×1 white JPEG — used as thumbnail fallback when sharp
+// and jimp both fail. WhatsApp just needs *any* non-empty jpegThumbnail
+// to render the blurred preview before the full image downloads.
+const FALLBACK_THUMB = Buffer.from(
+  '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=',
+  'base64'
+);
+
+/**
+ * Generate a 32px JPEG thumbnail from an image buffer.
+ * Tries sharp (fastest, native) → jimp v1.x → hardcoded 1×1 fallback.
+ * Never throws — always returns a Buffer.
+ */
+async function buildThumbnail(imgBuffer) {
+  // sharp — instant native resize
+  try {
+    const sharp = require('sharp');
+    return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
+  } catch (e) {
+    console.warn('[buildThumbnail] sharp failed:', e.message);
+  }
+  // jimp v1.x — pure-JS fallback
+  try {
+    const Jimp = require('jimp');
+    const img = await Jimp.Jimp.read(imgBuffer);
+    // v1.x resize takes an options object; { w } keeps aspect ratio
+    img.resize({ w: 32 });
+    return await img.getBuffer(Jimp.JimpMime.jpeg);
+  } catch (e) {
+    console.warn('[buildThumbnail] jimp failed:', e.message);
+  }
+  // Last resort — 1×1 white JPEG. WhatsApp still renders the blurred
+  // preview placeholder, which is better than no preview at all.
+  return FALLBACK_THUMB;
+}
+
+/**
+ * Send an image to a chat with multiple fallback layers.
+ *
+ * Flow:
+ *   1. Try sending by URL (fastest — WhatsApp fetches it directly).
+ *      Baileys will auto-generate a thumbnail using sharp/jimp.
+ *   2. If URL send fails, download the image ourselves, generate a
+ *      32px JPEG thumbnail, and send as a buffer with jpegThumbnail
+ *      attached (so WhatsApp shows the blurred preview).
+ *   3. If the download also fails, retry the URL send without any
+ *      thumbnail (last resort — may render without a preview, but
+ *      the message will at least arrive).
+ *
+ * Never throws — always attempts at least one send. If ALL sends
+ * fail, the last error propagates so the caller's catch block can
+ * surface a user-visible message.
+ */
+async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
+  if (!imageUrl) throw new Error("No imageUrl provided");
+
+  // Path 1 — URL send (fastest). Let WhatsApp fetch + Baileys thumbnail it.
+  try {
+    return await sock.sendMessage(
+      chatId,
+      { image: { url: imageUrl }, caption },
+      { quoted: quotedMsg },
+    );
+  } catch (urlErr) {
+    console.warn(
+      `[sendImageSafe] URL send failed (${imageUrl?.slice(0, 80)}):`,
+      urlErr.message,
+    );
+  }
+
+  // Path 2 — download + buffer + explicit jpegThumbnail
+  let imgBuffer = null;
+  try {
+    const resp = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000,
+      maxContentLength: 10 * 1024 * 1024,
+    });
+    imgBuffer = Buffer.from(resp.data);
+  } catch (dlErr) {
+    console.warn(
+      `[sendImageSafe] download failed (${imageUrl?.slice(0, 80)}):`,
+      dlErr.message,
+    );
+  }
+
+  if (imgBuffer) {
+    const thumb = await buildThumbnail(imgBuffer);
+    try {
+      return await sock.sendMessage(
+        chatId,
+        { image: imgBuffer, caption, jpegThumbnail: thumb },
+        { quoted: quotedMsg },
+      );
+    } catch (bufErr) {
+      console.warn("[sendImageSafe] buffer send failed:", bufErr.message);
+    }
+  }
+
+  // Path 3 — last resort: retry URL send without thumbnail
+  // (the original URL send in path 1 may have failed due to a transient
+  // network issue; this gives it one more shot)
+  return await sock.sendMessage(
+    chatId,
+    { image: { url: imageUrl }, caption },
+    { quoted: quotedMsg },
+  );
+}
+
 async function startBot(configInstance) {
   let sock;
   let qrShown = false;
@@ -17862,78 +18002,11 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                       }
                     }
 
-                    // Minimal valid 1×1 white JPEG — used as thumbnail fallback
-                    // when sharp/jimp aren't available. WhatsApp just needs *any*
-                    // non-empty jpegThumbnail to show the blurred preview.
-                    const FALLBACK_THUMB = Buffer.from(
-                      '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=',
-                      'base64'
-                    );
-
-                    async function buildThumbnail(imgBuffer) {
-                      try {
-                        // Attempt sharp first (fastest)
-                        const sharp = require('sharp');
-                        return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
-                      } catch (_) {}
-                      try {
-                        // Attempt jimp fallback
-                        const Jimp = require('jimp');
-                        const img = await Jimp.read(imgBuffer);
-                        img.resize(32, Jimp.AUTO);
-                        return await img.getBufferAsync(Jimp.MIME_JPEG);
-                      } catch (_) {}
-                      return FALLBACK_THUMB;
-                    }
-
-                    async function sendImageSafe(
-                      sock,
-                      chatId,
-                      imageUrl,
-                      caption,
-                      quotedMsg,
-                    ) {
-                      if (!imageUrl) throw new Error("No imageUrl provided");
-
-                      // Always download the buffer so we can generate a thumbnail
-                      // (WhatsApp requires jpegThumbnail for the blurred preview)
-                      let imgBuffer = null;
-                      try {
-                        const resp = await axios.get(imageUrl, {
-                          responseType: "arraybuffer",
-                          headers: { "User-Agent": "Mozilla/5.0" },
-                          timeout: 15000,
-                          maxContentLength: 10 * 1024 * 1024,
-                        });
-                        imgBuffer = Buffer.from(resp.data);
-                      } catch (_) {}
-
-                      const thumb = imgBuffer ? await buildThumbnail(imgBuffer) : FALLBACK_THUMB;
-
-                      try {
-                        if (imgBuffer) {
-                          await sock.sendMessage(
-                            chatId,
-                            { image: imgBuffer, caption, jpegThumbnail: thumb },
-                            { quoted: quotedMsg },
-                          );
-                        } else {
-                          // Couldn't download — send by URL with fallback thumb
-                          await sock.sendMessage(
-                            chatId,
-                            { image: { url: imageUrl }, caption, jpegThumbnail: thumb },
-                            { quoted: quotedMsg },
-                          );
-                        }
-                      } catch (err) {
-                        // Last resort: URL-only with no thumbnail
-                        await sock.sendMessage(
-                          chatId,
-                          { image: { url: imageUrl }, caption },
-                          { quoted: quotedMsg },
-                        );
-                      }
-                    }
+                    // NOTE: sendImageSafe / buildThumbnail / FALLBACK_THUMB are now
+                    // defined at module scope (above startBot) so they can be
+                    // called from ANY handler — including handleAnimeTrending and
+                    // the other top-level handlers that previously couldn't see
+                    // them and silently threw ReferenceError.
 
                     // --------------------------
                     // Search caches (by chat and by specific message id)
