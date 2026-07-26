@@ -1352,6 +1352,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     let gifBuffer;
     let hybridContentType = null;
+    let hybridMP4Buffer = null; // populated when hybrid returns MP4 — sent as separate video
     if (cached && cached.hash === currentHash && !useHybridAnim) {
         // Only use cache for static grid (hybrid is animated, don't cache — re-render each time)
         console.log(`🃏 [cmdColl] using cached grid buffer`);
@@ -1365,6 +1366,28 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
           console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer.length} bytes (${hybridContentType})`);
+
+          // 💡 FIX 2026-07-27: WhatsApp displays VIDEOS smaller than IMAGES in the chat.
+          // If the hybrid returned an MP4 (animated), we ALSO need the static PNG to
+          // send as the main full-width image with caption. The MP4 goes as a separate
+          // follow-up video (no caption) so the user sees both: full-size grid + animation.
+          if (hybridContentType && hybridContentType.includes('video')) {
+            hybridMP4Buffer = gifBuffer; // save the MP4 for the follow-up message
+            // Get the static PNG — try cache first, then call the static endpoint
+            const staticCache = gifCache.collections.get(senderJid);
+            if (staticCache && staticCache.hash === currentHash) {
+              console.log(`🃏 [cmdColl] using cached static PNG for main image`);
+              gifBuffer = staticCache.buffer;
+            } else {
+              console.log(`🃏 [cmdColl] fetching static PNG for main image (hybrid returned MP4)`);
+              const staticBuf = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
+              if (staticBuf) {
+                gifBuffer = staticBuf;
+                gifCache.collections.set(senderJid, { hash: currentHash, buffer: staticBuf });
+              }
+              // If static fetch fails, fall back to sending the MP4 as the main message
+            }
+          }
         } else {
           console.log(`🃏 [cmdColl] generateHybridGrid returned null`);
         }
@@ -1377,12 +1400,21 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      if (useHybridAnim && hybridMP4Buffer) {
+        // 💡 Hybrid returned an MP4 — send the static PNG as the main image (full-width
+        // with caption), then send the MP4 as a follow-up video (no caption, just animation).
+        // This matches the OLD .jk coll display size (full-width image + caption).
+        console.log(`🃏 [cmdColl] sending image (static) with caption + follow-up video (hybrid)`);
+        await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
+        // Small delay so WhatsApp orders them correctly (image first, video second)
+        await new Promise(r => setTimeout(r, 500));
+        return await inst.sock_ref.sendMessage(chatId, { video: hybridMP4Buffer, gifPlayback: true });
+      }
       if (useHybridAnim) {
-        // 💡 Hybrid may return MP4 (animated) or PNG (no animated cards).
-        // Send accordingly — WhatsApp handles both { video } and { image }.
+        // Hybrid returned a PNG (no animated cards) — send as image, same as static path
         const isVideo = hybridContentType && hybridContentType.includes('video');
-        console.log(`🃏 [cmdColl] sending ${isVideo ? 'video' : 'image'} (hybrid) with caption`);
         if (isVideo) {
+          // Shouldn't reach here (hybridMP4Buffer case above handles it), but just in case
           return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: fullText });
         }
         return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
@@ -1471,14 +1503,28 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 
     let gifBuffer;
     let hybridContentType = null;
+    let hybridMP4Buffer = null;
     if (cached && cached.hash === currentHash && !useHybridAnim) {
         gifBuffer = cached.buffer;
     } else if (useHybridAnim) {
-        // 💡 FEATURE 2026-07-27: hybrid animated grid — styled static grid + animated overlays.
         const hybridResult = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
         if (hybridResult) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
+          // 💡 Same WhatsApp display fix as cmdColl: if hybrid returned MP4, also fetch static PNG
+          if (hybridContentType && hybridContentType.includes('video')) {
+            hybridMP4Buffer = gifBuffer;
+            const staticCache = gifCache.decks.get(`${senderJid}_main`);
+            if (staticCache && staticCache.hash === currentHash) {
+              gifBuffer = staticCache.buffer;
+            } else {
+              const staticBuf = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
+              if (staticBuf) {
+                gifBuffer = staticBuf;
+                gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: staticBuf });
+              }
+            }
+          }
         }
         // Don't cache hybrid (see cmdColl comment)
     } else {
@@ -1487,6 +1533,12 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
+        if (useHybridAnim && hybridMP4Buffer) {
+          // Send static PNG (full-width image with caption) + follow-up MP4 (animation)
+          await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
+          await new Promise(r => setTimeout(r, 500));
+          return await inst.sock_ref.sendMessage(chatId, { video: hybridMP4Buffer, gifPlayback: true });
+        }
         if (useHybridAnim) {
           const isVideo = hybridContentType && hybridContentType.includes('video');
           if (isVideo) {
