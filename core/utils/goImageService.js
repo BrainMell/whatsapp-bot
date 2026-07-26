@@ -106,16 +106,22 @@ class GoImageService {
       return res.data;
     } catch (error) {
       // 💡 FIX 2026-07-26: log the ACTUAL error, not just "null". The
-      // deploy's curl test shows the Go service IS reachable, but the
-      // bot's axios healthCheck returns null. We need to see WHY axios
-      // is failing when curl succeeds. Possible causes:
-      //   - axios respecting HTTP_PROXY/NO_PROXY env vars that curl doesn't
-      //   - axios DNS resolution differs from curl
-      //   - axios connection reuse issue (stale keep-alive)
-      //   - the Go service rejecting axios's User-Agent or headers
-      console.error(`[GoService] healthCheck ERROR: ${error.code || error.constructor.name}: ${error.message}`);
+      // deploy's curl + axios + node-http tests ALL succeed, but the bot's
+      // axios healthCheck returns null. We need to see the exact error.
+      console.error(`[GoService] healthCheck ERROR:`);
+      console.error(`  code: ${error.code || 'N/A'}`);
+      console.error(`  message: ${error.message}`);
+      console.error(`  syscall: ${error.syscall || 'N/A'}`);
+      console.error(`  errno: ${error.errno || 'N/A'}`);
+      console.error(`  address: ${error.address || 'N/A'}`);
+      console.error(`  port: ${error.port || 'N/A'}`);
       if (error.response) {
-        console.error(`[GoService]   response status: ${error.response.status}, data: ${JSON.stringify(error.response.data).slice(0, 200)}`);
+        console.error(`  response status: ${error.response.status}`);
+        console.error(`  response data: ${JSON.stringify(error.response.data).slice(0, 200)}`);
+      }
+      if (error.request) {
+        console.error(`  request method: ${error.request.method || 'N/A'}`);
+        console.error(`  request path: ${error.request.path || 'N/A'}`);
       }
       return null;
     }
