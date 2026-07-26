@@ -110,24 +110,6 @@ jobs:
             echo "=== PM2 STATUS ==="
             pm2 list 2>&1
 
-            echo "=== GO SERVICE DIAGNOSTICS ==="
-            echo "--- PM2 process tree (all 3 services) ---"
-            pm2 describe bot-generation-go 2>&1 | head -30
-            echo "--- Port 7860 listening? ---"
-            ss -tlnp 2>&1 | grep 7860 || echo "NOTHING listening on port 7860"
-            echo "--- Curl GoService /health (5s timeout) ---"
-            curl -sS --max-time 5 http://127.0.0.1:7860/health 2>&1 || echo "CURL FAILED"
-            echo ""
-            echo "--- Curl GoService / (root, 5s timeout) ---"
-            curl -sS --max-time 5 http://127.0.0.1:7860/ 2>&1 || echo "CURL FAILED"
-            echo ""
-            echo "--- Go service logs (last 50 lines) ---"
-            tail -50 ~/.pm2/logs/bot-generation-go-out.log 2>&1 | tail -30
-            echo "--- Go service error logs (last 50 lines) ---"
-            tail -50 ~/.pm2/logs/bot-generation-go-error.log 2>&1 | tail -30
-            echo "--- scraper service logs (last 20 lines) ---"
-            tail -20 ~/.pm2/logs/bot-generation-scraper-out.log 2>&1 | tail -10
-
             echo "=== POST-RESTART PM2 LOGS (last 100 lines) ==="
             pm2 logs whatsapp-bot --lines 100 --nostream 2>&1 | tail -100
 

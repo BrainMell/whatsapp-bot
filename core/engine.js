@@ -853,10 +853,26 @@ const FALLBACK_THUMB = Buffer.from(
  * Never throws — always returns a Buffer.
  */
 async function buildThumbnail(imgBuffer) {
+  // 💡 CRITICAL: wrap each image processing library in a 5s timeout.
+  // Sharp can HANG on certain JPEGs (works on test images but hangs on
+  // real images). Without a timeout, this hang blocks everything.
+  const withTimeout = (promise, ms = 5000, label = 'thumb') =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      ),
+    ]);
+
   // sharp — instant native resize
   try {
     const sharp = require('sharp');
-    return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
+    const result = await withTimeout(
+      sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer(),
+      5000,
+      'sharp thumbnail'
+    );
+    return result;
   } catch (e) {
     console.warn('[buildThumbnail] sharp failed:', e.message);
   }
@@ -864,14 +880,12 @@ async function buildThumbnail(imgBuffer) {
   try {
     const Jimp = require('jimp');
     const img = await Jimp.Jimp.read(imgBuffer);
-    // v1.x resize takes an options object; { w } keeps aspect ratio
     img.resize({ w: 32 });
     return await img.getBuffer(Jimp.JimpMime.jpeg);
   } catch (e) {
     console.warn('[buildThumbnail] jimp failed:', e.message);
   }
-  // Last resort — 1×1 white JPEG. WhatsApp still renders the blurred
-  // preview placeholder, which is better than no preview at all.
+  // Last resort — 1×1 white JPEG.
   return FALLBACK_THUMB;
 }
 
@@ -895,12 +909,28 @@ async function buildThumbnail(imgBuffer) {
 async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   if (!imageUrl) throw new Error("No imageUrl provided");
 
-  // Path 1 — URL send (fastest). Let WhatsApp fetch + Baileys thumbnail it.
+  // 💡 CRITICAL: wrap all image sends in a 15s timeout.
+  // Baileys' media upload to mmg.whatsapp.net can hang indefinitely.
+  // Text sends work (WebSocket), but image sends require HTTP upload.
+  const withTimeout = (promise, ms = 15000, label = 'image send') =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms (media upload hung)`)), ms)
+      ),
+    ]);
+
+  // Path 1 — URL send (fastest). Pass FALLBACK_THUMB as jpegThumbnail to
+  // skip Baileys' internal thumbnail generation.
   try {
-    return await sock.sendMessage(
-      chatId,
-      { image: { url: imageUrl }, caption },
-      { quoted: quotedMsg },
+    return await withTimeout(
+      sock.sendMessage(
+        chatId,
+        { image: { url: imageUrl }, caption, jpegThumbnail: FALLBACK_THUMB },
+        { quoted: quotedMsg },
+      ),
+      15000,
+      'sendImageSafe URL send'
     );
   } catch (urlErr) {
     console.warn(
@@ -929,10 +959,14 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   if (imgBuffer) {
     const thumb = await buildThumbnail(imgBuffer);
     try {
-      return await sock.sendMessage(
-        chatId,
-        { image: imgBuffer, caption, jpegThumbnail: thumb },
-        { quoted: quotedMsg },
+      return await withTimeout(
+        sock.sendMessage(
+          chatId,
+          { image: imgBuffer, caption, jpegThumbnail: thumb },
+          { quoted: quotedMsg },
+        ),
+        15000,
+        'sendImageSafe buffer send'
       );
     } catch (bufErr) {
       console.warn("[sendImageSafe] buffer send failed:", bufErr.message);
@@ -940,12 +974,14 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   }
 
   // Path 3 — last resort: retry URL send without thumbnail
-  // (the original URL send in path 1 may have failed due to a transient
-  // network issue; this gives it one more shot)
-  return await sock.sendMessage(
-    chatId,
-    { image: { url: imageUrl }, caption },
-    { quoted: quotedMsg },
+  return await withTimeout(
+    sock.sendMessage(
+      chatId,
+      { image: { url: imageUrl }, caption },
+      { quoted: quotedMsg },
+    ),
+    15000,
+    'sendImageSafe last-resort URL send'
   );
 }
 
@@ -1471,11 +1507,9 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 5)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          // 💡 FIX: route through sendImageSafe (passes jpegThumbnail to
+          // skip Baileys' sharp/jimp thumbnail generation, has fallbacks)
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -1496,11 +1530,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -1521,11 +1551,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -2694,12 +2720,33 @@ What to do:
           }
 
           try {
-            const res = await rawSend(item.jid, item.content, item.options);
+            // 💡 CRITICAL FIX: wrap rawSend in a 20s timeout.
+            // Baileys' media upload to mmg.whatsapp.net can hang
+            // INDEFINITELY — never resolves, never rejects. This blocks
+            // the entire sequential queue, so all subsequent messages
+            // (including text fallbacks) never get sent.
+            // After 20s, treat it as a permanent error and move on.
+            const SEND_TIMEOUT_MS = 20000;
+            const sendPromise = rawSend(item.jid, item.content, item.options);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS}s (media upload hung — queue was blocked)`)), SEND_TIMEOUT_MS)
+            );
+            const res = await Promise.race([sendPromise, timeoutPromise]);
             queue.shift();
             item.resolve(res);
             await sleep(SEND_GAP_MS);
           } catch (err) {
             item.retries += 1;
+
+            // 💡 Timeout errors are NOT connection errors — don't retry.
+            // The media upload is permanently broken. Drop the message
+            // so the queue can process subsequent sends.
+            if (err.message?.includes('timed out')) {
+              console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
+              queue.shift();
+              item.reject(err);
+              continue;
+            }
 
             // Connection issues: pause and wait for reconnect; keep message at front
             if (isConnError(err)) {
@@ -4597,11 +4644,11 @@ What to do:
  */
 
     async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
+      console.log(`[sendMenuWithBanner] CALLED for chatId=${chatId?.split('@')[0]}, text length=${text?.length}`);
       const imagePath = botConfig.getAssetPath("banner.png");
+      console.log(`[sendMenuWithBanner] imagePath=${imagePath}, exists=${fs.existsSync(imagePath)}`);
 
       // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
-      // If Jake's WA account doesn't have access to the newsletter,
-      // WhatsApp silently rejects the ENTIRE message.
       const contextInfo = NEWSLETTER_JID ? {
         forwardingScore: 1,
         isForwarded: true,
@@ -4610,28 +4657,54 @@ What to do:
           newsletterName: botConfig.getBotName() + " Official",
           serverMessageId: -1,
         },
-      } : {};
+      } : null;
 
       if (fs.existsSync(imagePath)) {
         try {
-          return await sock.sendMessage(chatId, {
+          console.log(`[sendMenuWithBanner] sending IMAGE...`);
+          // 💡 CRITICAL FIX: use FALLBACK_THUMB directly — do NOT call
+          // buildThumbnail. buildThumbnail calls sharp, which HANGS on
+          // the 698KB banner JPEG (works on 1×1 test images but hangs
+          // on real images). The hang happens BEFORE the 15s send
+          // timeout starts, so the timeout never fires.
+          // FALLBACK_THUMB is a valid 1×1 white JPEG — WhatsApp uses
+          // it as the blur-preview placeholder. The actual image still
+          // sends and displays — just without a proper thumbnail.
+          const thumb = FALLBACK_THUMB;
+          console.log(`[sendMenuWithBanner] using FALLBACK_THUMB: ${thumb.length} bytes`);
+          const msg = {
             image: { url: imagePath },
             caption: text,
             mentions,
-            contextInfo,
-          });
+            jpegThumbnail: thumb,
+          };
+          if (contextInfo) msg.contextInfo = contextInfo;
+
+          // 💡 CRITICAL FIX: wrap image send in a 15s timeout.
+          const sendPromise = sock.sendMessage(chatId, msg);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Image send timed out after 15s (media upload hung)')), 15000)
+          );
+          const result = await Promise.race([sendPromise, timeoutPromise]);
+          console.log(`[sendMenuWithBanner] IMAGE SENT OK:`, JSON.stringify(result?.key || result?.status || 'no key'));
+          return result;
         } catch (imgErr) {
-          console.error("Banner image send failed, falling back to text:", imgErr.message);
+          console.error("[sendMenuWithBanner] IMAGE SEND FAILED:", imgErr.message);
+          console.error("[sendMenuWithBanner] falling back to TEXT");
         }
+      } else {
+        console.log(`[sendMenuWithBanner] banner file does NOT exist — skipping to text`);
       }
-      // 💡 FIX: always fall back to text if image doesn't exist OR image send fails
+      // Fall back to text
+      console.log(`[sendMenuWithBanner] falling back to TEXT`);
       const botName = botConfig.getBotName();
       const botMarker = `🃏 *${botName}*\n\n`;
-      return await sock.sendMessage(chatId, {
+      const textMsg = {
         text: botMarker + text,
         mentions,
-        contextInfo,
-      });
+      };
+      if (contextInfo) textMsg.contextInfo = contextInfo;
+      return await sock.sendMessage(chatId, textMsg);
     }
 
     // New dynamic menu function
@@ -4889,6 +4962,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await sock.sendMessage(chatId, {
                 image: { url: a.img },
                 caption: BOT_MARKER + message,
+                jpegThumbnail: FALLBACK_THUMB,
               });
               sent = true;
               console.log(`✅ Sent news IMAGE (via URL) to ${chatId}`);
@@ -5090,6 +5164,40 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // hanging on stalled queries (presence fetches, group metadata
           // fetches, etc). 10s is generous but bounded.
           defaultQueryTimeout: 10000,
+
+          // 💡 CRITICAL FIX (media upload hang): Baileys rc13's
+          // uploadWithNodeHttp passes `timeout: timeoutMs` to Node's
+          // https.request. If mediaUploadTimeoutMs is not set, timeoutMs
+          // is undefined → Node treats it as NO timeout → the upload
+          // hangs FOREVER if WhatsApp's media server doesn't respond.
+          // This is exactly what was happening: text sends work (they go
+          // over the WebSocket), but image sends hang (they require an
+          // HTTP POST to mmg.whatsapp.net which never completes).
+          // Setting this to 20s ensures the upload fails fast instead
+          // of hanging indefinitely, so the queue can move on and the
+          // text fallback can be sent.
+          mediaUploadTimeoutMs: 20000,
+
+          // 💡 CRITICAL FIX (IPv6 hang): Oracle Cloud instances have IPv6
+          // configured, but the IPv6 route to WhatsApp's media servers
+          // may not work. Node's default behavior is to try IPv6 first
+          // (happy eyeballs), which can cause the HTTPS connection to
+          // mmg.whatsapp.net to hang for 20+ seconds before falling back
+          // to IPv4. By passing a custom agent with family:4, we force
+          // IPv4 only — eliminating the IPv6 hang entirely.
+          // This agent is used by Baileys' uploadWithNodeHttp (line 555:
+          // `agent: fetchAgent`) for all media uploads.
+          fetchAgent: new (require('https').Agent)({
+            family: 4,           // force IPv4 — avoid IPv6 hang on Oracle
+            keepAlive: true,     // reuse connections for multiple uploads
+            timeout: 20000,      // socket timeout as a safety net
+          }),
+
+          // 💡 customUploadHosts is required by Baileys (used in
+          // getWAUploadToServer: `[...customUploadHosts, ...uploadInfo.hosts]`).
+          // If undefined, the spread throws "undefined is not iterable".
+          // Default to empty array — Baileys will use WhatsApp's hosts.
+          customUploadHosts: [],
         });
 
         sendQueue.bind(sock);
@@ -6006,21 +6114,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await botConfig.storage.run(configInstance, async () => {
                 try {
                   const rawChatId = m.key.remoteJid;
-                  // 💡 CRITICAL FIX: resolve @lid → @s.whatsapp.net for DMs.
-                  // WhatsApp on Oracle uses LID (Linked Identity) for DMs.
-                  // Text messages deliver fine to @lid (WebSocket), but
-                  // media uploads (images) are accepted by WhatsApp but
-                  // NOT delivered to @lid addresses. Converting @lid →
-                  // @s.whatsapp.net ensures media actually reaches the user.
-                  // Groups (@g.us) are left as-is — LID doesn't apply.
-                  let chatId = jidNormalizedUser(rawChatId);
-                  if (chatId.endsWith('@lid')) {
-                    const phoneJid = resolveLidToPhone(chatId, configInstance.getAuthPath());
-                    if (phoneJid && phoneJid.endsWith('@s.whatsapp.net')) {
-                      console.log(`[chatId] resolved ${chatId} → ${phoneJid} (LID→phone for media delivery)`);
-                      chatId = phoneJid;
-                    }
-                  }
+                  const chatId = jidNormalizedUser(rawChatId);
                   let senderJid = jidNormalizedUser(
                     m.key.participant || rawChatId,
                   );
@@ -6799,15 +6893,149 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j test — simplest possible command, for debugging
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 MINIMAL TEST — .j test
+                    // Simplest possible command. Just sends "test ok".
+                    // If THIS doesn't work, the issue is in command dispatch.
+                    // ═══════════════════════════════════════════════════════════
                     if (primaryCmd === "test") {
-                      console.log(`🧪 [TEST] handler reached | chatId=${chatId} | sender=${senderJid}`);
+                      console.log(`🧪 [TEST] handler reached for primaryCmd="test"`);
                       try {
-                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ test ok — command dispatch works. chatId=" + chatId });
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ test ok — command dispatch works" });
                       } catch (e) {
                         console.error(`🧪 [TEST] send failed:`, e.message);
                         return;
                       }
+                    }
+
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 DIAGNOSTIC COMMAND — .j diag
+                    // Tests every layer of image sending and reports back.
+                    // Use this to debug image/media issues in real-time.
+                    // ═══════════════════════════════════════════════════════════
+                    if (primaryCmd === "diag") {
+                      console.log(`🔍 [DIAG] handler reached for primaryCmd="diag"`);
+                      try {
+                      const results = [];
+                      results.push("🔍 *IMAGE PIPELINE DIAGNOSTIC*");
+                      results.push("━━━━━━━━━━━━━━━━━━━");
+
+                      // Test 1: Banner file
+                      const bannerPath = botConfig.getAssetPath("banner.png");
+                      results.push(`*1. Banner file:*`);
+                      results.push(`   Path: \`${bannerPath}\``);
+                      results.push(`   Exists: ${fs.existsSync(bannerPath) ? "✅ YES" : "❌ NO"}`);
+                      if (fs.existsSync(bannerPath)) {
+                        try {
+                          const stat = fs.statSync(bannerPath);
+                          results.push(`   Size: ${stat.size} bytes`);
+                          const buf = fs.readFileSync(bannerPath);
+                          results.push(`   Readable: ✅ YES (${buf.length} bytes)`);
+                          results.push(`   Magic bytes: ${buf.slice(0, 4).toString('hex')}`);
+                          results.push(`   Is JPEG: ${buf.slice(0, 2).toString('hex') === 'ffd8' ? "✅ YES (despite .png extension)" : "NO"}`);
+                        } catch (e) {
+                          results.push(`   Readable: ❌ ${e.message}`);
+                        }
+                      }
+
+                      // Test 2: Thumbnail generation
+                      results.push(`*2. Thumbnail generation:*`);
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        results.push(`   buildThumbnail: ✅ ${thumb.length} bytes`);
+                      } catch (e) {
+                        results.push(`   buildThumbnail: ❌ ${e.message}`);
+                      }
+                      results.push(`   FALLBACK_THUMB: ${FALLBACK_THUMB.length} bytes`);
+
+                      // Test 3: Sharp
+                      results.push(`*3. Sharp:*`);
+                      try {
+                        const sharp = require('sharp');
+                        const testBuf = await sharp({ create: { width: 1, height: 1, channels: 3, background: { r: 255, g: 255, b: 255 } } }).jpeg().toBuffer();
+                        results.push(`   Load + process: ✅ ${testBuf.length} bytes`);
+                      } catch (e) {
+                        results.push(`   Load + process: ❌ ${e.message}`);
+                      }
+
+                      // Test 4: Jimp
+                      results.push(`*4. Jimp:*`);
+                      try {
+                        const Jimp = require('jimp');
+                        results.push(`   Load: ✅ (Jimp type: ${typeof Jimp.Jimp})`);
+                      } catch (e) {
+                        results.push(`   Load: ❌ ${e.message}`);
+                      }
+
+                      // Test 5: Text send (baseline — should always work)
+                      results.push(`*5. Text send:*`);
+                      try {
+                        await sock.sendMessage(chatId, { text: "📱 Test text message from .jk diag" });
+                        results.push(`   ✅ SUCCESS`);
+                      } catch (e) {
+                        results.push(`   ❌ ${e.message}`);
+                      }
+
+                      // Send the text diagnostic first
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + results.join("\n") });
+
+                      // Test 6: Banner image send (the actual .jk menu path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Now testing banner image send..." });
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (with jpegThumbnail)",
+                          jpegThumbnail: thumb,
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Banner image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `6. Banner image: ❌ ${e.message}` });
+                      }
+
+                      // Test 7: Banner image WITHOUT thumbnail (raw Baileys path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Testing banner WITHOUT jpegThumbnail..." });
+                      try {
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (NO thumbnail — raw Baileys path)",
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Banner (no thumb): ✅ SENT" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `7. Banner (no thumb): ❌ ${e.message}` });
+                      }
+
+                      // Test 8: URL image send (the anime/img path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "8. Testing URL image send..." });
+                      try {
+                        await sendImageSafe(sock, chatId, "https://cdn.myanimelist.net/images/anime/13/17465.jpg", "🖼️ URL image test (Jikan/MAL CDN)", m);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "8. URL image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `8. URL image: ❌ ${e.message}` });
+                      }
+
+                      // Test 9: GoService health
+                      results.push(`*9. GoService:*`);
+                      try {
+                        const health = await goService.healthCheck();
+                        results.push(`   Health: ${health ? "✅ " + JSON.stringify(health) : "❌ null (service down)"}`);
+                      } catch (e) {
+                        results.push(`   Health: ❌ ${e.message}`);
+                      }
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `9. GoService health: ${goService.baseUrl}` });
+
+                      // Final summary
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "━━━━━━━━━━━━━━━━━━━\n📋 Diagnostic complete. Check which tests passed/failed above and report back." });
+                      } catch (diagErr) {
+                        console.error(`🔍 [DIAG] FATAL ERROR in diag handler:`, diagErr.message);
+                        console.error(`🔍 [DIAG] stack:`, diagErr.stack?.split('\n').slice(0, 8).join('\n'));
+                        try {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `🔍 DIAG FATAL ERROR: ${diagErr.message}` });
+                        } catch (_) {}
+                      }
+                      return;
                     }
 
                     // .j menu or .j help
@@ -17386,7 +17614,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           try {
                             await sock.sendMessage(
                               chatId,
-                              { image: { url: img } },
+                              { image: { url: img }, jpegThumbnail: FALLBACK_THUMB },
                               { quoted: m },
                             );
                             await new Promise((res) => setTimeout(res, 150));
@@ -17638,6 +17866,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                               chatId,
                               {
                                 image: { url: images[i] },
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17910,6 +18139,7 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: { url: imageUrl },
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17924,6 +18154,7 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: Buffer.from(imgRes.data),
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -17984,6 +18215,7 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                               {
                                 image: { url: img },
                                 caption: BOT_MARKER + caption,
+                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -24965,8 +25197,14 @@ _(Or reply to their message)_
                     err.message?.includes("MAC")
                   )
                     return;
-                  console.log("⚠️️ Skipping message:", err.message);
-                  console.log("⚠️️ Stack:", err.stack?.split('\n').slice(0, 5).join('\n'));
+                  console.error("🔴🔴🔴 SKIPPING MESSAGE (FATAL):", err.message);
+                  console.error("🔴🔴🔴 FULL STACK:", err.stack);
+                  console.error("🔴🔴🔴 Message that caused this:", JSON.stringify(txt?.slice(0, 100)));
+                  console.error("🔴🔴🔴 Sender:", senderJid, "Chat:", chatId);
+                  // 💡 Also send the error to the user so they can see it
+                  try {
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
+                  } catch (_) {}
                 }
               }); // END storage.run
             }),
