@@ -1,39 +1,29 @@
 #!/usr/bin/env node
 /**
- * DIRECT PIPELINE TEST — runs ON Oracle, requires the bot's actual modules.
+ * DIRECT PIPELINE TEST v2 — with aggressive timeouts on EVERY call.
  *
- * This script bypasses WhatsApp entirely. It directly:
- *   1. Requires goImageService.js and tests each Go service method
- *   2. Requires cardSystem.js and tests cmdColl directly
- *   3. Requires rpgCommands.js and tests displayCharacterSheet directly
- *   4. Reports exactly which call fails and why
+ * v1 hung because some Go service calls have no timeout (120s axios default).
+ * This version wraps EVERY call in a 10s Promise.race timeout.
  *
  * Usage: node scripts/test_direct_pipeline.js
- * Run on Oracle: cd ~/whatsapp-bot && node scripts/test_direct_pipeline.js
- *
- * This is the definitive test — if a call works here but fails in WhatsApp,
- * the issue is in the WhatsApp/Baileys layer, not the Go service or command code.
  */
 
 'use strict';
 
-// Load .env
 require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
 
-// Colors for console output
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
 const CYAN = '\x1b[36m';
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 
 function log(section, msg, color = RESET) {
   const ts = new Date().toISOString().split('T')[1].replace('Z', '');
-  console.log(`${color}[${ts}] ${BOLD}[${section}]${RESET} ${color}${msg}${RESET}`);
+  console.log(`${color}[${ts}] [${section}]${RESET} ${color}${msg}${RESET}`);
 }
 
 function logResult(label, success, detail) {
@@ -42,215 +32,218 @@ function logResult(label, success, detail) {
   console.log(`  ${icon} ${color}${label}${RESET}: ${detail}`);
 }
 
+// Wrap any promise in a timeout — prevents hangs
+async function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 async function main() {
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
-  console.log(`  DIRECT PIPELINE TEST — testing bot code without WhatsApp`);
+  console.log(`  DIRECT PIPELINE TEST v2 — every call has 10s timeout`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // ── 1. Environment check ──────────────────────────────────────
-  log('ENV', 'Checking environment...', CYAN);
-  console.log(`  GO_IMAGE_SERVICE_URL: ${process.env.GO_IMAGE_SERVICE_URL || '(unset — will use default http://127.0.0.1:7860)'}`);
-  console.log(`  MONGO_URI: ${process.env.MONGO_URI ? 'set (' + process.env.MONGO_URI.slice(0, 30) + '...)' : '(unset)'}`);
-  console.log(`  Node version: ${process.version}`);
-  console.log(`  CWD: ${process.cwd()}`);
+  // ── 1. Environment ─────────────────────────────────────────────
+  log('ENV', 'Environment check', CYAN);
+  console.log(`  GO_IMAGE_SERVICE_URL: ${process.env.GO_IMAGE_SERVICE_URL || '(unset — default http://127.0.0.1:7860)'}`);
+  console.log(`  MONGO_URI: ${process.env.MONGO_URI ? 'set' : '(unset)'}`);
+  console.log(`  Node: ${process.version}, CWD: ${process.cwd()}`);
   console.log('');
 
-  // ── 2. Test GoImageService ────────────────────────────────────
-  log('GOSERVICE', 'Loading goImageService.js...', CYAN);
+  // ── 2. Load goImageService ─────────────────────────────────────
+  log('LOAD', 'Requiring goImageService.js...', CYAN);
   let GoImageService;
   try {
     GoImageService = require('../core/utils/goImageService');
-    logResult('require goImageService', true, 'module loaded');
+    logResult('require', true, 'loaded');
   } catch (e) {
-    logResult('require goImageService', false, e.message);
+    logResult('require', false, e.message);
     process.exit(1);
   }
 
-  log('GOSERVICE', 'Creating instance...', CYAN);
+  // Create instance — this.client is now set BEFORE healthCheck (fixed in dc7ea3ac)
+  log('LOAD', 'Creating GoImageService instance...', CYAN);
   const goService = new GoImageService();
   console.log(`  baseUrl: ${goService.baseUrl}`);
   console.log(`  client defined: ${!!goService.client}`);
   console.log('');
 
-  // Wait a moment for the constructor's async healthCheck to complete
-  log('GOSERVICE', 'Waiting 3s for constructor healthCheck to complete...', CYAN);
-  await new Promise(r => setTimeout(r, 3000));
-
-  // ── 3. Test healthCheck ───────────────────────────────────────
-  log('HEALTH', 'Calling goService.healthCheck()...', CYAN);
+  // ── 3. healthCheck ─────────────────────────────────────────────
+  log('HEALTH', 'goService.healthCheck()...', CYAN);
   try {
-    const health = await goService.healthCheck();
+    const health = await withTimeout(goService.healthCheck(), 10000, 'healthCheck');
     if (health) {
       logResult('healthCheck', true, JSON.stringify(health));
     } else {
-      logResult('healthCheck', false, 'returned null (see error log above)');
+      logResult('healthCheck', false, 'returned null');
     }
   } catch (e) {
-    logResult('healthCheck', false, `${e.code || e.constructor.name}: ${e.message}`);
+    logResult('healthCheck', false, e.message);
   }
   console.log('');
 
-  // ── 4. Test generateProfileCard ───────────────────────────────
-  log('PROFILE', 'Calling goService.generateProfileCard() with test data...', CYAN);
+  // ── 4. generateProfileCard ─────────────────────────────────────
+  log('PROFILE', 'goService.generateProfileCard()...', CYAN);
   const profileData = {
-    nickname: 'TEST_USER',
-    level: 50,
-    rank: 'S',
-    class: 'Adventurer',
-    classIcon: '🛡️',
+    nickname: 'TEST', level: 50, rank: 'S', class: 'Adventurer', classIcon: '🛡️',
     stats: { hp: 5000, atk: 250, def: 200, mag: 150, spd: 100, luck: 50, crit: 25, evasion: 10 },
     equipStats: { hp: 500, atk: 25, def: 20, mag: 15, spd: 10, luck: 5, crit: 2, evasion: 1 },
-    statPoints: 0,
-    pfpUrl: '',
+    statPoints: 0, pfpUrl: '',
     rankData: { color: '#FFD700', label: 'S-Rank' },
   };
-
   try {
-    const startTime = Date.now();
-    const cardBuffer = await goService.generateProfileCard(profileData);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-    if (cardBuffer && cardBuffer.length > 100) {
-      logResult('generateProfileCard', true, `returned ${cardBuffer.length} bytes in ${elapsed}s`);
-      // Save to file for inspection
-      fs.writeFileSync('/tmp/test_profile.png', cardBuffer);
-      console.log(`  Saved to /tmp/test_profile.png`);
+    const t0 = Date.now();
+    const buf = await withTimeout(goService.generateProfileCard(profileData), 10000, 'generateProfileCard');
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    if (buf && buf.length > 100) {
+      logResult('generateProfileCard', true, `${buf.length} bytes in ${elapsed}s`);
+      fs.writeFileSync('/tmp/test_profile.png', buf);
     } else {
-      logResult('generateProfileCard', false, `returned ${cardBuffer ? cardBuffer.length + ' bytes' : 'null'} in ${elapsed}s`);
+      logResult('generateProfileCard', false, `${buf ? buf.length + ' bytes' : 'null'} in ${elapsed}s`);
     }
   } catch (e) {
-    logResult('generateProfileCard', false, `${e.code || e.constructor.name}: ${e.message}`);
+    logResult('generateProfileCard', false, e.message);
   }
   console.log('');
 
-  // ── 5. Test generateCardGrid ──────────────────────────────────
-  log('CARDGRID', 'Calling goService.generateCardGrid() with test data...', CYAN);
-  const testImageUrls = [
-    { url: 'https://cdn.shoob.gg/images/cards/1/1.png', name: 'Test Card 1', tier: '1', animated: false },
-    { url: 'https://cdn.shoob.gg/images/cards/2/1.png', name: 'Test Card 2', tier: '2', animated: false },
-    { url: 'https://cdn.shoob.gg/images/cards/3/1.png', name: 'Test Card 3', tier: '3', animated: false },
+  // ── 5. generateCardGrid ────────────────────────────────────────
+  log('GRID', 'goService.generateCardGrid()...', CYAN);
+  const testUrls = [
+    { url: 'https://cdn.shoob.gg/images/cards/1/1.png', name: 'Card 1', tier: '1', animated: false },
+    { url: 'https://cdn.shoob.gg/images/cards/2/1.png', name: 'Card 2', tier: '2', animated: false },
   ];
-
   try {
-    const startTime = Date.now();
-    const gridBuffer = await goService.generateCardGrid(testImageUrls, 'TEST GRID');
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-    if (gridBuffer && gridBuffer.length > 100) {
-      logResult('generateCardGrid', true, `returned ${gridBuffer.length} bytes in ${elapsed}s`);
-      fs.writeFileSync('/tmp/test_grid.png', gridBuffer);
-      console.log(`  Saved to /tmp/test_grid.png`);
+    const t0 = Date.now();
+    const buf = await withTimeout(goService.generateCardGrid(testUrls, 'TEST'), 15000, 'generateCardGrid');
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    if (buf && buf.length > 100) {
+      logResult('generateCardGrid', true, `${buf.length} bytes in ${elapsed}s`);
+      fs.writeFileSync('/tmp/test_grid.png', buf);
     } else {
-      logResult('generateCardGrid', false, `returned ${gridBuffer ? gridBuffer.length + ' bytes' : 'null'} in ${elapsed}s`);
+      logResult('generateCardGrid', false, `${buf ? buf.length + ' bytes' : 'null'} in ${elapsed}s`);
     }
   } catch (e) {
-    logResult('generateCardGrid', false, `${e.code || e.constructor.name}: ${e.message}`);
+    logResult('generateCardGrid', false, e.message);
   }
   console.log('');
 
-  // ── 6. Test generateTransactionCard ───────────────────────────
-  log('TXCARD', 'Calling goService.generateTransactionCard() with test data...', CYAN);
-  const txData = {
-    type: 'daily',
-    amount: 5000,
-    balance: 25000,
-    nickname: 'TEST_USER',
-    currency: 'Ꞩ',
-  };
-
+  // ── 6. generateTransactionCard ─────────────────────────────────
+  log('TX', 'goService.generateTransactionCard()...', CYAN);
   try {
-    const startTime = Date.now();
-    const txBuffer = await goService.generateTransactionCard(txData);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-    if (txBuffer && txBuffer.length > 100) {
-      logResult('generateTransactionCard', true, `returned ${txBuffer.length} bytes in ${elapsed}s`);
-      fs.writeFileSync('/tmp/test_tx.png', txBuffer);
-      console.log(`  Saved to /tmp/test_tx.png`);
+    const t0 = Date.now();
+    const buf = await withTimeout(
+      goService.generateTransactionCard({
+        type: 'daily', amount: 5000, balance: 25000, nickname: 'TEST', currency: 'Ꞩ'
+      }),
+      10000, 'generateTransactionCard'
+    );
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    if (buf && buf.length > 100) {
+      logResult('generateTransactionCard', true, `${buf.length} bytes in ${elapsed}s`);
     } else {
-      logResult('generateTransactionCard', false, `returned ${txBuffer ? txBuffer.length + ' bytes' : 'null'} in ${elapsed}s`);
+      logResult('generateTransactionCard', false, `${buf ? buf.length + ' bytes' : 'null'} in ${elapsed}s`);
     }
   } catch (e) {
-    logResult('generateTransactionCard', false, `${e.code || e.constructor.name}: ${e.message}`);
+    logResult('generateTransactionCard', false, e.message);
   }
   console.log('');
 
-  // ── 7. Test generateCombatImage ───────────────────────────────
-  log('COMBAT', 'Calling goService.generateCombatImage() with test data...', CYAN);
-  const combatData = {
-    players: [{ name: 'TestHero', class: 'Fighter', hp: 1000, maxHp: 1000, mp: 100, maxMp: 100, level: 50, spriteIndex: 0 }],
-    enemies: [{ name: 'TestEnemy', isBoss: false, hp: 500, maxHp: 500, level: 10, spriteIndex: 0 }],
-    background: 'env1.png',
-  };
-
+  // ── 7. generateCombatImage ─────────────────────────────────────
+  log('COMBAT', 'goService.generateCombatImage()...', CYAN);
   try {
-    const startTime = Date.now();
-    const combatBuffer = await goService.generateCombatImage(combatData);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-    if (combatBuffer && combatBuffer.length > 100) {
-      logResult('generateCombatImage', true, `returned ${combatBuffer.length} bytes in ${elapsed}s`);
-      fs.writeFileSync('/tmp/test_combat.png', combatBuffer);
-      console.log(`  Saved to /tmp/test_combat.png`);
+    const t0 = Date.now();
+    const buf = await withTimeout(
+      goService.generateCombatImage({
+        players: [{ name: 'Hero', class: 'Fighter', hp: 1000, maxHp: 1000, mp: 100, maxMp: 100, level: 50, spriteIndex: 0 }],
+        enemies: [{ name: 'Goblin', isBoss: false, hp: 500, maxHp: 500, level: 10, spriteIndex: 0 }],
+        background: 'env1.png',
+      }),
+      15000, 'generateCombatImage'
+    );
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    if (buf && buf.length > 100) {
+      logResult('generateCombatImage', true, `${buf.length} bytes in ${elapsed}s`);
     } else {
-      logResult('generateCombatImage', false, `returned ${combatBuffer ? combatBuffer.length + ' bytes' : 'null'} in ${elapsed}s`);
+      logResult('generateCombatImage', false, `${buf ? buf.length + ' bytes' : 'null'} in ${elapsed}s`);
     }
   } catch (e) {
-    logResult('generateCombatImage', false, `${e.code || e.constructor.name}: ${e.message}`);
+    logResult('generateCombatImage', false, e.message);
   }
   console.log('');
 
-  // ── 8. Test cardSystem directly ───────────────────────────────
-  log('CARDSYS', 'Loading cardSystem.js...', CYAN);
-  let cardSystem;
+  // ── 8. generateEconomyCard ─────────────────────────────────────
+  log('ECON', 'goService.generateEconomyCard()...', CYAN);
   try {
-    cardSystem = require('../core/rpg/cardSystem');
-    logResult('require cardSystem', true, 'module loaded');
-  } catch (e) {
-    logResult('require cardSystem', false, e.message);
-    console.log('');
-    console.log(`${YELLOW}Skipping cardSystem direct test (module failed to load).${RESET}`);
-    return summarize();
-  }
-
-  // Initialize card system
-  log('CARDSYS', 'Initializing cardSystem...', CYAN);
-  try {
-    const botConfig = require('../botConfig');
-    const configInstance = new botConfig.BotConfig(path.join(__dirname, '..', 'instances', 'Jake'));
-    await botConfig.storage.run(configInstance, async () => {
-      cardSystem.init({ sock: { sendMessage: async () => ({ key: { id: 'test' } }) }, sendMessage: async () => ({ key: { id: 'test' } }) });
-      logResult('cardSystem.init', true, 'initialized');
-    });
-  } catch (e) {
-    logResult('cardSystem.init', false, e.message);
-  }
-  console.log('');
-
-  // ── 9. Test MongoDB connectivity ──────────────────────────────
-  log('MONGO', 'Testing MongoDB connectivity...', CYAN);
-  try {
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://admin:umtaSx2zu940HhKQ@cluster0.drpztk6.mongodb.net/test?retryWrites=true&w=majority&appName=Cluster0', { serverSelectionTimeoutMS: 5000 });
+    const t0 = Date.now();
+    const buf = await withTimeout(
+      goService.generateEconomyCard({
+        type: 'balance', nickname: 'TEST', wallet: 50000, bank: 100000, currency: 'Ꞩ'
+      }),
+      10000, 'generateEconomyCard'
+    );
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    if (buf && buf.length > 100) {
+      logResult('generateEconomyCard', true, `${buf.length} bytes in ${elapsed}s`);
+    } else {
+      logResult('generateEconomyCard', false, `${buf ? buf.length + ' bytes' : 'null'} in ${elapsed}s`);
     }
-    logResult('MongoDB connect', true, `readyState=${mongoose.connection.readyState}`);
   } catch (e) {
-    logResult('MongoDB connect', false, e.message);
+    logResult('generateEconomyCard', false, e.message);
   }
   console.log('');
 
-  // ── SUMMARY ───────────────────────────────────────────────────
-  summarize();
-}
+  // ── 9. Raw axios test (same as deploy test) ────────────────────
+  log('RAW', 'Raw axios.get(/health) test...', CYAN);
+  try {
+    const axios = require('axios');
+    const t0 = Date.now();
+    const res = await withTimeout(
+      axios.get('http://127.0.0.1:7860/health', { timeout: 5000 }),
+      10000, 'raw axios'
+    );
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    logResult('raw axios /health', true, `${JSON.stringify(res.data)} in ${elapsed}s`);
+  } catch (e) {
+    logResult('raw axios /health', false, e.message);
+  }
+  console.log('');
 
-function summarize() {
+  // ── 10. Raw POST test (render endpoint) ────────────────────────
+  log('RAW', 'Raw axios.post(/api/cards/profile) test...', CYAN);
+  try {
+    const axios = require('axios');
+    const t0 = Date.now();
+    const res = await withTimeout(
+      axios.post('http://127.0.0.1:7860/api/cards/profile', profileData, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+      }),
+      15000, 'raw axios POST'
+    );
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    const buf = Buffer.from(res.data);
+    logResult('raw axios POST /api/cards/profile', true, `${buf.length} bytes in ${elapsed}s`);
+  } catch (e) {
+    logResult('raw axios POST /api/cards/profile', false, e.message);
+  }
+  console.log('');
+
   console.log(`${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
-  console.log(`  TEST COMPLETE — check results above`);
-  console.log(`═══════════════════════════════════════════════════════════════${RESET}`);
-  console.log(`\nIf all Go service calls returned ✅, the issue is in the WhatsApp/`);
-  console.log(`Baileys message handling layer, not the Go service or command code.`);
-  console.log(`If any call returned ❌, that's the specific call that needs fixing.\n`);
+  console.log(`  TEST COMPLETE${RESET}`);
+  console.log(`  If goService.* calls fail but raw axios succeeds, the issue is`);
+  console.log(`  in goImageService.js (client config, _enqueue queue, etc.).`);
+  console.log(`  If raw axios also fails, the Go service itself is the problem.`);
+  console.log(`${CYAN}═══════════════════════════════════════════════════════════════${RESET}\n`);
+
+  // Force exit — don't let hanging promises keep the process alive
+  process.exit(0);
 }
 
 main().catch(err => {
-  console.error(`${RED}FATAL ERROR:${RESET}`, err);
-  console.error(err.stack);
+  console.error(`${RED}FATAL:${RESET}`, err);
   process.exit(1);
 });
