@@ -656,11 +656,6 @@ class GoImageService {
    */
   async generateHybridGrid(images, title, opts = {}) {
     try {
-      // 💡 Tuned 2026-07-27 after real-world testing on Oracle.
-      // Original benchmarks used synthetic local files (3.3s render).
-      // Real shoob.gg downloads add ~20-25s to the wall clock, so we cut
-      // duration/fps to keep total response time reasonable.
-      // 5s @ 10fps = 50 frames, ~80-120 KB output, still smooth enough on WhatsApp.
       const duration = opts.duration || 5;
       const fps = opts.fps || 10;
       const response = await this.client.post(
@@ -669,13 +664,17 @@ class GoImageService {
         {
           responseType: "arraybuffer",
           // 45s timeout — real-world renders with slow downloads take ~25-30s.
-          // Falls back to static PNG on timeout.
           timeout: 45000,
         },
       );
       const buf = Buffer.from(response.data);
       if (buf.length < 100) return null;
-      return buf;
+      // 💡 The hybrid endpoint may return either:
+      //   - video/mp4 (when ≥1 card is animated — the styled static grid + GIF overlays)
+      //   - image/png (when NO cards are animated — just the styled static grid)
+      // The caller needs to know which so it can send as { video } or { image }.
+      const contentType = response.headers['content-type'] || '';
+      return { buffer: buf, contentType };
     } catch (error) {
       console.error("GoService Hybrid Grid Error:", error.message);
       return null;

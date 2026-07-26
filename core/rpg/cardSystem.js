@@ -110,6 +110,10 @@ function getInst() {
       spawnIntervalMs: 20 * 60 * 1000,
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
+      // 💡 PERF 2026-07-27: per-user render mode cache (hybrid vs static).
+      // Avoids hitting MongoDB on every .jk coll / .jk deck invocation.
+      // Key: userId (normalized phone@... JID), Value: 'hybrid' | 'static'
+      userRenderModes: new Map(),
     });
   }
   return instances.get(id);
@@ -1158,24 +1162,130 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   return reply(finalMsg);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  USER RENDER MODE PREFERENCE (hybrid vs static)
+// ═══════════════════════════════════════════════════════════════════════════
+// Added 2026-07-27 when hybrid became the default rendering mode.
+// Persists per-user preference in MongoDB System collection so it survives
+// bot restarts. In-memory cache in inst.userRenderModes avoids DB hits on
+// every .jk coll / .jk deck invocation.
+//
+// Default = 'hybrid' (the new animated MP4 grid)
+// Toggle via: .jk anim on | .jk anim off | .jk anim (status)
+// One-shot override via: .jk coll --static | .jk coll --anim
+
+async function getUserRenderMode(userId) {
+  const inst = getInst();
+  if (inst.userRenderModes.has(userId)) {
+    return inst.userRenderModes.get(userId);
+  }
+  // Lazy load from DB
+  const id = botConfig.getBotId();
+  try {
+    const doc = await System.findOne({ key: `card_render_mode_${id}_${userId}` }).lean();
+    const mode = doc?.value === 'static' ? 'static' : 'hybrid';
+    inst.userRenderModes.set(userId, mode);
+    return mode;
+  } catch (e) {
+    // DB read failed — default to hybrid (best experience)
+    return 'hybrid';
+  }
+}
+
+async function setUserRenderMode(userId, mode) {
+  const inst = getInst();
+  const id = botConfig.getBotId();
+  try {
+    await System.findOneAndUpdate(
+      { key: `card_render_mode_${id}_${userId}` },
+      { value: mode },
+      { upsert: true }
+    );
+  } catch (e) {
+    console.error(`[cardSystem] failed to persist render mode for ${userId}:`, e.message);
+  }
+  inst.userRenderModes.set(userId, mode);
+}
+
+/**
+ * cmdAnim — `.jk anim [on|off|status]` — toggle per-user render mode.
+ *   .jk anim           → show current status
+ *   .jk anim on         → enable animated hybrid (DEFAULT)
+ *   .jk anim off        → switch to static PNG
+ *   .jk anim hybrid     → alias for 'on'
+ *   .jk anim static     → alias for 'off'
+ */
+async function cmdAnim(senderJid, reply, chatId, args = []) {
+  const p = P();
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'on' || sub === 'hybrid' || sub === 'anim') {
+    await setUserRenderMode(senderJid, 'hybrid');
+    return reply(
+      `🎬 *Animated Hybrid — ENABLED*\n\n` +
+      `.jk coll and .jk deck will now produce animated MP4s by default.\n\n` +
+      `*Commands:*\n` +
+      `• \`${p} anim off\` — switch to static PNG\n` +
+      `• \`${p} coll --static\` — one-shot static (overrides preference)\n` +
+      `• \`${p} coll --anim\` — one-shot hybrid (overrides preference)`
+    );
+  }
+
+  if (sub === 'off' || sub === 'static') {
+    await setUserRenderMode(senderJid, 'static');
+    return reply(
+      `🖼️ *Static PNG — ENABLED*\n\n` +
+      `.jk coll and .jk deck will now produce static PNGs by default.\n\n` +
+      `*Commands:*\n` +
+      `• \`${p} anim on\` — switch back to animated hybrid (default)\n` +
+      `• \`${p} coll --anim\` — one-shot hybrid (overrides preference)\n` +
+      `• \`${p} coll --static\` — one-shot static (overrides preference)`
+    );
+  }
+
+  // No arg (or unknown arg) — show current status
+  const mode = await getUserRenderMode(senderJid);
+  const isHybrid = mode === 'hybrid';
+  return reply(
+    `🎬 *Card Render Mode*\n\n` +
+    `Current: *${isHybrid ? 'Animated Hybrid (MP4)' : 'Static PNG'}*\n\n` +
+    `*Commands:*\n` +
+    `• \`${p} anim on\` — animated hybrid (default)\n` +
+    `• \`${p} anim off\` — static PNG\n` +
+    `• \`${p} coll --static\` — one-shot static\n` +
+    `• \`${p} coll --anim\` — one-shot hybrid`
+  );
+}
+
 async function cmdColl(senderJid, reply, chatId, args = []) {
   console.log(`🃏 [cmdColl] ENTERED | senderJid=${senderJid?.split('@')[0]} | args=${JSON.stringify(args)}`);
   const inst = getInst();
   const p = P();
 
-  // 💡 FEATURE 2026-07-27: .jk coll --anim flag
-  // Strips the --anim flag from args so it doesn't get interpreted as a card index,
-  // and sets a flag that routes the grid render through generateHybridGrid instead
-  // of generateCardGrid. Hybrid produces a 540x1080 MP4 where animated cards cycle
-  // in place and static cards stay still (grid layout preserved).
-  // Falls back to the static PNG on any hybrid failure (network error, ffmpeg fail,
-  // Go service down, etc.) — user always sees SOMETHING.
-  let useHybridAnim = false;
+  // 💡 FEATURE 2026-07-27: hybrid is now the DEFAULT render mode.
+  // User can toggle globally via .jk anim on|off (persists in MongoDB).
+  // One-shot overrides:
+  //   .jk coll --anim     → force hybrid this once (regardless of preference)
+  //   .jk coll --static   → force static PNG this once
+  //   .jk coll -a         → shortcut for --anim
+  //   .jk coll -s         → shortcut for --static
+  // If no flag: use user's saved preference (default = hybrid).
+  let useHybridAnim;
   const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
+  const staticFlagIdx = args.findIndex(a => a === '--static' || a === '-s');
   if (animFlagIdx !== -1) {
     useHybridAnim = true;
     args.splice(animFlagIdx, 1);
-    console.log(`🃏 [cmdColl] --anim flag detected, will use hybrid grid renderer`);
+    console.log(`🃏 [cmdColl] --anim flag (one-shot override) → hybrid`);
+  } else if (staticFlagIdx !== -1) {
+    useHybridAnim = false;
+    args.splice(staticFlagIdx, 1);
+    console.log(`🃏 [cmdColl] --static flag (one-shot override) → static`);
+  } else {
+    // No flag — use user's saved preference
+    const mode = await getUserRenderMode(senderJid);
+    useHybridAnim = (mode === 'hybrid');
+    console.log(`🃏 [cmdColl] user preference: ${mode}`);
   }
 
   if (args.length > 0) {
@@ -1241,17 +1351,23 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     const cached = gifCache.collections.get(senderJid);
 
     let gifBuffer;
+    let hybridContentType = null;
     if (cached && cached.hash === currentHash && !useHybridAnim) {
         // Only use cache for static grid (hybrid is animated, don't cache — re-render each time)
         console.log(`🃏 [cmdColl] using cached grid buffer`);
         gifBuffer = cached.buffer;
     } else if (useHybridAnim) {
-        // 💡 FEATURE 2026-07-27: hybrid animated grid (MP4) — cycles animated cards in place
+        // 💡 FEATURE 2026-07-27: hybrid animated grid — styled static grid + animated overlays.
+        // May return video/mp4 (if ≥1 animated card) or image/png (if none animated).
         console.log(`🃏 [cmdColl] calling goService.generateHybridGrid | urls=${imageUrls.length}`);
-        gifBuffer = await goService.generateHybridGrid(imageUrls, "COLLECTION (TOP 12)");
-        console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer ? gifBuffer.length + ' bytes' : 'null'}`);
-        // Don't cache hybrid — it's animated + the cache stores PNG buffers that get sent as { image: ... }
-        // (mixing PNG cache + MP4 hybrid output would corrupt the next invocation)
+        const hybridResult = await goService.generateHybridGrid(imageUrls, "COLLECTION (TOP 12)");
+        if (hybridResult) {
+          gifBuffer = hybridResult.buffer;
+          hybridContentType = hybridResult.contentType;
+          console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer.length} bytes (${hybridContentType})`);
+        } else {
+          console.log(`🃏 [cmdColl] generateHybridGrid returned null`);
+        }
     } else {
         console.log(`🃏 [cmdColl] calling goService.generateCardGrid | urls=${imageUrls.length}`);
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
@@ -1262,9 +1378,14 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
       if (useHybridAnim) {
-        // 💡 Hybrid returns MP4 — send as video with gifPlayback (WhatsApp auto-plays + loops)
-        console.log(`🃏 [cmdColl] sending video (hybrid) with caption`);
-        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: fullText });
+        // 💡 Hybrid may return MP4 (animated) or PNG (no animated cards).
+        // Send accordingly — WhatsApp handles both { video } and { image }.
+        const isVideo = hybridContentType && hybridContentType.includes('video');
+        console.log(`🃏 [cmdColl] sending ${isVideo ? 'video' : 'image'} (hybrid) with caption`);
+        if (isVideo) {
+          return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: fullText });
+        }
+        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
       }
       console.log(`🃏 [cmdColl] sending image with caption`);
       return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
@@ -1280,13 +1401,23 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
 
-  // 💡 FEATURE 2026-07-27: .jk deck --anim flag — same pattern as cmdColl
-  let useHybridAnim = false;
+  // 💡 FEATURE 2026-07-27: hybrid is now the DEFAULT render mode.
+  // Same flag/preference logic as cmdColl — see comment there for details.
+  let useHybridAnim;
   const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
+  const staticFlagIdx = args.findIndex(a => a === '--static' || a === '-s');
   if (animFlagIdx !== -1) {
     useHybridAnim = true;
     args.splice(animFlagIdx, 1);
-    console.log(`🃏 [cmdDeck] --anim flag detected, will use hybrid grid renderer`);
+    console.log(`🃏 [cmdDeck] --anim flag (one-shot override) → hybrid`);
+  } else if (staticFlagIdx !== -1) {
+    useHybridAnim = false;
+    args.splice(staticFlagIdx, 1);
+    console.log(`🃏 [cmdDeck] --static flag (one-shot override) → static`);
+  } else {
+    const mode = await getUserRenderMode(senderJid);
+    useHybridAnim = (mode === 'hybrid');
+    console.log(`🃏 [cmdDeck] user preference: ${mode}`);
   }
 
   if (args.length > 0) {
@@ -1339,11 +1470,16 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     const cached = gifCache.decks.get(`${senderJid}_main`);
 
     let gifBuffer;
+    let hybridContentType = null;
     if (cached && cached.hash === currentHash && !useHybridAnim) {
         gifBuffer = cached.buffer;
     } else if (useHybridAnim) {
-        // 💡 FEATURE 2026-07-27: hybrid animated grid (MP4) — cycles animated cards in place
-        gifBuffer = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
+        // 💡 FEATURE 2026-07-27: hybrid animated grid — styled static grid + animated overlays.
+        const hybridResult = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
+        if (hybridResult) {
+          gifBuffer = hybridResult.buffer;
+          hybridContentType = hybridResult.contentType;
+        }
         // Don't cache hybrid (see cmdColl comment)
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
@@ -1352,7 +1488,11 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
         if (useHybridAnim) {
-          return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
+          const isVideo = hybridContentType && hybridContentType.includes('video');
+          if (isVideo) {
+            return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
+          }
+          return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
         }
         return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
@@ -3306,6 +3446,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'claim':
       await cmdClaim(args, senderJid, reply, chatId);
+      return true;
+
+    case 'anim':
+      await cmdAnim(senderJid, reply, chatId, args);
       return true;
 
     case 'coll':
