@@ -2920,28 +2920,13 @@ What to do:
      * Helper to update bot profile picture
      */
     async function updateBotPFP(sock) {
-      const pfpJpg = botConfig.getAssetPath("pfp.jpg");
-
-      if (fs.existsSync(pfpJpg)) {
-        try {
-          console.log(`🖼️  [${BOT_ID}] Updating PFP from: ${pfpJpg}...`);
-          const buffer = fs.readFileSync(pfpJpg);
-          await sock.updateProfilePicture(sock.user.id, buffer);
-          console.log(`✅ [${BOT_ID}] Bot profile picture updated.`);
-          
-          try {
-            console.log(`🔒 [${BOT_ID}] Setting PFP privacy to 'Everyone'...`);
-            await sock.updateProfilePicturePrivacy('all');
-            console.log(`✅ [${BOT_ID}] PFP privacy set to 'Everyone'.`);
-          } catch (privErr) {
-            console.log(`⚠️  [${BOT_ID}] Could not set PFP privacy:`, privErr.message);
-          }
-        } catch (e) {
-          console.error(`❌ [${BOT_ID}] PFP Helper Error:`, e.message);
-        }
-      } else {
-        console.log(`⚠️  [${BOT_ID}] No pfp.jpg found in assets, skipping PFP sync.`);
-      }
+      // 💡 CRITICAL FIX 2026-07-26: DISABLED — sock.updateProfilePicture
+      // calls sharp internally to resize the image, which crashes with
+      // GLib-GObject-CRITICAL on Oracle, killing the entire process.
+      // The PFP is already set on WhatsApp from the previous session.
+      // Re-enable only after sharp is fixed or removed from the system.
+      console.log(`⏭️  [${BOT_ID}] PFP update SKIPPED (sharp crashes on Oracle). PFP stays as-is.`);
+      return;
     }
 
     /*
