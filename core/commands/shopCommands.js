@@ -13,6 +13,7 @@ const botConfig = require('../../botConfig');
 const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 const profileHelper = require('../utils/profileHelper');
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -394,16 +395,13 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
     // Handle PFP
-    // 💡 FIX 2026-07-26: see rpgCommands.js — profilePictureUrl can hang on LID JIDs
+    // 💡 PERF PATCH 2026-07-27: replaced inline 8s timeout + raw
+    // sock.profilePictureUrl() call with the shared pfpCache helper.
+    // Behaviour preserved (8s timeout, returns null on failure) PLUS
+    // 5min positive cache + 60s negative cache + in-flight de-dup.
     let pfpUrl;
     try {
-        const pfpTimeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('profilePictureUrl timed out after 8s')), 8000)
-        );
-        pfpUrl = await Promise.race([
-            sock.profilePictureUrl(finalJid, 'image'),
-            pfpTimeout
-        ]);
+        pfpUrl = await fetchPfpCached(sock, finalJid);
     } catch (e) {
         console.warn('[shopCommands] profilePictureUrl failed:', e.message);
         pfpUrl = null;

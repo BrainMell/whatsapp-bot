@@ -477,6 +477,7 @@ const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
 const { getAnikaiBestMatch } = require('./utils/anikaiResolver');
 const runSecurity = require('./utils/security');
+const { fetchPfp: fetchPfpCached } = require('./utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 const tictactoe = require('./games/tictactoe');
 const chess = require('./games/chess');
 const debate = require('./games/debate');
@@ -21572,7 +21573,10 @@ ${senderName} said y'all should know:
                     try {
                       let pfpUrl = "";
                       try {
-                        pfpUrl = await sock.profilePictureUrl(senderJid, "image");
+                        // 💡 PERF PATCH 2026-07-27: was sock.profilePictureUrl(senderJid, "image")
+                        // with NO timeout — could hang for 90s on LID jids. Now uses the
+                        // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
+                        pfpUrl = await fetchPfpCached(sock, senderJid);
                       } catch (e) {}
 
                       const cardBuffer = await goService.generateEconomyCard({
@@ -21865,7 +21869,8 @@ Examples:
 
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "TRANSFER",
@@ -22022,7 +22027,8 @@ Examples:
                     const result = economy.deposit(senderJid, amount);
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "DEPOSIT",
@@ -22096,7 +22102,8 @@ Examples:
                     const result = economy.withdraw(senderJid, amount);
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "WITHDRAW",
@@ -22972,10 +22979,8 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                       console.log(`📸 Fetching PFP for ${normalizedJid}...`);
 
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(
-                          jid,
-                          "image",
-                        );
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, jid);
 
                         if (pfpUrl) {
                           const response = await axios.get(pfpUrl, {

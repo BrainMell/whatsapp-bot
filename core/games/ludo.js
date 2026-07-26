@@ -8,6 +8,7 @@ const botConfig = require('../../botConfig');
 const axios = require('axios');
 const economy = require('../rpg/economy');
 const GoImageService = require('../utils/goImageService');
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 
 const goService = new GoImageService();
 
@@ -73,7 +74,10 @@ async function fetchProfilePicture(sock, jid) {
     await cleanPfpCache();
 
     try {
-      const pfpUrl = await sock.profilePictureUrl(jid, 'image');
+      // 💡 PERF PATCH 2026-07-27: was sock.profilePictureUrl(jid, 'image')
+      // with NO timeout — could hang for 90s on LID jids. Now uses the
+      // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
+      const pfpUrl = await fetchPfpCached(sock, jid);
       if (pfpUrl) {
         return pfpUrl; // Return URL for Go service
       }

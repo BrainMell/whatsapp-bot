@@ -13,6 +13,7 @@ const GoImageService = require('../utils/goImageService');
 const goService = new GoImageService();
 const fs = require('fs');
 const profileHelper = require('../utils/profileHelper');
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 
 const getPrefix = () => botConfig.getPrefix();
 const getCurrency = () => botConfig.getCurrency();
@@ -39,27 +40,14 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const equipStats = inventorySystem.getEquipmentStats(senderJid);
     
     // Handle PFP
-    // 💡 FIX 2026-07-26 (INVESTIGATION.md):
-    // sock.profilePictureUrl() has NO built-in timeout. When senderJid is an
-    // LID (xxx@lid) instead of a phone JID (xxx@s.whatsapp.net), Baileys
-    // tries to fetch the PFP from WhatsApp's servers, which may hang
-    // indefinitely for LIDs. This caused .jk char to silently hang forever
-    // — the handler never reached the Go service call, never reached the
-    // outer catch, just hung. The user saw "nothing" as a response.
-    //
-    // Fix: wrap in an 8s timeout. If it doesn't resolve in 8s, treat as
-    // no PFP (pfpUrl = null) and continue. The character sheet renders fine
-    // without a PFP — it just omits the avatar.
+    // 💡 PERF PATCH 2026-07-27: replaced inline 8s timeout + raw
+    // sock.profilePictureUrl() call with the shared pfpCache helper.
+    // Behaviour preserved (8s timeout, returns null on failure) PLUS
+    // 5min positive cache + 60s negative cache + in-flight de-dup.
     let pfpUrl;
-    try { 
-        const pfpTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('profilePictureUrl timed out after 8s')), 8000)
-        );
-        pfpUrl = await Promise.race([
-            sock.profilePictureUrl(senderJid, 'image'),
-            pfpTimeout
-        ]);
-    } catch (e) { 
+    try {
+        pfpUrl = await fetchPfpCached(sock, senderJid);
+    } catch (e) {
         console.warn('[displayCharacterSheet] profilePictureUrl failed:', e.message);
         pfpUrl = null;
     }
@@ -691,7 +679,8 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
         try {
             const recipe = result.recipe;
             const economyUser = economy.getUser(senderJid) || {};
-            const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+            // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+            const pfpUrl = await fetchPfpCached(sock, senderJid);
             const nickname = economyUser.nickname || senderJid.split('@')[0];
             const currency = getCurrency();
             
@@ -1171,7 +1160,8 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
 
     // Generate transaction card image if possible
     try {
-        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+        const pfpUrl = await fetchPfpCached(sock, senderJid);
         const nickname = economyUser.nickname || senderJid.split('@')[0];
         const currency = getCurrency();
         

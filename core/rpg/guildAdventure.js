@@ -6809,7 +6809,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
         // Try to resolve the player's display name for the historical record.
         let displayName = player.name || player.pushName || player.jid.split('@')[0];
         if (!displayName || displayName === 'Unknown') {
-          try { displayName = await sock.profilePictureUrl?.(player.jid) ? player.jid.split('@')[0] : player.jid.split('@')[0]; } catch {}
+          // 💡 PERF PATCH 2026-07-27: previously called
+          // sock.profilePictureUrl?.(player.jid) with NO timeout — could
+          // hang for 90s on LID jids. The result was only used in a ternary
+          // whose two branches returned the SAME value (player.jid.split('@')[0]),
+          // making the entire call dead code that just blocked the event loop.
+          // Removed the call; displayName is assigned by the line below.
           displayName = displayName || player.jid.split('@')[0];
         }
         // Also try to fetch the actual WhatsApp pushName from the message
