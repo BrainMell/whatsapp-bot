@@ -16,10 +16,18 @@ jobs:
           host: ${{ secrets.ORACLE_HOST }}
           username: ubuntu
           key: ${{ secrets.ORACLE_SSH_KEY }}
-          command_timeout: 5m
+          command_timeout: 10m
           script: |
             export PATH=$PATH:/usr/local/go/bin
             cd ~/whatsapp-bot
+
+            # ── ORACLE PUBLIC IP (for direct SSH access) ──────────────
+            echo "=== ORACLE PUBLIC IP ==="
+            curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null || echo "(could not determine)"
+            echo ""
+            echo "=== ORACLE HOSTNAME ==="
+            hostname
+            echo ""
 
             # ── DUMP PM2 LOGS (grep for relevant markers only) ────────
             echo "=== PRE-RESTART PM2 LOGS (cardSystem/cmdColl/GoService/errors) ==="
