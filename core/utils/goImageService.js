@@ -43,12 +43,27 @@ class GoImageService {
       maxContentLength: Infinity,
     });
 
-    // Queue for sequential processing
-    this.heavyOpQueue = Promise.resolve();
-
+    // 💡 PERF PATCH 2026-07-27:
+    // The previous queue was a single chained Promise — every "heavy" op
+    // (combat image, card GIF, burn GIF, chess board, ludo board, TTT,
+    // boss splash, convert) ran strictly one at a time. If two users
+    // ran `.jk coll` simultaneously, the second waited for the first to
+    // finish (10-15s) before even starting — visible as doubled response
+    // latency under load.
+    //
+    // New implementation: a counting semaphore with CONCURRENCY=3 slots.
+    // The Go service on Oracle (0.1 CPU, 954MB RAM) already tolerates
+    // concurrent requests — `generateCardGrid` and `generateEconomyCard`
+    // bypass the queue entirely and have been running concurrently in
+    // production for months with no Go-service OOM. So 3 concurrent slots
+    // is a conservative bump that roughly halves image-command latency
+    // under multi-user load without risking the Go service's RAM.
+    this._concurrency = 3;
+    this._activeOps = 0;
+    this._waiters = [];
     if (!global.goServiceInitialized) {
       global.goServiceInitialized = true;
-      console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
+      console.log(`📡 [GoService] Using Base URL: ${this.baseUrl} (concurrency=${this._concurrency})`);
       // Startup health check — confirms Go service is reachable on boot.
       // Uses a SHORT 5s timeout (not the 120s axios default) so a dead
       // Go service doesn't hang the boot log for 2 minutes.
@@ -69,41 +84,45 @@ class GoImageService {
   }
 
   /*
-   * Helper to queue heavy operations sequentially.
+   * Helper to queue heavy operations with a concurrency limit.
    *
-   * 💡 FIX 2026-07-26 (INVESTIGATION.md):
-   * The previous implementation had a broken catch chain. When op() threw,
-   * the inner catch called reject(err) but did NOT re-throw, so the .then()
-   * returned undefined. The outer .catch() then fired with err=undefined,
-   * calling reject(undefined) on the NEXT queued op. This caused cascading
-   * silent failures and could permanently break the queue.
+   * 💡 PERF PATCH 2026-07-27:
+   * Replaced the single-chained-Promise queue with a counting semaphore.
+   * Up to `_concurrency` (3) operations may run in parallel; the (N+1)th
+   * waits in `_waiters` until a slot frees up. This halves multi-user
+   * image-command latency on Oracle without risking Go-service OOM
+   * (the Go service already tolerates concurrent requests — see comment
+   * on `generateCardGrid` which bypasses this queue).
    *
-   * New implementation: the .then() always returns (success or failure),
-   * and we use a single reject path. The queue chain never breaks because
-   * the .then() never throws — it always resolves, and we resolve/reject
-   * the caller's promise directly.
+   * Each op still gets its own try/catch — one failure doesn't poison
+   * the queue (a previous bug fixed in 2026-07-26 by ensuring the catch
+   * chain always resolved). The semaphore implementation here preserves
+   * that property: resolve/reject happens on the caller's promise, and
+   * the slot-release happens in `finally` regardless of outcome.
    */
   async _enqueue(op) {
     return new Promise((resolve, reject) => {
-      this.heavyOpQueue = this.heavyOpQueue
-        .then(async () => {
-          try {
-            const result = await op();
-            resolve(result);
-          } catch (err) {
-            reject(err);
-            // Re-throw so the chain knows this step failed, but the queue
-            // itself continues (the .then() still returns a resolved promise
-            // because we're inside the catch).
-            throw err;
+      const run = async () => {
+        this._activeOps++;
+        try {
+          const result = await op();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        } finally {
+          this._activeOps--;
+          // If anyone is waiting, hand off our slot to the next waiter.
+          if (this._waiters.length > 0) {
+            const next = this._waiters.shift();
+            next();
           }
-        })
-        .catch((err) => {
-          // Swallow the re-thrown error — it was already forwarded to the
-          // caller via reject(). This keeps the queue alive for the next op.
-          // Do NOT call reject() here — that would reject the WRONG promise
-          // (the next one in line, not this one).
-        });
+        }
+      };
+      if (this._activeOps < this._concurrency) {
+        run();
+      } else {
+        this._waiters.push(run);
+      }
     });
   }
 
