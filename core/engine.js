@@ -48,8 +48,7 @@ const { promisify } = require("util");
 const execPromise = promisify(exec);
 const axios = require("axios");
 const cheerio = require("cheerio");
-const GoImageService = require('./utils/goImageService');
-const goService = new GoImageService();
+const goService = require('./utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const play = require("play-dl");
 const yts = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
@@ -3364,8 +3363,8 @@ What to do:
     }
 
     // ---------- scraper (Hybrid Node/Go Service) ----------
-    const GoImageService = require('./utils/goImageService');
-    const goService = new GoImageService();
+    // 💡 singleton (PERF PATCH 2026-07-27): reuse the shared instance instead of creating a new one
+    const goService = require('./utils/goImageService');
 
     async function scrapePornPics(searchTerm, count = 10, options = {}) {
       try {

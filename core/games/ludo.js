@@ -7,10 +7,8 @@ const path = require('path');
 const botConfig = require('../../botConfig');
 const axios = require('axios');
 const economy = require('../rpg/economy');
-const GoImageService = require('../utils/goImageService');
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
-
-const goService = new GoImageService();
 
 let globalSock = null;
 

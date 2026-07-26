@@ -233,8 +233,8 @@ async function inspectItem(sock, chatId, userId, target) {
     
     // Try rendering image card via Go Service profile card endpoint
     try {
-        const GoImageService = require('../utils/goImageService');
-        const goService = new GoImageService();
+        // 💡 singleton (PERF PATCH 2026-07-27): reuse shared instance
+        const goService = require('../utils/goImageService');
         
         const cardData = {
             nickname: item.name || itemInfo.name || item.id,

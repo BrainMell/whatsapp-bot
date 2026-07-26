@@ -2,8 +2,7 @@
 // POWERSCALE.JS - Character list + selection flow
 // ===============================================
 
-const GoImageService = require('./goImageService');
-const goService = new GoImageService();
+const goService = require('./goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // Pending selections: chatId → { characters, timestamp }
 const pendingSelections = new Map();

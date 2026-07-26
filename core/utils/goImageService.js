@@ -637,4 +637,29 @@ class GoImageService {
   }
 }
 
-module.exports = GoImageService;
+// 💡 PERF PATCH 2026-07-27 (singleton):
+// Previously every module did `const goService = new GoImageService()` at the
+// top of the file. There were 12 such callsites (engine.js x2, rpgCommands,
+// shopCommands, repairCommands, cardSystem, combatImageGenerator, chess, ttt,
+// ludo, news, powerscale). Each one created:
+//   - Its own axios client (with its own connection pool — ~5-10 TCP sockets)
+//   - Its own _enqueue queue (independent concurrency=3 cap per instance)
+//   - Its own startup healthCheck log line
+// Net effect: 12 × (~3-5 MB) = ~40-60 MB of duplicate state, AND the
+// concurrency=3 cap was effectively 3×12=36 concurrent requests to the Go
+// service (could overwhelm it under load — the cap was meant to be a
+// GLOBAL limit, not per-instance).
+//
+// Fix: export a single shared instance. All callsites now do:
+//   const goService = require('../utils/goImageService');
+// instead of:
+//   const GoImageService = require('../utils/goImageService');
+//   const goService = new GoImageService();
+//
+// The class is still exported as `.GoImageService` for tests that construct
+// their own instance with a custom overrideUrl.
+const _sharedInstance = new GoImageService();
+
+module.exports = _sharedInstance;
+module.exports.GoImageService = GoImageService;
+module.exports.getShared = () => _sharedInstance;

@@ -2,10 +2,8 @@
 // 🎨 COMBAT IMAGE GENERATOR - GO MICROSERVICE CLIENT 
 // ============================================ 
 
-const GoImageService = require('../utils/goImageService');
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const botConfig = require('../../botConfig');
-
-const goService = new GoImageService();
 
 /*
  * Generate Combat Image using Go Microservice

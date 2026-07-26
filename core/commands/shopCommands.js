@@ -10,8 +10,7 @@ const lootSystem = require('../rpg/lootSystem');
 const classSystem = require('../rpg/classSystem');
 const progression = require('../rpg/progression');
 const botConfig = require('../../botConfig');
-const GoImageService = require('../utils/goImageService');
-const goService = new GoImageService();
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const profileHelper = require('../utils/profileHelper');
 const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 

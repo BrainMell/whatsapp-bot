@@ -7,9 +7,8 @@ const { Chess } = require('chess.js');
 const economy = require('../rpg/economy');
 const system = require('../utils/system');
 const botConfig = require('../../botConfig');
-const GoImageService = require('../utils/goImageService');
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
-const goService = new GoImageService();
 // ============================================
 // AI LOGIC (BASIC EVALUATION + MINIMAX)
 // ============================================

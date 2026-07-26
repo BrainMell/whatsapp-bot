@@ -10,8 +10,7 @@
 const fs      = require('fs');
 const path    = require('path');
 const axios   = require('axios');
-const GoImageService = require('../utils/goImageService');
-const goService = new GoImageService();
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // ── Mongoose Models ──────────────────────────────────────────────────────────
 const CardStat   = require('../models/CardStat');

@@ -8,9 +8,7 @@ const path = require('path');
 const botConfig = require('../../botConfig');
 const economy = require('../rpg/economy');
 const system = require('../utils/system'); // NEW: Database System Module
-const GoImageService = require('../utils/goImageService');
-
-const goService = new GoImageService();
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // ============================================
 // SCOREBOARD MANAGEMENT (UPGRADED)
