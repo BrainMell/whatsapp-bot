@@ -16,33 +16,21 @@ jobs:
           host: ${{ secrets.ORACLE_HOST }}
           username: ubuntu
           key: ${{ secrets.ORACLE_SSH_KEY }}
+          command_timeout: 5m
           script: |
             export PATH=$PATH:/usr/local/go/bin
             cd ~/whatsapp-bot
 
-            # ── DUMP EXISTING PM2 LOGS BEFORE RESTART ────────────────────
-            # PM2 log files persist across restarts. Dump them NOW so we
-            # can see what happened when the user sent commands before
-            # this deploy. Grep for relevant keywords.
-            echo "=============================================="
-            echo "=== PRE-RESTART PM2 LOGS (last 2000 lines) ==="
-            echo "=== OUT LOG (last 2000 lines) ==="
-            tail -2000 ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -2000
-            echo "=== ERR LOG (last 2000 lines) ==="
-            tail -2000 ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -2000
-            echo "=== GREP: All Pipeline + GoService + Timeout markers ==="
-            grep -E "Pipeline:|GoService|TIMEOUT|SKIPPING|🔴|⏱️|Unknown command|cardSystem|DIAG|char|coll|bal|diag|profilePictureUrl|timed out|ECONNREFUSED|Error:" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -300
-            grep -E "Pipeline:|GoService|TIMEOUT|SKIPPING|🔴|⏱️|Unknown command|cardSystem|DIAG|char|coll|bal|diag|profilePictureUrl|timed out|ECONNREFUSED|Error:" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -300
-            echo "=== GREP: Skipping message / Pipeline:4 / sendMenuWithBanner / diag / CMD DETECTED ==="
-            grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -100
-            grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -100
+            # ── DUMP PM2 LOGS (grep for relevant markers only) ────────
+            echo "=== PRE-RESTART PM2 LOGS (cardSystem/cmdColl/GoService/errors) ==="
+            grep -E "cardSystem.*dispatching|cmdColl|sock_ref is null|GoService.*Health|TIMED OUT|TIMEOUT|SKIPPING|🔴|⏱️|Error:|TypeError|profilePictureUrl" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -100
+            grep -E "cardSystem.*dispatching|cmdColl|sock_ref is null|GoService.*Health|TIMED OUT|TIMEOUT|SKIPPING|🔴|⏱️|Error:|TypeError|profilePictureUrl" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -50
             echo "=============================================="
 
             # ── BACKUP AUTH FILES ────────────────────────────────────────
             AUTH_BACKUP=/tmp/auth_backup_$(date +%s).tar.gz
             if [ -d "instances/Jake/auth" ]; then
               tar czf "$AUTH_BACKUP" instances/*/auth/ 2>/dev/null || true
-              echo "Backed up auth files to $AUTH_BACKUP"
             fi
 
             # ── FORCE-UPDATE CODE ────────────────────────────────────────
@@ -54,206 +42,22 @@ jobs:
             if [ -f "$AUTH_BACKUP" ]; then
               tar xzf "$AUTH_BACKUP"
               rm "$AUTH_BACKUP"
-              echo "Restored auth files"
             fi
 
             npm install
             pm2 restart whatsapp-bot
 
-            # ── GO SERVICE HEALTH GATE ──────────────────────────────────
-            # 💡 FIX 2026-07-26 (INVESTIGATION.md):
-            # The bot depends on the Go image service (bot-generation-go)
-            # running on the same host at http://127.0.0.1:7860. If that
-            # service is down, EVERY image command (.char/.coll/.deck/.bal/
-            # combat) silently fails. 12 prior "ROOT CAUSE" commits chased
-            # symptoms without ever checking this. Now we check explicitly
-            # and scream in the deploy log if it's down.
-            echo "=============================================="
-            echo "=== GO SERVICE HEALTH CHECK ==="
-            GO_HEALTH=$(curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN")
-            echo "Go service health response: $GO_HEALTH"
-            if [ "$GO_HEALTH" = "DOWN" ] || [ -z "$GO_HEALTH" ] || ! echo "$GO_HEALTH" | grep -q '"status"'; then
-              echo "⚠️  ⚠️  ⚠️  GO IMAGE SERVICE IS DOWN OR UNRESPONSIVE  ⚠️  ⚠️  ⚠️"
-              echo "    pm2 says bot-generation-go is: $(pm2 list 2>/dev/null | grep bot-generation-go | awk '{print $10}')"
-              echo "    Image commands will FAIL SILENTLY until this is fixed."
-              echo "    To restart: cd ~/bot_generation && pm2 restart bot-generation-go bot-generation-scraper"
-              echo "    To verify:  curl -s -m 5 http://127.0.0.1:7860/health"
-              echo "    (should return JSON with 'status':'ready')"
-              echo ""
-              echo "    Attempting automatic restart..."
-              cd ~/bot_generation 2>/dev/null && pm2 restart bot-generation-go bot-generation-scraper 2>&1 || echo "    Auto-restart failed — manual intervention required."
-              cd ~/whatsapp-bot
-              sleep 5
-              GO_HEALTH2=$(curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN")
-              echo "Go service health after restart attempt: $GO_HEALTH2"
-              if [ "$GO_HEALTH2" = "DOWN" ] || [ -z "$GO_HEALTH2" ]; then
-                echo "❌ Go service STILL DOWN after restart. Image commands will fail."
-                echo "   Check bot-generation-go logs: pm2 logs bot-generation-go --lines 50 --nostream"
-              else
-                echo "✅ Go service recovered after restart."
-              fi
-            else
-              echo "✅ Go image service /health endpoint is responding."
-            fi
-
-            # ── GO SERVICE RENDER TEST (not just /health) ──────────────
-            # 💡 The /health endpoint is trivial — it just returns JSON.
-            # The actual render endpoints (/api/cards/grid, /api/cards/profile)
-            # do real work: load PNGs, use fonts, composite images. If the
-            # Go service can't find its assets/ directory (because pm2's
-            # working directory isn't ~/bot_generation), /health works but
-            # every render call hangs or fails. This test catches that.
-            echo "=============================================="
-            echo "=== GO SERVICE RENDER TEST (actual /api/cards/profile call) ==="
-            RENDER_TEST=$(curl -s -m 15 -X POST http://127.0.0.1:7860/api/cards/profile \
-              -H "Content-Type: application/json" \
-              -d '{"nickname":"DEPLOY_TEST","level":1,"rank":"F","class":"Adventurer","stats":{"hp":100,"atk":10,"def":10,"mag":10,"spd":10,"luck":10,"crit":0,"evasion":0},"equipStats":{}}' \
-              -o /tmp/render_test.png -w "%{http_code} %{size_download} %{time_total}" 2>/dev/null || echo "FAILED")
-            echo "Render test result: $RENDER_TEST"
-            RENDER_SIZE=$(stat -c%s /tmp/render_test.png 2>/dev/null || echo 0)
-            RENDER_TYPE=$(file -b /tmp/render_test.png 2>/dev/null | head -c 40)
-            echo "Render output: size=${RENDER_SIZE} bytes, type=${RENDER_TYPE}"
-            if [ "$RENDER_SIZE" -lt 1000 ] || echo "$RENDER_TYPE" | grep -qi "text\|html\|ascii"; then
-              echo "⚠️  ⚠️  ⚠️  GO SERVICE RENDER IS BROKEN  ⚠️  ⚠️  ⚠️"
-              echo "    /health works but actual rendering fails. This means:"
-              echo "    - The Go service probably can't find its assets/ directory"
-              echo "    - pm2's working directory for bot-generation-go may be wrong"
-              echo "    - Check: pm2 describe bot-generation-go | grep 'cwd\\|script path'"
-              echo "    - The Go service must run from ~/bot_generation so assets/ is found"
-              echo "    - Image commands will HANG for 60s then return nothing"
-              echo ""
-              echo "    bot-generation-go pm2 details:"
-              pm2 describe bot-generation-go 2>/dev/null | grep -E "script path|cwd|exec cwd|status|restarts|uptime" | head -10
-              echo ""
-              echo "    Attempting fix: restart bot-generation-go from ~/bot_generation..."
-              cd ~/bot_generation 2>/dev/null
-              pm2 delete bot-generation-go 2>/dev/null || true
-              pm2 start ./bot-generation --name bot-generation-go --cwd ~/bot_generation 2>&1 || echo "    Manual restart failed — needs SSH intervention"
-              cd ~/whatsapp-bot
-              sleep 8
-              RENDER_TEST2=$(curl -s -m 15 -X POST http://127.0.0.1:7860/api/cards/profile \
-                -H "Content-Type: application/json" \
-                -d '{"nickname":"DEPLOY_TEST2","level":1,"rank":"F","class":"Adventurer","stats":{"hp":100,"atk":10,"def":10,"mag":10,"spd":10,"luck":10,"crit":0,"evasion":0},"equipStats":{}}' \
-                -o /tmp/render_test2.png -w "%{http_code} %{size_download} %{time_total}" 2>/dev/null || echo "FAILED")
-              RENDER_SIZE2=$(stat -c%s /tmp/render_test2.png 2>/dev/null || echo 0)
-              echo "Render test after restart: $RENDER_TEST2 (size=${RENDER_SIZE2})"
-              if [ "$RENDER_SIZE2" -gt 1000 ]; then
-                echo "✅ Go service render WORKS after restart."
-              else
-                echo "❌ Go service render STILL BROKEN. Image commands will fail/hang."
-                echo "   Manual SSH required: cd ~/bot_generation && pm2 restart bot-generation-go"
-              fi
-            else
-              echo "✅ Go service render works (returned valid PNG, ${RENDER_SIZE} bytes)."
-            fi
-
-            # ── AXIOS vs CURL TEST ──────────────────────────────────────
-            # 💡 The deploy's curl tests pass but the bot's axios healthCheck
-            # returns null. This test runs the SAME axios call the bot makes,
-            # from the same Node.js runtime, to see if axios itself is broken.
-            echo "=============================================="
-            echo "=== AXIOS vs CURL TEST (does axios reach the Go service?) ==="
-            node -e "
-              const axios = require('axios');
-              const client = axios.create({
-                baseURL: 'http://127.0.0.1:7860',
-                timeout: 5000,
-                maxBodyLength: Infinity,
-                maxContentLength: Infinity,
-              });
-              client.get('/health').then(r => {
-                console.log('AXIOS /health SUCCESS:', JSON.stringify(r.data));
-              }).catch(e => {
-                console.log('AXIOS /health FAILED:', e.code || e.constructor.name, ':', e.message);
-                if (e.response) console.log('  response:', e.response.status, JSON.stringify(e.response.data).slice(0,200));
-              });
-            " 2>&1
-            echo "=== Also test with Node's http module (bypass axios entirely) ==="
-            node -e "
-              const http = require('http');
-              const req = http.get('http://127.0.0.1:7860/health', { timeout: 5000 }, (res) => {
-                let data = '';
-                res.on('data', c => data += c);
-                res.on('end', () => console.log('NODE HTTP /health SUCCESS:', data));
-              });
-              req.on('error', e => console.log('NODE HTTP /health FAILED:', e.code || e.constructor.name, ':', e.message));
-              req.on('timeout', () => { console.log('NODE HTTP /health TIMEOUT'); req.destroy(); });
-            " 2>&1
-            echo "=== Check for proxy env vars that axios might respect ==="
-            env | grep -iE "proxy|PROXY" || echo "(no proxy env vars set)"
-            echo "=== Check pm2 env for bot-generation-go ==="
-            pm2 env 0 2>/dev/null | grep -iE "proxy|PROXY|PORT|GO_IMAGE" | head -10 || echo "(pm2 env not available)"
-
-            # ── DIRECT PIPELINE TEST ────────────────────────────────────
-            # 💡 These scripts run ON Oracle and test the bot's code directly.
-            # They have aggressive timeouts so they can't hang the deploy.
-            # Commented out for now — they proved the code works (see commit
-            # 3d0ded34). The issue is in the WhatsApp/Baileys layer.
-            # Uncomment to re-run if needed.
-            # echo "=============================================="
-            # echo "=== DIRECT TESTS (bypasses WhatsApp) ==="
-            # cd ~/whatsapp-bot
-            # timeout 60 node scripts/test_direct_pipeline.js 2>&1 || echo "(direct pipeline test timed out or failed)"
-            # timeout 60 node scripts/test_cmdcoll_direct.js 2>&1 || echo "(direct cmdcoll test timed out or failed)"
-            # echo "=== DIRECT TESTS COMPLETE ==="
-            # cd ~
-            echo "=============================================="
+            # ── QUICK GO SERVICE HEALTH CHECK ───────────────────────────
+            echo "=== GO SERVICE HEALTH ==="
+            curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN"
+            echo ""
 
             # ── VERIFY ───────────────────────────────────────────────────
-            echo "=============================================="
-            echo "=== DEPLOY VERIFICATION ==="
-            echo "Deployed HEAD: $(git rev-parse --short HEAD)"
-            echo "Deployed commit: $(git log -1 --format='%s')"
-
-            echo "=== Waiting 20s for bot to boot ==="
-            sleep 20
-
-            echo "=== AUTH FILES ==="
-            echo "Auth dir exists: $(test -d instances/Jake/auth && echo YES || echo NO)"
-            echo "Auth file count: $(ls instances/Jake/auth/ 2>/dev/null | wc -l)"
-
-            echo "=== SHARP CHECK ==="
-            node -e "try { const s = require('sharp'); s({create:{width:1,height:1,channels:3,background:{r:255,g:255,b:255}}}).jpeg().toBuffer().then(b => console.log('sharp WORKS, test buffer:', b.length, 'bytes')).catch(e => console.log('sharp PROCESS FAIL:', e.message)); } catch(e) { console.log('sharp LOAD FAIL:', e.message); }" 2>&1
-
-            echo "=== MEDIA UPLOAD CONNECTIVITY TEST ==="
-            echo "--- DNS resolution of mmg.whatsapp.net ---"
-            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { all: true }, (err, addrs) => { if (err) console.log('DNS FAIL:', err.message); else console.log('DNS OK:', JSON.stringify(addrs)); });"
-            echo "--- DNS resolution of mmg.whatsapp.net (IPv4 only) ---"
-            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { family: 4 }, (err, addr) => { if (err) console.log('IPv4 DNS FAIL:', err.message); else console.log('IPv4 DNS OK:', addr); });"
-            echo "--- DNS resolution of mmg.whatsapp.net (IPv6 only) ---"
-            node -e "const dns = require('dns'); dns.lookup('mmg.whatsapp.net', { family: 6 }, (err, addr) => { if (err) console.log('IPv6 DNS FAIL:', err.message); else console.log('IPv6 DNS OK:', addr); });"
-            echo "--- HTTPS connectivity test (IPv4 forced, 10s timeout) ---"
-            node -e "
-              const https = require('https');
-              const agent = new https.Agent({ family: 4 });
-              const req = https.get('https://mmg.whatsapp.net/', { agent, timeout: 10000 }, (res) => {
-                console.log('IPv4 HTTPS OK: status', res.statusCode);
-                res.resume();
-              });
-              req.on('error', (e) => console.log('IPv4 HTTPS FAIL:', e.message));
-              req.on('timeout', () => { console.log('IPv4 HTTPS TIMEOUT (10s)'); req.destroy(); });
-            "
-            echo "--- HTTPS connectivity test (default, 10s timeout) ---"
-            node -e "
-              const https = require('https');
-              const req = https.get('https://mmg.whatsapp.net/', { timeout: 10000 }, (res) => {
-                console.log('Default HTTPS OK: status', res.statusCode);
-                res.resume();
-              });
-              req.on('error', (e) => console.log('Default HTTPS FAIL:', e.message));
-              req.on('timeout', () => { console.log('Default HTTPS TIMEOUT (10s)'); req.destroy(); });
-            "
-            echo "--- IPv6 check on this server ---"
-            ip -6 addr show 2>&1 | head -10 || echo "No IPv6 addresses"
-
-            echo "=== SYNTAX CHECK ==="
-            node -c core/engine.js 2>&1 && echo "engine.js syntax OK" || echo "engine.js SYNTAX ERROR"
-
+            echo "=== DEPLOYED: $(git rev-parse --short HEAD) ==="
+            sleep 15
             echo "=== PM2 STATUS ==="
-            pm2 list 2>&1
-
-            echo "=== POST-RESTART PM2 LOGS (last 100 lines) ==="
-            pm2 logs whatsapp-bot --lines 100 --nostream 2>&1 | tail -100
-
+            pm2 list 2>&1 | grep -E "bot-generation|whatsapp-bot"
+            echo "=== POST-RESTART LOGS (last 30 lines) ==="
+            pm2 logs whatsapp-bot --lines 30 --nostream 2>&1 | tail -30
             echo "=============================================="
-            echo "✅ Diagnostics complete."
+            echo "✅ Done."
