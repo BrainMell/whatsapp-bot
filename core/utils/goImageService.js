@@ -635,6 +635,47 @@ class GoImageService {
       return null;
     }
   }
+
+  /**
+   * Generate a TRUE hybrid grid MP4 — animated cards cycle in place,
+   * static cards stay still, grid layout preserved (540×1080).
+   *
+   * Added 2026-07-27 per benchmark results showing Mode D (true hybrid via
+   * ffmpeg) is the right architecture for `.jk coll --anim` / `.jk deck --anim`.
+   *
+   * Benchmark on Oracle (0.1 OCPU, 954MB RAM):
+   *   8s @ 15fps: 3.3s render, 34 KB output, 0 MB RAM delta (SWEET SPOT)
+   *
+   * Returns an MP4 buffer, or null on failure (callers should fall back
+   * to the static generateCardGrid() in that case).
+   *
+   * @param {Array<{url, animated, name, tier}>} images — same shape as generateCardGrid,
+   *   but the `animated` field is now honored (T6/S/Event cards should be marked animated:true)
+   * @param {string} title — currently unused by the Go renderer, kept for API symmetry
+   * @param {object} opts — { duration: seconds, fps: framerate }, defaults to 8s @ 15fps
+   */
+  async generateHybridGrid(images, title, opts = {}) {
+    try {
+      const duration = opts.duration || 8;
+      const fps = opts.fps || 15;
+      const response = await this.client.post(
+        "/api/cards/hybrid-grid",
+        { images, title, duration, fps },
+        {
+          responseType: "arraybuffer",
+          // 30s timeout — typical render is 3-5s, give headroom for slow downloads
+          // or a 10s @ 30fps render. Falls back to static PNG on timeout.
+          timeout: 30000,
+        },
+      );
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Hybrid Grid Error:", error.message);
+      return null;
+    }
+  }
 }
 
 // 💡 PERF PATCH 2026-07-27 (singleton):

@@ -1163,6 +1163,21 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
 
+  // 💡 FEATURE 2026-07-27: .jk coll --anim flag
+  // Strips the --anim flag from args so it doesn't get interpreted as a card index,
+  // and sets a flag that routes the grid render through generateHybridGrid instead
+  // of generateCardGrid. Hybrid produces a 540x1080 MP4 where animated cards cycle
+  // in place and static cards stay still (grid layout preserved).
+  // Falls back to the static PNG on any hybrid failure (network error, ffmpeg fail,
+  // Go service down, etc.) — user always sees SOMETHING.
+  let useHybridAnim = false;
+  const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
+  if (animFlagIdx !== -1) {
+    useHybridAnim = true;
+    args.splice(animFlagIdx, 1);
+    console.log(`🃏 [cmdColl] --anim flag detected, will use hybrid grid renderer`);
+  }
+
   if (args.length > 0) {
     const input = args[0];
     if (input === '--tier') return cmdCardsTier(senderJid, reply, chatId);
@@ -1194,7 +1209,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
         return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
       } catch (e) { return reply(caption); }
     }
-    return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
+    return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\`\n• Animated grid: \`${p} coll --anim\``, `${p} coll 5`);
   }
 
   console.log(`🃏 [cmdColl] querying UserCard.find | senderJid=${senderJid?.split('@')[0]}`);
@@ -1224,11 +1239,19 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
     const cached = gifCache.collections.get(senderJid);
-    
+
     let gifBuffer;
-    if (cached && cached.hash === currentHash) {
+    if (cached && cached.hash === currentHash && !useHybridAnim) {
+        // Only use cache for static grid (hybrid is animated, don't cache — re-render each time)
         console.log(`🃏 [cmdColl] using cached grid buffer`);
         gifBuffer = cached.buffer;
+    } else if (useHybridAnim) {
+        // 💡 FEATURE 2026-07-27: hybrid animated grid (MP4) — cycles animated cards in place
+        console.log(`🃏 [cmdColl] calling goService.generateHybridGrid | urls=${imageUrls.length}`);
+        gifBuffer = await goService.generateHybridGrid(imageUrls, "COLLECTION (TOP 12)");
+        console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer ? gifBuffer.length + ' bytes' : 'null'}`);
+        // Don't cache hybrid — it's animated + the cache stores PNG buffers that get sent as { image: ... }
+        // (mixing PNG cache + MP4 hybrid output would corrupt the next invocation)
     } else {
         console.log(`🃏 [cmdColl] calling goService.generateCardGrid | urls=${imageUrls.length}`);
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
@@ -1238,6 +1261,11 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      if (useHybridAnim) {
+        // 💡 Hybrid returns MP4 — send as video with gifPlayback (WhatsApp auto-plays + loops)
+        console.log(`🃏 [cmdColl] sending video (hybrid) with caption`);
+        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: fullText });
+      }
       console.log(`🃏 [cmdColl] sending image with caption`);
       return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
     }
@@ -1251,7 +1279,16 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 async function cmdDeck(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
-  
+
+  // 💡 FEATURE 2026-07-27: .jk deck --anim flag — same pattern as cmdColl
+  let useHybridAnim = false;
+  const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
+  if (animFlagIdx !== -1) {
+    useHybridAnim = true;
+    args.splice(animFlagIdx, 1);
+    console.log(`🃏 [cmdDeck] --anim flag detected, will use hybrid grid renderer`);
+  }
+
   if (args.length > 0) {
     const slot = parseInt(args[0]);
     if (!isNaN(slot)) {
@@ -1273,7 +1310,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             } catch (e) { return reply(caption); }
         }
     }
-    return sendUsage(reply, `${p} deck`, `${p} deck [slot_number]`, `${p} deck 1`);
+    return sendUsage(reply, `${p} deck`, `${p} deck [slot_number]\n• Animated grid: \`${p} deck --anim\``, `${p} deck 1`);
   }
 
   const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
@@ -1300,16 +1337,23 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
     const cached = gifCache.decks.get(`${senderJid}_main`);
-    
+
     let gifBuffer;
-    if (cached && cached.hash === currentHash) {
+    if (cached && cached.hash === currentHash && !useHybridAnim) {
         gifBuffer = cached.buffer;
+    } else if (useHybridAnim) {
+        // 💡 FEATURE 2026-07-27: hybrid animated grid (MP4) — cycles animated cards in place
+        gifBuffer = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
+        // Don't cache hybrid (see cmdColl comment)
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
         if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
+        if (useHybridAnim) {
+          return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
+        }
         return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
