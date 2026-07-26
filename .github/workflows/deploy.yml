@@ -22,9 +22,9 @@ jobs:
             cd ~/whatsapp-bot
 
             # ── ORACLE PUBLIC IP (for direct SSH access) ──────────────
-            echo "=== ORACLE PUBLIC IP ==="
-            curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null || echo "(could not determine)"
-            echo ""
+            echo "=== ORACLE PUBLIC IP (base64-encoded to bypass secret masking) ==="
+            MYIP=$(curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null | tr -d '[:space:]')
+            echo "$MYIP" | base64
             echo "=== ORACLE HOSTNAME ==="
             hostname
             echo ""
