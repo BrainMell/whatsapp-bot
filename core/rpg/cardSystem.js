@@ -1160,6 +1160,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
 }
 
 async function cmdColl(senderJid, reply, chatId, args = []) {
+  console.log(`🃏 [cmdColl] ENTERED | senderJid=${senderJid?.split('@')[0]} | args=${JSON.stringify(args)}`);
   const inst = getInst();
   const p = P();
 
@@ -1197,8 +1198,13 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\``, `${p} coll 5`);
   }
 
+  console.log(`🃏 [cmdColl] querying UserCard.find | senderJid=${senderJid?.split('@')[0]}`);
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  if (!owned.length) return reply('📭 Collection empty.');
+  console.log(`🃏 [cmdColl] UserCard.find returned ${owned.length} cards`);
+  if (!owned.length) {
+    console.log(`🃏 [cmdColl] collection empty, sending text reply`);
+    return reply('📭 Collection empty.');
+  }
 
   // Build flat list with simple style
   let msg = `🃏 *Collection*\n`;
@@ -1222,19 +1228,24 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     
     let gifBuffer;
     if (cached && cached.hash === currentHash) {
+        console.log(`🃏 [cmdColl] using cached grid buffer`);
         gifBuffer = cached.buffer;
     } else {
+        console.log(`🃏 [cmdColl] calling goService.generateCardGrid | urls=${imageUrls.length}`);
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
+        console.log(`🃏 [cmdColl] generateCardGrid returned: ${gifBuffer ? gifBuffer.length + ' bytes' : 'null'}`);
         if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
     }
 
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
+      console.log(`🃏 [cmdColl] sending image with caption`);
       return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: fullText });
     }
   }
 
   // Fallback text-only (Send as one message)
+  console.log(`🃏 [cmdColl] sending text-only fallback`);
   return reply(msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`);
 }
 
@@ -3146,7 +3157,13 @@ setInterval(() => {
 
 async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
   const inst = getInst();
-  if (!inst.sock_ref) return false;
+  // 💡 DIAG 2026-07-26: log why handleCommand returns false for .jk coll
+  // The log showed cardSystem returning false for .jk coll when it should
+  // return true. This logging will reveal which early-return fires.
+  if (!inst.sock_ref) {
+    console.warn(`🃏 [cardSystem] returning false: inst.sock_ref is null | botId=${botConfig.getBotId()} | inst has instances: ${instances.has(botConfig.getBotId())} | txt=${txt?.slice(0,40)}`);
+    return false;
+  }
 
   try {
     const lidResolver = require('../utils/lidResolver');
@@ -3169,6 +3186,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   const args = firstWord === p ? parts.slice(2) : parts.slice(1);
 
   if (!cmd) return false;
+
+  // 💡 DIAG: log what cmd we're about to handle
+  console.log(`🃏 [cardSystem] dispatching cmd="${cmd}" | senderJid=${senderJid?.split('@')[0]} | chatId=${chatId?.split('@')[0]}`);
 
   // Mod check helper
   // 💡 POLISH 2026-07-17: now also checks isCardsMod() from the 3-tier mod
