@@ -105,6 +105,18 @@ class GoImageService {
       const res = await this.client.get("/health", { timeout: 5000 });
       return res.data;
     } catch (error) {
+      // 💡 FIX 2026-07-26: log the ACTUAL error, not just "null". The
+      // deploy's curl test shows the Go service IS reachable, but the
+      // bot's axios healthCheck returns null. We need to see WHY axios
+      // is failing when curl succeeds. Possible causes:
+      //   - axios respecting HTTP_PROXY/NO_PROXY env vars that curl doesn't
+      //   - axios DNS resolution differs from curl
+      //   - axios connection reuse issue (stale keep-alive)
+      //   - the Go service rejecting axios's User-Agent or headers
+      console.error(`[GoService] healthCheck ERROR: ${error.code || error.constructor.name}: ${error.message}`);
+      if (error.response) {
+        console.error(`[GoService]   response status: ${error.response.status}, data: ${JSON.stringify(error.response.data).slice(0, 200)}`);
+      }
       return null;
     }
   }

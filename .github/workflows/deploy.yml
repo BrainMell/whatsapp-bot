@@ -147,6 +147,43 @@ jobs:
               echo "✅ Go service render works (returned valid PNG, ${RENDER_SIZE} bytes)."
             fi
 
+            # ── AXIOS vs CURL TEST ──────────────────────────────────────
+            # 💡 The deploy's curl tests pass but the bot's axios healthCheck
+            # returns null. This test runs the SAME axios call the bot makes,
+            # from the same Node.js runtime, to see if axios itself is broken.
+            echo "=============================================="
+            echo "=== AXIOS vs CURL TEST (does axios reach the Go service?) ==="
+            node -e "
+              const axios = require('axios');
+              const client = axios.create({
+                baseURL: 'http://127.0.0.1:7860',
+                timeout: 5000,
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+              });
+              client.get('/health').then(r => {
+                console.log('AXIOS /health SUCCESS:', JSON.stringify(r.data));
+              }).catch(e => {
+                console.log('AXIOS /health FAILED:', e.code || e.constructor.name, ':', e.message);
+                if (e.response) console.log('  response:', e.response.status, JSON.stringify(e.response.data).slice(0,200));
+              });
+            " 2>&1
+            echo "=== Also test with Node's http module (bypass axios entirely) ==="
+            node -e "
+              const http = require('http');
+              const req = http.get('http://127.0.0.1:7860/health', { timeout: 5000 }, (res) => {
+                let data = '';
+                res.on('data', c => data += c);
+                res.on('end', () => console.log('NODE HTTP /health SUCCESS:', data));
+              });
+              req.on('error', e => console.log('NODE HTTP /health FAILED:', e.code || e.constructor.name, ':', e.message));
+              req.on('timeout', () => { console.log('NODE HTTP /health TIMEOUT'); req.destroy(); });
+            " 2>&1
+            echo "=== Check for proxy env vars that axios might respect ==="
+            env | grep -iE "proxy|PROXY" || echo "(no proxy env vars set)"
+            echo "=== Check pm2 env for bot-generation-go ==="
+            pm2 env 0 2>/dev/null | grep -iE "proxy|PROXY|PORT|GO_IMAGE" | head -10 || echo "(pm2 env not available)"
+
             # ── VERIFY ───────────────────────────────────────────────────
             echo "=============================================="
             echo "=== DEPLOY VERIFICATION ==="
