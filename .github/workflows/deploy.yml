@@ -185,18 +185,18 @@ jobs:
             pm2 env 0 2>/dev/null | grep -iE "proxy|PROXY|PORT|GO_IMAGE" | head -10 || echo "(pm2 env not available)"
 
             # ── DIRECT PIPELINE TEST ────────────────────────────────────
-            # 💡 This script runs ON Oracle, requires the bot's actual modules,
-            # and tests each Go service call directly — bypassing WhatsApp.
-            # This tells us definitively whether the Go service calls work
-            # from the bot's code, independent of Baileys/message handling.
-            echo "=============================================="
-            echo "=== DIRECT PIPELINE TEST (bypasses WhatsApp) ==="
-            cd ~/whatsapp-bot
-            node scripts/test_direct_pipeline.js 2>&1
-            echo "=== DIRECT CMDCOLL TEST (calls cardSystem.handleCommand directly) ==="
-            node scripts/test_cmdcoll_direct.js 2>&1
-            echo "=== DIRECT TESTS COMPLETE ==="
-            cd ~
+            # 💡 These scripts run ON Oracle and test the bot's code directly.
+            # They have aggressive timeouts so they can't hang the deploy.
+            # Commented out for now — they proved the code works (see commit
+            # 3d0ded34). The issue is in the WhatsApp/Baileys layer.
+            # Uncomment to re-run if needed.
+            # echo "=============================================="
+            # echo "=== DIRECT TESTS (bypasses WhatsApp) ==="
+            # cd ~/whatsapp-bot
+            # timeout 60 node scripts/test_direct_pipeline.js 2>&1 || echo "(direct pipeline test timed out or failed)"
+            # timeout 60 node scripts/test_cmdcoll_direct.js 2>&1 || echo "(direct cmdcoll test timed out or failed)"
+            # echo "=== DIRECT TESTS COMPLETE ==="
+            # cd ~
             echo "=============================================="
 
             # ── VERIFY ───────────────────────────────────────────────────
