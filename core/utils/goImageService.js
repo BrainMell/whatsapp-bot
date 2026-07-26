@@ -656,16 +656,21 @@ class GoImageService {
    */
   async generateHybridGrid(images, title, opts = {}) {
     try {
-      const duration = opts.duration || 8;
-      const fps = opts.fps || 15;
+      // 💡 Tuned 2026-07-27 after real-world testing on Oracle.
+      // Original benchmarks used synthetic local files (3.3s render).
+      // Real shoob.gg downloads add ~20-25s to the wall clock, so we cut
+      // duration/fps to keep total response time reasonable.
+      // 5s @ 10fps = 50 frames, ~80-120 KB output, still smooth enough on WhatsApp.
+      const duration = opts.duration || 5;
+      const fps = opts.fps || 10;
       const response = await this.client.post(
         "/api/cards/hybrid-grid",
         { images, title, duration, fps },
         {
           responseType: "arraybuffer",
-          // 30s timeout — typical render is 3-5s, give headroom for slow downloads
-          // or a 10s @ 30fps render. Falls back to static PNG on timeout.
-          timeout: 30000,
+          // 45s timeout — real-world renders with slow downloads take ~25-30s.
+          // Falls back to static PNG on timeout.
+          timeout: 45000,
         },
       );
       const buf = Buffer.from(response.data);
