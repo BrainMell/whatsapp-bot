@@ -27,12 +27,32 @@ class GoImageService {
   constructor(overrideUrl = null) {
     this.baseUrl = overrideUrl || _explicitGoUrl || _DEFAULT_GO_URL;
 
+    // 💡 FIX 2026-07-26 (CRITICAL):
+    // this.client MUST be created BEFORE this.healthCheck() is called.
+    // The previous code called this.healthCheck() at line 36, but
+    // this.client wasn't set until line 50. Inside healthCheck(),
+    // `this.client.get(...)` threw `TypeError: Cannot read properties of
+    // undefined (reading 'get')` — which was caught and returned null,
+    // making it look like the Go service was unreachable when it was
+    // actually fine. This was the root cause of ALL the "Health: null"
+    // logs. The Go service was never down; the healthCheck code was broken.
+    this.client = axios.create({
+      baseURL: this.baseUrl,
+      timeout: 120000, // 120s timeout for browser ops (scrapes, GIFs)
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    // Queue for sequential processing
+    this.heavyOpQueue = Promise.resolve();
+
     if (!global.goServiceInitialized) {
       global.goServiceInitialized = true;
       console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
       // Startup health check — confirms Go service is reachable on boot.
       // Uses a SHORT 5s timeout (not the 120s axios default) so a dead
       // Go service doesn't hang the boot log for 2 minutes.
+      // Now that this.client is set before this call, it actually works.
       this.healthCheck()
         .then((h) => {
           if (h) {
@@ -46,16 +66,6 @@ class GoImageService {
         })
         .catch((e) => console.error("[GoService] Health FAIL:", e.message));
     }
-
-    this.client = axios.create({
-      baseURL: this.baseUrl,
-      timeout: 120000, // 120s timeout for browser ops (scrapes, GIFs)
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    });
-
-    // Queue for sequential processing
-    this.heavyOpQueue = Promise.resolve();
   }
 
   /*
