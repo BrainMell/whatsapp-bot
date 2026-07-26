@@ -5365,7 +5365,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (!sock._sendMessagePatched) {
                 const _origSendMessage = sock.sendMessage.bind(sock);
                 sock.sendMessage = async (chatId, content, options = {}) => {
-                  if (content && content.image && !content.jpegThumbnail) {
+                  // Auto-inject jpegThumbnail for BOTH image and video messages
+                  // to prevent sharp from being called (it crashes on Oracle)
+                  if (content && !content.jpegThumbnail && (content.image || content.video)) {
                     content.jpegThumbnail = FALLBACK_THUMB;
                   }
                   return _origSendMessage(chatId, content, options);
