@@ -57,6 +57,42 @@ jobs:
             npm install
             pm2 restart whatsapp-bot
 
+            # ── GO SERVICE HEALTH GATE ──────────────────────────────────
+            # 💡 FIX 2026-07-26 (INVESTIGATION.md):
+            # The bot depends on the Go image service (bot-generation-go)
+            # running on the same host at http://127.0.0.1:7860. If that
+            # service is down, EVERY image command (.char/.coll/.deck/.bal/
+            # combat) silently fails. 12 prior "ROOT CAUSE" commits chased
+            # symptoms without ever checking this. Now we check explicitly
+            # and scream in the deploy log if it's down.
+            echo "=============================================="
+            echo "=== GO SERVICE HEALTH CHECK ==="
+            GO_HEALTH=$(curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN")
+            echo "Go service health response: $GO_HEALTH"
+            if [ "$GO_HEALTH" = "DOWN" ] || [ -z "$GO_HEALTH" ] || ! echo "$GO_HEALTH" | grep -q '"status"'; then
+              echo "⚠️  ⚠️  ⚠️  GO IMAGE SERVICE IS DOWN OR UNRESPONSIVE  ⚠️  ⚠️  ⚠️"
+              echo "    pm2 says bot-generation-go is: $(pm2 list 2>/dev/null | grep bot-generation-go | awk '{print $10}')"
+              echo "    Image commands will FAIL SILENTLY until this is fixed."
+              echo "    To restart: cd ~/bot_generation && pm2 restart bot-generation-go bot-generation-scraper"
+              echo "    To verify:  curl -s -m 5 http://127.0.0.1:7860/health"
+              echo "    (should return JSON with 'status':'ready')"
+              echo ""
+              echo "    Attempting automatic restart..."
+              cd ~/bot_generation 2>/dev/null && pm2 restart bot-generation-go bot-generation-scraper 2>&1 || echo "    Auto-restart failed — manual intervention required."
+              cd ~/whatsapp-bot
+              sleep 5
+              GO_HEALTH2=$(curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN")
+              echo "Go service health after restart attempt: $GO_HEALTH2"
+              if [ "$GO_HEALTH2" = "DOWN" ] || [ -z "$GO_HEALTH2" ]; then
+                echo "❌ Go service STILL DOWN after restart. Image commands will fail."
+                echo "   Check bot-generation-go logs: pm2 logs bot-generation-go --lines 50 --nostream"
+              else
+                echo "✅ Go service recovered after restart."
+              fi
+            else
+              echo "✅ Go image service is healthy."
+            fi
+
             # ── VERIFY ───────────────────────────────────────────────────
             echo "=============================================="
             echo "=== DEPLOY VERIFICATION ==="

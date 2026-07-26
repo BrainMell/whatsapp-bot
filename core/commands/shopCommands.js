@@ -394,10 +394,18 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
     // Handle PFP
+    // 💡 FIX 2026-07-26: see rpgCommands.js — profilePictureUrl can hang on LID JIDs
     let pfpUrl;
     try {
-        pfpUrl = await sock.profilePictureUrl(finalJid, 'image');
+        const pfpTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('profilePictureUrl timed out after 8s')), 8000)
+        );
+        pfpUrl = await Promise.race([
+            sock.profilePictureUrl(finalJid, 'image'),
+            pfpTimeout
+        ]);
     } catch (e) {
+        console.warn('[shopCommands] profilePictureUrl failed:', e.message);
         pfpUrl = null;
     }
 

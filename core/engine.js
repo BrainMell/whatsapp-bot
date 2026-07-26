@@ -6111,7 +6111,48 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // ✅ Real message — reset zombie silence timer
               recordUpsert(BOT_ID);
 
-              await botConfig.storage.run(configInstance, async () => {
+              // 💡 FIX 2026-07-26 (INVESTIGATION.md):
+              // GLOBAL COMMAND TIMEOUT — 90 seconds.
+              //
+              // The message handler has many await points that can hang
+              // indefinitely with no timeout:
+              //   - sock.profilePictureUrl() — hangs on LID JIDs (fixed
+              //     separately in rpgCommands.js with an 8s timeout, but
+              //     other callsites may still hang)
+              //   - goService.generateCardGrid() — 60s axios timeout, but
+              //     the _enqueue queue can stack up blocked calls
+              //   - goService.generateCombatImage() — 10s timeout, but
+              //     same queue issue
+              //   - any DB query that hangs
+              //   - any external HTTP call without a timeout
+              //
+              // When a command hangs, the outer catch (line ~25195) never
+              // fires because no error is thrown — the Promise just never
+              // resolves. The user sees "nothing" as the response. This is
+              // exactly what caused .jk char / .jk bal / .jk coll / .jk diag
+              // to silently fail for 30+ hours while 12 "ROOT CAUSE" commits
+              // chased symptoms.
+              //
+              // Fix: race the entire storage.run against a 90s timeout.
+              // If the timeout wins, log loudly and tell the user. The
+              // underlying hung promise is orphaned (we can't cancel it),
+              // but at least the user gets a visible error instead of
+              // silence, and the bot can continue processing other messages.
+              const _cmdStartTime = Date.now();
+              const _cmdTimeoutMs = 90000; // 90s — generous enough for
+                // legitimate long commands (card grid = 60s, combat = 10s,
+                // anime search = 15s) but short enough that a truly hung
+                // command doesn't block the user's chat forever.
+              const _cmdTimeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                  const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
+                  reject(new Error(`Command timed out after ${elapsed}s (possible Go service hang or network stall)`));
+                }, _cmdTimeoutMs);
+              });
+
+              try {
+                await Promise.race([
+                  botConfig.storage.run(configInstance, async () => {
                 try {
                   const rawChatId = m.key.remoteJid;
                   const chatId = jidNormalizedUser(rawChatId);
@@ -25206,7 +25247,25 @@ _(Or reply to their message)_
                     await sock.sendMessage(chatId, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
                   } catch (_) {}
                 }
-              }); // END storage.run
+                  }), // END storage.run callback
+                  _cmdTimeoutPromise,
+                ]); // END Promise.race
+              } catch (_cmdTimeoutErr) {
+                // 💡 This catch fires when the 90s timeout wins the race.
+                // The original storage.run promise is orphaned (we can't
+                // cancel it) but at least the user gets a visible error
+                // instead of silence. This is the ONLY way to surface
+                // hung commands — the inner catch at line ~25235 only
+                // fires when something THROWS, and a hung await never
+                // throws.
+                const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
+                console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(primaryCmd || txt?.slice(0, 50))} | sender=${senderJid?.split('@')[0]} | chat=${chatId?.split('@')[0]}`);
+                console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
+                console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
+                try {
+                  await sock.sendMessage(chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                } catch (_) {}
+              }
             }),
           ); // END Promise.all map
         }); // END messages.upsert

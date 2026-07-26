@@ -39,10 +39,28 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const equipStats = inventorySystem.getEquipmentStats(senderJid);
     
     // Handle PFP
+    // 💡 FIX 2026-07-26 (INVESTIGATION.md):
+    // sock.profilePictureUrl() has NO built-in timeout. When senderJid is an
+    // LID (xxx@lid) instead of a phone JID (xxx@s.whatsapp.net), Baileys
+    // tries to fetch the PFP from WhatsApp's servers, which may hang
+    // indefinitely for LIDs. This caused .jk char to silently hang forever
+    // — the handler never reached the Go service call, never reached the
+    // outer catch, just hung. The user saw "nothing" as a response.
+    //
+    // Fix: wrap in an 8s timeout. If it doesn't resolve in 8s, treat as
+    // no PFP (pfpUrl = null) and continue. The character sheet renders fine
+    // without a PFP — it just omits the avatar.
     let pfpUrl;
     try { 
-        pfpUrl = await sock.profilePictureUrl(senderJid, 'image');
+        const pfpTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('profilePictureUrl timed out after 8s')), 8000)
+        );
+        pfpUrl = await Promise.race([
+            sock.profilePictureUrl(senderJid, 'image'),
+            pfpTimeout
+        ]);
     } catch (e) { 
+        console.warn('[displayCharacterSheet] profilePictureUrl failed:', e.message);
         pfpUrl = null;
     }
 
