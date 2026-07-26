@@ -853,39 +853,12 @@ const FALLBACK_THUMB = Buffer.from(
  * Never throws — always returns a Buffer.
  */
 async function buildThumbnail(imgBuffer) {
-  // 💡 CRITICAL: wrap each image processing library in a 5s timeout.
-  // Sharp can HANG on certain JPEGs (works on test images but hangs on
-  // real images). Without a timeout, this hang blocks everything.
-  const withTimeout = (promise, ms = 5000, label = 'thumb') =>
-    Promise.race([
-      promise,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-      ),
-    ]);
-
-  // sharp — instant native resize
-  try {
-    const sharp = require('sharp');
-    const result = await withTimeout(
-      sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer(),
-      5000,
-      'sharp thumbnail'
-    );
-    return result;
-  } catch (e) {
-    console.warn('[buildThumbnail] sharp failed:', e.message);
-  }
-  // jimp v1.x — pure-JS fallback
-  try {
-    const Jimp = require('jimp');
-    const img = await Jimp.Jimp.read(imgBuffer);
-    img.resize({ w: 32 });
-    return await img.getBuffer(Jimp.JimpMime.jpeg);
-  } catch (e) {
-    console.warn('[buildThumbnail] jimp failed:', e.message);
-  }
-  // Last resort — 1×1 white JPEG.
+  // 💡 CRITICAL FIX 2026-07-26: NEVER call sharp. On Oracle, sharp crashes
+  // with a native GLib-GObject-CRITICAL error that kills the entire Node.js
+  // process. This is not a catchable error — it's a native segfault.
+  // The monkey-patch on sock.sendMessage already adds jpegThumbnail:
+  // FALLBACK_THUMB to all image sends, so buildThumbnail is no longer
+  // needed for Baileys. Just return FALLBACK_THUMB directly.
   return FALLBACK_THUMB;
 }
 
@@ -7022,13 +6995,8 @@ _💡 Reply with another number from your search list!_`.trim();
 
                       // Test 3: Sharp
                       results.push(`*3. Sharp:*`);
-                      try {
-                        const sharp = require('sharp');
-                        const testBuf = await sharp({ create: { width: 1, height: 1, channels: 3, background: { r: 255, g: 255, b: 255 } } }).jpeg().toBuffer();
-                        results.push(`   Load + process: ✅ ${testBuf.length} bytes`);
-                      } catch (e) {
-                        results.push(`   Load + process: ❌ ${e.message}`);
-                      }
+                      results.push(`   ⚠️ Sharp is DISABLED — it crashes with GLib-GObject-CRITICAL on Oracle, killing the process. All image sends now use FALLBACK_THUMB instead.`);
+                      results.push(`   buildThumbnail() returns FALLBACK_THUMB (${FALLBACK_THUMB.length} bytes) without calling sharp.`);
 
                       // Test 4: Jimp
                       results.push(`*4. Jimp:*`);
