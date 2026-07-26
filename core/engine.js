@@ -5321,6 +5321,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               isRekeying = false; // BOT IS STABLE
               ignoreBroadcasts = false; // Allow broadcasts after successful connection
 
+              // 💡 PERF PATCH 2026-07-27: bind cardSystem.sock_ref SYNCHRONOUSLY
+              // before any await in this handler. Without this, the first wave of
+              // post-connect messages hits handleCommand() while sock_ref is still
+              // null (init() hadn't been called yet — it was 80+ lines below,
+              // behind ~6 awaits that take 1-30s to resolve on a cold start).
+              // Symptom: "🃏 [cardSystem] returning false: inst.sock_ref is null"
+              // for EVERY card command in the first ~30s after a reconnect.
+              // bindSocket() is sync and only sets the sock_ref — the heavy
+              // DB loads still happen later via cardSystem.init() below.
+              try { cardSystem.bindSocket(sock); } catch (e) { /* best-effort */ }
+
               // 💡 CRITICAL FIX 2026-07-26 (ROOT CAUSE OF ALL IMAGE FAILURES):
               // Baileys calls sharp() to generate a JPEG thumbnail for every
               // image send that doesn't include a `jpegThumbnail` property.

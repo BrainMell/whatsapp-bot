@@ -3703,6 +3703,20 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   return false;
 }
 
+// 💡 PERF PATCH 2026-07-27:
+// bindSocket() is the SYNCHRONOUS part of init(). It MUST be called before
+// any await in the connection.open handler — otherwise incoming messages
+// can hit handleCommand() before sock_ref is set, causing cardSystem to
+// bail with "inst.sock_ref is null" for every card command during the
+// post-connect DB-load window (which can take seconds on a cold start).
+//
+// init() is still async (awaits DB loads). Callers should call
+// bindSocket(sock) FIRST (sync), then fire init(sock, ...) for the DB loads.
+function bindSocket(sock) {
+  const inst = getInst();
+  inst.sock_ref = sock;
+}
+
 async function init(sock, admins = [], mods = [], owner = null) {
   const inst = getInst();
   inst.sock_ref  = sock;
@@ -3868,6 +3882,7 @@ async function cmdT2EColl(senderJid, reply, args) {
 
 module.exports = {
   init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
+  bindSocket,
   // 💡 Token event & eShop exports
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
