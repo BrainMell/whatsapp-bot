@@ -5346,6 +5346,34 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               isRekeying = false; // BOT IS STABLE
               ignoreBroadcasts = false; // Allow broadcasts after successful connection
 
+              // 💡 CRITICAL FIX 2026-07-26 (ROOT CAUSE OF ALL IMAGE FAILURES):
+              // Baileys calls sharp() to generate a JPEG thumbnail for every
+              // image send that doesn't include a `jpegThumbnail` property.
+              // On Oracle, sharp crashes with a native GLib-GObject-CRITICAL
+              // error ("cannot retrieve class for invalid (unclassed) type")
+              // which kills the ENTIRE Node.js process. pm2 restarts, and the
+              // user sees "nothing" — the image was never sent.
+              //
+              // This is why .jk menu worked (sendMenuWithBanner passes
+              // jpegThumbnail: FALLBACK_THUMB, bypassing sharp) but .jk coll,
+              // .jk char, .jk deck, .jk bal all crashed (they send images
+              // without jpegThumbnail, so Baileys called sharp, which crashed).
+              //
+              // FIX: monkey-patch sock.sendMessage to auto-inject
+              // jpegThumbnail: FALLBACK_THUMB for ALL image messages. This
+              // makes Baileys skip the sharp thumbnail generation entirely.
+              if (!sock._sendMessagePatched) {
+                const _origSendMessage = sock.sendMessage.bind(sock);
+                sock.sendMessage = async (chatId, content, options = {}) => {
+                  if (content && content.image && !content.jpegThumbnail) {
+                    content.jpegThumbnail = FALLBACK_THUMB;
+                  }
+                  return _origSendMessage(chatId, content, options);
+                };
+                sock._sendMessagePatched = true;
+                console.log(`🛡️ [${BOT_ID}] sock.sendMessage patched: auto-injecting jpegThumbnail to prevent sharp crash`);
+              }
+
               // Give the WS a moment to settle, then flush any queued outbound messages.
               setTimeout(() => sendQueue.kick(), 1500);
 
