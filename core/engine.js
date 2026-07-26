@@ -5206,46 +5206,63 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             if (qr && !qrShown) {
               qrShown = true;
 
-              // 💡 INTERACTIVE LOGIN: on fresh login, ask the user in the
-              // terminal whether they want QR code or phone pairing code.
-              // No need to pre-configure anything in botConfig.json.
-              //
-              // If botConfig.json has "pairingPhone" set, that's used
-              // automatically (no prompt). Otherwise the terminal asks.
+              // 💡 FIX 2026-07-26: Pairing code is now the DEFAULT login
+              // method. QR code is the BACKUP. Previous code auto-skipped
+              // to QR after a 5-second timeout (too fast to type), and
+              // defaulted to QR (option 1). Now:
+              //   - Pairing code is option 1 (default)
+              //   - QR code is option 2 (backup)
+              //   - NO timeout on the menu (waits forever for input)
+              //   - NO timeout on phone number entry (waits forever)
+              //   - If pairingPhone is set in botConfig.json, use it directly
+              //   - If stdin not available (PM2), use pairingPhone if set,
+              //     otherwise fall back to QR
               const pairingPhoneConfig = configInstance.pairingPhone || null;
 
               let usePairing = false;
               let phoneForPairing = null;
 
               if (pairingPhoneConfig) {
-                // Pre-configured in botConfig.json — use it directly
+                // Pre-configured in botConfig.json — use it directly (works in PM2 too)
                 usePairing = true;
                 phoneForPairing = pairingPhoneConfig;
               } else if (isFreshLogin) {
                 const isPM2 = Boolean(process.env.PM2_HOME || process.env.PM2_USAGE || !process.stdin.isTTY);
                 if (isPM2) {
-                  console.log(`📱 [${BOT_ID}] Non-interactive background mode detected. Rendering QR code...`);
+                  // Non-interactive: can't prompt for phone number.
+                  // QR code is the only option that works without stdin.
+                  console.log(`📱 [${BOT_ID}] Non-interactive background mode (PM2). Rendering QR code...`);
+                  console.log(`   💡 To use pairing code instead, set "pairingPhone": "<your_number>" in instances/${BOT_ID}/botConfig.json`);
                 } else {
-                  console.log(`\n╔══════════════════════════════════════════════╗`);
-                  console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(33)}║`);
-                  console.log(`╠══════════════════════════════════════════════╣`);
-                  console.log(`║  1️⃣  QR Code (scan with phone camera)        ║`);
-                  console.log(`║  2️⃣  Pairing Code (enter code on phone)     ║`);
-                  console.log(`╚══════════════════════════════════════════════╝`);
+                  // Interactive terminal — let the user choose, NO timeout
+                  console.log(`\n╔══════════════════════════════════════════════════╗`);
+                  console.log(`║  🔐 LOGIN METHOD — ${BOT_ID.padEnd(37)}║`);
+                  console.log(`╠══════════════════════════════════════════════════╣`);
+                  console.log(`║  1️⃣  Pairing Code (enter code on phone) [DEFAULT]║`);
+                  console.log(`║  2️⃣  QR Code (scan with phone camera) [BACKUP]   ║`);
+                  console.log(`╚══════════════════════════════════════════════════╝`);
 
                   try {
                     const readline = require('readline');
                     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
                     const choice = await new Promise(resolve => {
-                      const timer = setTimeout(() => resolve('1'), 5000);
-                      rl.question('Choose (1 or 2, default=1): ', answer => { clearTimeout(timer); rl.close(); resolve(answer.trim() || '1'); });
+                      // 💡 NO timeout — wait forever for the user to choose.
+                      // Previous code had a 5s timeout that auto-defaulted to
+                      // QR code, which was way too fast.
+                      rl.question('Choose (1 or 2, default=1 for pairing code): ', answer => { rl.close(); resolve(answer.trim() || '1'); });
                     });
 
+                    // Default to pairing code (option 1) instead of QR
                     if (choice === '2') {
+                      // QR code — just fall through (qr is already rendered by Baileys)
+                      console.log('📱 Using QR code. Scan it with your phone.\n');
+                    } else {
+                      // Pairing code (default) — ask for phone number, NO timeout
                       const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
                       const phone = await new Promise(resolve => {
-                        const timer = setTimeout(() => resolve(''), 10000);
-                        rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { clearTimeout(timer); rl2.close(); resolve(answer.trim()); });
+                        // 💡 NO timeout — wait forever for the phone number.
+                        // Previous code had a 10s timeout.
+                        rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { rl2.close(); resolve(answer.trim()); });
                       });
                       if (phone && /^\d{8,15}$/.test(phone)) {
                         usePairing = true;
