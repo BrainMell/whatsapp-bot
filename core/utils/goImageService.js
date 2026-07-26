@@ -274,7 +274,14 @@ class GoImageService {
         },
         {
           responseType: "arraybuffer",
-          timeout: 60000, // 60s — sequential downloads of up to 16 cards
+          // 💡 FIX 2026-07-26: was 60000 (60s). When the Go service is
+          // unreachable or slow, this 60s hang blocks the message handler
+          // for a full minute, backing up the entire bot (user saw 80s
+          // pong response times). 15s is enough for the grid to render
+          // on a working Go service (typical: 2-5s for 12 cards). If it
+          // takes longer than 15s, something is wrong and we should bail
+          // to the text fallback immediately.
+          timeout: 15000,
         },
       );
       const buf = Buffer.from(response.data);

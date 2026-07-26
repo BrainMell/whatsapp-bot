@@ -25,11 +25,14 @@ jobs:
             # can see what happened when the user sent commands before
             # this deploy. Grep for relevant keywords.
             echo "=============================================="
-            echo "=== PRE-RESTART PM2 LOGS (last 500 lines) ==="
-            echo "=== OUT LOG (last 500 lines) ==="
-            tail -500 ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -500
-            echo "=== ERR LOG (last 500 lines) ==="
-            tail -500 ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -500
+            echo "=== PRE-RESTART PM2 LOGS (last 2000 lines) ==="
+            echo "=== OUT LOG (last 2000 lines) ==="
+            tail -2000 ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -2000
+            echo "=== ERR LOG (last 2000 lines) ==="
+            tail -2000 ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -2000
+            echo "=== GREP: All Pipeline + GoService + Timeout markers ==="
+            grep -E "Pipeline:|GoService|TIMEOUT|SKIPPING|🔴|⏱️|Unknown command|cardSystem|DIAG|char|coll|bal|diag|profilePictureUrl|timed out|ECONNREFUSED|Error:" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -300
+            grep -E "Pipeline:|GoService|TIMEOUT|SKIPPING|🔴|⏱️|Unknown command|cardSystem|DIAG|char|coll|bal|diag|profilePictureUrl|timed out|ECONNREFUSED|Error:" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -300
             echo "=== GREP: Skipping message / Pipeline:4 / sendMenuWithBanner / diag / CMD DETECTED ==="
             grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -100
             grep -E "Skipping message|Pipeline:4|sendMenuWithBanner|diag|CMD DETECTED|Dropping invalid|Banner image send failed|IMAGE SEND FAILED|IMAGE SENT OK" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -100
@@ -90,7 +93,58 @@ jobs:
                 echo "✅ Go service recovered after restart."
               fi
             else
-              echo "✅ Go image service is healthy."
+              echo "✅ Go image service /health endpoint is responding."
+            fi
+
+            # ── GO SERVICE RENDER TEST (not just /health) ──────────────
+            # 💡 The /health endpoint is trivial — it just returns JSON.
+            # The actual render endpoints (/api/cards/grid, /api/cards/profile)
+            # do real work: load PNGs, use fonts, composite images. If the
+            # Go service can't find its assets/ directory (because pm2's
+            # working directory isn't ~/bot_generation), /health works but
+            # every render call hangs or fails. This test catches that.
+            echo "=============================================="
+            echo "=== GO SERVICE RENDER TEST (actual /api/cards/profile call) ==="
+            RENDER_TEST=$(curl -s -m 15 -X POST http://127.0.0.1:7860/api/cards/profile \
+              -H "Content-Type: application/json" \
+              -d '{"nickname":"DEPLOY_TEST","level":1,"rank":"F","class":"Adventurer","stats":{"hp":100,"atk":10,"def":10,"mag":10,"spd":10,"luck":10,"crit":0,"evasion":0},"equipStats":{}}' \
+              -o /tmp/render_test.png -w "%{http_code} %{size_download} %{time_total}" 2>/dev/null || echo "FAILED")
+            echo "Render test result: $RENDER_TEST"
+            RENDER_SIZE=$(stat -c%s /tmp/render_test.png 2>/dev/null || echo 0)
+            RENDER_TYPE=$(file -b /tmp/render_test.png 2>/dev/null | head -c 40)
+            echo "Render output: size=${RENDER_SIZE} bytes, type=${RENDER_TYPE}"
+            if [ "$RENDER_SIZE" -lt 1000 ] || echo "$RENDER_TYPE" | grep -qi "text\|html\|ascii"; then
+              echo "⚠️  ⚠️  ⚠️  GO SERVICE RENDER IS BROKEN  ⚠️  ⚠️  ⚠️"
+              echo "    /health works but actual rendering fails. This means:"
+              echo "    - The Go service probably can't find its assets/ directory"
+              echo "    - pm2's working directory for bot-generation-go may be wrong"
+              echo "    - Check: pm2 describe bot-generation-go | grep 'cwd\\|script path'"
+              echo "    - The Go service must run from ~/bot_generation so assets/ is found"
+              echo "    - Image commands will HANG for 60s then return nothing"
+              echo ""
+              echo "    bot-generation-go pm2 details:"
+              pm2 describe bot-generation-go 2>/dev/null | grep -E "script path|cwd|exec cwd|status|restarts|uptime" | head -10
+              echo ""
+              echo "    Attempting fix: restart bot-generation-go from ~/bot_generation..."
+              cd ~/bot_generation 2>/dev/null
+              pm2 delete bot-generation-go 2>/dev/null || true
+              pm2 start ./bot-generation --name bot-generation-go --cwd ~/bot_generation 2>&1 || echo "    Manual restart failed — needs SSH intervention"
+              cd ~/whatsapp-bot
+              sleep 8
+              RENDER_TEST2=$(curl -s -m 15 -X POST http://127.0.0.1:7860/api/cards/profile \
+                -H "Content-Type: application/json" \
+                -d '{"nickname":"DEPLOY_TEST2","level":1,"rank":"F","class":"Adventurer","stats":{"hp":100,"atk":10,"def":10,"mag":10,"spd":10,"luck":10,"crit":0,"evasion":0},"equipStats":{}}' \
+                -o /tmp/render_test2.png -w "%{http_code} %{size_download} %{time_total}" 2>/dev/null || echo "FAILED")
+              RENDER_SIZE2=$(stat -c%s /tmp/render_test2.png 2>/dev/null || echo 0)
+              echo "Render test after restart: $RENDER_TEST2 (size=${RENDER_SIZE2})"
+              if [ "$RENDER_SIZE2" -gt 1000 ]; then
+                echo "✅ Go service render WORKS after restart."
+              else
+                echo "❌ Go service render STILL BROKEN. Image commands will fail/hang."
+                echo "   Manual SSH required: cd ~/bot_generation && pm2 restart bot-generation-go"
+              fi
+            else
+              echo "✅ Go service render works (returned valid PNG, ${RENDER_SIZE} bytes)."
             fi
 
             # ── VERIFY ───────────────────────────────────────────────────
