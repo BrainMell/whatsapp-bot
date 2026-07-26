@@ -6799,6 +6799,17 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // .j test — simplest possible command, for debugging
+                    if (primaryCmd === "test") {
+                      console.log(`🧪 [TEST] handler reached | chatId=${chatId} | sender=${senderJid}`);
+                      try {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ test ok — command dispatch works. chatId=" + chatId });
+                      } catch (e) {
+                        console.error(`🧪 [TEST] send failed:`, e.message);
+                        return;
+                      }
+                    }
+
                     // .j menu or .j help
                     if (primaryCmd === "menu" || primaryCmd === "help") {
                       const menuArgs = cmdArgs.slice(1);
