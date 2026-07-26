@@ -193,7 +193,9 @@ jobs:
             echo "=== DIRECT PIPELINE TEST (bypasses WhatsApp) ==="
             cd ~/whatsapp-bot
             node scripts/test_direct_pipeline.js 2>&1
-            echo "=== DIRECT PIPELINE TEST COMPLETE ==="
+            echo "=== DIRECT CMDCOLL TEST (calls cardSystem.handleCommand directly) ==="
+            node scripts/test_cmdcoll_direct.js 2>&1
+            echo "=== DIRECT TESTS COMPLETE ==="
             cd ~
             echo "=============================================="
 

@@ -35,3 +35,5 @@ instances/*/auth/**
 # Runtime-generated per-instance data (safe to exclude from git)
 instances/*/database/
 instances/*/downloads/
+scripts/.monitor_marker
+scripts/monitor_loop.sh
