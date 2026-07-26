@@ -184,6 +184,19 @@ jobs:
             echo "=== Check pm2 env for bot-generation-go ==="
             pm2 env 0 2>/dev/null | grep -iE "proxy|PROXY|PORT|GO_IMAGE" | head -10 || echo "(pm2 env not available)"
 
+            # ── DIRECT PIPELINE TEST ────────────────────────────────────
+            # 💡 This script runs ON Oracle, requires the bot's actual modules,
+            # and tests each Go service call directly — bypassing WhatsApp.
+            # This tells us definitively whether the Go service calls work
+            # from the bot's code, independent of Baileys/message handling.
+            echo "=============================================="
+            echo "=== DIRECT PIPELINE TEST (bypasses WhatsApp) ==="
+            cd ~/whatsapp-bot
+            node scripts/test_direct_pipeline.js 2>&1
+            echo "=== DIRECT PIPELINE TEST COMPLETE ==="
+            cd ~
+            echo "=============================================="
+
             # ── VERIFY ───────────────────────────────────────────────────
             echo "=============================================="
             echo "=== DEPLOY VERIFICATION ==="
