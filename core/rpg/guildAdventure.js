@@ -2483,12 +2483,35 @@ function applyStatusEffect(
     source: source,
     effect: def.effect,
     tickRate: def.tickRate,
+    // 💡 BUG-08/09 fix: justApplied prevents the effect from ticking on the
+    // same turn it was applied. Without this, a self-buff cast on turn N
+    // would tick down at the end of turn N, effectively losing 1 turn of
+    // duration. The flag is cleared by tickDurations() on the next turn.
+    justApplied: true,
   });
 
   return { applied: true, synergyMsg };
 }
 
-function processStatusEffects(entity) {
+// 💡 BUG-07/08/09 fix: processStatusEffects was split into two functions.
+// The old function applied DoT/HoT AND ticked durations in one call, which
+// meant any CC with duration:1 (e.g. Elementalist's Blizzard freeze) was
+// removed BEFORE the skip-turn check ran — so the enemy appeared frozen
+// but still acted normally. Same for buffs: a duration:1 buff_team cast
+// on a teammate expired before the teammate's turn came around.
+//
+// Now:
+//   - applyEffectTicks(entity) runs at the START of the actor's turn
+//     (applies DoT/HoT damage, does NOT decrement durations)
+//   - tickDurations(entity) runs at the END of the actor's turn
+//     (decrements status + buff durations, removes expired)
+// This way a duration:1 effect is active for exactly one of the victim's
+// turns before expiring, instead of zero.
+//
+// processStatusEffects is kept as a backward-compat wrapper that calls
+// both in sequence (replicating the old behavior) for any external caller.
+
+function applyEffectTicks(entity) {
   let messages = [];
 
   if (!entity.statusEffects) {
@@ -2504,7 +2527,7 @@ function processStatusEffects(entity) {
     const value =
       Number(effect.value !== undefined ? effect.value : template.value) || 0;
 
-    // Process effect based on type
+    // Process effect based on type (DoT / HoT / stat-reduce — NO duration--)
     if (
       effect.effect === "damage_over_time" ||
       template.effect === "damage_over_time"
@@ -2554,8 +2577,33 @@ function processStatusEffects(entity) {
 
     // Sync HP for V2 (combat Integration expects currentHP)
     entity.currentHP = entity.stats.hp;
+  }
 
-    // Reduce duration
+  return messages;
+}
+
+function tickDurations(entity) {
+  let messages = [];
+
+  if (!entity.statusEffects) {
+    entity.statusEffects = [];
+  }
+
+  // Tick down status effect durations
+  for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
+    const effect = entity.statusEffects[i];
+    const template = STATUS_EFFECTS[effect.type] || {};
+    const name = effect.name || template.name || effect.type;
+
+    // 💡 BUG-08/09 fix: skip justApplied effects (applied THIS turn).
+    // Clear the flag so the effect ticks normally on the NEXT turn.
+    // Without this, a self-buff cast on turn N would tick down at the
+    // end of turn N, losing 1 turn of duration.
+    if (effect.justApplied) {
+      effect.justApplied = false;
+      continue;
+    }
+
     effect.duration--;
     if (effect.duration <= 0) {
       entity.statusEffects.splice(i, 1);
@@ -2563,10 +2611,17 @@ function processStatusEffects(entity) {
     }
   }
 
-  // Tick down buffs
+  // Tick down buff durations
   if (entity.buffs && entity.buffs.length > 0) {
     for (let i = entity.buffs.length - 1; i >= 0; i--) {
       const buff = entity.buffs[i];
+
+      // 💡 BUG-08/09 fix: skip justApplied buffs (applied THIS turn).
+      if (buff.justApplied) {
+        buff.justApplied = false;
+        continue;
+      }
+
       buff.duration--;
       if (buff.duration <= 0) {
         const buffName = buff.type.charAt(0).toUpperCase() + buff.type.slice(1);
@@ -2578,6 +2633,16 @@ function processStatusEffects(entity) {
   }
 
   return messages;
+}
+
+// Backward-compat wrapper — applies ticks then durations in one call.
+// Used to replicate the old behavior for any external caller. The main
+// combat loop (processCombatTurn) now calls applyEffectTicks and
+// tickDurations separately to fix BUG-07/08/09.
+function processStatusEffects(entity) {
+  const tickMsgs = applyEffectTicks(entity);
+  const expireMsgs = tickDurations(entity);
+  return [...tickMsgs, ...expireMsgs];
 }
 function getAvailableEnemies(poolId) {
   // poolId is 1-indexed, convert to avgLevel for classEncounters
@@ -3529,7 +3594,11 @@ async function processCombatTurn(sock, sessionKey) {
         }
       }
 
-      const statusMessages = processStatusEffects(activeActor);
+      // 💡 BUG-07/08/09 fix: apply DoT/HoT damage at the START of the turn,
+      // but do NOT tick durations yet. Duration tick happens AFTER the
+      // action (skip or perform) so a duration:1 effect is active for
+      // exactly one of the victim's turns before expiring.
+      const statusMessages = applyEffectTicks(activeActor);
 
       // Start of Turn Equipment Triggers
       if (activeActor && !activeActor.isEnemy) {
@@ -3553,9 +3622,16 @@ async function processCombatTurn(sock, sessionKey) {
         );
       }
 
-      // Buffer status messages — they'll be prepended to the next action output
-      state.pendingStatusMsg =
-        statusMessages.length > 0 ? statusMessages.join("\n") : null;
+      // Buffer status messages — they'll be prepended to the next action output.
+      // 💡 BUG-08/09 fix: MERGE with any pending expiry messages from the
+      // previous turn (set by tickDurations after the previous actor's
+      // action). The old code OVERWROTE pendingStatusMsg, which lost expiry
+      // notifications when the current actor had no DoT/HoT messages.
+      if (statusMessages.length > 0) {
+        state.pendingStatusMsg = state.pendingStatusMsg
+          ? state.pendingStatusMsg + "\n" + statusMessages.join("\n")
+          : statusMessages.join("\n");
+      }
 
       if (activeActor.stats.hp <= 0) {
         await handleDeath(sock, activeActor, sessionKey);
@@ -3589,6 +3665,13 @@ async function processCombatTurn(sock, sessionKey) {
         } catch (msgErr) {
           console.error("Failed to send skip status message:", msgErr.message);
         }
+        // 💡 BUG-07/08/09 fix: tick durations AFTER the skip decision.
+        // The CC effect was active for this turn (causing the skip), and
+        // now expires. Without this, duration:1 CC would never tick down.
+        const skipExpireMsgs = tickDurations(activeActor);
+        if (skipExpireMsgs.length > 0) {
+          state.pendingStatusMsg = skipExpireMsgs.join("\n");
+        }
         await nextTurn(
           sock,
           null, // skip round image generation
@@ -3607,6 +3690,16 @@ async function processCombatTurn(sock, sessionKey) {
         // Player Turn - Wait for action
         await promptPlayerAction(sock, activeActor, sessionKey);
         // The loop continues because promptPlayerAction resolved (via performAction)
+      }
+
+      // 💡 BUG-07/08/09 fix: tick durations AFTER the action completes.
+      // Effect/buff durations now decrement at the END of the actor's turn
+      // instead of the beginning, so duration:1 effects (freeze, stun,
+      // buff_team, etc.) actually take effect for one full turn before
+      // expiring. Expiry messages are buffered for the next actor's output.
+      const actionExpireMsgs = tickDurations(activeActor);
+      if (actionExpireMsgs.length > 0) {
+        state.pendingStatusMsg = actionExpireMsgs.join("\n");
       }
     }
   } catch (err) {
@@ -8947,6 +9040,9 @@ function applyBuff(target, buffType, value, duration) {
     value: value,
     duration: duration,
     icon: getBuffIcon(buffType),
+    // 💡 BUG-08/09 fix: justApplied prevents the buff from ticking on the
+    // same turn it was applied (would otherwise lose 1 turn of duration).
+    justApplied: true,
   });
 }
 
@@ -8958,6 +9054,9 @@ function applyDebuff(target, debuffType, value, duration) {
     value: value,
     duration: duration,
     icon: getDebuffIcon(debuffType),
+    // 💡 BUG-08/09 fix: justApplied prevents the debuff from ticking on the
+    // same turn it was applied.
+    justApplied: true,
   });
 }
 
