@@ -2420,7 +2420,24 @@ function applyStatusEffect(
   // so the player understands why their CC didn't land.
   // Non-CC effects (burn, poison, bleed, bless, shield, regen, etc.)
   // are NOT blocked — ccImmune only blocks crowd control.
-  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify'];
+  // 💡 BUG-10 fix: added 'silence' to CC_TYPES so the ccImmune buff now
+  // blocks silence too. Previously silence bypassed ccImmune entirely.
+  // Also added a DR (diminishing returns) immunity window: after a CC
+  // expires, the target is immune to the same CC type for 2 of their
+  // turns. Prevents chaining (e.g. Spellbreaker casting arcane_silence
+  // every turn to permanently lock a player out of abilities).
+  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence'];
+
+  // 💡 BUG-10 fix: DR check — if this CC type was recently applied and
+  // expired, the target is immune for 2 of their turns.
+  if (CC_TYPES.includes(effectType) && target.ccImmuneUntil && target.ccImmuneUntil[effectType] > (target._turnCount || 0)) {
+    return {
+      applied: false,
+      blockedByDR: true,
+      synergyMsg: `🛡️ ${target.name} recently recovered from ${effectType} — immune for now!`,
+    };
+  }
+
   if (CC_TYPES.includes(effectType) && target.statusEffects.some(e => e.type === 'ccImmune')) {
     return {
       applied: false,
@@ -2589,6 +2606,11 @@ function tickDurations(entity) {
     entity.statusEffects = [];
   }
 
+  // 💡 BUG-10 fix: increment per-entity turn counter for DR tracking.
+  // Used by applyStatusEffect to check if the target is within the
+  // post-expiry immunity window for a CC type.
+  entity._turnCount = (entity._turnCount || 0) + 1;
+
   // Tick down status effect durations
   for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
     const effect = entity.statusEffects[i];
@@ -2608,6 +2630,17 @@ function tickDurations(entity) {
     if (effect.duration <= 0) {
       entity.statusEffects.splice(i, 1);
       messages.push(`✨ *EXPIRED:* ${entity.name}'s **${name}** has worn off.`);
+
+      // 💡 BUG-10 fix: set DR immunity window for CC types.
+      // After a CC expires, the target is immune to the same CC type
+      // for 2 of their turns. Prevents chaining (e.g. Silence lock).
+      // _turnCount was just incremented above, so ccImmuneUntil = current + 2
+      // means "immune until 2 more of the target's turns have passed."
+      const CC_TYPES_FOR_DR = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence'];
+      if (CC_TYPES_FOR_DR.includes(effect.type)) {
+        if (!entity.ccImmuneUntil) entity.ccImmuneUntil = {};
+        entity.ccImmuneUntil[effect.type] = entity._turnCount + 2;
+      }
     }
   }
 

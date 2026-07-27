@@ -1524,7 +1524,25 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   const animeQuery = args.join(' ').toLowerCase().trim();
   if (!animeQuery) return sendUsage(reply, `${p} scc`, `${p} scc <anime_name> [--page n]`, `${p} scc dragon ball`);
 
-  const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  // 💡 BUG-03 fix: fetch ALL owned cards (for display) but build the coll-number
+  // map from COLL-ONLY cards (matching .g coll numbering). The old code built
+  // collNumberMap from ALL cards, so the numbers didn't match what .g coll
+  // showed — and the collNum was computed but never rendered in the output.
+  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+
+  // Build coll-number map from COLL-ONLY cards (not in deck, not for sale).
+  // This matches the numbering used by .g coll, .g t2deck, .g burn, .g cg, etc.
+  const collOnly = await UserCard.find({
+    userId: senderJid,
+    inMainDeck: false,
+    inCustomDeck: false,
+    forSale: false,
+  }).sort({ createdAt: 1 });
+  const collNumberMap = new Map();
+  collOnly.forEach((uc, i) => {
+    collNumberMap.set(uc._id.toString(), i + 1);
+  });
+
   const filtered = [];
 
   // 💡 FIX (BUG 3: "scc doesn't show coll numbers, gives random ones, needs
@@ -1536,24 +1554,8 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   // output to match the user's requested format: grouped by tier with
   // proper icons (👑 for S, 💎 for 6, ✨ for 5, etc.), tier S gets a crown,
   // and it's a flex mechanism not a paginated list.
-  //
-  // The user's example format:
-  //   🔍 *Found 50 card(s)* with "log horizon":
-  //   💎 *Shiroe* (Tier 6) in 📜 *Collection*
-  //   ✨ *Akatsuki* (Tier 5) in 📜 *Collection*
-  //   ...grouped by tier descending...
-  //
-  // We also build a true coll-number map by sorting all owned cards
-  // (regardless of deck status) so the number is stable and meaningful.
 
-  // Build coll-number map: assign sequential numbers to ALL owned cards
-  // sorted by createdAt. This matches how `.g coll` numbers them.
-  const collNumberMap = new Map();
-  owned.forEach((uc, i) => {
-    collNumberMap.set(uc._id.toString(), i + 1);
-  });
-
-  owned.forEach((uc) => {
+  allOwned.forEach((uc) => {
     const card = CARD_INDEX()[uc.cardId];
     if (card?.animeName.toLowerCase().includes(animeQuery)) {
       // Determine location
@@ -1562,10 +1564,16 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
       else if (uc.inCustomDeck) location = '📁 Custom Deck';
       else if (uc.forSale) location = '🏷️ Market';
 
+      // Coll number only exists for cards in the loose collection.
+      // Deck/market cards have no coll number (shown as —).
+      const collNum = collNumberMap.has(uc._id.toString())
+        ? collNumberMap.get(uc._id.toString())
+        : null;
+
       filtered.push({
         uc,
         card,
-        collNum: collNumberMap.get(uc._id.toString()) || '?',
+        collNum,
         location,
       });
     }
@@ -1575,10 +1583,16 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   // Sort by tier descending (S > 6 > 5 > 4 > 3 > 2 > 1 > E), then by coll number
   const tierOrder = { 'S': 100, '6': 90, '5': 80, '4': 70, '3': 60, '2': 50, '1': 40, 'E': 30 };
+  // 💡 BUG-03 fix: sort uses collNum — null (deck/market cards) sort after
+  // numbered cards so they appear at the end of each tier group.
   filtered.sort((a, b) => {
     const ta = tierOrder[String(a.card.tier)] || 0;
     const tb = tierOrder[String(b.card.tier)] || 0;
     if (tb !== ta) return tb - ta;
+    // Cards with coll numbers sort first (ascending), then nulls last
+    if (a.collNum === null && b.collNum === null) return 0;
+    if (a.collNum === null) return 1;
+    if (b.collNum === null) return -1;
     return a.collNum - b.collNum;
   });
 
@@ -1595,7 +1609,10 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   let msg = `🔍 *Found ${filtered.length} card(s)* with "${animeQuery}":\n\n`;
   for (const item of chunk) {
     const icon = tierIcons[String(item.card.tier)] || '🃏';
-    msg += `${icon} *${item.card.cardName}* (Tier ${item.card.tier}) in ${item.location}\n`;
+    // 💡 BUG-03 fix: render the coll number (was computed but never shown).
+    // Deck/market cards show no coll number (just the location).
+    const numStr = item.collNum ? ` [#${item.collNum}]` : '';
+    msg += `${icon} *${item.card.cardName}* (Tier ${item.card.tier})${numStr} in ${item.location}\n`;
   }
 
   if (totalPages > 1) {
