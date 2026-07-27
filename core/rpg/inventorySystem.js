@@ -157,8 +157,24 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
             if (!inventory[itemId].stats && itemInfo.stats) inventory[itemId].stats = JSON.parse(JSON.stringify(itemInfo.stats));
             if (!inventory[itemId].slot && itemInfo.slot) inventory[itemId].slot = itemInfo.slot;
 
-            // Update metadata if provided
-            Object.assign(inventory[itemId], itemData);
+            // 💡 BUG-05 fix: Update metadata if provided — but NEVER overwrite
+            // instance-specific fields (rarity/stats/name/value/enhancement*)
+            // that were set by a previous drop or by the hydrate block above.
+            // The old `Object.assign(inventory[itemId], itemData)` clobbered
+            // a previously-rolled Mythic rarity with the new drop's (often
+            // lower) rarity, and replaced enhanced stats with base stats —
+            // producing Akon's "Mythic weapon enhanced, no visible effect"
+            // symptom. Now we only set fields that aren't already populated.
+            // NOTE: equipment stacking is fundamentally broken (each instance
+            // is unique), but this fix at least preserves the best existing
+            // instance instead of overwriting it. Proper fix = non-stackable
+            // equipment (deferred — bigger architectural change).
+            for (const [k, v] of Object.entries(itemData)) {
+                if (k === 'quantity') continue; // already handled at line 150
+                if (inventory[itemId][k] === undefined || inventory[itemId][k] === null) {
+                    inventory[itemId][k] = v;
+                }
+            }
         }
     } else {
         const itemType = itemData.type || itemInfo.type || (itemId.includes('shard') || itemId.includes('steel') || itemId.includes('leather') || itemId.includes('stone') ? 'MATERIAL' : 'ITEM');

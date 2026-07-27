@@ -84,9 +84,15 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                                     else if (pct < 50) condLabel = ` 🟠 ${pct}%`;
                                 }
                                 const RARITY_MARK = { UNCOMMON: ' ✦', RARE: ' ✦✦', EPIC: ' ✦✦✦', LEGENDARY: ' ★', MYTHIC: ' ★★' };
-                                const rarityMark = RARITY_MARK[itemInfo.rarity?.toUpperCase()] || '';
+                                // 💡 BUG-05 fix: read INSTANCE rarity (item.rarity) first, fall back to
+                                // DB rarity (itemInfo.rarity). The old code read only itemInfo.rarity,
+                                // so an instance-rolled Mythic weapon displayed as Uncommon (the DB default).
+                                const itemRarity = (item.rarity || itemInfo.rarity || 'COMMON').toUpperCase();
+                                const rarityMark = RARITY_MARK[itemRarity] || '';
                                 const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                                captionEquipped.push(`${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${rarityMark}${condLabel}`);
+                                // 💡 Also use item.name (preserves enhancement prefix like "+5 Iron Sword")
+                                const displayName = item.name || itemInfo.name;
+                                captionEquipped.push(`${getSlotIcon(slot)} *${slotName}:* ${displayName}${rarityMark}${condLabel}`);
                             }
                         }
                     }
@@ -158,7 +164,9 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                         durStr = ` (${block.repeat(filled)}${'⬜'.repeat(5 - filled)} ${pct}%)`;
                     }
                     const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                    equipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${itemInfo.name}${durStr}`);
+                    // 💡 BUG-05 fix: use instance name (preserves enhancement prefix)
+                    const displayName = item.name || itemInfo.name;
+                    equipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${displayName}${durStr}`);
                 }
             }
         }
@@ -470,7 +478,9 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
                 const curDur = item.durability !== undefined ? item.durability : maxDur;
                 const durStr = `⚙️ ${Math.ceil(curDur)}/${maxDur}`;
                 const brokenStr = durabilitySystem.isBroken(item) ? " 💔 *[BROKEN]*" : "";
-                msg += `${icon} *${title}*: ${itemInfo.name}${brokenStr}\n   Condition: ${durStr}\n   🆔 ID: \`${item.id}\`\n\n`;
+                // 💡 BUG-05 fix: use instance name (preserves enhancement prefix)
+                const displayName = item.name || itemInfo.name;
+                msg += `${icon} *${title}*: ${displayName}${brokenStr}\n   Condition: ${durStr}\n   🆔 ID: \`${item.id}\`\n\n`;
             } else { 
                 msg += `${icon} *${title}*: _Empty_\n\n`;
             }
