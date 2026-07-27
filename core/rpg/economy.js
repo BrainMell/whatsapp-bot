@@ -370,6 +370,21 @@ function getUser(userId) {
   if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
   if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
 
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 3;
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+
   // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
   // This catches any inflated values from past exploits or bugs.
   clampWallet(user);
@@ -471,7 +486,22 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
       reason: ""
     };
   }
-  
+
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 3;
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+
   return user;
 }
 
