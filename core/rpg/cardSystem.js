@@ -131,6 +131,15 @@ function isEventCard(card) {
   return card && card.id && String(card.id).startsWith('E-');
 }
 
+// 💡 Helper: escape regex special characters in a deck name before using it
+// in `new RegExp(...)`. Without this, deck names like "Best (Girls)" or
+// "S+ Tiers" throw SyntaxError or silently fail to match.
+// Used by: cmdCDeck, cmdCDeckRemove, cmdEShopDeckTrading(sell),
+//          cmdRenameDeck, cmdDeleteDeck.
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // 💡 Helper: get all event cards (by ID prefix, not tier)
 function getEventCards() {
   return ALL_CARDS().filter(c => isEventCard(c));
@@ -2205,7 +2214,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       return sendUsage(reply, `${p} eshop deck sell`, `${p} eshop deck sell <deck_name> <price>`, `${p} eshop deck sell Waifus 50000`);
     }
 
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${deckName}$`, 'i') } });
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
     if (deck.cards.length === 0) return reply('❌ You cannot sell an empty deck!');
 
@@ -3056,7 +3065,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     
     if (!deckName || isNaN(slot)) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot>\``);
     
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${deckName}$`, 'i') } });
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
     
     const ucId = deck.cards[slot - 1];
@@ -3097,9 +3106,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   //   2. Try exact (case-insensitive) match first
   //   3. Fall back to substring match if no exact match
   // This mirrors the more lenient matching in cmdT2CDeck.
-  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const escapedName = escapeRegex(name);
-  let deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapedName}$`, 'i') } });
+  let deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
   if (!deck) {
     // Fallback: substring match
     const allDecks = await CardDeck.find({ userId: senderJid });
@@ -3175,7 +3182,7 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
   if (!oldName || !newName) return sendUsage(reply, `${p} rename deck`, `${p} rename deck <old> | <new>`, `${p} rename deck Waifus | Best Waifus`);
 
   try {
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${oldName}$`, 'i') } });
+    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } });
     if (!deck) return reply(`❌ Deck *"${oldName}"* not found.`);
 
     deck.name = newName;
@@ -3201,7 +3208,7 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
 
   if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name> [@user]`, `${p} delete deck MyDeck`);
 
-  const deck = await CardDeck.findOne({ userId: targetJid, name: { $regex: new RegExp(`^${name}$`, 'i') } });
+  const deck = await CardDeck.findOne({ userId: targetJid, name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
   if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
 
   try {
