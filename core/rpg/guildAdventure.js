@@ -3147,6 +3147,17 @@ function getClassPassiveDamageMult(attacker, target, isAbility) {
         mult *= attacker.passiveMagBonus;
       }
       break;
+
+    // 💡 BUG-11 fix: magic_damage passive was SET at combat start (line 2994)
+    // but never READ here — so Mage/Archmage/Warlock/Voidwalker/Necromancer/
+    // Chronomancer all got ZERO bonus magic damage from their passive.
+    // Now applies passiveMagBonus to ability damage (basic attacks rarely
+    // use MAG, so isAbility gate is appropriate).
+    case 'magic_damage':
+      if (isAbility && attacker.passiveMagBonus && attacker.passiveMagBonus > 1) {
+        mult *= attacker.passiveMagBonus;
+      }
+      break;
   }
 
   return mult;
@@ -7170,7 +7181,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
   for (const player of state.players) {
    try {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
-    let finalGold = Math.floor(player.goldEarned * multiplier);
+    let finalGold = Math.floor(player.goldEarned * multiplier * (1 + (player.passiveGoldFind || 0) / 100));
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
 
@@ -8216,7 +8227,10 @@ async function applyAbilityEffect(
       if (effId === "heal") {
         const target = getHealTarget(player, targetIndex, chatId);
         if (target) {
-          const hMult = getHealMult(chatId);
+          // 💡 BUG-11 fix: apply healer's passiveHealingBoost (Cleric +25%, Saint +50%, etc.)
+          // Was set at combat start but never read — healing classes got zero bonus.
+          const chatHealMult = getHealMult(chatId);
+          const hMult = chatHealMult * (player.passiveHealingBoost || 1);
           const rawHeal = Number(effData.value) || 0;
           const maxHpVal = target.stats.maxHp || target.stats.hp || 100;
           const healAmount = Math.max(0, Math.min(
@@ -8228,14 +8242,17 @@ async function applyAbilityEffect(
           totalHealing += healAmount;
 
           const targetIcon = target.class?.icon || "👤";
-          msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
+          // Display label uses chatHealMult only (so passive boost doesn't
+          // falsely show "(Holy Ground!)" when only the passive is active)
+          msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${chatHealMult < 1 ? " (Healing Reduced)" : chatHealMult > 1 ? " (Holy Ground!)" : ""}\n`;
         }
       }
       else if (effId === "heal_team") {
         const friendlySide = player.isEnemy
           ? state.enemies.filter((e) => e.stats.hp > 0)
           : state.players.filter((p) => !p.isDead);
-        const hMult = getHealMult(chatId);
+        // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
+        const hMult = getHealMult(chatId) * (player.passiveHealingBoost || 1);
         for (const ally of friendlySide) {
           const rawHealT = Number(effData.value) || 0;
           const maxHpT = ally.stats.maxHp || ally.stats.hp || 100;
@@ -8610,7 +8627,9 @@ async function applyAbilityEffect(
     if (effect.type === "heal") {
       const target = getHealTarget(player, targetIndex, chatId);
       if (target) {
-        const hMult = getHealMult(chatId);
+        // 💡 BUG-11 fix: apply healer's passiveHealingBoost
+        const chatHealMult = getHealMult(chatId);
+        const hMult = chatHealMult * (player.passiveHealingBoost || 1);
         const rawHealE = Number(effect.value) || 0;
         const maxHpE = target.stats.maxHp || target.stats.hp || 100;
         const healAmount = Math.max(0, Math.min(
@@ -8622,7 +8641,7 @@ async function applyAbilityEffect(
         totalHealing += healAmount;
 
         const targetIcon = target.class?.icon || "👤";
-        msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${hMult < 1 ? " (Healing Reduced)" : hMult > 1 ? " (Holy Ground!)" : ""}\n`;
+        msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${chatHealMult < 1 ? " (Healing Reduced)" : chatHealMult > 1 ? " (Holy Ground!)" : ""}\n`;
         if (!player.isEnemy && player.combatStats) {
           player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
         }
@@ -8634,7 +8653,8 @@ async function applyAbilityEffect(
       const friendlySide = player.isEnemy
         ? state.enemies.filter((e) => e.stats.hp > 0)
         : state.players.filter((p) => !p.isDead);
-      const hMult = getHealMult(chatId);
+      // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
+      const hMult = getHealMult(chatId) * (player.passiveHealingBoost || 1);
       for (const ally of friendlySide) {
         const rawHealET = Number(effect.value) || 0;
         const maxHpET = ally.stats.maxHp || ally.stats.hp || 100;
