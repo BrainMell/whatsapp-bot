@@ -285,7 +285,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     msg += `📊 Points Remaining: ${user.skillPoints}\n\n`;
     
     if (effect?.type === 'damage' && effect.multiplier) {
-        msg += `💥 Damage: ${Math.floor(effect.multiplier * 100)}% ATK\n`;
+        msg += `💥 Damage: ${Math.floor(effect.multiplier * 100)}% ${effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK'}\n`;
     } else if (effect?.type === 'heal') {
         msg += `💚 Healing: ${effect.value} HP\n`;
     } else if (effect?.type === 'buff_self' || effect?.type === 'buff_team') {
@@ -452,7 +452,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
                 if (e.type === 'damage' && e.multiplier) {
                     msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage\n`;
                 } else if (e.type === 'aoe' && e.multiplier) {
-                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ATK — ALL ENEMIES\n`;
+                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : e.damageType === 'true' ? 'TRUE' : 'ATK'} — ALL ENEMIES\n`;
                 } else if (e.type === 'heal' || e.type === 'heal_team') {
                     msg += `   💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}\n`;
                 } else if (e.type === 'buff_self' && e.value) {
@@ -460,7 +460,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
                 } else if (e.type === 'buff_team' && e.value) {
                     msg += `   ✨ Party +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
                 } else if (e.type === 'damage_cc') {
-                    msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ATK + ${e.ccChance}% ${e.cc || 'CC'}\n`;
+                    msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} + ${e.ccChance}% ${e.cc || 'CC'}\n`;
                 } else if (e.type === 'execute') {
                     msg += `   ⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)\n`;
                 } else if (e.type === 'passive') {
@@ -513,14 +513,20 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
 
-    // Search ALL trees OUTSIDE the player's own lineage
+    // 💡 BUG-06 fix: apply the same two-pass matcher (exact-then-substring)
+    // as upgradeSkill. The old single-pass matcher used `cleanName.includes(cleanSearch)`
+    // which matched 'Rallying Cry' when the user typed 'rally', 'Holy Fire' when
+    // the user typed 'fire', etc. Now Pass 1 tries exact match on skill id OR
+    // name; Pass 2 falls back to substring only if no exact match.
+
+    // ── Pass 1: exact match across non-lineage classes ──
     for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
         if (lineage.includes(classId)) continue;
         for (const [, treeData] of Object.entries(classData.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
                 const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
                 const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
-                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
+                if (cleanSId === cleanSearch || cleanName === cleanSearch) {
                     targetSkill = { ...skill, id: sId };
                     sourceClassId = classId;
                     break;
@@ -529,6 +535,26 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
             if (targetSkill) break;
         }
         if (targetSkill) break;
+    }
+
+    // ── Pass 2: substring fallback (only if no exact match) ──
+    if (!targetSkill) {
+        for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
+            if (lineage.includes(classId)) continue;
+            for (const [, treeData] of Object.entries(classData.trees)) {
+                for (const [sId, skill] of Object.entries(treeData.skills)) {
+                    const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                    const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                    if (cleanSId.includes(cleanSearch) || cleanName.includes(cleanSearch)) {
+                        targetSkill = { ...skill, id: sId };
+                        sourceClassId = classId;
+                        break;
+                    }
+                }
+                if (targetSkill) break;
+            }
+            if (targetSkill) break;
+        }
     }
 
     if (!targetSkill) {

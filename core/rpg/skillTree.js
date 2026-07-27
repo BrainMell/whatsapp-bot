@@ -3430,7 +3430,14 @@ const SKILL_TREES = {
                         isAscended: true,
                         effect: (level) => ({
                             type: 'aoe',
-                            multiplier: 8.0 + (level * 2.0),
+                            // 💡 BUG-12 fix: reconciled with damageMultiplier [4.0, 5.0, 6.0].
+                            // Was `8.0 + (level * 2.0)` = 10/12/14, which didn't match the
+                            // display (400%/500%/600%). The damageMultiplier comment says
+                            // "nerfed AOE ult" — assuming the display values are the intended
+                            // damage. Formula: 3.0 + level = 4/5/6 at levels 1/2/3.
+                            // ASSUMPTION: confirm with Mellow that [4,5,6] is the intended
+                            // nerfed value (not the old [12,16,22] or the mismatched 10/12/14).
+                            multiplier: 3.0 + (level * 1.0),
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
                             cc: 'curse',
