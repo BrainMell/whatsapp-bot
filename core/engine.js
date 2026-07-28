@@ -495,6 +495,8 @@ const shopCommands = require('./commands/shopCommands');
 const repairCommands = require('./commands/repairCommands');
 const skillCommands = require('./commands/skillCommands');
 const classCommands = require('./commands/classCommands');
+// 💡 Summoner System (Phase 4) — see download/SUMMONER_SYSTEM_DESIGN.md
+const summonCommands = require('./commands/summonCommands');
 const pvpSystem = require('./rpg/pvpSystem');
 const cardSystem = require('./rpg/cardSystem');
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
@@ -7983,6 +7985,19 @@ _💡 Reply with another number from your search list!_`.trim();
                         chatId,
                         senderJid,
                         senderName,
+                      );
+                      return;
+                    }
+
+                    // 💡 Summoner System (Phase 4) — .j summon <subcommand> [args]
+                    if (primaryCmd === "summon" || primaryCmd === "summons") {
+                      const summonArgs = cmdArgs.slice(1);
+                      await summonCommands.handleCommand(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                        summonArgs,
                       );
                       return;
                     }

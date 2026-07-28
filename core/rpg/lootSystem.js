@@ -892,7 +892,28 @@ const ITEM_DATABASE = {
     'null_staff':          { name: 'Null Staff',           description: 'A staff tipped with a null matrix. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)', rarity: 'MYTHIC', value: 380000, type: 'EQUIPMENT', stats: { mag: 135, hp: 35, crit: 15 }, slot: 'main_hand', reqLevel: 70, isTwoHanded: true },
     'null_aegis':          { name: 'Null Aegis',           description: 'A shield that absorbs impacts into a pocket of nothingness. (+130 DEF, +110 HP, +15 LUCK)', rarity: 'MYTHIC', value: 360000, type: 'EQUIPMENT', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor', reqLevel: 70 },
     'abyssal_blade':       { name: 'Abyssal Blade',        description: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)', rarity: 'MYTHIC', value: 950000, type: 'EQUIPMENT', stats: { atk: 210, mag: 50, crit: 20 }, slot: 'main_hand', reqLevel: 90, isTwoHanded: true },
-    'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 }
+    'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 },
+
+    // ── SUMMONER SYSTEM ITEMS (Phase 4) ──────────────────────────
+    // Summon eggs — hatch via `.summon hatch <eggId>`. Drop from bosses, raids, abyss.
+    // Common egg = random COMMON species. Species-specific eggs = that species.
+    'summon_egg_common':       { name: 'Common Summon Egg',   description: 'A pulsating egg. Hatches into a random common summon. Use `.summon hatch summon_egg_common`.', rarity: 'UNCOMMON', value: 5000, type: 'ITEM', usable: false },
+    'summon_egg_skeleton':     { name: 'Skeleton Egg',         description: 'A bone-white egg. Hatches into a Skeleton summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_flame_elemental': { name: 'Flame Elemental Egg', description: 'A warm, flickering egg. Hatches into a Flame Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_frost_elemental': { name: 'Frost Elemental Egg', description: 'A cold, crystalline egg. Hatches into a Frost Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_wolf':         { name: 'Wolf Egg',              description: 'A furry, warm egg. Hatches into a Gray Wolf summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_bear':         { name: 'Bear Egg',              description: 'A heavy, thick-shelled egg. Hatches into a Cave Bear summon.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_imp':          { name: 'Imp Egg',               description: 'A mischievously quivering egg. Hatches into an Imp summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_void_walker':  { name: 'Void Walker Egg',       description: 'An egg of pure darkness. Hatches into a Void Walker summon.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+    'summon_egg_wyrmling':     { name: 'Wyrmling Egg',          description: 'A scaled, warm egg. Hatches into a Wyrmling summon.', rarity: 'EPIC', value: 50000, type: 'ITEM', usable: false },
+    'summon_egg_turret_mk1':   { name: 'Turret MK-I Egg',       description: 'A mechanical egg full of gears. Hatches into an Auto-Turret MK-I.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_lich_minion':  { name: 'Lich Minion Egg',       description: 'A necrotic egg radiating dark energy. Hatches into a Lich Minion.', rarity: 'RARE', value: 20000, type: 'ITEM', usable: false },
+    'summon_egg_storm_elemental': { name: 'Storm Elemental Egg', description: 'A crackling, electric egg. Hatches into a Storm Elemental.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+
+    // Summon consumables
+    'loyalty_crystal':         { name: 'Loyalty Crystal',       description: 'Restores a summon\'s loyalty to 100. Use via the summon system.', rarity: 'RARE', value: 5000, type: 'CONSUMABLE', usable: false },
+    'summon_rename_tag':       { name: 'Summon Rename Tag',     description: 'Renames a summon. Cosmetic.', rarity: 'UNCOMMON', value: 2000, type: 'CONSUMABLE', usable: false },
+    'memory_tonic':            { name: 'Memory Tonic',          description: 'Resets a summon\'s personality to STOIC. Rare drop.', rarity: 'EPIC', value: 15000, type: 'CONSUMABLE', usable: false }
 };
 
 function getItemInfo(itemId) {
