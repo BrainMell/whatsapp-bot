@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
+  phoneHash: { type: String, default: null, index: true }, // 💡 Phase 6: alt detection
   
   // Basic Econ
   wallet: { type: Number, default: 1000 },

@@ -379,6 +379,12 @@ function getUser(userId) {
   if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
   if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection — ensure phoneHash is set for all users
+  try {
+    const altDetection = require('./altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
   if (!user.summonStats) {
     user.summonStats = {
       captured: 0, forged: 0, evolved: 0,
@@ -499,6 +505,12 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
   if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
   if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection — ensure phoneHash is set for all users
+  try {
+    const altDetection = require('./altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
   if (!user.summonStats) {
     user.summonStats = {
       captured: 0, forged: 0, evolved: 0,
@@ -831,6 +843,18 @@ function transferMoney(fromUserId, toUserId, amount) {
   
   if (!sender || !receiver) {
     return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
+  }
+  
+  // 💡 Phase 6: Alt-account detection — block transfers between same-phone accounts
+  try {
+    const altDetection = require('./altDetection');
+    const altCheck = altDetection.checkTransfer(fromUserId, toUserId);
+    if (altCheck.blocked) {
+      return { success: false, message: `❌ *TRANSFER BLOCKED*\n\n${altCheck.reason}` };
+    }
+  } catch (e) {
+    console.error('[AltDetection] checkTransfer failed:', e?.message || e);
+    // Fail open — allow transfer if alt detection module is broken
   }
   
   const val = Number(amount);
