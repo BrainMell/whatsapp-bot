@@ -384,6 +384,7 @@ function getUser(userId) {
       arenaWins: 0, arenaLosses: 0
     };
   }
+  if (!user.tamingProgress) user.tamingProgress = {};
 
   // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
   // This catches any inflated values from past exploits or bugs.
@@ -501,6 +502,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
       arenaWins: 0, arenaLosses: 0
     };
   }
+  if (!user.tamingProgress) user.tamingProgress = {};
 
   return user;
 }

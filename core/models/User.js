@@ -177,6 +177,10 @@ const UserSchema = new mongoose.Schema({
     arenaLosses: { type: Number, default: 0 }
   },
 
+  // Taming progress per enemy type (Necromancer capture pipeline).
+  // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
+  tamingProgress: { type: Map, of: Number, default: {} },
+
   // AI Memory & Profile Data
   profile: {
     whatsappName: { type: String, default: null },

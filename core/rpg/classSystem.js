@@ -659,7 +659,12 @@ const EVOLVED_CLASSES = {
         stats: { hp: 92, atk: 6, def: 5, mag: 27, spd: 8, luck: 9, crit: 11 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'GRAVEYARD_LORD' },
         evolutionCost: 0,
-        passive: { name: `Death's Apprentice`, desc: `Summons have +30% stats.`, effect: 'magic_damage', value: 15 },
+        // 💡 Phase 3 fix: changed effect from 'magic_damage' (which gave the
+        // player +15% magic damage — unrelated to summons) to 'summon_buff'.
+        // The actual +30% undead summon stat bonus is applied via
+        // summonCapture.applyClassSummonBonus in summonSystem.buildCombatEntity.
+        // The 'value: 30' now matches the description (+30% stats).
+        passive: { name: `Death's Apprentice`, desc: `Undead summons have +30% stats. Capture souls with Army of the Dead.`, effect: 'summon_buff', value: 30 },
         evolves_into: ['LICH'],
     },
     LICH: {

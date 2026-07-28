@@ -482,7 +482,7 @@ function buildCombatEntity(summon, summonerJid) {
   const stats = computeEffectiveStats(summon);
   const species = registry.getSpecies(summon.species);
 
-  return {
+  const entity = {
     // Identity
     id: summon.summonId,
     name: summon.nickname || species?.name || summon.species,
@@ -528,6 +528,23 @@ function buildCombatEntity(summon, summonerJid) {
     // Reference back to the DB document (for post-combat persistence)
     _summonDoc: summon
   };
+
+  // 💡 Phase 3: Apply class-based summon bonuses (Necromancer +30% undead, Lich +40%).
+  // Looks up the owner's class via economy.getUser and applies the bonus
+  // to the combat entity's stats. This is the "player → summon" direction
+  // of Soul Resonance.
+  try {
+    const summonCapture = require('./summonCapture');
+    const user = economy.getUser(summonerJid);
+    if (user && user.class) {
+      summonCapture.applyClassSummonBonus(entity, user.class);
+    }
+  } catch (e) {
+    // Non-fatal — bonus is optional
+    console.error('[Summon] applyClassSummonBonus failed:', e?.message || e);
+  }
+
+  return entity;
 }
 
 // ─────────────────────────────────────────────────────────────

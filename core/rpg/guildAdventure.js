@@ -26,6 +26,8 @@ const monsterSkills = require("./monsterSkills");
 // 💡 Summoner System (Phase 2) — see download/SUMMONER_SYSTEM_DESIGN.md
 const summonSystem = require("./summonSystem");
 const summonAI = require("./summonAI");
+// 💡 Phase 3: Necromancer capture pipeline
+const summonCapture = require("./summonCapture");
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -2022,6 +2024,10 @@ const INITIAL_STATE_TEMPLATE = {
   // summon (user.activeSummonId) via summonSystem.buildCombatEntity.
   // Pushed into state.turnOrder alongside players + enemies.
   summons: [],
+  // 💡 Phase 3: Necromancer capture windows.
+  // Keyed by playerJid, value = { turnsRemaining, captureChance }.
+  // Set when army_of_dead ult is cast, ticked each round, expired at 0.
+  captureWindows: {},
   turnOrder: [],
   currentTurn: 0,
   combatRound: 0,
@@ -3783,6 +3789,18 @@ async function processCombatTurn(sock, sessionKey) {
       if (actionExpireMsgs.length > 0) {
         state.pendingStatusMsg = actionExpireMsgs.join("\n");
       }
+
+      // 💡 Phase 3: tick Necromancer capture windows each round.
+      // Only tick when a PLAYER acts (not enemy/summon) — mirrors how
+      // combatRound is incremented at line 3606. This means the window
+      // lasts 3 of the PLAYER's turns, not 3 of any actor's turns.
+      if (!activeActor.isEnemy && !activeActor.isSummon) {
+        try {
+          summonCapture.tickCaptureWindows(state);
+        } catch (e) {
+          console.error('[Capture] tickCaptureWindows failed:', e?.message || e);
+        }
+      }
     }
   } catch (err) {
     console.error("[Combat] Turn loop error:", err);
@@ -4907,6 +4925,31 @@ function recordEnemyKill(state, entity) {
       }
     } catch (e) {
       console.error('[Passive] applyClassPassiveOnKill failed:', e?.message || e);
+    }
+
+    // 💡 Phase 3: Necromancer capture pipeline.
+    // If this player has an active capture window (from army_of_dead ult),
+    // attempt to capture the defeated enemy as a permanent summon.
+    // Fire-and-forget async — result pushed to roundLog.
+    try {
+      const window = summonCapture.getCaptureWindow(state, p.jid);
+      if (window) {
+        // Fire-and-forget — don't block the sync kill tracking
+        summonCapture.attemptCapture(state, entity, p.jid)
+          .then(result => {
+            if (result && result.captured && result.message) {
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(result.message);
+            } else if (result && result.message) {
+              // Capture failed but has a message (e.g. "soul escapes")
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(result.message);
+            }
+          })
+          .catch(e => console.error('[Capture] attemptCapture failed:', e?.message || e));
+      }
+    } catch (e) {
+      console.error('[Capture] recordEnemyKill capture branch failed:', e?.message || e);
     }
 
     if (entity.isBoss) {
@@ -8617,6 +8660,33 @@ async function applyAbilityEffect(
           // Add to total damage dealt this cast — will be applied via existing
           // damage-dealt processing below
           totalDamage += summonDmg;
+        }
+
+        // 💡 Phase 3: Necromancer capture pipeline.
+        // If this is the Necromancer's army_of_dead ult (identified by the
+        // 'ALL_CORPSES' targeting + 'skeleton_warrior' unit), set a capture
+        // window for the caster. During the window, killing enemies has a
+        // chance to capture them as permanent summons.
+        try {
+          const skillId = effect.skillId || effect.id || '';
+          const isArmyOfDead = skillId === 'army_of_dead' ||
+                               effData.unit === 'skeleton_warrior' ||
+                               effect.targeting === 'ALL_CORPSES';
+          if (isArmyOfDead && !player.isEnemy && player.jid) {
+            // Get the Necromancer's active summon level (for capture bonus)
+            let summonLevel = 1;
+            try {
+              const user = economy.getUser(player.jid);
+              if (user && user.activeSummonId) {
+                const activeSummon = await summonSystem.getActiveSummon(user);
+                if (activeSummon) summonLevel = activeSummon.level || 1;
+              }
+            } catch (e) {}
+            summonCapture.setCaptureWindow(state, player.jid, summonLevel);
+            msg += `🗡️ *Army of the Dead active!* Soul capture window open for ${summonCapture.CAPTURE_CONFIG.CAPTURE_WINDOW_TURNS} turns.\n`;
+          }
+        } catch (captureErr) {
+          console.error('[Capture] setCaptureWindow failed:', captureErr?.message || captureErr);
         }
       }
     }
