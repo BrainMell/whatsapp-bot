@@ -58,6 +58,17 @@ const BUILDING_PERKS = {
     goldMultiplier: (level) => level * 0.10,
     interestRate: (level) => level * 0.005, // 0.5% per level per day, max 2.5%
   },
+  // 💡 Summoner System (Phase 9): Summon Sanctuary
+  // L1: +1 summon slot for all members
+  // L2: +5% summon XP
+  // L3: +5% summon damage in guild adventures
+  // L4: +1 summon slot
+  // L5: +10% summon damage
+  summonSanctum: {
+    slotBonus: (level) => (level >= 1 ? 1 : 0) + (level >= 4 ? 1 : 0),
+    xpMultiplier: (level) => level >= 2 ? 0.05 + (level - 2) * 0.02 : 0,
+    damageMultiplier: (level) => level >= 3 ? 0.05 + Math.max(0, level - 3) * 0.025 : 0,
+  },
 };
 
 // ─── GUILD LEVEL PERKS ────────────────────────────────────────────────────
@@ -163,6 +174,33 @@ function getCraftCostReduction(userId) {
   const { guild } = data;
   const arch = ARCHETYPE_PERKS[guild.type] || ARCHETYPE_PERKS.ADVENTURER;
   return arch.craftCostReduction;
+}
+
+// ─── SUMMON SANCTUARY PERKS (Phase 9) ─────────────────────────────────────
+// Returns summon-related bonuses from the Summon Sanctuary building.
+// L1: +1 slot, L2: +5% XP, L3: +5% damage, L4: +1 slot, L5: +10% damage
+function getSummonSlotBonus(userId) {
+  const data = getUserGuildData(userId);
+  if (!data) return 0;
+  const { guild } = data;
+  const lvl = getBuildingLevel(guild, 'summonSanctum');
+  return BUILDING_PERKS.summonSanctum.slotBonus(lvl);
+}
+
+function getSummonXpMultiplier(userId) {
+  const data = getUserGuildData(userId);
+  if (!data) return 0;
+  const { guild } = data;
+  const lvl = getBuildingLevel(guild, 'summonSanctum');
+  return BUILDING_PERKS.summonSanctum.xpMultiplier(lvl);
+}
+
+function getSummonDamageMultiplier(userId) {
+  const data = getUserGuildData(userId);
+  if (!data) return 0;
+  const { guild } = data;
+  const lvl = getBuildingLevel(guild, 'summonSanctum');
+  return BUILDING_PERKS.summonSanctum.damageMultiplier(lvl);
 }
 
 // ─── MEMBER CAP ───────────────────────────────────────────────────────────
@@ -365,6 +403,10 @@ module.exports = {
   runDailyInterest,
   canRecruitMember,
   runDailyLoanProcessing,
+  // 💡 Phase 9: Summon Sanctuary perks
+  getSummonSlotBonus,
+  getSummonXpMultiplier,
+  getSummonDamageMultiplier,
 };
 
 // ─── DAILY LOAN PROCESSING ─────────────────────────────────────────────────

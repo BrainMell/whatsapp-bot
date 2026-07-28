@@ -33,10 +33,22 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
   const sub = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
+  // 💡 Phase 9: .summon with no args → Pokémon-style interface (NOT help).
+  // .summon help → command list. .summon <number> → view summon #N details.
+  // Numeric arg = navigate to summon by list position (1-indexed).
+  if (!sub) {
+    return await cmdPokedex(sock, chatId, senderJid);
+  }
+
+  // Numeric navigation — .summon 3 → view details of the 3rd summon in the list
+  if (/^\d+$/.test(sub)) {
+    return await cmdNavigate(sock, chatId, senderJid, sub, rest);
+  }
+
   switch (sub) {
     case 'list':
     case 'ls':
-      return await cmdList(sock, chatId, senderJid);
+      return await cmdPokedex(sock, chatId, senderJid);
 
     case 'deploy':
     case 'equip':
@@ -81,17 +93,26 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'passives':
       return await cmdPassives(sock, chatId, senderJid);
 
+    case 'market':
+    case 'shop':
+      return await cmdMarket(sock, chatId, senderJid, rest);
+
+    case 'duel':
+      return await cmdDuel(sock, chatId, senderJid, rest);
+
     case 'help':
+      return await cmdHelp(sock, chatId);
+
     default:
       return await cmdHelp(sock, chatId);
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon list — view owned summons
+// .summon — Pokémon-style Pokédex interface (DEFAULT when no subcommand)
 // ─────────────────────────────────────────────────────────────
 
-async function cmdList(sock, chatId, senderJid) {
+async function cmdPokedex(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
   if (!user) {
     await sock.sendMessage(chatId, { text: '❌ Not registered. Use `' + getPrefix() + ' register` first.' });
@@ -99,38 +120,99 @@ async function cmdList(sock, chatId, senderJid) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
+  const activeResonances = user.activeResonances || [];
+  const p = getPrefix();
 
   if (summons.length === 0) {
     await sock.sendMessage(chatId, {
-      text: `🐉 *You own no summons.*\n\nSummons can be obtained by:\n• Necromancer: capture enemies with Army of the Dead\n• Hatching summon eggs (from boss drops, raids, abyss)\n• Purchasing from the summon market\n\nUse \`${getPrefix()} summon help\` for all commands.`
+      text: `🐉 *SUMMON CODEX*\n━━━━━━━━━━━━━━━\n\n📭 Your codex is empty.\n\n*HOW TO GET SUMMONS:*\n💀 Necromancer: capture enemies with Army of the Dead\n🥚 Hatch eggs (from boss drops, raids, abyss)\n🏪 Trade on the summon market (\`${p} summon market\`)\n\nType \`${p} summon help\` for all commands.`
     });
     return;
   }
 
-  let msg = `🐉 *YOUR SUMMONS* (${summons.length}/${user.summonSlots || 3} slots)\n`;
+  let msg = `🐉 *SUMMON CODEX*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📦 ${summons.length}/${user.summonSlots || 3} slots`;
+  if (activeResonances.length > 0) {
+    msg += ` | 🔗 ${activeResonances.length} resonance${activeResonances.length > 1 ? 's' : ''}`;
+  }
+  if (user.activeSummonId) {
+    msg += ` | ⭐ 1 deployed`;
+  }
+  msg += `\n\n`;
+
+  // Pokémon-style card layout — each summon gets a visual "card"
+  const rarityColors = {
+    COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🔴', LEGENDARY: '🟡', MYTHIC: '🟣'
+  };
 
   for (let i = 0; i < summons.length; i++) {
     const s = summons[i];
     const species = registry.getSpecies(s.species);
     const name = s.nickname || species?.name || s.species;
-    const active = user.activeSummonId === s.summonId ? ' ⭐' : '';
+    const active = user.activeSummonId === s.summonId;
     const forSaleTag = s.forSale ? ' 🏷️' : '';
     const tamedTag = (s.lineage || []).some(l => l.personality === 'TAMED') ? ' ✨' : '';
+    const rarityIcon = rarityColors[s.rarity] || '⚪';
+    const stats = summonSystem.computeEffectiveStats(s);
 
-    msg += `\n${i + 1}. ${species?.icon || '🐉'} *${name}*${active}${forSaleTag}${tamedTag}\n`;
-    msg += `   📊 Lv.${s.level} ${s.rarity} ${s.tier} | ${s.element}/${s.archetype}\n`;
-    msg += `   💖 ${s.loyalty} loyalty | 🧠 ${s.personality}\n`;
-    msg += `   🆔 \`${s.summonId.slice(-8)}\`\n`;
+    // Loyalty bar
+    const loyaltyPct = s.loyalty;
+    const loyaltyBar = loyaltyPct >= 75 ? '🟩' : loyaltyPct >= 50 ? '🟨' : loyaltyPct >= 25 ? '🟧' : loyaltyPct >= 1 ? '🟥' : '⬛';
+
+    msg += `${i + 1}│ ${species?.icon || '🐉'} *${name}*${active ? ' ⭐' : ''}${forSaleTag}${tamedTag}\n`;
+    msg += `  │ ${rarityIcon} Lv.${s.level} ${s.tier} | ${s.element}/${s.archetype}\n`;
+    msg += `  │ ❤️ ${stats.hp} HP | ⚔️ ${stats.atk} | 🛡️ ${stats.def} | 🔮 ${stats.mag}\n`;
+    msg += `  │ 💖 ${loyaltyBar} ${s.loyalty}/100 | 🧠 ${s.personality}\n`;
+    msg += `\n`;
   }
 
-  msg += `\n💡 Use \`${getPrefix()} summon info <id>\` for details.\n`;
-  msg += `💡 Use \`${getPrefix()} summon deploy <id>\` to equip one.\n`;
-  if (user.activeSummonId) {
-    msg += `⭐ = currently deployed`;
-  }
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `📱 \`${p} summon <#>\` — view details\n`;
+  msg += `⚔️ \`${p} summon deploy <#>\` — equip\n`;
+  msg += `❓ \`${p} summon help\` — all commands`;
 
   await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon <#> — navigate to summon by list position (Pokédex entry)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const index = parseInt(numStr) - 1;  // 1-indexed → 0-indexed
+
+  if (index < 0 || index >= summons.length) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Invalid number. You have ${summons.length} summons (1-${summons.length}).`
+    });
+    return;
+  }
+
+  // Check if there's a subcommand after the number (e.g., ".summon 3 deploy")
+  const action = (rest[0] || '').toLowerCase();
+  if (action === 'deploy' || action === 'equip') {
+    return await cmdDeploy(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+  }
+  if (action === 'release') {
+    return await cmdRelease(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+  }
+  if (action === 'train') {
+    return await cmdTrain(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+  }
+  if (action === 'trial') {
+    return await cmdTrial(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+  }
+
+  // Default: show info for this summon
+  return await cmdInfo(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -737,6 +819,436 @@ async function cmdPassives(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// .summon market <subcommand> — summon trading market
+// ─────────────────────────────────────────────────────────────
+
+const SummonMarket = require('../models/SummonMarket');
+const SummonModel = require('../models/Summon');
+
+async function cmdMarket(sock, chatId, senderJid, args) {
+  const action = (args[0] || '').toLowerCase();
+  const rest = args.slice(1);
+
+  switch (action) {
+    case 'list':
+    case 'browse':
+      return await cmdMarketList(sock, chatId, senderJid);
+    case 'sell':
+    case 'list_sell':
+      return await cmdMarketSell(sock, chatId, senderJid, rest);
+    case 'buy':
+      return await cmdMarketBuy(sock, chatId, senderJid, rest);
+    case 'cancel':
+      return await cmdMarketCancel(sock, chatId, senderJid, rest);
+    case 'my':
+    case 'mine':
+      return await cmdMarketMy(sock, chatId, senderJid);
+    default:
+      await sock.sendMessage(chatId, {
+        text: `🏪 *SUMMON MARKET*\n\nCommands:\n• \`${getPrefix()} summon market list\` — browse summons for sale\n• \`${getPrefix()} summon market sell <id> <price>\` — list a summon\n• \`${getPrefix()} summon market buy <listingId>\` — buy a summon\n• \`${getPrefix()} summon market cancel <listingId>\` — cancel your listing\n• \`${getPrefix()} summon market my\` — view your listings\n\n💡 5% listing fee on sale price. Soulbound summons can't be sold.`
+      });
+  }
+}
+
+async function cmdMarketList(sock, chatId, senderJid) {
+  try {
+    const listings = await SummonMarket.find({ status: 'active' })
+      .sort({ price: 1 })
+      .limit(20);
+
+    if (listings.length === 0) {
+      await sock.sendMessage(chatId, { text: '🏪 *SUMMON MARKET*\n\nNo summons for sale right now.' });
+      return;
+    }
+
+    // Load summon details for each listing
+    let msg = `🏪 *SUMMON MARKET*\n`;
+    msg += `━━━━━━━━━━━━━━━\n\n`;
+
+    for (let i = 0; i < listings.length; i++) {
+      const listing = listings[i];
+      const summon = await SummonModel.findOne({ summonId: listing.summonId });
+      if (!summon) continue;
+
+      const species = registry.getSpecies(summon.species);
+      const name = summon.nickname || species?.name || summon.species;
+
+      msg += `${i + 1}│ ${species?.icon || '🐉'} *${name}*\n`;
+      msg += `  │ 📊 Lv.${summon.level} ${summon.rarity} | ${summon.element}\n`;
+      msg += `  │ 💰 ${listing.price.toLocaleString()} Zeni\n`;
+      msg += `  │ 🆔 \`${listing.listingId.slice(-8)}\`\n\n`;
+    }
+
+    msg += `💡 \`${getPrefix()} summon market buy <listingId>\` to purchase`;
+    await sock.sendMessage(chatId, { text: msg });
+  } catch (e) {
+    await sock.sendMessage(chatId, { text: `❌ Market error: ${e.message}` });
+  }
+}
+
+async function cmdMarketSell(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const query = (args[0] || '').trim();
+  const price = parseInt(args[1]) || 0;
+
+  if (!query || price < 1000) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Usage: \`${getPrefix()} summon market sell <id> <price>\`\nMinimum price: 1,000 Zeni.`
+    });
+    return;
+  }
+
+  // Resolve summon
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const target = summons.find(s =>
+    s.summonId.endsWith(query) || s.summonId === query ||
+    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
+  );
+
+  if (!target) {
+    await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
+    return;
+  }
+
+  // Validate
+  if (target.forSale) {
+    await sock.sendMessage(chatId, { text: '❌ This summon is already listed for sale.' });
+    return;
+  }
+  if (target.isLocked) {
+    await sock.sendMessage(chatId, { text: '❌ This summon is locked and cannot be sold.' });
+    return;
+  }
+  if (target.soulboundUntil && target.soulboundUntil > new Date()) {
+    await sock.sendMessage(chatId, { text: '❌ This summon is soulbound. Wait for the soulbound period to end.' });
+    return;
+  }
+  if (user.activeSummonId === target.summonId) {
+    await sock.sendMessage(chatId, { text: '❌ Cannot sell your active summon. Dismiss it first.' });
+    return;
+  }
+
+  // Calculate listing fee (5%)
+  const fee = Math.floor(price * 0.05);
+  const totalCost = fee;
+
+  if (user.wallet < totalCost) {
+    await sock.sendMessage(chatId, { text: `❌ Listing fee is ${fee.toLocaleString()} Zeni (5% of price). You have ${user.wallet.toLocaleString()}.` });
+    return;
+  }
+
+  // Deduct fee
+  economy.removeMoney(senderJid, totalCost, `Summon market listing fee`);
+
+  // Create listing
+  const listingId = `smarket_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const listing = new SummonMarket({
+    listingId,
+    summonId: target.summonId,
+    sellerId: senderJid,
+    type: 'sale',
+    price,
+    status: 'active',
+    approvalStatus: 'approved'
+  });
+  await listing.save();
+
+  // Mark summon as forSale
+  target.forSale = true;
+  target.salePrice = price;
+  await target.save();
+
+  // Refresh resonances (forSale summons don't count)
+  try { await summonSystem.refreshUserResonances(user); } catch (e) {}
+
+  const species = registry.getSpecies(target.species);
+  await sock.sendMessage(chatId, {
+    text: `🏪 *SUMMON LISTED FOR SALE*\n\n${species?.icon || '🐉'} *${target.nickname || species?.name || target.species}*\n💰 Price: ${price.toLocaleString()} Zeni\n💸 Listing fee: ${fee.toLocaleString()} Zeni\n🆔 Listing ID: \`${listingId.slice(-8)}\`\n\nUse \`${getPrefix()} summon market cancel ${listingId.slice(-8)}\` to cancel.`
+  });
+}
+
+async function cmdMarketBuy(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const query = (args[0] || '').trim();
+  if (!query) {
+    await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} summon market buy <listingId>\`` });
+    return;
+  }
+
+  // Find listing
+  const listing = await SummonMarket.findOne({
+    listingId: { $regex: query + '$' },
+    status: 'active'
+  });
+
+  if (!listing) {
+    await sock.sendMessage(chatId, { text: `❌ No active listing matching "${query}".` });
+    return;
+  }
+
+  // Anti-self-buy
+  if (listing.sellerId === senderJid) {
+    await sock.sendMessage(chatId, { text: '❌ You cannot buy your own listing.' });
+    return;
+  }
+
+  // Alt detection
+  try {
+    const altDetection = require('../rpg/altDetection');
+    const altCheck = altDetection.checkTransfer(senderJid, listing.sellerId);
+    if (altCheck.blocked) {
+      await sock.sendMessage(chatId, { text: `❌ ${altCheck.reason}` });
+      return;
+    }
+  } catch (e) {}
+
+  // Check slot space
+  const userSummons = await summonSystem.getUserSummons(senderJid);
+  if (userSummons.length >= (user.summonSlots || 3)) {
+    await sock.sendMessage(chatId, { text: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 3}).` });
+    return;
+  }
+
+  // Check funds
+  if (user.wallet < listing.price) {
+    await sock.sendMessage(chatId, { text: `❌ Insufficient Zeni. Need ${listing.price.toLocaleString()}, have ${user.wallet.toLocaleString()}.` });
+    return;
+  }
+
+  // Atomic claim
+  const claimed = await SummonMarket.findOneAndUpdate(
+    { listingId: listing.listingId, status: 'active' },
+    { status: 'sold', buyerId: senderJid, soldAt: new Date(), salePrice: listing.price },
+    { new: true }
+  );
+
+  if (!claimed) {
+    await sock.sendMessage(chatId, { text: '❌ This listing was just purchased by someone else.' });
+    return;
+  }
+
+  // Transfer funds
+  economy.removeMoney(senderJid, listing.price, `Summon market purchase: ${listing.summonId}`);
+  economy.addMoney(listing.sellerId, listing.price, `Summon market sale: ${listing.summonId}`);
+
+  // Transfer summon
+  const summon = await SummonModel.findOneAndUpdate(
+    { summonId: listing.summonId },
+    { ownerJid: senderJid, forSale: false, salePrice: null },
+    { new: true }
+  );
+
+  // Refresh resonances for both users
+  try {
+    const seller = economy.getUser(listing.sellerId);
+    if (seller) await summonSystem.refreshUserResonances(seller);
+    await summonSystem.refreshUserResonances(user);
+  } catch (e) {}
+
+  const species = registry.getSpecies(summon.species);
+  await sock.sendMessage(chatId, {
+    text: `✅ *SUMMON PURCHASED!*\n\n${species?.icon || '🐉'} *${summon.nickname || species?.name || summon.species}*\n💰 Paid: ${listing.price.toLocaleString()} Zeni\n📊 Lv.${summon.level} ${summon.rarity}\n\nUse \`${getPrefix()} summon deploy ${summon.summonId.slice(-8)}\` to equip it.`
+  });
+}
+
+async function cmdMarketCancel(sock, chatId, senderJid, args) {
+  const query = (args[0] || '').trim();
+  if (!query) {
+    await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} summon market cancel <listingId>\`` });
+    return;
+  }
+
+  const listing = await SummonMarket.findOne({
+    listingId: { $regex: query + '$' },
+    sellerId: senderJid,
+    status: 'active'
+  });
+
+  if (!listing) {
+    await sock.sendMessage(chatId, { text: `❌ No active listing matching "${query}" belonging to you.` });
+    return;
+  }
+
+  // Cancel listing
+  listing.status = 'cancelled';
+  await listing.save();
+
+  // Unmark summon
+  await SummonModel.updateOne(
+    { summonId: listing.summonId },
+    { forSale: false, salePrice: null }
+  );
+
+  // Refresh resonances
+  const user = economy.getUser(senderJid);
+  if (user) {
+    try { await summonSystem.refreshUserResonances(user); } catch (e) {}
+  }
+
+  await sock.sendMessage(chatId, { text: `✅ Listing cancelled. Your summon is back in your collection.` });
+}
+
+async function cmdMarketMy(sock, chatId, senderJid) {
+  const listings = await SummonMarket.find({
+    sellerId: senderJid,
+    status: 'active'
+  }).sort({ createdAt: -1 });
+
+  if (listings.length === 0) {
+    await sock.sendMessage(chatId, { text: '📭 You have no active market listings.' });
+    return;
+  }
+
+  let msg = `🏪 *YOUR LISTINGS*\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
+
+  for (const listing of listings) {
+    const summon = await SummonModel.findOne({ summonId: listing.summonId });
+    if (!summon) continue;
+    const species = registry.getSpecies(summon.species);
+    msg += `${species?.icon || '🐉'} *${summon.nickname || species?.name || summon.species}*\n`;
+    msg += `  💰 ${listing.price.toLocaleString()} Zeni | 🆔 \`${listing.listingId.slice(-8)}\`\n\n`;
+  }
+
+  msg += `💡 \`${getPrefix()} summon market cancel <id>\` to cancel`;
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon duel @user — PvP summon vs summon
+// ─────────────────────────────────────────────────────────────
+
+async function cmdDuel(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  // Get target from mention or reply
+  const mentioned = args[0];
+  if (!mentioned || !mentioned.includes('@')) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Usage: \`${getPrefix()} summon duel @user\`\n\nChallenge another player's active summon to a 1v1 duel. Both players must have a summon deployed.`
+    });
+    return;
+  }
+
+  // Clean mention to JID
+  const targetJid = mentioned.replace(/[@!]/g, '').includes('s.whatsapp.net')
+    ? mentioned.replace(/[@!]/g, '')
+    : mentioned.replace(/[@!]/g, '') + '@s.whatsapp.net';
+
+  if (targetJid === senderJid) {
+    await sock.sendMessage(chatId, { text: '❌ Cannot duel yourself.' });
+    return;
+  }
+
+  // Alt detection
+  try {
+    const altDetection = require('../rpg/altDetection');
+    const altCheck = altDetection.checkTransfer(senderJid, targetJid);
+    if (altCheck.blocked) {
+      await sock.sendMessage(chatId, { text: `❌ ${altCheck.reason}` });
+      return;
+    }
+  } catch (e) {}
+
+  const targetUser = economy.getUser(targetJid);
+  if (!targetUser || !targetUser.registered) {
+    await sock.sendMessage(chatId, { text: '❌ Target is not registered.' });
+    return;
+  }
+
+  // Both players must have active summons
+  const mySummon = await summonSystem.getActiveSummon(user);
+  if (!mySummon) {
+    await sock.sendMessage(chatId, { text: `❌ You don't have an active summon. Deploy one with \`${getPrefix()} summon deploy <id>\`.` });
+    return;
+  }
+
+  const targetSummon = await summonSystem.getActiveSummon(targetUser);
+  if (!targetSummon) {
+    await sock.sendMessage(chatId, { text: `❌ @${targetJid.split('@')[0]} doesn't have an active summon deployed.`, mentions: [targetJid] });
+    return;
+  }
+
+  // Simulate the duel
+  const myStats = summonSystem.computeEffectiveStats(mySummon);
+  const targetStats = summonSystem.computeEffectiveStats(targetSummon);
+  const mySpecies = registry.getSpecies(mySummon.species);
+  const targetSpecies = registry.getSpecies(targetSummon.species);
+
+  let myHp = myStats.hp;
+  let targetHp = targetStats.hp;
+  const log = [];
+  let round = 0;
+  const maxRounds = 15;
+
+  while (myHp > 0 && targetHp > 0 && round < maxRounds) {
+    round++;
+
+    // My summon attacks
+    const myDmg = Math.max(1, Math.floor(myStats.atk * (0.8 + Math.random() * 0.4) - targetStats.def * 0.5));
+    targetHp -= myDmg;
+    log.push(`R${round}: ${mySpecies?.name || 'Summon'} hits for ${myDmg}!`);
+
+    if (targetHp <= 0) break;
+
+    // Target summon attacks
+    const targetDmg = Math.max(1, Math.floor(targetStats.atk * (0.8 + Math.random() * 0.4) - myStats.def * 0.5));
+    myHp -= targetDmg;
+    log.push(`R${round}: ${targetSpecies?.name || 'Summon'} hits for ${targetDmg}!`);
+  }
+
+  const victory = targetHp <= 0 && myHp > 0;
+  const draw = myHp <= 0 && targetHp <= 0;
+
+  // Update ELO
+  if (user.summonStats) {
+    if (victory) user.summonStats.arenaWins = (user.summonStats.arenaWins || 0) + 1;
+    else if (!draw) user.summonStats.arenaLosses = (user.summonStats.arenaLosses || 0) + 1;
+  }
+  if (targetUser.summonStats) {
+    if (!victory && !draw) targetUser.summonStats.arenaWins = (targetUser.summonStats.arenaWins || 0) + 1;
+    else if (victory) targetUser.summonStats.arenaLosses = (targetUser.summonStats.arenaLosses || 0) + 1;
+  }
+
+  // Loyalty cost (both summons lose some loyalty from the fight)
+  mySummon.loyalty = Math.max(0, mySummon.loyalty - 3);
+  await mySummon.save();
+  targetSummon.loyalty = Math.max(0, targetSummon.loyalty - 3);
+  await targetSummon.save();
+
+  let msg = `⚔️ *SUMMON DUEL!*\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
+  msg += `${mySpecies?.icon || '🐉'} *${mySummon.nickname || mySpecies?.name}* vs ${targetSpecies?.icon || '🐉'} *${targetSummon.nickname || targetSpecies?.name}*\n\n`;
+  msg += log.join('\n') + '\n\n';
+
+  if (victory) {
+    msg += `🏆 *${mySummon.nickname || mySpecies?.name} WINS!*`;
+  } else if (draw) {
+    msg += `🤝 *DRAW — both summons fell!*`;
+  } else {
+    msg += `💀 *${targetSummon.nickname || targetSpecies?.name} WINS!*`;
+  }
+
+  msg += `\n\n💖 Both summons lost 3 loyalty from the fight.`;
+
+  await sock.sendMessage(chatId, { text: msg, mentions: [targetJid] });
+}
+
+// ─────────────────────────────────────────────────────────────
 // .summon help
 // ─────────────────────────────────────────────────────────────
 
@@ -757,11 +1269,13 @@ async function cmdHelp(sock, chatId) {
   msg += `⚔️ \`${p} summon forge <id1> <id2>\` — Soul Forge two summons\n`;
   msg += `🏆 \`${p} summon trial <id>\` — attempt evolution trial\n`;
   msg += `✨ \`${p} summon passives\` — view unlocked trial passives\n`;
+  msg += `🏪 \`${p} summon market <list/sell/buy/cancel>\` — summon trading\n`;
+  msg += `⚔️ \`${p} summon duel @user\` — summon vs summon PvP\n`;
   msg += `💔 \`${p} summon release <id>\` — permanently release a summon\n\n`;
   msg += `*OBTAINING SUMMONS:*\n`;
   msg += `• Necromancer: cast Army of the Dead to capture enemies\n`;
   msg += `• Hatch eggs (from boss drops, raids, abyss)\n`;
-  msg += `• Trade on the summon market (coming soon)\n\n`;
+  msg += `• Buy from other players on the summon market\n\n`;
   msg += `*MECHANICS:*\n`;
   msg += `• Summons act via gauge-based turn order (high SPD = more turns)\n`;
   msg += `• Personalities shift based on how you use them\n`;

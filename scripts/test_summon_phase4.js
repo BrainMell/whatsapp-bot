@@ -94,7 +94,7 @@ console.log('\n--- summonCommands source verification ---');
 const cmdSource = fs.readFileSync(path.join(REPO, 'core/commands/summonCommands.js'), 'utf8');
 
 test('all 10 commands implemented', () => {
-  const commands = ['cmdList', 'cmdDeploy', 'cmdDismiss', 'cmdInfo', 'cmdRelease', 'cmdTrain', 'cmdAllocate', 'cmdResonance', 'cmdCompendium', 'cmdHatch'];
+  const commands = ['cmdPokedex', 'cmdDeploy', 'cmdDismiss', 'cmdInfo', 'cmdRelease', 'cmdTrain', 'cmdAllocate', 'cmdResonance', 'cmdCompendium', 'cmdHatch'];
   for (const cmd of commands) {
     assert.ok(cmdSource.includes(`async function ${cmd}(`), `${cmd} must be implemented`);
   }
