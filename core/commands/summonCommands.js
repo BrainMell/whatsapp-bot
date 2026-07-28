@@ -19,6 +19,8 @@ const economy = require('../rpg/economy');
 const botConfig = require('../../botConfig');
 const summonSystem = require('../rpg/summonSystem');
 const summonCapture = require('../rpg/summonCapture');
+const summonForging = require('../rpg/summonForging');
+const summonTrials = require('../rpg/summonTrials');
 const registry = require('../rpg/summonRegistry');
 
 const getPrefix = () => botConfig.getPrefix();
@@ -68,6 +70,16 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
 
     case 'hatch':
       return await cmdHatch(sock, chatId, senderJid, rest);
+
+    case 'forge':
+    case 'fuse':
+      return await cmdForge(sock, chatId, senderJid, rest);
+
+    case 'trial':
+      return await cmdTrial(sock, chatId, senderJid, rest);
+
+    case 'passives':
+      return await cmdPassives(sock, chatId, senderJid);
 
     case 'help':
     default:
@@ -568,6 +580,163 @@ async function cmdHatch(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// .summon forge <id1> <id2> — Soul Forging
+// ─────────────────────────────────────────────────────────────
+
+async function cmdForge(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const id1 = (args[0] || '').trim();
+  const id2 = (args[1] || '').trim();
+
+  if (!id1 || !id2) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Usage: \`${getPrefix()} summon forge <id1> <id2>\`\n\nBoth summons are consumed. The fused summon inherits traits from both + random mutations. Soulbound for 7 days. Cost: 50K+ Zeni.`
+    });
+    return;
+  }
+
+  // Resolve both summons by partial ID
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const s1 = summons.find(s => s.summonId.endsWith(id1) || s.summonId === id1 || (s.nickname && s.nickname.toLowerCase() === id1.toLowerCase()));
+  const s2 = summons.find(s => s.summonId.endsWith(id2) || s.summonId === id2 || (s.nickname && s.nickname.toLowerCase() === id2.toLowerCase()));
+
+  if (!s1 || !s2) {
+    await sock.sendMessage(chatId, { text: '❌ One or both summons not found. Use partial IDs from `.summon list`.' });
+    return;
+  }
+
+  // Confirm
+  const species1 = registry.getSpecies(s1.species);
+  const species2 = registry.getSpecies(s2.species);
+  const totalLevel = s1.level + s2.level;
+  const goldCost = summonForging.FORGE_CONFIG.GOLD_COST_BASE + (totalLevel * summonForging.FORGE_CONFIG.GOLD_COST_PER_LEVEL);
+
+  // Execute the forge
+  const result = await summonForging.forgeSummons(senderJid, s1.summonId, s2.summonId);
+  await sock.sendMessage(chatId, { text: result.message });
+
+  if (result.success && result.summon) {
+    // Show active resonances update
+    try {
+      const activeRes = user.activeResonances || [];
+      if (activeRes.length > 0) {
+        const resonanceNames = activeRes.map(r => registry.getResonance(r)?.name || r).join(', ');
+        await sock.sendMessage(chatId, { text: `🔗 Active resonances: ${resonanceNames}` });
+      }
+    } catch (e) {}
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon trial <id> — attempt solo evolution trial
+// ─────────────────────────────────────────────────────────────
+
+async function cmdTrial(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const query = (args[0] || '').trim();
+  if (!query) {
+    // Show available trials
+    const summons = await summonSystem.getUserSummons(senderJid);
+    const eligible = summons.filter(s => {
+      const trial = summonTrials.getTrial(s.species);
+      return trial && !s.trialCompleted && s.level >= trial.requiredSummonLevel && s.tier === trial.requiredTier;
+    });
+
+    let msg = `⚔️ *SUMMON TRIALS*\n`;
+    msg += `━━━━━━━━━━━━━━━\n\n`;
+
+    if (eligible.length === 0) {
+      msg += `No eligible summons for trials right now.\n\n`;
+      msg += `Trials require:\n• Summon at the required level\n• Correct evolution tier (BASE or ASCENDED)\n• Trial not already completed\n\n`;
+      msg += `Use \`${getPrefix()} summon trial <id>\` to attempt a trial.`;
+    } else {
+      msg += `*ELIGIBLE SUMMONS:*\n`;
+      for (const s of eligible) {
+        const trial = summonTrials.getTrial(s.species);
+        const species = registry.getSpecies(s.species);
+        msg += `${species?.icon || '🐉'} *${s.nickname || species?.name || s.species}* — ${trial.name}\n`;
+        msg += `   📊 Lv.${s.level} | Boss: ${trial.bossId} (Lv.${trial.bossLevel})\n`;
+        msg += `   🆔 \`${s.summonId.slice(-8)}\`\n`;
+        msg += `   Reward: Evolve to ${trial.rewardEvolution} + unlock *${summonTrials.getPassive(trial.rewardPassive)?.name || 'passive'}*\n\n`;
+      }
+      msg += `Use \`${getPrefix()} summon trial <id>\` to attempt.`;
+    }
+
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  // Resolve summon
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const target = summons.find(s =>
+    s.summonId.endsWith(query) || s.summonId === query ||
+    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
+  );
+
+  if (!target) {
+    await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
+    return;
+  }
+
+  const result = await summonTrials.attemptTrial(senderJid, target.summonId);
+  await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon passives — view unlocked player passives from trials
+// ─────────────────────────────────────────────────────────────
+
+async function cmdPassives(sock, chatId, senderJid) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const passives = summonTrials.getActivePlayerPassives(user);
+  const allPassives = Object.entries(summonTrials.PLAYER_PASSIVES);
+
+  let msg = `✨ *SUMMON TRIAL PASSIVES*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `Unlocked: ${passives.length}/${allPassives.length}\n\n`;
+
+  if (passives.length === 0) {
+    msg += `No passives unlocked yet.\n\n`;
+    msg += `Complete summon trials to unlock permanent player passives.\n`;
+    msg += `Each passive is active whenever you own a summon of the matching element.\n\n`;
+    msg += `Use \`${getPrefix()} summon trial\` to see eligible summons.`;
+  } else {
+    msg += `*ACTIVE PASSIVES:*\n`;
+    for (const p of passives) {
+      msg += `✅ ${p.name} — ${p.desc}\n`;
+    }
+
+    const locked = allPassives.filter(([id]) => !user.unlockedSummonPassives.includes(id));
+    if (locked.length > 0) {
+      msg += `\n*LOCKED:*\n`;
+      for (const [id, p] of locked.slice(0, 10)) {
+        msg += `🔒 ${p.name} — ${p.desc}\n`;
+      }
+      if (locked.length > 10) {
+        msg += `... and ${locked.length - 10} more\n`;
+      }
+    }
+  }
+
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
 // .summon help
 // ─────────────────────────────────────────────────────────────
 
@@ -585,6 +754,9 @@ async function cmdHelp(sock, chatId) {
   msg += `🔗 \`${p} summon resonance\` — view active resonance bonuses\n`;
   msg += `📖 \`${p} summon compendium\` — view tamed species (Necromancer)\n`;
   msg += `🥚 \`${p} summon hatch <egg_id>\` — hatch a summon egg\n`;
+  msg += `⚔️ \`${p} summon forge <id1> <id2>\` — Soul Forge two summons\n`;
+  msg += `🏆 \`${p} summon trial <id>\` — attempt evolution trial\n`;
+  msg += `✨ \`${p} summon passives\` — view unlocked trial passives\n`;
   msg += `💔 \`${p} summon release <id>\` — permanently release a summon\n\n`;
   msg += `*OBTAINING SUMMONS:*\n`;
   msg += `• Necromancer: cast Army of the Dead to capture enemies\n`;

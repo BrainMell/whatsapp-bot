@@ -377,6 +377,8 @@ function getUser(userId) {
   if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
   if (!user.activeResonances) user.activeResonances = [];
   if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
   if (!user.summonStats) {
     user.summonStats = {
       captured: 0, forged: 0, evolved: 0,
@@ -495,6 +497,8 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
   if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
   if (!user.activeResonances) user.activeResonances = [];
   if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
   if (!user.summonStats) {
     user.summonStats = {
       captured: 0, forged: 0, evolved: 0,

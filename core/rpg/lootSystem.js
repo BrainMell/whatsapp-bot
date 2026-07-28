@@ -256,6 +256,21 @@ const BOSS_DROPS = {
             quantity: 1,
             rarity: 'MYTHIC',
             announcement: '🌌 *MYTHIC DROP!* A Godshard — fragment of the Abyssal God\'s divine essence — descends!'
+        },
+        // 💡 Phase 5: Summon egg drops
+        {
+            id: 'summon_egg_void_walker',
+            dropChance: 25,
+            quantity: 1,
+            rarity: 'RARE',
+            announcement: '🌑 An egg of pure darkness condenses from the void!'
+        },
+        {
+            id: 'summon_egg_common',
+            dropChance: 50,
+            quantity: [1, 2],
+            rarity: 'UNCOMMON',
+            announcement: '🥚 A common summon egg materializes!'
         }]
     },
     
@@ -275,6 +290,21 @@ const BOSS_DROPS = {
                 quantity: 1,
                 rarity: 'EPIC',
                 announcement: '💀 The Lich\'s phylactery cracks and reveals a dark gem!'
+            },
+            // 💡 Phase 5: Summon egg drops
+            {
+                id: 'summon_egg_lich_minion',
+                dropChance: 20,
+                quantity: 1,
+                rarity: 'RARE',
+                announcement: '💀 A necrotic egg drops from the Lich\'s remains!'
+            },
+            {
+                id: 'summon_egg_skeleton',
+                dropChance: 35,
+                quantity: 1,
+                rarity: 'UNCOMMON',
+                announcement: '🦴 A bone-white egg clatters to the ground!'
             }
         ]
     },
@@ -290,6 +320,14 @@ const BOSS_DROPS = {
                 quantity: 1,
                 rarity: 'LEGENDARY',
                 announcement: '🔥 *LEGENDARY DROP!* The Dragon\'s Heart still beats with ancient power!'
+            },
+            // 💡 Phase 5: Summon egg drops
+            {
+                id: 'summon_egg_wyrmling',
+                dropChance: 15,
+                quantity: 1,
+                rarity: 'EPIC',
+                announcement: '🐉 A scaled, warm egg drops from the Dragon!'
             }
         ]
     },

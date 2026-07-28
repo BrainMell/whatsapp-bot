@@ -167,6 +167,8 @@ const UserSchema = new mongoose.Schema({
   unlockedSummonPassives: { type: [String], default: [] },  // from completing summon trials
   activeResonances: { type: [String], default: [] },        // cached, recomputed on summon changes
   lastSummonTrained: { type: Number, default: 0 },          // daily training cooldown (shared across all summons)
+  lastForgedAt: { type: Number, default: 0 },                // Soul Forging cooldown (1 forge/day)
+  summonAchievements: { type: [String], default: [] },        // unlocked summon achievements (pilots the achievement system)
   summonStats: {
     captured: { type: Number, default: 0 },
     forged: { type: Number, default: 0 },
