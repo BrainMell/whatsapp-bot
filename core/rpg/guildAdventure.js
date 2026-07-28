@@ -23,6 +23,9 @@ const combatIntegration = require("./combatIntegration");
 const guilds = require("./guilds");
 const classSystem = require("./classSystem");
 const monsterSkills = require("./monsterSkills");
+// 💡 Summoner System (Phase 2) — see download/SUMMONER_SYSTEM_DESIGN.md
+const summonSystem = require("./summonSystem");
+const summonAI = require("./summonAI");
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -2014,6 +2017,11 @@ const INITIAL_STATE_TEMPLATE = {
   players: [],
   inCombat: false,
   enemies: [],
+  // 💡 Summoner System (Phase 2): summons array on combat state.
+  // Summon entities are built at combat start from each player's active
+  // summon (user.activeSummonId) via summonSystem.buildCombatEntity.
+  // Pushed into state.turnOrder alongside players + enemies.
+  summons: [],
   turnOrder: [],
   currentTurn: 0,
   combatRound: 0,
@@ -3273,9 +3281,32 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.pendingActions = {};
   state.combatHistory = [];
 
+  // 💡 Summoner System (Phase 2): deploy each player's active summon.
+  // Build combat entities from user.activeSummonId, push to state.summons.
+  // Summons are added to turnOrder below (alongside players + enemies).
+  state.summons = [];
+  for (const player of state.players) {
+    if (!player.jid || player.isDead) continue;
+    try {
+      const user = economy.getUser(player.jid);
+      if (!user || !user.activeSummonId) continue;
+
+      const summonDoc = await summonSystem.getActiveSummon(user);
+      if (!summonDoc) continue;  // stale activeSummonId — already cleared by getActiveSummon
+
+      const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
+      if (summonEntity) {
+        state.summons.push(summonEntity);
+      }
+    } catch (e) {
+      console.error('[Summon] Failed to deploy summon for', player.jid, ':', e?.message || e);
+    }
+  }
+
   // 💡 INITIALIZE ACTION GAUGE
   const allCombatants = [
     ...state.players.filter((p) => !p.isDead),
+    ...state.summons,  // 💡 Phase 2: summons in turn order
     ...state.enemies,
   ];
 
@@ -3288,7 +3319,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     if (c.isEnemy || c.isBoss) {
       c.actionGauge = 0; // Enemies start with 0 gauge
     } else {
-      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players get headstart
+      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players + summons get headstart
     }
   });
 
@@ -3408,6 +3439,9 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 }
 
 async function checkCombatEnd(sock, state, sessionKey) {
+  // 💡 Phase 2 fix: exclude summons from the defeat check.
+  // A party wipe with summons alive still counts as defeat — summons
+  // are allies, not party members. But summons alone can't win either.
   const playersDead = state.players.every((p) => p.isDead || p.stats.hp <= 0);
   const enemiesDead = state.enemies.every((e) => e.stats.hp <= 0);
 
@@ -3730,6 +3764,10 @@ async function processCombatTurn(sock, sessionKey) {
         // AI Turn
         await performEnemyAction(sock, activeActor, sessionKey);
         // The loop continues because performEnemyAction resolved
+      } else if (activeActor.isSummon) {
+        // 💡 Phase 2: Summon AI Turn — personality-driven behavior,
+        // loyalty decay, behavior tracking, optional betrayal.
+        await summonAI.performSummonAction(sock, activeActor, sessionKey);
       } else {
         // Player Turn - Wait for action
         await promptPlayerAction(sock, activeActor, sessionKey);
@@ -4978,6 +5016,50 @@ async function handleDeath(
 
   if (entity.isEnemy) {
     recordEnemyKill(state, entity);
+  }
+
+  // 💡 Summoner System (Phase 2): summon death → apply Soul Echo to summoner.
+  // The summon's echo buff is applied to the PLAYER who summoned it.
+  // The summon is removed from state.summons + state.turnOrder.
+  // The summon is NOT permanently lost — it returns to the roster at reduced loyalty.
+  if (entity.isSummon) {
+    try {
+      const summoner = (state.players || []).find(p => p.jid === entity.summonerJid && !p.isDead);
+      if (summoner) {
+        const echoMsg = summonAI.applySoulEcho(summoner, entity);
+        if (echoMsg && chatId) {
+          try {
+            await sock.sendMessage(chatId, { text: echoMsg });
+          } catch (e) {}
+        }
+        // Track echo absorption on user stats
+        try {
+          const user = economy.getUser(summoner.jid);
+          if (user && user.summonStats) {
+            user.summonStats.echoesAbsorbed = (user.summonStats.echoesAbsorbed || 0) + 1;
+          }
+        } catch (e) {}
+      }
+
+      // Remove summon from combat state
+      state.summons = (state.summons || []).filter(s => s.id !== entity.id);
+      state.turnOrder = (state.turnOrder || []).filter(c => c.id !== entity.id);
+
+      // Persist loyalty reduction (summon returns at 50% of current loyalty, min 10)
+      if (entity._summonDoc) {
+        try {
+          const doc = entity._summonDoc;
+          const reducedLoyalty = Math.max(10, Math.floor((doc.loyalty || 100) * 0.5));
+          doc.loyalty = reducedLoyalty;
+          await doc.save();
+        } catch (e) {
+          console.error('[Summon] Failed to persist loyalty reduction:', e?.message || e);
+        }
+      }
+    } catch (e) {
+      console.error('[Summon] handleDeath summon branch failed:', e?.message || e);
+    }
+    return;  // summons don't go through the PERMADEATH logic below
   }
 
   if (!entity.isEnemy) {
@@ -9234,4 +9316,10 @@ module.exports = {
   EQUIPMENT,
   GAME_CONFIG,
   startAbyssCombat,
+  // 💡 Summoner System (Phase 2): export for summonAI.js to access.
+  // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
+  // so these must be on the exports.
+  gameStates,
+  calculateDamage,
+  handleDeath,
 };

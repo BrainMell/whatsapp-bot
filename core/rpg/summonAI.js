@@ -1,0 +1,449 @@
+// ============================================
+// 🧠 SUMMON AI — combat behavior for summons
+// ============================================
+// Mirrors performEnemyAction but with personality modifiers,
+// behavior tracking (for personality shifts), loyalty decay,
+// and the rare betrayal mechanic.
+//
+// Reuses monsterSkills.evaluateAction for base AI decisions,
+// then applies personality overrides.
+//
+// See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+
+const monsterSkills = require('./monsterSkills');
+const summonSystem = require('./summonSystem');
+const registry = require('./summonRegistry');
+
+// ─────────────────────────────────────────────────────────────
+// PERSONALITY SHIFT CONFIG
+// ─────────────────────────────────────────────────────────────
+
+const PERSONALITY_SHIFT_THRESHOLD = 20;  // score at which personality shifts
+
+// ─────────────────────────────────────────────────────────────
+// BEHAVIOR TRACKING — increments behaviorScore based on action taken
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Track summon behavior for personality development.
+ * Called after each summon action.
+ * @param {object} summonEntity - Combat entity (mutated)
+ * @param {object} decision - The decision that was executed
+ */
+function trackBehavior(summonEntity, decision) {
+  if (!summonEntity || !decision || !summonEntity.behaviorScore) return;
+
+  // Attack actions → aggressive
+  if (decision.action === 'attack') {
+    summonEntity.behaviorScore.aggressive = (summonEntity.behaviorScore.aggressive || 0) + 1;
+  }
+  // Skill actions — depends on skill type
+  else if (decision.action === 'skill' && decision.skill) {
+    const skillType = decision.skill.type || '';
+    if (['attack', 'aoe', 'execute'].includes(skillType)) {
+      summonEntity.behaviorScore.aggressive = (summonEntity.behaviorScore.aggressive || 0) + 1;
+    } else if (['buff_self', 'buff_team', 'heal', 'heal_team', 'revive'].includes(skillType)) {
+      summonEntity.behaviorScore.curious = (summonEntity.behaviorScore.curious || 0) + 1;
+    } else if (['debuff_target', 'taunt'].includes(skillType)) {
+      summonEntity.behaviorScore.protective = (summonEntity.behaviorScore.protective || 0) + 1;
+    }
+  }
+  // Guard/defend actions → protective
+  else if (decision.action === 'guard' || decision.action === 'defend') {
+    summonEntity.behaviorScore.protective = (summonEntity.behaviorScore.protective || 0) + 2;
+  }
+  // Skip/flee → volatile
+  else if (decision.action === 'skip' || decision.action === 'flee') {
+    summonEntity.behaviorScore.volatile = (summonEntity.behaviorScore.volatile || 0) + 1;
+  }
+}
+
+/**
+ * Check if a summon's personality should shift based on behaviorScore.
+ * Shifts when any score exceeds the threshold.
+ * @param {object} summonEntity - Combat entity (mutated)
+ * @returns {string|null} - New personality if shifted, null otherwise
+ */
+function checkPersonalityShift(summonEntity) {
+  if (!summonEntity || !summonEntity.behaviorScore) return null;
+
+  const scores = summonEntity.behaviorScore;
+  const currentPersonality = summonEntity.personality;
+
+  // Find the highest score
+  let highestKey = null;
+  let highestVal = 0;
+  for (const [key, val] of Object.entries(scores)) {
+    if (val > highestVal) {
+      highestVal = val;
+      highestKey = key;
+    }
+  }
+
+  // Only shift if score exceeds threshold AND the new personality is different
+  if (highestVal >= PERSONALITY_SHIFT_THRESHOLD) {
+    const newPersonality = highestKey.toUpperCase();  // 'aggressive' → 'AGGRESSIVE'
+    if (newPersonality !== currentPersonality && registry.PERSONALITY_MODIFIERS[newPersonality]) {
+      summonEntity.personality = newPersonality;
+      return newPersonality;
+    }
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// PERSONALITY MODIFIERS — override base AI decisions
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Apply personality modifier to a base AI decision.
+ * @param {object} decision - Base decision from monsterSkills.evaluateAction
+ * @param {object} summonEntity - Summon combat entity
+ * @param {array} enemies - Living enemies
+ * @param {array} players - Living players (for protective guarding)
+ * @returns {object} - Modified decision
+ */
+function applyPersonalityModifier(decision, summonEntity, enemies, players) {
+  if (!summonEntity || !summonEntity.personality) return decision;
+
+  const personalityConfig = registry.getPersonalityModifier(summonEntity.personality);
+  if (!personalityConfig || !personalityConfig.aiOverride) return decision;
+
+  const override = personalityConfig.aiOverride;
+  const summoner = players.find(p => p.jid === summonEntity.summonerJid && !p.isDead);
+
+  // VOLATILE: 30% chance to do something random
+  if (override.randomActionChance && Math.random() < override.randomActionChance) {
+    const randomActions = ['attack', 'guard', 'skip'];
+    if (enemies.length > 0) {
+      const randomTarget = enemies[Math.floor(Math.random() * enemies.length)];
+      return {
+        action: 'attack',
+        target: randomTarget,
+        msg: `${summonEntity.name} acts erratically!`
+      };
+    }
+    return { action: 'skip', msg: `${summonEntity.name} hesitates...` };
+  }
+
+  // AGGRESSIVE: 70% chance to override buff/heal with attack on lowest-HP enemy
+  if (override.overrideBuffHeal && override.attackLowestHpChance &&
+      Math.random() < override.attackLowestHpChance &&
+      decision.action === 'skill' && decision.skill) {
+    const skillType = decision.skill.type || '';
+    if (['buff_self', 'buff_team', 'heal', 'heal_team', 'revive'].includes(skillType)) {
+      // Find lowest-HP enemy
+      const livingEnemies = enemies.filter(e => e.stats && e.stats.hp > 0);
+      if (livingEnemies.length > 0) {
+        const lowestHp = livingEnemies.reduce((min, e) =>
+          (e.stats.hp < min.stats.hp) ? e : min, livingEnemies[0]);
+        return {
+          action: 'attack',
+          target: lowestHp,
+          msg: `${summonEntity.name}'s aggression flares — attacking the weakest enemy!`
+        };
+      }
+    }
+  }
+
+  // PROTECTIVE: 50% chance to guard summoner instead of attacking
+  if (override.guardSummonerChance && summoner &&
+      Math.random() < override.guardSummonerChance &&
+      decision.action === 'attack') {
+    return {
+      action: 'guard',
+      target: summoner,
+      interceptPct: override.interceptDamagePct || 30,
+      msg: `${summonEntity.name} moves to protect ${summoner.name}!`
+    };
+  }
+
+  // CURIOUS: 60% chance to prefer utility skills over damage
+  // (This is a pre-decision modifier — would need to hook into evaluateAction.
+  // For simplicity, we just don't override here. The base AI already picks
+  // skills based on archetype, and curious summons often have utility skills.)
+  // Future enhancement: pass a "preferUtility" flag to evaluateAction.
+
+  return decision;
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAIN: performSummonAction
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Execute a summon's turn in combat.
+ * Mirrors performEnemyAction but with personality + behavior tracking + loyalty.
+ *
+ * @param {object} sock - WhatsApp socket
+ * @param {object} summonEntity - Summon combat entity (from buildCombatEntity)
+ * @param {string} sessionKey - Combat session key
+ */
+async function performSummonAction(sock, summonEntity, sessionKey) {
+  // Lazy-require guildAdventure to avoid circular dependency
+  // (guildAdventure requires summonAI at top, summonAI needs gameStates from guildAdventure)
+  const guildAdventure = require('./guildAdventure');
+  const state = guildAdventure.gameStates?.get(sessionKey);
+  if (!state) {
+    console.error('[SummonAI] No game state for session:', sessionKey);
+    return;
+  }
+  const chatId = state.chatId;
+
+  // 1. Check loyalty — if 0, summon refuses to fight (or betrays)
+  if (summonEntity.loyalty <= 0) {
+    // 5% betrayal chance per combat when loyalty is 0
+    if (Math.random() < 0.05) {
+      return await performBetrayal(sock, summonEntity, sessionKey, state);
+    }
+    // Otherwise, summon just skips
+    try {
+      await sock.sendMessage(chatId, {
+        text: `${summonEntity.icon} ${summonEntity.name}'s loyalty is depleted. It refuses to act.`
+      });
+    } catch (e) {}
+    return;
+  }
+
+  // 2. Apply loyalty decay for this action
+  summonSystem.applyLoyaltyDecay(summonEntity);
+
+  // 3. Gather targets + allies for AI
+  const enemies = (state.enemies || []).filter(e => e.stats && e.stats.hp > 0 && !e.isDead);
+  const players = (state.players || []).filter(p => !p.isDead);
+  const allies = [...players, ...(state.summons || []).filter(s => s !== summonEntity && s.stats.hp > 0)];
+
+  if (enemies.length === 0) {
+    // No enemies to fight — summon skips
+    return;
+  }
+
+  // 4. Base AI decision (reuses monsterSkills.evaluateAction)
+  let decision;
+  try {
+    decision = monsterSkills.evaluateAction(summonEntity, enemies, allies);
+  } catch (e) {
+    console.error('[SummonAI] evaluateAction failed:', e?.message || e);
+    // Fallback: basic attack on random enemy
+    decision = {
+      action: 'attack',
+      target: enemies[Math.floor(Math.random() * enemies.length)]
+    };
+  }
+
+  // 5. Apply personality modifier
+  decision = applyPersonalityModifier(decision, summonEntity, enemies, players);
+
+  // 6. Execute the decision
+  let actionMsg = '';
+  if (decision.msg) actionMsg += decision.msg + '\n';
+
+  if (decision.action === 'guard' && decision.target) {
+    // Guard mode: summon intercepts damage for the target
+    decision.target.guardedBy = summonEntity.id;
+    decision.target.guardInterceptPct = decision.interceptPct || 30;
+    actionMsg += `🛡️ ${summonEntity.icon} ${summonEntity.name} is guarding ${decision.target.name} — intercepting ${decision.interceptPct || 30}% of incoming damage!`;
+  } else if (decision.action === 'attack' && decision.target) {
+    // Basic attack — use calculateDamage from guildAdventure
+    try {
+      const damage = guildAdventure.calculateDamage(
+        summonEntity, decision.target, 1.0, 'physical', null, chatId, false
+      );
+      if (damage && damage.damage) {
+        decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage.damage);
+        decision.target.currentHP = decision.target.stats.hp;
+        actionMsg += `⚔️ ${summonEntity.icon} ${summonEntity.name} attacks ${decision.target.name} for ${damage.damage} damage!`;
+        if (decision.target.stats.hp <= 0) {
+          actionMsg += `\n💀 ${decision.target.name} was defeated!`;
+          await guildAdventure.handleDeath(sock, decision.target, sessionKey, summonEntity.name);
+        }
+      }
+    } catch (e) {
+      console.error('[SummonAI] attack failed:', e?.message || e);
+      actionMsg += `⚔️ ${summonEntity.name} attacks but misses!`;
+    }
+  } else if (decision.action === 'skill' && decision.skill && decision.target) {
+    // Skill — delegate to applyAbilityEffect via guildAdventure
+    // For Phase 2, we implement a simplified version: summon uses the skill's effect
+    // directly. Full integration with applyAbilityEffect comes in Phase 3+ when
+    // we rework Necromancer skills.
+    try {
+      const skill = decision.skill;
+      const effect = typeof skill.effect === 'function' ? skill.effect(summonEntity.level) : skill.effect;
+      if (effect && effect.multiplier) {
+        const baseStat = effect.damageType === 'magic'
+          ? (summonEntity.stats.mag || summonEntity.stats.atk || 10)
+          : (summonEntity.stats.atk || 10);
+        const damage = Math.floor(baseStat * effect.multiplier);
+        decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage);
+        decision.target.currentHP = decision.target.stats.hp;
+        actionMsg += `✨ ${summonEntity.icon} ${summonEntity.name} uses ${skill.name} on ${decision.target.name} for ${damage} damage!`;
+        if (decision.target.stats.hp <= 0) {
+          actionMsg += `\n💀 ${decision.target.name} was defeated!`;
+          await guildAdventure.handleDeath(sock, decision.target, sessionKey, summonEntity.name);
+        }
+      } else {
+        actionMsg += `✨ ${summonEntity.name} uses ${skill.name || 'a skill'}!`;
+      }
+    } catch (e) {
+      console.error('[SummonAI] skill failed:', e?.message || e);
+      actionMsg += `✨ ${summonEntity.name} attempts a skill but fumbles!`;
+    }
+  } else if (decision.action === 'skip') {
+    actionMsg += `${summonEntity.icon} ${summonEntity.name} ${decision.msg || 'waits...'}`;
+  } else {
+    actionMsg += `${summonEntity.icon} ${summonEntity.name} hesitates.`;
+  }
+
+  // 7. Send the action message
+  if (actionMsg.trim()) {
+    try {
+      await sock.sendMessage(chatId, { text: actionMsg.trim() });
+    } catch (e) {
+      console.error('[SummonAI] sendMessage failed:', e?.message || e);
+    }
+  }
+
+  // 8. Track behavior for personality development
+  trackBehavior(summonEntity, decision);
+
+  // 9. Check for personality shift
+  const newPersonality = checkPersonalityShift(summonEntity);
+  if (newPersonality) {
+    try {
+      await sock.sendMessage(chatId, {
+        text: `💫 ${summonEntity.icon} ${summonEntity.name}'s personality shifted to **${newPersonality}**!`
+      });
+    } catch (e) {}
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// BETRAYAL — when loyalty hits 0, summon may attack the player
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Perform a betrayal action — summon attacks its summoner.
+ * Rare (5% chance per combat when loyalty = 0).
+ * @param {object} sock
+ * @param {object} summonEntity
+ * @param {string} sessionKey
+ * @param {object} state
+ */
+async function performBetrayal(sock, summonEntity, sessionKey, state) {
+  const chatId = state.chatId;
+  const summoner = (state.players || []).find(p => p.jid === summonEntity.summonerJid && !p.isDead);
+
+  if (!summoner) {
+    // No summoner to betray — summon just leaves
+    summonEntity.isDead = true;
+    summonEntity.stats.hp = 0;
+    try {
+      await sock.sendMessage(chatId, {
+        text: `💔 ${summonEntity.icon} ${summonEntity.name}'s bond is broken. It vanishes into the ether.`
+      });
+    } catch (e) {}
+    return;
+  }
+
+  // Summon attacks summoner
+  const guildAdventure = require('./guildAdventure');
+  try {
+    const damage = Math.floor((summonEntity.stats.atk || 20) * 1.5);  // 1.5× damage on betrayal
+    summoner.stats.hp = Math.max(0, summoner.stats.hp - damage);
+    summoner.currentHP = summoner.stats.hp;
+    try {
+      await sock.sendMessage(chatId, {
+        text: `💔 ${summonEntity.icon} ${summonEntity.name} BETRAYS ${summoner.name}! Dealt ${damage} damage to its former master!`
+      });
+    } catch (e) {}
+
+    if (summoner.stats.hp <= 0) {
+      await guildAdventure.handleDeath(sock, summoner, sessionKey, summonEntity.name);
+    }
+  } catch (e) {
+    console.error('[SummonAI] betrayal failed:', e?.message || e);
+  }
+
+  // Summon leaves after betrayal
+  summonEntity.isDead = true;
+  summonEntity.stats.hp = 0;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SOUL ECHO — apply buff to summoner on summon death
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Apply a summon's Soul Echo to its summoner on death.
+ * @param {object} summoner - Player entity (mutated)
+ * @param {object} summonEntity - The summon that died
+ * @returns {string} - Echo message for combat log
+ */
+function applySoulEcho(summoner, summonEntity) {
+  if (!summoner || !summonEntity || !summonEntity.echoId) return '';
+
+  const echo = registry.getEcho(summonEntity.echoId);
+  if (!echo || !echo.buff) return '';
+
+  // Apply the buff to the summoner
+  if (!summoner.buffs) summoner.buffs = [];
+
+  // Remove any existing echo buff (only one echo active at a time)
+  summoner.buffs = summoner.buffs.filter(b => !b.isEcho);
+
+  // Add the new echo buff
+  const buff = {
+    type: echo.buff.type,
+    value: echo.buff.value,
+    duration: echo.buff.duration,
+    icon: echo.icon,
+    name: echo.name,
+    isEcho: true,  // flag so we can identify + replace echoes
+    justApplied: true  // BUG-08/09 fix: don't tick on apply turn
+  };
+  summoner.buffs.push(buff);
+
+  return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// POST-COMBAT PERSISTENCE — save loyalty/personality changes
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Persist combat state changes back to the Summon document.
+ * Called at end of combat for each summon that participated.
+ * @param {object} summonEntity - Combat entity
+ */
+async function persistSummonChanges(summonEntity) {
+  if (!summonEntity || !summonEntity._summonDoc) return;
+
+  const doc = summonEntity._summonDoc;
+  doc.loyalty = summonEntity.loyalty || doc.loyalty;
+  doc.personality = summonEntity.personality || doc.personality;
+  doc.behaviorScore = summonEntity.behaviorScore || doc.behaviorScore;
+  doc.lastUsedAt = new Date();
+
+  try {
+    await doc.save();
+  } catch (e) {
+    console.error('[SummonAI] persistSummonChanges failed:', e?.message || e);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// MODULE EXPORTS
+// ─────────────────────────────────────────────────────────────
+
+module.exports = {
+  performSummonAction,
+  trackBehavior,
+  checkPersonalityShift,
+  applyPersonalityModifier,
+  applySoulEcho,
+  persistSummonChanges,
+  performBetrayal,
+  PERSONALITY_SHIFT_THRESHOLD
+};
