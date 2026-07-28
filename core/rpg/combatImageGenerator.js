@@ -30,12 +30,20 @@ async function generateCombatImage(players, enemies, options = {}) {
                 isBoss: Boolean(e.isBoss),
                 justDied: Boolean(e.justDied),
                 spriteIndex: Math.floor(Number(e.spriteIndex) || 0),
-                // 💡 FIX: pass bossId so the Go service can pick distinct sprites
-                // per boss name instead of only keying on level. Currently the Go
-                // service ignores this field, but adding it to the payload now
-                // means the Go side can use it without another JS change.
                 bossId: String(e.id || e.name || '').toUpperCase().replace(/\s+/g, '_'),
                 level: Math.floor(Number(e.level || e.stats?.level || 1))
+            })),
+            // 💡 Phase 7: Include summons in the combat render payload.
+            // Summons are passed from state.summons (built at combat start).
+            // The Go service renders them on the player's side of the battlefield.
+            summons: (options.summons || []).map(s => ({
+                name: String(s.name || 'Summon'),
+                species: String(s.type || s.species || 'skeleton'),
+                currentHP: Math.floor(Number(s.currentHP !== undefined ? s.currentHP : (s.stats?.hp || 0))),
+                maxHp: Math.floor(Number(s.stats?.maxHp || s.maxHP || 100)),
+                justDied: Boolean(s.justDied),
+                ownerIndex: Math.floor(Number(s.ownerIndex) || 0),
+                isStationary: Boolean(s.isStationary)
             })),
             combatType: String(options.combatType || 'PVE'),
             rank: String(options.rank || 'F'),

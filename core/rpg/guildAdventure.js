@@ -3365,13 +3365,16 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     state.enemies,
     "START",
     {
-      rank: state.dungeonRank, // Pass rank explicitly
-      backgroundPath: state.backgroundPath, // Consistent with TURN phase
+      rank: state.dungeonRank,
+      backgroundPath: state.backgroundPath,
+      // 💡 Phase 7: Pass summons to the combat image generator so the
+      // Go service can render them on the player's side of the battlefield.
+      summons: state.summons || [],
       encounterInfo: {
         ...encounter,
-        rank: state.dungeonRank, // Also in encounterInfo
-        backgroundPath: state.backgroundPath, // CRITICAL FIX for renderCombatStart
-        turnOrderStr: turnOrderStr, // Pass turn order here instead of AI narration
+        rank: state.dungeonRank,
+        backgroundPath: state.backgroundPath,
+        turnOrderStr: turnOrderStr,
         theme: encounter.theme || {
           theme: "Battle",
           description: "A fierce fight breaks out!",
@@ -5138,6 +5141,8 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           turnInfo: lastTurnInfo,
           backgroundPath: state.backgroundPath,
           rank: state.dungeonRank,
+          // 💡 Phase 7: Pass summons to TURN-phase rendering too
+          summons: state.summons || [],
         },
       );
       if (scene.success) {

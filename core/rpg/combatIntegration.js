@@ -14,7 +14,9 @@ async function renderCombatStart(players, enemies, encounterInfo) {
     try {
         const result = await combatImageGen.generateCombatImage(players, enemies, {
             rank: encounterInfo.rank,
-            backgroundPath: encounterInfo.backgroundPath
+            backgroundPath: encounterInfo.backgroundPath,
+            // 💡 Phase 7: Pass summons through to the Go service
+            summons: encounterInfo.summons || []
         });
         return result;
     } catch (error) {
@@ -29,7 +31,7 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
         const enemiesToShow = enemies.filter(e => e.currentHP > 0 || e.justDied);
         const result = await combatImageGen.updateCombatImage(
             playersToShow, enemiesToShow, turnInfo,
-            { rank: options.rank, backgroundPath: options.backgroundPath }
+            { rank: options.rank, backgroundPath: options.backgroundPath, summons: options.summons || [] }
         );
         return result;
     } catch (error) {
@@ -209,7 +211,8 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         victory = false,
         rewards = null,
         backgroundPath = null,
-        rank = null
+        rank = null,
+        summons = []  // 💡 Phase 7: summons passed from guildAdventure.js
     } = options;
     
     let imageResult;
@@ -217,12 +220,12 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
     
     switch (phase) {
         case 'START':
-            imageResult = await renderCombatStart(players, enemies, encounterInfo);
+            imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, summons });
             caption = generateStartCaption(players, enemies, encounterInfo);
             break;
             
         case 'TURN':
-            imageResult = await renderCombatTurn(players, enemies, turnInfo, { backgroundPath, rank });
+            imageResult = await renderCombatTurn(players, enemies, turnInfo, { backgroundPath, rank, summons });
             caption = generateTurnCaption(players, enemies, turnInfo);
             break;
             
