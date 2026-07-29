@@ -11,7 +11,7 @@
 //
 // Replaces the Go-rendered profile card.
 
-const { createCanvas, loadImage, registerFont } = require('canvas');
+// canvas is lazy-loaded via getCanvas() below (prevents crash if not installed)
 const path = require('path');
 const fs = require('fs');
 
@@ -20,14 +20,27 @@ const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
-try {
-  if (fs.existsSync(path.join(FONTS_DIR, 'PixeloidSans.ttf'))) {
-    registerFont(path.join(FONTS_DIR, 'PixeloidSans.ttf'), { family: FONT_REG });
-  }
-  if (fs.existsSync(path.join(FONTS_DIR, 'dogicapixelbold.otf'))) {
-    registerFont(path.join(FONTS_DIR, 'dogicapixelbold.otf'), { family: FONT_BOLD });
-  }
-} catch (e) {}
+// Lazy-load canvas (prevents crash if not installed on server)
+let _canvas = null;
+function getCanvas() {
+  if (!_canvas) _canvas = require('canvas');
+  return _canvas;
+}
+
+let _fontsRegistered = false;
+function ensureFonts() {
+  if (_fontsRegistered) return;
+  _fontsRegistered = true;
+  try {
+    const { registerFont } = getCanvas();
+    if (fs.existsSync(path.join(FONTS_DIR, 'PixeloidSans.ttf'))) {
+      registerFont(path.join(FONTS_DIR, 'PixeloidSans.ttf'), { family: FONT_REG });
+    }
+    if (fs.existsSync(path.join(FONTS_DIR, 'dogicapixelbold.otf'))) {
+      registerFont(path.join(FONTS_DIR, 'dogicapixelbold.otf'), { family: FONT_BOLD });
+    }
+  } catch (e) {}
+}
 
 function roundRect(ctx, x, y, w, h, r) {
   if (w < 2 * r) r = w / 2;
@@ -87,6 +100,8 @@ async function renderProfileCard(params) {
 
   const W = 800;
   const H = 600;
+  ensureFonts();
+  const { createCanvas } = getCanvas();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
@@ -135,6 +150,7 @@ async function renderProfileCard(params) {
   // Try to load PFP if available
   if (params.pfpBuffer) {
     try {
+      const { loadImage } = getCanvas();
       const pfpImg = await loadImage(params.pfpBuffer);
       ctx.save();
       roundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, 6);
@@ -332,6 +348,7 @@ async function renderProfileCard(params) {
       const summonSprites = require('./summonSprites');
       const spritePath = summonSprites.getSpritePath(activeSummon.species);
       if (spritePath && fs.existsSync(spritePath)) {
+        const { loadImage } = getCanvas();
         const img = await loadImage(spritePath);
         const scale = Math.min(summonPortraitSize / img.width, summonPortraitSize / img.height) * 0.9;
         const dw = img.width * scale;

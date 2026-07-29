@@ -11,7 +11,15 @@
 // UI elements drawn with canvas primitives (no sprite dependencies).
 // Sprites loaded from summonSprites.js (Digimon cache + local assets).
 
-const { createCanvas, loadImage, registerFont } = require('canvas');
+// Lazy-load canvas (prevents crash if not installed on server)
+let _canvas = null;
+function getCanvas() {
+  if (!_canvas) {
+    const canvas = require('canvas');
+    _canvas = canvas;
+  }
+  return _canvas;
+}
 const path = require('path');
 const fs = require('fs');
 const summonSprites = require('./summonSprites');
@@ -23,15 +31,22 @@ const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
-try {
-  if (fs.existsSync(path.join(FONTS_DIR, 'PixeloidSans.ttf'))) {
-    registerFont(path.join(FONTS_DIR, 'PixeloidSans.ttf'), { family: FONT_REG });
+// Font registration (lazy — done on first render)
+let _fontsRegistered = false;
+function ensureFonts() {
+  if (_fontsRegistered) return;
+  _fontsRegistered = true;
+  try {
+    const { registerFont } = getCanvas();
+    if (fs.existsSync(path.join(FONTS_DIR, 'PixeloidSans.ttf'))) {
+      registerFont(path.join(FONTS_DIR, 'PixeloidSans.ttf'), { family: FONT_REG });
+    }
+    if (fs.existsSync(path.join(FONTS_DIR, 'dogicapixelbold.otf'))) {
+      registerFont(path.join(FONTS_DIR, 'dogicapixelbold.otf'), { family: FONT_BOLD });
+    }
+  } catch (e) {
+    console.warn('[RosterRenderer] Font registration failed:', e.message);
   }
-  if (fs.existsSync(path.join(FONTS_DIR, 'dogicapixelbold.otf'))) {
-    registerFont(path.join(FONTS_DIR, 'dogicapixelbold.otf'), { family: FONT_BOLD });
-  }
-} catch (e) {
-  console.warn('[RosterRenderer] Font registration failed:', e.message);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -133,6 +148,8 @@ function drawStatBar(ctx, x, y, w, value, maxValue, color) {
 async function renderRoster(user, summons, options = {}) {
   const W = 1024;
   const H = 720;
+  ensureFonts();
+  const { createCanvas } = getCanvas();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
@@ -294,6 +311,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   const spritePath = summonSprites.getSpritePath(summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
+      const { loadImage } = getCanvas();
       const img = await loadImage(spritePath);
       // Fit sprite into portrait area (contain mode)
       const scale = Math.min(portraitSize / img.width, portraitSize / img.height);
@@ -441,6 +459,7 @@ async function renderDetailCard(summon, user) {
   const spritePath = summonSprites.getSpritePath(summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
+      const { loadImage } = getCanvas();
       const img = await loadImage(spritePath);
       const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;
       const dw = img.width * scale;

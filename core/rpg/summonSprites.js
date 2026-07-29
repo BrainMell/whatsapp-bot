@@ -11,7 +11,12 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { Jimp } = require('/home/z/my-project/repos/whatsapp-bot/node_modules/jimp');
+// Lazy-load Jimp only when needed (prevents crash if not installed)
+let _jimp = null;
+async function getJimp() {
+  if (!_jimp) _jimp = require('jimp');
+  return _jimp;
+}
 
 const CACHE_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'digimon');
 const FALLBACK_DIR = path.join(__dirname, '..', 'rpgasset', 'summons');
@@ -99,6 +104,7 @@ function downloadImage(url) {
 }
 
 async function removeWhiteBackground(imageBuffer) {
+  const Jimp = await getJimp();
   const image = await Jimp.read(imageBuffer);
   const { width, height } = image.bitmap;
 
