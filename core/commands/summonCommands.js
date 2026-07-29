@@ -25,6 +25,7 @@ const registry = require('../rpg/summonRegistry');
 // 💡 Phase C2: Image-based roster rendering
 const rosterRenderer = require('../rpg/summonRosterRenderer');
 const summonSprites = require('../rpg/summonSprites');
+const codexRenderer = require('../rpg/summonCodexRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
@@ -82,7 +83,7 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'codex':
     case 'all':
     case 'species':
-      return await cmdCodex(sock, chatId, senderJid);
+      return await cmdCodex(sock, chatId, senderJid, rest);
 
     case 'compendium':
     case 'tamed':
@@ -534,56 +535,50 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
 // .summon codex — view ALL summon species in the game
 // ─────────────────────────────────────────────────────────────
 
-async function cmdCodex(sock, chatId, senderJid) {
+async function cmdCodex(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
   if (!user) {
     await sock.sendMessage(chatId, { text: '❌ Not registered.' });
     return;
   }
 
-  const allSpecies = registry.getAllSpecies();
+  // Parse page number and element filter from args
+  let page = 1;
+  let filter = 'all';
+  for (const arg of args) {
+    const num = parseInt(arg);
+    if (!isNaN(num) && num > 0) page = num;
+    else if (['undead','demon','fire','ice','lightning','beast','dragon','construct','holy'].includes(arg.toLowerCase())) {
+      filter = arg.toLowerCase();
+    }
+  }
+
   const p = getPrefix();
 
-  let msg = `📖 *SUMMON CODEX — ALL SPECIES*\n`;
-  msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `Total: ${allSpecies.length} species\n\n`;
-
-  // Group by element
-  const byElement = {};
-  for (const speciesId of allSpecies) {
-    const species = registry.getSpecies(speciesId);
-    if (!species) continue;
-    if (!byElement[species.element]) byElement[species.element] = [];
-    byElement[species.element].push({ id: speciesId, ...species });
-  }
-
-  const elementOrder = ['undead', 'demon', 'fire', 'ice', 'lightning', 'beast', 'dragon', 'construct'];
-  const elementLabels = {
-    undead: '💀 Undead', demon: '😈 Demon', fire: '🔥 Fire', ice: '❄️ Ice',
-    lightning: '⚡ Storm', beast: '🐺 Beast', dragon: '🐉 Dragon', construct: '🔫 Construct'
-  };
-
-  for (const el of elementOrder) {
-    const speciesList = byElement[el];
-    if (!speciesList || speciesList.length === 0) continue;
-
-    msg += `${elementLabels[el] || el}:\n`;
-    for (const s of speciesList) {
-      const rarityCfg = registry.getRarityConfig(s.rarity);
-      msg += `  ${s.icon} *${s.name}* — ${s.rarity} (Lv cap ${rarityCfg.maxLevel}, ${rarityCfg.runeSlots} rune slots)\n`;
-      msg += `    📊 ${s.archetype} | Evolution: ${s.evolutionStages.join(' → ')}\n`;
-      msg += `    💬 ${s.desc}\n`;
+  // Try image rendering first
+  try {
+    const result = await codexRenderer.renderCodexPage(registry, page, filter);
+    if (result.buffer && result.buffer.length > 0) {
+      let caption = `SUMMON CODEX — ${result.totalSpecies} species`;
+      if (filter !== 'all') caption += ` (${filter})`;
+      caption += ` | Page ${result.currentPage}/${result.totalPages}`;
+      if (result.totalPages > 1) {
+        caption += `\n${p} summon codex <page> — navigate | ${p} summon codex <element> — filter`;
+      }
+      await sock.sendMessage(chatId, { image: result.buffer, caption });
+      return;
     }
-    msg += `\n`;
+  } catch (e) {
+    console.error('[Codex] Image render failed, falling back to text:', e.message);
   }
 
-  // Show trial passives available
-  const trials = summonTrials.getAllTrials();
-  msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `⚔️ *TRIALS:* ${trials.length} trials available\n`;
-  msg += `Complete trials to evolve summons + unlock permanent player passives.\n\n`;
-  msg += `💡 \`${p} summon help\` for all commands`;
-
+  // Text fallback
+  const allSpecies = registry.getAllSpecies();
+  let msg = `SUMMON CODEX — ALL SPECIES\n`;
+  msg += `Total: ${allSpecies.length} species\n\n`;
+  msg += `Use ${p} summon codex to view the image version.\n`;
+  msg += `Filters: ${p} summon codex <element> (undead, demon, fire, ice, etc.)\n`;
+  msg += `Pages: ${p} summon codex <page number>`;
   await sock.sendMessage(chatId, { text: msg });
 }
 

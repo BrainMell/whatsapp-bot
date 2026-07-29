@@ -1,9 +1,9 @@
 // ============================================
-// 🎨 PROFILE CARD RENDERER — node-canvas (DYNAMIC LAYOUT v3)
+// 🎨 PROFILE CARD RENDERER v4 — uses real UI sprites
 // ============================================
-// NO EMOJIS in canvas rendering — they show as yellow tofu boxes on
-// servers without color emoji font support. Use text labels + drawn shapes.
-// All sections use a running Y cursor — no hardcoded positions.
+// Uses existing RPG UI PNGs (hp bars, banners, panels) for chrome.
+// Equipment slots use text labels (no weapon icon sprites available).
+// NO EMOJIS — all text/drawn elements.
 
 const path = require('path');
 const fs = require('fs');
@@ -12,6 +12,7 @@ let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
 
 const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const UI_DIR = path.join(__dirname, '..', 'rpgasset', 'ui');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
@@ -26,6 +27,20 @@ function ensureFonts() {
     if (fs.existsSync(path.join(FONTS_DIR, 'dogicapixelbold.otf')))
       registerFont(path.join(FONTS_DIR, 'dogicapixelbold.otf'), { family: FONT_BOLD });
   } catch (e) {}
+}
+
+// Cache loaded UI images
+const _imageCache = new Map();
+async function loadUI(name) {
+  if (_imageCache.has(name)) return _imageCache.get(name);
+  const { loadImage } = getCanvas();
+  const p = path.join(UI_DIR, name);
+  if (!fs.existsSync(p)) return null;
+  try {
+    const img = await loadImage(p);
+    _imageCache.set(name, img);
+    return img;
+  } catch (e) { return null; }
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -46,65 +61,28 @@ function drawBar(ctx, x, y, w, h, pct, color) {
   roundRect(ctx, x, y, w * Math.min(1, Math.max(0, pct)), h, h / 2); ctx.fill();
 }
 
-// Draw a small colored circle as a status icon (replaces emojis)
 function drawDot(ctx, x, y, r, color) {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = color; ctx.fill();
 }
 
-// Draw a simple icon shape for equipment slots (replaces emojis)
-function drawSlotIcon(ctx, cx, cy, slotKey) {
-  const r = 14;
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = 2;
-  switch(slotKey) {
-    case 'main_hand': // sword shape
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
-      ctx.moveTo(cx - 6, cy + r - 4); ctx.lineTo(cx + 6, cy + r - 4);
-      ctx.stroke();
-      break;
-    case 'off_hand': // shield shape
-      roundRect(ctx, cx - r * 0.7, cy - r, r * 1.4, r * 2, 4);
-      ctx.stroke();
-      break;
-    case 'armor': // vest shape
-      roundRect(ctx, cx - r, cy - r * 0.7, r * 2, r * 1.4, 4);
-      ctx.stroke();
-      break;
-    case 'helmet': // circle
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2); ctx.stroke();
-      break;
-    case 'gloves': // square
-      roundRect(ctx, cx - r * 0.6, cy - r * 0.6, r * 1.2, r * 1.2, 3); ctx.stroke();
-      break;
-    case 'boots': // triangle
-      ctx.beginPath();
-      ctx.moveTo(cx - r * 0.6, cy + r * 0.6);
-      ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
-      ctx.lineTo(cx, cy - r * 0.6);
-      ctx.closePath(); ctx.stroke();
-      break;
-    case 'ring': // small circle
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
-      break;
-    case 'amulet': // diamond
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - r * 0.6); ctx.lineTo(cx + r * 0.6, cy);
-      ctx.lineTo(cx, cy + r * 0.6); ctx.lineTo(cx - r * 0.6, cy);
-      ctx.closePath(); ctx.stroke();
-      break;
-    case 'cloak': // wavy shape
-      ctx.beginPath();
-      ctx.moveTo(cx - r * 0.7, cy - r * 0.7);
-      ctx.quadraticCurveTo(cx, cy + r * 0.7, cx + r * 0.7, cy - r * 0.7);
-      ctx.stroke();
-      break;
-    default:
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
-  }
+// Draw 9-slice panel using a UI sprite
+function draw9Slice(ctx, img, x, y, w, h, slice) {
+  if (!img) { ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(ctx, x, y, w, h, 8); ctx.fill(); return; }
+  const s = slice || 8;
+  const iw = img.width, ih = img.height;
+  // Corners
+  ctx.drawImage(img, 0, 0, s, s, x, y, s, s);
+  ctx.drawImage(img, iw - s, 0, s, s, x + w - s, y, s, s);
+  ctx.drawImage(img, 0, ih - s, s, s, x, y + h - s, s, s);
+  ctx.drawImage(img, iw - s, ih - s, s, s, x + w - s, y + h - s, s, s);
+  // Edges
+  ctx.drawImage(img, s, 0, iw - 2 * s, s, x + s, y, w - 2 * s, s);
+  ctx.drawImage(img, s, ih - s, iw - 2 * s, s, x + s, y + h - s, w - 2 * s, s);
+  ctx.drawImage(img, 0, s, s, ih - 2 * s, x, y + s, s, h - 2 * s);
+  ctx.drawImage(img, iw - s, s, s, ih - 2 * s, x + w - s, y + s, s, h - 2 * s);
+  // Center
+  ctx.drawImage(img, s, s, iw - 2 * s, ih - 2 * s, x + s, y + s, w - 2 * s, h - 2 * s);
 }
 
 const RANK_COLORS = {
@@ -137,21 +115,25 @@ const EQUIP_RARITY = {
 };
 
 const EQUIPMENT_SLOTS = [
-  { key: 'main_hand', label: 'Weapon' }, { key: 'off_hand', label: 'Off-Hand' },
-  { key: 'armor', label: 'Armor' }, { key: 'helmet', label: 'Helmet' },
-  { key: 'gloves', label: 'Gloves' }, { key: 'boots', label: 'Boots' },
-  { key: 'ring', label: 'Ring' }, { key: 'amulet', label: 'Amulet' },
-  { key: 'cloak', label: 'Cloak' }
+  { key: 'main_hand', label: 'Weapon', short: 'WPN' },
+  { key: 'off_hand', label: 'Off-Hand', short: 'OFF' },
+  { key: 'armor', label: 'Armor', short: 'ARM' },
+  { key: 'helmet', label: 'Helmet', short: 'HLM' },
+  { key: 'gloves', label: 'Gloves', short: 'GLV' },
+  { key: 'boots', label: 'Boots', short: 'BTS' },
+  { key: 'ring', label: 'Ring', short: 'RNG' },
+  { key: 'amulet', label: 'Amulet', short: 'AML' },
+  { key: 'cloak', label: 'Cloak', short: 'CLK' }
 ];
 
 async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
   const portraitSize = 80;
-  const portraitX = x + 15;
-  const portraitY = y;
+  const portraitX = x + 15, portraitY = y;
 
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
-  ctx.fill();
+  roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+  roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6); ctx.stroke();
 
   try {
     const summonSprites = require('./summonSprites');
@@ -169,34 +151,29 @@ async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
   const name = summon.nickname || species?.name || summon.species;
   const infoX = portraitX + portraitSize + 15;
 
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
+  ctx.fillStyle = '#FFFFFF'; ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText(name, infoX, portraitY + 2);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = `12px "${FONT_REG}", monospace`;
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.fillText(`Lv.${summon.level} ${summon.rarity} ${summon.tier || 'BASE'} | ${summon.element}`, infoX, portraitY + 22);
   ctx.fillText(`Personality: ${summon.personality}`, infoX, portraitY + 38);
 
   drawBar(ctx, infoX, portraitY + 56, 150, 6, summon.loyalty / 100,
     summon.loyalty >= 75 ? '#4CAF50' : summon.loyalty >= 50 ? '#FFEB3B' : '#F44336');
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = `10px "${FONT_REG}", monospace`;
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = `10px "${FONT_REG}", monospace`;
   ctx.fillText(`Loyalty ${summon.loyalty}/100`, infoX, portraitY + 66);
 
   const isTamed = (summon.lineage || []).some(l => l.personality === 'TAMED');
   if (isTamed) {
     drawDot(ctx, infoX + 165, portraitY + 60, 4, '#4CAF50');
-    ctx.fillStyle = '#4CAF50';
-    ctx.font = `bold 10px "${FONT_BOLD}", monospace`;
+    ctx.fillStyle = '#4CAF50'; ctx.font = `bold 10px "${FONT_BOLD}", monospace`;
     ctx.fillText('TAMED', infoX + 175, portraitY + 56);
   }
 
   const echo = registry.getEcho(summon.echoId);
   if (echo) {
-    ctx.fillStyle = '#4FC3F7';
-    ctx.font = `10px "${FONT_REG}", monospace`;
+    ctx.fillStyle = '#4FC3F7'; ctx.font = `10px "${FONT_REG}", monospace`;
     ctx.fillText(`Echo: ${echo.name}`, infoX + 165, portraitY + 70);
   }
 
@@ -213,6 +190,10 @@ async function renderProfileCard(params) {
   const W = 800, PAD = 20, GAP = 12;
   const rankColor = RANK_COLORS[rank] || RANK_COLORS.F;
   const rankGradient = RANK_GRADIENTS[rank] || RANK_GRADIENTS.F;
+
+  // Load UI sprites
+  const panelImg = await loadUI('banner.png'); // for panel backgrounds
+  const hpBarImg = await loadUI('hp5.png'); // for stat bars
 
   const headerH = 90;
   const statList = [
@@ -282,7 +263,6 @@ async function renderProfileCard(params) {
       ctx.drawImage(pfpImg, avatarX, avatarY, avatarSize, avatarSize); ctx.restore();
     } catch (e) {}
   } else {
-    // Draw a person silhouette instead of emoji
     ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 20, 12, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 55, 22, Math.PI, 0); ctx.stroke();
@@ -375,22 +355,24 @@ async function renderProfileCard(params) {
     ctx.fillStyle = hasItem ? rarityCfg.tint : 'rgba(0,0,0,0.3)';
     roundRect(ctx, sx, sy, slotSize, slotSize, 6); ctx.fill();
 
-    // Border colored by rarity
+    // Border colored by rarity — THICK for equipped
     ctx.strokeStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = hasItem ? 2 : 1;
+    ctx.lineWidth = hasItem ? 3 : 1;
     roundRect(ctx, sx, sy, slotSize, slotSize, 6); ctx.stroke();
 
-    // Draw slot icon (no emoji — drawn shapes)
-    ctx.strokeStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 2;
-    drawSlotIcon(ctx, sx + slotSize / 2, sy + slotSize / 2 - 12, slot.key);
+    // Slot short label (WPN, OFF, ARM, etc.) — centered, bold
+    ctx.fillStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.3)';
+    ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(slot.short, sx + slotSize / 2, sy + slotSize / 2 - 12);
 
-    // Item name
+    // Item name or slot label
     ctx.fillStyle = hasItem ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)';
-    ctx.font = `9px "${FONT_REG}", monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = `9px "${FONT_REG}", monospace`;
+    ctx.textBaseline = 'top';
     ctx.fillText(hasItem ? (equippedItem.name || slot.label).slice(0, 12) : slot.label, sx + slotSize / 2, sy + slotSize - 22);
 
-    // Rarity letter badge
+    // Rarity letter badge (top-right)
     if (hasItem && itemRarity !== 'COMMON') {
       ctx.fillStyle = rarityCfg.border;
       ctx.font = `bold 10px "${FONT_BOLD}", monospace`;
@@ -449,7 +431,6 @@ async function renderProfileCard(params) {
         const res = registry.getResonance(resonances[i]);
         if (!res) continue;
         const ry = y + 38 + i * 22;
-        // Draw colored dot instead of emoji icon
         drawDot(ctx, PAD + 20, ry + 5, 4, '#4FC3F7');
         ctx.fillStyle = '#4FC3F7'; ctx.font = `12px "${FONT_REG}", monospace`;
         ctx.fillText(res.name, PAD + 30, ry);
