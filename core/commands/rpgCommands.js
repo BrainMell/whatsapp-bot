@@ -13,6 +13,8 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 const fs = require('fs');
 const profileHelper = require('../utils/profileHelper');
 const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
+// 💡 Visual Overhaul: node-canvas profile card renderer
+const profileCardRenderer = require('../rpg/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 const getCurrency = () => botConfig.getCurrency();
@@ -51,7 +53,63 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         pfpUrl = null;
     }
 
-    // Try Go Image Service first
+    // 💡 Visual Overhaul: Try node-canvas profile card FIRST (new design).
+    // Falls back to Go service → text if canvas isn't available.
+    try {
+        // Fetch active summon(s) for the card
+        const summonSystem = require('../rpg/summonSystem');
+        const activeSummonDoc = await summonSystem.getActiveSummon(economyUser);
+        const activeSummon = activeSummonDoc ? {
+          species: activeSummonDoc.species,
+          nickname: activeSummonDoc.nickname,
+          level: activeSummonDoc.level,
+          rarity: activeSummonDoc.rarity,
+          tier: activeSummonDoc.tier,
+          element: activeSummonDoc.element,
+          archetype: activeSummonDoc.archetype,
+          personality: activeSummonDoc.personality,
+          loyalty: activeSummonDoc.loyalty,
+          echoId: activeSummonDoc.echoId,
+          lineage: activeSummonDoc.lineage
+        } : null;
+
+        // Fetch PFP as buffer (download if URL available)
+        let pfpBuffer = null;
+        if (pfpUrl) {
+          try {
+            const axios = require('axios');
+            const resp = await axios.get(pfpUrl, { responseType: 'arraybuffer', timeout: 5000 });
+            pfpBuffer = Buffer.from(resp.data);
+          } catch (e) {}
+        }
+
+        const cardBuffer = await profileCardRenderer.renderProfileCard({
+          user: economyUser,
+          classData,
+          stats,
+          equipStats,
+          equipment,
+          level: sheet?.level || 1,
+          rank: sheet?.adventurerRank || 'F',
+          xpPercent: sheet?.progressPercent || 0,
+          activeSummon,
+          pfpBuffer,
+          prefix: getPrefix()
+        });
+
+        if (cardBuffer && cardBuffer.length > 0) {
+          await sock.sendMessage(chatId, {
+            image: cardBuffer,
+            caption: `👤 *${senderName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}`,
+            mentions: [senderJid]
+          });
+          return;
+        }
+    } catch (err) {
+        console.error('[displayCharacterSheet] node-canvas profile card failed:', err.message);
+    }
+
+    // ── Fallback: Try Go Image Service ──
     try {
         const cardData = await profileHelper.buildCardData(senderJid, senderName, pfpUrl);
         if (cardData) {
