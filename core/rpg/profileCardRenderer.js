@@ -99,7 +99,7 @@ async function renderProfileCard(params) {
   const { user, classData, stats, equipStats, equipment, level, rank, activeSummon } = params;
 
   const W = 800;
-  const H = 600;
+  const H = 750; // 💡 Made taller to prevent equipment/summon overlap
   ensureFonts();
   const { createCanvas } = getCanvas();
   const canvas = createCanvas(W, H);
@@ -191,13 +191,14 @@ async function renderProfileCard(params) {
   const statsX = 30;
   const statsY = 120;
   const statsW = 350;
+  const panelH = 320; // 💡 Taller panels to fit content
 
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  roundRect(ctx, statsX, statsY, statsW, 280, 8);
+  roundRect(ctx, statsX, statsY, statsW, panelH, 8);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
   ctx.lineWidth = 1;
-  roundRect(ctx, statsX, statsY, statsW, 280, 8);
+  roundRect(ctx, statsX, statsY, statsW, panelH, 8);
   ctx.stroke();
 
   // Stats header
@@ -257,10 +258,10 @@ async function renderProfileCard(params) {
   const equipW = 370;
 
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  roundRect(ctx, equipX, equipY, equipW, 280, 8);
+  roundRect(ctx, equipX, equipY, equipW, panelH, 8);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-  roundRect(ctx, equipX, equipY, equipW, 280, 8);
+  roundRect(ctx, equipX, equipY, equipW, panelH, 8);
   ctx.stroke();
 
   // Equipment header
@@ -319,7 +320,7 @@ async function renderProfileCard(params) {
   ctx.textAlign = 'left';
 
   // ── Bottom section: Active Summon + Resonances ──
-  const bottomY = 420;
+  const bottomY = 470;
 
   // Active summon panel
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
