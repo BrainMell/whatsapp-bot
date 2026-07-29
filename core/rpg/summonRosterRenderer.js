@@ -186,7 +186,7 @@ async function renderRoster(user, summons, options = {}) {
   ctx.font = `bold 28px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('🐉 SUMMON CODEX', 40, 45);
+  ctx.fillText('🐉 MY SUMMONS', 40, 45);
 
   // Slots info
   const slotText = `${summons.length}/${user.summonSlots || 3} slots`;
@@ -307,8 +307,8 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
   ctx.fill();
 
-  // Try to load sprite
-  const spritePath = summonSprites.getSpritePath(summon.species);
+  // Try to load sprite (auto-fetch from API on cache miss)
+  const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
       const { loadImage } = getCanvas();
@@ -456,7 +456,7 @@ async function renderDetailCard(summon, user) {
   roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 10);
   ctx.stroke();
 
-  const spritePath = summonSprites.getSpritePath(summon.species);
+  const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
       const { loadImage } = getCanvas();
@@ -471,6 +471,13 @@ async function renderDetailCard(summon, user) {
       ctx.textAlign = 'center';
       ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
     }
+  } else {
+    // No sprite — draw emoji fallback
+    ctx.fillStyle = elementCfg.color;
+    ctx.font = `80px "${FONT_REG}", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
   }
 
   // ── Info panel (right side) ──

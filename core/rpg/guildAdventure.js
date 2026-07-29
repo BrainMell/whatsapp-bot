@@ -5147,7 +5147,18 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       );
       if (scene.success) {
         try {
-          if (scene.buffer) {
+          // 💡 NEW 2026-07-29: Detect MP4 vs PNG and send accordingly.
+          // The animated combat endpoint returns video/mp4 with VFX + sprite reactions.
+          const mimeType = scene.mimeType || 'image/png';
+          if (scene.buffer && mimeType === 'video/mp4') {
+            // Send as WhatsApp video (mp4 H.264, plays inline)
+            await sock.sendMessage(state.chatId, {
+              video: scene.buffer,
+              caption: scene.caption,
+              mimetype: 'video/mp4',
+              gifPlayback: false,  // MP4 should play as video, not GIF
+            });
+          } else if (scene.buffer) {
             await sock.sendMessage(state.chatId, {
               image: scene.buffer,
               caption: scene.caption,
@@ -5496,8 +5507,9 @@ async function endCombat(sock, victory, sessionKey) {
     })),
   };
 
-  // Generate text-only combat end message
-  // Default caption now correctly respects the victory flag so defeat never shows "Victory!"
+  // Generate end-of-combat message.
+  // 💡 NEW 2026-07-29: Render an end-screen image (VICTORY/DEFEATED) via the
+  // Go service. Falls back to text-only on any failure (preserves old behavior).
   let caption = victory ? "✅ Victory!" : "💀 Defeat...";
   try {
     if (combatIntegration && combatIntegration.generateEndCaption) {
@@ -5505,13 +5517,35 @@ async function endCombat(sock, victory, sessionKey) {
     }
   } catch (sceneErr) {
     console.error("End combat caption generation failed:", sceneErr.message);
-    // Keep the safe default already set above
   }
 
+  // Try to render end-screen image
+  let endScreenSent = false;
   try {
-    await sock.sendMessage(state.chatId, { text: caption });
-  } catch (err) {
-    console.error("Failed to send end combat text:", err.message);
+    if (combatIntegration && combatIntegration.renderCombatEnd) {
+      const endResult = await combatIntegration.renderCombatEnd(
+        state.players, state.enemies, victory, rewards,
+        { rank: state.dungeonRank, backgroundPath: state.backgroundPath }
+      );
+      if (endResult.success && endResult.buffer && endResult.buffer.length > 100) {
+        await sock.sendMessage(state.chatId, {
+          image: endResult.buffer,
+          caption: caption,
+          mimetype: 'image/png'
+        });
+        endScreenSent = true;
+      }
+    }
+  } catch (endImgErr) {
+    console.error('[EndScreen] Image render failed (non-fatal):', endImgErr.message);
+  }
+
+  if (!endScreenSent) {
+    try {
+      await sock.sendMessage(state.chatId, { text: caption });
+    } catch (err) {
+      console.error("Failed to send end combat text:", err.message);
+    }
   }
 
   if (victory) {
@@ -6465,12 +6499,12 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
           // map so splash + combat render the same distinct sprite per boss.
           const BOSS_SPLASH_SPRITES = {
             // S/SS/SSS-rank dungeon bosses
-            "PRIMORDIAL CHAOS": "calamaties (1).png",
-            "ELDER CHAOS": "calamaties (1).png",
-            "VOID TITAN": "calamaties (3).png",
-            "ABYSSAL GOD": "calamaties (5).png",
-            "MUTATION PRIME": "calamaties (4).png",
-            "ELEMENTAL ARCHON": "calamaties (2).png",
+            "PRIMORDIAL CHAOS": "boss_0_N.png",
+            "ELDER CHAOS": "boss_1_N.png",
+            "VOID TITAN": "boss_2_N.png",
+            "ABYSSAL GOD": "boss_3_N.png",
+            "MUTATION PRIME": "boss_4_N.png",
+            "ELEMENTAL ARCHON": "boss_5_N.png",
             // Mid-level bosses
             "THE INFECTED COLOSSUS": "midlevelbosses (1).png",
             "INFECTED COLOSSUS": "midlevelbosses (1).png",
@@ -6489,40 +6523,40 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
             "GRAVEYARD LORD": "highlevelbosses (12).png",
             "SHADOW LORD": "highlevelbosses (13).png",
             // Dragon bosses
-            "IGNEEL THE FIRE KING": "calamaties (2).png",
-            "ANCIENT DRAGON": "calamaties (2).png",
-            "ETERNAL DRAGON": "calamaties (2).png",
-            "ELDER FLAME": "calamaties (2).png",
+            "IGNEEL THE FIRE KING": "boss_6_N.png",
+            "ANCIENT DRAGON": "boss_6_N.png",
+            "ETERNAL DRAGON": "boss_6_S.png",
+            "ELDER FLAME": "boss_6_N.png",
             // Trial bosses
             "ARCANE SENTINEL": "midlevelbosses (4).png",
             "LICH KING": "highlevelbosses (12).png",
             "SHADOW STALKER": "highlevelbosses (13).png",
             "VOID ASSASSIN": "highlevelbosses (9).png",
             "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
-            "ANCIENT WURM": "calamaties (2).png",
+            "ANCIENT WURM": "boss_6_N.png",
             "SOUL EATER": "mutated (3).png",
-            "ABYSSAL WHISPER": "calamaties (5).png",
-            "ELEMENTAL PRIMORDIAL": "calamaties (2).png",
-            "PRIME ELEMENT": "calamaties (2).png",
+            "ABYSSAL WHISPER": "boss_3_N.png",
+            "ELEMENTAL PRIMORDIAL": "boss_5_N.png",
+            "PRIME ELEMENT": "boss_5_N.png",
             "VOID NECROMANCER": "mutated (5).png",
             "CHRONOS WARDEN": "highlevelbosses (11).png",
             "TIME EATER": "mutated (7).png",
             "HEAVENLY GUARDIAN": "highlevelbosses (10).png",
-            "SERAPHIM PRIME": "calamaties (5).png",
+            "SERAPHIM PRIME": "boss_3_S.png",
             "FOREST ANCESTOR": "midlevelbosses (5).png",
             "GAIA SENTINEL": "midlevelbosses (5).png",
             "GOLDEN GOLEM": "midlevelbosses (3).png",
-            "TREASURE HOARDER": "calamaties (2).png",
+            "TREASURE HOARDER": "boss_5_S.png",
             "SOUND REAPER": "mutated (4).png",
-            "MAESTRO OF VOID": "calamaties (3).png",
+            "MAESTRO OF VOID": "boss_2_N.png",
             "CLOCKWORK TITAN": "highlevelbosses (7).png",
-            "MECH GOD": "calamaties (5).png",
-            "DEMON LORD": "calamaties (4).png",
-            "PRIMORDIAL EVIL": "calamaties (1).png",
-            "LEVIATHAN": "calamaties (6).png",
-            "LEVIATHAN SPAWN ALPHA": "calamaties (6).png",
+            "MECH GOD": "boss_4_S.png",
+            "DEMON LORD": "boss_4_N.png",
+            "PRIMORDIAL EVIL": "boss_0_S.png",
+            "LEVIATHAN": "boss_3_N.png",
+            "LEVIATHAN SPAWN ALPHA": "boss_3_N.png",
             "INFERNAL OVERLORD": "highlevelbosses (8).png",
-            "PRIMORDIAL FLAME": "calamaties (2).png",
+            "PRIMORDIAL FLAME": "boss_6_N.png",
             "PERMAFROST TITAN": "highlevelbosses (11).png",
           };
           const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
@@ -6546,11 +6580,10 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
           // Fix: race the splash generation against a hard 5s wall-clock
           // timeout. If it loses, skip the splash and proceed to combat.
           // Splash is cosmetic — combat must never wait on it.
-          const goService = require('../utils/goImageService');
-          const go = new goService();
+          const goServiceSingleton = require('../utils/goImageService');
           let splashBuf = null;
           try {
-            const splashPromise = go.generateBossSplash(splashPayload);
+            const splashPromise = goServiceSingleton.generateBossSplash(splashPayload);
             const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('__TIMEOUT__'), 5000));
             const raceResult = await Promise.race([splashPromise, timeoutPromise]);
             if (raceResult !== '__TIMEOUT__') {

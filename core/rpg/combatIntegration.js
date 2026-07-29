@@ -29,9 +29,19 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
         const playersToShow = players.filter(p => p.currentHP > 0 || p.justDied);
         const enemiesToShow = enemies.filter(e => e.currentHP > 0 || e.justDied);
+
+        // Build animation action payload from turnInfo (if actionable)
+        // The Go service uses this to render VFX, sprite reactions, and HP interpolation.
+        const animAction = buildAnimationAction(turnInfo, options);
+
         const result = await combatImageGen.updateCombatImage(
             playersToShow, enemiesToShow, turnInfo,
-            { rank: options.rank, backgroundPath: options.backgroundPath, summons: options.summons || [] }
+            {
+                rank: options.rank,
+                backgroundPath: options.backgroundPath,
+                summons: options.summons || [],
+                action: animAction  // null if no actionable attack
+            }
         );
         return result;
     } catch (error) {
@@ -40,9 +50,110 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     }
 }
 
+/**
+ * Build the animation action payload from turnInfo.
+ * Returns null for non-actionable turns (rest, flee, defend, charge-up).
+ *
+ * The animator needs to know:
+ *   - Who is attacking (side + index)
+ *   - Who is being attacked (side + index)
+ *   - What element/VFX to play
+ *   - Damage dealt, crit, miss, heal
+ */
+function buildAnimationAction(turnInfo, options = {}) {
+    if (!turnInfo || !turnInfo.action) return null;
+    const actionName = String(turnInfo.action.name || '').toLowerCase();
+
+    // Skip non-actionable turns
+    if (['rest', 'flee', 'defend', 'charging', 'charge'].some(s => actionName.includes(s))) {
+        return null;
+    }
+
+    // Resolve attacker side + index
+    const actor = turnInfo.actor;
+    if (!actor) return null;
+    const summons = options.summons || [];
+    const players = options._allPlayers || [];
+    const enemies = options._allEnemies || [];
+
+    let attackerSide = null, attackerIndex = -1;
+    if (actor.isEnemy) {
+        attackerSide = 'enemy';
+        attackerIndex = enemies.findIndex(e => e === actor || e.name === actor.name);
+    } else if (actor.isSummon) {
+        attackerSide = 'summon';
+        attackerIndex = summons.findIndex(s => s === actor || s.name === actor.name);
+    } else {
+        attackerSide = 'player';
+        attackerIndex = players.findIndex(p => p === actor || p.name === actor.name);
+    }
+    if (attackerIndex < 0) attackerSide = null;
+
+    // Resolve target side + index
+    const target = turnInfo.target;
+    let targetSide = null, targetIndex = -1;
+    if (target) {
+        if (target.isEnemy) {
+            targetSide = 'enemy';
+            targetIndex = enemies.findIndex(e => e === target || e.name === target.name);
+        } else if (target.isSummon) {
+            targetSide = 'summon';
+            targetIndex = summons.findIndex(s => s === target || s.name === target.name);
+        } else {
+            targetSide = 'player';
+            targetIndex = players.findIndex(p => p === target || p.name === target.name);
+        }
+    }
+    if (targetIndex < 0) targetSide = null;
+
+    // If we can't resolve sides, skip animation (fall back to static)
+    if (!attackerSide || !targetSide) return null;
+
+    // Determine element/VFX from action name + skill info
+    let element = 'physical';
+    const nameLower = actionName;
+    if (/fire|flame|burn|inferno|meteor|fireball/i.test(nameLower)) element = 'fire';
+    else if (/ice|frost|freeze|blizzard|snow/i.test(nameLower)) element = 'ice';
+    else if (/lightning|thunder|shock|bolt|zap/i.test(nameLower)) element = 'lightning';
+    else if (/dark|shadow|void|necro|curse|decay/i.test(nameLower)) element = 'dark';
+    else if (/holy|light|smite|divine|sanctif/i.test(nameLower)) element = 'holy';
+    else if (/heal|cure|mend|regen/i.test(nameLower)) element = 'none';
+
+    // Determine damage/heal
+    const damage = Math.max(0, Math.floor(Number(turnInfo.damage) || 0));
+    const heal = Math.max(0, Math.floor(Number(turnInfo.healing) || 0));
+    const isCrit = Boolean(turnInfo.isCrit);
+    const missed = Boolean(turnInfo.missed) || actionName.includes('miss');
+
+    return {
+        attackerSide,
+        attackerIndex,
+        targetSide,
+        targetIndex,
+        skillName: String(turnInfo.action.name || 'Attack'),
+        element,
+        vfx: '',  // let Go service pick based on element
+        damage,
+        isCrit,
+        missed,
+        heal
+    };
+}
+
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        return await combatImageGen.generateEndScreenImage(victory ? 'VICTORY' : 'DEFEATED');
+        // 💡 UPDATED 2026-07-29: Pass full rewards to the Go service so it can
+        // render a richer victory/defeat scene with rewards panel.
+        const items = rewards?.items?.map(i => i.name).join(', ') || '';
+        return await combatImageGen.generateEndScreenImage(
+            victory ? 'VICTORY' : 'DEFEATED',
+            {
+                victory,
+                gold: rewards?.gold || 0,
+                xp: rewards?.xp || 0,
+                items
+            }
+        );
     } catch (error) {
         console.error('Combat end render error:', error);
         return { success: false, error: error.message };
@@ -204,7 +315,7 @@ function ensureTempDirectory() {
 
 async function generateCombatScene(players, enemies, phase, options = {}) {
     ensureTempDirectory();
-    
+
     const {
         turnInfo = null,
         encounterInfo = null,
@@ -214,34 +325,39 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         rank = null,
         summons = []  // 💡 Phase 7: summons passed from guildAdventure.js
     } = options;
-    
+
     let imageResult;
     let caption;
-    
+
     switch (phase) {
         case 'START':
             imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, summons });
             caption = generateStartCaption(players, enemies, encounterInfo);
             break;
-            
+
         case 'TURN':
-            imageResult = await renderCombatTurn(players, enemies, turnInfo, { backgroundPath, rank, summons });
+            imageResult = await renderCombatTurn(players, enemies, turnInfo, {
+                backgroundPath, rank, summons,
+                // Pass full arrays so buildAnimationAction can resolve actor/target indices
+                _allPlayers: players,
+                _allEnemies: enemies
+            });
             caption = generateTurnCaption(players, enemies, turnInfo);
             break;
-            
+
         case 'END':
             imageResult = await renderCombatEnd(players, enemies, victory, rewards, { rank, backgroundPath });
             caption = generateEndCaption(players, enemies, victory, rewards);
             break;
-            
+
         default:
             return { success: false, error: 'Invalid phase' };
     }
-    
+
     if (!imageResult.success) {
         return { success: false, error: imageResult.error, caption };
     }
-    
+
     return {
         success: true,
         buffer: imageResult.buffer,
@@ -249,6 +365,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         caption,
         width: imageResult.width,
         height: imageResult.height,
+        mimeType: imageResult.mimeType || 'image/png',  // 💡 NEW: 'image/png' or 'video/mp4'
         backgroundPath: options.backgroundPath
     };
 }

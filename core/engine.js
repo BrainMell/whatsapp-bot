@@ -8767,14 +8767,59 @@ _💡 Reply with another number from your search list!_`.trim();
                     const sellMultiplier = rarityInfo.sellMultiplier || 0.6;
                     const sellValue = Math.floor((item.value || 0) * sellMultiplier);
 
-                    let msg =
-                      GET_BANNER(`🏹 HUNTING`) +
-                      `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}`;
-                    return await sock.sendMessage(
-                      chatId,
-                      { text: msg },
-                      { quoted: m },
-                    );
+                    // 💡 NEW 2026-07-29: Render an image card for the hunt result
+                    // (replaces the text-only banner). Falls back to text on failure.
+                    let huntCardSent = false;
+                    try {
+                      const combatImageGen = require('./rpg/combatImageGenerator');
+                      // Determine animal name + biome from context
+                      const animalName = (selected.id === 'rabbit_hide') ? 'Rabbit'
+                        : (selected.id === 'deer_antler') ? 'Deer'
+                        : (selected.id === 'bear_claw') ? 'Bear' : 'Creature';
+                      // XP reward scales with rarity
+                      const xpReward = Math.max(5, Math.floor(sellValue / 5));
+                      const huntCard = await combatImageGen.generateHuntCard({
+                        playerName: freshUser.nickname || senderJid.split('@')[0],
+                        playerClass: String(freshUser.class?.id || freshUser.class || 'FIGHTER').toUpperCase(),
+                        biome: 'forest',
+                        animal: animalName.toUpperCase(),
+                        item: item.name || 'Unknown Item',
+                        itemRarity: item.rarity || 'COMMON',
+                        xp: xpReward,
+                        zeni: sellValue,
+                        rank: freshUser.adventurerRank || 'F'
+                      });
+                      if (huntCard.success && huntCard.buffer) {
+                        const huntCaption =
+                          `🏹 *HUNT SUCCESSFUL!*\n` +
+                          `———————————\n` +
+                          `Captured: ${emoji} *${item.name}*\n` +
+                          `▫️ Rarity: ${item.rarity}\n` +
+                          `▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}\n` +
+                          `▫️ XP Gained: +${xpReward}`;
+                        await sock.sendMessage(chatId, {
+                          image: huntCard.buffer,
+                          caption: huntCaption,
+                          mimetype: 'image/png'
+                        }, { quoted: m });
+                        huntCardSent = true;
+                      }
+                    } catch (huntCardErr) {
+                      console.error('[HuntCard] Render failed (non-fatal):', huntCardErr.message);
+                    }
+
+                    if (!huntCardSent) {
+                      // Fallback to text-only banner
+                      let msg =
+                        GET_BANNER(`🏹 HUNTING`) +
+                        `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}`;
+                      return await sock.sendMessage(
+                        chatId,
+                        { text: msg },
+                        { quoted: m },
+                      );
+                    }
+                    return;
                   }
 
                   // SPAM PREVENTION: Intelligent Cooldowns

@@ -2,7 +2,12 @@
 // 🎨 SUMMON CODEX RENDERER — image cards with sprites
 // ============================================
 // Renders all summon species as an image card grid with sprite previews.
-// Supports pagination (16 species per page).
+// Supports pagination (12 species per page).
+//
+// Sprite handling:
+//   1. Try local sprite via summonSprites.getSpritePath (case-insensitive)
+//   2. On miss, auto-fetch from digi-api.com via getOrFetchSprite (async)
+//   3. On fetch failure, fall back to species emoji icon (consistent with roster renderer)
 
 const path = require('path');
 const fs = require('fs');
@@ -57,12 +62,16 @@ const RARITY_TINT = {
 
 const PAGE_SIZE = 12; // 4 columns × 3 rows
 
+// In-memory set of species we've already attempted to fetch this session
+// (avoids re-attempting API fetches for permanently-missing sprites)
+const _fetchAttempted = new Set();
+
 /**
  * Render a codex page as an image.
  * @param {object} registry - summonRegistry module
  * @param {number} page - 1-indexed page number
  * @param {string} filter - element filter (or 'all')
- * @returns {Promise<Buffer>} - PNG buffer
+ * @returns {Promise<{buffer: Buffer, totalPages: number, currentPage: number, totalSpecies: number}>}
  */
 async function renderCodexPage(registry, page = 1, filter = 'all') {
   ensureFonts();
@@ -78,7 +87,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
     });
   }
 
-  const totalPages = Math.ceil(allSpecies.length / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(allSpecies.length / PAGE_SIZE));
   if (page < 1) page = 1;
   if (page > totalPages) page = totalPages;
 
@@ -109,13 +118,32 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
 
   ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = `14px "${FONT_REG}", monospace`;
   ctx.textAlign = 'right';
-  ctx.fillText(`${allSpecies.length} species | Page ${page}/${totalPages || 1}`, W - 35, 40);
+  ctx.fillText(`${allSpecies.length} species | Page ${page}/${totalPages}`, W - 35, 40);
 
   // Species grid
   const cols = 4, cardW = 230, cardH = 180, gapX = 12, gapY = 12;
   const gridW = cols * cardW + (cols - 1) * gapX;
   const gridStartX = (W - gridW) / 2;
   const gridStartY = 80;
+
+  // Pre-resolve all sprites in parallel (auto-fetch enabled)
+  // This dramatically improves perceived performance vs sequential awaits per card.
+  const spritePaths = await Promise.all(pageSpecies.map(async (speciesId) => {
+    // First check local cache (sync, fast)
+    let p = summonSprites.getSpritePath(speciesId);
+    if (p) return p;
+    // Avoid re-attempting fetches for species we've already tried this session
+    if (_fetchAttempted.has(speciesId)) return null;
+    _fetchAttempted.add(speciesId);
+    // Auto-fetch from API (best-effort, don't block the whole page if it fails)
+    try {
+      const sp = registry.getSpecies(speciesId);
+      const fetchName = sp?.name || speciesId.replace(/_/g, ' ');
+      return await summonSprites.getOrFetchSprite(speciesId, fetchName);
+    } catch (e) {
+      return null;
+    }
+  }));
 
   for (let i = 0; i < pageSpecies.length; i++) {
     const speciesId = pageSpecies[i];
@@ -150,21 +178,25 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6); ctx.fill();
 
-    try {
-      const spritePath = summonSprites.getSpritePath(speciesId);
-      if (spritePath && fs.existsSync(spritePath)) {
+    const spritePath = spritePaths[i];
+    let spriteDrawn = false;
+    if (spritePath && fs.existsSync(spritePath)) {
+      try {
         const img = await loadImage(spritePath);
         const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;
         const dw = img.width * scale, dh = img.height * scale;
         ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
-      } else {
-        // No sprite — show species name as placeholder
-        ctx.fillStyle = elementColor;
-        ctx.font = `bold 12px "${FONT_BOLD}", monospace`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(species.name.slice(0, 8), portraitX + portraitSize / 2, portraitY + portraitSize / 2);
-      }
-    } catch (e) {}
+        spriteDrawn = true;
+      } catch (e) {}
+    }
+    if (!spriteDrawn) {
+      // Fallback: species emoji icon (consistent with roster renderer)
+      // Use 40px font for emoji to fit nicely in 80×80 portrait
+      ctx.fillStyle = elementColor;
+      ctx.font = `40px "${FONT_REG}", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(species.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
+    }
 
     // Name
     ctx.textBaseline = 'top'; ctx.textAlign = 'center';
@@ -202,7 +234,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
   ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.textAlign = 'center';
   const navText = totalPages > 1
-    ? `Page ${page}/${totalPages} — use .summon codex <page> to navigate`
+    ? `Page ${page}/${totalPages} — use .summon codex <page> to navigate | filter: .summon codex <element>`
     : `${allSpecies.length} species available`;
   ctx.fillText(navText, W / 2, H - 20);
 

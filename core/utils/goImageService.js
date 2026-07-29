@@ -180,17 +180,63 @@ class GoImageService {
   }
 
   /*
-   * Generate Combat End Screen
+   * Generate ANIMATED Combat Video (MP4) — NEW 2026-07-29
+   * Renders a 12-frame animation as an MP4 with VFX overlays, sprite reactions,
+   * HP interpolation, and defeated fade-out. Falls back to static PNG on failure.
+   * Payload extends generateCombatImage with an `action` field.
    */
-  async generateCombatEndScreen(text) {
+  async generateAnimatedCombat(data) {
+    return this._enqueue(async () => {
+      try {
+        const response = await this.client.post("/api/combat/animated", data, {
+          responseType: "arraybuffer",
+          timeout: 60000, // MP4 encoding via ffmpeg can take 10-30s on slow CPU
+        });
+        return Buffer.from(response.data);
+      } catch (error) {
+        console.error("GoService Animated Combat Error:", error.message);
+        throw error;
+      }
+    });
+  }
+
+  /*
+   * Generate Hunt Card — NEW 2026-07-29
+   * Renders a hunting result image card (player + animal + loot).
+   * Payload: { playerName, playerClass, biome, animal, animalSprite, item, itemRarity, xp, zeni, rank }
+   */
+  async generateHuntCard(data) {
+    return this._enqueue(async () => {
+      try {
+        const response = await this.client.post("/api/hunt/card", data, {
+          responseType: "arraybuffer",
+          timeout: 10000,
+        });
+        return Buffer.from(response.data);
+      } catch (error) {
+        console.error("GoService Hunt Card Error:", error.message);
+        return null; // non-fatal — caller falls back to text
+      }
+    });
+  }
+
+  /*
+   * Generate Combat End Screen
+   * 💡 UPDATED 2026-07-29: Now accepts a richer payload {text, victory, gold, xp, items}
+   * for the new gradient + rewards panel end screen. The text-only path is still
+   * supported as a fallback (just pass {text}).
+   */
+  async generateCombatEndScreen(payload) {
+    // Backward-compat: accept a plain string
+    if (typeof payload === 'string') payload = { text: payload };
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
           "/api/combat/endscreen",
-          { text },
+          payload,
           {
             responseType: "arraybuffer",
-            timeout: 10000, // 💡 FIX: was 5000ms — same issue as combat image
+            timeout: 10000,
           },
         );
         return Buffer.from(response.data);

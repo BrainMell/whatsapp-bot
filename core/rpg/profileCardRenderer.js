@@ -1,9 +1,11 @@
 // ============================================
-// 🎨 PROFILE CARD RENDERER v4 — uses real UI sprites
+// 🎨 PROFILE CARD RENDERER v5 — real icon PNGs + auto-fetch sprites
 // ============================================
-// Uses existing RPG UI PNGs (hp bars, banners, panels) for chrome.
-// Equipment slots use text labels (no weapon icon sprites available).
-// NO EMOJIS — all text/drawn elements.
+// Uses RPG UI PNGs (hp bars, banners, panels) for chrome.
+// Equipment slots use real icon PNGs from rpgasset/icons/essential/.
+// Summon sprites auto-fetch from digi-api.com on cache miss.
+// Avatar fallback uses a default character PNG instead of stick-figure.
+// NO EMOJIS — all text/drawn elements (Oracle has no color emoji font).
 
 const path = require('path');
 const fs = require('fs');
@@ -13,6 +15,8 @@ function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas
 
 const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
 const UI_DIR = path.join(__dirname, '..', 'rpgasset', 'ui');
+const ICON_DIR = path.join(__dirname, '..', 'rpgasset', 'icons', 'essential');
+const CHAR_DIR = path.join(__dirname, '..', 'rpgasset', 'characters');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
@@ -31,17 +35,21 @@ function ensureFonts() {
 
 // Cache loaded UI images
 const _imageCache = new Map();
-async function loadUI(name) {
-  if (_imageCache.has(name)) return _imageCache.get(name);
+async function loadImageFrom(dir, name, cacheKey) {
+  const key = cacheKey || `${dir}/${name}`;
+  if (_imageCache.has(key)) return _imageCache.get(key);
   const { loadImage } = getCanvas();
-  const p = path.join(UI_DIR, name);
+  const p = path.join(dir, name);
   if (!fs.existsSync(p)) return null;
   try {
     const img = await loadImage(p);
-    _imageCache.set(name, img);
+    _imageCache.set(key, img);
     return img;
   } catch (e) { return null; }
 }
+async function loadUI(name)    { return loadImageFrom(UI_DIR, name); }
+async function loadIcon(name)  { return loadImageFrom(ICON_DIR, name); }
+async function loadChar(name)  { return loadImageFrom(CHAR_DIR, name); }
 
 function roundRect(ctx, x, y, w, h, r) {
   if (w < 2 * r) r = w / 2;
@@ -114,17 +122,31 @@ const EQUIP_RARITY = {
   MYTHIC:    { border: '#E91E63', tint: 'rgba(233,30,99,0.17)',   label: 'M' }
 };
 
+// Equipment slot → icon PNG mapping.
+// Uses real icon assets from rpgasset/icons/essential/ (80 PNGs from SpriteAssets).
+// The folder is "essential UI icons" — there are no weapon/armor/helmet themed icons,
+// so we use the closest semantic matches. When no good match exists, we still draw
+// the short text label as fallback.
 const EQUIPMENT_SLOTS = [
-  { key: 'main_hand', label: 'Weapon', short: 'WPN' },
-  { key: 'off_hand', label: 'Off-Hand', short: 'OFF' },
-  { key: 'armor', label: 'Armor', short: 'ARM' },
-  { key: 'helmet', label: 'Helmet', short: 'HLM' },
-  { key: 'gloves', label: 'Gloves', short: 'GLV' },
-  { key: 'boots', label: 'Boots', short: 'BTS' },
-  { key: 'ring', label: 'Ring', short: 'RNG' },
-  { key: 'amulet', label: 'Amulet', short: 'AML' },
-  { key: 'cloak', label: 'Cloak', short: 'CLK' }
+  { key: 'main_hand', label: 'Weapon',   short: 'WPN', icon: 'Hammer.png' },      // Hammer = closest weapon/tool metaphor
+  { key: 'off_hand',  label: 'Off-Hand', short: 'OFF', icon: 'Book.png' },        // Book = spellbook/tome off-hand
+  { key: 'armor',     label: 'Armor',    short: 'ARM', icon: 'Backpack.png' },    // Backpack = worn torso gear
+  { key: 'helmet',    label: 'Helmet',   short: 'HLM', icon: 'Sun.png' },         // Sun = head/halo metaphor
+  { key: 'gloves',    label: 'Gloves',   short: 'GLV', icon: 'Wrench.png' },      // Wrench = tool/grip metaphor
+  { key: 'boots',     label: 'Boots',    short: 'BTS', icon: 'Exit.png' },        // Exit = movement metaphor
+  { key: 'ring',      label: 'Ring',     short: 'RNG', icon: 'Key.png' },         // Key = jewelry metaphor
+  { key: 'amulet',    label: 'Amulet',   short: 'AML', icon: 'Necklace.png' },    // Necklace = perfect match
+  { key: 'cloak',     label: 'Cloak',    short: 'CLK', icon: 'Briefcase.png' }    // Briefcase = carried item
 ];
+
+// Try a list of fallback icon names (in order) — returns first that exists
+async function loadFirstIcon(icons) {
+  for (const name of icons) {
+    const img = await loadIcon(name);
+    if (img) return img;
+  }
+  return null;
+}
 
 async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
   const portraitSize = 80;
@@ -137,12 +159,22 @@ async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
 
   try {
     const summonSprites = require('./summonSprites');
-    const spritePath = summonSprites.getSpritePath(summon.species);
+    // Auto-fetch from digi-api.com on cache miss (best-effort, doesn't block on failure)
+    const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
     if (spritePath && fs.existsSync(spritePath)) {
       const img = await loadImage(spritePath);
       const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;
       const dw = img.width * scale, dh = img.height * scale;
       ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
+    } else {
+      // No sprite available — draw species initial letter as fallback
+      const registry = require('./summonRegistry');
+      const sp = registry.getSpecies(summon.species);
+      const initial = (sp?.name || summon.species).charAt(0).toUpperCase();
+      ctx.fillStyle = 'rgba(255,215,0,0.4)';
+      ctx.font = `bold 36px "${FONT_BOLD}", monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(initial, portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }
   } catch (e) {}
 
@@ -263,9 +295,33 @@ async function renderProfileCard(params) {
       ctx.drawImage(pfpImg, avatarX, avatarY, avatarSize, avatarSize); ctx.restore();
     } catch (e) {}
   } else {
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 20, 12, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 55, 22, Math.PI, 0); ctx.stroke();
+    // Avatar fallback: try a default character PNG based on class, else draw a hooded silhouette
+    const classSpriteMap = {
+      FIGHTER: 'Fighter1.png', WARRIOR: 'warrior1.png', BERSERKER: 'Berserker1.png',
+      PALADIN: 'Paladin (1).png', ROGUE: 'Rogue1.png', NINJA: 'ninja1.png',
+      MONK: 'Monk.png', MAGE: 'archmage1.png', ARCHMAGE: 'archmage6.png',
+      WARLOCK: 'voidwalker1.png', VOIDWALKER: 'voidwalker5.png',
+      CLERIC: 'cleric1.png', SAINT: 'saint1.png', DRUID: 'druid1.png',
+      NECROMANCER: 'necromancer1.png', LICH: 'lich1.png',
+      TYCOON: 'tycoon1.png', MERCHANT: 'merchant1.png'
+    };
+    const spriteFile = classSpriteMap[(classData?.name || '').toUpperCase()] || 'apprentice1.png';
+    const charImg = await loadChar(spriteFile);
+    if (charImg) {
+      ctx.save(); roundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, 6); ctx.clip();
+      // Crop to top portion (head/torso) like the combat renderer does
+      const cropTop = charImg.height * 0.3;
+      const scale = Math.max(avatarSize / charImg.width, avatarSize / cropTop);
+      const dw = charImg.width * scale, dh = cropTop * scale;
+      ctx.drawImage(charImg, 0, 0, charImg.width, cropTop,
+                    avatarX + (avatarSize - dw) / 2, avatarY + (avatarSize - dh) / 2, dw, dh);
+      ctx.restore();
+    } else {
+      // Final fallback: simple hooded silhouette
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 20, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(avatarX + avatarSize / 2, avatarY + 55, 22, Math.PI, 0); ctx.fill();
+    }
   }
 
   ctx.textBaseline = 'top'; ctx.textAlign = 'left';
@@ -360,16 +416,27 @@ async function renderProfileCard(params) {
     ctx.lineWidth = hasItem ? 3 : 1;
     roundRect(ctx, sx, sy, slotSize, slotSize, 6); ctx.stroke();
 
-    // Slot short label (WPN, OFF, ARM, etc.) — centered, bold
-    ctx.fillStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.3)';
-    ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(slot.short, sx + slotSize / 2, sy + slotSize / 2 - 12);
+    // Slot icon (real PNG from rpgasset/icons/essential/)
+    // Falls back to short text label if icon image can't be loaded
+    const iconImg = await loadIcon(slot.icon);
+    const iconSize = 40;
+    const iconX = sx + (slotSize - iconSize) / 2, iconY = sy + 12;
+    if (iconImg) {
+      ctx.globalAlpha = hasItem ? 1.0 : 0.4;
+      ctx.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
+      ctx.globalAlpha = 1.0;
+    } else {
+      // Fallback: short text label (WPN, OFF, ARM, etc.)
+      ctx.fillStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.3)';
+      ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(slot.short, sx + slotSize / 2, sy + slotSize / 2 - 12);
+    }
 
-    // Item name or slot label
+    // Slot label below icon (always shown)
     ctx.fillStyle = hasItem ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)';
     ctx.font = `9px "${FONT_REG}", monospace`;
-    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(hasItem ? (equippedItem.name || slot.label).slice(0, 12) : slot.label, sx + slotSize / 2, sy + slotSize - 22);
 
     // Rarity letter badge (top-right)
