@@ -61,6 +61,21 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  *   - Damage dealt, crit, miss, heal
  */
 function buildAnimationAction(turnInfo, options = {}) {
+    // 💡 HOTFIX 2026-07-29: Animated combat (MP4 via ffmpeg) is temporarily
+    // disabled because the Go service on Box 2 (512MB RAM micro instance)
+    // takes 6-27s per MP4 encode, which exceeds the Node bot's 10s Go service
+    // timeout and causes all combat commands to hang for 90s (the command
+    // timeout), pegging CPU at 100% and making the bot unresponsive.
+    //
+    // The animated combat code is fully written and tested — it just needs
+    // either (a) a bigger Go service instance, (b) async fire-and-forget
+    // MP4 delivery, or (c) reduced frame count. Until then, return null
+    // to fall back to the fast static PNG path.
+    //
+    // To re-enable: delete this early return. The rest of the function is
+    // unchanged and will produce the action payload for the Go animator.
+    return null;
+
     if (!turnInfo || !turnInfo.action) return null;
     const actionName = String(turnInfo.action.name || '').toLowerCase();
 

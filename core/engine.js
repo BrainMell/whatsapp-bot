@@ -6161,6 +6161,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // legitimate long commands (card grid = 60s, combat = 10s,
                 // anime search = 15s) but short enough that a truly hung
                 // command doesn't block the user's chat forever.
+              // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
+              // The catch block at line ~25328 is OUTSIDE the storage.run callback,
+              // so it can't see primaryCmd/senderJid/chatId/txt. We populate this
+              // object from inside storage.run so the timeout handler can log
+              // which command hung. Without this, the timeout handler crashes with
+              // "ReferenceError: primaryCmd is not defined" — masking the real
+              // timeout error and producing an unhandled rejection.
+              const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null };
               const _cmdTimeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => {
                   const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
@@ -6852,6 +6860,15 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
+
+                    // 💡 FIX 2026-07-29: Populate the timeout context so the
+                    // catch handler at line ~25337 can log which command hung.
+                    // This prevents the "primaryCmd is not defined" ReferenceError
+                    // that was masking all real timeout errors.
+                    _cmdContext.primaryCmd = primaryCmd;
+                    _cmdContext.senderJid = senderJid;
+                    _cmdContext.chatId = chatId;
+                    _cmdContext.txt = txt;
 
                     const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
                     if (disabledCat) {
@@ -25333,12 +25350,19 @@ _(Or reply to their message)_
                 // hung commands — the inner catch at line ~25235 only
                 // fires when something THROWS, and a hung await never
                 // throws.
+                //
+                // 💡 FIX 2026-07-29: Use _cmdContext (populated inside
+                // storage.run) instead of primaryCmd/senderJid/etc which
+                // are out of scope here. Previously this catch crashed with
+                // "ReferenceError: primaryCmd is not defined" — masking the
+                // real timeout error and producing an unhandled rejection.
                 const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
-                console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(primaryCmd || txt?.slice(0, 50))} | sender=${senderJid?.split('@')[0]} | chat=${chatId?.split('@')[0]}`);
+                const _ctx = _cmdContext || {};
+                console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'} | chat=${_ctx.chatId?.split('@')[0] || 'unknown'}`);
                 console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
                 console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
                 try {
-                  await sock.sendMessage(chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                  await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
                 } catch (_) {}
               }
             }),
