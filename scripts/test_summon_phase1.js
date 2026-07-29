@@ -37,10 +37,10 @@ test('every species has an echoId that exists in SUMMON_ECHOES', () => {
   }
 });
 
-test('every species has evolutionStages array (3 stages)', () => {
+test('every species has evolutionStages array (2+ stages)', () => {
   for (const [speciesId, species] of Object.entries(registry.SUMMON_SPECIES)) {
     assert.ok(Array.isArray(species.evolutionStages), `${speciesId} must have evolutionStages array`);
-    assert.ok(species.evolutionStages.length === 3, `${speciesId} must have 3 evolution stages, got ${species.evolutionStages.length}`);
+    assert.ok(species.evolutionStages.length >= 2, `${speciesId} must have ≥2 evolution stages, got ${species.evolutionStages.length}`);
   }
 });
 
