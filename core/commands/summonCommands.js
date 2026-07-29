@@ -22,6 +22,9 @@ const summonCapture = require('../rpg/summonCapture');
 const summonForging = require('../rpg/summonForging');
 const summonTrials = require('../rpg/summonTrials');
 const registry = require('../rpg/summonRegistry');
+// 💡 Phase C2: Image-based roster rendering
+const rosterRenderer = require('../rpg/summonRosterRenderer');
+const summonSprites = require('../rpg/summonSprites');
 
 const getPrefix = () => botConfig.getPrefix();
 
@@ -120,7 +123,6 @@ async function cmdPokedex(sock, chatId, senderJid) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const activeResonances = user.activeResonances || [];
   const p = getPrefix();
 
   if (summons.length === 0) {
@@ -129,6 +131,24 @@ async function cmdPokedex(sock, chatId, senderJid) {
     });
     return;
   }
+
+  // 💡 Phase C2: Render the roster as an image using node-canvas.
+  // Falls back to text if the renderer fails.
+  try {
+    const imageBuffer = await rosterRenderer.renderRoster(user, summons);
+    if (imageBuffer && imageBuffer.length > 0) {
+      await sock.sendMessage(chatId, {
+        image: imageBuffer,
+        caption: `🐉 *SUMMON CODEX* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`
+      });
+      return;
+    }
+  } catch (e) {
+    console.error('[SummonRoster] Image render failed, falling back to text:', e.message);
+  }
+
+  // ── Text fallback (same as before) ──
+  const activeResonances = user.activeResonances || [];
 
   let msg = `🐉 *SUMMON CODEX*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
@@ -141,7 +161,6 @@ async function cmdPokedex(sock, chatId, senderJid) {
   }
   msg += `\n\n`;
 
-  // Pokémon-style card layout — each summon gets a visual "card"
   const rarityColors = {
     COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🔴', LEGENDARY: '🟡', MYTHIC: '🟣'
   };
@@ -156,7 +175,6 @@ async function cmdPokedex(sock, chatId, senderJid) {
     const rarityIcon = rarityColors[s.rarity] || '⚪';
     const stats = summonSystem.computeEffectiveStats(s);
 
-    // Loyalty bar
     const loyaltyPct = s.loyalty;
     const loyaltyBar = loyaltyPct >= 75 ? '🟩' : loyaltyPct >= 50 ? '🟨' : loyaltyPct >= 25 ? '🟧' : loyaltyPct >= 1 ? '🟥' : '⬛';
 
@@ -211,7 +229,25 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     return await cmdTrial(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
   }
 
-  // Default: show info for this summon
+  // Default: show detail card image for this summon
+  // 💡 Phase C2: Try image rendering first, fall back to text cmdInfo
+  try {
+    const imageBuffer = await rosterRenderer.renderDetailCard(summons[index], user);
+    if (imageBuffer && imageBuffer.length > 0) {
+      const species = registry.getSpecies(summons[index].species);
+      const name = summons[index].nickname || species?.name || summons[index].species;
+      const active = user.activeSummonId === summons[index].summonId;
+      await sock.sendMessage(chatId, {
+        image: imageBuffer,
+        caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${getPrefix()} summon ${index + 1} deploy\` — equip | \`${getPrefix()} summon ${index + 1} trial\` — evolve`
+      });
+      return;
+    }
+  } catch (e) {
+    console.error('[SummonDetail] Image render failed, falling back to text:', e.message);
+  }
+
+  // Text fallback
   return await cmdInfo(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
 }
 

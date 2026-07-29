@@ -1,0 +1,639 @@
+{
+  "success": [
+    {
+      "name": "Parallelmon",
+      "file": "parallelmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Parallelmon.png"
+    },
+    {
+      "name": "Aegiochusmon(Dark)",
+      "file": "aegiochusmon_dark_.png",
+      "url": "https://digi-api.com/images/digimon/w/Aegiochusmon(Dark).png"
+    },
+    {
+      "name": "Breakdramon",
+      "file": "breakdramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Breakdramon.png"
+    },
+    {
+      "name": "Firamon",
+      "file": "firamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Firamon.png"
+    },
+    {
+      "name": "Angemon",
+      "file": "angemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Angemon.png"
+    },
+    {
+      "name": "Orgemon",
+      "file": "orgemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Orgemon.png"
+    },
+    {
+      "name": "Tyranomon",
+      "file": "tyranomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Tyranomon.png"
+    },
+    {
+      "name": "Cyclomon",
+      "file": "cyclomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Cyclomon.png"
+    },
+    {
+      "name": "Shortmon",
+      "file": "shortmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Shortmon.png"
+    },
+    {
+      "name": "Panbachimon",
+      "file": "panbachimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Panbachimon.png"
+    },
+    {
+      "name": "Babydmon",
+      "file": "babydmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Babydmon.png"
+    },
+    {
+      "name": "Betamon",
+      "file": "betamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Betamon.png"
+    },
+    {
+      "name": "Tyumon",
+      "file": "tyumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Tyumon.png"
+    },
+    {
+      "name": "Airdramon",
+      "file": "airdramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Airdramon.png"
+    },
+    {
+      "name": "Nanimon",
+      "file": "nanimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Nanimon.png"
+    },
+    {
+      "name": "Punimon",
+      "file": "punimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Punimon.png"
+    },
+    {
+      "name": "Dorulumon",
+      "file": "dorulumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Dorulumon.png"
+    },
+    {
+      "name": "Pusurimon",
+      "file": "pusurimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Pusurimon.png"
+    },
+    {
+      "name": "Dagomon",
+      "file": "dagomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Dagomon.png"
+    },
+    {
+      "name": "Quartzmon",
+      "file": "quartzmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Quartzmon.png"
+    },
+    {
+      "name": "Koromon",
+      "file": "koromon.png",
+      "url": "https://digi-api.com/images/digimon/w/Koromon.png"
+    },
+    {
+      "name": "Garurumon",
+      "file": "garurumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Garurumon.png"
+    },
+    {
+      "name": "Budmon",
+      "file": "budmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Budmon.png"
+    },
+    {
+      "name": "Fladramon",
+      "file": "fladramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Fladramon.png"
+    },
+    {
+      "name": "Eyesmon",
+      "file": "eyesmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Eyesmon.png"
+    },
+    {
+      "name": "Lunamon",
+      "file": "lunamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Lunamon.png"
+    },
+    {
+      "name": "Goburimon",
+      "file": "goburimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Goburimon.png"
+    },
+    {
+      "name": "Revolmon",
+      "file": "revolmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Revolmon.png"
+    },
+    {
+      "name": "Golemon",
+      "file": "golemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Golemon.png"
+    },
+    {
+      "name": "Jokermon",
+      "file": "jokermon.png",
+      "url": "https://digi-api.com/images/digimon/w/Jokermon.png"
+    },
+    {
+      "name": "Archnemon",
+      "file": "archnemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Archnemon.png"
+    },
+    {
+      "name": "Gaossmon",
+      "file": "gaossmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Gaossmon.png"
+    },
+    {
+      "name": "Icemon",
+      "file": "icemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Icemon.png"
+    },
+    {
+      "name": "Bitmon",
+      "file": "bitmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Bitmon.png"
+    },
+    {
+      "name": "Gururumon",
+      "file": "gururumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Gururumon.png"
+    },
+    {
+      "name": "Guardromon",
+      "file": "guardromon.png",
+      "url": "https://digi-api.com/images/digimon/w/Guardromon.png"
+    },
+    {
+      "name": "Angewomon",
+      "file": "angewomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Angewomon.png"
+    },
+    {
+      "name": "Dondokomon",
+      "file": "dondokomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Dondokomon.png"
+    },
+    {
+      "name": "Raijinmon",
+      "file": "raijinmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Raijinmon.png"
+    },
+    {
+      "name": "Coelamon",
+      "file": "coelamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Coelamon.png"
+    },
+    {
+      "name": "Ankylomon",
+      "file": "ankylomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Ankylomon.png"
+    },
+    {
+      "name": "Kamemon",
+      "file": "kamemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Kamemon.png"
+    },
+    {
+      "name": "Kinkakumon",
+      "file": "kinkakumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Kinkakumon.png"
+    },
+    {
+      "name": "Monochromon",
+      "file": "monochromon.png",
+      "url": "https://digi-api.com/images/digimon/w/Monochromon.png"
+    },
+    {
+      "name": "Mechanorimon",
+      "file": "mechanorimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Mechanorimon.png"
+    },
+    {
+      "name": "Shoutmon",
+      "file": "shoutmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Shoutmon.png"
+    },
+    {
+      "name": "Fusamon",
+      "file": "fusamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Fusamon.png"
+    },
+    {
+      "name": "Monimon",
+      "file": "monimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Monimon.png"
+    },
+    {
+      "name": "Centalmon",
+      "file": "centalmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Centalmon.png"
+    },
+    {
+      "name": "Vajramon",
+      "file": "vajramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Vajramon.png"
+    },
+    {
+      "name": "Kuzuhamon",
+      "file": "kuzuhamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Kuzuhamon.png"
+    },
+    {
+      "name": "Exermon",
+      "file": "exermon.png",
+      "url": "https://digi-api.com/images/digimon/w/Exermon.png"
+    },
+    {
+      "name": "Shonitamon",
+      "file": "shonitamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Shonitamon.png"
+    },
+    {
+      "name": "Bagramon",
+      "file": "bagramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Bagramon.png"
+    },
+    {
+      "name": "Pillomon",
+      "file": "pillomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Pillomon.png"
+    },
+    {
+      "name": "Mitamamon",
+      "file": "mitamamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Mitamamon.png"
+    },
+    {
+      "name": "Puroromon",
+      "file": "puroromon.png",
+      "url": "https://digi-api.com/images/digimon/w/Puroromon.png"
+    },
+    {
+      "name": "Chamelemon",
+      "file": "chamelemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Chamelemon.png"
+    },
+    {
+      "name": "Sparrowmon",
+      "file": "sparrowmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Sparrowmon.png"
+    },
+    {
+      "name": "Troopmon",
+      "file": "troopmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Troopmon.png"
+    },
+    {
+      "name": "Sunarizamon",
+      "file": "sunarizamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Sunarizamon.png"
+    },
+    {
+      "name": "Tunomon",
+      "file": "tunomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Tunomon.png"
+    },
+    {
+      "name": "Blitzmon",
+      "file": "blitzmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Blitzmon.png"
+    },
+    {
+      "name": "Monitamon",
+      "file": "monitamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Monitamon.png"
+    },
+    {
+      "name": "Aegiochusmon",
+      "file": "aegiochusmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Aegiochusmon.png"
+    },
+    {
+      "name": "Toropiamon",
+      "file": "toropiamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Toropiamon.png"
+    },
+    {
+      "name": "Weddinmon",
+      "file": "weddinmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Weddinmon.png"
+    },
+    {
+      "name": "Rurimon",
+      "file": "rurimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Rurimon.png"
+    },
+    {
+      "name": "Thetismon",
+      "file": "thetismon.png",
+      "url": "https://digi-api.com/images/digimon/w/Thetismon.png"
+    },
+    {
+      "name": "Turuiemon",
+      "file": "turuiemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Turuiemon.png"
+    },
+    {
+      "name": "Manticoremon",
+      "file": "manticoremon.png",
+      "url": "https://digi-api.com/images/digimon/w/Manticoremon.png"
+    },
+    {
+      "name": "Funbeemon",
+      "file": "funbeemon.png",
+      "url": "https://digi-api.com/images/digimon/w/Funbeemon.png"
+    },
+    {
+      "name": "Minidekachimon",
+      "file": "minidekachimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Minidekachimon.png"
+    },
+    {
+      "name": "Geremon",
+      "file": "geremon.png",
+      "url": "https://digi-api.com/images/digimon/w/Geremon.png"
+    },
+    {
+      "name": "Morphomon",
+      "file": "morphomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Morphomon.png"
+    },
+    {
+      "name": "Gogmamon",
+      "file": "gogmamon.png",
+      "url": "https://digi-api.com/images/digimon/w/Gogmamon.png"
+    },
+    {
+      "name": "Pinochimon",
+      "file": "pinochimon.png",
+      "url": "https://digi-api.com/images/digimon/w/Pinochimon.png"
+    },
+    {
+      "name": "Stiffilmon",
+      "file": "stiffilmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Stiffilmon.png"
+    },
+    {
+      "name": "Devidramon",
+      "file": "devidramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Devidramon.png"
+    },
+    {
+      "name": "Mametyramon",
+      "file": "mametyramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Mametyramon.png"
+    },
+    {
+      "name": "Meramon",
+      "file": "meramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Meramon.png"
+    },
+    {
+      "name": "Ketomon",
+      "file": "ketomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Ketomon.png"
+    },
+    {
+      "name": "Raptordramon",
+      "file": "raptordramon.png",
+      "url": "https://digi-api.com/images/digimon/w/Raptordramon.png"
+    },
+    {
+      "name": "Madomon",
+      "file": "madomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Madomon.png"
+    },
+    {
+      "name": "Vulcanusmon",
+      "file": "vulcanusmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Vulcanusmon.png"
+    },
+    {
+      "name": "Tankmon",
+      "file": "tankmon.png",
+      "url": "https://digi-api.com/images/digimon/w/Tankmon.png"
+    },
+    {
+      "name": "ShouCutemon",
+      "file": "shoucutemon.png",
+      "url": "https://digi-api.com/images/digimon/w/ShouCutemon.png"
+    },
+    {
+      "name": "Apollomon",
+      "file": "apollomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Apollomon.png"
+    },
+    {
+      "name": "DORUgoramon",
+      "file": "dorugoramon.png",
+      "url": "https://digi-api.com/images/digimon/w/DORUgoramon.png"
+    },
+    {
+      "name": "Culumon",
+      "file": "culumon.png",
+      "url": "https://digi-api.com/images/digimon/w/Culumon.png"
+    },
+    {
+      "name": "Frozomon",
+      "file": "frozomon.png",
+      "url": "https://digi-api.com/images/digimon/w/Frozomon.png"
+    }
+  ],
+  "failed": [
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    },
+    {
+      "error": "404"
+    }
+  ],
+  "total": 91
+}
