@@ -1,8 +1,9 @@
 // ============================================
-// 🎨 PROFILE CARD RENDERER — node-canvas (DYNAMIC LAYOUT)
+// 🎨 PROFILE CARD RENDERER — node-canvas (DYNAMIC LAYOUT v2)
 // ============================================
 // All sections use a running Y cursor — no hardcoded positions.
 // Card height is computed from total content, so nothing ever overlaps.
+// Supports multiple active summons, rank gradient bar, equipment rarity colors.
 
 const path = require('path');
 const fs = require('fs');
@@ -58,9 +59,34 @@ const RANK_COLORS = {
   SSS: '#E65100', GOD: '#FFD700', DRAGON: '#FF6F00'
 };
 
+// Rank gradient pairs (from → to) for the rank bar
+const RANK_GRADIENTS = {
+  F:   ['#616161', '#9E9E9E'],
+  E:   ['#5D4037', '#8D6E63'],
+  D:   ['#4E342E', '#795548'],
+  C:   ['#33691E', '#558B2F'],
+  B:   ['#1B5E20', '#2E7D32'],
+  A:   ['#0D47A1', '#1565C0'],
+  S:   ['#4A148C', '#7B1FA2'],
+  SS:  ['#880E4F', '#C2185B'],
+  SSS: ['#BF360C', '#E65100'],
+  GOD: ['#F57F17', '#FFD700'],
+  DRAGON: ['#E65100', '#FF6F00']
+};
+
 const STAT_COLORS = {
   hp: '#F44336', atk: '#FF9800', def: '#2196F3', mag: '#9C27B0',
   spd: '#4CAF50', luck: '#FFEB3B', crit: '#FF6F00', evasion: '#00BCD4'
+};
+
+// Equipment rarity → border color + bg tint
+const EQUIP_RARITY = {
+  COMMON:    { border: 'rgba(158,158,158,0.5)',  tint: 'rgba(158,158,158,0.08)',  label: 'C' },
+  UNCOMMON:  { border: 'rgba(76,175,80,0.5)',    tint: 'rgba(76,175,80,0.1)',     label: 'U' },
+  RARE:      { border: 'rgba(33,150,243,0.6)',   tint: 'rgba(33,150,243,0.12)',   label: 'R' },
+  EPIC:      { border: 'rgba(156,39,176,0.6)',   tint: 'rgba(156,39,176,0.12)',   label: 'E' },
+  LEGENDARY: { border: 'rgba(255,152,0,0.7)',    tint: 'rgba(255,152,0,0.15)',    label: 'L' },
+  MYTHIC:    { border: 'rgba(233,30,99,0.7)',    tint: 'rgba(233,30,99,0.15)',    label: 'M' }
 };
 
 const EQUIPMENT_SLOTS = [
@@ -76,21 +102,94 @@ const EQUIPMENT_SLOTS = [
 ];
 
 // ─────────────────────────────────────────────────────────────
+// Draw a single summon entry (portrait + stats) — used in a loop
+// ─────────────────────────────────────────────────────────────
+async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
+  const portraitSize = 80;
+  const portraitX = x + 15;
+  const portraitY = y;
+
+  // Portrait bg
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
+  ctx.fill();
+
+  // Load sprite
+  try {
+    const summonSprites = require('./summonSprites');
+    const spritePath = summonSprites.getSpritePath(summon.species);
+    if (spritePath && fs.existsSync(spritePath)) {
+      const img = await loadImage(spritePath);
+      const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
+    }
+  } catch (e) {}
+
+  const registry = require('./summonRegistry');
+  const species = registry.getSpecies(summon.species);
+  const name = summon.nickname || species?.name || summon.species;
+  const infoX = portraitX + portraitSize + 15;
+  const entryH = 95; // fixed entry height
+
+  // Name + level
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(name, infoX, portraitY + 2);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = `12px "${FONT_REG}", monospace`;
+  ctx.fillText(`Lv.${summon.level} ${summon.rarity} ${summon.tier || 'BASE'} | ${summon.element}`, infoX, portraitY + 22);
+  ctx.fillText(`🧠 ${summon.personality}`, infoX, portraitY + 38);
+
+  // Loyalty bar
+  drawBar(ctx, infoX, portraitY + 56, 150, 6, summon.loyalty / 100,
+    summon.loyalty >= 75 ? '#4CAF50' : summon.loyalty >= 50 ? '#FFEB3B' : '#F44336');
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = `10px "${FONT_REG}", monospace`;
+  ctx.fillText(`💖 ${summon.loyalty}/100`, infoX, portraitY + 66);
+
+  // Tamed + echo (compact, right side)
+  const isTamed = (summon.lineage || []).some(l => l.personality === 'TAMED');
+  if (isTamed) {
+    ctx.fillStyle = '#4CAF50';
+    ctx.font = `bold 10px "${FONT_BOLD}", monospace`;
+    ctx.fillText('✨ TAMED', infoX + 165, portraitY + 56);
+  }
+
+  const echo = registry.getEcho(summon.echoId);
+  if (echo) {
+    ctx.fillStyle = '#4FC3F7';
+    ctx.font = `10px "${FONT_REG}", monospace`;
+    ctx.fillText(`${echo.icon} ${echo.name}`, infoX + 165, portraitY + 70);
+  }
+
+  ctx.textBaseline = 'alphabetic';
+  return entryH;
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN RENDER — dynamic height, cursor-based layout
 // ─────────────────────────────────────────────────────────────
 
 async function renderProfileCard(params) {
-  const { user, classData, stats, equipStats, equipment, level, rank, activeSummon } = params;
+  const { user, classData, stats, equipStats, equipment, level, rank } = params;
+  // Support both single activeSummon and array activeSummons
+  const activeSummons = params.activeSummons || (params.activeSummon ? [params.activeSummon] : []);
+
   ensureFonts();
   const { createCanvas, loadImage } = getCanvas();
 
   const W = 800;
-  const PAD = 20;       // outer padding
-  const GAP = 12;       // gap between sections
+  const PAD = 20;
+  const GAP = 12;
   const rankColor = RANK_COLORS[rank] || RANK_COLORS.F;
+  const rankGradient = RANK_GRADIENTS[rank] || RANK_GRADIENTS.F;
 
   // ── STEP 1: Compute all section heights ──
-  const headerH = 80;
+  const headerH = 90; // taller for rank gradient bar
   const statList = [
     { key: 'hp', label: 'HP', base: stats?.hp || 100, equip: equipStats?.hp || 0, max: 5000 },
     { key: 'atk', label: 'ATK', base: stats?.atk || 10, equip: equipStats?.atk || 0, max: 500 },
@@ -102,21 +201,21 @@ async function renderProfileCard(params) {
     { key: 'evasion', label: 'EVA', base: stats?.evasion || 5, equip: equipStats?.evasion || 0, max: 100, suffix: '%' }
   ];
 
-  const statsPanelH = 40 + statList.length * 28 + 15; // header + rows + padding
-
-  // Equipment grid: 3 columns × 3 rows of 88px slots + gaps
+  const statsPanelH = 40 + statList.length * 28 + 15;
   const slotSize = 88;
   const slotGap = 8;
-  const equipGridH = 3 * slotSize + 2 * slotGap; // 280
-  const equipPanelH = 40 + equipGridH + 15; // header + grid + padding = 335
-
-  // Top panels use the taller of stats/equip
+  const equipGridH = 3 * slotSize + 2 * slotGap;
+  const equipPanelH = 40 + equipGridH + 15;
   const topPanelH = Math.max(statsPanelH, equipPanelH);
 
-  // Active summon panel
-  const summonPanelH = activeSummon ? 200 : 80;
+  // Active summons — dynamic: 35px header + 95px per summon + 10px gap between + 15px padding
+  const summonEntryH = 95;
+  const summonGap = 8;
+  const summonPanelH = activeSummons.length > 0
+    ? 35 + activeSummons.length * summonEntryH + (activeSummons.length - 1) * summonGap + 15
+    : 60;
 
-  // Resonances panel
+  // Resonances
   const resonances = user?.activeResonances || [];
   const resonancePanelH = 40 + Math.max(resonances.length, 1) * 22 + 15;
 
@@ -130,7 +229,7 @@ async function renderProfileCard(params) {
   // Total height
   const H = PAD + headerH + GAP + topPanelH + GAP + summonPanelH + GAP + resonancePanelH + passivesH + GAP + footerH + PAD;
 
-  // ── STEP 2: Create canvas with computed height ──
+  // ── STEP 2: Create canvas ──
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
@@ -147,7 +246,7 @@ async function renderProfileCard(params) {
     for (let j = 0; j < H; j += 40)
       ctx.fillRect(i, j, 1, 1);
 
-  // Outer border
+  // Outer border (rank-colored)
   ctx.strokeStyle = rankColor;
   ctx.lineWidth = 4;
   roundRect(ctx, 8, 8, W - 16, H - 16, 12);
@@ -157,20 +256,29 @@ async function renderProfileCard(params) {
   roundRect(ctx, 14, 14, W - 28, H - 28, 8);
   ctx.stroke();
 
-  // ── Running Y cursor ──
   let y = PAD;
 
   // ═══════════════════════════════════════════
-  // SECTION 1: HEADER
+  // SECTION 1: HEADER with RANK GRADIENT BAR
   // ═══════════════════════════════════════════
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   roundRect(ctx, PAD, y, W - 2 * PAD, headerH, 8);
   ctx.fill();
 
+  // Rank gradient bar (full width strip at top of header)
+  const rankBarH = 8;
+  const rankGrad = ctx.createLinearGradient(PAD, y, W - PAD, y);
+  rankGrad.addColorStop(0, rankGradient[0]);
+  rankGrad.addColorStop(0.5, rankGradient[1]);
+  rankGrad.addColorStop(1, rankGradient[0]);
+  ctx.fillStyle = rankGrad;
+  roundRect(ctx, PAD, y, W - 2 * PAD, rankBarH, 4);
+  ctx.fill();
+
   // Avatar
   const avatarSize = 55;
   const avatarX = PAD + 15;
-  const avatarY = y + 12;
+  const avatarY = y + rankBarH + 8;
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
   roundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, 6);
   ctx.fill();
@@ -196,35 +304,51 @@ async function renderProfileCard(params) {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `bold 22px "${FONT_BOLD}", monospace`;
-  ctx.fillText(user?.nickname || 'Adventurer', avatarX + avatarSize + 15, y + 12);
+  ctx.fillText(user?.nickname || 'Adventurer', avatarX + avatarSize + 15, avatarY);
 
   ctx.fillStyle = rankColor;
-  ctx.font = `14px "${FONT_REG}", monospace`;
-  ctx.fillText(`${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}  |  ⭐ Lv.${level || 1}  |  🏆 ${rank}-Rank`, avatarX + avatarSize + 15, y + 40);
+  ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
+  ctx.fillText(`${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}  |  ⭐ Lv.${level || 1}`, avatarX + avatarSize + 15, avatarY + 28);
+
+  // Rank badge with gradient fill
+  const rankBadgeW = 80;
+  const rankBadgeH = 24;
+  const rankBadgeX = W - PAD - rankBadgeW - 15;
+  const rankBadgeY = avatarY + 2;
+  const badgeGrad = ctx.createLinearGradient(rankBadgeX, rankBadgeY, rankBadgeX + rankBadgeW, rankBadgeY);
+  badgeGrad.addColorStop(0, rankGradient[0]);
+  badgeGrad.addColorStop(1, rankGradient[1]);
+  ctx.fillStyle = badgeGrad;
+  roundRect(ctx, rankBadgeX, rankBadgeY, rankBadgeW, rankBadgeH, 4);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`${rank}-RANK`, rankBadgeX + rankBadgeW / 2, rankBadgeY + 5);
 
   // XP bar
   const xpPct = params.xpPercent || 0;
-  drawBar(ctx, avatarX + avatarSize + 15, y + 60, W - avatarX - avatarSize - 2 * PAD - 30, 8, xpPct / 100, '#4CAF50');
+  ctx.textAlign = 'left';
+  drawBar(ctx, avatarX + avatarSize + 15, avatarY + 50, W - avatarX - avatarSize - 2 * PAD - 30, 6, xpPct / 100, '#4CAF50');
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.font = `10px "${FONT_REG}", monospace`;
-  ctx.fillText(`XP ${xpPct}%`, W - PAD - 60, y + 58);
+  ctx.fillText(`XP ${xpPct}%`, W - PAD - 50, avatarY + 48);
 
   y += headerH + GAP;
 
   // ═══════════════════════════════════════════
-  // SECTION 2: STATS (left) + EQUIPMENT (right) — side by side
+  // SECTION 2: STATS (left) + EQUIPMENT (right)
   // ═══════════════════════════════════════════
   const statsX = PAD;
   const statsW = 350;
   const equipX = PAD + statsW + GAP;
   const equipW = W - PAD - equipX;
 
-  // Stats panel background
+  // Stats panel
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(ctx, statsX, y, statsW, topPanelH, 8);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-  ctx.lineWidth = 1;
   roundRect(ctx, statsX, y, statsW, topPanelH, 8);
   ctx.stroke();
 
@@ -261,7 +385,7 @@ async function renderProfileCard(params) {
   }
   ctx.textAlign = 'left';
 
-  // Equipment panel background
+  // Equipment panel
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(ctx, equipX, y, equipW, topPanelH, 8);
   ctx.fill();
@@ -273,7 +397,6 @@ async function renderProfileCard(params) {
   ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
   ctx.fillText('⚔️ EQUIPMENT', equipX + 15, y + 12);
 
-  // 3×3 grid — centered in the panel
   const gridW = 3 * slotSize + 2 * slotGap;
   const gridStartX = equipX + (equipW - gridW) / 2;
   const gridStartY = y + 40;
@@ -287,29 +410,44 @@ async function renderProfileCard(params) {
 
     const equippedItem = equipment?.[slot.key];
     const hasItem = equippedItem && equippedItem !== null && typeof equippedItem === 'object';
+    const itemRarity = hasItem ? (equippedItem.rarity || 'COMMON') : 'COMMON';
+    const rarityCfg = EQUIP_RARITY[itemRarity] || EQUIP_RARITY.COMMON;
 
-    ctx.fillStyle = hasItem ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.3)';
+    // Slot bg — tinted by rarity if equipped
+    ctx.fillStyle = hasItem ? rarityCfg.tint : 'rgba(0,0,0,0.3)';
     roundRect(ctx, sx, sy, slotSize, slotSize, 6);
     ctx.fill();
-    ctx.strokeStyle = hasItem ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 1;
+
+    // Slot border — colored by rarity if equipped
+    ctx.strokeStyle = hasItem ? rarityCfg.border : 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = hasItem ? 2 : 1;
     roundRect(ctx, sx, sy, slotSize, slotSize, 6);
     ctx.stroke();
 
+    // Slot icon
     ctx.fillStyle = hasItem ? '#FFD700' : 'rgba(255,255,255,0.3)';
-    ctx.font = `26px "${FONT_REG}", monospace`;
+    ctx.font = `24px "${FONT_REG}", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(slot.icon, sx + slotSize / 2, sy + slotSize / 2 - 8);
+    ctx.fillText(slot.icon, sx + slotSize / 2, sy + slotSize / 2 - 12);
 
-    ctx.fillStyle = hasItem ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)';
+    // Item name
+    ctx.fillStyle = hasItem ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)';
     ctx.font = `9px "${FONT_REG}", monospace`;
-    ctx.fillText(hasItem ? (equippedItem.name || slot.label).slice(0, 12) : slot.label, sx + slotSize / 2, sy + slotSize - 14);
+    ctx.fillText(hasItem ? (equippedItem.name || slot.label).slice(0, 12) : slot.label, sx + slotSize / 2, sy + slotSize - 20);
 
+    // Rarity letter badge (top-right corner of slot)
+    if (hasItem && itemRarity !== 'COMMON') {
+      ctx.fillStyle = rarityCfg.border.replace('0.5', '0.9').replace('0.6', '0.9').replace('0.7', '0.9');
+      ctx.font = `bold 9px "${FONT_BOLD}", monospace`;
+      ctx.fillText(rarityCfg.label, sx + slotSize - 10, sy + 10);
+    }
+
+    // Durability bar
     if (hasItem && equippedItem.durability !== undefined && equippedItem.maxDurability) {
       const durPct = (equippedItem.durability / equippedItem.maxDurability);
       const durColor = durPct >= 0.75 ? '#4CAF50' : durPct >= 0.5 ? '#FFEB3B' : durPct >= 0.25 ? '#FF9800' : '#F44336';
-      drawBar(ctx, sx + 8, sy + slotSize - 8, slotSize - 16, 5, durPct, durColor);
+      drawBar(ctx, sx + 8, sy + slotSize - 8, slotSize - 16, 4, durPct, durColor);
     }
   }
 
@@ -319,7 +457,7 @@ async function renderProfileCard(params) {
   y += topPanelH + GAP;
 
   // ═══════════════════════════════════════════
-  // SECTION 3: ACTIVE SUMMON (dynamic height)
+  // SECTION 3: ACTIVE SUMMONS (plural — dynamic height)
   // ═══════════════════════════════════════════
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(ctx, PAD, y, W - 2 * PAD, summonPanelH, 8);
@@ -330,77 +468,26 @@ async function renderProfileCard(params) {
 
   ctx.fillStyle = '#FFD700';
   ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
-  ctx.fillText('🐉 ACTIVE SUMMON', PAD + 15, y + 12);
+  ctx.fillText(`🐉 ACTIVE SUMMONS (${activeSummons.length})`, PAD + 15, y + 12);
 
-  if (activeSummon) {
-    const portraitSize = 100;
-    const portraitX = PAD + 15;
-    const portraitY = y + 35;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
-    ctx.fill();
-
-    try {
-      const summonSprites = require('./summonSprites');
-      const spritePath = summonSprites.getSpritePath(activeSummon.species);
-      if (spritePath && fs.existsSync(spritePath)) {
-        const img = await loadImage(spritePath);
-        const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
-      }
-    } catch (e) {}
-
-    const registry = require('./summonRegistry');
-    const species = registry.getSpecies(activeSummon.species);
-    const summonName = activeSummon.nickname || species?.name || activeSummon.species;
-    const infoX = portraitX + portraitSize + 15;
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
-    ctx.fillText(summonName, infoX, portraitY + 10);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = `13px "${FONT_REG}", monospace`;
-    ctx.fillText(`Lv.${activeSummon.level} ${activeSummon.rarity} ${activeSummon.tier || 'BASE'} | ${activeSummon.element}/${activeSummon.archetype}`, infoX, portraitY + 32);
-    ctx.fillText(`🧠 ${activeSummon.personality} | ${species?.icon || '🐉'} ${activeSummon.element}`, infoX, portraitY + 50);
-
-    // Loyalty bar
-    drawBar(ctx, infoX, portraitY + 68, 200, 8, activeSummon.loyalty / 100,
-      activeSummon.loyalty >= 75 ? '#4CAF50' : activeSummon.loyalty >= 50 ? '#FFEB3B' : '#F44336');
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = `11px "${FONT_REG}", monospace`;
-    ctx.fillText(`💖 Loyalty ${activeSummon.loyalty}/100`, infoX, portraitY + 82);
-
-    // Echo info
-    const echo = registry.getEcho(activeSummon.echoId);
-    if (echo) {
-      ctx.fillStyle = '#4FC3F7';
-      ctx.font = `12px "${FONT_REG}", monospace`;
-      ctx.fillText(`${echo.icon} ${echo.name} — ${echo.desc}`, infoX, portraitY + 105);
-    }
-
-    // Tamed indicator
-    const isTamed = (activeSummon.lineage || []).some(l => l.personality === 'TAMED');
-    if (isTamed) {
-      ctx.fillStyle = '#4CAF50';
-      ctx.font = `bold 12px "${FONT_BOLD}", monospace`;
-      ctx.fillText('✨ TAMED (+20% stats)', infoX, portraitY + 125);
+  if (activeSummons.length > 0) {
+    let summonY = y + 35;
+    for (let i = 0; i < activeSummons.length; i++) {
+      const entryH = await drawSummonEntry(ctx, activeSummons[i], PAD, summonY, W - 2 * PAD, loadImage);
+      summonY += entryH + summonGap;
     }
   } else {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = `14px "${FONT_REG}", monospace`;
-    ctx.fillText('No summon deployed', PAD + 15, y + 45);
+    ctx.fillText('No summons deployed', PAD + 15, y + 38);
     ctx.font = `11px "${FONT_REG}", monospace`;
-    ctx.fillText(`Use ${params.prefix || '.jk'} summon deploy <id> to equip one`, PAD + 15, y + 63);
+    ctx.fillText(`Use ${params.prefix || '.jk'} summon deploy <id> to equip one`, PAD + 15, y + 56);
   }
 
   y += summonPanelH + GAP;
 
   // ═══════════════════════════════════════════
-  // SECTION 4: RESONANCES (dynamic height)
+  // SECTION 4: RESONANCES
   // ═══════════════════════════════════════════
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(ctx, PAD, y, W - 2 * PAD, resonancePanelH, 8);
@@ -437,7 +524,7 @@ async function renderProfileCard(params) {
   y += resonancePanelH;
 
   // ═══════════════════════════════════════════
-  // SECTION 5: TRIAL PASSIVES (if any)
+  // SECTION 5: TRIAL PASSIVES
   // ═══════════════════════════════════════════
   if (passives.length > 0) {
     ctx.fillStyle = '#FFD700';
@@ -466,6 +553,8 @@ async function renderProfileCard(params) {
 module.exports = {
   renderProfileCard,
   RANK_COLORS,
+  RANK_GRADIENTS,
   STAT_COLORS,
+  EQUIP_RARITY,
   EQUIPMENT_SLOTS
 };
