@@ -79,6 +79,11 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'res':
       return await cmdResonance(sock, chatId, senderJid);
 
+    case 'codex':
+    case 'all':
+    case 'species':
+      return await cmdCodex(sock, chatId, senderJid);
+
     case 'compendium':
     case 'tamed':
       return await cmdCompendium(sock, chatId, senderJid);
@@ -523,6 +528,63 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
     await target.save();
   }
   await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon codex — view ALL summon species in the game
+// ─────────────────────────────────────────────────────────────
+
+async function cmdCodex(sock, chatId, senderJid) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const allSpecies = registry.getAllSpecies();
+  const p = getPrefix();
+
+  let msg = `📖 *SUMMON CODEX — ALL SPECIES*\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `Total: ${allSpecies.length} species\n\n`;
+
+  // Group by element
+  const byElement = {};
+  for (const speciesId of allSpecies) {
+    const species = registry.getSpecies(speciesId);
+    if (!species) continue;
+    if (!byElement[species.element]) byElement[species.element] = [];
+    byElement[species.element].push({ id: speciesId, ...species });
+  }
+
+  const elementOrder = ['undead', 'demon', 'fire', 'ice', 'lightning', 'beast', 'dragon', 'construct'];
+  const elementLabels = {
+    undead: '💀 Undead', demon: '😈 Demon', fire: '🔥 Fire', ice: '❄️ Ice',
+    lightning: '⚡ Storm', beast: '🐺 Beast', dragon: '🐉 Dragon', construct: '🔫 Construct'
+  };
+
+  for (const el of elementOrder) {
+    const speciesList = byElement[el];
+    if (!speciesList || speciesList.length === 0) continue;
+
+    msg += `${elementLabels[el] || el}:\n`;
+    for (const s of speciesList) {
+      const rarityCfg = registry.getRarityConfig(s.rarity);
+      msg += `  ${s.icon} *${s.name}* — ${s.rarity} (Lv cap ${rarityCfg.maxLevel}, ${rarityCfg.runeSlots} rune slots)\n`;
+      msg += `    📊 ${s.archetype} | Evolution: ${s.evolutionStages.join(' → ')}\n`;
+      msg += `    💬 ${s.desc}\n`;
+    }
+    msg += `\n`;
+  }
+
+  // Show trial passives available
+  const trials = summonTrials.getAllTrials();
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `⚔️ *TRIALS:* ${trials.length} trials available\n`;
+  msg += `Complete trials to evolve summons + unlock permanent player passives.\n\n`;
+  msg += `💡 \`${p} summon help\` for all commands`;
+
+  await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1301,6 +1363,7 @@ async function cmdHelp(sock, chatId) {
   msg += `📊 \`${p} summon allocate <id> <stat> <pts>\` — allocate stat points\n`;
   msg += `🔗 \`${p} summon resonance\` — view active resonance bonuses\n`;
   msg += `📖 \`${p} summon compendium\` — view tamed species (Necromancer)\n`;
+  msg += `📚 \`${p} summon codex\` — view ALL summon species in the game\n`;
   msg += `🥚 \`${p} summon hatch <egg_id>\` — hatch a summon egg\n`;
   msg += `⚔️ \`${p} summon forge <id1> <id2>\` — Soul Forge two summons\n`;
   msg += `🏆 \`${p} summon trial <id>\` — attempt evolution trial\n`;

@@ -57,21 +57,28 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     // Falls back to Go service → text if canvas isn't available.
     try {
         // Fetch active summon(s) for the card
-        const summonSystem = require('../rpg/summonSystem');
-        const activeSummonDoc = await summonSystem.getActiveSummon(economyUser);
-        const activeSummon = activeSummonDoc ? {
-          species: activeSummonDoc.species,
-          nickname: activeSummonDoc.nickname,
-          level: activeSummonDoc.level,
-          rarity: activeSummonDoc.rarity,
-          tier: activeSummonDoc.tier,
-          element: activeSummonDoc.element,
-          archetype: activeSummonDoc.archetype,
-          personality: activeSummonDoc.personality,
-          loyalty: activeSummonDoc.loyalty,
-          echoId: activeSummonDoc.echoId,
-          lineage: activeSummonDoc.lineage
-        } : null;
+        let activeSummon = null;
+        try {
+            const summonSystem = require('../rpg/summonSystem');
+            const activeSummonDoc = await summonSystem.getActiveSummon(economyUser);
+            if (activeSummonDoc) {
+              activeSummon = {
+                species: activeSummonDoc.species,
+                nickname: activeSummonDoc.nickname,
+                level: activeSummonDoc.level,
+                rarity: activeSummonDoc.rarity,
+                tier: activeSummonDoc.tier,
+                element: activeSummonDoc.element,
+                archetype: activeSummonDoc.archetype,
+                personality: activeSummonDoc.personality,
+                loyalty: activeSummonDoc.loyalty,
+                echoId: activeSummonDoc.echoId,
+                lineage: activeSummonDoc.lineage
+              };
+            }
+        } catch (summonErr) {
+            console.warn('[displayCharacterSheet] Failed to fetch active summon:', summonErr.message);
+        }
 
         // Fetch PFP as buffer (download if URL available)
         let pfpBuffer = null;
