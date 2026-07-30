@@ -2695,16 +2695,19 @@ What to do:
           }
 
           try {
-            // 💡 CRITICAL FIX: wrap rawSend in a 20s timeout.
+            // 💡 CRITICAL FIX: wrap rawSend in a 15s timeout.
             // Baileys' media upload to mmg.whatsapp.net can hang
             // INDEFINITELY — never resolves, never rejects. This blocks
             // the entire sequential queue, so all subsequent messages
             // (including text fallbacks) never get sent.
-            // After 20s, treat it as a permanent error and move on.
-            const SEND_TIMEOUT_MS = 20000;
+            // After 15s, treat it as a permanent error and move on.
+            // 💡 FIX 2026-07-30: reduced from 20s to 15s — a 15s media upload
+            // is already broken, no point waiting longer. Also fixed the error
+            // message (was "20000s", should be "15s").
+            const SEND_TIMEOUT_MS = 15000;
             const sendPromise = rawSend(item.jid, item.content, item.options);
             const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS}s (media upload hung — queue was blocked)`)), SEND_TIMEOUT_MS)
+              setTimeout(() => reject(new Error(`rawSend timed out after 15s (media upload hung — queue was blocked)`)), SEND_TIMEOUT_MS)
             );
             const res = await Promise.race([sendPromise, timeoutPromise]);
             queue.shift();
@@ -6157,10 +6160,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // but at least the user gets a visible error instead of
               // silence, and the bot can continue processing other messages.
               const _cmdStartTime = Date.now();
-              const _cmdTimeoutMs = 90000; // 90s — generous enough for
-                // legitimate long commands (card grid = 60s, combat = 10s,
-                // anime search = 15s) but short enough that a truly hung
-                // command doesn't block the user's chat forever.
+              const _cmdTimeoutMs = 45000; // 45s — was 90s (way too long).
+                // Legitimate commands: card grid = 15s, combat = 5s, anime = 10s.
+                // Card grid hybrid MP4 can take 30s — 45s gives headroom.
+                // Anything over 45s is hung and should be killed.
               // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
               // The catch block at line ~25328 is OUTSIDE the storage.run callback,
               // so it can't see primaryCmd/senderJid/chatId/txt. We populate this
@@ -25361,9 +25364,15 @@ _(Or reply to their message)_
                 console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'} | chat=${_ctx.chatId?.split('@')[0] || 'unknown'}`);
                 console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
                 console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
-                try {
-                  await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
-                } catch (_) {}
+                // 💡 FIX 2026-07-30: Guard against null/undefined chatId — Baileys
+                // calls jidDecode(chatId) internally which crashes with
+                // "Cannot destructure property 'user' of 'jidDecode(...)' as it is undefined"
+                // if chatId is null. Only send the timeout message if we have a valid chatId.
+                if (_ctx.chatId && typeof _ctx.chatId === 'string' && _ctx.chatId.includes('@')) {
+                  try {
+                    await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                  } catch (_) {}
+                }
               }
             }),
           ); // END Promise.all map
