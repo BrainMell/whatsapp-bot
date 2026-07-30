@@ -308,7 +308,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   ctx.fill();
 
   // Try to load sprite (auto-fetch from API on cache miss)
-  const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
+  const spritePath = await summonSprites.getOrFetchSprite(summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
       const { loadImage } = getCanvas();
@@ -456,7 +456,7 @@ async function renderDetailCard(summon, user) {
   roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 10);
   ctx.stroke();
 
-  const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
+  const spritePath = await summonSprites.getOrFetchSprite(summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
       const { loadImage } = getCanvas();

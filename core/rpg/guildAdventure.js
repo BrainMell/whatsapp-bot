@@ -4912,8 +4912,15 @@ const RANK_ORDER_FOR_GATE = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GO
 
 function recordEnemyKill(state, entity) {
   if (!state || !entity || !entity.isEnemy) return;
-  state.stats.monstersKilled++;
-  if (entity.isBoss) state.stats.bossesDefeated++;
+  // 💡 FIX 2026-07-30: Defensive init — Abyss combat states (startAbyssCombat
+  // at line 5294) and possibly other state-creation paths don't include the
+  // `stats` object from INITIAL_STATE_TEMPLATE. This caused a crash:
+  //   TypeError: Cannot read properties of undefined (reading 'monstersKilled')
+  // whenever a kill happened in Abyss combat or any state missing `stats`.
+  // Now we ensure state.stats exists before incrementing.
+  if (!state.stats) state.stats = { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 };
+  state.stats.monstersKilled = (state.stats.monstersKilled || 0) + 1;
+  if (entity.isBoss) state.stats.bossesDefeated = (state.stats.bossesDefeated || 0) + 1;
 
   state.players.forEach((p) => {
     if (!p.jid || p.isDead) return;

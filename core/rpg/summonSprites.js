@@ -348,11 +348,66 @@ async function batchFetch(list, opts = {}) {
   return { ok, failed };
 }
 
+// ─────────────────────────────────────────────
+// Startup warm-up: fetch all missing sprites in the background
+// ─────────────────────────────────────────────
+// Called once on bot boot. Iterates the summon registry, finds all species
+// with no local sprite, and fetches them from the Digimon API in parallel.
+// This ensures sprites are cached BEFORE any user views the codex/roster/
+// profile card, so the first render is instant.
+//
+// Runs with a 30s delay after boot (don't compete with MongoDB/card loads).
+// Logs progress but never throws — failures are silently skipped (the
+// emoji fallback handles missing sprites gracefully).
+let _warmupStarted = false;
+async function warmupCache(registryModule) {
+  if (_warmupStarted) return;
+  _warmupStarted = true;
+
+  // Delay 30s to let MongoDB/card loads finish first
+  await new Promise(r => setTimeout(r, 30000));
+
+  try {
+    const allSpecies = registryModule.getAllSpecies();
+    const LEGACY = new Set([
+      'skeleton', 'skeleton_knight', 'lich_minion', 'imp', 'void_walker',
+      'flame_elemental', 'frost_elemental', 'storm_elemental',
+      'wolf', 'bear', 'turret_mk1', 'cannon_turret',
+      'wyrmling', 'juvenile_dragon'
+    ]);
+
+    const missing = [];
+    for (const id of allSpecies) {
+      if (LEGACY.has(id)) continue;
+      if (!getSpritePath(id)) missing.push({ species: id });
+    }
+
+    if (missing.length === 0) {
+      console.log(`[SummonSprites] Warm-up: all ${allSpecies.length - LEGACY.size} non-legacy species already cached`);
+      return;
+    }
+
+    console.log(`[SummonSprites] Warm-up: fetching ${missing.length} missing sprites in background...`);
+    const result = await batchFetch(missing, {
+      concurrency: 3,
+      onProgress: (done, total, name, ok) => {
+        if (done % 5 === 0 || done === total) {
+          console.log(`[SummonSprites] Warm-up: ${done}/${total} (${ok ? 'OK' : 'FAIL'} ${name})`);
+        }
+      }
+    });
+    console.log(`[SummonSprites] Warm-up complete: ${result.ok.length} fetched, ${result.failed.length} failed (will use emoji fallback)`);
+  } catch (e) {
+    console.error('[SummonSprites] Warm-up error (non-fatal):', e.message);
+  }
+}
+
 module.exports = {
   getSpritePath,
   fetchAndCache,
   getOrFetchSprite,
   batchFetch,
+  warmupCache,
   CACHE_DIR,
   imageCache,
   // Exposed for testing / debugging

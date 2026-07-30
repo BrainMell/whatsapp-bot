@@ -685,4 +685,17 @@ async function boot() {
 
 if (require.main === module) {
     boot();
+
+    // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background
+    // 30s after boot. This ensures the codex/roster/profile card renderers
+    // have sprites cached before any user views them. Non-blocking, non-fatal.
+    setTimeout(() => {
+        try {
+            const summonSprites = require('./core/rpg/summonSprites');
+            const registry = require('./core/rpg/summonRegistry');
+            summonSprites.warmupCache(registry);
+        } catch (e) {
+            console.error('[SpriteWarmup] Failed to start (non-fatal):', e.message);
+        }
+    }, 30000);
 }

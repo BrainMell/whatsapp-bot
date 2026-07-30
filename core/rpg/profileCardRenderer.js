@@ -161,7 +161,7 @@ async function drawSummonEntry(ctx, summon, x, y, w, loadImage) {
   try {
     const summonSprites = require('./summonSprites');
     // Auto-fetch from digi-api.com on cache miss (best-effort, doesn't block on failure)
-    const spritePath = await summonSprites.getOrFetchSprite(summon.species, summon.species);
+    const spritePath = await summonSprites.getOrFetchSprite(summon.species);
     if (spritePath && fs.existsSync(spritePath)) {
       const img = await loadImage(spritePath);
       const scale = Math.min(portraitSize / img.width, portraitSize / img.height) * 0.9;

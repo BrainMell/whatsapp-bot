@@ -136,10 +136,10 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
     if (_fetchAttempted.has(speciesId)) return null;
     _fetchAttempted.add(speciesId);
     // Auto-fetch from API (best-effort, don't block the whole page if it fails)
+    // Note: don't pass explicit digimonName — let getOrFetchSprite use the
+    // DIGIMON_API_NAME_OVERRIDES map (handles Japanese names + underscore variants).
     try {
-      const sp = registry.getSpecies(speciesId);
-      const fetchName = sp?.name || speciesId.replace(/_/g, ' ');
-      return await summonSprites.getOrFetchSprite(speciesId, fetchName);
+      return await summonSprites.getOrFetchSprite(speciesId);
     } catch (e) {
       return null;
     }
