@@ -5863,25 +5863,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const isOwner = _isBotOwner(authorNormalized);
                   const isGlobal = isGlobalMod && isGlobalMod(update.author);
                   if (!isOwner && !isGlobal) {
-                    const allowed = hasActionPermission(update.id, update.author, "glock");
-                    if (!allowed) {
-                      console.log(`🛡️ Undo manual group setting change by unauthorized user: ${update.author} in group ${update.id}`);
-                      await sock.sendMessage(update.id, {
-                        text: BOT_MARKER + `⚠️ @${update.author.split('@')[0]} is not authorized to edit group settings. Reverting changes...`,
-                        mentions: [update.author]
-                      });
-
-                      if (update.announce !== undefined) {
-                        const settings = getGroupSettings(update.id);
-                        const expectedAnnounce = settings.lockMode === 'locked';
-                        await sock.groupSettingUpdate(update.id, expectedAnnounce ? 'announcement' : 'not_announcement');
-                      }
-                      
-                      if (update.restrict !== undefined) {
-                        const originalRestrict = cached ? !update.restrict : true;
-                        await sock.groupSettingUpdate(update.id, originalRestrict ? 'locked' : 'unlocked');
-                      }
-                    }
+                    // 💡 DISABLED 2026-07-31: "not authorized to edit group settings"
+                    // was spamming every group chat whenever any admin did anything.
+                    // Let all group setting changes through without reverting.
+                    // const allowed = hasActionPermission(update.id, update.author, "glock");
+                    // if (!allowed) { ... }
                   }
                 }
               }
@@ -5915,6 +5901,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const isGlobal = isGlobalMod && isGlobalMod(author);
                   if (!isOwner && !isGlobal) {
                     const cmdKey = action === "remove" ? "kick" : action;
+                    // 💡 DISABLED 2026-07-31: "not authorized to promote/demote/kick"
+                    // was spamming every group chat whenever any admin did anything.
+                    // Let all participant changes through without reverting.
+                    /*
                     let allowed = hasActionPermission(id, author, cmdKey);
                     if (allowed) {
                       for (const target of participants) {
@@ -5952,6 +5942,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
                       return;
                     }
+                    */
                   }
                 }
               }
@@ -6421,6 +6412,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
 
                       if (!isOwner && !isGlobal && !isWAAdmin) {
+                        // 💡 DISABLED 2026-07-31: "not authorized to pin/unpin"
+                        // was spamming group chats. Let all pin/unpin through.
+                        /*
                         const allowed = hasActionPermission(chatId, senderJid, "pin");
                         if (!allowed) {
                           console.log(`🛡️ Undo manual pin/unpin by unauthorized user: ${senderJid} in group ${chatId}`);
@@ -6448,6 +6442,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           }
                           return;
                         }
+                        */
                       }
                     }
 
