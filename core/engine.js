@@ -1463,24 +1463,35 @@ async function startBot(configInstance) {
         }
 
         // Send audio message
-        // 💡 FIX 2026-07-31: Baileys silently fails to upload audio messages
-        // sometimes — sendMessage resolves but the message never appears.
-        // Sending as DOCUMENT is more reliable (no media upload to mmg.whatsapp.net).
-        // The user can still play it as audio — WhatsApp detects the mimetype.
-        console.log(`[Audio] Sending to WhatsApp as document (more reliable)...`);
+        // 💡 FIX 2026-07-31: Based on research of popular WhatsApp bots
+        // (SilvaTechB/silva-md-bot, BochilGaming/games-wabot, jacktheboss220),
+        // the proven pattern is:
+        //   1. Write audio to a temp file (NOT buffer — Baileys handles file URLs better)
+        //   2. Use `audio: { url: filePath }` (NOT `audio: buffer`)
+        //   3. mimetype: 'audio/mpeg', ptt: false
+        //   4. Clean up temp file after send
+        // This matches the official Baileys docs example.
+        console.log(`[Audio] Writing to temp file...`);
+        const tmpDir = require('os').tmpdir();
+        const safeTitle = (metadata.title || 'audio').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+        const tmpAudioPath = require('path').join(tmpDir, `bot_audio_${Date.now()}_${safeTitle}.mp3`);
+        require('fs').writeFileSync(tmpAudioPath, audioBuffer);
+        console.log(`[Audio] Temp file: ${tmpAudioPath} (${audioBuffer.length} bytes)`);
+
         try {
+          console.log(`[Audio] Sending via Baileys (audio: { url })...`);
           const sendResult = await sock.sendMessage(
             chatId,
             {
-              document: audioBuffer,
+              audio: { url: tmpAudioPath },
               mimetype: "audio/mpeg",
-              fileName: `${metadata.title.slice(0, 50)}.mp3`,
-              caption: `🎵 *${metadata.title.slice(0, 50)}*`,
+              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+              ptt: false,
               ...(thumbnailBuffer ? {
                 contextInfo: {
                   externalAdReply: {
-                    title: metadata.title.slice(0, 50),
-                    body: metadata.author || "Audio",
+                    title: (metadata.title || 'Audio').slice(0, 50),
+                    body: metadata.author || "",
                     thumbnail: thumbnailBuffer,
                     mediaType: 2,
                     mediaUrl: metadata.url || "",
@@ -1491,27 +1502,43 @@ async function startBot(configInstance) {
             },
             { quoted: m },
           );
-          console.log(`[Audio] Document sent! Message key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
+          console.log(`[Audio] Sent! Message key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
           await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
         } catch (sendErr) {
-          console.error(`[Audio] Document send failed: ${sendErr.message}`);
-          // Fallback: try as audio type (less reliable but sometimes works)
+          console.error(`[Audio] Audio send failed: ${sendErr.message}`);
+          // Fallback 1: try as document
           try {
-            console.log(`[Audio] Trying audio type fallback...`);
+            console.log(`[Audio] Trying document fallback...`);
             await sock.sendMessage(chatId, {
-              audio: audioBuffer,
+              document: { url: tmpAudioPath },
               mimetype: "audio/mpeg",
-              fileName: `${metadata.title.slice(0, 50)}.mp3`,
-              ptt: false,
+              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+              caption: `🎵 *${(metadata.title || 'Audio').slice(0, 50)}*`,
             }, { quoted: m });
-            console.log(`[Audio] Audio type sent!`);
+            console.log(`[Audio] Document sent!`);
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-          } catch (audioErr) {
-            console.error(`[Audio] Audio type also failed: ${audioErr.message}`);
-            await sock.sendMessage(chatId, {
-              text: BOT_MARKER + "❌ Failed to send audio. The file was downloaded but WhatsApp rejected it.",
-            });
+          } catch (docErr) {
+            console.error(`[Audio] Document fallback failed: ${docErr.message}`);
+            // Fallback 2: send as buffer
+            try {
+              console.log(`[Audio] Trying buffer fallback...`);
+              await sock.sendMessage(chatId, {
+                audio: audioBuffer,
+                mimetype: "audio/mpeg",
+                ptt: false,
+              }, { quoted: m });
+              console.log(`[Audio] Buffer sent!`);
+              await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+            } catch (bufErr) {
+              console.error(`[Audio] All send methods failed: ${bufErr.message}`);
+              await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `❌ Failed to send audio: ${bufErr.message?.slice(0, 100)}`,
+              });
+            }
           }
+        } finally {
+          // Clean up temp file
+          try { require('fs').unlinkSync(tmpAudioPath); } catch (e) {}
         }
       } catch (err) {
         console.error("[Audio] Command Error:", err.message);
