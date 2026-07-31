@@ -1463,71 +1463,53 @@ async function startBot(configInstance) {
         }
 
         // Send audio message
-        // 💡 FIX 2026-07-31: Raw buffer send works. Now adding contextInfo back
-        // so the message shows song title, artist, and album artwork thumbnail.
-        // The earlier issue was PTT/OGG conversion, not contextInfo itself.
-        console.log(`[Audio] Sending audio with metadata...`);
+        // 💡 FIX 2026-07-31: contextInfo/externalAdReply BREAKS audio sends
+        // on Baileys v7.0.0-rc13 — the message key is returned but the media
+        // never uploads. Confirmed: raw buffer WITHOUT contextInfo works,
+        // raw buffer WITH contextInfo silently fails.
+        //
+        // SOLUTION: Send the song info as a SEPARATE text message first,
+        // then send the audio as a bare buffer (no contextInfo).
+        // The user sees: "🎵 Song Name - Artist" then the audio appears below.
+        console.log(`[Audio] Sending song info text...`);
+        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}`;
+        try {
+          await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+        } catch (e) {
+          console.error(`[Audio] Info text send failed: ${e.message}`);
+        }
+
+        console.log(`[Audio] Sending audio buffer (no contextInfo)...`);
         let audioSent = false;
 
-        // Build the contextInfo with thumbnail (externalAdReply shows the
-        // song title + artist + artwork in a nice card above the audio)
-        const audioContent = {
-          audio: audioBuffer,
-          mimetype: "audio/mpeg",
-          ptt: false,
-          ...(thumbnailBuffer ? {
-            contextInfo: {
-              externalAdReply: {
-                title: (metadata.title || 'Audio').slice(0, 50),
-                body: metadata.author || "",
-                thumbnail: thumbnailBuffer,
-                mediaType: 2,
-                mediaUrl: metadata.url || "",
-                sourceUrl: metadata.url || "",
-              },
-            },
-          } : {}),
-        };
-
-        // Attempt 1: audio buffer with contextInfo
+        // Attempt 1: raw buffer, NO contextInfo (this is what works)
         try {
-          console.log(`[Audio] Attempt 1: audio buffer + contextInfo...`);
-          const sendResult = await sock.sendMessage(chatId, audioContent, { quoted: m });
+          console.log(`[Audio] Attempt 1: audio buffer, no contextInfo...`);
+          const sendResult = await sock.sendMessage(chatId, {
+            audio: audioBuffer,
+            mimetype: "audio/mpeg",
+            ptt: false,
+          }, { quoted: m });
           console.log(`[Audio] Attempt 1 result: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
           audioSent = true;
           await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
         } catch (err1) {
           console.error(`[Audio] Attempt 1 failed: ${err1.message}`);
 
-          // Attempt 2: audio buffer WITHOUT contextInfo (simpler)
+          // Attempt 2: send as document (file attachment)
           try {
-            console.log(`[Audio] Attempt 2: audio buffer (no contextInfo)...`);
+            console.log(`[Audio] Attempt 2: document...`);
             await sock.sendMessage(chatId, {
-              audio: audioBuffer,
+              document: audioBuffer,
               mimetype: "audio/mpeg",
-              ptt: false,
+              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+              caption: songInfo,
             }, { quoted: m });
-            console.log(`[Audio] Attempt 2 sent!`);
+            console.log(`[Audio] Attempt 2 sent as document!`);
             audioSent = true;
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
           } catch (err2) {
             console.error(`[Audio] Attempt 2 failed: ${err2.message}`);
-
-            // Attempt 3: send as document (file attachment)
-            try {
-              console.log(`[Audio] Attempt 3: document...`);
-              await sock.sendMessage(chatId, {
-                document: audioBuffer,
-                mimetype: "audio/mpeg",
-                fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
-                caption: `🎵 *${(metadata.title || 'Audio').slice(0, 50)}*`,
-              }, { quoted: m });
-              console.log(`[Audio] Attempt 3 sent as document!`);
-              audioSent = true;
-              await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-            } catch (err3) {
-              console.error(`[Audio] Attempt 3 failed: ${err3.message}`);
-            }
           }
         }
 
@@ -6236,19 +6218,29 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // Legitimate commands: card grid = 15s, combat = 5s, anime = 10s.
                 // Card grid hybrid MP4 can take 30s — 45s gives headroom.
                 // Anything over 45s is hung and should be killed.
+                // 💡 NOTE: audio command gets extra time (see _cmdEffectiveTimeout below)
               // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
-              // The catch block at line ~25328 is OUTSIDE the storage.run callback,
-              // so it can't see primaryCmd/senderJid/chatId/txt. We populate this
-              // object from inside storage.run so the timeout handler can log
-              // which command hung. Without this, the timeout handler crashes with
-              // "ReferenceError: primaryCmd is not defined" — masking the real
-              // timeout error and producing an unhandled rejection.
               const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null };
+              // 💡 FIX 2026-07-31: Audio command needs more time (download + send = 60-90s).
+              // We can't know the command yet (it's parsed inside storage.run), so we
+              // use a generous 120s timeout. The _cmdContext is populated with the
+              // primaryCmd inside storage.run, but the timeout is already set here.
+              // Solution: use a dynamic timeout that checks _cmdContext.primaryCmd.
+              let _cmdEffectiveTimeout = _cmdTimeoutMs;
               const _cmdTimeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => {
-                  const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
-                  reject(new Error(`Command timed out after ${elapsed}s (possible Go service hang or network stall)`));
-                }, _cmdTimeoutMs);
+                // Check every 5s if we should extend the timeout for audio commands
+                const checkInterval = setInterval(() => {
+                  const elapsed = Date.now() - _cmdStartTime;
+                  // Audio commands get up to 180s (3 min) — download + convert + send
+                  if (_cmdContext.primaryCmd === 'audio' && elapsed < 180000) {
+                    return; // keep waiting
+                  }
+                  if (elapsed >= _cmdTimeoutMs || (_cmdContext.primaryCmd === 'audio' && elapsed >= 180000)) {
+                    clearInterval(checkInterval);
+                    const elapsedSec = (elapsed / 1000).toFixed(1);
+                    reject(new Error(`Command timed out after ${elapsedSec}s (possible Go service hang or network stall)`));
+                  }
+                }, 5000);
               });
 
               try {
