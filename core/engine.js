@@ -1418,56 +1418,99 @@ async function startBot(configInstance) {
       // Audio download takes ~30-60s — tell the user immediately so they don't think it's broken
       await sock.sendMessage(chatId, { text: BOT_MARKER + `⏳ Searching and downloading *${query}*... this takes about 30-60 seconds.` }, { quoted: m });
       try {
+        console.log(`[Audio] Query: "${query}" | sender=${chatId}`);
         const data = await goService.getAudioInfo(query);
         if (!data || !data.metadata || !data.audioURL) {
+          console.error(`[Audio] No results for "${query}"`);
           return await sock.sendMessage(chatId, {
             text: BOT_MARKER + "❌ No results found or service unavailable.",
           });
         }
 
         const { metadata, audioURL } = data;
+        console.log(`[Audio] Got URL: ${audioURL} | title: ${metadata.title}`);
         await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
         // Download audio buffer from the direct URL
+        console.log(`[Audio] Downloading from Go service...`);
         const response = await axios.get(audioURL, {
           responseType: "arraybuffer",
           timeout: 60000,
         });
         const audioBuffer = Buffer.from(response.data);
+        console.log(`[Audio] Downloaded: ${audioBuffer.length} bytes`);
 
-        // Fetch thumbnail buffer
-        let thumbnailBuffer = null;
-        try {
-          const thumbRes = await axios.get(metadata.thumbnail, {
-            responseType: "arraybuffer",
+        if (audioBuffer.length < 1000) {
+          console.error(`[Audio] File too small (${audioBuffer.length} bytes) — download failed`);
+          return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + "❌ Audio file was empty or corrupted. Try a different search term.",
           });
-          thumbnailBuffer = Buffer.from(thumbRes.data);
-        } catch (e) {}
+        }
 
-        await sock.sendMessage(
-          chatId,
-          {
-            audio: audioBuffer,
-            mimetype: "audio/mpeg",
-            fileName: `${metadata.title}.mp3`,
-            contextInfo: {
-              externalAdReply: {
-                title: metadata.title,
-                body: `${metadata.author} | ${metadata.duration}`,
-                thumbnail: thumbnailBuffer,
-                mediaType: 2,
-                mediaUrl: metadata.url,
-                sourceUrl: metadata.url,
-              },
+        // Fetch thumbnail buffer (best-effort, don't fail if it 404s)
+        let thumbnailBuffer = null;
+        if (metadata.thumbnail) {
+          try {
+            const thumbRes = await axios.get(metadata.thumbnail, {
+              responseType: "arraybuffer",
+              timeout: 10000,
+            });
+            thumbnailBuffer = Buffer.from(thumbRes.data);
+            console.log(`[Audio] Thumbnail: ${thumbnailBuffer.length} bytes`);
+          } catch (e) {
+            console.log(`[Audio] Thumbnail fetch failed (non-fatal): ${e.message}`);
+          }
+        }
+
+        // Send audio message
+        console.log(`[Audio] Sending to WhatsApp...`);
+        try {
+          await sock.sendMessage(
+            chatId,
+            {
+              audio: audioBuffer,
+              mimetype: "audio/mpeg",
+              fileName: `${metadata.title.slice(0, 50)}.mp3`,
+              ptt: false,
+              ...(thumbnailBuffer ? {
+                contextInfo: {
+                  externalAdReply: {
+                    title: metadata.title.slice(0, 50),
+                    body: metadata.author || "Audio",
+                    thumbnail: thumbnailBuffer,
+                    mediaType: 2,
+                    mediaUrl: metadata.url || "",
+                    sourceUrl: metadata.url || "",
+                  },
+                },
+              } : {}),
             },
-          },
-          { quoted: m },
-        );
-        await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+            { quoted: m },
+          );
+          console.log(`[Audio] Sent successfully!`);
+          await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+        } catch (sendErr) {
+          console.error(`[Audio] WhatsApp send failed: ${sendErr.message}`);
+          // Fallback: send as document if audio send fails
+          try {
+            await sock.sendMessage(chatId, {
+              document: audioBuffer,
+              mimetype: "audio/mpeg",
+              fileName: `${metadata.title.slice(0, 50)}.mp3`,
+            }, { quoted: m });
+            console.log(`[Audio] Sent as document fallback`);
+            await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+          } catch (docErr) {
+            console.error(`[Audio] Document fallback also failed: ${docErr.message}`);
+            await sock.sendMessage(chatId, {
+              text: BOT_MARKER + "❌ Failed to send audio. The file was downloaded but WhatsApp rejected it.",
+            });
+          }
+        }
       } catch (err) {
-        console.error("Audio Command Error:", err.message);
+        console.error("[Audio] Command Error:", err.message);
         await sock.sendMessage(chatId, {
-          text: BOT_MARKER + "❌ Audio processing failed.",
+          text: BOT_MARKER + `❌ Audio processing failed: ${err.message?.slice(0, 100)}`,
         });
       }
     }
