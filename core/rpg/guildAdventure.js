@@ -3360,15 +3360,14 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   const turnOrderStr = `⚔️ *Order:* ${orderList}${state.turnOrder.length > 6 ? " ..." : ""}`;
 
   // NEW: Generate combat image and caption (with Turn Order merged)
-  const scene = await combatIntegration.generateCombatScene(
+  // 💡 FIX 2026-07-31: 10s timeout — if Go service is slow, skip image
+  const scenePromise = combatIntegration.generateCombatScene(
     state.players,
     state.enemies,
     "START",
     {
       rank: state.dungeonRank,
       backgroundPath: state.backgroundPath,
-      // 💡 Phase 7: Pass summons to the combat image generator so the
-      // Go service can render them on the player's side of the battlefield.
       summons: state.summons || [],
       encounterInfo: {
         ...encounter,
@@ -3382,6 +3381,10 @@ async function startCombat(sock, groq, encounter, sessionKey) {
       },
     },
   );
+  const startTimeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Combat start image timeout (10s)')), 10000)
+  );
+  const scene = await Promise.race([scenePromise, startTimeoutPromise]);
 
   // Store background for consistency
   if (scene.backgroundPath) {
@@ -5140,7 +5143,11 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {
     try {
-      const scene = await combatIntegration.generateCombatScene(
+      // 💡 FIX 2026-07-31: Race the combat image generation against a 10s
+      // timeout. If the Go service is slow/unresponsive, skip the image
+      // and just send the text caption. This prevents one slow image
+      // render from blocking the entire bot's event loop.
+      const scenePromise = combatIntegration.generateCombatScene(
         state.players,
         state.enemies,
         "TURN",
@@ -5148,10 +5155,13 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           turnInfo: lastTurnInfo,
           backgroundPath: state.backgroundPath,
           rank: state.dungeonRank,
-          // 💡 Phase 7: Pass summons to TURN-phase rendering too
           summons: state.summons || [],
         },
       );
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Combat image timeout (10s)')), 10000)
+      );
+      const scene = await Promise.race([scenePromise, timeoutPromise]);
       if (scene.success) {
         try {
           // 💡 NEW 2026-07-29: Detect MP4 vs PNG and send accordingly.
@@ -5197,6 +5207,16 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
         "Critical error in nextTurn image generation:",
         err.message,
       );
+      // 💡 FIX 2026-07-31: If image generation timed out or failed,
+      // send the text caption so the user isn't left hanging.
+      if (lastTurnInfo) {
+        try {
+          const caption = combatIntegration.generateTurnCaption
+            ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo)
+            : `🎮 *TURN ${lastTurnInfo.turnNumber || '?'}*`;
+          await sock.sendMessage(state.chatId, { text: caption });
+        } catch (e) {}
+      }
     }
   }
   // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
