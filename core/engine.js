@@ -1463,15 +1463,19 @@ async function startBot(configInstance) {
         }
 
         // Send audio message
-        console.log(`[Audio] Sending to WhatsApp...`);
+        // 💡 FIX 2026-07-31: Baileys silently fails to upload audio messages
+        // sometimes — sendMessage resolves but the message never appears.
+        // Sending as DOCUMENT is more reliable (no media upload to mmg.whatsapp.net).
+        // The user can still play it as audio — WhatsApp detects the mimetype.
+        console.log(`[Audio] Sending to WhatsApp as document (more reliable)...`);
         try {
-          await sock.sendMessage(
+          const sendResult = await sock.sendMessage(
             chatId,
             {
-              audio: audioBuffer,
+              document: audioBuffer,
               mimetype: "audio/mpeg",
               fileName: `${metadata.title.slice(0, 50)}.mp3`,
-              ptt: false,
+              caption: `🎵 *${metadata.title.slice(0, 50)}*`,
               ...(thumbnailBuffer ? {
                 contextInfo: {
                   externalAdReply: {
@@ -1487,21 +1491,23 @@ async function startBot(configInstance) {
             },
             { quoted: m },
           );
-          console.log(`[Audio] Sent successfully!`);
+          console.log(`[Audio] Document sent! Message key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
           await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
         } catch (sendErr) {
-          console.error(`[Audio] WhatsApp send failed: ${sendErr.message}`);
-          // Fallback: send as document if audio send fails
+          console.error(`[Audio] Document send failed: ${sendErr.message}`);
+          // Fallback: try as audio type (less reliable but sometimes works)
           try {
+            console.log(`[Audio] Trying audio type fallback...`);
             await sock.sendMessage(chatId, {
-              document: audioBuffer,
+              audio: audioBuffer,
               mimetype: "audio/mpeg",
               fileName: `${metadata.title.slice(0, 50)}.mp3`,
+              ptt: false,
             }, { quoted: m });
-            console.log(`[Audio] Sent as document fallback`);
+            console.log(`[Audio] Audio type sent!`);
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-          } catch (docErr) {
-            console.error(`[Audio] Document fallback also failed: ${docErr.message}`);
+          } catch (audioErr) {
+            console.error(`[Audio] Audio type also failed: ${audioErr.message}`);
             await sock.sendMessage(chatId, {
               text: BOT_MARKER + "❌ Failed to send audio. The file was downloaded but WhatsApp rejected it.",
             });
