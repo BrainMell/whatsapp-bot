@@ -1414,9 +1414,7 @@ async function startBot(configInstance) {
     }
 
     async function handleAudioCommand(sock, chatId, query, m) {
-      await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
-      // Audio download takes ~30-60s — tell the user immediately so they don't think it's broken
-      await sock.sendMessage(chatId, { text: BOT_MARKER + `⏳ Searching and downloading *${query}*... this takes about 30-60 seconds.` }, { quoted: m });
+      await sock.sendMessage(chatId, { react: { text: "🎵", key: m.key } });
       try {
         console.log(`[Audio] Query: "${query}" | sender=${chatId}`);
         const data = await goService.getAudioInfo(query);
@@ -1429,7 +1427,6 @@ async function startBot(configInstance) {
 
         const { metadata, audioURL } = data;
         console.log(`[Audio] Got URL: ${audioURL} | title: ${metadata.title}`);
-        await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
 
         // Download audio buffer from the direct URL
         console.log(`[Audio] Downloading from Go service...`);
@@ -1469,7 +1466,7 @@ async function startBot(configInstance) {
         //   2. Audio as bare buffer (no contextInfo — this is what works)
         //   3. (react emoji)
         console.log(`[Audio] Sending album artwork + song info...`);
-        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}`;
+        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${metadata.url ? `\n🔗 ${metadata.url}` : ''}`;
 
         // Send thumbnail as image with song info as caption
         if (thumbnailBuffer && thumbnailBuffer.length > 100) {
@@ -1482,6 +1479,22 @@ async function startBot(configInstance) {
             console.log(`[Audio] Artwork sent (${thumbnailBuffer.length} bytes)`);
           } catch (imgErr) {
             console.error(`[Audio] Artwork send failed: ${imgErr.message}`);
+            // Fallback: send text only
+            try {
+              await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+            } catch (e) {}
+          }
+        } else if (metadata.thumbnail) {
+          // Thumbnail download failed — try sending image by URL directly
+          try {
+            await sock.sendMessage(chatId, {
+              image: { url: metadata.thumbnail },
+              caption: BOT_MARKER + songInfo,
+              jpegThumbnail: FALLBACK_THUMB,
+            }, { quoted: m });
+            console.log(`[Audio] Artwork sent via URL`);
+          } catch (imgErr) {
+            console.error(`[Audio] URL artwork send failed: ${imgErr.message}`);
             // Fallback: send text only
             try {
               await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
