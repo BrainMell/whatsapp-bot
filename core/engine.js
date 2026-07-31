@@ -1426,7 +1426,9 @@ async function startBot(configInstance) {
         }
 
         const { metadata, audioURL } = data;
-        console.log(`[Audio] Got URL: ${audioURL} | title: ${metadata.title}`);
+        const audioSource = data.audioSource || 'unknown';
+        const isPreview = data.isPreview || false;
+        console.log(`[Audio] Got URL: ${audioURL} | title: ${metadata.title} | source: ${audioSource} | preview: ${isPreview}`);
 
         // Download audio buffer from the direct URL
         console.log(`[Audio] Downloading from Go service...`);
@@ -1435,7 +1437,7 @@ async function startBot(configInstance) {
           timeout: 60000,
         });
         const audioBuffer = Buffer.from(response.data);
-        console.log(`[Audio] Downloaded: ${audioBuffer.length} bytes`);
+        console.log(`[Audio] Downloaded: ${audioBuffer.length} bytes | source: ${audioSource}`);
 
         if (audioBuffer.length < 1000) {
           console.error(`[Audio] File too small (${audioBuffer.length} bytes) — download failed`);
@@ -1444,108 +1446,57 @@ async function startBot(configInstance) {
           });
         }
 
-        // Fetch thumbnail buffer (best-effort, don't fail if it 404s)
-        let thumbnailBuffer = null;
-        if (metadata.thumbnail) {
-          try {
-            const thumbRes = await axios.get(metadata.thumbnail, {
-              responseType: "arraybuffer",
-              timeout: 10000,
-            });
-            thumbnailBuffer = Buffer.from(thumbRes.data);
-            console.log(`[Audio] Thumbnail: ${thumbnailBuffer.length} bytes`);
-          } catch (e) {
-            console.log(`[Audio] Thumbnail fetch failed (non-fatal): ${e.message}`);
-          }
+        // 💡 FIX 2026-07-31: Don't manually fetch/send thumbnail image.
+        // Instead, send the YouTube URL as a text message — WhatsApp
+        // automatically generates a rich link preview with the video
+        // thumbnail, title, and channel name. Much simpler and more reliable.
+        console.log(`[Audio] Sending song info + YouTube link (auto-preview)...`);
+        const previewTag = isPreview ? ' (30s preview)' : '';
+        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${previewTag}${metadata.url ? `\n\n▶️ Listen on YouTube:\n${metadata.url}` : ''}`;
+
+        try {
+          await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+          console.log(`[Audio] Song info sent`);
+        } catch (e) {
+          console.error(`[Audio] Song info send failed: ${e.message}`);
         }
 
-        // Send audio message
-        // 💡 FIX 2026-07-31: contextInfo/externalAdReply BREAKS audio sends
-        // on Baileys v7.0.0-rc13. SOLUTION: send 3 separate messages:
-        //   1. Album artwork as an IMAGE (with song title as caption)
-        //   2. Audio as bare buffer (no contextInfo — this is what works)
-        //   3. (react emoji)
-        console.log(`[Audio] Sending album artwork + song info...`);
-        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${metadata.url ? `\n🔗 ${metadata.url}` : ''}`;
-
-        // Send thumbnail as image with song info as caption
-        if (thumbnailBuffer && thumbnailBuffer.length > 100) {
-          try {
-            await sock.sendMessage(chatId, {
-              image: thumbnailBuffer,
-              caption: BOT_MARKER + songInfo,
-              jpegThumbnail: FALLBACK_THUMB,
-            }, { quoted: m });
-            console.log(`[Audio] Artwork sent (${thumbnailBuffer.length} bytes)`);
-          } catch (imgErr) {
-            console.error(`[Audio] Artwork send failed: ${imgErr.message}`);
-            // Fallback: send text only
-            try {
-              await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
-            } catch (e) {}
-          }
-        } else if (metadata.thumbnail) {
-          // Thumbnail download failed — try sending image by URL directly
-          try {
-            await sock.sendMessage(chatId, {
-              image: { url: metadata.thumbnail },
-              caption: BOT_MARKER + songInfo,
-              jpegThumbnail: FALLBACK_THUMB,
-            }, { quoted: m });
-            console.log(`[Audio] Artwork sent via URL`);
-          } catch (imgErr) {
-            console.error(`[Audio] URL artwork send failed: ${imgErr.message}`);
-            // Fallback: send text only
-            try {
-              await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
-            } catch (e) {}
-          }
-        } else {
-          // No thumbnail — send text only
-          try {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
-          } catch (e) {
-            console.error(`[Audio] Info text send failed: ${e.message}`);
-          }
-        }
-
-        console.log(`[Audio] Sending audio buffer (no contextInfo)...`);
+        // Send audio as bare buffer (no contextInfo — this is what works)
+        console.log(`[Audio] Sending audio buffer...`);
         let audioSent = false;
 
-        // Attempt 1: raw buffer, NO contextInfo (this is what works)
         try {
-          console.log(`[Audio] Attempt 1: audio buffer, no contextInfo...`);
+          console.log(`[Audio] Attempt 1: audio buffer...`);
           const sendResult = await sock.sendMessage(chatId, {
             audio: audioBuffer,
             mimetype: "audio/mpeg",
             ptt: false,
           }, { quoted: m });
-          console.log(`[Audio] Attempt 1 result: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
+          console.log(`[Audio] Sent! Key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
           audioSent = true;
           await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
         } catch (err1) {
           console.error(`[Audio] Attempt 1 failed: ${err1.message}`);
 
-          // Attempt 2: send as document (file attachment)
+          // Fallback: send as document
           try {
             console.log(`[Audio] Attempt 2: document...`);
             await sock.sendMessage(chatId, {
               document: audioBuffer,
               mimetype: "audio/mpeg",
               fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
-              caption: songInfo,
             }, { quoted: m });
-            console.log(`[Audio] Attempt 2 sent as document!`);
+            console.log(`[Audio] Document sent!`);
             audioSent = true;
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
           } catch (err2) {
-            console.error(`[Audio] Attempt 2 failed: ${err2.message}`);
+            console.error(`[Audio] Document failed: ${err2.message}`);
           }
         }
 
         if (!audioSent) {
           await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `❌ Failed to send audio: all methods failed`,
+            text: BOT_MARKER + `❌ Failed to send audio`,
           });
         }
       } catch (err) {
