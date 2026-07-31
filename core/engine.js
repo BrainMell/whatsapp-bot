@@ -1463,116 +1463,74 @@ async function startBot(configInstance) {
         }
 
         // Send audio message
-        // 💡 FIX 2026-07-31: Convert to OGG/Opus and send as PTT (voice note).
-        // This is the MOST RELIABLE method for WhatsApp group chats — PTT uses
-        // a different media upload path than regular audio. The old issue where
-        // "some people could see it, others couldn't" was caused by regular
-        // audio media uploads failing silently to mmg.whatsapp.net.
+        // 💡 FIX 2026-07-31: Baileys v7.0.0-rc13 has a bug where media uploads
+        // to mmg.whatsapp.net silently fail on Oracle Cloud. The message key
+        // is returned (looks successful) but the media URL is invalid —
+        // recipients see "this audio file isn't available".
         //
-        // Research: SilvaTechB/silva-md-bot, BochilGaming, official Baileys docs
-        // all confirm PTT with OGG/Opus is the reliable path.
-        // ffmpeg command: -c:a libopus -b:a 48k -ac 1 -avoid_negative_ts make_zero
-        console.log(`[Audio] Converting to OGG/Opus for PTT...`);
-        const tmpDir = require('os').tmpdir();
-        const safeTitle = (metadata.title || 'audio').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-        const tmpMp3Path = require('path').join(tmpDir, `bot_audio_${Date.now()}_${safeTitle}.mp3`);
-        const tmpOggPath = require('path').join(tmpDir, `bot_audio_${Date.now()}_${safeTitle}.ogg`);
-        require('fs').writeFileSync(tmpMp3Path, audioBuffer);
-
-        // Convert MP3 → OGG/Opus via ffmpeg
-        const { execSync } = require('child_process');
-        let oggReady = false;
-        try {
-          execSync(`ffmpeg -y -i "${tmpMp3Path}" -vn -c:a libopus -b:a 48k -ac 1 -avoid_negative_ts make_zero -f opus "${tmpOggPath}"`, {
-            timeout: 30000,
-            stdio: 'pipe'
-          });
-          const oggSize = require('fs').statSync(tmpOggPath).size;
-          console.log(`[Audio] OGG/Opus converted: ${oggSize} bytes`);
-          oggReady = oggSize > 1000;
-        } catch (ffErr) {
-          console.error(`[Audio] ffmpeg conversion failed: ${ffErr.message}`);
-        }
-
-        // Try PTT (voice note) first — most reliable for group chats
+        // WORKAROUND: Send the audio buffer DIRECTLY (not via file URL).
+        // The buffer approach forces Baileys to upload inline rather than
+        // streaming from a file, which uses a different code path.
+        // Also try WITHOUT contextInfo (externalAdReply can cause issues).
+        console.log(`[Audio] Sending as audio buffer (no contextInfo)...`);
         let audioSent = false;
-        if (oggReady) {
-          try {
-            console.log(`[Audio] Sending as PTT voice note...`);
-            const sendResult = await sock.sendMessage(
-              chatId,
-              {
-                audio: { url: tmpOggPath },
-                mimetype: "audio/ogg; codecs=opus",
-                ptt: true,
-                ...(thumbnailBuffer ? {
-                  contextInfo: {
-                    externalAdReply: {
-                      title: (metadata.title || 'Audio').slice(0, 50),
-                      body: metadata.author || "",
-                      thumbnail: thumbnailBuffer,
-                      mediaType: 2,
-                      mediaUrl: metadata.url || "",
-                      sourceUrl: metadata.url || "",
-                    },
-                  },
-                } : {}),
-              },
-              { quoted: m },
-            );
-            console.log(`[Audio] PTT sent! Key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
-            audioSent = true;
-            await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-          } catch (pttErr) {
-            console.error(`[Audio] PTT send failed: ${pttErr.message}`);
-          }
-        }
 
-        // Fallback 1: regular audio with { url } (MP3)
-        if (!audioSent) {
+        // Attempt 1: raw buffer, no contextInfo, simplest possible message
+        try {
+          console.log(`[Audio] Attempt 1: audio buffer, mimetype audio/mpeg...`);
+          const sendResult = await sock.sendMessage(chatId, {
+            audio: audioBuffer,
+            mimetype: "audio/mpeg",
+            ptt: false,
+          }, { quoted: m });
+          console.log(`[Audio] Attempt 1 result: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
+          audioSent = true;
+          await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+        } catch (err1) {
+          console.error(`[Audio] Attempt 1 failed: ${err1.message}`);
+
+          // Attempt 2: write to file, send via { url }
           try {
-            console.log(`[Audio] Trying regular audio (MP3 url)...`);
+            console.log(`[Audio] Attempt 2: audio { url: file }...`);
+            const tmpDir = require('os').tmpdir();
+            const tmpPath = require('path').join(tmpDir, `bot_audio_${Date.now()}.mp3`);
+            require('fs').writeFileSync(tmpPath, audioBuffer);
             await sock.sendMessage(chatId, {
-              audio: { url: tmpMp3Path },
+              audio: { url: tmpPath },
               mimetype: "audio/mpeg",
               ptt: false,
-              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
             }, { quoted: m });
-            console.log(`[Audio] MP3 audio sent!`);
+            console.log(`[Audio] Attempt 2 sent!`);
             audioSent = true;
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-          } catch (mp3Err) {
-            console.error(`[Audio] MP3 send failed: ${mp3Err.message}`);
-          }
-        }
+            try { require('fs').unlinkSync(tmpPath); } catch (e) {}
+          } catch (err2) {
+            console.error(`[Audio] Attempt 2 failed: ${err2.message}`);
 
-        // Fallback 2: document
-        if (!audioSent) {
-          try {
-            console.log(`[Audio] Trying document...`);
-            await sock.sendMessage(chatId, {
-              document: { url: tmpMp3Path },
-              mimetype: "audio/mpeg",
-              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
-              caption: `🎵 *${(metadata.title || 'Audio').slice(0, 50)}*`,
-            }, { quoted: m });
-            console.log(`[Audio] Document sent!`);
-            audioSent = true;
-            await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-          } catch (docErr) {
-            console.error(`[Audio] Document send failed: ${docErr.message}`);
+            // Attempt 3: send as document (file attachment)
+            try {
+              console.log(`[Audio] Attempt 3: document...`);
+              await sock.sendMessage(chatId, {
+                document: audioBuffer,
+                mimetype: "audio/mpeg",
+                fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+              }, { quoted: m });
+              console.log(`[Audio] Attempt 3 sent as document!`);
+              audioSent = true;
+              await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+            } catch (err3) {
+              console.error(`[Audio] Attempt 3 failed: ${err3.message}`);
+            }
           }
         }
 
         if (!audioSent) {
+          // Final fallback: send the download link as text
+          const downloadLink = audioURL.replace('localhost', '10.0.1.56');
           await sock.sendMessage(chatId, {
-            text: BOT_MARKER + "❌ Failed to send audio. All methods failed.",
+            text: BOT_MARKER + `🎵 *${metadata.title}*\n\n⚠️ Audio send failed. Download link:\n${downloadLink}`,
           });
         }
-
-        // Clean up temp files
-        try { require('fs').unlinkSync(tmpMp3Path); } catch (e) {}
-        try { require('fs').unlinkSync(tmpOggPath); } catch (e) {}
       } catch (err) {
         console.error("[Audio] Command Error:", err.message);
         await sock.sendMessage(chatId, {
