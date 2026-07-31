@@ -1464,19 +1464,36 @@ async function startBot(configInstance) {
 
         // Send audio message
         // 💡 FIX 2026-07-31: contextInfo/externalAdReply BREAKS audio sends
-        // on Baileys v7.0.0-rc13 — the message key is returned but the media
-        // never uploads. Confirmed: raw buffer WITHOUT contextInfo works,
-        // raw buffer WITH contextInfo silently fails.
-        //
-        // SOLUTION: Send the song info as a SEPARATE text message first,
-        // then send the audio as a bare buffer (no contextInfo).
-        // The user sees: "🎵 Song Name - Artist" then the audio appears below.
-        console.log(`[Audio] Sending song info text...`);
+        // on Baileys v7.0.0-rc13. SOLUTION: send 3 separate messages:
+        //   1. Album artwork as an IMAGE (with song title as caption)
+        //   2. Audio as bare buffer (no contextInfo — this is what works)
+        //   3. (react emoji)
+        console.log(`[Audio] Sending album artwork + song info...`);
         const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}`;
-        try {
-          await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
-        } catch (e) {
-          console.error(`[Audio] Info text send failed: ${e.message}`);
+
+        // Send thumbnail as image with song info as caption
+        if (thumbnailBuffer && thumbnailBuffer.length > 100) {
+          try {
+            await sock.sendMessage(chatId, {
+              image: thumbnailBuffer,
+              caption: BOT_MARKER + songInfo,
+              jpegThumbnail: FALLBACK_THUMB,
+            }, { quoted: m });
+            console.log(`[Audio] Artwork sent (${thumbnailBuffer.length} bytes)`);
+          } catch (imgErr) {
+            console.error(`[Audio] Artwork send failed: ${imgErr.message}`);
+            // Fallback: send text only
+            try {
+              await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+            } catch (e) {}
+          }
+        } else {
+          // No thumbnail — send text only
+          try {
+            await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+          } catch (e) {
+            console.error(`[Audio] Info text send failed: ${e.message}`);
+          }
         }
 
         console.log(`[Audio] Sending audio buffer (no contextInfo)...`);
