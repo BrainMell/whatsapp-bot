@@ -1463,47 +1463,53 @@ async function startBot(configInstance) {
         }
 
         // Send audio message
-        // 💡 FIX 2026-07-31: Baileys v7.0.0-rc13 has a bug where media uploads
-        // to mmg.whatsapp.net silently fail on Oracle Cloud. The message key
-        // is returned (looks successful) but the media URL is invalid —
-        // recipients see "this audio file isn't available".
-        //
-        // WORKAROUND: Send the audio buffer DIRECTLY (not via file URL).
-        // The buffer approach forces Baileys to upload inline rather than
-        // streaming from a file, which uses a different code path.
-        // Also try WITHOUT contextInfo (externalAdReply can cause issues).
-        console.log(`[Audio] Sending as audio buffer (no contextInfo)...`);
+        // 💡 FIX 2026-07-31: Raw buffer send works. Now adding contextInfo back
+        // so the message shows song title, artist, and album artwork thumbnail.
+        // The earlier issue was PTT/OGG conversion, not contextInfo itself.
+        console.log(`[Audio] Sending audio with metadata...`);
         let audioSent = false;
 
-        // Attempt 1: raw buffer, no contextInfo, simplest possible message
+        // Build the contextInfo with thumbnail (externalAdReply shows the
+        // song title + artist + artwork in a nice card above the audio)
+        const audioContent = {
+          audio: audioBuffer,
+          mimetype: "audio/mpeg",
+          ptt: false,
+          ...(thumbnailBuffer ? {
+            contextInfo: {
+              externalAdReply: {
+                title: (metadata.title || 'Audio').slice(0, 50),
+                body: metadata.author || "",
+                thumbnail: thumbnailBuffer,
+                mediaType: 2,
+                mediaUrl: metadata.url || "",
+                sourceUrl: metadata.url || "",
+              },
+            },
+          } : {}),
+        };
+
+        // Attempt 1: audio buffer with contextInfo
         try {
-          console.log(`[Audio] Attempt 1: audio buffer, mimetype audio/mpeg...`);
-          const sendResult = await sock.sendMessage(chatId, {
-            audio: audioBuffer,
-            mimetype: "audio/mpeg",
-            ptt: false,
-          }, { quoted: m });
+          console.log(`[Audio] Attempt 1: audio buffer + contextInfo...`);
+          const sendResult = await sock.sendMessage(chatId, audioContent, { quoted: m });
           console.log(`[Audio] Attempt 1 result: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
           audioSent = true;
           await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
         } catch (err1) {
           console.error(`[Audio] Attempt 1 failed: ${err1.message}`);
 
-          // Attempt 2: write to file, send via { url }
+          // Attempt 2: audio buffer WITHOUT contextInfo (simpler)
           try {
-            console.log(`[Audio] Attempt 2: audio { url: file }...`);
-            const tmpDir = require('os').tmpdir();
-            const tmpPath = require('path').join(tmpDir, `bot_audio_${Date.now()}.mp3`);
-            require('fs').writeFileSync(tmpPath, audioBuffer);
+            console.log(`[Audio] Attempt 2: audio buffer (no contextInfo)...`);
             await sock.sendMessage(chatId, {
-              audio: { url: tmpPath },
+              audio: audioBuffer,
               mimetype: "audio/mpeg",
               ptt: false,
             }, { quoted: m });
             console.log(`[Audio] Attempt 2 sent!`);
             audioSent = true;
             await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
-            try { require('fs').unlinkSync(tmpPath); } catch (e) {}
           } catch (err2) {
             console.error(`[Audio] Attempt 2 failed: ${err2.message}`);
 
@@ -1514,6 +1520,7 @@ async function startBot(configInstance) {
                 document: audioBuffer,
                 mimetype: "audio/mpeg",
                 fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+                caption: `🎵 *${(metadata.title || 'Audio').slice(0, 50)}*`,
               }, { quoted: m });
               console.log(`[Audio] Attempt 3 sent as document!`);
               audioSent = true;
@@ -1525,10 +1532,8 @@ async function startBot(configInstance) {
         }
 
         if (!audioSent) {
-          // Final fallback: send the download link as text
-          const downloadLink = audioURL.replace('localhost', '10.0.1.56');
           await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `🎵 *${metadata.title}*\n\n⚠️ Audio send failed. Download link:\n${downloadLink}`,
+            text: BOT_MARKER + `❌ Failed to send audio: all methods failed`,
           });
         }
       } catch (err) {
