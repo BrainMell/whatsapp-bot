@@ -83,6 +83,16 @@ function getMaxLevel(rarity) {
   if (!rarity) return DEFAULT_MAX_ENHANCEMENT_LEVEL;
   return MAX_ENHANCEMENT_LEVEL_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_LEVEL;
 }
+// 💡 FIX 2026-08-01 (BUG #6): was `item.enhancementLevel × 0.35` which
+// assumes Legendary stones were used at every prior level. But Mythic
+// stones give 0.60 per level — so a legitimately Mythic-enhanced item
+// (e.g. level 5 with 3.0 bonus from 5 Mythic stones) was being "repaired"
+// down to 1.75 (5 × 0.35). Now assumes Mythic stones (most generous
+// assumption), capped at the rarity-aware maxBonus. This matches the
+// stated intent in the comment below — "most generous assumption" —
+// which was previously wrong (Legendary is NOT most generous, Mythic is).
+const ASSUMED_STONE_BONUS = 0.60;  // per level — was 0.35 (Legendary), now 0.60 (Mythic)
+
 function getMaxBonus(rarity) {
   if (!rarity) return DEFAULT_MAX_ENHANCEMENT_BONUS;
   return MAX_ENHANCEMENT_BONUS_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_BONUS;
@@ -101,7 +111,7 @@ function recalcStats(item, baseStatsRef) {
   // caller (we receive baseStatsRef but not the full baseItem here — assume
   // caller has already stamped item.rarity if it was missing).
   const maxBonus = getMaxBonus(item.rarity);
-  const bonus = Math.min(item.enhancementLevel * 0.35, maxBonus);
+  const bonus = Math.min(item.enhancementLevel * ASSUMED_STONE_BONUS, maxBonus);
   const newStats = {};
   for (const stat in baseStatsRef) {
     newStats[stat] = Math.ceil(baseStatsRef[stat] * (1 + bonus));
@@ -168,7 +178,10 @@ async function main() {
   // Use the bot's own lootSystem so we read the exact same ITEM_DATABASE
   // the runtime uses.
   process.env.MONGO_URI = MONGO_URI;  // ensure lootSystem sees it if it lazy-loads
-  const lootSystem = require('/home/z/my-project/repo/whatsapp-bot/core/rpg/lootSystem.js');
+  // 💡 FIX 2026-08-01 (BUG #7): was a hardcoded absolute path that only
+  // existed on one specific dev machine. Now uses a relative path so the
+  // script works from any clone location (dev box, CI, Oracle server).
+  const lootSystem = require('../core/rpg/lootSystem.js');
 
   // ── 3. Walk each affected user and compute recovery ops ──────────────
   let totalItemsScanned = 0;

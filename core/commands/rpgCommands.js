@@ -366,7 +366,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
         }
         if (parts.length) statLine = `  📊 ${parts.join(' ')}\n`;
       } else {
-        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}${v >= 0 ? '+' : ''}${v}`);
+        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}+${v}`);
         if (parts.length) statLine = `  ✨ ${parts.join(' ')}\n`;
       }
       msg += statLine;
@@ -595,7 +595,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
 
 async function unequipItem(sock, chatId, senderJid, slot) { 
     if (!slot) { 
-        await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} unequip <slot>\`\n\nSlots: main_hand, off_hand, armor, helmet, gloves, boots, ring, amulet, cloak` });
+        await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} unequip <slot>\`\n\nSlots: weapon, armor, helmet, boots, ring, amulet, cloak, gloves` });
         return;
     }
 
@@ -977,14 +977,67 @@ async function useItem(sock, chatId, senderJid, target) {
     else await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
 }
 
+// 💡 FIX 2026-08-01 (BUG #2 + GAP #2): enhance command now:
+//   1. Accepts an optional stone-type arg: `.jk enhance <#> [mythic|legendary|rare|minor]`
+//   2. Defaults to best-available stone (mythic > legendary > rare > minor)
+//   3. Previously the priority list omitted mythic_enhancement_stone entirely,
+//      so even if a player had Mythic stones the command would skip them.
+// Stone priority — best first. Player can override with the 2nd arg.
+const ENHANCE_STONE_PRIORITY = [
+    'mythic_enhancement_stone',
+    'legendary_enhancement_stone',
+    'rare_enhancement_stone',
+    'minor_enhancement_stone'
+];
+// Maps the optional arg keyword → stone id (case-insensitive)
+const STONE_KEYWORD_MAP = {
+    'mythic': 'mythic_enhancement_stone',
+    'legendary': 'legendary_enhancement_stone',
+    'rare': 'rare_enhancement_stone',
+    'minor': 'minor_enhancement_stone'
+};
+
 async function enhanceItem(sock, chatId, senderJid, input) {
-    if (!input) return await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} enhance <#bag_index>\`\nExample: \`${getPrefix()} enhance 1\`` });
+    // Parse input: `<#> [stoneKeyword]`
+    const parts = (input || '').trim().split(/\s+/);
+    const indexArg = parts[0];
+    const stoneKeyword = parts[1] ? parts[1].toLowerCase() : null;
+
+    if (!indexArg) {
+        return await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()}enhance <#bag_index> [mythic|legendary|rare|minor]\`\nExample: \`${getPrefix()}enhance 1 mythic\`\n\n💡 If no stone type is specified, the best available stone is used automatically.` });
+    }
+
     const inventory = inventorySystem.formatInventory(senderJid);
-    const targetItem = inventory.items[parseInt(input) - 1];
-    if (!targetItem) return await sock.sendMessage(chatId, { text: `❌ Item not found at index ${input}!` });
-    const stones = ['mythic_enhancement_stone', 'legendary_enhancement_stone', 'rare_enhancement_stone', 'minor_enhancement_stone'];
-    let stoneId = stones.find(s => inventory.items.some(item => item.id === s));
-    if (!stoneId) return await sock.sendMessage(chatId, { text: `❌ You don't have any Enhancement Stones!` });
+    const targetItem = inventory.items[parseInt(indexArg) - 1];
+    if (!targetItem) return await sock.sendMessage(chatId, { text: `❌ Item not found at index ${indexArg}!` });
+
+    // Resolve which stone to use:
+    //   - If player specified a keyword, try that stone first.
+    //   - Otherwise walk the priority list (best → worst).
+    let stoneId = null;
+    if (stoneKeyword) {
+        const requestedId = STONE_KEYWORD_MAP[stoneKeyword];
+        if (!requestedId) {
+            return await sock.sendMessage(chatId, { text: `❌ Unknown stone type "${stoneKeyword}". Valid: mythic, legendary, rare, minor.` });
+        }
+        const hasIt = inventory.items.some(item => item.id === requestedId);
+        if (!hasIt) {
+            return await sock.sendMessage(chatId, { text: `❌ You don't have any *${lootSystem.getItemInfo(requestedId)?.name || requestedId}*!` });
+        }
+        stoneId = requestedId;
+    } else {
+        // Auto-pick best available
+        for (const sid of ENHANCE_STONE_PRIORITY) {
+            if (inventory.items.some(item => item.id === sid)) {
+                stoneId = sid;
+                break;
+            }
+        }
+        if (!stoneId) {
+            return await sock.sendMessage(chatId, { text: `❌ You don't have any Enhancement Stones!` });
+        }
+    }
+
     const result = inventorySystem.enhanceItem(senderJid, targetItem.id, stoneId);
     await sock.sendMessage(chatId, { text: result.message });
 }
