@@ -1846,15 +1846,21 @@ async function runWealthTax() {
 
   for (const [userId, user] of economyData.entries()) {
     if (!user) continue;
+    // 💡 AUDIT FIX 2026-08-01 (Round 3): tax TOTAL wealth (wallet + bank),
+    // not just bank. Previously players could avoid the wealth tax entirely
+    // by keeping everything in wallet — defeating the purpose of a "hoarded
+    // wealth" tax. Now both wallet and bank are included.
+    const walletBalance = user.wallet || 0;
     const bankBalance = user.bank || 0;
-    if (bankBalance < 10000000) continue; // below first bracket
+    const totalBalance = walletBalance + bankBalance;
+    if (totalBalance < 10000000) continue; // below first bracket
 
     // Find applicable bracket (highest first)
     let tax = 0;
     let bracketLabel = '';
     for (const bracket of WEALTH_TAX_BRACKETS) {
-      if (bankBalance >= bracket.threshold) {
-        tax = Math.floor(bankBalance * bracket.rate);
+      if (totalBalance >= bracket.threshold) {
+        tax = Math.floor(totalBalance * bracket.rate);
         bracketLabel = `${(bracket.rate * 100).toFixed(0)}% over ${bracket.threshold.toLocaleString()}`;
         break;
       }
@@ -1862,8 +1868,17 @@ async function runWealthTax() {
 
     if (tax <= 0) continue;
 
-    // Deduct
-    user.bank = Math.max(0, bankBalance - tax);
+    // Deduct proportionally from wallet first, then bank
+    // (wallet is "liquid" — easier to tax. Bank is "hoarded" — harder.)
+    let remaining = tax;
+    const walletTax = Math.min(walletBalance, remaining);
+    if (walletTax > 0) {
+      user.wallet = Math.max(0, walletBalance - walletTax);
+      remaining -= walletTax;
+    }
+    if (remaining > 0) {
+      user.bank = Math.max(0, bankBalance - remaining);
+    }
     scheduleSave(userId);
     totalTaxed += tax;
     playersTaxed++;

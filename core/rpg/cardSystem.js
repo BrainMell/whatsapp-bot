@@ -963,10 +963,37 @@ async function searchEventCards(nameQuery, animeQuery) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // GIF Cache
+// 💡 AUDIT FIX 2026-08-01 (Round 3): added TTL + timestamp to cache entries.
+// Previously entries never expired — every user who ran .coll/.deck added
+// a permanent buffer to the Map. On a 954MB box with 3000+ users, this is
+// a slow memory leak. Now entries expire after 60s (matches onboarding doc's
+// "Hybrid grid 60s cache" note) and a sweeper runs every 2 min.
+const GIF_CACHE_TTL_MS = 60 * 1000; // 60 seconds
 const gifCache = {
-    decks: new Map(), // key: userId_deckName, value: { hash: string, buffer: Buffer }
-    collections: new Map() // key: userId, value: { hash: string, buffer: Buffer }
+    decks: new Map(), // key: userId_deckName, value: { hash: string, buffer: Buffer, ts: number }
+    collections: new Map() // key: userId, value: { hash: string, buffer: Buffer, ts: number }
 };
+
+// Sweep expired cache entries every 2 min — prevents unbounded growth
+setInterval(() => {
+    const now = Date.now();
+    let decksEvicted = 0, collsEvicted = 0;
+    for (const [key, entry] of gifCache.decks.entries()) {
+        if (now - (entry.ts || 0) > GIF_CACHE_TTL_MS) {
+            gifCache.decks.delete(key);
+            decksEvicted++;
+        }
+    }
+    for (const [key, entry] of gifCache.collections.entries()) {
+        if (now - (entry.ts || 0) > GIF_CACHE_TTL_MS) {
+            gifCache.collections.delete(key);
+            collsEvicted++;
+        }
+    }
+    if (decksEvicted > 0 || collsEvicted > 0) {
+        console.log(`🃏 [GifCache] Swept ${decksEvicted} deck + ${collsEvicted} collection entries (TTL ${GIF_CACHE_TTL_MS/1000}s).`);
+    }
+}, 2 * 60 * 1000);
 
 function getDeckHash(cards) {
     return cards.map(c => c.cardId + (c.isLocked ? 'L' : 'U')).join('|');
@@ -1156,11 +1183,11 @@ async function cmdCardsTier(senderJid, reply, chatId) {
     const cached = gifCache.collections.get(senderJid);
     
     let gifBuffer;
-    if (cached && cached.hash === currentHash) {
+    if (cached && cached.hash === currentHash && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
         gifBuffer = cached.buffer;
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION HIGHLIGHTS");
-        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
+        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
     }
 
     if (gifBuffer) {
@@ -1361,7 +1388,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
 
     let gifBuffer;
     let hybridContentType = null;
-    if (cached && cached.hash === currentHash && !useHybridAnim) {
+    if (cached && cached.hash === currentHash && !useHybridAnim && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
         // Only use cache for static grid (hybrid is animated, don't cache — re-render each time)
         console.log(`🃏 [cmdColl] using cached grid buffer`);
         gifBuffer = cached.buffer;
@@ -1381,7 +1408,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
         console.log(`🃏 [cmdColl] calling goService.generateCardGrid | urls=${imageUrls.length}`);
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
         console.log(`🃏 [cmdColl] generateCardGrid returned: ${gifBuffer ? gifBuffer.length + ' bytes' : 'null'}`);
-        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer });
+        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
     }
 
     if (gifBuffer) {
@@ -1481,7 +1508,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
 
     let gifBuffer;
     let hybridContentType = null;
-    if (cached && cached.hash === currentHash && !useHybridAnim) {
+    if (cached && cached.hash === currentHash && !useHybridAnim && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
         gifBuffer = cached.buffer;
     } else if (useHybridAnim) {
         const hybridResult = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
@@ -1492,7 +1519,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
         // Don't cache hybrid (see cmdColl comment)
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
-        if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer });
+        if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
     }
 
     if (gifBuffer) {
@@ -3177,11 +3204,11 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     const cached = gifCache.decks.get(`${senderJid}_${deck.name}`);
     
     let gifBuffer;
-    if (cached && cached.hash === currentHash) {
+    if (cached && cached.hash === currentHash && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
         gifBuffer = cached.buffer;
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
-        if (gifBuffer) gifCache.decks.set(`${senderJid}_${deck.name}`, { hash: currentHash, buffer: gifBuffer });
+        if (gifBuffer) gifCache.decks.set(`${senderJid}_${deck.name}`, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
     }
 
     if (gifBuffer) {
