@@ -12,7 +12,13 @@ class GroqClient {
             .map((key) => key.trim())
             .filter((key) => key !== "");
         this.currentKeyIndex = 0;
-        this.model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+        // 💡 AUDIT FIX 2026-08-01 (Round 4): default model is now llama-3.3-70b-versatile
+        // (was llama-3.1-8b-instant). The onboarding doc specifies GROQ_MODEL=llama-3.3-70b-versatile
+        // in .env, but .env is gitignored — so Box 1's .env doesn't have GROQ_MODEL and the
+        // bot was falling back to the weaker 8b model. The 70b model is significantly better
+        // at structured extraction (the context engine's main use case). If GROQ_MODEL is set
+        // in .env, it overrides this default.
+        this.model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         
         console.log(`🔌 Groq Client initialized (Model: ${this.model}, hasKeys: ${this.keys.length > 0})`);

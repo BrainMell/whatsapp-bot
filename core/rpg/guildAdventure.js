@@ -1915,6 +1915,34 @@ const ENCOUNTER_TYPES = {
 
 const gameStates = new Map(); // sessionKey -> state
 
+// 💡 AUDIT FIX 2026-08-01 (Round 4): periodic sweeper for stale game states.
+// If the bot crashes mid-combat or a player abandons a quest, the state
+// stays in the Map forever. On a long-running bot with 3000+ users, this
+// is a slow memory leak. Now a sweeper runs every 5 min and removes any
+// state that hasn't been updated in 30 min (configurable below).
+const STALE_STATE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
+setInterval(() => {
+    const now = Date.now();
+    let swept = 0;
+    for (const [key, state] of gameStates.entries()) {
+        // Skip active states (inCombat means a fight is in progress)
+        if (state?.inCombat) continue;
+        // Check lastActivity — fall back to createdAt if not set
+        const lastActivity = state?.lastActivity || state?.createdAt || 0;
+        if (lastActivity > 0 && (now - lastActivity) > STALE_STATE_TIMEOUT_MS) {
+            // Clear any timers before deleting
+            if (state.timers) {
+                Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+            }
+            gameStates.delete(key);
+            swept++;
+        }
+    }
+    if (swept > 0) {
+        console.log(`🧹 [GameStates] Swept ${swept} stale state(s) (inactive >${STALE_STATE_TIMEOUT_MS/60000}min).`);
+    }
+}, 5 * 60 * 1000); // every 5 min
+
 function getGameState(chatId, senderJid = null) {
   if (!chatId) return null;
 
@@ -2030,6 +2058,11 @@ const INITIAL_STATE_TEMPLATE = {
   players: [],
   inCombat: false,
   enemies: [],
+  // 💡 AUDIT FIX 2026-08-01 (Round 4): lastActivity timestamp for stale-state sweeper.
+  // Updated on every combat action + state access. Sweeper (line 1924) removes
+  // states inactive > 30 min to prevent memory leak.
+  lastActivity: 0,
+  createdAt: 0,
   // 💡 Summoner System (Phase 2): summons array on combat state.
   // Summon entities are built at combat start from each player's active
   // summon (user.activeSummonId) via summonSystem.buildCombatEntity.
@@ -6105,6 +6138,9 @@ const initAdventure = async (
     sock,
     groq,
     smartGroqCall,
+    // 💡 AUDIT FIX 2026-08-01 (Round 4): set timestamps for stale-state sweeper
+    createdAt: Date.now(),
+    lastActivity: Date.now(),
     dungeonRank: upperRank,
     difficulty: rankData.difficulty,
     environment: environment,
@@ -7996,6 +8032,9 @@ const handleCombatAction = async (
   }
 
   state.pendingActions[senderJid] = action;
+  // 💡 AUDIT FIX 2026-08-01 (Round 4): update lastActivity so the stale-state
+  // sweeper doesn't clean up an active combat session.
+  state.lastActivity = Date.now();
 
   // Execute action immediately
   const sessionKey = state.solo ? `${chatId}_${senderJid}` : chatId;
