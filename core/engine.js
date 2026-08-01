@@ -8189,6 +8189,34 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 💡 HOSPITAL COMMAND (2026-07-31): Free full heal.
+                    // Restores HP to max. Works with the persistent HP system.
+                    if (primaryCmd === "hospital" || primaryCmd === "heal" || primaryCmd === "clinic") {
+                      try {
+                        if (!economy.isRegistered(senderJid))
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first!" });
+                        const user = economy.getUser(senderJid);
+                        const userClass = user.class || { id: 'FIGHTER', name: 'Fighter' };
+                        const classId = userClass?.id || userClass?.name?.toUpperCase() || 'FIGHTER';
+                        const baseStats = progression.getBaseStats(senderJid, classId);
+                        const maxHP = baseStats.hp;
+
+                        const currentHP = economy.getPersistentHP(senderJid, maxHP);
+                        if (currentHP >= maxHP) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 You're already at full health!" });
+                        }
+
+                        const healed = economy.healToFull(senderJid, maxHP);
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._`,
+                        });
+                      } catch (e) {
+                        console.error('Hospital command error:', e.message);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Hospital error: " + e.message });
+                      }
+                      return;
+                    }
+
                     // .j recipes
                     if (primaryCmd === "recipes") {
                       await rpgCommands.displayRecipes(sock, chatId);
@@ -16463,6 +16491,18 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const abyssSub = abyssArgs[0]?.toLowerCase();
                       const abyssSystem = require('./rpg/abyssSystem');
 
+                      // 💡 FIX 2026-07-31 Bug #3: Block Abyss sub-commands during
+                      // active combat to prevent state corruption. Players in combat
+                      // must finish the combat round before using abyss commands.
+                      // 'status', 'leaderboard', 'best', 'help', and 'admin' are
+                      // allowed (read-only or admin operations).
+                      const _abyssCombatState = guildAdventure.getGameState(`${chatId}_${senderJid}`);
+                      const _abyssInCombat = _abyssCombatState?.inCombat === true;
+                      const _abyssReadOnly = ['status', 'info', 'leaderboard', 'lb', 'best', 'help', 'admin', 'mod'];
+                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub)) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ You are in active combat! Finish the round first with `.g combat attack` or `.g combat flee`.' });
+                      }
+
                       // .g abyss — show status or help
                       if (!abyssSub || abyssSub === 'help') {
                         let msg = `🕳️ *ABYSS — ENDLESS DUNGEON* 🕳️\n\n`;
@@ -16557,11 +16597,22 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (run.lootAccumulator.runes.length > 0) {
                             msg += `• Runes: ${run.lootAccumulator.runes.length}\n`;
                           }
-                          msg += `\n👹 *Current Enemy:* ${run.currentEnemy.name}\n`;
-                          msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
-                          msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
-                          if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
-                          msg += `\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                          // 💡 FIX 2026-07-31 Bug #5: Null-safe enemy display
+                          // (currentEnemy is null on treasure/event floors)
+                          const encounterType = run.currentEncounterType || 'combat';
+                          if (encounterType === 'combat' && run.currentEnemy && run.currentEnemy.name) {
+                            msg += `\n👹 *Current Enemy:* ${run.currentEnemy.name}\n`;
+                            msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
+                            msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
+                            if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
+                            msg += `\n_Attack with \`.g combat attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                          } else if (encounterType === 'treasure') {
+                            msg += `\n💰 *Treasure Floor!*\n_Use \`.g abyss collect\` or \`.g abyss skip\`_`;
+                          } else if (encounterType === 'event') {
+                            msg += `\n❓ *Event Floor!*\n_Use \`.g abyss choose <1|2>\` or \`.g abyss skip\`_`;
+                          } else {
+                            msg += `\n_Use \`.g abyss retreat\` to extract._`;
+                          }
                           return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });

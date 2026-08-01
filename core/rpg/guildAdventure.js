@@ -5472,6 +5472,15 @@ async function endCombat(sock, victory, sessionKey) {
       p.passiveKillBonus = 1;
       p.passiveDamageBonus = 1;
       p.passiveMagBonus = 1;
+
+      // 💡 PERSISTENT HP SYSTEM (2026-07-31): Save current HP back to the
+      // User document so damage persists after combat ends. HP is clamped
+      // to 0..maxHP. On next combat start, getPersistentHP() will restore
+      // to 1 if HP was 0 (defeated).
+      if (p.jid && p.stats && p.stats.maxHp) {
+        const finalHP = p.currentHP !== undefined ? p.currentHP : p.stats.hp;
+        economy.setPersistentHP(p.jid, finalHP, p.stats.maxHp);
+      }
     });
   }
 
@@ -6101,17 +6110,16 @@ async function startJourney(sock, sessionKey) {
     p.stats.spd = baseStats.spd;
     p.stats.luck = baseStats.luck;
     p.stats.crit = baseStats.crit;
-    // 💡 CRITICAL FIX: Copy secondary stats that were calculated by
-    // progression.getBaseStats() but never assigned to the combat player.
-    // Without these, damage reduction was always 0 (players took full
-    // damage from boss ultimates) and evasion was always 0 (players
-    // could never dodge). This was the root cause of the "defense is
-    // ignored" and "one-shot by boss" complaints.
     p.stats.dmgReduction = baseStats.dmgReduction || 0;
     p.stats.evasion = baseStats.evasion || 0;
 
-    // NEW: Combat system requirements
-    p.currentHP = p.stats.hp;
+    // 💡 PERSISTENT HP SYSTEM (2026-07-31): Use persistent HP instead of
+    // resetting to max. HP carries over from previous combat. If the player
+    // was defeated (HP=0), restore to 1 so they can fight. Full heal only
+    // via .g hospital.
+    const persistentHP = economy.getPersistentHP(p.jid, p.stats.maxHp);
+    p.stats.hp = persistentHP;
+    p.currentHP = persistentHP;
     p.mana = 100;
     p.maxMana = 100;
 

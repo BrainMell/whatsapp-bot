@@ -31,6 +31,12 @@ const AbyssRunSchema = new mongoose.Schema({
     isBoss: { type: Boolean, default: false },
     level: { type: Number, default: 1 },
   },
+  // 💡 FIX 2026-07-31 Bug #1: These fields were referenced in code but NOT
+  // in the schema. Mongoose strict mode silently stripped them on save,
+  // causing treasure/event floors to be completely broken (the encounter
+  // type was lost between commands). Now properly defined.
+  currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event'
+  currentEncounterData: { type: mongoose.Schema.Types.Mixed, default: null },
   // Player state snapshot at run start (so we can restore on death)
   playerSnapshot: {
     hp: { type: Number, default: 0 },

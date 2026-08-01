@@ -97,11 +97,31 @@ async function startRun(userId, playerStats) {
     const lastActivity = new Date(existing.updatedAt).getTime();
     const age = Date.now() - lastActivity;
     if (age > ABYSS_STALE_TIMEOUT_MS) {
-      // Auto-retreat the stale run
-      existing.status = 'completed';
-      existing.completedAt = new Date();
-      await existing.save();
-      console.log(`[Abyss] Auto-retreated stale run for ${userId} (age: ${Math.floor(age / 60000)}min)`);
+      // 💡 FIX 2026-07-31 Bug #4: Auto-retreat stale runs properly —
+      // award loot, add to leaderboard, zero accumulator. Previously
+      // just set status='completed' without paying out loot or recording
+      // on the leaderboard.
+      console.log(`[Abyss] Auto-retreating stale run for ${userId} (age: ${Math.floor(age / 60000)}min)`);
+      try {
+        // Award full loot (same as manual retreat)
+        const loot = existing.lootAccumulator || {};
+        if (loot.xp > 0) progression.awardXP(userId, loot.xp, 'Abyss (auto-retreat)');
+        if (loot.gold > 0) economy.addMoney(userId, loot.gold, 'Abyss (auto-retreat)', 'abyss');
+        // Add to leaderboard
+        const score = existing.currentFloor * 100 + (existing.monstersKilled || 0) * 5;
+        await addToLeaderboard(userId, existing.currentFloor, existing.monstersKilled, existing.bossesKilled, score, 'retreat');
+        // Mark as completed
+        existing.status = 'completed';
+        existing.finalScore = score;
+        existing.finalFloor = existing.currentFloor;
+        existing.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
+        await existing.save();
+      } catch (retreatErr) {
+        console.error('[Abyss] Auto-retreat error:', retreatErr.message);
+        // Force-complete even if loot payout fails
+        existing.status = 'completed';
+        await existing.save();
+      }
     } else {
       return {
         success: false,
@@ -623,22 +643,10 @@ async function processEventChoice(userId, choiceId) {
     return await processDeath(userId, run, msg);
   }
 
-  if (treasure.guaranteedRune) {
-    try {
-      const runeSystem = require('./runeSystem');
-      const drop = (run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') 
-        ? runeSystem.rollAbyssalRuneDrop(run.currentFloor)
-        : { type: Object.keys(runeSystem.RUNE_TYPES)[Math.floor(Math.random() * 6)], tier: 'GREATER' };
-        
-      const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
-      if (runeResult.success) {
-        run.lootAccumulator.runes.push(runeResult.rune.runeId);
-        msg += runeResult.message + '\n';
-      }
-    } catch (e) {
-      msg += `💎 The shrine is dormant. (Rune system error)\n`;
-    }
-  }
+  // 💡 FIX 2026-07-31 Bug #2: Removed orphaned `treasure.guaranteedRune`
+  // block — `treasure` was undefined in processEventChoice (copy-paste
+  // from processTreasure). This would throw ReferenceError after Bug #1
+  // fix made event floors actually reachable.
 
   // Advance to next floor
   run.currentFloor += 1;

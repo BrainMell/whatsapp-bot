@@ -70,7 +70,12 @@ const UserSchema = new mongoose.Schema({
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },
-    level: { type: Number, default: 1 }
+    level: { type: Number, default: 1 },
+    // 💡 PERSISTENT HP SYSTEM (2026-07-31): currentHP persists across combat.
+    // HP lost in any combat (dungeon, raid, PvP, abyss, boss) remains after
+    // combat ends. Players heal via .g hospital (free) or rest events.
+    // -1 = "not initialized" → first access sets it to maxHP.
+    currentHP: { type: Number, default: -1 },
   },
   
   statBonuses: {

@@ -127,7 +127,14 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `⭐ *Level:* ${sheet?.level || 1}  |  🏆 *Rank:* ${cardData.rank}\n`;
                 captionMsg += `💰 *Zeni:* ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
                 captionMsg += `*STATS:*\n`;
-                captionMsg += `❤️ HP: ${stats?.hp || 100}${equipStats?.hp ? `+${equipStats.hp}` : ''}  |  ⚔️ ATK: ${stats?.atk || 10}${equipStats?.atk ? `+${equipStats.atk}` : ''}\n`;
+                // 💡 PERSISTENT HP SYSTEM (2026-07-31): Show current/max HP.
+                // If currentHP < maxHP, show in red/warning format.
+                const maxHP = stats?.hp || 100;
+                const currentHP = economy.getPersistentHP(senderJid, maxHP);
+                const hpDisplay = currentHP < maxHP
+                  ? `❤️ HP: ${currentHP}/${maxHP} ⚠️  |  ⚔️ ATK: ${stats?.atk || 10}\n`
+                  : `❤️ HP: ${maxHP}  |  ⚔️ ATK: ${stats?.atk || 10}\n`;
+                captionMsg += hpDisplay;
                 captionMsg += `🛡️ DEF: ${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''}  |  🔮 MAG: ${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
                 captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
                 captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
@@ -197,7 +204,13 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     
     // Stats (compact 2-column)
     msg += `*STATS:*\n`;
-    msg += `❤️ HP:${stats?.hp || 100}${equipStats?.hp ? `+${equipStats.hp}` : ''} ⚔️ ATK:${stats?.atk || 10}${equipStats?.atk ? `+${equipStats.atk}` : ''}\n`;
+    // 💡 PERSISTENT HP: show current/max HP
+    const maxHP2 = stats?.hp || 100;
+    const currentHP2 = economy.getPersistentHP(senderJid, maxHP2);
+    const hpStr2 = currentHP2 < maxHP2
+      ? `❤️ HP:${currentHP2}/${maxHP2}⚠️ ⚔️ ATK:${stats?.atk || 10}\n`
+      : `❤️ HP:${maxHP2} ⚔️ ATK:${stats?.atk || 10}\n`;
+    msg += hpStr2;
     msg += `🛡️ DEF:${stats?.def || 10}${equipStats?.def ? `+${equipStats.def}` : ''} 🔮 MAG:${stats?.mag || 10}${equipStats?.mag ? `+${equipStats.mag}` : ''}\n`;
     msg += `💨 SPD:${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
     msg += `💥 CRIT:${stats?.crit || 0}% | 🕊️ EVA:${(stats?.evasion || 0).toFixed(1)}%\n`;

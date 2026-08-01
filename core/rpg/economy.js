@@ -1986,7 +1986,88 @@ module.exports = {
   getRankMissionStatus,
   claimRankMission,
   trackMissionStat,
+
+  // 💡 Persistent HP System (2026-07-31)
+  getPersistentHP,
+  setPersistentHP,
+  healToFull,
 };
+
+// ════════════════════════════════════════════════════════════════
+// 💡 PERSISTENT HP SYSTEM (2026-07-31)
+// HP persists across combat. Lost HP remains after combat ends.
+// Players heal via .g hospital (free) or rest events.
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Get the player's persistent current HP.
+ * If currentHP is -1 (uninitialized), sets it to maxHP and returns maxHP.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP (from getBaseStats)
+ * @returns {number} Current HP (1 to maxHP)
+ */
+function getPersistentHP(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return maxHP; // fallback for unregistered users
+
+  // Lazy migration: if currentHP is -1 (default), initialize to maxHP
+  if (user.stats.currentHP === undefined || user.stats.currentHP === -1) {
+    user.stats.currentHP = maxHP;
+    scheduleSave(userId);
+  }
+
+  // Clamp to valid range (1 to maxHP)
+  // Minimum 1 so players can always act (0 HP = defeated, handled by combat)
+  const hp = user.stats.currentHP;
+  if (hp > maxHP) {
+    user.stats.currentHP = maxHP;
+    scheduleSave(userId);
+    return maxHP;
+  }
+  if (hp < 1) {
+    // If HP is 0 or negative (player was defeated), restore to 1
+    // so they can continue playing. The actual "defeat" state is
+    // handled by the combat system, not by persistent HP.
+    user.stats.currentHP = 1;
+    scheduleSave(userId);
+    return 1;
+  }
+  return hp;
+}
+
+/**
+ * Save the player's current HP back to the persistent store.
+ * Called after combat ends (victory or defeat) to persist damage taken.
+ * @param {string} userId - Player JID
+ * @param {number} hp - The HP value to save
+ * @param {number} maxHP - The player's max HP (for clamping)
+ */
+function setPersistentHP(userId, hp, maxHP) {
+  const user = getUser(userId);
+  if (!user) return;
+
+  // Clamp: 0 to maxHP. 0 means defeated (will be restored to 1 on next access).
+  user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
+  scheduleSave(userId);
+}
+
+/**
+ * Heal the player to full HP.
+ * Called by the .g hospital command.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP
+ * @returns {number} Amount healed
+ */
+function healToFull(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return 0;
+
+  const currentHP = getPersistentHP(userId, maxHP);
+  const healed = maxHP - currentHP;
+  user.stats.currentHP = maxHP;
+  scheduleSave(userId);
+  return healed;
+}
 
 // Auto-load disabled - now called by index.js startBot()
 // loadEconomy();
