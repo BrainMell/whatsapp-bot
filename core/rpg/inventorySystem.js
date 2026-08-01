@@ -813,9 +813,17 @@ function getMaxEnhancementBonus(item, itemId) {
 function hydrateBaseStats(item, itemId) {
     if (item.baseStats && Object.keys(item.baseStats).length > 0) return;
 
-    const source = (item.stats && Object.keys(item.stats).length > 0)
-        ? item.stats
-        : lootSystem.getItemInfo(item.id || itemId)?.stats;
+    // 💡 AUDIT FIX 2026-08-01: ALWAYS prefer the ITEM_DATABASE stats over
+    // item.stats. The current item.stats may have been corrupted by the old
+    // exponential enhancement bug (which inflated stats to absurd values,
+    // then the "fix" introduced negative values). Using the DB stats as the
+    // base ensures enhancement always starts from the correct baseline.
+    const dbItem = lootSystem.getItemInfo(item.id || itemId);
+    const source = (dbItem && dbItem.stats && Object.keys(dbItem.stats).length > 0)
+        ? dbItem.stats
+        : (item.stats && Object.keys(item.stats).length > 0
+            ? item.stats
+            : null);
 
     item.baseStats = source ? JSON.parse(JSON.stringify(source)) : {};
 }
@@ -956,48 +964,53 @@ function enhanceItem(userId, itemId, stoneId) {
 // assumption the original exponential bug scenario was diagnosed under.
 function repairItemStats(item, itemId) {
     if (!item || item.type !== 'EQUIPMENT') return false;
-    if (!(item.enhancementLevel > 0)) return false; // never enhanced, nothing to repair
 
     const baseItem = lootSystem.getItemInfo(item.id || itemId);
     const baseStatsRef = baseItem?.stats;
     if (!baseStatsRef) return false;
 
-    // Corruption check: any current stat wildly exceeds what's possible under
-    // the rarity-aware cap. 💡 POLISH 2026-07-17: was using flat
-    // MAX_ENHANCEMENT_BONUS = 1.0 which meant every Mythic item at level 20+
-    // was flagged as "corrupted" and re-nerfed to 2x base on every bag open.
-    const maxBonus = getMaxEnhancementBonus(item, itemId);
-    const maxPossibleMultiplier = 1 + maxBonus;
+    // 💡 AUDIT FIX 2026-08-01: also repair items with enhancementLevel = 0
+    // if their stats are corrupted (negative values, or values that don't
+    // match the DB base stats). The old code skipped these, leaving
+    // corrupted items in the bag forever.
     let corrupted = false;
-    for (const stat in item.stats || {}) {
-        const base = baseStatsRef[stat];
-        if (base && item.stats[stat] > base * maxPossibleMultiplier * 1.05) {
-            corrupted = true;
-            break;
+
+    if (item.enhancementLevel > 0) {
+        // Enhanced items: check if stats exceed what's possible under the cap
+        const maxBonus = getMaxEnhancementBonus(item, itemId);
+        const maxPossibleMultiplier = 1 + maxBonus;
+        for (const stat in item.stats || {}) {
+            const base = baseStatsRef[stat];
+            if (base !== undefined && Math.abs(item.stats[stat]) > Math.abs(base) * maxPossibleMultiplier * 1.05) {
+                corrupted = true;
+                break;
+            }
+        }
+        if (!item.baseStats || Object.keys(item.baseStats).length === 0) corrupted = true;
+    } else {
+        // Non-enhanced items: check if stats match the DB (should be identical)
+        for (const stat in baseStatsRef) {
+            if (item.stats && item.stats[stat] !== undefined && item.stats[stat] !== baseStatsRef[stat]) {
+                corrupted = true;
+                break;
+            }
+        }
+        // Also check for negative values that shouldn't exist
+        for (const stat in item.stats || {}) {
+            if (baseStatsRef[stat] !== undefined && baseStatsRef[stat] > 0 && item.stats[stat] < 0) {
+                corrupted = true;
+                break;
+            }
         }
     }
-    // Also treat missing/negative baseStats bookkeeping as corrupted
-    if (!item.baseStats || Object.keys(item.baseStats).length === 0) corrupted = true;
 
     if (!corrupted) return false;
 
+    // Reset baseStats from DB + recalculate
     item.baseStats = JSON.parse(JSON.stringify(baseStatsRef));
-    // Use rarity-aware cap so a legitimately-enhanced Mythic item at level 20
-    // isn't clamped back down to 5 by the repair sweep. Only genuinely corrupted
-    // items (stats wildly exceeding what's possible under the rarity cap) get
-    // healed, and they're healed to the rarity-appropriate ceiling, not the old
-    // flat 5-level cap.
     const maxLevel = getMaxEnhancementLevel(item, itemId);
-    item.enhancementLevel = Math.min(item.enhancementLevel, maxLevel);
-    // 💡 FIX 2026-08-01 (BUG #6): the previous multiplier was the Legendary
-    // stone value (0.35 per level), which assumed Legendary stones were used
-    // at every prior level. But Mythic stones give a larger bonus per level —
-    // so a legitimately Mythic-enhanced item was being "repaired" down to the
-    // Legendary-stone assumption. Now uses the Mythic stone value (most
-    // generous assumption), capped at the rarity-aware maxBonus. This matches
-    // the stated intent in recover_enhancement_stats.js — "most generous
-    // assumption" — which was previously wrong (Legendary is NOT most generous).
-    item.enhancementBonus = Math.min(item.enhancementLevel * 0.60, maxBonus);
+    item.enhancementLevel = Math.min(item.enhancementLevel || 0, maxLevel);
+    item.enhancementBonus = Math.min((item.enhancementLevel || 0) * 0.60, getMaxEnhancementBonus(item, itemId));
     recalculateEnhancedStats(item, itemId);
     return true;
 }
