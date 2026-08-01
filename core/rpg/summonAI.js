@@ -426,6 +426,14 @@ async function persistSummonChanges(summonEntity) {
   doc.behaviorScore = summonEntity.behaviorScore || doc.behaviorScore;
   doc.lastUsedAt = new Date();
 
+  // 💡 PHASE 4 (2026-08-01): add bond XP for participating in combat.
+  // 1-3 bond XP per combat (randomized). 10 bond XP = 1 bond level.
+  try {
+    const summonBondTraits = require('./summonBondTraits');
+    const bondXP = 1 + Math.floor(Math.random() * 3); // 1-3
+    summonBondTraits.addBondXP(doc, bondXP);
+  } catch (e) {}
+
   try {
     await doc.save();
   } catch (e) {

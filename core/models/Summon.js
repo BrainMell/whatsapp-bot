@@ -121,7 +121,22 @@ const SummonSchema = new mongoose.Schema({
   obtainedAt: { type: Date, default: Date.now },
   obtainedFrom: { type: String, default: null }, // 'capture' | 'egg' | 'craft' | 'market' | 'event' | 'daily' | 'forge'
   lastUsedAt: { type: Date, default: null },
-  lastTrainedAt: { type: Date, default: null }
+  lastTrainedAt: { type: Date, default: null },
+
+  // PHASE 4: Bond, Traits, AI Mode
+  bond: { type: Number, default: 0, min: 0, max: 100 },
+  bondXp: { type: Number, default: 0 },
+  traits: [{ type: String }],
+  aiMode: { type: String, enum: ['AGGRESSIVE', 'DEFENSIVE', 'PROTECT_OWNER', 'SUPPORT_ALLY', 'BALANCED'], default: 'BALANCED' },
+
+  // PHASE 5: Summon Equipment
+  summonEquipment: {
+    claw:  { type: Object, default: null },
+    core:  { type: Object, default: null },
+    armor: { type: Object, default: null },
+    crest: { type: Object, default: null },
+    relic: { type: Object, default: null }
+  }
 
 }, { timestamps: true });
 

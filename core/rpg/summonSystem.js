@@ -51,11 +51,19 @@ async function createSummon(ownerJid, speciesId, opts = {}) {
     level: effectiveLevel,
     xp: 0,
     statPoints: 0,
+    skillPoints: 0,
+    chosenSkillPath: null,
+    unlockedSkillNodes: [],
     allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0 },
     baseStats: { ...species.baseStats },
     loyalty: opts.loyalty !== undefined ? opts.loyalty : 100,
     personality: 'STOIC',
     behaviorScore: { aggressive: 0, protective: 0, curious: 0, volatile: 0 },
+    bond: 0,
+    bondXp: 0,
+    traits: require('./summonBondTraits').rollTraits(rarity),  // PHASE 4: roll traits
+    aiMode: 'BALANCED',
+    summonEquipment: { claw: null, core: null, armor: null, crest: null, relic: null },
     lineage: [],
     socketedRuneIds: [],
     echoId: species.echoId,
@@ -171,14 +179,32 @@ function computeEffectiveStats(summon) {
   const skillHp = skillBonuses.hp || 0;
   const skillCrit = skillBonuses.crit || 0;
 
-  // Derived stats (mirrors how enemies are constructed)
+  // 💡 PHASE 4 (2026-08-01): apply bond + trait bonuses
+  let bondMult = 0;
+  let traitEffects = {};
+  try {
+    const summonBondTraits = require('./summonBondTraits');
+    bondMult = summonBondTraits.getBondStatMult(summon.bond || 0);
+    traitEffects = summonBondTraits.getTraitEffects(summon);
+  } catch (e) {}
+
+  // Trait multipliers (applied to base stats)
+  const traitAtkMult = 1 + (traitEffects.atkMult || 0) + (traitEffects.allStatsMult || 0) + (traitEffects.damageMult || 0);
+  const traitDefMult = 1 + (traitEffects.defMult || 0) + (traitEffects.allStatsMult || 0);
+  const traitMagMult = 1 + (traitEffects.magMult || 0) + (traitEffects.allStatsMult || 0);
+  const traitSpdMult = 1 + (traitEffects.spdMult || 0) + (traitEffects.allStatsMult || 0);
+  const traitHpMult = 1 + (traitEffects.hpMult || 0) + (traitEffects.allStatsMult || 0);
+  // Bond multiplier (applied to final stats)
+  const bondMultFinal = 1 + bondMult;
+
+  // Derived stats with skill + trait + bond bonuses
   return {
-    hp: Math.floor(baseHp + skillHp),
-    maxHp: Math.floor(baseHp + skillHp),
-    atk: Math.floor(baseAtk + skillAtk),
-    def: Math.floor(baseDef + skillDef),
-    mag: Math.floor(baseMag + skillMag),
-    spd: Math.floor(baseSpd + skillSpd),
+    hp: Math.floor((baseHp + skillHp) * traitHpMult * bondMultFinal),
+    maxHp: Math.floor((baseHp + skillHp) * traitHpMult * bondMultFinal),
+    atk: Math.floor((baseAtk + skillAtk) * traitAtkMult * bondMultFinal),
+    def: Math.floor((baseDef + skillDef) * traitDefMult * bondMultFinal),
+    mag: Math.floor((baseMag + skillMag) * traitMagMult * bondMultFinal),
+    spd: Math.floor((baseSpd + skillSpd) * traitSpdMult * bondMultFinal),
     energy: 100,
     maxEnergy: 100,
     crit: 5 + Math.floor(summon.level * 0.2) + skillCrit,

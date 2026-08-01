@@ -106,6 +106,17 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'evolution':
       return await cmdEvolve(sock, chatId, senderJid, rest);
 
+    case 'bond':
+      return await cmdBond(sock, chatId, senderJid, rest);
+
+    case 'trait':
+    case 'traits':
+      return await cmdTraits(sock, chatId, senderJid, rest);
+
+    case 'ai':
+    case 'aimode':
+      return await cmdAIMode(sock, chatId, senderJid, rest);
+
     case 'forge':
     case 'fuse':
       return await cmdForge(sock, chatId, senderJid, rest);
@@ -1466,6 +1477,119 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
   // Execute evolution
   const result = await summonEvolution.evolveSummon(summon);
   await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon bond <id> — view bond level + bonuses (Phase 4)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdBond(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  if (!summonIdQuery) {
+    await sock.sendMessage(chatId, {
+      text: `💖 *SUMMON BOND SYSTEM*\n\nFight alongside your summon to grow your bond. Each combat grants 1-3 bond XP.\n\n*Bond Tiers:*\n• 10: Acquainted — +5% all stats\n• 25: Trusted — +10% stats, loyalty decays slower\n• 50: Bonded — +15% stats, echo buff stronger\n• 75: Soulbound — +20% stats, combo attack unlocked\n• 100: Eternal — +25% stats, loyalty never decays\n\n_Usage: \`${getPrefix()} summon bond <id>\`_`
+    });
+    return;
+  }
+
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) {
+    await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
+    return;
+  }
+
+  const summonBondTraits = require('../rpg/summonBondTraits');
+  const bondDisplay = summonBondTraits.getBondDisplay(summon);
+  const species = registry.getSpecies(summon.species);
+  let msg = `💖 *BOND — ${summon.nickname || species?.name || summon.species}*\n\n`;
+  msg += bondDisplay;
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon traits <id> — view traits (Phase 4)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdTraits(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  if (!summonIdQuery) {
+    await sock.sendMessage(chatId, {
+      text: `🧬 *SUMMON TRAITS*\n\nEach summon spawns with 1-3 permanent traits that define its unique identity.\n\n_Usage: \`${getPrefix()} summon traits <id>\`_`
+    });
+    return;
+  }
+
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) {
+    await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
+    return;
+  }
+
+  const summonBondTraits = require('../rpg/summonBondTraits');
+  const species = registry.getSpecies(summon.species);
+  let msg = `🧬 *TRAITS — ${summon.nickname || species?.name || summon.species}*\n\n`;
+  msg += `   ${summonBondTraits.getTraitsDisplay(summon)}\n`;
+  msg += `\n_Traits are permanent — they define this summon's unique identity._`;
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon ai <id> <mode> — set AI behavior mode (Phase 4)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdAIMode(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  const mode = (args[1] || '').toUpperCase().trim();
+
+  if (!summonIdQuery) {
+    const summonBondTraits = require('../rpg/summonBondTraits');
+    let msg = `🤖 *SUMMON AI MODES*\n\nChoose how your summon behaves in combat:\n\n`;
+    msg += summonBondTraits.getAIModesDisplay();
+    msg += `\n\n_Usage: \`${getPrefix()} summon ai <id> <mode>\`_`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) {
+    await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
+    return;
+  }
+
+  if (!mode) {
+    const summonBondTraits = require('../rpg/summonBondTraits');
+    const currentMode = summonBondTraits.getAIMode(summon.aiMode || 'BALANCED');
+    let msg = `🤖 *AI MODE — ${summon.nickname || summon.species}*\n\n`;
+    msg += `Current: ${currentMode.icon} ${currentMode.name}\n${currentMode.desc}\n\n`;
+    msg += `*Available modes:*\n`;
+    msg += summonBondTraits.getAIModesDisplay();
+    msg += `\n\n_Usage: \`${getPrefix()} summon ai ${summonIdQuery} <mode>\`_`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  const summonBondTraits = require('../rpg/summonBondTraits');
+  const modeData = summonBondTraits.getAIMode(mode);
+  if (!summonBondTraits.AI_MODES[mode]) {
+    await sock.sendMessage(chatId, { text: `❌ Invalid mode. Use: AGGRESSIVE, DEFENSIVE, PROTECT_OWNER, SUPPORT_ALLY, or BALANCED.` });
+    return;
+  }
+
+  summon.aiMode = mode;
+  await summon.save();
+  await sock.sendMessage(chatId, { text: `🤖 AI mode set to *${modeData.name}* ${modeData.icon}\n${modeData.desc}` });
 }
 
 // ─────────────────────────────────────────────────────────────
