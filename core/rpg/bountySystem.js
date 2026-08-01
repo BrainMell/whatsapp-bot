@@ -31,7 +31,8 @@ const FAILED_HUNT_PENALTY_PCT = 0.10; // 10% of bounty
 
 // ─── GENERATE BOUNTY ID ───────────────────────────────────────────────────
 function generateBountyId() {
-  return `bounty_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  // 💡 Short readable ID: "B-3F7A" instead of "bounty_1699999999999_a1b2c3d4"
+  return 'B-' + Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
 // ─── PLACE BOUNTY ─────────────────────────────────────────────────────────

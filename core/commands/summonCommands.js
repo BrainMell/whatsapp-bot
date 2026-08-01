@@ -436,7 +436,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
     msg += `\n`;
   }
 
-  msg += `🆔 Full ID: \`${target.summonId}\`\n`;
+  msg += '🆔 ID: `' + target.summonId + '`\n';
   msg += `📅 Obtained: ${target.obtainedAt?.toLocaleDateString() || 'unknown'} via ${target.obtainedFrom || 'unknown'}`;
 
   await sock.sendMessage(chatId, { text: msg });
@@ -1018,7 +1018,7 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
   economy.removeMoney(senderJid, totalCost, `Summon market listing fee`);
 
   // Create listing
-  const listingId = `smarket_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const listingId = 'L-' + Math.random().toString(36).slice(2, 6).toUpperCase();
   const listing = new SummonMarket({
     listingId,
     summonId: target.summonId,

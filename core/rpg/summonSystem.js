@@ -31,7 +31,11 @@ async function createSummon(ownerJid, speciesId, opts = {}) {
     throw new Error(`Unknown summon species: ${speciesId}`);
   }
 
-  const summonId = `sum_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  // 💡 AUDIT FIX 2026-08-01: short readable IDs instead of long timestamp+hex.
+  // Old: "sum_1699999999999_a1b2c3d4" (30+ chars)
+  // New: "S-3F7A" (6 chars, 4 hex = 65K unique IDs, enough for this bot)
+  const shortId = crypto.randomBytes(2).toString('hex').toUpperCase();
+  const summonId = `S-${shortId}`;
   const level = opts.level || 1;
   const rarity = species.rarity;
   const rarityConfig = registry.getRarityConfig(rarity);

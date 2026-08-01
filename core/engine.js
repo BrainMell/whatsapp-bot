@@ -277,23 +277,23 @@ async function loadGlobalMods() {
   }
 }
 
-function saveGlobalMods() {
+async function saveGlobalMods() {
   const system = require('./utils/system');
-  system.set("_shared_global_mods", Array.from(globalMods));
+  await system.set("_shared_global_mods", Array.from(globalMods));
 }
 
-function addGlobalMod(userId) {
+async function addGlobalMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   globalMods.add(normalized);
-  saveGlobalMods();
+  await saveGlobalMods();
 }
 
-function delGlobalMod(userId) {
+async function delGlobalMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   globalMods.delete(normalized);
-  saveGlobalMods();
+  await saveGlobalMods();
 }
 
 function isGlobalMod(userId) {
@@ -341,9 +341,9 @@ async function loadRpgMods() {
   }
 }
 
-function saveRpgMods() {
+async function saveRpgMods() {
   const system = require('./utils/system');
-  system.set("_shared_rpg_mods", Array.from(rpgMods));
+  await system.set("_shared_rpg_mods", Array.from(rpgMods));
 }
 
 async function loadCardsMods() {
@@ -364,23 +364,23 @@ async function loadCardsMods() {
   }
 }
 
-function saveCardsMods() {
+async function saveCardsMods() {
   const system = require('./utils/system');
-  system.set("_shared_cards_mods", Array.from(cardsMods));
+  await system.set("_shared_cards_mods", Array.from(cardsMods));
 }
 
-function addRpgMod(userId) {
+async function addRpgMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   rpgMods.add(normalized);
-  saveRpgMods();
+  await saveRpgMods();
 }
 
-function delRpgMod(userId) {
+async function delRpgMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   rpgMods.delete(normalized);
-  saveRpgMods();
+  await saveRpgMods();
 }
 
 function isRpgMod(userId) {
@@ -10892,7 +10892,7 @@ Usage: ${newUsage}/5${warningText}`;
                       });
                     }
 
-                    addGlobalMod(target);
+                    await addGlobalMod(target);
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
@@ -10927,15 +10927,15 @@ Usage: ${newUsage}/5${warningText}`;
                           "❌ Tag someone to remove from moderators.",
                       });
 
-                    delGlobalMod(target);
+                    await delGlobalMod(target);
                     // 💡 SECURITY FIX: Also clean up ALL other mod Sets.
                     // Previously delmod only removed from globalMods — if the
                     // person was also in rpgMods, cardsMods, or cardSystem's
                     // modJids, they'd still have mod privileges and the ban
                     // protection would still see them as a mod ("can't ban a
                     // mod or owner" even after removal).
-                    delRpgMod(target);
-                    delCardsMod(target);
+                    await delRpgMod(target);
+                    await delCardsMod(target);
                     try {
                       const cardSystem = require('./rpg/cardSystem');
                       const inst = cardSystem.getInst();
@@ -10992,7 +10992,7 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to add as an RPG Moderator.",
                       });
 
-                    addRpgMod(target);
+                    await addRpgMod(target);
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
@@ -11026,7 +11026,7 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to remove from RPG Moderators.",
                       });
 
-                    delRpgMod(target);
+                    await delRpgMod(target);
                     // 💡 SECURITY FIX: also clean cardSystem modJids for full cleanup
                     try {
                       const cardSystem = require('./rpg/cardSystem');
@@ -11069,7 +11069,7 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to add as a Cards Moderator.",
                       });
 
-                    addCardsMod(target);
+                    await addCardsMod(target);
                     // 💡 SECURITY FIX: ALSO add to cardSystem's modJids so the
                     // two systems stay in sync.
                     try {
@@ -11113,7 +11113,7 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to remove from Cards Moderators.",
                       });
 
-                    delCardsMod(target);
+                    await delCardsMod(target);
                     // 💡 SECURITY FIX: ALSO remove from cardSystem's modJids.
                     // Without this, the card commands still see them as a
                     // card mod (inst.modJids.has() check) even after
