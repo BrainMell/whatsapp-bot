@@ -8288,9 +8288,27 @@ _💡 Reply with another number from your search list!_`.trim();
                           return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 You're already at full health!" });
                         }
 
-                        const healed = economy.healToFull(senderJid, maxHP);
+                        // 💡 AUDIT FIX 2026-08-01: healToFull now returns {healed, onCooldown, cooldownRemainingMs}
+                        // (12h cooldown added to prevent free-heal spam). Handle both old + new return shapes
+                        // defensively in case of stale deployment.
+                        const healResult = economy.healToFull(senderJid, maxHP);
+                        const healed = typeof healResult === 'object' ? (healResult.healed || 0) : healResult;
+                        const onCooldown = typeof healResult === 'object' ? healResult.onCooldown : false;
+                        const cdRemainingMs = typeof healResult === 'object' ? healResult.cooldownRemainingMs : 0;
+
+                        if (onCooldown) {
+                          // Format remaining cooldown as "Xh Ym"
+                          const totalMin = Math.ceil(cdRemainingMs / 60000);
+                          const h = Math.floor(totalMin / 60);
+                          const m = totalMin % 60;
+                          const cdStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                          return sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat — your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.`,
+                          });
+                        }
+
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._`,
+                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
                         });
                       } catch (e) {
                         console.error('Hospital command error:', e.message);

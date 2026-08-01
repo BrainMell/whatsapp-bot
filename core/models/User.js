@@ -78,6 +78,11 @@ const UserSchema = new mongoose.Schema({
     currentHP: { type: Number, default: -1 },
   },
   
+  // 💡 AUDIT FIX 2026-08-01: hospital cooldown timestamp. Set by healToFull()
+  // when the player uses .g hospital. 12h cooldown prevents free-heal spam
+  // and gives the out-of-combat passive regen system room to matter.
+  lastHospitalUse: { type: Date, default: null },
+  
   statBonuses: {
     hp: { type: Number, default: 0 },
     atk: { type: Number, default: 0 },

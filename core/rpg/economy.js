@@ -2054,19 +2054,37 @@ function setPersistentHP(userId, hp, maxHP) {
 /**
  * Heal the player to full HP.
  * Called by the .g hospital command.
+ * 💡 AUDIT FIX 2026-08-01: added 12-hour cooldown. Without a cooldown, the
+ * persistent HP system was meaningless — players could spam .g hospital
+ * after every fight for free full heals. Now: 12h cooldown, tracked on
+ * user.lastHospitalUse. Out-of-combat passive regen (Soul of the Deep,
+ * Druid regen, etc.) handles healing between hospital visits.
  * @param {string} userId - Player JID
  * @param {number} maxHP - The player's max HP
- * @returns {number} Amount healed
+ * @returns {{healed: number, onCooldown: boolean, cooldownRemainingMs?: number}}
  */
+const HOSPITAL_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 function healToFull(userId, maxHP) {
   const user = getUser(userId);
-  if (!user) return 0;
+  if (!user) return { healed: 0, onCooldown: false };
+
+  // Cooldown check
+  const lastUse = user.lastHospitalUse ? new Date(user.lastHospitalUse).getTime() : 0;
+  const elapsed = Date.now() - lastUse;
+  if (elapsed < HOSPITAL_COOLDOWN_MS) {
+    return {
+      healed: 0,
+      onCooldown: true,
+      cooldownRemainingMs: HOSPITAL_COOLDOWN_MS - elapsed,
+    };
+  }
 
   const currentHP = getPersistentHP(userId, maxHP);
   const healed = maxHP - currentHP;
   user.stats.currentHP = maxHP;
+  user.lastHospitalUse = new Date();
   scheduleSave(userId);
-  return healed;
+  return { healed, onCooldown: false };
 }
 
 // Auto-load disabled - now called by index.js startBot()

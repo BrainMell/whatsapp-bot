@@ -662,6 +662,114 @@ async function boot() {
       console.error("Failed to init guild war scheduler:", e.message);
     }
 
+    // 3f. Out-of-combat passive regen scheduler (AUDIT FIX 2026-08-01)
+    // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,
+    // +5-13% MP/turn) and class passives with effect:'regen' (e.g. Druid's
+    // Nature's Wrath: +5 HP/turn) were ONLY applied during combat rounds.
+    // Outside combat, players had no regen at all — they could only heal via
+    // .g hospital. Now a global tick runs every 60s and applies passive regen
+    // to ALL users with persistent HP below max.
+    //
+    // Design notes:
+    //   - 60s tick = "1 turn" out of combat (combat turns are ~1-5s).
+    //   - Regen is CAPPED at maxHP — no overheal.
+    //   - Only users with currentHP < maxHP are touched (efficient).
+    //   - Reads the same passive definitions the combat engine uses, so
+    //     there's ONE source of truth.
+    //   - Non-fatal: any error for one user doesn't break the tick.
+    try {
+      const economy = require('./core/rpg/economy');
+      const classSystem = require('./core/rpg/classSystem');
+      const progression = require('./core/rpg/progression');
+      const skillTreeMod = require('./core/rpg/skillTree');
+
+      const OUT_OF_COMBAT_TICK_MS = 60 * 1000; // 60s = 1 "turn"
+
+      const applyOutOfCombatPassiveRegen = async () => {
+        try {
+          // Iterate all loaded users. economy.economyData is the in-memory
+          // cache; we touch only users the bot has seen this session.
+          const economyData = economy.economyData;
+          if (!economyData || typeof economyData.entries !== 'function') return;
+          let touched = 0;
+          for (const [userId, user] of economyData.entries()) {
+            try {
+              if (!user || !user.class) continue;
+              // Resolve maxHP from progression (handles level + class + stats)
+              const classId = user.class?.id || user.class?.name?.toUpperCase() || 'FIGHTER';
+              const baseStats = progression.getBaseStats(userId, classId);
+              const maxHP = baseStats?.hp || 100;
+              const currentHP = economy.getPersistentHP(userId, maxHP);
+              if (currentHP >= maxHP) continue; // full HP, skip
+
+              // Compute regen rate from:
+              //   1. Class passive effect:'regen' (flat HP/turn, e.g. Druid +5)
+              //   2. Skill-tree passiveEffects.hpRegenPerTurn (% of maxHP/turn, e.g. Soul of the Deep +2-6%)
+              let flatRegen = 0;
+              let pctRegen = 0;
+
+              // Class passive
+              const classPassive = user.class?.passive;
+              if (classPassive && classPassive.effect === 'regen') {
+                flatRegen += Number(classPassive.value) || 0;
+              }
+
+              // Skill-tree passives (iterate lineage + learned skills)
+              if (user.skills) {
+                const lineage = classSystem.getLineage(classId) || [];
+                const seen = new Set();
+                for (const cId of lineage) {
+                  const tree = skillTreeMod.SKILL_TREES[cId.toUpperCase()];
+                  if (!tree) continue;
+                  for (const [, treeData] of Object.entries(tree.trees || {})) {
+                    for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+                      if (!skill.passive) continue;
+                      const level = user.skills[skillId] || 0;
+                      if (level < 1) continue;
+                      if (seen.has(skillId)) continue;
+                      seen.add(skillId);
+                      const pe = skill.passiveEffects;
+                      if (!pe) continue;
+                      if (Array.isArray(pe.hpRegenPerTurn)) {
+                        const idx = Math.min(level - 1, pe.hpRegenPerTurn.length - 1);
+                        const val = pe.hpRegenPerTurn[idx];
+                        if (typeof val === 'number' && val > pctRegen) pctRegen = val;
+                      }
+                    }
+                  }
+                }
+              }
+
+              const pctHeal = Math.floor(maxHP * pctRegen);
+              const totalHeal = flatRegen + pctHeal;
+              if (totalHeal <= 0) continue; // no regen passive, skip
+
+              const newHP = Math.min(maxHP, currentHP + totalHeal);
+              const actualHeal = newHP - currentHP;
+              if (actualHeal > 0) {
+                economy.setPersistentHP(userId, newHP, maxHP);
+                touched++;
+              }
+            } catch (userErr) {
+              // Non-fatal — one user's error shouldn't break the tick
+            }
+          }
+          if (touched > 0) {
+            console.log(`🌊 [PassiveRegen] Out-of-combat regen applied to ${touched} user(s).`);
+          }
+        } catch (tickErr) {
+          console.error('[PassiveRegen] Tick failed:', tickErr.message);
+        }
+      };
+
+      // First run in 5 min (let DB settle), then every 60s
+      setTimeout(applyOutOfCombatPassiveRegen, 5 * 60 * 1000);
+      setInterval(applyOutOfCombatPassiveRegen, OUT_OF_COMBAT_TICK_MS);
+      console.log("🌊 Out-of-combat passive regen scheduler initialized (runs every 60s).");
+    } catch (e) {
+      console.error("Failed to init passive regen scheduler:", e.message);
+    }
+
     // 4. Start each instance with a stagger delay
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
