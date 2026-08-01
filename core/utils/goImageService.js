@@ -703,7 +703,10 @@ class GoImageService {
   async generateHybridGrid(images, title, opts = {}) {
     try {
       const duration = opts.duration || 5;
-      const fps = opts.fps || 10;
+      // 💡 AUDIT FIX 2026-08-01 (Round 2): raised default fps from 10 to 15.
+      // 10fps looks choppy. 15fps is the sweet spot (20fps doubles render
+      // time with marginal gain). Matches the onboarding doc's note.
+      const fps = opts.fps || 15;
       const response = await this.client.post(
         "/api/cards/hybrid-grid",
         { images, title, duration, fps },

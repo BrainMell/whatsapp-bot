@@ -2091,6 +2091,16 @@ function calculateDamage(
   chatId = null,
   isAbility = false,
 ) {
+  // 💡 AUDIT FIX 2026-08-01 (Round 2): null-guard attacker + target.
+  // If either is undefined (edge case after a kill or stale state),
+  // accessing .jid or .stats would crash the entire combat round.
+  // Now we bail out with 0 damage instead of crashing.
+  if (!attacker || !target) {
+    console.error('[calculateDamage] null attacker or target', {
+      attacker: !!attacker, target: !!target, power, type
+    });
+    return { damage: 0, isCrit: false, wasEvaded: false };
+  }
   // 🛡️ Guard against NaN
   let damage = Number(power) || 0;
 
@@ -5547,8 +5557,15 @@ async function handleAbyssVictory(sock, sessionKey) {
   const run = state.abyssRun;
   if (!run) { deleteGameState(sessionKey); return; }
 
-  // Update run with current HP/energy
+  // 💡 AUDIT FIX 2026-08-01 (Round 2): guard against empty players array.
+  // If state.players is somehow empty (shouldn't happen but defensive),
+  // accessing player.stats.hp would crash. Now we bail out safely.
   const player = state.players[0];
+  if (!player || !player.stats) {
+    console.error('[Abyss] handleAbyssVictory: no player in state');
+    deleteGameState(sessionKey);
+    return;
+  }
   run.currentHp = Math.max(1, player.stats.hp);
   run.currentEnergy = player.stats.energy || 0;
   run.monstersKilled = (run.monstersKilled || 0) + 1;
@@ -7333,6 +7350,16 @@ async function endAdventure(sock, sessionKey, victory = true) {
   // === SPECIAL MODE HANDLING: TRIAL ===
   if (state.mode === "TRIAL" && victory) {
     const player = state.players[0]; // Trials are always solo
+    // 💡 AUDIT FIX 2026-08-01 (Round 2): guard against empty players array.
+    // If state.players is empty (edge case after a crash), bail out instead
+    // of crashing on player.jid.
+    if (!player) {
+      console.error('[Trial] victory handler: no player in state');
+      state.active = false;
+      state.phase = 'IDLE';
+      deleteGameState(sessionKey);
+      return;
+    }
     const trialData = state.trialData;
     const user = economy.getUser(player.jid);
     const classSystem = require("./classSystem");
