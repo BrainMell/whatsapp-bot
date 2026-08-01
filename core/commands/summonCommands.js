@@ -92,6 +92,11 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'hatch':
       return await cmdHatch(sock, chatId, senderJid, rest);
 
+    case 'eggcraft':
+    case 'craftegg':
+    case 'egg':
+      return await cmdEggCraft(sock, chatId, senderJid, rest);
+
     case 'forge':
     case 'fuse':
       return await cmdForge(sock, chatId, senderJid, rest);
@@ -682,75 +687,22 @@ async function cmdHatch(sock, chatId, senderJid, args) {
 
   const eggId = (args[0] || '').trim();
   if (!eggId) {
+    // 💡 AUDIT FIX 2026-08-01: updated help text to reflect the new egg system
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${getPrefix()} summon hatch <egg_id>\`\n\nSummon eggs can be obtained from boss drops, raids, and the abyss.`
+      text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` — 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` — random RARE summon\n• \`epic_summon_egg\` — random EPIC summon\n• \`legendary_summon_egg\` — random LEGENDARY summon\n• \`mythic_summon_egg\` — random MYTHIC summon\n\n_Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._`
     });
     return;
   }
 
-  // Check if user has the egg
-  const inventorySystem = require('../rpg/inventorySystem');
-  if (!inventorySystem.hasItem(senderJid, eggId)) {
-    await sock.sendMessage(chatId, { text: `❌ You don't have a "${eggId}" egg.` });
-    return;
-  }
-
-  // Check slot space
-  const summons = await summonSystem.getUserSummons(senderJid);
-  if (summons.length >= (user.summonSlots || 3)) {
-    await sock.sendMessage(chatId, { text: `❌ Summon slots full (${summons.length}/${user.summonSlots || 3}). Release a summon or expand your slots first.` });
-    return;
-  }
-
-  // Determine species from egg ID
-  // Egg IDs: summon_egg_<species> (e.g. summon_egg_skeleton, summon_egg_flame_elemental)
-  // Common eggs: summon_egg_common (random COMMON species)
-  let speciesId = null;
-  if (eggId === 'summon_egg_common' || eggId === 'common_summon_egg') {
-    // Random common species
-    const commonSpecies = Object.entries(registry.SUMMON_SPECIES)
-      .filter(([_, s]) => s.rarity === 'COMMON')
-      .map(([id]) => id);
-    if (commonSpecies.length === 0) {
-      await sock.sendMessage(chatId, { text: '❌ No common species available.' });
-      return;
-    }
-    speciesId = commonSpecies[Math.floor(Math.random() * commonSpecies.length)];
-  } else {
-    // Extract species from egg ID
-    const match = eggId.match(/^summon_egg_(.+)$/);
-    if (match) {
-      speciesId = match[1];
-    }
-  }
-
-  if (!speciesId || !registry.getSpecies(speciesId)) {
-    await sock.sendMessage(chatId, { text: `❌ Unknown egg type: "${eggId}". Cannot hatch.` });
-    return;
-  }
-
-  // Consume the egg
-  inventorySystem.removeItem(senderJid, eggId, 1);
-
-  // Create the summon
-  try {
-    const summon = await summonSystem.createSummon(senderJid, speciesId, {
-      obtainedFrom: 'egg'
-    });
-
-    const species = registry.getSpecies(speciesId);
-    await sock.sendMessage(chatId, {
-      text: `🥚 *EGG HATCHED!*\n\n${species.icon} A *${species.name}* has been born!\n\n📊 Level ${summon.level} | ${summon.rarity}\n💖 Loyalty: ${summon.loyalty}/100\n🧠 Personality: STOIC\n\nUse \`${getPrefix()} summon deploy ${summon.summonId.slice(-8)}\` to equip it.`
-    });
-
+  // 💡 AUDIT FIX 2026-08-01: use the new summonEggSystem for tiered eggs
+  const summonEggSystem = require('../rpg/summonEggSystem');
+  const result = await summonEggSystem.hatchEgg(senderJid, eggId);
+  await sock.sendMessage(chatId, { text: result.message });
+  if (result.success) {
     // Refresh resonances
     try {
       await summonSystem.refreshUserResonances(user);
     } catch (e) {}
-  } catch (e) {
-    // Refund the egg on failure
-    inventorySystem.addItem(senderJid, eggId, 1);
-    await sock.sendMessage(chatId, { text: `❌ Hatching failed: ${e.message}` });
   }
 }
 
@@ -1342,6 +1294,55 @@ async function cmdDuel(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// .summon eggcraft <tier> — craft eggs from fragments
+// ─────────────────────────────────────────────────────────────
+// 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): combines 10 fragments
+// into 1 egg of the next tier up. The progression loop:
+//   Abyss → fragments → craft egg → hatch → summon
+
+async function cmdEggCraft(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+
+  const tier = (args[0] || '').toLowerCase().trim();
+  const validTiers = ['rare', 'epic', 'legendary', 'mythic'];
+
+  if (!tier) {
+    const inventorySystem = require('../rpg/inventorySystem');
+    const p = getPrefix();
+    let msg = `💎 *SUMMON EGG CRAFTING*\n\n`;
+    msg += `Combine 10 fragments to craft an egg:\n\n`;
+    for (const t of validTiers) {
+      const summonEggSystem = require('../rpg/summonEggSystem');
+      const tierData = summonEggSystem.EGG_TIERS[t];
+      const fragId = tierData.fragmentsRequired.id;
+      const fragCount = tierData.fragmentsRequired.count;
+      const have = inventorySystem.getItemCount(senderJid, fragId);
+      const eggName = require('../rpg/lootSystem').getItemInfo(tierData.eggId)?.name || tierData.eggId;
+      const fragName = require('../rpg/lootSystem').getItemInfo(fragId)?.name || fragId;
+      msg += `• \`${p} summon eggcraft ${t}\` — ${fragCount}x ${fragName} → ${eggName}\n  _You have: ${have}/${fragCount}_\n`;
+    }
+    msg += `\n_Get fragments by defeating Wild Summons in the Abyss (10% encounter rate per floor)._`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  if (!validTiers.includes(tier)) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Invalid tier. Use: \`${getPrefix()} summon eggcraft <rare|epic|legendary|mythic>\``
+    });
+    return;
+  }
+
+  const summonEggSystem = require('../rpg/summonEggSystem');
+  const result = await summonEggSystem.craftEgg(senderJid, tier);
+  await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
 // .summon help
 // ─────────────────────────────────────────────────────────────
 
@@ -1360,6 +1361,7 @@ async function cmdHelp(sock, chatId) {
   msg += `📖 \`${p} summon compendium\` — view tamed species (Necromancer)\n`;
   msg += `📚 \`${p} summon codex\` — view ALL summon species in the game\n`;
   msg += `🥚 \`${p} summon hatch <egg_id>\` — hatch a summon egg\n`;
+  msg += `💎 \`${p} summon eggcraft <tier>\` — craft eggs from fragments\n`;
   msg += `⚔️ \`${p} summon forge <id1> <id2>\` — Soul Forge two summons\n`;
   msg += `🏆 \`${p} summon trial <id>\` — attempt evolution trial\n`;
   msg += `✨ \`${p} summon passives\` — view unlocked trial passives\n`;
@@ -1367,9 +1369,17 @@ async function cmdHelp(sock, chatId) {
   msg += `⚔️ \`${p} summon duel @user\` — summon vs summon PvP\n`;
   msg += `💔 \`${p} summon release <id>\` — permanently release a summon\n\n`;
   msg += `*OBTAINING SUMMONS:*\n`;
+  msg += `• 🥚 Buy a *Basic Summon Egg* from the shop (5K Zeni) → hatches 1 of 4 starters\n`;
+  msg += `• 🐉 Explore the *Abyss* — 10% chance per floor to encounter a Wild Summon\n`;
+  msg += `• 💎 Defeat Wild Summons → drop *Summon Fragments* (tiered by floor depth)\n`;
+  msg += `• 🔮 Craft higher-tier eggs from fragments → hatch stronger summons\n`;
   msg += `• Necromancer: cast Army of the Dead to capture enemies\n`;
-  msg += `• Hatch eggs (from boss drops, raids, abyss)\n`;
   msg += `• Buy from other players on the summon market\n\n`;
+  msg += `*EGG CRAFTING:*\n`;
+  msg += `• 10x Common Fragment → Rare Egg\n`;
+  msg += `• 10x Rare Fragment → Epic Egg\n`;
+  msg += `• 10x Epic Fragment → Legendary Egg\n`;
+  msg += `• 10x Legendary Fragment → Mythic Egg\n\n`;
   msg += `*MECHANICS:*\n`;
   msg += `• Summons act via gauge-based turn order (high SPD = more turns)\n`;
   msg += `• Personalities shift based on how you use them\n`;

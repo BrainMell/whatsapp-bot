@@ -1001,6 +1001,27 @@ const ITEM_DATABASE = {
     'mythic_enhancement_stone': { name: 'Mythic Enhancement Stone', description: 'Boosts gear stats by 60%. The pinnacle of enhancement.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
     'dragon_heart':        { name: 'Dragon Heart',        description: 'A still-warm dragon heart. Pumping ancient fire magic.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
 
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): EGGS + FRAGMENTS
+    // Eggs are consumables that hatch into summons. Fragments are
+    // crafting materials dropped by wild summons in the Abyss.
+    // Combine fragments → craft higher-tier eggs → hatch better summons.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- SUMMON EGGS ---
+    'basic_summon_egg':    { name: 'Basic Summon Egg',    description: 'A common egg that hatches one of 4 starter summons. (Tank/DPS/Mage/Support)', rarity: 'COMMON', value: 5000, type: 'ITEM', usable: true },
+    'rare_summon_egg':     { name: 'Rare Summon Egg',     description: 'Hatches a random RARE-tier summon. Crafted from 10 Common Fragments.', rarity: 'RARE', value: 25000, type: 'ITEM', usable: true },
+    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: 'Hatches a random EPIC-tier summon. Crafted from 10 Rare Fragments.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: true },
+    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: 'Hatches a random LEGENDARY-tier summon. Crafted from 10 Epic Fragments.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: true },
+    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: 'Hatches a random MYTHIC-tier summon. The rarest egg. Crafted from 10 Legendary Fragments.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: true },
+
+    // --- SUMMON FRAGMENTS (dropped by wild summons in the Abyss) ---
+    'common_fragment':     { name: 'Common Summon Fragment',  description: 'A faint soul fragment from a defeated wild summon. Collect 10 to craft a Rare Egg.', rarity: 'COMMON', value: 500, type: 'MATERIAL' },
+    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'A glowing soul fragment from a stronger wild summon. Collect 10 to craft an Epic Egg.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
+    'epic_fragment':       { name: 'Epic Summon Fragment',    description: 'A pulsing soul fragment radiating power. Collect 10 to craft a Legendary Egg.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
+    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: 'A blinding fragment of immense power. Collect 10 to craft a Mythic Egg.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
+    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: 'A fragment of pure divine essence. Only obtainable from the deepest Abyss floors + raids.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
+
     // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
     'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
     'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },

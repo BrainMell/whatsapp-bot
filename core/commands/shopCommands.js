@@ -36,17 +36,19 @@ async function displayShop(sock, chatId, category = 'all') {
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
         // Items with an explicit value > 1 that are Equipment, Stones, or specifically categorized
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy'))) {
+        // 💡 AUDIT FIX 2026-08-01: also include summon eggs + fragments in the shop
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy') || id.includes('summon_egg'))) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
+                icon: id.includes('stone') ? '💎' : (id.includes('summon_egg') ? '🥚' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪'))),
                 desc: item.description,
                 cost: item.value,
                 rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3: propagate rarity
-                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
-                slot: item.slot, // Copy the item's slot property
-                reqLevel: item.reqLevel  // 💡 FIX GAP #1: propagate reqLevel for display
+                category: id.includes('summon_egg') ? 'SUMMON' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'),
+                type: id.includes('summon_egg') ? 'ITEM' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE'),
+                slot: item.slot,
+                reqLevel: item.reqLevel
             };
         }
     });
@@ -59,6 +61,7 @@ async function displayShop(sock, chatId, category = 'all') {
         class: { name: 'Class Items', icon: '🎭' },
         quest: { name: 'Quest Items', icon: '🧪' },
         equipment: { name: 'Equipment', icon: '⚔️' },
+        summon: { name: 'Summon Eggs', icon: '🥚' },  // 💡 AUDIT FIX 2026-08-01: summon egg category
         permanent: { name: 'Special', icon: '📈' }
     };
     
@@ -130,16 +133,16 @@ async function buyItem(sock, chatId, senderJid, input) {
     // preview; if we don't fix both, the purchase still stores COMMON.
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy'))) {
+        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy') || id.includes('summon_egg'))) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
+                icon: id.includes('stone') ? '💎' : (id.includes('summon_egg') ? '🥚' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪'))),
                 desc: item.description,
                 cost: item.value,
                 rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3
-                type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
-                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
+                type: id.includes('summon_egg') ? 'ITEM' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE'),
+                category: id.includes('summon_egg') ? 'SUMMON' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'),
                 slot: item.slot,  // 💡 FIX BUG #3: also copy slot (was missing in this path too)
                 reqLevel: item.reqLevel  // 💡 FIX GAP #1
             };
@@ -225,6 +228,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         case 'CONSUMABLE':
         case 'BOOSTER':
         case 'SPECIAL_KEY':
+        case 'ITEM':  // 💡 AUDIT FIX 2026-08-01: summon eggs are type 'ITEM'
             result = await handleConsumable(senderJid, item);
             break;
         default:

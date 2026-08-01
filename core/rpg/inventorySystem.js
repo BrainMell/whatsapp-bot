@@ -1173,6 +1173,18 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
 
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
+        // 💡 SUMMON EGGS: hatchable items — use triggers the egg spin
+        if (itemId.endsWith('_summon_egg')) {
+            // Eggs are async (createSummon is async) but useItem is sync.
+            // Return a special marker so the caller (rpgCommands.useItem)
+            // can handle it async. We can't hatch here because createSummon
+            // is async.
+            return {
+                success: false,
+                isEgg: true,
+                message: `🥚 *${itemInfo.name}* — use \`${botConfig.getPrefix()} summon hatch\` to hatch it!`
+            };
+        }
         // Give specific guidance based on item type
         if (itemId === 'ascension_stone' || itemId === 'evolution_stone') {
             const stoneTier = itemId === 'ascension_stone' ? 'T3 Ascension' : 'T2 Evolution';

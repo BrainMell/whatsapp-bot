@@ -159,11 +159,17 @@ async function startRun(userId, playerStats) {
     status: 'active',
   });
 
-  // Generate first floor encounter (may be combat, treasure, or event)
+  // Generate first floor encounter (may be combat, treasure, event, or wild_summon)
   const encounter = generateFloorEncounter(1);
-  if (encounter.type === 'combat') {
+  if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
-    run.currentEncounterType = 'combat';
+    run.currentEncounterType = encounter.type;
+    if (encounter.type === 'wild_summon') {
+      run.currentEncounterData = {
+        species: encounter.wildSummonSpecies,
+        rarity: encounter.wildSummonRarity,
+      };
+    }
   } else {
     run.currentEnemy = null;
     run.currentEncounterType = encounter.type;
@@ -174,6 +180,9 @@ async function startRun(userId, playerStats) {
   let startMsg = `🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n`;
   if (encounter.type === 'combat') {
     startMsg += `⚔️ *Floor 1 — ${encounter.enemy.name}*\n_HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}_\n\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+  } else if (encounter.type === 'wild_summon') {
+    const species = encounter.wildSummonSpecies;
+    startMsg += `🐉 *Floor 1 — Wild ${species} appeared!*\n_HP: ${encounter.enemy.stats.hp}/${encounter.enemy.stats.maxHp}_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
   } else if (encounter.type === 'treasure') {
     startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_\n_Skip with \`.g abyss skip\`_`;
   } else if (encounter.type === 'event') {
@@ -195,11 +204,33 @@ async function startRun(userId, playerStats) {
 // 20% chance of treasure/event instead of combat on non-boss floors.
 function generateFloorEncounter(floor) {
   const isBoss = isBossFloor(floor);
-  
+
   // Boss floors are always combat
   if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor) };
-  
-  // Non-boss floors: 20% chance of treasure, 10% chance of event, 70% combat
+
+  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): 10% chance of wild summon encounter.
+  // When triggered, the player fights a wild summon species. Winning drops
+  // summon fragments (tiered by floor depth) which can be crafted into eggs.
+  // This is the primary source of summon fragments — the core progression loop.
+  const WILD_SUMMON_CHANCE = 0.10; // 10% per non-boss floor
+  if (Math.random() < WILD_SUMMON_CHANCE) {
+    try {
+      const summonEggSystem = require('./summonEggSystem');
+      const wildEncounter = summonEggSystem.generateWildSummonEncounter(floor);
+      if (wildEncounter) {
+        return {
+          type: 'wild_summon',
+          enemy: wildEncounter.enemy,
+          wildSummonSpecies: wildEncounter.speciesId,
+          wildSummonRarity: wildEncounter.species.rarity,
+        };
+      }
+    } catch (e) {
+      console.error('[Abyss] Wild summon encounter failed:', e.message);
+    }
+  }
+
+  // Non-boss floors: 20% chance of treasure, 10% chance of event, remaining combat
   const roll = Math.random();
   if (roll < 0.20) {
     return generateTreasureEncounter(floor);
@@ -425,10 +456,17 @@ async function processAttack(userId, playerDamage, playerStats) {
     // Advance to next floor using encounter system
     run.currentFloor += 1;
     const nextEncounter = generateFloorEncounter(run.currentFloor);
-    if (nextEncounter.type === 'combat') {
+    if (nextEncounter.type === 'combat' || nextEncounter.type === 'wild_summon') {
       run.currentEnemy = nextEncounter.enemy;
-      run.currentEncounterType = 'combat';
-      run.currentEncounterData = null;
+      run.currentEncounterType = nextEncounter.type;
+      if (nextEncounter.type === 'wild_summon') {
+        run.currentEncounterData = {
+          species: nextEncounter.wildSummonSpecies,
+          rarity: nextEncounter.wildSummonRarity,
+        };
+      } else {
+        run.currentEncounterData = null;
+      }
     } else {
       run.currentEnemy = null;
       run.currentEncounterType = nextEncounter.type;
@@ -436,9 +474,11 @@ async function processAttack(userId, playerDamage, playerStats) {
     }
     // Restore some energy between floors
     run.currentEnergy = Math.min(run.playerSnapshot.maxEnergy, run.currentEnergy + 20);
-    
+
     if (nextEncounter.type === 'combat') {
       attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.g abyss attack\`_`;
+    } else if (nextEncounter.type === 'wild_summon') {
+      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${nextEncounter.enemy.stats.hp}/${nextEncounter.enemy.stats.maxHp}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`.g abyss attack\`_`;
     } else if (nextEncounter.type === 'treasure') {
       attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_`;
     } else if (nextEncounter.type === 'event') {

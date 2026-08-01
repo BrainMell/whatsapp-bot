@@ -5631,6 +5631,27 @@ async function handleAbyssVictory(sock, sessionKey) {
     } catch (e) {}
   }
 
+  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): drop fragments when the
+  // defeated enemy was a wild summon. The encounter type + species data
+  // are stored on the run — check if this was a wild summon encounter.
+  let fragmentMsg = '';
+  if (run.currentEncounterType === 'wild_summon' && run.currentEncounterData) {
+    try {
+      const summonEggSystem = require('./summonEggSystem');
+      const wildRarity = run.currentEncounterData.rarity || 'COMMON';
+      const fragDrop = summonEggSystem.getFragmentDrop(state.abyssFloor, wildRarity);
+      if (fragDrop) {
+        const { fragmentId, quantity } = fragDrop;
+        inventorySystem.addItem(senderJid, fragmentId, quantity);
+        const fragInfo = lootSystem.getItemInfo(fragmentId);
+        const fragName = fragInfo?.name || fragmentId;
+        fragmentMsg = `\n💎 *SUMMON FRAGMENT DROP!* +${quantity}x ${fragName}`;
+      }
+    } catch (e) {
+      console.error('[Abyss] Fragment drop failed:', e.message);
+    }
+  }
+
   // Advance floor
   run.currentFloor = (run.currentFloor || state.abyssFloor) + 1;
   const newFloor = run.currentFloor;
@@ -5638,10 +5659,17 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   // Generate next encounter
   const encounter = abyssSystem.generateFloorEncounter(newFloor);
-  if (encounter.type === 'combat') {
+  if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
-    run.currentEncounterType = 'combat';
-    run.currentEncounterData = null;
+    run.currentEncounterType = encounter.type;
+    if (encounter.type === 'wild_summon') {
+      run.currentEncounterData = {
+        species: encounter.wildSummonSpecies,
+        rarity: encounter.wildSummonRarity,
+      };
+    } else {
+      run.currentEncounterData = null;
+    }
   } else {
     run.currentEnemy = null;
     run.currentEncounterType = encounter.type;
@@ -5654,12 +5682,19 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   // Build and send message
   let msg = `✅ *Floor ${state.abyssFloor} cleared!*\n`;
-  msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}\n`;
+  msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
   msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot?.maxHp || '?'}\n\n`;
 
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;
     msg += `HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}\n`;
+    msg += `_Use \`.g combat attack\` to fight!_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+  } else if (encounter.type === 'wild_summon') {
+    msg += `🐉 *Floor ${newFloor}* — Wild ${encounter.wildSummonSpecies} appeared!*\n`;
+    msg += `HP: ${encounter.enemy.stats.hp}/${encounter.enemy.stats.maxHp}\n`;
+    msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
     msg += `_Use \`.g combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);

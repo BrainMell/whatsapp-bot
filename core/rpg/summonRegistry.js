@@ -330,7 +330,76 @@ const SUMMON_SPECIES = {
   sparchu: { name: 'Sparchu', archetype: 'STALKER', element: 'lightning', baseStats: { hp: 80, atk: 14, def: 5, mag: 18, spd: 26 }, rarity: 'COMMON', echoId: 'storm_echo', evolutionStages: ['sparchu', 'kabuterimon'], trialId: 'trial_sparchu', icon: '⚡', desc: 'A spark mouse Digimon with electric cheek pouches.' },
   friolera: { name: 'Friolera', archetype: 'MAGE', element: 'ice', baseStats: { hp: 120, atk: 10, def: 10, mag: 25, spd: 12 }, rarity: 'UNCOMMON', echoId: 'frost_echo', evolutionStages: ['friolera', 'zudomon'], trialId: 'trial_friolera', icon: '❄️', desc: 'A frost flower Digimon that blooms in blizzards.' },
   charmordillo: { name: 'Charmordillo', archetype: 'TANK', element: 'beast', baseStats: { hp: 200, atk: 18, def: 30, mag: 8, spd: 6 }, rarity: 'UNCOMMON', echoId: 'guardian_echo', evolutionStages: ['charmordillo', 'cerberusmon'], trialId: 'trial_charmordillo', icon: '🦔', desc: 'A charmed armadillo Digimon with impenetrable shell.' },
-  finsta: { name: 'Finsta', archetype: 'STALKER', element: 'ice', baseStats: { hp: 100, atk: 16, def: 8, mag: 12, spd: 22 }, rarity: 'COMMON', echoId: 'frost_echo', evolutionStages: ['finsta', 'coelamon'], trialId: 'trial_finsta', icon: '🐟', desc: 'A small fish Digimon with iridescent scales.' }
+  finsta: { name: 'Finsta', archetype: 'STALKER', element: 'ice', baseStats: { hp: 100, atk: 16, def: 8, mag: 12, spd: 22 }, rarity: 'COMMON', echoId: 'frost_echo', evolutionStages: ['finsta', 'coelamon'], trialId: 'trial_finsta', icon: '🐟', desc: 'A small fish Digimon with iridescent scales.' },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): 4 STARTER SUMMONS
+  // Every new player can buy a Basic Summon Egg from the shop, which
+  // spins for 1 of these 4 starters. Each fills a distinct combat role:
+  //   - StoneGuard (TANK): high HP + DEF, taunts enemies
+  //   - EmberDrake (DPS): high ATK + CRIT, fast attacker
+  //   - MistWisp  (MAGE): high MAG, elemental attacks
+  //   - BloomPixie (SUPPORT): heals + buffs the player
+  // These are custom species (not from Digimon API) with balanced
+  // starter stats. They use existing enemy sprites as placeholders
+  // until dedicated art is created.
+  // ═══════════════════════════════════════════════════════════════
+  stoneguard: {
+    name: 'StoneGuard',
+    archetype: 'TANK',
+    element: 'earth',
+    baseStats: { hp: 200, atk: 12, def: 25, mag: 5, spd: 6 },
+    rarity: 'COMMON',
+    echoId: 'guardian_echo',
+    evolutionStages: ['stoneguard', 'iron_sentinel', 'mountain_titan'],
+    trialId: 'trial_stoneguard',
+    icon: '🪨',
+    desc: 'A living stone guardian. Sturdy and protective, it shields its master from harm.',
+    role: 'TANK',
+    isStarter: true
+  },
+  emberdrake: {
+    name: 'EmberDrake',
+    archetype: 'BRUTE',
+    element: 'fire',
+    baseStats: { hp: 100, atk: 30, def: 8, mag: 15, spd: 18 },
+    rarity: 'COMMON',
+    echoId: 'fire_echo',
+    evolutionStages: ['emberdrake', 'flare_wyrm', 'infernal_dragon'],
+    trialId: 'trial_emberdrake',
+    icon: '🔥',
+    desc: 'A young fire drake. Aggressive and fast, it tears through enemies with blazing claws.',
+    role: 'DPS',
+    isStarter: true
+  },
+  mistwisp: {
+    name: 'MistWisp',
+    archetype: 'MAGE',
+    element: 'water',
+    baseStats: { hp: 90, atk: 8, def: 6, mag: 30, spd: 14 },
+    rarity: 'COMMON',
+    echoId: 'frost_echo',
+    evolutionStages: ['mistwisp', 'frost_spectre', 'abyssal_phantom'],
+    trialId: 'trial_mistwisp',
+    icon: '💨',
+    desc: 'A spectral wisp of mist. Fragile but powerful, it hurls elemental magic from afar.',
+    role: 'MAGE',
+    isStarter: true
+  },
+  bloompixie: {
+    name: 'BloomPixie',
+    archetype: 'SUPPORT',
+    element: 'nature',
+    baseStats: { hp: 120, atk: 8, def: 10, mag: 20, spd: 16 },
+    rarity: 'COMMON',
+    echoId: 'bloom_echo',
+    evolutionStages: ['bloom_pixie', 'blossom_sylph', 'world_tree_spirit'],
+    trialId: 'trial_bloompixie',
+    icon: '🌸',
+    desc: 'A tiny nature pixie. It heals and empowers its master, turning the tide of battle.',
+    role: 'SUPPORT',
+    isStarter: true
+  }
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -436,6 +505,22 @@ const SUMMON_ECHOES = {
     buff: { type: 'enemy_atk_reduction', value: 15, duration: 3 },
     icon: '🐲😨',
     desc: '-15% enemy attack for 3 turns'
+  },
+
+  // 💡 STARTER SUMMON ECHOES (2026-08-01)
+  // fire_echo: EmberDrake's death echo — burns enemies
+  fire_echo: {
+    name: 'Fire Echo',
+    buff: { type: 'attack', value: 20, duration: 3 },
+    icon: '🔥',
+    desc: '+20% attack for 3 turns'
+  },
+  // bloom_echo: BloomPixie's death echo — last healing burst
+  bloom_echo: {
+    name: 'Bloom Echo',
+    buff: { type: 'healing_boost', value: 50, duration: 3 },
+    icon: '🌸',
+    desc: '+50% healing received for 3 turns'
   }
 };
 
