@@ -1027,6 +1027,40 @@ const ITEM_DATABASE = {
     'summon_essence_t3':   { name: 'Summon Essence (T3)',    description: 'Pure crystallized essence used to evolve a summon to its final form. Dropped by Abyss bosses floor 21+.', rarity: 'EPIC', value: 60000, type: 'MATERIAL' },
     'skill_respec_scroll': { name: 'Skill Respec Scroll',    description: 'Resets a summon\'s skill tree, refunding all skill points. The path choice is also reset.', rarity: 'EPIC', value: 40000, type: 'CONSUMABLE', usable: true },
 
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 PHASE 5 (2026-08-01): SUMMON EQUIPMENT
+    // Separate from player gear — 5 slots: Claw, Core, Armor, Crest, Relic.
+    // Dropped by wild summons in the Abyss + craftable from fragments.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- CLAWS (ATK bonus) ---
+    'rusty_claw':         { name: 'Rusty Claw',         description: 'A worn claw. (+5 ATK for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 5 } },
+    'iron_claw':          { name: 'Iron Claw',          description: 'A sturdy iron claw. (+15 ATK for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 15 } },
+    'dragon_claw':        { name: 'Dragon Claw',        description: 'A claw from a slain dragon. (+35 ATK, +5 CRIT for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 35, crit: 5 } },
+    'abyssal_claw':       { name: 'Abyssal Claw',       description: 'A claw that tears reality. (+60 ATK, +10 CRIT for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 60, crit: 10 } },
+
+    // --- CORES (MAG bonus) ---
+    'cracked_core':       { name: 'Cracked Core',       description: 'A cracked mana core. (+5 MAG for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 5 } },
+    'mana_core':          { name: 'Mana Core',          description: 'A pulsing mana core. (+15 MAG for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 15 } },
+    'elemental_core':     { name: 'Elemental Core',     description: 'A core of pure elemental power. (+35 MAG, +10 HP for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 35, hp: 10 } },
+    'abyssal_core':       { name: 'Abyssal Core',       description: 'A core drawn from the abyss itself. (+60 MAG, +20 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 60, hp: 20 } },
+
+    // --- ARMOR (DEF + HP bonus) ---
+    'leather_summon_armor': { name: 'Leather Barding',  description: 'Simple leather armor for a summon. (+5 DEF, +20 HP for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 5, hp: 20 } },
+    'iron_summon_armor':  { name: 'Iron Barding',       description: 'Sturdy iron armor for a summon. (+15 DEF, +50 HP for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 15, hp: 50 } },
+    'dragon_scale_barding': { name: 'Dragon Scale Barding', description: 'Armor from dragon scales. (+30 DEF, +100 HP for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 30, hp: 100 } },
+    'abyssal_barding':    { name: 'Abyssal Barding',    description: 'Armor that absorbs the void. (+50 DEF, +200 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 50, hp: 200 } },
+
+    // --- CRESTS (Special effects) ---
+    'crit_crest':         { name: 'Crest of Crits',     description: 'Grants +10% crit chance to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { crit: 10 } },
+    'evasion_crest':      { name: 'Crest of Evasion',   description: 'Grants +15% evasion to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { evasion: 15 } },
+    'lifesteal_crest':    { name: 'Crest of Vampirism', description: 'Grants 8% lifesteal to a summon.', rarity: 'EPIC', value: 50000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { lifestealPct: 8 } },
+    'swift_crest':        { name: 'Crest of Swiftness', description: 'Grants +20 SPD to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { spd: 20 } },
+
+    // --- RELICS (Ultimate bonus — very rare) ---
+    'ancient_relic':      { name: 'Ancient Relic',      description: 'A relic of immense power. (+10% all stats for summon)', rarity: 'LEGENDARY', value: 200000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.10 } },
+    'abyssal_relic':      { name: 'Abyssal Relic',      description: 'A relic from the deepest abyss. (+15% all stats, +5% lifesteal for summon)', rarity: 'MYTHIC', value: 500000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.15, lifestealPct: 5 } },
+
     // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
     'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
     'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },

@@ -117,6 +117,13 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'aimode':
       return await cmdAIMode(sock, chatId, senderJid, rest);
 
+    case 'equip':
+    case 'gear':
+      return await cmdSummonEquip(sock, chatId, senderJid, rest);
+
+    case 'unequip':
+      return await cmdSummonUnequip(sock, chatId, senderJid, rest);
+
     case 'forge':
     case 'fuse':
       return await cmdForge(sock, chatId, senderJid, rest);
@@ -1477,6 +1484,128 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
   // Execute evolution
   const result = await summonEvolution.evolveSummon(summon);
   await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon equip <summonId> <gearId> — equip summon gear (Phase 5)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdSummonEquip(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  const gearIdQuery = (args[1] || '').trim();
+
+  if (!summonIdQuery || !gearIdQuery) {
+    let msg = `⚙️ *SUMMON EQUIPMENT*\n\n5 equipment slots: Claw, Core, Armor, Crest, Relic.\n\n_Usage: \`${getPrefix()} summon equip <summonId> <gearId>\`_`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  // Resolve summon
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
+
+  // Resolve gear item — look up in ITEM_DATABASE for type SUMMON_GEAR
+  const lootSystem = require('../rpg/lootSystem');
+  const inventorySystem = require('../rpg/inventorySystem');
+  const cleanQuery = gearIdQuery.toLowerCase().replace(/_/g, '').replace(/ /g, '');
+  const gearId = Object.keys(lootSystem.ITEM_DATABASE).find(id =>
+    lootSystem.ITEM_DATABASE[id].type === 'SUMMON_GEAR' &&
+    id.toLowerCase().replace(/_/g, '') === cleanQuery
+  );
+
+  if (!gearId) {
+    await sock.sendMessage(chatId, { text: `❌ Summon gear "${gearIdQuery}" not found. Make sure it's a summon equipment item.` });
+    return;
+  }
+
+  const gearInfo = lootSystem.getItemInfo(gearId);
+  const slot = gearInfo.summonSlot;
+  if (!slot) {
+    await sock.sendMessage(chatId, { text: `❌ ${gearInfo.name} is not summon equipment.` });
+    return;
+  }
+
+  // Check player has the item
+  if (!inventorySystem.hasItem(senderJid, gearId, 1)) {
+    await sock.sendMessage(chatId, { text: `❌ You don't have a ${gearInfo.name}.` });
+    return;
+  }
+
+  // If something is already equipped in that slot, return it to inventory
+  const oldGear = summon.summonEquipment?.[slot];
+  if (oldGear) {
+    inventorySystem.addItem(senderJid, oldGear.id || oldGear.summonSlot, 1);
+  }
+
+  // Equip the new gear
+  if (!summon.summonEquipment) summon.summonEquipment = {};
+  summon.summonEquipment[slot] = {
+    id: gearId,
+    name: gearInfo.name,
+    stats: gearInfo.stats,
+    rarity: gearInfo.rarity,
+  };
+
+  // Remove from inventory
+  inventorySystem.removeItem(senderJid, gearId, 1);
+  await summon.save();
+
+  let msg = `⚙️ *EQUIPPED!*\n\n${gearInfo.name} → ${summon.nickname || summon.species}'s ${slot} slot\n`;
+  if (gearInfo.stats) {
+    const statStr = Object.entries(gearInfo.stats)
+      .filter(([,v]) => v !== 0)
+      .map(([k,v]) => `${k.toUpperCase()} ${v > 0 ? '+' : ''}${v}`)
+      .join(', ');
+    if (statStr) msg += `Stats: ${statStr}`;
+  }
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon unequip <summonId> <slot> — unequip summon gear (Phase 5)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdSummonUnequip(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  const slot = (args[1] || '').toLowerCase().trim();
+
+  if (!summonIdQuery || !slot) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Usage: \`${getPrefix()} summon unequip <summonId> <claw|core|armor|crest|relic>\``
+    });
+    return;
+  }
+
+  const validSlots = ['claw', 'core', 'armor', 'crest', 'relic'];
+  if (!validSlots.includes(slot)) {
+    await sock.sendMessage(chatId, { text: `❌ Invalid slot. Use: claw, core, armor, crest, or relic.` });
+    return;
+  }
+
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
+
+  const gear = summon.summonEquipment?.[slot];
+  if (!gear) {
+    await sock.sendMessage(chatId, { text: `❌ Nothing equipped in ${slot} slot.` });
+    return;
+  }
+
+  // Return to inventory
+  const inventorySystem = require('../rpg/inventorySystem');
+  inventorySystem.addItem(senderJid, gear.id, 1);
+  summon.summonEquipment[slot] = null;
+  await summon.save();
+
+  await sock.sendMessage(chatId, { text: `✅ Unequipped ${gear.name} from ${slot} slot. Returned to inventory.` });
 }
 
 // ─────────────────────────────────────────────────────────────

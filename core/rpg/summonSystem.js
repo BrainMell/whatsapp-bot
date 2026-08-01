@@ -197,14 +197,35 @@ function computeEffectiveStats(summon) {
   // Bond multiplier (applied to final stats)
   const bondMultFinal = 1 + bondMult;
 
-  // Derived stats with skill + trait + bond bonuses
+  // 💡 PHASE 5 (2026-08-01): apply summon equipment bonuses
+  // Summon equipment adds flat stats + special effects (allStatsMult, lifesteal, etc.)
+  let gearAtk = 0, gearDef = 0, gearMag = 0, gearSpd = 0, gearHp = 0, gearCrit = 0;
+  let gearAllStatsMult = 0, gearLifesteal = 0, gearEvasion = 0;
+  if (summon.summonEquipment) {
+    for (const slot of ['claw', 'core', 'armor', 'crest', 'relic']) {
+      const gear = summon.summonEquipment[slot];
+      if (!gear || !gear.stats) continue;
+      gearAtk += gear.stats.atk || 0;
+      gearDef += gear.stats.def || 0;
+      gearMag += gear.stats.mag || 0;
+      gearSpd += gear.stats.spd || 0;
+      gearHp += gear.stats.hp || 0;
+      gearCrit += gear.stats.crit || 0;
+      gearAllStatsMult += gear.stats.allStatsMult || 0;
+      gearLifesteal += gear.stats.lifestealPct || 0;
+      gearEvasion += gear.stats.evasion || 0;
+    }
+  }
+  const gearMultFinal = 1 + gearAllStatsMult;
+
+  // Derived stats with skill + trait + bond + equipment bonuses
   return {
-    hp: Math.floor((baseHp + skillHp) * traitHpMult * bondMultFinal),
-    maxHp: Math.floor((baseHp + skillHp) * traitHpMult * bondMultFinal),
-    atk: Math.floor((baseAtk + skillAtk) * traitAtkMult * bondMultFinal),
-    def: Math.floor((baseDef + skillDef) * traitDefMult * bondMultFinal),
-    mag: Math.floor((baseMag + skillMag) * traitMagMult * bondMultFinal),
-    spd: Math.floor((baseSpd + skillSpd) * traitSpdMult * bondMultFinal),
+    hp: Math.floor(((baseHp + skillHp) * traitHpMult + gearHp) * bondMultFinal * gearMultFinal),
+    maxHp: Math.floor(((baseHp + skillHp) * traitHpMult + gearHp) * bondMultFinal * gearMultFinal),
+    atk: Math.floor(((baseAtk + skillAtk) * traitAtkMult + gearAtk) * bondMultFinal * gearMultFinal),
+    def: Math.floor(((baseDef + skillDef) * traitDefMult + gearDef) * bondMultFinal * gearMultFinal),
+    mag: Math.floor(((baseMag + skillMag) * traitMagMult + gearMag) * bondMultFinal * gearMultFinal),
+    spd: Math.floor(((baseSpd + skillSpd) * traitSpdMult + gearSpd) * bondMultFinal * gearMultFinal),
     energy: 100,
     maxEnergy: 100,
     crit: 5 + Math.floor(summon.level * 0.2) + skillCrit,
