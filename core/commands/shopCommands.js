@@ -33,20 +33,54 @@ async function displayShop(sock, chatId, category = 'all') {
     // purchase. A Mythic Abyssal Blade bought from the shop was stored as
     // Common — wrong sell multiplier, wrong enhancement cap, wrong display.
     // Now rarity is propagated from the lootSystem ITEM_DATABASE.
+    // 💡 AUDIT FIX 2026-08-01: split items into main shop + summon shop.
+    // Summon items (eggs, fragments, gear, essences) are HIDDEN from the
+    // main shop. They only appear in the dedicated .shop summon view.
     const buyableDbItems = {};
+    const summonShopItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
-        // Items with an explicit value > 1 that are Equipment, Stones, or specifically categorized
-        // 💡 AUDIT FIX 2026-08-01: also include summon eggs + fragments in the shop
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy') || id.includes('summon_egg'))) {
+        if (item.value <= 1) return;
+
+        // Summon-specific items go to the summon shop only
+        const isSummonItem = item.type === 'SUMMON_GEAR' ||
+                             id.includes('summon_egg') ||
+                             id.includes('_fragment') ||
+                             id.includes('summon_essence') ||
+                             id.includes('skill_respec_scroll');
+
+        if (isSummonItem) {
+            summonShopItems[id] = {
+                id,
+                name: item.name,
+                icon: id.includes('summon_egg') ? '🥚' :
+                      id.includes('_fragment') ? '💎' :
+                      id.includes('summon_essence') ? '🔮' :
+                      id.includes('skill_respec') ? '📜' :
+                      item.type === 'SUMMON_GEAR' ? '⚙️' : '🧪',
+                desc: item.description,
+                cost: item.value,
+                rarity: item.rarity || 'COMMON',
+                category: 'SUMMON',
+                type: 'ITEM',
+                slot: item.summonSlot || item.slot,
+                reqLevel: item.reqLevel,
+                stats: item.stats,
+                summonSlot: item.summonSlot,
+            };
+            return;
+        }
+
+        // Main shop items (equipment, potions, stones, etc.)
+        if (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy')) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (id.includes('summon_egg') ? '🥚' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪'))),
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
-                rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3: propagate rarity
-                category: id.includes('summon_egg') ? 'SUMMON' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'),
-                type: id.includes('summon_egg') ? 'ITEM' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE'),
+                rarity: item.rarity || 'COMMON',
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
+                type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
                 slot: item.slot,
                 reqLevel: item.reqLevel
             };
@@ -55,13 +89,54 @@ async function displayShop(sock, chatId, category = 'all') {
 
     const items = { ...classItems, ...buyableDbItems };
 
-    // Categories
+    // 💡 DEDICATED SUMMON SHOP: if category is 'summon', show only summon items
+    if (category.toLowerCase() === 'summon') {
+        const summonItems = Object.entries(summonShopItems);
+        if (summonItems.length === 0) {
+            await sock.sendMessage(chatId, { text: '🥚 No summon items available.' });
+            return;
+        }
+        const p = getPrefix();
+        const Z = getZENI();
+        let msg = '🥚 *SUMMON SHOP* 🥚\n';
+        msg += '━━━━━━━━━━━━━━━\n\n';
+        msg += '*EGGS:*\n';
+        summonItems.filter(([,i]) => i.id.includes('summon_egg')).forEach(([id, item]) => {
+            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
+            msg += '   ' + item.desc + '\n';
+            msg += '   🆔 `' + item.id + '`\n\n';
+        });
+        msg += '*SUMMON GEAR:*\n';
+        summonItems.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([id, item]) => {
+            let statStr = '';
+            if (item.stats) {
+                statStr = Object.entries(item.stats).filter(([,v]) => v !== 0).map(([k,v]) => k.toUpperCase() + ' ' + (v > 0 ? '+' : '') + v).join(', ');
+            }
+            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
+            msg += '   ' + item.desc + '\n';
+            if (statStr) msg += '   ⚙️ ' + statStr + '\n';
+            msg += '   🆔 `' + item.id + '`\n\n';
+        });
+        msg += '*MATERIALS:*\n';
+        summonItems.filter(([,i]) => i.id.includes('_fragment') || i.id.includes('summon_essence') || i.id.includes('skill_respec')).forEach(([id, item]) => {
+            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
+            msg += '   ' + item.desc + '\n';
+            msg += '   🆔 `' + item.id + '`\n\n';
+        });
+        msg += '━━━━━━━━━━━━━━━\n';
+        msg += '💡 *How to buy:* `' + p + ' buy <id>`\n';
+        msg += '📌 *Summon progression:* Abyss → fragments → craft eggs → hatch → evolve → equip';
+        await sock.sendMessage(chatId, { text: msg });
+        return;
+    }
+
+    // Categories (summon is handled above, not shown in main shop)
     const categoryInfo = {
         all: { name: 'All Items', icon: '🛍️' },
         class: { name: 'Class Items', icon: '🎭' },
         quest: { name: 'Quest Items', icon: '🧪' },
         equipment: { name: 'Equipment', icon: '⚔️' },
-        summon: { name: 'Summon Eggs', icon: '🥚' },  // 💡 AUDIT FIX 2026-08-01: summon egg category
+        summon: { name: 'Summon Shop', icon: '🥚' },
         permanent: { name: 'Special', icon: '📈' }
     };
     
@@ -128,23 +203,54 @@ async function buyItem(sock, chatId, senderJid, input) {
     // Build the full combined item list (same as displayShop 'all')
     const classItems = classSystem.CLASS_SHOP_ITEMS;
     const allDbItems = lootSystem.ITEM_DATABASE;
-    // 💡 FIX 2026-08-01 (BUG #3): copy rarity + reqLevel here too — this is
-    // the path the actual purchase goes through. displayShop is just the
-    // preview; if we don't fix both, the purchase still stores COMMON.
+    // 💡 FIX 2026-08-01: split into main shop + summon shop items (same as displayShop).
+    // Both are buyable — the split only affects what's DISPLAYED, not what can be purchased.
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
-        if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy') || id.includes('summon_egg'))) {
+        if (item.value <= 1) return;
+
+        // Summon items (eggs, gear, fragments, essences, respec scrolls)
+        const isSummonItem = item.type === 'SUMMON_GEAR' ||
+                             id.includes('summon_egg') ||
+                             id.includes('_fragment') ||
+                             id.includes('summon_essence') ||
+                             id.includes('skill_respec_scroll');
+
+        if (isSummonItem) {
             buyableDbItems[id] = {
                 id,
                 name: item.name,
-                icon: id.includes('stone') ? '💎' : (id.includes('summon_egg') ? '🥚' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪'))),
+                icon: id.includes('summon_egg') ? '🥚' :
+                      id.includes('_fragment') ? '💎' :
+                      id.includes('summon_essence') ? '🔮' :
+                      id.includes('skill_respec') ? '📜' :
+                      item.type === 'SUMMON_GEAR' ? '⚙️' : '🧪',
                 desc: item.description,
                 cost: item.value,
-                rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3
-                type: id.includes('summon_egg') ? 'ITEM' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE'),
-                category: id.includes('summon_egg') ? 'SUMMON' : (item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'),
-                slot: item.slot,  // 💡 FIX BUG #3: also copy slot (was missing in this path too)
-                reqLevel: item.reqLevel  // 💡 FIX GAP #1
+                rarity: item.rarity || 'COMMON',
+                type: 'ITEM',
+                category: 'SUMMON',
+                slot: item.summonSlot || item.slot,
+                reqLevel: item.reqLevel,
+                stats: item.stats,
+                summonSlot: item.summonSlot,
+            };
+            return;
+        }
+
+        // Main shop items
+        if (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy')) {
+            buyableDbItems[id] = {
+                id,
+                name: item.name,
+                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
+                desc: item.description,
+                cost: item.value,
+                rarity: item.rarity || 'COMMON',
+                type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
+                slot: item.slot,
+                reqLevel: item.reqLevel
             };
         }
     });
