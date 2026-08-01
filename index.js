@@ -52,12 +52,14 @@ app.get('/', (req, res) => {
     let activeCount = 0;
     let disconnectedCount = 0;
     let qrCount = 0;
+    let otherCount = 0; // connecting / logged_out / needs_pairing / unknown
 
     for (const [botId, health] of healthMap.entries()) {
         instances.push({ botId, ...health });
         if (health.status === 'connected') activeCount++;
         else if (health.status === 'disconnected') disconnectedCount++;
-        else if (health.status === 'needs_qr') qrCount++;
+        else if (health.status === 'needs_qr' || health.status === 'needs_pairing') qrCount++;
+        else otherCount++; // connecting, logged_out, unknown, etc.
     }
 
     let overallStatus = 'Healthy';
@@ -66,7 +68,11 @@ app.get('/', (req, res) => {
         if (disconnectedCount === instances.length) {
             overallStatus = 'Offline';
             overallClass = 'down';
-        } else if (disconnectedCount > 0 || qrCount > 0) {
+        } else if (disconnectedCount > 0 || qrCount > 0 || otherCount > 0) {
+            // 💡 FIX: any non-connected bot (including `connecting`, `logged_out`,
+            // `needs_pairing`) makes the fleet Degraded. Previously these fell
+            // through and the dashboard reported "Healthy" while bots were
+            // crash-looping.
             overallStatus = 'Degraded';
             overallClass = 'degraded';
         }

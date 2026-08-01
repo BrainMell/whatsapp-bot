@@ -7294,15 +7294,63 @@ _💡 Reply with another number from your search list!_`.trim();
                       // 💡 .g bots — simplified version for regular players
                       if (primaryCmd === "bots") {
                         try {
+                          // 💡 FIX: status-based online check (was timestamp-only — a
+                          // disconnected bot in a reconnect loop kept refreshing
+                          // lastUpdated, so it always showed as 🟢 Online even though
+                          // it was actually offline. Inverted the truth.)
+                          //
+                          // Now we read the actual connection status from the
+                          // health map. Only `connected` counts as online.
+                          // `connecting`/`needs_qr`/`needs_pairing` show their
+                          // real state. `disconnected`/`logged_out` show as offline.
+                          // We also include disabled siblings (instances that exist
+                          // in config but were not spawned) so the user can see
+                          // they exist but are turned off.
                           const allHealth = botInstancesHealth;
+                          const seenIds = new Set();
                           let msg = `🤖 *BOT STATUS*\n\n`;
                           for (const [id, h] of allHealth.entries()) {
+                            seenIds.add(id);
                             const ageMs = Date.now() - (h.lastUpdated || 0);
-                            const isOnline = ageMs < 120000; // 2 min threshold
-                            const uptime = h.uptime ? formatUptime(h.uptime) : '—';
-                            msg += `${isOnline ? '🟢' : '🔴'} ${h.name || id} — ${isOnline ? 'Online' : 'Offline'}\n`;
-                            if (isOnline && h.uptime) msg += `   ⏱️ Uptime: ${uptime}\n`;
+                            const fresh = ageMs < 120000;
+                            let icon, label;
+                            if (!fresh) {
+                              icon = '⚫'; label = 'Stale';
+                            } else if (h.status === 'connected') {
+                              icon = '🟢'; label = 'Online';
+                            } else if (h.status === 'connecting') {
+                              icon = '🟡'; label = 'Connecting';
+                            } else if (h.status === 'needs_qr') {
+                              icon = '🟣'; label = 'Needs QR';
+                            } else if (h.status === 'needs_pairing') {
+                              icon = '🟣'; label = 'Needs Pairing';
+                            } else if (h.status === 'logged_out') {
+                              icon = '⚫'; label = 'Logged Out';
+                            } else if (h.status === 'disconnected') {
+                              icon = '🔴'; label = 'Offline';
+                            } else {
+                              icon = '⚪'; label = h.status ? String(h.status).replace(/_/g, ' ') : 'Unknown';
+                            }
+                            msg += `${icon} ${h.name || id} — ${label}\n`;
+                            if (h.status === 'connected' && h.uptime) {
+                              msg += `   ⏱️ Uptime: ${formatUptime(h.uptime)}\n`;
+                            }
                           }
+                          // Show disabled siblings (configured but not spawned)
+                          // so the user can see they exist but are turned off.
+                          try {
+                            const siblings = (typeof botConfig.getSiblings === 'function') ? (botConfig.getSiblings() || []) : [];
+                            const allConfigIds = Array.from(new Set([BOT_ID, ...siblings]));
+                            const disabledIds = allConfigIds.filter(id => !seenIds.has(id) && id !== BOT_ID);
+                            // Also include self if THIS bot is somehow not in the health map
+                            if (!seenIds.has(BOT_ID)) disabledIds.unshift(BOT_ID);
+                            if (disabledIds.length > 0) {
+                              msg += `\n🔇 *Disabled / Not Running*\n`;
+                              for (const id of disabledIds) {
+                                msg += `⚫ ${id} — Disabled\n`;
+                              }
+                            }
+                          } catch (_) {}
                           msg += `\n_Updated every 30s. Use \`${botConfig.getPrefix()} instances\` (mods only) for full details._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
@@ -7318,15 +7366,42 @@ _💡 Reply with another number from your search list!_`.trim();
                       const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
 
                       if (!isSenderMod) {
-                        // 💡 FIX: regular players get the simplified view instead of a hard denial
+                        // 💡 FIX: regular players get the simplified view instead of a hard denial.
+                        // Same status-based logic as the `.g bots` handler above —
+                        // do NOT use timestamp-only check (that's the inversion bug
+                        // where disconnected bots in a reconnect loop show as Online).
                         try {
                           const allHealth = botInstancesHealth;
+                          const seenIds = new Set();
                           let msg = `🤖 *BOT STATUS*\n\n`;
                           for (const [id, h] of allHealth.entries()) {
+                            seenIds.add(id);
                             const ageMs = Date.now() - (h.lastUpdated || 0);
-                            const isOnline = ageMs < 120000;
-                            msg += `${isOnline ? '🟢' : '🔴'} ${h.name || id} — ${isOnline ? 'Online' : 'Offline'}\n`;
+                            const fresh = ageMs < 120000;
+                            let icon, label;
+                            if (!fresh) { icon = '⚫'; label = 'Stale'; }
+                            else if (h.status === 'connected') { icon = '🟢'; label = 'Online'; }
+                            else if (h.status === 'connecting') { icon = '🟡'; label = 'Connecting'; }
+                            else if (h.status === 'needs_qr') { icon = '🟣'; label = 'Needs QR'; }
+                            else if (h.status === 'needs_pairing') { icon = '🟣'; label = 'Needs Pairing'; }
+                            else if (h.status === 'logged_out') { icon = '⚫'; label = 'Logged Out'; }
+                            else if (h.status === 'disconnected') { icon = '🔴'; label = 'Offline'; }
+                            else { icon = '⚪'; label = h.status ? String(h.status).replace(/_/g, ' ') : 'Unknown'; }
+                            msg += `${icon} ${h.name || id} — ${label}\n`;
                           }
+                          // Include disabled siblings so players can see they exist but are off
+                          try {
+                            const siblings = (typeof botConfig.getSiblings === 'function') ? (botConfig.getSiblings() || []) : [];
+                            const allConfigIds = Array.from(new Set([BOT_ID, ...siblings]));
+                            const disabledIds = allConfigIds.filter(id => !seenIds.has(id) && id !== BOT_ID);
+                            if (!seenIds.has(BOT_ID)) disabledIds.unshift(BOT_ID);
+                            if (disabledIds.length > 0) {
+                              msg += `\n🔇 *Disabled / Not Running*\n`;
+                              for (const id of disabledIds) {
+                                msg += `⚫ ${id} — Disabled\n`;
+                              }
+                            }
+                          } catch (_) {}
                           msg += `\n_Full details: \`${botConfig.getPrefix()} instances\` (mods only)_`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
@@ -7335,13 +7410,20 @@ _💡 Reply with another number from your search list!_`.trim();
                         return;
                       }
 
-                      // Write our own fresh heartbeat immediately before querying
+                      // Write our own fresh heartbeat immediately before querying.
+                      // 💡 FIX: was hard-coded `status: 'connected'` regardless of
+                      // actual state. Now reads from botInstancesHealth so the
+                      // mod view reflects the truth (e.g. if self is in a 408
+                      // reconnect loop, the heartbeat says `disconnected`).
                       try {
                         const siblings = botConfig.getSiblings();
+                        const selfHealth = botInstancesHealth.get(BOT_ID);
+                        const selfStatus = selfHealth?.status || 'unknown';
                         await system.set('heartbeat_' + BOT_ID, {
                           botId: BOT_ID,
                           name: BOT_NAME,
-                          status: 'connected',
+                          status: selfStatus,
+                          error: selfHealth?.error || null,
                           lastSeen: Date.now(),
                           startedAt: botStartTime || Date.now(),
                           uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
