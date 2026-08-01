@@ -16429,7 +16429,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         msg += `• 7-day expiry with Zeni refund\n`;
                         msg += `• Hunter fee: 5% to hunter's guild treasury\n`;
                         msg += `• Failed hunt: hunter pays 10% penalty to target\n`;
-                        msg += `• Targets with bounties CANNOT use the bank\n\n`;
+                        msg += `• Targets with bounties CANNOT use the bank (deposit OR withdraw)\n`;
+                        msg += `• 💡 Defender wins: if the target defeats 3 challengers, the bounty auto-clears (no refund to placer)\n\n`;
                         msg += `*Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} bounty place @target <amount>\` — place a bounty\n`;
                         msg += `• \`${botConfig.getPrefix()} bounty list\` — top 10 active bounties\n`;
@@ -16616,6 +16617,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         msg += `*Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss attack\` — attack current floor enemy\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss resume\` — restart combat after bot restart\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure on current floor\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — respond to event encounter\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss skip\` — skip treasure/event floor\n`;
@@ -16678,6 +16680,33 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `.g combat attack` to fight.' });
                       }
 
+                      // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume —
+                      // restart combat after bot restart wiped the in-memory
+                      // gameStates Map. Without this, players mid-Abyss-combat
+                      // when the bot restarts had no way to finish the fight.
+                      if (abyssSub === 'resume' || abyssSub === 'restart' || abyssSub === 'continue') {
+                        try {
+                          const run = await abyssSystem.getRunStatus(senderJid);
+                          if (!run) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run to resume.' });
+                          }
+                          if (run.currentEncounterType !== 'combat' || !run.currentEnemy) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Current floor is not a combat floor. Use `.g abyss status` to see what to do.' });
+                          }
+                          const abyssSessionKey = `${chatId}_${senderJid}`;
+                          const existingState = guildAdventure.getGameState(abyssSessionKey);
+                          if (existingState && existingState.inCombat) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ You are already in combat! Use `.g combat attack` to fight.' });
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ *Resuming Abyss combat on floor ${run.currentFloor}...*` });
+                          await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, run.currentFloor);
+                          return;
+                        } catch (e) {
+                          console.error('[Abyss resume] failed:', e.message);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Resume failed: ' + e.message + '\n\n_You can still retreat with `.g abyss retreat`._' });
+                        }
+                      }
+
                       // .g abyss status — view active run
                       if (abyssSub === 'status' || abyssSub === 'info') {
                         try {
@@ -16705,7 +16734,20 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
                             msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
                             if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
-                            msg += `\n_Attack with \`.g combat attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                            // 💡 AUDIT FIX 2026-08-01 (Round 1): if the bot restarted
+                            // while the player was in Abyss combat, the in-memory
+                            // gameStates Map was wiped — the player had no way to
+                            // resume the fight. Now we check if the combat state
+                            // exists; if not, offer to resume it.
+                            const abyssSessionKey = `${chatId}_${senderJid}`;
+                            const abyssCombatState = guildAdventure.getGameState(abyssSessionKey);
+                            if (!abyssCombatState || !abyssCombatState.inCombat) {
+                              msg += `\n⚠️ _Combat state lost (bot may have restarted)._\n`;
+                              msg += `_Type \`${botConfig.getPrefix()} abyss resume\` to restart the fight._\n`;
+                              msg += `_Or \`${botConfig.getPrefix()} abyss retreat\` to extract._`;
+                            } else {
+                              msg += `\n_Attack with \`.g combat attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                            }
                           } else if (encounterType === 'treasure') {
                             msg += `\n💰 *Treasure Floor!*\n_Use \`.g abyss collect\` or \`.g abyss skip\`_`;
                           } else if (encounterType === 'event') {

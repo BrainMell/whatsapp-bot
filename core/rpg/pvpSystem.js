@@ -734,6 +734,26 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         if (fleeingUser) {
             fleeingUser.pvpLosses = (fleeingUser.pvpLosses || 0) + 1;
             economy.saveUser(fleeingJid);
+            // 💡 AUDIT FIX 2026-08-01 (Round 1): call failedHuntPenalty in the
+            // FLEE scenario too. If the player who STAYED had an active bounty
+            // and the FLEEING player was the hunter, the fleeing hunter pays
+            // the penalty + the stayer's defendersWon increments.
+            try {
+                const bountySystem = require('./bountySystem');
+                const bountyCheckOnStayer = await bountySystem.getBountiesOnTarget(stayingJid);
+                if (bountyCheckOnStayer.length > 0) {
+                    const penaltyResult = await bountySystem.failedHuntPenalty(fleeingJid, stayingJid);
+                    if (penaltyResult.success && penaltyResult.penaltyPaid > 0) {
+                        let fleePenaltyMsg = `\n\n💸 *BOUNTY HUNT FAILED:* ${fleeingUser.nickname || fleeingJid.split('@')[0]} paid ${penaltyResult.penaltyPaid.toLocaleString()} ${ZENI} penalty for fleeing.`;
+                        if (penaltyResult.defendedBounties && penaltyResult.defendedBounties.length > 0) {
+                            fleePenaltyMsg += `\n🛡️ *BOUNTY DEFENDED!* 3 challengers defeated — bounty cleared!`;
+                        }
+                        duel._bountyClaimMsg = (duel._bountyClaimMsg || '') + fleePenaltyMsg;
+                    }
+                }
+            } catch (e) {
+                console.error('[FailedHuntPenalty flee] Failed:', e.message);
+            }
         }
 
         // Give the standard win rewards to the staying player
@@ -1134,6 +1154,34 @@ async function finishDuel(chatId, duel, winner, loser) {
     if (loserUser) {
         loserUser.pvpLosses = (loserUser.pvpLosses || 0) + 1;
         economy.saveUser(loser.jid);
+        // 💡 AUDIT FIX 2026-08-01 (Round 1): call failedHuntPenalty when the
+        // LOSER was the hunter (i.e. the WINNER had an active bounty on them).
+        // This was NEVER called — the function existed but no code invoked it.
+        // Consequences:
+        //   1. Hunter paid 0 penalty for losing (should pay 10% of bounty)
+        //   2. defendersWon counter never incremented
+        //   3. Bounty never auto-terminated by defender wins (the feature I
+        //      added in the prior pass was dead code without this call)
+        // Now: if the winner had an active bounty, the loser (hunter) pays
+        // the penalty + the winner's defendersWon counter increments.
+        let failedHuntMsg = '';
+        try {
+            const bountySystem = require('./bountySystem');
+            const bountyCheckOnWinner = await bountySystem.getBountiesOnTarget(winner.jid);
+            if (bountyCheckOnWinner.length > 0) {
+                // The winner was a bounty target who just defeated a hunter
+                const penaltyResult = await bountySystem.failedHuntPenalty(loser.jid, winner.jid);
+                if (penaltyResult.success && penaltyResult.penaltyPaid > 0) {
+                    failedHuntMsg = `\n💸 *BOUNTY HUNT FAILED:* ${loser.name} paid ${penaltyResult.penaltyPaid.toLocaleString()} ${ZENI} penalty to ${winner.name}.`;
+                    if (penaltyResult.defendedBounties && penaltyResult.defendedBounties.length > 0) {
+                        failedHuntMsg += `\n🛡️ *BOUNTY DEFENDED!* ${winner.name} defeated 3 challengers — bounty cleared!`;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[FailedHuntPenalty] Failed:', e.message);
+        }
+        bountyClaimMsg += failedHuntMsg;
     }
 
     let msg = `🏆 *DUEL RESULT* 🏆\n`;
