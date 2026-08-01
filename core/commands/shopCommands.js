@@ -42,8 +42,9 @@ async function displayShop(sock, chatId, category = 'all') {
         if (item.value <= 1) return;
 
         // Summon-specific items go to the summon shop only
+        // 💡 Only basic_summon_egg is buyable — higher-tier eggs come from crafting fragments
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
-                             id.includes('summon_egg') ||
+                             id === 'basic_summon_egg' ||
                              id.includes('_fragment') ||
                              id.includes('summon_essence') ||
                              id.includes('skill_respec_scroll');
@@ -101,11 +102,12 @@ async function displayShop(sock, chatId, category = 'all') {
         let msg = '🥚 *SUMMON SHOP* 🥚\n';
         msg += '━━━━━━━━━━━━━━━\n\n';
         msg += '*EGGS:*\n';
-        summonItems.filter(([,i]) => i.id.includes('summon_egg')).forEach(([id, item]) => {
+        summonItems.filter(([,i]) => i.id === 'basic_summon_egg').forEach(([id, item]) => {
             msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
             msg += '   ' + item.desc + '\n';
             msg += '   🆔 `' + item.id + '`\n\n';
         });
+        msg += '_Higher-tier eggs (Rare→Mythic) are crafted from fragments.\nUse `.summon eggcraft <tier>` after collecting fragments from the Abyss._\n\n';
         msg += '*SUMMON GEAR:*\n';
         summonItems.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([id, item]) => {
             let statStr = '';
@@ -209,9 +211,9 @@ async function buyItem(sock, chatId, senderJid, input) {
     Object.entries(allDbItems).forEach(([id, item]) => {
         if (item.value <= 1) return;
 
-        // Summon items (eggs, gear, fragments, essences, respec scrolls)
+        // Summon items (only basic egg is buyable — others come from crafting fragments)
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
-                             id.includes('summon_egg') ||
+                             id === 'basic_summon_egg' ||
                              id.includes('_fragment') ||
                              id.includes('summon_essence') ||
                              id.includes('skill_respec_scroll');
