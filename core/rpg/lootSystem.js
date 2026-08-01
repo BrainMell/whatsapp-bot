@@ -1022,6 +1022,11 @@ const ITEM_DATABASE = {
     'legendary_fragment':  { name: 'Legendary Summon Fragment',description: 'A blinding fragment of immense power. Collect 10 to craft a Mythic Egg.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
     'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: 'A fragment of pure divine essence. Only obtainable from the deepest Abyss floors + raids.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
 
+    // --- SUMMON EVOLUTION STONES (Phase 3) ---
+    'summon_essence_t2':   { name: 'Summon Essence (T2)',    description: 'Crystallized essence used to evolve a summon to its 2nd form. Dropped by Abyss bosses floor 5+.', rarity: 'RARE', value: 15000, type: 'MATERIAL' },
+    'summon_essence_t3':   { name: 'Summon Essence (T3)',    description: 'Pure crystallized essence used to evolve a summon to its final form. Dropped by Abyss bosses floor 21+.', rarity: 'EPIC', value: 60000, type: 'MATERIAL' },
+    'skill_respec_scroll': { name: 'Skill Respec Scroll',    description: 'Resets a summon\'s skill tree, refunding all skill points. The path choice is also reset.', rarity: 'EPIC', value: 40000, type: 'CONSUMABLE', usable: true },
+
     // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
     'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
     'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },

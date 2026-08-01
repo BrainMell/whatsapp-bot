@@ -39,6 +39,15 @@ const SummonSchema = new mongoose.Schema({
   xp: { type: Number, default: 0 },
   statPoints: { type: Number, default: 0 },
 
+  // 💡 PHASE 2 (2026-08-01): Summon Skill Tree
+  // Each summon gets 1 skill point per level (starting L1, max 50).
+  // Players pick ONE of 3 paths (determined by archetype). Each path has
+  // 5 nodes unlocked at specific levels. Once a path is chosen, it can't
+  // be changed without a Skill Respec Scroll (rare item).
+  skillPoints: { type: Number, default: 0 },
+  chosenSkillPath: { type: String, default: null }, // 'A' | 'B' | 'C' | null (unchose)
+  unlockedSkillNodes: [{ type: String }], // e.g. ['A1', 'A2', 'A3']
+
   // Player-allocated stat points (mirrors User.allocatedStats pattern)
   allocatedStats: {
     hp: { type: Number, default: 0 },

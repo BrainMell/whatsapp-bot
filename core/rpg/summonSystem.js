@@ -155,19 +155,37 @@ function computeEffectiveStats(summon) {
   const baseSpd = (summon.baseStats.spd + applySoftCap(alloc.spd) * statValues.spd) * tierMult * loyaltyMult;
   const baseHp = (summon.baseStats.hp + applySoftCap(alloc.hp) * statValues.hp) * tierMult * loyaltyMult;
 
+  // 💡 PHASE 2 (2026-08-01): apply skill tree passive bonuses
+  // Skill tree passives add flat stat bonuses + special effects (dmgReduction,
+  // lifesteal, evasion, etc.) that are merged into the final stats.
+  let skillBonuses = {};
+  try {
+    const summonSkillTrees = require('./summonSkillTrees');
+    skillBonuses = summonSkillTrees.getPassiveEffects(summon);
+  } catch (e) {}
+
+  const skillAtk = skillBonuses.atk || 0;
+  const skillDef = skillBonuses.def || 0;
+  const skillMag = skillBonuses.mag || 0;
+  const skillSpd = skillBonuses.spd || 0;
+  const skillHp = skillBonuses.hp || 0;
+  const skillCrit = skillBonuses.crit || 0;
+
   // Derived stats (mirrors how enemies are constructed)
   return {
-    hp: Math.floor(baseHp),
-    maxHp: Math.floor(baseHp),
-    atk: Math.floor(baseAtk),
-    def: Math.floor(baseDef),
-    mag: Math.floor(baseMag),
-    spd: Math.floor(baseSpd),
+    hp: Math.floor(baseHp + skillHp),
+    maxHp: Math.floor(baseHp + skillHp),
+    atk: Math.floor(baseAtk + skillAtk),
+    def: Math.floor(baseDef + skillDef),
+    mag: Math.floor(baseMag + skillMag),
+    spd: Math.floor(baseSpd + skillSpd),
     energy: 100,
     maxEnergy: 100,
-    crit: 5 + Math.floor(summon.level * 0.2),  // crit scales mildly with level
-    evasion: Math.min(45, Math.floor(baseSpd * 0.12)),  // mirrors player evasion formula
-    dmgReduction: Math.min(65, Math.floor(baseDef * 0.55))  // mirrors player dmgReduction formula
+    crit: 5 + Math.floor(summon.level * 0.2) + skillCrit,
+    evasion: Math.min(60, Math.floor(baseSpd * 0.12) + (skillBonuses.evasion || 0)),
+    dmgReduction: Math.min(75, Math.floor(baseDef * 0.55) + (skillBonuses.dmgReduction || 0)),
+    // 💡 PHASE 2: store special skill effects on the stats object so combat can read them
+    skillEffects: skillBonuses,
   };
 }
 
@@ -450,6 +468,8 @@ function addSummonXP(summon, amount) {
     summon.level += 1;
     summon.statPoints += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
     statPointsGained += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
+    // 💡 PHASE 2 (2026-08-01): grant 1 skill point per level
+    summon.skillPoints = (summon.skillPoints || 0) + 1;
     leveledUp = true;
 
     // Re-grow base stats to new level

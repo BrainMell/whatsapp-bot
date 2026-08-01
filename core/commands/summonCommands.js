@@ -97,6 +97,15 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'egg':
       return await cmdEggCraft(sock, chatId, senderJid, rest);
 
+    case 'skill':
+    case 'skills':
+    case 'skilltree':
+      return await cmdSkillTree(sock, chatId, senderJid, rest);
+
+    case 'evolve':
+    case 'evolution':
+      return await cmdEvolve(sock, chatId, senderJid, rest);
+
     case 'forge':
     case 'fuse':
       return await cmdForge(sock, chatId, senderJid, rest);
@@ -1294,11 +1303,174 @@ async function cmdDuel(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// .summon skill — view/manage summon skill tree (Phase 2)
+// Subcommands:
+//   .summon skill <id>           — view skill tree for a summon
+//   .summon skill choose <id> <A|B|C> — choose a path
+//   .summon skill unlock <id> <A1-A5> — unlock a node
+//   .summon skill respec <id>    — reset skill tree (needs scroll)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdSkillTree(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const sub = (args[0] || '').toLowerCase();
+  const summonIdQuery = args[1] || '';
+  const p = getPrefix();
+
+  // .summon skill (no args) — show help
+  if (!sub || !summonIdQuery) {
+    await sock.sendMessage(chatId, {
+      text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <id>\` — view skill tree\n• \`${p} summon skill choose <id> <A|B|C>\` — choose a path (permanent without respec scroll)\n• \`${p} summon skill unlock <id> <A1-A5>\` — unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <id>\` — reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._`
+    });
+    return;
+  }
+
+  // Resolve the summon
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) {
+    await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${p} summon list\` to see your summons.` });
+    return;
+  }
+
+  const summonSkillTrees = require('../rpg/summonSkillTrees');
+
+  if (sub === 'choose') {
+    const path = (args[2] || '').toUpperCase().trim();
+    const result = summonSkillTrees.choosePath(summon, path);
+    await summon.save();
+    await sock.sendMessage(chatId, { text: result.message });
+    return;
+  }
+
+  if (sub === 'unlock') {
+    const nodeKey = (args[2] || '').toUpperCase().trim();
+    const result = summonSkillTrees.unlockNode(summon, nodeKey);
+    if (result.success) await summon.save();
+    await sock.sendMessage(chatId, { text: result.message });
+    return;
+  }
+
+  if (sub === 'respec') {
+    const inventorySystem = require('../rpg/inventorySystem');
+    if (!inventorySystem.hasItem(senderJid, 'skill_respec_scroll', 1)) {
+      await sock.sendMessage(chatId, { text: `❌ Need a Skill Respec Scroll. Buy from shop or craft.` });
+      return;
+    }
+    inventorySystem.removeItem(senderJid, 'skill_respec_scroll', 1);
+    // Refund all skill points from unlocked nodes
+    const refunded = (summon.unlockedSkillNodes || []).length;
+    summon.skillPoints = (summon.skillPoints || 0) + refunded;
+    summon.unlockedSkillNodes = [];
+    summon.chosenSkillPath = null;
+    await summon.save();
+    await sock.sendMessage(chatId, { text: `✨ *SKILL TREE RESET!* Refunded ${refunded} skill point(s). Path choice cleared.` });
+    return;
+  }
+
+  // .summon skill <id> — show the skill tree
+  const tree = summonSkillTrees.getSkillTree(summon.archetype);
+  const chosenPath = summon.chosenSkillPath;
+  const unlocked = summon.unlockedSkillNodes || [];
+
+  let msg = `🛤️ *SKILL TREE — ${summon.nickname || registry.getSpecies(summon.species)?.name}*\n`;
+  msg += `📊 L${summon.level} | Skill Points: ${summon.skillPoints || 0}\n`;
+  msg += `${chosenPath ? `🛤️ Path: ${chosenPath}` : '⚠️ No path chosen yet'}\n\n`;
+
+  for (const [pathKey, pathData] of Object.entries(tree)) {
+    const isChosen = chosenPath === pathKey;
+    msg += `${isChosen ? '▶️' : '⚪'} *Path ${pathKey}: ${pathData.name}* ${pathData.icon}\n`;
+    msg += `_${pathData.desc}_\n`;
+
+    for (const [nodeKey, node] of Object.entries(pathData.nodes)) {
+      const isUnlocked = unlocked.includes(nodeKey);
+      const canUnlock = isChosen && !isUnlocked && summonSkillTrees.canUnlockNode(summon, nodeKey).canUnlock;
+      const icon = isUnlocked ? '✅' : (canUnlock ? '🔹' : '🔒');
+      msg += `  ${icon} \`${nodeKey}\` L${node.levelReq} — ${node.name} (${node.type})\n`;
+      msg += `     ${node.desc}\n`;
+    }
+    msg += `\n`;
+  }
+
+  if (!chosenPath) {
+    msg += `_Choose a path: \`${p} summon skill choose <id> <A|B|C>\`_`;
+  } else {
+    msg += `_Unlock: \`${p} summon skill unlock <id> <${chosenPath}1-${chosenPath}5>\`_`;
+  }
+
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon evolve <id> — evolve a summon to its next stage (Phase 3)
+// ─────────────────────────────────────────────────────────────
+
+async function cmdEvolve(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summonIdQuery = (args[0] || '').trim();
+  if (!summonIdQuery) {
+    const summonEvolution = require('../rpg/summonEvolution');
+    const p = getPrefix();
+    let msg = `✨ *SUMMON EVOLUTION*\n\nEvolve your summon to its next form!\n\n`;
+    msg += `*Requirements:*\n`;
+    msg += `• Stage 2 (ASCENDED): L15 + 1x Summon Essence (T2) + 10K Zeni\n`;
+    msg += `• Stage 3 (TRANSCENDENT): L30 + 1x Summon Essence (T3) + 50K Zeni\n\n`;
+    msg += `_Essences drop from Abyss bosses. Use \`${p} summon evolve <id>\` to evolve._`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  // Resolve the summon
+  const summons = await summonSystem.getUserSummons(senderJid);
+  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  if (!summon) {
+    await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${getPrefix()} summon list\` to see your summons.` });
+    return;
+  }
+
+  const summonEvolution = require('../rpg/summonEvolution');
+
+  // Check if can evolve first
+  const check = summonEvolution.canEvolve(summon);
+  if (!check.canEvolve) {
+    await sock.sendMessage(chatId, { text: `❌ ${check.reason}` });
+    return;
+  }
+
+  // Show requirements + confirm
+  if (!args[1] || args[1].toLowerCase() !== 'confirm') {
+    const { nextSpeciesData, reqs } = check;
+    const ZENI = botConfig.getCurrency().symbol;
+    let msg = `✨ *EVOLUTION PREVIEW*\n\n`;
+    msg += `${registry.getSpecies(summon.species)?.icon || '🐉'} ${registry.getSpecies(summon.species)?.name || summon.species}\n`;
+    msg += `→ ${nextSpeciesData.icon} *${nextSpeciesData.name}* (${reqs.tier})\n\n`;
+    msg += `*New Stats:*\n`;
+    msg += `❤️ HP: ${nextSpeciesData.baseStats.hp} | ⚔️ ATK: ${nextSpeciesData.baseStats.atk}\n`;
+    msg += `🛡️ DEF: ${nextSpeciesData.baseStats.def} | 🔮 MAG: ${nextSpeciesData.baseStats.mag}\n`;
+    msg += `💨 SPD: ${nextSpeciesData.baseStats.spd}\n\n`;
+    msg += `*Requirements:*\n`;
+    msg += `📊 Level: ${summon.level}/${reqs.levelReq} ${summon.level >= reqs.levelReq ? '✅' : '❌'}\n`;
+    const hasEssence = require('../rpg/inventorySystem').hasItem(senderJid, reqs.essenceId, 1);
+    msg += `💎 ${reqs.essenceName}: ${hasEssence ? '✅' : '❌'}\n`;
+    const balance = economy.getGold(senderJid);
+    msg += `💰 Zeni: ${balance.toLocaleString()}/${reqs.zeniCost.toLocaleString()} ${balance >= reqs.zeniCost ? '✅' : '❌'}\n\n`;
+    msg += `_Confirm with: \`${getPrefix()} summon evolve ${summonIdQuery} confirm\`_`;
+    await sock.sendMessage(chatId, { text: msg });
+    return;
+  }
+
+  // Execute evolution
+  const result = await summonEvolution.evolveSummon(summon);
+  await sock.sendMessage(chatId, { text: result.message });
+}
+
+// ─────────────────────────────────────────────────────────────
 // .summon eggcraft <tier> — craft eggs from fragments
 // ─────────────────────────────────────────────────────────────
-// 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): combines 10 fragments
-// into 1 egg of the next tier up. The progression loop:
-//   Abyss → fragments → craft egg → hatch → summon
 
 async function cmdEggCraft(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);

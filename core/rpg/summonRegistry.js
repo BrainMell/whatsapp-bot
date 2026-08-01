@@ -399,6 +399,93 @@ const SUMMON_SPECIES = {
     desc: 'A tiny nature pixie. It heals and empowers its master, turning the tide of battle.',
     role: 'SUPPORT',
     isStarter: true
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 💡 PHASE 3 (2026-08-01): EVOLVED STARTER SUMMONS
+  // Each starter has 2 evolution stages (3 total forms).
+  // Evolution requires: level + evolution stone + Zeni.
+  // Each stage multiplies base stats by 1.5× and grants a new tier.
+  // ═══════════════════════════════════════════════════════════════
+
+  // --- StoneGuard evolutions (TANK) ---
+  iron_sentinel: {
+    name: 'Iron Sentinel', archetype: 'TANK', element: 'earth',
+    baseStats: { hp: 350, atk: 20, def: 45, mag: 8, spd: 8 },
+    rarity: 'UNCOMMON', echoId: 'guardian_echo',
+    evolutionStages: ['stoneguard', 'iron_sentinel', 'mountain_titan'],
+    trialId: 'trial_iron_sentinel', icon: '⚙️',
+    desc: 'An upgraded StoneGuard clad in iron plating. Its defenses are nearly impenetrable.',
+    role: 'TANK', evolvedFrom: 'stoneguard', evolutionTier: 2
+  },
+  mountain_titan: {
+    name: 'Mountain Titan', archetype: 'TANK', element: 'earth',
+    baseStats: { hp: 600, atk: 35, def: 80, mag: 12, spd: 10 },
+    rarity: 'RARE', echoId: 'guardian_echo',
+    evolutionStages: ['stoneguard', 'iron_sentinel', 'mountain_titan'],
+    trialId: 'trial_mountain_titan', icon: '⛰️',
+    desc: 'A colossal titan of living rock. It shrugs off blows that would fell armies.',
+    role: 'TANK', evolvedFrom: 'iron_sentinel', evolutionTier: 3
+  },
+
+  // --- EmberDrake evolutions (DPS) ---
+  flare_wyrm: {
+    name: 'Flare Wyrm', archetype: 'BRUTE', element: 'fire',
+    baseStats: { hp: 180, atk: 55, def: 12, mag: 25, spd: 24 },
+    rarity: 'UNCOMMON', echoId: 'fire_echo',
+    evolutionStages: ['emberdrake', 'flare_wyrm', 'infernal_dragon'],
+    trialId: 'trial_flare_wyrm', icon: '🐉',
+    desc: 'A maturing fire drake. Its flames burn hot enough to melt steel.',
+    role: 'DPS', evolvedFrom: 'emberdrake', evolutionTier: 2
+  },
+  infernal_dragon: {
+    name: 'Infernal Dragon', archetype: 'BRUTE', element: 'fire',
+    baseStats: { hp: 300, atk: 90, def: 20, mag: 40, spd: 30 },
+    rarity: 'RARE', echoId: 'fire_echo',
+    evolutionStages: ['emberdrake', 'flare_wyrm', 'infernal_dragon'],
+    trialId: 'trial_infernal_dragon', icon: '🔥🐉',
+    desc: 'A fully-grown infernal dragon. Its breath reduces everything to ash.',
+    role: 'DPS', evolvedFrom: 'flare_wyrm', evolutionTier: 3
+  },
+
+  // --- MistWisp evolutions (MAGE) ---
+  frost_spectre: {
+    name: 'Frost Spectre', archetype: 'MAGE', element: 'water',
+    baseStats: { hp: 160, atk: 12, def: 10, mag: 55, spd: 20 },
+    rarity: 'UNCOMMON', echoId: 'frost_echo',
+    evolutionStages: ['mistwisp', 'frost_spectre', 'abyssal_phantom'],
+    trialId: 'trial_frost_spectre', icon: '👻',
+    desc: 'A chilling spectre of mist and ice. Its spells freeze the very soul.',
+    role: 'MAGE', evolvedFrom: 'mistwisp', evolutionTier: 2
+  },
+  abyssal_phantom: {
+    name: 'Abyssal Phantom', archetype: 'MAGE', element: 'water',
+    baseStats: { hp: 270, atk: 20, def: 15, mag: 90, spd: 26 },
+    rarity: 'RARE', echoId: 'frost_echo',
+    evolutionStages: ['mistwisp', 'frost_spectre', 'abyssal_phantom'],
+    trialId: 'trial_abyssal_phantom', icon: '🌌👻',
+    desc: 'A phantom drawn from the deepest abyss. Its magic warps reality itself.',
+    role: 'MAGE', evolvedFrom: 'frost_spectre', evolutionTier: 3
+  },
+
+  // --- BloomPixie evolutions (SUPPORT) ---
+  blossom_sylph: {
+    name: 'Blossom Sylph', archetype: 'SUPPORT', element: 'nature',
+    baseStats: { hp: 210, atk: 12, def: 16, mag: 38, spd: 24 },
+    rarity: 'UNCOMMON', echoId: 'bloom_echo',
+    evolutionStages: ['bloompixie', 'blossom_sylph', 'world_tree_spirit'],
+    trialId: 'trial_blossom_sylph', icon: '🌺',
+    desc: 'A blooming nature spirit. Its healing pollen can mend even mortal wounds.',
+    role: 'SUPPORT', evolvedFrom: 'bloompixie', evolutionTier: 2
+  },
+  world_tree_spirit: {
+    name: 'World Tree Spirit', archetype: 'SUPPORT', element: 'nature',
+    baseStats: { hp: 340, atk: 20, def: 25, mag: 65, spd: 30 },
+    rarity: 'RARE', echoId: 'bloom_echo',
+    evolutionStages: ['bloompixie', 'blossom_sylph', 'world_tree_spirit'],
+    trialId: 'trial_world_tree_spirit', icon: '🌳✨',
+    desc: 'A spirit of the World Tree itself. Its presence brings life and hope to all allies.',
+    role: 'SUPPORT', evolvedFrom: 'blossom_sylph', evolutionTier: 3
   }
 };
 
