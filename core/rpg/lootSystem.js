@@ -855,6 +855,112 @@ const ITEM_DATABASE = {
     'iron_ring': { name: 'Iron Ring', description: 'A sturdy band. (+10 HP)', rarity: 'UNCOMMON', value: 2000, type: 'EQUIPMENT', stats: { hp: 10 }, slot: 'ring', reqLevel: 5 },
     'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'Pierce draconic hide. (+10 ATK)', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', stats: { atk: 10 }, slot: 'ring', reqLevel: 20 },
 
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): CRAFTED EQUIPMENT
+    // The crafting system (craftingSystem.js) creates items by ID, but
+    // these IDs were NEVER added to ITEM_DATABASE. This means crafted
+    // items had no rarity (defaulted to COMMON), no proper name, no
+    // sell value, no reqLevel, and wrong enhancement caps. Now all
+    // crafted equipment is properly registered here.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- CRAFTED WEAPONS (slot: main_hand) ---
+    'inferno_blade': { name: 'Inferno Blade', description: 'A blade wreathed in flame. (+35 ATK, +15% Crit)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 35, crit: 15 }, slot: 'main_hand', reqLevel: 15 },
+    'volt_dagger': { name: 'Volt Dagger', description: 'Crackles with electrical energy. (+20 ATK, +25 SPD)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { atk: 20, spd: 25 }, slot: 'main_hand', reqLevel: 12 },
+    'dragonslayer_spear': { name: 'Dragonslayer Spear', description: 'Forged to pierce dragon scales. (+50 ATK)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { atk: 50 }, slot: 'main_hand', reqLevel: 22, isTwoHanded: true },
+    'shadow_dagger': { name: 'Shadow Dagger', description: 'Strikes from the darkness. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 14 },
+    'warhammer': { name: 'Paladin Warhammer', description: 'A holy blunt weapon. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, isTwoHanded: true },
+    'death_scythe': { name: 'Reaper Scythe', description: 'Harvests souls. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'chrono_blade': { name: 'Chrono Blade', description: 'Bends time with each swing. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 45000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 28 },
+    'golden_cane': { name: 'Merchant Cane', description: 'A symbol of wealth. (+20 ATK, +50 LUCK)', rarity: 'EPIC', value: 50000, type: 'EQUIPMENT', stats: { atk: 20, luck: 50 }, slot: 'main_hand', reqLevel: 25 },
+    'multi_tool': { name: 'Artificer Tool', description: 'A versatile multi-tool. (+25 ATK, +25 MAG, +10 DEF)', rarity: 'RARE', value: 20000, type: 'EQUIPMENT', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand', reqLevel: 18 },
+    'greataxe': { name: 'Berserker Axe', description: 'Raw power at the cost of defense. (+55 ATK, -10 DEF)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { atk: 55, def: -10 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'elemental_wand': { name: 'Prism Wand', description: 'Channels raw elemental power. (+50 MAG)', rarity: 'EPIC', value: 42000, type: 'EQUIPMENT', stats: { mag: 50 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'storm_bow': { name: 'Storm Bow', description: 'Fires arrows of lightning. (+40 ATK, +20 SPD)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 40, spd: 20 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+
+    // --- CRAFTED ARMOR ---
+    'stealth_garb': { name: 'Stealth Garb', description: 'Lightweight and silent. (+15 DEF, +30 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 15, spd: 30 }, slot: 'armor', reqLevel: 15 },
+    'holy_raiment': { name: 'Holy Raiment', description: 'Blessed by the divine. (+35 DEF, +50 MAG, +20 HP)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { def: 35, mag: 50, hp: 20 }, slot: 'armor', reqLevel: 22 },
+    'dragon_plate': { name: 'Dragon Armor', description: 'Forged from dragon scales. (+90 DEF, +140 HP, +15 SPD)', rarity: 'LEGENDARY', value: 80000, type: 'EQUIPMENT', stats: { def: 90, hp: 140, spd: 15 }, slot: 'armor', reqLevel: 35 },
+    'archmage_robes': { name: 'Archmage Robes', description: 'Pulses with arcane energy. (+20 DEF, +80 MAG)', rarity: 'LEGENDARY', value: 90000, type: 'EQUIPMENT', stats: { def: 20, mag: 80 }, slot: 'armor', reqLevel: 40 },
+    'glacier_guard': { name: 'Glacier Guard', description: 'Armor that chills attackers. (+50 DEF, +80 HP)', rarity: 'EPIC', value: 45000, type: 'EQUIPMENT', stats: { def: 50, hp: 80 }, slot: 'armor', reqLevel: 25 },
+    'obsidian_shield': { name: 'Obsidian Shield', description: 'A heavy shield of black glass. (+60 DEF)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { def: 60 }, slot: 'armor', reqLevel: 22 },
+
+    // --- CRAFTED HELMETS ---
+    'iron_helm': { name: 'Iron Helmet', description: 'Basic head protection. (+10 DEF)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { def: 10 }, slot: 'helmet', reqLevel: 5 },
+    'wizard_hat': { name: 'Wizard Hat', description: 'Classic pointy hat. (+15 MAG)', rarity: 'UNCOMMON', value: 4000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'helmet', reqLevel: 8 },
+    'assassin_hood': { name: 'Shadow Hood', description: 'Hides your face. (+10 DEF, +15 SPD, +8% Crit)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { def: 10, spd: 15, crit: 8 }, slot: 'helmet', reqLevel: 15 },
+
+    // --- CRAFTED BOOTS ---
+    'leather_boots': { name: 'Leather Boots', description: 'Simple walking boots. (+5 SPD)', rarity: 'COMMON', value: 800, type: 'EQUIPMENT', stats: { spd: 5 }, slot: 'boots', reqLevel: 1 },
+    'winged_sandals': { name: 'Winged Sandals', description: 'Feel as light as a feather. (+40 SPD)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { spd: 40 }, slot: 'boots', reqLevel: 18 },
+    'wind_boots': { name: 'Wind Boots', description: 'Walk on the air itself. (+50 SPD)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { spd: 50 }, slot: 'boots', reqLevel: 25 },
+
+    // --- CRAFTED AMULETS ---
+    'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 15 },
+    'ghost_pendant': { name: 'Ghost Pendant', description: 'Pulsing with ethereal energy. (+45 MAG)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { mag: 45 }, slot: 'amulet', reqLevel: 25 },
+
+    // --- CRAFTED RINGS ---
+    'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 15 },
+    'vampiric_ring': { name: 'Vampiric Ring', description: 'Drains life from your foes. (+15 ATK, +10% Lifesteal)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 25 },
+
+    // --- CRAFTED GLOVES ---
+    'titan_gauntlets': { name: 'Titan Gauntlets', description: 'Grants the strength of a titan. (+30 ATK, +20 DEF)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 30, def: 20 }, slot: 'gloves', reqLevel: 25 },
+
+    // --- CRAFTED CLOAK ---
+    'silk_cloak': { name: 'Silk Cloak', description: 'Lightweight and elegant. (+30 SPD, +15 LUCK)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { spd: 30, luck: 15 }, slot: 'cloak', reqLevel: 18 },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): OFF_HAND SHIELDS
+    // The off_hand slot had ZERO items — players could equip off_hand
+    // but had nothing to put there. Now shields fill this slot.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- OFF_HAND SHIELDS ---
+    'wooden_shield': { name: 'Wooden Shield', description: 'A basic wooden shield. (+5 DEF)', rarity: 'COMMON', value: 800, type: 'EQUIPMENT', stats: { def: 5 }, slot: 'off_hand', reqLevel: 1 },
+    'iron_shield': { name: 'Iron Shield', description: 'A sturdy iron shield. (+15 DEF)', rarity: 'UNCOMMON', value: 4000, type: 'EQUIPMENT', stats: { def: 15 }, slot: 'off_hand', reqLevel: 5 },
+    'kite_shield': { name: 'Kite Shield', description: 'A knight\'s shield. (+25 DEF, +10 HP)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 25, hp: 10 }, slot: 'off_hand', reqLevel: 12 },
+    'tower_shield': { name: 'Tower Shield', description: 'A massive shield that blocks everything. (+40 DEF, +30 HP)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { def: 40, hp: 30 }, slot: 'off_hand', reqLevel: 22 },
+    'abyssal_shield': { name: 'Abyssal Shield', description: 'Absorbs impacts into nothingness. (+70 DEF, +80 HP, +10 SPD)', rarity: 'LEGENDARY', value: 120000, type: 'EQUIPMENT', stats: { def: 70, hp: 80, spd: 10 }, slot: 'off_hand', reqLevel: 45 },
+    'null_ward': { name: 'Null Ward', description: 'A shield that exists partially outside reality. (+100 DEF, +100 HP, +20 LUCK)', rarity: 'MYTHIC', value: 500000, type: 'EQUIPMENT', stats: { def: 100, hp: 100, luck: 20 }, slot: 'off_hand', reqLevel: 70 },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): ADDITIONAL SLOT COVERAGE
+    // Fill remaining gaps: boots/amulet/cloak/gloves need more variety
+    // across rarities so players have progression options per slot.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- ADDITIONAL BOOTS ---
+    'steel_boots': { name: 'Steel Boots', description: 'Sturdy steel protection. (+10 DEF, +5 SPD)', rarity: 'UNCOMMON', value: 3500, type: 'EQUIPMENT', stats: { def: 10, spd: 5 }, slot: 'boots', reqLevel: 6 },
+    'dragonhide_boots': { name: 'Dragonhide Boots', description: 'Scaled boots from a dragon. (+25 DEF, +20 SPD, +30 HP)', rarity: 'LEGENDARY', value: 85000, type: 'EQUIPMENT', stats: { def: 25, spd: 20, hp: 30 }, slot: 'boots', reqLevel: 40 },
+    'voidwalk_boots': { name: 'Voidwalk Boots', description: 'Step through the void. (+60 SPD, +30 LUCK)', rarity: 'MYTHIC', value: 400000, type: 'EQUIPMENT', stats: { spd: 60, luck: 30 }, slot: 'boots', reqLevel: 70 },
+
+    // --- ADDITIONAL AMULETS ---
+    'lucky_charm': { name: 'Lucky Charm', description: 'A simple charm. (+5 LUCK)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { luck: 5 }, slot: 'amulet', reqLevel: 1 },
+    'warrior_pendant': { name: 'Warrior Pendant', description: 'Boosts combat prowess. (+20 ATK, +10 HP)', rarity: 'EPIC', value: 36000, type: 'EQUIPMENT', stats: { atk: 20, hp: 10 }, slot: 'amulet', reqLevel: 22 },
+    'abyssal_amulet': { name: 'Abyssal Amulet', description: 'Whispers of the deep. (+100 MAG, +50 HP)', rarity: 'MYTHIC', value: 450000, type: 'EQUIPMENT', stats: { mag: 100, hp: 50 }, slot: 'amulet', reqLevel: 70 },
+
+    // --- ADDITIONAL CLOAKS ---
+    'traveler_cloak': { name: 'Traveler Cloak', description: 'A weathered cloak. (+5 DEF, +10 SPD)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { def: 5, spd: 10 }, slot: 'cloak', reqLevel: 5 },
+    'shadow_cloak': { name: 'Shadow Cloak', description: 'Woven from darkness. (+40 DEF, +30 SPD, +20 LUCK)', rarity: 'LEGENDARY', value: 90000, type: 'EQUIPMENT', stats: { def: 40, spd: 30, luck: 20 }, slot: 'cloak', reqLevel: 40 },
+    'abyssal_cloak': { name: 'Abyssal Cloak', description: 'Existing partially outside reality. (+80 DEF, +100 HP, +40 SPD)', rarity: 'MYTHIC', value: 550000, type: 'EQUIPMENT', stats: { def: 80, hp: 100, spd: 40 }, slot: 'cloak', reqLevel: 75 },
+
+    // --- ADDITIONAL GLOVES ---
+    'leather_gloves': { name: 'Leather Gloves', description: 'Basic hand protection. (+3 DEF, +3 SPD)', rarity: 'COMMON', value: 600, type: 'EQUIPMENT', stats: { def: 3, spd: 3 }, slot: 'gloves', reqLevel: 1 },
+    'chain_gloves': { name: 'Chain Gloves', description: 'Metal-linked gloves. (+12 DEF, +5 ATK)', rarity: 'UNCOMMON', value: 3500, type: 'EQUIPMENT', stats: { def: 12, atk: 5 }, slot: 'gloves', reqLevel: 8 },
+    'dragon_gauntlets': { name: 'Dragon Gauntlets', description: 'Scaled from a dragon. (+45 DEF, +25 ATK, +30 HP)', rarity: 'LEGENDARY', value: 80000, type: 'EQUIPMENT', stats: { def: 45, atk: 25, hp: 30 }, slot: 'gloves', reqLevel: 35 },
+    'abyssal_gauntlets': { name: 'Abyssal Gauntlets', description: 'Crush reality in your fists. (+80 ATK, +60 DEF, +30 CRIT)', rarity: 'MYTHIC', value: 500000, type: 'EQUIPMENT', stats: { atk: 80, def: 60, crit: 30 }, slot: 'gloves', reqLevel: 75 },
+
+    // --- ADDITIONAL HELMETS ---
+    'war_helm': { name: 'War Helm', description: 'A seasoned warrior\'s helm. (+18 DEF, +5 ATK)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { def: 18, atk: 5 }, slot: 'helmet', reqLevel: 12 },
+    'archmage_hat': { name: 'Archmage Hat', description: 'Amplifies magical resonance. (+50 MAG, +15 HP)', rarity: 'LEGENDARY', value: 75000, type: 'EQUIPMENT', stats: { mag: 50, hp: 15 }, slot: 'helmet', reqLevel: 35 },
+    'void_crown': { name: 'Void Crown', description: 'A crown of nothing. (+100 MAG, +50 DEF, +30 LUCK)', rarity: 'MYTHIC', value: 600000, type: 'EQUIPMENT', stats: { mag: 100, def: 50, luck: 30 }, slot: 'helmet', reqLevel: 80 },
+
+    // --- ADDITIONAL RINGS ---
+    'mana_ring': { name: 'Mana Ring', description: 'Pulses with magical energy. (+15 MAG)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'ring', reqLevel: 12 },
+    'cursed_ring': { name: 'Cursed Ring', description: 'Great power at a cost. (+40 ATK, -20 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { atk: 40, hp: -20 }, slot: 'ring', reqLevel: 25 },
+    'abyssal_ring': { name: 'Abyssal Ring', description: 'A band of the deep void. (+50 ATK, +50 MAG, +30 HP)', rarity: 'MYTHIC', value: 400000, type: 'EQUIPMENT', stats: { atk: 50, mag: 50, hp: 30 }, slot: 'ring', reqLevel: 70 },
+
     // 💡 Phase 3: Rune system consumables
     'rune_removal_scroll': { name: 'Rune Removal Scroll', description: 'Safely removes a socketed rune without destroying it.', rarity: 'RARE', value: 50000, type: 'CONSUMABLE', usable: true },
 

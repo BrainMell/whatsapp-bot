@@ -17,85 +17,85 @@ const CRAFTING_RECIPES = {
         name: 'Steel Sabre', category: 'WEAPON', id: 'steel_sabre',
         desc: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)',
         ingredients: { 'iron_sword': 1, 'refined_steel': 3, 'sharp_whetstone': 1 },
-        result: { id: 'steel_sabre', stats: { atk: 25, spd: 5 }, slot: 'weapon' }
+        result: { id: 'steel_sabre', stats: { atk: 25, spd: 5 }, slot: 'main_hand' }
     },
     'mythril_staff': {
         name: 'Mythril Staff', category: 'WEAPON', id: 'mythril_staff',
         desc: 'A staff made of rare mythril that amplifies magic. (+40 MAG, +10 HP)',
         ingredients: { 'arcane_wand': 1, 'mythril_ore': 5, 'mana_crystal': 2 },
-        result: { id: 'mythril_staff', stats: { mag: 40, hp: 10 }, slot: 'weapon' }
+        result: { id: 'mythril_staff', stats: { mag: 40, hp: 10 }, slot: 'main_hand' }
     },
     'inferno_blade': {
         name: 'Inferno Blade', category: 'WEAPON', id: 'inferno_blade',
         desc: 'A sword that burns with divine fire. (+35 ATK, +15% Crit)',
         ingredients: { 'steel_sabre': 1, 'fire_shard': 3, 'fire_essence': 2 },
-        result: { id: 'inferno_blade', stats: { atk: 35, crit: 15 }, slot: 'weapon' }
+        result: { id: 'inferno_blade', stats: { atk: 35, crit: 15 }, slot: 'main_hand' }
     },
     'volt_dagger': {
         name: 'Volt Dagger', category: 'WEAPON', id: 'volt_dagger',
         desc: 'Fast as lightning. (+20 ATK, +25 SPD)',
         ingredients: { 'iron_sword': 1, 'lightning_shard': 3, 'refined_steel': 2 },
-        result: { id: 'volt_dagger', stats: { atk: 20, spd: 25 }, slot: 'weapon' }
+        result: { id: 'volt_dagger', stats: { atk: 20, spd: 25 }, slot: 'main_hand' }
     },
     'dragonslayer_spear': {
         name: 'Dragonslayer Spear', category: 'WEAPON', id: 'dragonslayer_spear',
         desc: 'The ultimate boss-killing tool. (+50 ATK)',
         ingredients: { 'steel_sabre': 1, 'dragon_blood': 1, 'dragon_scale': 5 },
-        result: { id: 'dragonslayer_spear', stats: { atk: 50 }, slot: 'weapon' }
+        result: { id: 'dragonslayer_spear', stats: { atk: 50 }, slot: 'main_hand' }
     },
     'shadow_dagger': {
         name: 'Shadow Dagger', category: 'WEAPON', id: 'shadow_dagger',
         desc: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)',
         ingredients: { 'rusty_dagger': 1, 'dark_matter': 1, 'sharp_whetstone': 2 },
-        result: { id: 'shadow_dagger', stats: { atk: 30, spd: 15 }, slot: 'weapon' }
+        result: { id: 'shadow_dagger', stats: { atk: 30, spd: 15 }, slot: 'main_hand' }
     },
     'warhammer': {
         name: 'Paladin Warhammer', category: 'WEAPON', id: 'warhammer',
         desc: 'Heavy and blessed. (+35 ATK, +10 DEF)',
         ingredients: { 'iron_sword': 1, 'refined_steel': 5, 'mana_crystal': 1 },
-        result: { id: 'warhammer', stats: { atk: 35, def: 10 }, slot: 'weapon' }
+        result: { id: 'warhammer', stats: { atk: 35, def: 10 }, slot: 'main_hand' }
     },
     'death_scythe': {
         name: 'Reaper Scythe', category: 'WEAPON', id: 'death_scythe',
         desc: 'Harvests the souls of the living. (+45 ATK, +20 MAG)',
         ingredients: { 'mythril_staff': 1, 'dark_matter': 2, 'ghost_essence': 5 },
-        result: { id: 'death_scythe', stats: { atk: 45, mag: 20 }, slot: 'weapon' }
+        result: { id: 'death_scythe', stats: { atk: 45, mag: 20 }, slot: 'main_hand' }
     },
     'chrono_blade': {
         name: 'Chrono Blade', category: 'WEAPON', id: 'chrono_blade',
         desc: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)',
         ingredients: { 'steel_sabre': 1, 'mana_dew': 5, 'mana_crystal': 3 },
-        result: { id: 'chrono_blade', stats: { atk: 25, spd: 40 }, slot: 'weapon' }
+        result: { id: 'chrono_blade', stats: { atk: 25, spd: 40 }, slot: 'main_hand' }
     },
     'golden_cane': {
         name: 'Merchant Cane', category: 'WEAPON', id: 'golden_cane',
         desc: 'Wealth is power. (+20 ATK, +50 LUCK)',
         ingredients: { 'iron_sword': 1, 'gold_pile': 1000, 'rare_gem': 2 },
-        result: { id: 'golden_cane', stats: { atk: 20, luck: 50 }, slot: 'weapon' }
+        result: { id: 'golden_cane', stats: { atk: 20, luck: 50 }, slot: 'main_hand' }
     },
     'multi_tool': {
         name: 'Artificer Tool', category: 'WEAPON', id: 'multi_tool',
         desc: 'A gadget for every situation. (+25 ATK, +25 MAG, +10 DEF)',
         ingredients: { 'iron_shard': 20, 'gunpowder': 10, 'refined_steel': 5 },
-        result: { id: 'multi_tool', stats: { atk: 25, mag: 25, def: 10 }, slot: 'weapon' }
+        result: { id: 'multi_tool', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand' }
     },
     'greataxe': {
         name: 'Berserker Axe', category: 'WEAPON', id: 'greataxe',
         desc: 'Pure, unadulterated rage. (+55 ATK, -10 DEF)',
         ingredients: { 'refined_steel': 10, 'dragon_blood': 1, 'tough_leather': 5 },
-        result: { id: 'greataxe', stats: { atk: 55, def: -10 }, slot: 'weapon' }
+        result: { id: 'greataxe', stats: { atk: 55, def: -10 }, slot: 'main_hand' }
     },
     'elemental_wand': {
         name: 'Prism Wand', category: 'WEAPON', id: 'elemental_wand',
         desc: 'Channels the four elements. (+50 MAG)',
         ingredients: { 'arcane_wand': 1, 'fire_shard': 2, 'ice_shard': 2, 'lightning_shard': 2 },
-        result: { id: 'elemental_wand', stats: { mag: 50 }, slot: 'weapon' }
+        result: { id: 'elemental_wand', stats: { mag: 50 }, slot: 'main_hand' }
     },
     'storm_bow': {
         name: 'Storm Bow', category: 'WEAPON', id: 'storm_bow',
         desc: 'Shoots arrows of pure lightning. (+40 ATK, +20 SPD)',
         ingredients: { 'ancient_wood': 5, 'lightning_shard': 5, 'mystic_thread': 5 },
-        result: { id: 'storm_bow', stats: { atk: 40, spd: 20 }, slot: 'weapon' }
+        result: { id: 'storm_bow', stats: { atk: 40, spd: 20 }, slot: 'main_hand' }
     },
 
     // --- ARMOR ---
@@ -113,15 +113,15 @@ const CRAFTING_RECIPES = {
     },
     'holy_raiment': {
         name: 'Holy Raiment', category: 'ARMOR', id: 'holy_raiment',
-        desc: 'Blessed by the divine. (+25 DEF, +40 MAG)',
+        desc: 'Blessed by the divine. (+35 DEF, +50 MAG, +20 HP)',
         ingredients: { 'leather_tunic': 1, 'mystic_thread': 10, 'mana_dew': 2 },
-        result: { id: 'holy_raiment', stats: { def: 25, mag: 40 }, slot: 'armor' }
+        result: { id: 'holy_raiment', stats: { def: 35, mag: 50, hp: 20 }, slot: 'armor' }
     },
     'dragon_plate': {
         name: 'Dragon Armor', category: 'ARMOR', id: 'dragon_plate',
-        desc: 'Forged from dragon scales. (+60 DEF, +100 HP)',
+        desc: 'Forged from dragon scales. (+90 DEF, +140 HP, +15 SPD)',
         ingredients: { 'reinforced_plate': 1, 'dragon_scale': 10, 'dragon_blood': 2 },
-        result: { id: 'dragon_plate', stats: { def: 60, hp: 100 }, slot: 'armor' }
+        result: { id: 'dragon_plate', stats: { def: 90, hp: 140, spd: 15 }, slot: 'armor' }
     },
     'archmage_robes': {
         name: 'Archmage Robes', category: 'ARMOR', id: 'archmage_robes',
@@ -145,9 +145,9 @@ const CRAFTING_RECIPES = {
     },
     'assassin_hood': {
         name: 'Shadow Hood', category: 'ARMOR', id: 'assassin_hood',
-        desc: 'Hides your face. (+5 DEF, +10 SPD, +5% Crit)',
+        desc: 'Hides your face. (+10 DEF, +15 SPD, +8% Crit)',
         ingredients: { 'spider_silk': 5, 'dark_matter': 1 },
-        result: { id: 'assassin_hood', stats: { def: 5, spd: 10, crit: 5 }, slot: 'helmet' }
+        result: { id: 'assassin_hood', stats: { def: 10, spd: 15, crit: 8 }, slot: 'helmet' }
     },
 
     // --- BOOTS ---
