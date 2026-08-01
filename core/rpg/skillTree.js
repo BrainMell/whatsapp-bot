@@ -4573,17 +4573,20 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [137, 128, 120],
                         cooldown: 1,
-                        buffType: 'TRANSFORM',
-                        buffDuration: [3, 4, 5],
-                        buffs: [
-                            { stat: 'atk', multiplier: 1.5 },
-                            { stat: 'def', multiplier: 1.5 },
-                            { stat: 'mag', multiplier: 1.5 },
-                        ],
                         targeting: 'SELF',
                         description: 'Transform into full dragon form for 3-5 turns. +50% ATK/DEF/MAG. All attacks gain fire element.',
                         animation: '🐲✨🔥',
-                        skillPointCost: [6, 8, 10]
+                        skillPointCost: [6, 8, 10],
+                        // 💡 FIX 2026-08-01: Added effect callback — previously had
+                        // unrecognized buffType/buffs fields that the engine couldn't read.
+                        // Now uses standard 'all' buff type with 50% value.
+                        effect: (level) => ({
+                            type: 'buff_self',
+                            buffType: 'all',
+                            value: 50,
+                            duration: 2 + level,  // 3/4/5 turns
+                            elementOverride: 'fire',  // all attacks gain fire element
+                        })
                     },
                     apocalypse_wing: {
                         id: 'apocalypse_wing',
@@ -4600,19 +4603,24 @@ const SKILL_TREES = {
                         isAscended: true,
                         description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
                         animation: '🌋🌊🐉🔥',
+                        // 💡 FIX 2026-08-01: Fixed multiplier (was 12/14/16, should be 9/10/11),
+                        // fixed CC2 (was 'fear', should be 'stun' per description),
+                        // added stun field that the engine actually reads,
+                        // added drown as a separate DoT effect.
                         effect: (level) => ({
                             type: 'aoe',
-                            multiplier: 10.0 + (level * 2.0),
+                            multiplier: 8.0 + level,  // 9/10/11 — matches description
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
                             element: 'fire',
                             cc: 'burn',
                             ccChance: 80,
                             ccDuration: 3,
-                            ccValue: 50 + (level * 20),
-                            cc2: 'fear',
-                            cc2Chance: 40 + (level * 10),
-                            cc2Duration: 1,
+                            ccValue: 50 + (level * 20),  // 70/90/110 burn damage per turn
+                            // Stun (was cc2:'fear' which was never read by engine)
+                            stun: true,
+                            stunChance: 40 + (level * 10),  // 50/60/70%
+                            stunDuration: 1,
                             animation: '🐲👑🔥💥🌪️✨'
                         }),
                         skillPointCost: [8, 10, 12]
@@ -4662,12 +4670,25 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [97, 89, 81],
                         cooldown: 1,
-                        debuffType: 'SUPPRESS',
-                        debuffDuration: [2, 3, 4],
                         targeting: 'AOE_ALL',
                         description: 'All enemies are silenced and pacified for 2-4 turns. Their buffs are stripped. "Kneel," you say. They kneel.',
                         animation: '🐲👑⚡',
-                        skillPointCost: [7, 9, 11]
+                        skillPointCost: [7, 9, 11],
+                        // 💡 FIX 2026-08-01: Added effect callback — previously had
+                        // unrecognized debuffType:'SUPPRESS' that did nothing.
+                        // Now applies silence + strips buffs via standard engine fields.
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 0,  // no damage — pure CC
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            // Silence all enemies
+                            silence: true,
+                            silenceChance: 100,
+                            silenceDuration: 1 + level,  // 2/3/4 turns
+                            // Strip buffs
+                            stripBuffs: true,
+                        })
                     }
                 }
             }

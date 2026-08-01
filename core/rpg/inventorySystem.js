@@ -658,7 +658,8 @@ function getEquipmentStats(userId) {
 const ENHANCEMENT_BONUS_MAP = {
     'minor_enhancement_stone': 0.05,
     'rare_enhancement_stone': 0.15,
-    'legendary_enhancement_stone': 0.35
+    'legendary_enhancement_stone': 0.35,
+    'mythic_enhancement_stone': 0.60  // 💡 FIX 2026-08-01: was missing — Mythic stone was unusable
 };
 
 // Rarity-based enhancement level cap. Higher-rarity gear has more headroom

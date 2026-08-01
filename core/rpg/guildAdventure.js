@@ -2460,6 +2460,17 @@ function applyStatusEffect(
     };
   }
 
+  // 💡 FIX 2026-08-01: Dragon God "Dragon Heart" passive — full status immunity.
+  // Checks player.statusImmune flag (set by applyClassPassiveAtCombatStart).
+  // Blocks ALL status effects, not just CC types.
+  if (target.statusImmune) {
+    return {
+      applied: false,
+      blockedByImmune: true,
+      synergyMsg: `🛡️ ${target.name} is IMMUNE to all status effects!`,
+    };
+  }
+
   // 🧪 SYNERGY LOGIC
   const currentTypes = target.statusEffects.map((s) => s.type);
   let finalType = effectType;
@@ -3044,6 +3055,14 @@ function applyClassPassiveAtCombatStart(player) {
     case 'damage_reduction':
       // -value% damage taken. Stored as a percentage the damage calc can read.
       player.passiveDmgReduction = (player.passiveDmgReduction || 0) + value;
+      // 💡 FIX 2026-08-01: Dragon God's "Dragon Heart" passive says "Immune to
+      // all status effects" — the description includes both damage_reduction
+      // AND status immunity. Since the classSystem only allows one effect type,
+      // we check if the description mentions immunity and grant it here.
+      if (classData?.passive?.desc && /immune to all status/i.test(classData.passive.desc)) {
+        player.statusImmune = true;
+        msgs.push(`🛡️ Status Immunity active!`);
+      }
       break;
 
     case 'healing_boost':
@@ -5472,6 +5491,12 @@ async function endCombat(sock, victory, sessionKey) {
       p.passiveKillBonus = 1;
       p.passiveDamageBonus = 1;
       p.passiveMagBonus = 1;
+      // 💡 FIX 2026-08-01: Reset passivesApplied so combat-start passives
+      // (including magic_damage) re-apply on the next encounter. Previously
+      // passiveMagBonus was reset to 1 but passivesApplied stayed true,
+      // preventing re-application — Mages lost their +20% magic damage
+      // after the first encounter in multi-encounter dungeons.
+      p.passivesApplied = false;
 
       // 💡 PERSISTENT HP SYSTEM (2026-07-31): Save current HP back to the
       // User document so damage persists after combat ends. HP is clamped
@@ -6069,11 +6094,32 @@ async function startJourney(sock, sessionKey) {
     let classData;
     if (userClass && CLASSES[userClass.id]) {
       classData = CLASSES[userClass.id];
+    } else if (userClass) {
+      // 💡 FIX 2026-08-01: Ascended classes (DRAGON_GOD, DRAGON_LORD, etc.)
+      // are NOT in the guildAdventure CLASSES object (only 17 base classes are).
+      // Previously fell through to a RANDOM class — ascended players lost
+      // their class stats, abilities, AND passive on every dungeon.
+      // Now: build a classData from classSystem.js so the player keeps
+      // their actual class identity. Use FIGHTER stats as the base since
+      // classSystem doesn't have combat stats for ascended classes.
+      const classSystem = require('./classSystem');
+      const csClass = classSystem.getClassById(userClass.id || userClass.name?.toUpperCase());
+      if (csClass) {
+        classData = {
+          id: csClass.id,
+          name: csClass.name,
+          icon: csClass.icon,
+          passive: csClass.passive,
+          abilities: csClass.abilities || [],
+          stats: csClass.stats || { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 },
+        };
+      } else {
+        // Final fallback: use FIGHTER (not random!)
+        classData = CLASSES['FIGHTER'];
+      }
     } else {
-      // Fallback to random only if economy fails
-      const classKeys = Object.keys(CLASSES);
-      const randomKey = classKeys[Math.floor(Math.random() * classKeys.length)];
-      classData = CLASSES[randomKey];
+      // No userClass at all — use FIGHTER (not random!)
+      classData = CLASSES['FIGHTER'];
     }
 
     p.class = classData;
@@ -8395,22 +8441,37 @@ async function applyAbilityEffect(
           target,
           effect.cc,
           effect.ccDuration,
-          0,
+          effect.ccValue || 0,  // 💡 FIX 2026-08-01: was hard-coded 0, ignoring ccValue
           player.name,
         );
-        // 💡 FIX (BUG 6): surface the ccImmune block message so players
-        // understand why their CC didn't land on a boss.
         if (sRes.blockedByImmune) {
           msg += `${sRes.synergyMsg}\n`;
         } else if (sRes.applied) {
           msg += `💫 Applied ${effect.cc} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
         }
       }
+      // 💡 FIX 2026-08-01: Apply stun from effect.stun (Apocalypse Wing)
+      if (effect.stun && Math.random() * 100 < (effect.stunChance || 100)) {
+        const sRes = applyStatusEffect(target, 'stun', effect.stunDuration || 1, 0, player.name);
+        if (sRes.applied) msg += `⚡ Stunned ${target.name}!\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 FIX 2026-08-01: Apply silence from effect.silence (Dragon God's Decree)
+      if (effect.silence && Math.random() * 100 < (effect.silenceChance || 100)) {
+        const sRes = applyStatusEffect(target, 'silence', effect.silenceDuration || 2, 0, player.name);
+        if (sRes.applied) msg += `🤐 Silenced ${target.name}!\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 FIX 2026-08-01: Strip buffs (Dragon God's Decree)
+      if (effect.stripBuffs && target.buffs) {
+        const buffCount = target.buffs.length;
+        target.buffs = [];  // strip all buffs
+        if (buffCount > 0) msg += `✨ Stripped ${buffCount} buff(s) from ${target.name}!\n`;
+      }
       // Apply Specific Debuffs (Slow, etc found in keys)
       ["slow", "stun", "freeze", "burn", "shock", "poison"].forEach(
         (debuff) => {
-          if (effect[debuff] !== undefined) {
-            // Check if it's a value or object, though flattening makes it a value usually
+          if (effect[debuff] !== undefined && typeof effect[debuff] !== 'boolean') {
             const val = effect[debuff];
             const dur = effect[debuff + "Duration"] || 2;
             const sRes = applyStatusEffect(

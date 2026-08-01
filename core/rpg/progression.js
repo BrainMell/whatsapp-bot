@@ -340,7 +340,28 @@ function getBaseStats(userId, classId) {
     for (const [stat, bonus] of Object.entries(equipStats)) {
         if (typeof baseStats[stat] !== 'undefined') baseStats[stat] += bonus;
     }
-    
+
+    // 💡 FIX 2026-08-01: Apply summon trial passives.
+    // computePassiveBonuses() returns {hp, atk, def, mag, spd, luck, crit, ...}
+    // based on which trial passives the user has unlocked and which element
+    // summons they own. Previously this was NEVER called — all 14 trial
+    // passives were dead data.
+    try {
+        const summonTrials = require('./summonTrials');
+        if (mainUser && mainUser.unlockedSummonPassives && mainUser.unlockedSummonPassives.length > 0) {
+            const passiveBonuses = summonTrials.computePassiveBonuses(mainUser);
+            if (passiveBonuses) {
+                for (const [stat, bonus] of Object.entries(passiveBonuses)) {
+                    if (typeof baseStats[stat] !== 'undefined' && typeof bonus === 'number') {
+                        baseStats[stat] += bonus;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // Non-fatal — trial passives are optional
+    }
+
     baseStats.maxHp = baseStats.hp;
     baseStats.maxEnergy = 100 + (levelsGained * 15) + (Math.floor(baseStats.mag * 3));
     baseStats.evasion = Math.min(45, (baseStats.spd * 0.12)); // Increased evasion cap

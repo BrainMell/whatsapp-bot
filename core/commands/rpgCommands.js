@@ -366,7 +366,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
         }
         if (parts.length) statLine = `  📊 ${parts.join(' ')}\n`;
       } else {
-        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}+${v}`);
+        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}${v >= 0 ? '+' : ''}${v}`);
         if (parts.length) statLine = `  ✨ ${parts.join(' ')}\n`;
       }
       msg += statLine;
@@ -595,7 +595,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
 
 async function unequipItem(sock, chatId, senderJid, slot) { 
     if (!slot) { 
-        await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} unequip <slot>\`\n\nSlots: weapon, armor, helmet, boots, ring, amulet, cloak, gloves` });
+        await sock.sendMessage(chatId, { text: `❌ Usage: \`${getPrefix()} unequip <slot>\`\n\nSlots: main_hand, off_hand, armor, helmet, gloves, boots, ring, amulet, cloak` });
         return;
     }
 
@@ -982,7 +982,7 @@ async function enhanceItem(sock, chatId, senderJid, input) {
     const inventory = inventorySystem.formatInventory(senderJid);
     const targetItem = inventory.items[parseInt(input) - 1];
     if (!targetItem) return await sock.sendMessage(chatId, { text: `❌ Item not found at index ${input}!` });
-    const stones = ['legendary_enhancement_stone', 'rare_enhancement_stone', 'minor_enhancement_stone'];
+    const stones = ['mythic_enhancement_stone', 'legendary_enhancement_stone', 'rare_enhancement_stone', 'minor_enhancement_stone'];
     let stoneId = stones.find(s => inventory.items.some(item => item.id === s));
     if (!stoneId) return await sock.sendMessage(chatId, { text: `❌ You don't have any Enhancement Stones!` });
     const result = inventorySystem.enhanceItem(senderJid, targetItem.id, stoneId);

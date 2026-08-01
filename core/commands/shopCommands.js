@@ -38,7 +38,10 @@ async function displayShop(sock, chatId, category = 'all') {
                 desc: item.description,
                 cost: item.value,
                 category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
-                slot: item.slot // Copy the item's slot property
+                slot: item.slot,
+                rarity: item.rarity,        // 💡 FIX 2026-08-01: was missing — shop purchases lost rarity
+                stats: item.stats,          // 💡 FIX: was missing — shop purchases lost base stats
+                reqLevel: item.reqLevel,    // 💡 FIX: was missing — repair cost was wrong
             };
         }
     });
@@ -78,7 +81,11 @@ async function displayShop(sock, chatId, category = 'all') {
     } else {
         // Display items
         filteredItems.forEach(([key, item], index) => {
-            msg += `${item.icon} *${item.name}* \n`;
+            // 💡 FIX 2026-08-01: Show rarity in shop display
+            const rarityIcons = { COMMON: '', UNCOMMON: '★', RARE: '★★', EPIC: '★★★', LEGENDARY: '★★★★', MYTHIC: '★★★★★' };
+            const rarityTag = item.rarity ? ` ${rarityIcons[item.rarity] || ''}` : '';
+            const reqLevelTag = item.reqLevel ? ` (Lv.${item.reqLevel})` : '';
+            msg += `${item.icon} *${item.name}*${rarityTag}${reqLevelTag}\n`;
             msg += `   💰 Price: ${getZENI()}${item.cost.toLocaleString()}\n`;
             msg += `   📝 ${item.desc}\n`;
             if (item.requirement) msg += `   ⚠️ ${item.requirement}\n`;

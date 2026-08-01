@@ -82,7 +82,7 @@ const LOOT_TABLES = {
             { id: 'legendary_enhancement_stone', weight: 10, quantity: [1, 1] },
             { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
             { id: 'dragon_helm', weight: 5, quantity: [1, 1] },
-            { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
+            // 💡 FIX 2026-08-01: Removed duplicate legendary_shard (was doubling its drop rate)
         ]
     },
     
