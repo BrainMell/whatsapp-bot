@@ -27,6 +27,12 @@ async function displayShop(sock, chatId, category = 'all') {
     const allDbItems = lootSystem.ITEM_DATABASE;
 
     // 2. Identify buyable items from the database (Equipment, Consumables, and Stones)
+    // 💡 FIX 2026-08-01 (BUG #3): previously `rarity` was NOT copied into
+    // buyableDbItems, so handleEquipment() at line 312 received
+    // `item.rarity === undefined` and defaulted to 'COMMON' for EVERY shop
+    // purchase. A Mythic Abyssal Blade bought from the shop was stored as
+    // Common — wrong sell multiplier, wrong enhancement cap, wrong display.
+    // Now rarity is propagated from the lootSystem ITEM_DATABASE.
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
         // Items with an explicit value > 1 that are Equipment, Stones, or specifically categorized
@@ -37,8 +43,10 @@ async function displayShop(sock, chatId, category = 'all') {
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
+                rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3: propagate rarity
                 category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
-                slot: item.slot // Copy the item's slot property
+                slot: item.slot, // Copy the item's slot property
+                reqLevel: item.reqLevel  // 💡 FIX GAP #1: propagate reqLevel for display
             };
         }
     });
@@ -102,6 +110,9 @@ async function buyItem(sock, chatId, senderJid, input) {
     // Build the full combined item list (same as displayShop 'all')
     const classItems = classSystem.CLASS_SHOP_ITEMS;
     const allDbItems = lootSystem.ITEM_DATABASE;
+    // 💡 FIX 2026-08-01 (BUG #3): copy rarity + reqLevel here too — this is
+    // the path the actual purchase goes through. displayShop is just the
+    // preview; if we don't fix both, the purchase still stores COMMON.
     const buyableDbItems = {};
     Object.entries(allDbItems).forEach(([id, item]) => {
         if (item.value > 1 && (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy'))) {
@@ -111,8 +122,11 @@ async function buyItem(sock, chatId, senderJid, input) {
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
                 cost: item.value,
+                rarity: item.rarity || 'COMMON',  // 💡 FIX BUG #3
                 type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
-                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST'
+                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
+                slot: item.slot,  // 💡 FIX BUG #3: also copy slot (was missing in this path too)
+                reqLevel: item.reqLevel  // 💡 FIX GAP #1
             };
         }
     });
@@ -305,13 +319,19 @@ This boost is permanent and applies to all your quests!`
 
 async function handleEquipment(senderJid, item) {
     // Add to inventory with its specific stats and slot
+    // 💡 FIX 2026-08-01 (BUG #3): item.rarity is now properly propagated
+    // from lootSystem.ITEM_DATABASE via the buyableDbItems construction in
+    // both displayShop and buyItem. Previously it was undefined here, so
+    // every shop-bought equipment defaulted to 'COMMON' rarity — wrong
+    // sell multiplier, wrong enhancement cap, wrong display.
     const result = await inventorySystem.addItem(senderJid, item.id, 1, {
         name: item.name,
         type: 'EQUIPMENT',
         rarity: item.rarity || 'COMMON',
         stats: item.stats,
         slot: item.slot,
-        value: item.cost
+        value: item.cost,
+        reqLevel: item.reqLevel  // 💡 FIX GAP #1: persist reqLevel so equipItem can check it
     });
     
     if (result.success) {

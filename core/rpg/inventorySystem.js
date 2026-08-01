@@ -403,6 +403,23 @@ async function equipItem(userId, itemId, slot) {
             message: `❌ Level too low! Need Level ${reqLevel} to use this.`
         };
     }
+
+    // 💡 FIX 2026-08-01 (GAP #1): rank enforcement on equip.
+    // User quote: "Players should not be able to equip weapons above their
+    // required rank or level." The reqRank is derived from reqLevel using the
+    // rank thresholds in classSystem.ADVENTURER_RANKS (F=1, E=10, D=20, ...).
+    // A player may meet the level req but not hold the rank yet (rank also
+    // requires questsCompleted + GP) — in that case, block the equip.
+    const reqRank = getRequiredRankForLevel(reqLevel);
+    const user = economy.getUser(userId);
+    const playerRank = user?.adventurerRank || 'F';
+    if (!rankGte(playerRank, reqRank)) {
+        const rankData = classSystem.ADVENTURER_RANKS[reqRank];
+        return {
+            success: false,
+            message: `❌ Rank too low! Need *${rankData?.name || reqRank}* (Level ${reqLevel}) to equip this. You are *${classSystem.ADVENTURER_RANKS[playerRank]?.name || playerRank}*.\n\nRank up by completing quests and earning GP — use \`${botConfig.getPrefix()}rank\` to see your progress.`
+        };
+    }
     
     // Auto-detect slot if not provided
     let targetSlot = slot;
@@ -558,10 +575,20 @@ async function equipItem(userId, itemId, slot) {
         economy.trackMissionStat(userId, 'itemsEquipped', 1);
     } catch (e) {}
 
+    // 💡 FIX 2026-08-01 (BUG #11): include item name + slot + rank in the
+    // return so the command handler can show a useful success message
+    // instead of just "equipped <id>".
+    const equippedName = equipment[slotName]?.name || itemInfo.name || itemId;
+    const equippedRarity = equipment[slotName]?.rarity || itemInfo.rarity || 'COMMON';
+    const rarityIcon = ITEM_RARITY[equippedRarity]?.icon || '⚪';
     return {
         success: true,
-        equipped: itemId,
-        slot: slotName
+        equipped: targetItemId,
+        equippedName,
+        slot: slotName,
+        rarity: equippedRarity,
+        rarityIcon,
+        message: `${rarityIcon} Equipped *${equippedName}* to **${slotName}** slot.`
     };
 }
 
@@ -654,12 +681,48 @@ function getEquipmentStats(userId) {
     return totalStats;
 }
 
-// Enhancement stones: percentage each stone adds to the TOTAL bonus pool (not compounded)
+// Enhancement stones: percentage each stone adds to the TOTAL bonus pool (not compounded).
+// 💡 FIX 2026-08-01 (BUG #1): mythic_enhancement_stone was MISSING from this map.
+// It is defined in lootSystem.js:895 with description "Boosts gear stats by 60%."
+// but enhanceItem() fell through to the || 0.05 fallback (worst bonus in the game)
+// instead of giving the intended 60% per stone. This made Mythic stones — the
+// most expensive enhancement item at 80,000 Zeni — completely useless.
 const ENHANCEMENT_BONUS_MAP = {
     'minor_enhancement_stone': 0.05,
     'rare_enhancement_stone': 0.15,
-    'legendary_enhancement_stone': 0.35
+    'legendary_enhancement_stone': 0.35,
+    'mythic_enhancement_stone': 0.60
 };
+
+// 💡 FIX 2026-08-01 (GAP #1): rank enforcement on equip.
+// The rank thresholds mirror classSystem.ADVENTURER_RANKS — a player must
+// hold at least the rank whose level requirement is <= the item's reqLevel.
+// F=1, E=10, D=20, C=30, B=40, A=50, S=60, SS=75, SSS=90, GOD=100.
+const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+
+// Returns the minimum rank a player must hold to equip an item with the given
+// reqLevel. Walks RANK_ORDER and returns the highest rank whose level
+// threshold is <= reqLevel. Items with no reqLevel default to 'F'.
+function getRequiredRankForLevel(level) {
+    if (!level || level < 1) return 'F';
+    let requiredRank = 'F';
+    for (const rank of RANK_ORDER) {
+        const rankData = classSystem.ADVENTURER_RANKS[rank];
+        if (rankData && level >= rankData.requirement.level) {
+            requiredRank = rank;
+        }
+    }
+    return requiredRank;
+}
+
+// Returns true if rankA is >= rankB (using RANK_ORDER indices, not string
+// comparison — 'S' > 'SS' is false in JS string compare but S < SS in rank).
+function rankGte(rankA, rankB) {
+    const a = RANK_ORDER.indexOf(rankA);
+    const b = RANK_ORDER.indexOf(rankB);
+    if (a === -1 || b === -1) return false; // unknown rank → fail closed
+    return a >= b;
+}
 
 // Rarity-based enhancement level cap. Higher-rarity gear has more headroom
 // so Common trash can't be enhanced into endgame gear, while Mythic items can
@@ -787,9 +850,21 @@ function enhanceItem(userId, itemId, stoneId) {
         return { success: false, message: `❌ *${item.name || itemId}* is already at max enhancement level (${maxLevel}) for its rarity!` };
     }
 
+    // 💡 FIX 2026-08-01 (BUG #1): ENHANCEMENT_BONUS_MAP now includes
+    // mythic_enhancement_stone (0.60). Previously it fell through to || 0.05
+    // (the Minor-stone fallback), making Mythic stones the worst in the game.
     const stoneBonus = ENHANCEMENT_BONUS_MAP[stoneId] || 0.05;
+    const stoneInfo = lootSystem.getItemInfo(stoneId);
+    const stoneName = stoneInfo?.name || stoneId;
 
     hydrateBaseStats(item, itemId);
+
+    // 💡 FIX 2026-08-01 (BUG #5): snapshot stats BEFORE enhancement so we can
+    // report per-stat deltas in the result message. Previously
+    // recalculateEnhancedStats() mutated item.stats in place and the old
+    // values were lost.
+    const statsBefore = JSON.parse(JSON.stringify(item.stats || {}));
+    const bonusBefore = item.enhancementBonus || 0;
 
     item.enhancementLevel = (item.enhancementLevel || 0) + 1;
     // 💡 POLISH 2026-07-17: cap bonus at rarity-aware max (not flat 1.0)
@@ -797,6 +872,14 @@ function enhanceItem(userId, itemId, stoneId) {
     item.enhancementBonus = Math.min((item.enhancementBonus || 0) + stoneBonus, maxBonus);
 
     recalculateEnhancedStats(item, itemId);
+
+    // Compute per-stat deltas for the result message
+    const statDeltas = {};
+    for (const stat of Object.keys(item.stats || {})) {
+        const before = statsBefore[stat] || 0;
+        const after = item.stats[stat] || 0;
+        if (after !== before) statDeltas[stat] = after - before;
+    }
 
     // Add prefix
     const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
@@ -838,9 +921,28 @@ function enhanceItem(userId, itemId, stoneId) {
     removeItem(userId, stoneId, 1);
     economy.saveUser(userId);
 
+    // 💡 FIX 2026-08-01 (BUG #4): include stone name + per-stat deltas in the
+    // result message. User quote: "Show exactly which stone is being consumed
+    // during enhancement. Display how much each enhancement increases the
+    // item's stats."
+    const statLines = Object.entries(statDeltas)
+        .map(([stat, delta]) => `   ${stat.toUpperCase()}: ${statsBefore[stat] || 0} → ${item.stats[stat]} (+${delta})`)
+        .join('\n');
+    const bonusThisStone = item.enhancementBonus - bonusBefore;
+
     return {
         success: true,
-        message: `✨ *ENHANCEMENT SUCCESS!* \n\nYour *${item.name}* is now Level ${item.enhancementLevel}/${maxLevel}!\nTotal stat bonus: ${Math.round(item.enhancementBonus * 100)}%.`
+        message: `✨ *ENHANCEMENT SUCCESS!*\n\n💎 Stone used: *${stoneName}* (+${Math.round(stoneBonus * 100)}% bonus)\n⚔️ Item: *${item.name}* (${item.rarity || 'COMMON'})\n📊 Level: ${item.enhancementLevel}/${maxLevel}\n📈 Total bonus: ${Math.round(bonusBefore * 100)}% → ${Math.round(item.enhancementBonus * 100)}% (+${Math.round(bonusThisStone * 100)}%)\n${statLines ? `\n*Stat changes:*\n${statLines}` : ''}`,
+        // Structured return for callers that want to render their own UI
+        stoneUsed: stoneId,
+        stoneName,
+        stoneBonus,
+        bonusBefore,
+        bonusAfter: item.enhancementBonus,
+        levelBefore: item.enhancementLevel - 1,
+        levelAfter: item.enhancementLevel,
+        maxLevel,
+        statDeltas
     };
 }
 
@@ -887,8 +989,15 @@ function repairItemStats(item, itemId) {
     // flat 5-level cap.
     const maxLevel = getMaxEnhancementLevel(item, itemId);
     item.enhancementLevel = Math.min(item.enhancementLevel, maxLevel);
-    // 💡 POLISH 2026-07-17: bonus capped at rarity-aware max (not flat 1.0)
-    item.enhancementBonus = Math.min(item.enhancementLevel * 0.35, maxBonus);
+    // 💡 FIX 2026-08-01 (BUG #6): the previous multiplier was the Legendary
+    // stone value (0.35 per level), which assumed Legendary stones were used
+    // at every prior level. But Mythic stones give a larger bonus per level —
+    // so a legitimately Mythic-enhanced item was being "repaired" down to the
+    // Legendary-stone assumption. Now uses the Mythic stone value (most
+    // generous assumption), capped at the rarity-aware maxBonus. This matches
+    // the stated intent in recover_enhancement_stats.js — "most generous
+    // assumption" — which was previously wrong (Legendary is NOT most generous).
+    item.enhancementBonus = Math.min(item.enhancementLevel * 0.60, maxBonus);
     recalculateEnhancedStats(item, itemId);
     return true;
 }
@@ -1289,6 +1398,8 @@ module.exports = {
     INVENTORY_CONFIG,
     ITEM_RARITY,
     EQUIPMENT_SLOTS,
+    ENHANCEMENT_BONUS_MAP,
+    RANK_ORDER,
     MAX_ENHANCEMENT_LEVEL,
     MAX_ENHANCEMENT_LEVEL_BY_RARITY,
     DEFAULT_MAX_ENHANCEMENT_LEVEL,
@@ -1296,5 +1407,7 @@ module.exports = {
     MAX_ENHANCEMENT_BONUS_BY_RARITY,
     DEFAULT_MAX_ENHANCEMENT_BONUS,
     getMaxEnhancementLevel,
-    getMaxEnhancementBonus
+    getMaxEnhancementBonus,
+    getRequiredRankForLevel,
+    rankGte
 };
