@@ -84,10 +84,25 @@ async function displayShop(sock, chatId, category = 'all') {
     if (filteredItems.length === 0) {
         msg += `❌ No items found in this category.\n`;
     } else {
-        // Display items
+        // 💡 AUDIT FIX 2026-08-01: show rarity icon, reqLevel, slot, and stats
+        // for equipment items. Previously the shop only showed name/price/desc/ID,
+        // so players couldn't tell how strong an item was without buying it.
+        // Also added a `?filter=<rarity|slot|level>` syntax for finer filtering.
+        const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
         filteredItems.forEach(([key, item], index) => {
-            msg += `${item.icon} *${item.name}* \n`;
+            const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
+            msg += `${item.icon} ${rarIcon} *${item.name}*\n`;
             msg += `   💰 Price: ${getZENI()}${item.cost.toLocaleString()}\n`;
+            if (item.rarity && item.rarity !== 'COMMON') msg += `   ${rarIcon} Rarity: *${item.rarity}*\n`;
+            if (item.reqLevel && item.reqLevel > 1) msg += `   📊 Requires Level *${item.reqLevel}*\n`;
+            if (item.slot) msg += `   📍 Slot: ${item.slot.replace('_', ' ')}\n`;
+            if (item.stats && Object.keys(item.stats).length > 0) {
+              const statStr = Object.entries(item.stats)
+                .filter(([,v]) => v !== 0)
+                .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`)
+                .join(' ');
+              if (statStr) msg += `   ⚔️ Stats: ${statStr}\n`;
+            }
             msg += `   📝 ${item.desc}\n`;
             if (item.requirement) msg += `   ⚠️ ${item.requirement}\n`;
             msg += `   🆔 ID: \`${item.id}\`\n\n`;

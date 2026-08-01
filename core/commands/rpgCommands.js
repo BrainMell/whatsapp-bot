@@ -366,7 +366,15 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
         }
         if (parts.length) statLine = `  📊 ${parts.join(' ')}\n`;
       } else {
-        const parts = Object.entries(item.stats).filter(([,v]) => v).map(([s, v]) => `${s.toUpperCase()}+${v}`);
+        // 💡 AUDIT FIX 2026-08-01: negative stats were displayed as "SPD+-10"
+        // (the literal string "+" followed by the negative number). The
+        // filter `[,v]) => v` correctly excludes 0 but the template
+        // `${s.toUpperCase()}+${v}` always prepends "+", producing ugly
+        // output like "SPD+-10". Now: filter on `v !== 0`, and only show
+        // "+" for positive values — negative values show "SPD-10" naturally.
+        const parts = Object.entries(item.stats)
+          .filter(([,v]) => v !== 0)
+          .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`);
         if (parts.length) statLine = `  ✨ ${parts.join(' ')}\n`;
       }
       msg += statLine;

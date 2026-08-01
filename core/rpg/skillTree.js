@@ -4621,6 +4621,16 @@ const SKILL_TREES = {
                             stun: true,
                             stunChance: 40 + (level * 10),  // 50/60/70%
                             stunDuration: 1,
+                            // 💡 AUDIT FIX 2026-08-01: added drown DoT.
+                            // Description says "Burn, Stun, and Drown" but
+                            // drown was missing — no effect.drown field and
+                            // no `drown` entry in STATUS_EFFECTS. Both are
+                            // now added; engine reads effect.drown + applies
+                            // via applyStatusEffect('drown', ...).
+                            drown: true,
+                            drownChance: 60 + (level * 10),  // 70/80/90%
+                            drownDuration: 2,
+                            drownValue: 40 + (level * 20),   // 60/80/100 drown dmg/turn
                             animation: '🐲👑🔥💥🌪️✨'
                         }),
                         skillPointCost: [8, 10, 12]

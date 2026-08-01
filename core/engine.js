@@ -22351,6 +22351,27 @@ Examples:
                       return;
                     }
 
+                    // 💡 AUDIT FIX 2026-08-01: bounty block on withdraw.
+                    // The bounty rules at the top of bountySystem.js say:
+                    //   "Targets with bounties cannot use the bank (forces
+                    //    wallet carry = risk)"
+                    // The deposit command was already blocked (line 22271),
+                    // but withdraw was NOT — a player with a bounty could
+                    // still withdraw existing bank funds, which defeats the
+                    // "forces wallet carry" design. Now both directions are
+                    // blocked while a bounty is active. Player must clear
+                    // the bounty (win PvP, wait 7 days, or placer cancels)
+                    // before accessing the bank again.
+                    try {
+                      const bountySystem = require('./rpg/bountySystem');
+                      const hasBounty = await bountySystem.hasActiveBounty(senderJid);
+                      if (hasBounty) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head — you cannot access the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
+                      }
+                    } catch (e) {
+                      // If bounty check fails, allow the withdraw (don't block on error)
+                    }
+
                     const result = economy.withdraw(senderJid, amount);
                     if (result.success) {
                       try {

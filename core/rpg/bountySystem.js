@@ -169,6 +169,12 @@ async function claimBounty(hunterJid, targetJid) {
 
 // ─── FAILED HUNT PENALTY (called after PvP loss when hunting) ─────────────
 // Hunter pays 10% of total active bounty as penalty.
+// 💡 AUDIT FIX 2026-08-01: also increment `defendersWon` on each active
+// bounty. If the target defeats 3 challengers, the bounty is auto-
+// terminated (status='defended', no refund to placer). This gives the
+// target a path to clear the bounty by winning duels, not just waiting
+// 7 days. Placer forfeits the Zeni — they chose to place the bounty.
+const DEFENDERS_WIN_THRESHOLD = 3;
 async function failedHuntPenalty(hunterJid, targetJid) {
   const bounties = await Bounty.find({ targetJid, status: 'active' });
   if (bounties.length === 0) {
@@ -188,10 +194,32 @@ async function failedHuntPenalty(hunterJid, targetJid) {
     // Penalty goes to the target (consolation for being attacked)
     economy.addMoney(targetJid, actualPenalty, `Failed bounty hunt consolation from ${hunterJid}`);
   }
+
+  // 💡 AUDIT FIX 2026-08-01: increment defendersWon + auto-terminate at threshold.
+  // Track this on each active bounty on the target. If any reaches the
+  // threshold, flip it to 'defended' (terminated, no refund).
+  const defendedBounties = [];
+  for (const bounty of bounties) {
+    bounty.defendersWon = (bounty.defendersWon || 0) + 1;
+    bounty.penaltyPaid = (bounty.penaltyPaid || 0) + actualPenalty;
+    if (bounty.defendersWon >= DEFENDERS_WIN_THRESHOLD) {
+      bounty.status = 'defended';
+      bounty.defendedAt = new Date();
+      defendedBounties.push(bounty);
+    }
+    await bounty.save();
+  }
+
+  let defenseMsg = '';
+  if (defendedBounties.length > 0) {
+    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${targetJid.split('@')[0]} defeated ${DEFENDERS_WIN_THRESHOLD} challengers — ${defendedBounties.length} bounty(ies) cleared!`;
+  }
+
   return {
     success: true,
     penaltyPaid: actualPenalty,
-    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${targetJid.split('@')[0]}.`,
+    defendedBounties,
+    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${targetJid.split('@')[0]}.${defenseMsg}`,
   };
 }
 

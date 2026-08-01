@@ -176,7 +176,7 @@ const DUNGEON_ENVIRONMENTS = {
   DRAGON_LAIR: {
     id: "DRAGON_LAIR",
     name: "Dragon’s Lair",
-    asset: "env10.png",
+    asset: "background2.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) → Go service fell back to random bg each render
     mobs: ["DRAKE_SCOUT", "FIRE_BREATHER"],
     bosses: ["ANCIENT_DRAGON_BOSS"],
     modifier: {
@@ -203,7 +203,7 @@ const DUNGEON_ENVIRONMENTS = {
   ICE_CAVE: {
     id: "ICE_CAVE",
     name: "Ice Cave",
-    asset: "env2.png",
+    asset: "ice.png",  // 💡 AUDIT FIX 2026-08-01: was env2.png — ice.png is more thematic
     mobs: ["FROST_GHOUL", "GLACIAL_BEAST", "BLIZZARD_WRAITH"],
     bosses: ["PERMAFROST_TITAN"],
     modifier: {
@@ -229,7 +229,7 @@ const DUNGEON_ENVIRONMENTS = {
   VOID_DIMENSION: {
     id: "VOID_DIMENSION",
     name: "Void Dimension",
-    asset: "env4.png",
+    asset: "background1.png",  // 💡 AUDIT FIX 2026-08-01: was env4.png (doesn't exist)
     mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
     bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
     modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
@@ -238,7 +238,7 @@ const DUNGEON_ENVIRONMENTS = {
   SCI_FI_CITY: {
     id: "SCI_FI_CITY",
     name: "Sci-Fi City",
-    asset: "env5.png",
+    asset: "background3.png",  // 💡 AUDIT FIX 2026-08-01: was env5.png (doesn't exist)
     mobs: ["TSUNAMI_WALKER", "ABYSSAL_HORROR"],
     bosses: ["KRAKEN_SPAWN"],
     modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
@@ -247,7 +247,7 @@ const DUNGEON_ENVIRONMENTS = {
   DEMON_CASTLE: {
     id: "DEMON_CASTLE",
     name: "Demon Castle",
-    asset: "env6.png",
+    asset: "env2.png",  // 💡 AUDIT FIX 2026-08-01: was env6.png (doesn't exist)
     mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
     bosses: [
       "MUTATION_PRIME",
@@ -265,7 +265,7 @@ const DUNGEON_ENVIRONMENTS = {
   DESERT: {
     id: "DESERT",
     name: "Desert",
-    asset: "env7.png",
+    asset: "sand.png",  // 💡 AUDIT FIX 2026-08-01: was env7.png (doesn't exist) — sand.png is thematic
     mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
     bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
     modifier: {
@@ -278,7 +278,7 @@ const DUNGEON_ENVIRONMENTS = {
   INFECTED_AFTERLIFE: {
     id: "INFECTED_AFTERLIFE",
     name: "Infected Afterlife",
-    asset: "env8.png",
+    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env8.png (doesn't exist)
     mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
     bosses: ["PERFECT_MUTATION"],
     modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
@@ -287,7 +287,7 @@ const DUNGEON_ENVIRONMENTS = {
   PRE_INFECTED_AFTERLIFE: {
     id: "PRE_INFECTED_AFTERLIFE",
     name: "Pre-Infected Afterlife",
-    asset: "env9.png",
+    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env9.png (doesn't exist)
     mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
     bosses: ["ELEMENTAL_SOVEREIGN"],
     modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
@@ -296,7 +296,7 @@ const DUNGEON_ENVIRONMENTS = {
   SIMPLE_FOREST: {
     id: "SIMPLE_FOREST",
     name: "Simple Forest",
-    asset: "env10.png",
+    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) — forest.png is thematic
     mobs: ["OBSIDIAN_JUGGERNAUT", "DIAMOND_SENTINEL"],
     bosses: ["MOUNTAIN_COLOSSUS"],
     modifier: { type: "DENSE_FOLIAGE", desc: "Line-of-sight blocked" },
@@ -1794,6 +1794,17 @@ const STATUS_EFFECTS = {
     value: 15,
     tickRate: "per_turn",
   },
+  // 💡 AUDIT FIX 2026-08-01: added `drown` status effect.
+  // Apocalypse Wing's description says "Inflicts Burn, Stun, and Drown"
+  // but no `drown` effect existed, so the drown portion did nothing.
+  // Now defined as a DoT that scales with the caster's MAG via ccValue.
+  drown: {
+    name: "Drown",
+    icon: "🌊",
+    effect: "damage_over_time",
+    value: 20,
+    tickRate: "per_turn",
+  },
   weak: {
     name: "Weakened",
     icon: "😵",
@@ -2471,6 +2482,21 @@ function applyStatusEffect(
     };
   }
 
+  // 💡 AUDIT FIX 2026-08-01: Skill-tree status immunity (Soul of the Deep).
+  // Soul of the Deep's passiveEffects.statusImmunity = ['DROWN','FREEZE','POISON'].
+  // applySkillPassivesAtCombatStart stores this as target.skillStatusImmunity
+  // (array of uppercase types). Check it here — only blocks the listed types.
+  if (Array.isArray(target.skillStatusImmunity) && target.skillStatusImmunity.length > 0) {
+    const effectUpper = String(effectType).toUpperCase();
+    if (target.skillStatusImmunity.includes(effectUpper)) {
+      return {
+        applied: false,
+        blockedByImmune: true,
+        synergyMsg: `🌊 ${target.name} is immune to ${effectType}! (Soul of the Deep)`,
+      };
+    }
+  }
+
   // 🧪 SYNERGY LOGIC
   const currentTypes = target.statusEffects.map((s) => s.type);
   let finalType = effectType;
@@ -3059,9 +3085,16 @@ function applyClassPassiveAtCombatStart(player) {
       // all status effects" — the description includes both damage_reduction
       // AND status immunity. Since the classSystem only allows one effect type,
       // we check if the description mentions immunity and grant it here.
-      if (classData?.passive?.desc && /immune to all status/i.test(classData.passive.desc)) {
+      //
+      // 💡 AUDIT FIX 2026-08-01 (this pass): the previous code referenced
+      // `classData?.passive?.desc` and `msgs.push(...)` — both UNDEFINED in
+      // this scope (classData is not a variable here; msgs is not declared).
+      // That made the if-condition always falsy, so player.statusImmune was
+      // NEVER set. Dragon God players were still getting burned / silenced /
+      // stunned / etc. Now reads from player.class.passive.desc directly.
+      if (player?.class?.passive?.desc && /immune to all status/i.test(player.class.passive.desc)) {
         player.statusImmune = true;
-        msgs.push(`🛡️ Status Immunity active!`);
+        console.log(`🛡️ [Passive] ${player.name || 'Player'} has Dragon Heart — full status immunity active.`);
       }
       break;
 
@@ -3090,6 +3123,116 @@ function applyClassPassiveAtCombatStart(player) {
   }
 
   player.passivesApplied = true;
+}
+
+// 💡 AUDIT FIX 2026-08-01: Skill-tree passive processor.
+//
+// Skill-tree passives (e.g. Dragon God's "Soul of the Deep") define their
+// effects on the SKILL object via `passiveEffects: { hpRegenPerTurn,
+// manaRegenPerTurn, statusImmunity }`. The previous code only applied the
+// CLASS passive (player.class.passive) — skill-tree passives were silently
+// dead. Soul of the Deep regen + status immunity did nothing.
+//
+// This function iterates over the player's learned passive skills and
+// applies their passiveEffects at combat start. Per-turn effects (regen)
+// are stored on the player for `applySkillPassivesPerTurn` to apply each
+// round. Status immunity is stored as `player.skillStatusImmunity` (array
+// of uppercase status types) and checked in `applyStatusEffect`.
+function applySkillPassivesAtCombatStart(player) {
+  if (!player || !player.jid) return;
+  if (player.skillPassivesApplied) return;  // idempotent
+
+  const economy = require('./economy');
+  const classSystem = require('./classSystem');
+  const skillTreeMod = require('./skillTree');
+
+  const user = economy.getUser(player.jid);
+  if (!user || !user.skills) return;
+
+  const userClass = economy.getUserClass(player.jid);
+  if (!userClass) return;
+  const lineage = classSystem.getLineage(userClass.id);
+
+  player.skillStatusImmunity = player.skillStatusImmunity || [];
+  player.skillHpRegenPct = player.skillHpRegenPct || 0;  // % of maxHp per turn
+  player.skillManaRegenPct = player.skillManaRegenPct || 0;  // % of maxMana per turn
+
+  const seen = new Set();
+  for (const cId of lineage) {
+    const tree = skillTreeMod.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees || {})) {
+      for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+        if (!skill.passive) continue;
+        const level = user.skills[skillId] || 0;
+        if (level < 1) continue;
+        if (seen.has(skillId)) continue;
+        seen.add(skillId);
+
+        const pe = skill.passiveEffects;
+        if (!pe) continue;
+
+        // Status immunity (Soul of the Deep: ['DROWN','FREEZE','POISON'])
+        if (Array.isArray(pe.statusImmunity)) {
+          for (const statusType of pe.statusImmunity) {
+            const upper = String(statusType).toUpperCase();
+            if (!player.skillStatusImmunity.includes(upper)) {
+              player.skillStatusImmunity.push(upper);
+            }
+          }
+        }
+
+        // Per-turn regen — store the highest tier the player has unlocked
+        const getVal = (val, lvl) =>
+          Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
+        const hpRegen = getVal(pe.hpRegenPerTurn, level);
+        const manaRegen = getVal(pe.manaRegenPerTurn, level);
+        if (typeof hpRegen === 'number' && hpRegen > player.skillHpRegenPct) {
+          player.skillHpRegenPct = hpRegen;
+        }
+        if (typeof manaRegen === 'number' && manaRegen > player.skillManaRegenPct) {
+          player.skillManaRegenPct = manaRegen;
+        }
+      }
+    }
+  }
+
+  player.skillPassivesApplied = true;
+  if (player.skillStatusImmunity.length > 0) {
+    console.log(`🌊 [SkillPassive] ${player.name || 'Player'} status immunity: ${player.skillStatusImmunity.join(', ')}`);
+  }
+  if (player.skillHpRegenPct > 0 || player.skillManaRegenPct > 0) {
+    console.log(`🌊 [SkillPassive] ${player.name || 'Player'} regen: +${(player.skillHpRegenPct*100).toFixed(0)}% HP/turn, +${(player.skillManaRegenPct*100).toFixed(0)}% MP/turn`);
+  }
+}
+
+// 💡 AUDIT FIX 2026-08-01: Per-turn skill-tree passive processor.
+// Called once per combat round (per player). Applies the stored regen
+// percentages. Returns an array of message strings for the combat log.
+function applySkillPassivesPerTurn(player, state) {
+  if (!player || player.isDead) return [];
+  if (!player.skillPassivesApplied) return [];
+
+  const msgs = [];
+  const maxHp = player.stats?.maxHp || player.stats?.hp || 1;
+  const maxMp = player.maxMana || 100;
+
+  if (player.skillHpRegenPct > 0 && player.stats.hp < maxHp) {
+    const heal = Math.min(Math.floor(maxHp * player.skillHpRegenPct), maxHp - player.stats.hp);
+    if (heal > 0) {
+      player.stats.hp += heal;
+      player.currentHP = player.stats.hp;
+      msgs.push(`🌊 Soul of the Deep: +${heal} HP regen`);
+    }
+  }
+  if (player.skillManaRegenPct > 0 && (player.mana || 0) < maxMp) {
+    const restore = Math.min(Math.floor(maxMp * player.skillManaRegenPct), maxMp - (player.mana || 0));
+    if (restore > 0) {
+      player.mana = (player.mana || 0) + restore;
+      msgs.push(`🌊 Soul of the Deep: +${restore} MP regen`);
+    }
+  }
+  return msgs;
 }
 
 // Apply per-turn passive effects. Called once per combat round (per player).
@@ -3543,6 +3686,14 @@ async function processCombatTurn(sock, sessionKey) {
           if (msgs && msgs.length > 0) passiveMsgsThisRound.push(...msgs);
         } catch (e) {
           console.error('[Passive] applyClassPassivePerTurn failed:', e?.message || e);
+        }
+        // 💡 AUDIT FIX 2026-08-01: also apply skill-tree per-turn passives
+        // (Soul of the Deep regen). Was previously dead code.
+        try {
+          const msgs = applySkillPassivesPerTurn(p, state);
+          if (msgs && msgs.length > 0) passiveMsgsThisRound.push(...msgs);
+        } catch (e) {
+          console.error('[Passive] applySkillPassivesPerTurn failed:', e?.message || e);
         }
       });
       if (passiveMsgsThisRound.length > 0) {
@@ -5357,6 +5508,14 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
     turnCount: 0,
     pendingActions: {},
     combatHistory: [],
+    // 💡 AUDIT FIX 2026-08-01: Abyss combat was missing backgroundPath,
+    // causing the same random-background bug as regular dungeons (Go
+    // service picks random .png when the requested file doesn't exist).
+    // Abyss is void-themed → use background1.png (same as VOID_DIMENSION).
+    backgroundPath: 'rpgasset/environment/background1.png',
+    // 💡 AUDIT FIX 2026-08-01: also missing stats object (onboarding rule #24).
+    // recordEnemyKill has a defensive init, but let's be explicit.
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
     roundLog: [],
     timers: {},
     groq: null,
@@ -6180,6 +6339,15 @@ async function startJourney(sock, sessionKey) {
       applyClassPassiveAtCombatStart(p);
     } catch (e) {
       console.error('[Passive] applyClassPassiveAtCombatStart failed:', e?.message || e);
+    }
+    // 💡 AUDIT FIX 2026-08-01: also apply skill-tree passives (Soul of the
+    // Deep, etc.). These were previously NEVER applied — only the class
+    // passive was. Soul of the Deep's hpRegen/manaRegen/statusImmunity
+    // were silently dead. Now wired in alongside the class passive.
+    try {
+      applySkillPassivesAtCombatStart(p);
+    } catch (e) {
+      console.error('[Passive] applySkillPassivesAtCombatStart failed:', e?.message || e);
     }
   });
 
@@ -8460,6 +8628,13 @@ async function applyAbilityEffect(
       if (effect.silence && Math.random() * 100 < (effect.silenceChance || 100)) {
         const sRes = applyStatusEffect(target, 'silence', effect.silenceDuration || 2, 0, player.name);
         if (sRes.applied) msg += `🤐 Silenced ${target.name}!\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 AUDIT FIX 2026-08-01: Apply drown DoT from effect.drown (Apocalypse Wing).
+      // Description says "Burn, Stun, and Drown" — drown was previously missing.
+      if (effect.drown && Math.random() * 100 < (effect.drownChance || 100)) {
+        const sRes = applyStatusEffect(target, 'drown', effect.drownDuration || 2, effect.drownValue || 30, player.name);
+        if (sRes.applied) msg += `🌊 Drowning ${target.name}! (${effect.drownValue || 30}/turn)\n`;
         else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
       }
       // 💡 FIX 2026-08-01: Strip buffs (Dragon God's Decree)
