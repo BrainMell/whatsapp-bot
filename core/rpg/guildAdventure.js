@@ -5700,26 +5700,26 @@ async function handleAbyssVictory(sock, sessionKey) {
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;
     msg += `HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}\n`;
-    msg += `_Use \`${P()} combat attack\` to fight!_`;
+    msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
   } else if (encounter.type === 'wild_summon') {
     msg += `🐉 *Floor ${newFloor}* — Wild ${encounter.wildSummonSpecies} appeared!*\n`;
     msg += `HP: ${encounter.enemy.stats.hp}/${encounter.enemy.stats.maxHp}\n`;
     msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
-    msg += `_Use \`${P()} combat attack\` to fight!_`;
+    msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
   } else if (encounter.type === 'treasure') {
     msg += `${encounter.treasure.icon} *Floor ${newFloor}* — ${encounter.treasure.name}\n`;
     msg += `_${encounter.treasure.desc}_\n\n`;
-    msg += `_Collect with \`${P()} abyss collect\` | Skip with \`${P()} abyss skip\`_`;
+    msg += `_Collect with \`${botConfig.getPrefix()} abyss collect\` | Skip with \`${botConfig.getPrefix()} abyss skip\`_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
   } else if (encounter.type === 'event') {
     msg += `${encounter.event.icon} *Floor ${newFloor}* — ${encounter.event.name}\n`;
     msg += `_${encounter.event.desc}_\n\n`;
     encounter.event.choices.forEach(c => { msg += `\`${c.id}\` — ${c.text}\n`; });
-    msg += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    msg += `\n_Choose with \`${botConfig.getPrefix()} abyss choose <1/2>\`_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
   }
 }
@@ -6126,7 +6126,7 @@ const initAdventure = async (
       } else if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
         return {
           success: false,
-          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`${P()} craft dragon_key\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
+          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`${botConfig.getPrefix()} craft dragon_key\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
         };
       } else {
         // Consume Key
