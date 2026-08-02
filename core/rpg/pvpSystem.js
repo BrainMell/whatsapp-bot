@@ -163,7 +163,7 @@ const PVP_ENERGY_REGEN  = 25;    // Energy gained per turn. FIX: bumped from 20 
 const PVP_DEFENSE_CAP   = 0.50;  // Max 50% damage reduction from DEF in PvP
 const PVP_ABILITY_MULT  = 0.45;  // Ability damage multiplier in PvP
 const PVP_CRIT_MULT     = 1.5;   // Crit multiplier in PvP
-const PVP_TIMEOUT_MS    = 300000; // 5 minutes inactivity = expired duel
+const PVP_TIMEOUT_MS    = 120000; // 2 minutes inactivity = expired duel
 const CHALLENGE_TIMEOUT = 120000; // 2 minutes to accept challenge
 
 function getDuel(chatId) {
@@ -330,9 +330,34 @@ async function acceptChallenge(sock, chatId, targetJid) {
     activeDuels.set(chatId, duelState);
 
     // 💡 Deploy summons for both players
-    await deployPvPSummons(duelState);
+    try {
+        await deployPvPSummons(duelState);
+    } catch (e) {
+        console.error('[PvP] Summon deploy failed:', e.message);
+    }
 
-    const image = await generateDuelImage(duelState);
+    // 💡 FIX: wrap image generation in try/catch. If it fails (Go service down/slow),
+    // clean up the duel state so it doesn't get stuck as "active" forever.
+    let image = null;
+    try {
+        image = await Promise.race([
+            generateDuelImage(duelState),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
+        ]);
+    } catch (imgErr) {
+        console.error('[PvP] Duel image generation failed:', imgErr.message);
+        // Clean up — don't leave a stuck duel state
+        activeDuels.delete(chatId);
+        // Refund stakes if they were paid
+        if (invite.stake > 0) {
+            economy.addMoney(invite.challenger, invite.stake, 'Duel stake refund (image failed)');
+            economy.addMoney(resolvedTarget, invite.stake, 'Duel stake refund (image failed)');
+        }
+        return {
+            success: false,
+            message: `❌ Duel failed to start (image rendering timed out). Stakes refunded.\n_Try again in a moment — the image service may be restarting._`,
+        };
+    }
 
     const p1 = duelState.players[0];
     const p2 = duelState.players[1];

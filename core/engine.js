@@ -6639,7 +6639,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   // 🚨 HARD-PING TEST (Bypasses everything)
                   const _isPing = txt.toLowerCase() === "ping" ||
-                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`;
+                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping` ||
+                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()}ping`;
                   if (_isPing) {
                     console.log(`🏓 [${BOT_ID}] Ping test matched: "${txt}"`);
                   }
