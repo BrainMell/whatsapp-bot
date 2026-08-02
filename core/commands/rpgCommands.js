@@ -415,7 +415,7 @@ async function allocateStats(sock, chatId, senderJid, stat, amount = 1) {
     msg += `📊 Points Spent: ${result.pointsSpent}\n`;
     msg += `💎 Remaining: ${result.remainingPoints}\n\n`;
     msg += `━━━━━━━━━━━━━\n*NEW STATS:*\n`;
-    msg += `❤️ HP: ${sheet.stats.hp}\n⚔️ ATK: ${sheet.stats.atk}\n🛡️ DEF: ${sheet.stats.def}\n🔮 MAG: ${sheet.stats.mag}\n💨 SPD: ${sheet.stats.spd}\n🍀 LUCK: ${sheet.stats.luck}\n💥 CRIT: ${sheet.stats.crit}%`;
+    msg += `❤️ HP: ${Math.floor(sheet.stats.hp)}\n⚔️ ATK: ${Math.floor(sheet.stats.atk)}\n🛡️ DEF: ${Math.floor(sheet.stats.def)}\n🔮 MAG: ${Math.floor(sheet.stats.mag)}\n💨 SPD: ${Math.floor(sheet.stats.spd)}\n🍀 LUCK: ${Math.floor(sheet.stats.luck)}\n💥 CRIT: ${Math.floor(sheet.stats.crit)}%`;
     
     await sock.sendMessage(chatId, { text: msg });
 }

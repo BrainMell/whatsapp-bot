@@ -4063,8 +4063,8 @@ async function promptPlayerAction(sock, player, sessionKey) {
   let msg = statusPrefix + `⚔️ *YOUR TURN*\n`;
 
   msg += `${icon} *${player.name}*\n`;
-  msg += `❤️ ${player.stats.hp}/${player.stats.maxHp} HP\n`;
-  msg += `⚡ ${player.stats.energy}/${player.stats.maxEnergy} EN\n`;
+  msg += `❤️ ${Math.floor(player.stats.hp)}/${Math.floor(player.stats.maxHp)} HP\n`;
+  msg += `⚡ ${Math.floor(player.stats.energy)}/${Math.floor(player.stats.maxEnergy)} EN\n`;
 
   if (player.statusEffects && player.statusEffects.length > 0) {
     msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
@@ -4076,7 +4076,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
     livingEnemies.forEach((e) => {
       const maxHp = e.stats.maxHp || e.stats.hp;
       const curHp = Math.max(0, e.stats.hp);
-      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${curHp}/${maxHp} HP\n`;
+      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${Math.floor(curHp)}/${Math.floor(maxHp)} HP\n`;
     });
   }
 
@@ -5683,7 +5683,7 @@ async function handleAbyssVictory(sock, sessionKey) {
   // Build and send message
   let msg = `✅ *Floor ${state.abyssFloor} cleared!*\n`;
   msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
-  msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot?.maxHp || '?'}\n\n`;
+  msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n\n`;
 
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;

@@ -218,7 +218,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
 
     msg += `${i + 1}│ ${species?.icon || '🐉'} *${name}*${active ? ' ⭐' : ''}${forSaleTag}${tamedTag}\n`;
     msg += `  │ ${rarityIcon} Lv.${s.level} ${s.tier} | ${s.element}/${s.archetype}\n`;
-    msg += `  │ ❤️ ${stats.hp} HP | ⚔️ ${stats.atk} | 🛡️ ${stats.def} | 🔮 ${stats.mag}\n`;
+    msg += `  │ ❤️ ${Math.floor(stats.hp)} HP | ⚔️ ${Math.floor(stats.atk)} | 🛡️ ${Math.floor(stats.def)} | 🔮 ${Math.floor(stats.mag)}\n`;
     msg += `  │ 💖 ${loyaltyBar} ${s.loyalty}/100 | 🧠 ${s.personality}\n`;
     msg += `\n`;
   }
@@ -396,9 +396,9 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   msg += `🧠 Personality: ${personality.name} — ${personality.desc}\n\n`;
 
   msg += `*STATS:*\n`;
-  msg += `❤️ HP: ${stats.hp} | ⚔️ ATK: ${stats.atk}\n`;
-  msg += `🛡️ DEF: ${stats.def} | 🔮 MAG: ${stats.mag}\n`;
-  msg += `💨 SPD: ${stats.spd} | 💥 CRIT: ${stats.crit}%\n`;
+  msg += `❤️ HP: ${stats.hp} | ⚔️ ATK: ${Math.floor(stats.atk)}\n`;
+  msg += `🛡️ DEF: ${Math.floor(stats.def)} | 🔮 MAG: ${Math.floor(stats.mag)}\n`;
+  msg += `💨 SPD: ${Math.floor(stats.spd)} | 💥 CRIT: ${Math.floor(stats.crit)}%\n`;
   msg += `🕊️ EVA: ${stats.evasion}% | 🛡️ DR: ${stats.dmgReduction}%\n\n`;
 
   msg += `*PROGRESSION:*\n`;

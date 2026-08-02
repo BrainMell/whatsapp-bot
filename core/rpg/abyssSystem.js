@@ -498,7 +498,7 @@ async function processAttack(userId, playerDamage, playerStats) {
   const enemyDamage = Math.max(1, Math.floor(enemy.atk * (1 - (playerStats.def || 0) / 200)));
   run.currentHp = Math.max(0, run.currentHp - enemyDamage);
   attackMsg += `💥 ${enemy.name} counterattacks for ${enemyDamage} damage!\n`;
-  attackMsg += `❤️ Your HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+  attackMsg += `❤️ Your HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
   attackMsg += `👹 ${enemy.name} HP: ${enemy.hp}/${enemy.maxHp}\n`;
 
   // Check if player died
@@ -645,7 +645,7 @@ async function processEventChoice(userId, choiceId) {
       run.currentHp = Math.max(0, run.currentHp - choice.failure.damage);
       msg += `💥 ${choice.failure.damage} damage taken.\n`;
     }
-    msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+    msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
   }
 
   // Handle CROSSROADS event
@@ -664,7 +664,7 @@ async function processEventChoice(userId, choiceId) {
     run.lootAccumulator.gold += choice.rewards.gold;
     run.lootAccumulator.xp += choice.rewards.xp;
     msg += `💰 +${choice.rewards.gold} Zeni, ✨ +${choice.rewards.xp} XP\n`;
-    msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+    msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
   }
 
   // Handle SHRINE event
@@ -676,7 +676,7 @@ async function processEventChoice(userId, choiceId) {
       run.currentHp = Math.max(1, run.currentHp - sacrifice);
       run.lootAccumulator.xp += choice.reward.xp;
       msg += `🩸 Sacrificed ${sacrifice} HP for ✨ ${choice.reward.xp} XP\n`;
-      msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+      msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
     }
   }
 
