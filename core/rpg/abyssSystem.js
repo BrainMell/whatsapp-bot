@@ -133,15 +133,29 @@ async function startRun(userId, playerStats) {
   }
 
   // Check cooldown — look at most recent completed/failed run
+  // 💡 RPG Mods are immune to the Abyss cooldown — they can enter at any time.
   const lastRun = await AbyssRun.findOne({ userId, status: { $in: ['completed', 'failed'] } }).sort({ updatedAt: -1 });
   if (lastRun) {
     const elapsed = Date.now() - new Date(lastRun.updatedAt).getTime();
     if (elapsed < RUN_COOLDOWN_MS) {
-      const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
-      return {
-        success: false,
-        message: `❌ Abyss cooldown. Try again in ${remaining}h.\n_The Abyss needs time to reform between challenges._`,
-      };
+      // Check if user is an RPG mod — bypass cooldown if so
+      let isRpgMod = false;
+      try {
+        const botConfig = require('../../botConfig');
+        // Access the engine's isRpgMod via a lazy require to avoid circular dep
+        const engine = require('../engine');
+        if (typeof engine.isRpgMod === 'function') {
+          isRpgMod = engine.isRpgMod(userId);
+        }
+      } catch (e) {}
+
+      if (!isRpgMod) {
+        const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
+        return {
+          success: false,
+          message: `❌ Abyss cooldown. Try again in ${remaining}h.\n_The Abyss needs time to reform between challenges._`,
+        };
+      }
     }
   }
 
