@@ -102,7 +102,19 @@ class GoImageService {
    */
   async _enqueue(op) {
     return new Promise((resolve, reject) => {
+      // 💡 FIX 2026-08-03: Queue wait timeout.
+      // If all 3 concurrency slots are busy with 10s timeouts, a 4th request
+      // would wait 30s+ in the queue before even starting — and the outer
+      // command timeout (45s) would fire, leaving the request orphaned.
+      // Now: if we wait > 8s in the queue just to START, reject immediately
+      // so the caller can fall back to text-only. The op itself still has
+      // its own axios timeout (10s for combat, etc).
+      let queueTimer = null;
+      let started = false;
       const run = async () => {
+        if (started) return;
+        started = true;
+        if (queueTimer) clearTimeout(queueTimer);
         this._activeOps++;
         try {
           const result = await op();
@@ -121,6 +133,16 @@ class GoImageService {
       if (this._activeOps < this._concurrency) {
         run();
       } else {
+        // Queue wait timeout — if we don't get a slot in 8s, reject so
+        // the caller can fall back gracefully instead of hanging the
+        // outer command for 45s.
+        queueTimer = setTimeout(() => {
+          if (started) return;
+          // Remove our `run` from the waiters list so it doesn't fire later.
+          const idx = this._waiters.indexOf(run);
+          if (idx !== -1) this._waiters.splice(idx, 1);
+          reject(new Error('GoService queue timeout (8s wait for slot)'));
+        }, 8000);
         this._waiters.push(run);
       }
     });

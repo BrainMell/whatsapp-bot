@@ -316,7 +316,7 @@ async function castVote(userId, skillIndex) {
   // Check if user has joined
   const attacker = raid.attackers.find(a => a.jid === userId);
   if (!attacker) {
-    return { success: false, message: '❌ You must join the raid first. Use `${P()} raid join`.' };
+    return { success: false, message: '❌ You must join the raid first. Use `' + P() + ' raid join`.' };
   }
   if (attacker.isDead) {
     return { success: false, message: '❌ You are dead and cannot vote.' };

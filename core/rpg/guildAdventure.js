@@ -5455,8 +5455,9 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
   const user = economy.getUser(senderJid);
   if (!user) return { success: false, message: '❌ You need to register first.' };
 
-  const userClass = user.class || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
-  const baseStats = progression.getBaseStats(senderJid, userClass.id || userClass.name?.toUpperCase());
+  const userClass = economy.getUserClass(senderJid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+  const classIdForAbyss = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+  const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
 
   const player = {
     jid: senderJid,

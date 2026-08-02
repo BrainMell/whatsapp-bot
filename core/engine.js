@@ -3551,78 +3551,116 @@ What to do:
 
     // Helper to get target user from mention or reply
     function getMentionOrReply(m) {
-      // Check mentions
+      // 💡 FIX 2026-08-03: Centralized resolution + fallback.
+      // Previously, if `resolveLidToPhone()` returned null (LID→phone mapping
+      // miss — common after Oracle migration and in LID-privacy groups),
+      // the whole function returned null — even though we KNEW the target's
+      // JID from the reply/mention. This made `.s pvp` (via reply) show the
+      // usage message instead of challenging the replied-to user.
+      // Now: if resolution fails, fall back to the raw JID AND try the
+      // @lid ↔ @s.whatsapp.net swap in the economy cache.
+      const economy = require('./rpg/economy');
+      const resolveWithFallback = (rawJid) => {
+        if (!rawJid) return null;
+        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
+        // If resolved and in economy cache, use it
+        if (resolved && economy.economyData.has(resolved)) return resolved;
+        // Try the swap: @lid ↔ @s.whatsapp.net
+        const candidates = [resolved, rawJid].filter(Boolean);
+        for (const c of candidates) {
+          if (typeof c !== 'string') continue;
+          if (c.endsWith('@lid')) {
+            const phoneJid = c.replace('@lid', '@s.whatsapp.net');
+            if (economy.economyData.has(phoneJid)) return phoneJid;
+          } else if (c.endsWith('@s.whatsapp.net')) {
+            const lidJid = c.replace('@s.whatsapp.net', '@lid');
+            if (economy.economyData.has(lidJid)) return lidJid;
+          }
+        }
+        // Last resort: return whichever we have (resolved or rawJid).
+        // Better to return a JID than null — the caller can still check
+        // registration and proceed.
+        return resolved || rawJid;
+      };
+
+      // 1. Check explicit @-mentions
       const mentioned =
         m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       if (mentioned.length > 0) {
-        const rawJid = jidNormalizedUser(mentioned[0]);
-        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
-        // 💡 FIX: if LID resolution failed (mapping miss after Oracle migration),
-        // try the OTHER format directly in the economy cache. When someone tags
-        // a user in a group, WhatsApp sends a LID JID, but the user may have
-        // registered with a phone JID.
-        const economy = require('./rpg/economy');
-        if (resolved && !economy.economyData.has(resolved)) {
-          if (typeof resolved === 'string') {
-            if (resolved.endsWith('@lid')) {
-              const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
-              if (economy.economyData.has(phoneJid)) return phoneJid;
-            } else if (resolved.endsWith('@s.whatsapp.net')) {
-              const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
-              if (economy.economyData.has(lidJid)) return lidJid;
-            }
-          }
-        }
-        return resolved;
+        return resolveWithFallback(jidNormalizedUser(mentioned[0]));
       }
 
-      // Check direct reply participant
+      // 2. Check direct reply participant (when user swipes/replies to a message)
       const replyParticipant =
         m.message?.extendedTextMessage?.contextInfo?.participant;
       if (replyParticipant) {
-        const rawJid = jidNormalizedUser(replyParticipant);
-        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
-        const economy = require('./rpg/economy');
-        if (resolved && !economy.economyData.has(resolved)) {
-          if (typeof resolved === 'string') {
-            if (resolved.endsWith('@lid')) {
-              const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
-              if (economy.economyData.has(phoneJid)) return phoneJid;
-            } else if (resolved.endsWith('@s.whatsapp.net')) {
-              const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
-              if (economy.economyData.has(lidJid)) return lidJid;
-            }
-          }
-        }
-        return resolved;
+        return resolveWithFallback(jidNormalizedUser(replyParticipant));
       }
 
-      // Baileys sometimes wraps the quoted message differently
+      // 3. Baileys sometimes wraps the quoted message differently
       const quotedMessage =
         m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
       if (quotedMessage) {
         const participant =
           m.message?.extendedTextMessage?.contextInfo?.participant;
         if (participant) {
-          const rawJid = jidNormalizedUser(participant);
-          const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
-          const economy = require('./rpg/economy');
-          if (resolved && !economy.economyData.has(resolved)) {
-            if (typeof resolved === 'string') {
-              if (resolved.endsWith('@lid')) {
-                const phoneJid = resolved.replace('@lid', '@s.whatsapp.net');
-                if (economy.economyData.has(phoneJid)) return phoneJid;
-              } else if (resolved.endsWith('@s.whatsapp.net')) {
-                const lidJid = resolved.replace('@s.whatsapp.net', '@lid');
-                if (economy.economyData.has(lidJid)) return lidJid;
-              }
-            }
-          }
-          return resolved;
+          return resolveWithFallback(jidNormalizedUser(participant));
         }
       }
 
       return null;
+    }
+
+    // Helper: get the FIRST explicitly @-mentioned user ONLY.
+    // Unlike getMentionOrReply(), this does NOT fall back to a quoted/replied
+    // message's author. Use this to decide whether to ping someone — a player
+    // who replies to (quotes) someone's message to target them should NOT be
+    // @-tagged/pinged by the bot, but a player who explicitly @-tags someone
+    // has already notified them, so the bot may also ping.
+    function getExplicitMention(m) {
+      const mentioned =
+        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      if (mentioned.length > 0) {
+        const rawJid = jidNormalizedUser(mentioned[0]);
+        return resolveLidToPhone(rawJid, configInstance.getAuthPath()) || rawJid;
+      }
+      return null;
+    }
+
+    // Helper: was `jid` explicitly @-mentioned in the incoming command?
+    // Returns true only for real @-tags, NOT for reply/quote participants.
+    function wasExplicitlyMentioned(m, jid) {
+      if (!jid) return false;
+      const mentioned =
+        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      if (mentioned.length === 0) return false;
+      const target = jidNormalizedUser(jid);
+      return mentioned.some((mj) => {
+        const resolved = resolveLidToPhone(
+          jidNormalizedUser(mj),
+          configInstance.getAuthPath(),
+        ) || jidNormalizedUser(mj);
+        return (
+          resolved === target ||
+          jidNormalizedUser(mj) === target
+        );
+      });
+    }
+
+    // Helper: build the outgoing `mentions` array so that a target user is
+    // only pinged if they were explicitly @-mentioned in the command.
+    // `alwaysPingJids` = jids to always ping (e.g. the command sender).
+    // `conditionalJid` + `m` = a target that should only be pinged if the
+    // commander explicitly @-tagged them (not if resolved via a reply).
+    function buildMentions(m, alwaysPingJids, conditionalJid) {
+      const out = new Set();
+      (alwaysPingJids || []).forEach((j) => {
+        if (j) out.add(j);
+      });
+      if (conditionalJid && wasExplicitlyMentioned(m, conditionalJid)) {
+        out.add(conditionalJid);
+      }
+      return Array.from(out);
     }
 
     // ✅ Blacklist - banned words or blocked users
@@ -9388,7 +9426,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `@${targetUser.split("@")[0]} has been blocked from using the bot.`,
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     console.log(`🚫 Blocked user: ${targetUser}`);
@@ -9465,7 +9503,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `@${targetUser.split("@")[0]} can now use the bot again.`,
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     return;
@@ -9556,7 +9594,7 @@ Usage: ${newUsage}/5${warningText}`;
                     console.log(`🚫 [PermaBan] ${senderJid} banned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
                       text: BOT_MARKER + `🚫 @${targetUser.split("@")[0]} has been *permanently banned*.\n\nThey can no longer use the bot in ANY group. Only a moderator can reverse this with \`${botConfig.getPrefix()} unban\`.`,
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
                   }
 
@@ -9584,7 +9622,7 @@ Usage: ${newUsage}/5${warningText}`;
                     console.log(`✅ [PermaBan] ${senderJid} unbanned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
                       text: BOT_MARKER + `✅ @${targetUser.split("@")[0]} has been unbanned. They can use the bot again.`,
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
                   }
 
@@ -10798,7 +10836,7 @@ Usage: ${newUsage}/5${warningText}`;
                           return reply(
                             `🚫 *Rank protection triggered.*\n\n` +
                             `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot remove them.`,
-                            { mentions: [target] }
+                            { mentions: buildMentions(m, [], target) }
                           );
                         }
                       }
@@ -10904,7 +10942,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -10955,7 +10993,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -11004,7 +11042,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -11047,7 +11085,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} has been removed from RPG Moderators.`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -11091,7 +11129,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -11137,7 +11175,7 @@ Usage: ${newUsage}/5${warningText}`;
                       text:
                         BOT_MARKER +
                         `✅ @${target.split("@")[0]} has been removed from Cards Moderators.`,
-                      mentions: [target],
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
@@ -11257,7 +11295,7 @@ Usage: ${newUsage}/5${warningText}`;
                         const user = economy.getUser(targetUser);
                         return await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `✅ Reloaded @${targetUser.split("@")[0]} from DB.\nStat points: ${user?.progression?.statPoints ?? 'unknown'}\nWallet: ${(user?.wallet || 0).toLocaleString()}`,
-                          mentions: [targetUser],
+                          mentions: buildMentions(m, [], targetUser),
                         });
                       } else {
                         return await sock.sendMessage(chatId, {
@@ -12274,7 +12312,7 @@ Commands:
                           return reply(
                             `🚫 *Rank protection triggered.*\n\n` +
                             `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot warn them.`,
-                            { mentions: [targetUser] }
+                            { mentions: buildMentions(m, [], targetUser) }
                           );
                         }
                       }
@@ -12456,7 +12494,7 @@ Commands:
                         return reply(
                           `🚫 *Rank protection triggered.*\n\n` +
                           `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot promote them.`,
-                          { mentions: [target] }
+                          { mentions: buildMentions(m, [], target) }
                         );
                       }
                     }
@@ -12535,7 +12573,7 @@ Commands:
                         return reply(
                           `🚫 *Rank protection triggered.*\n\n` +
                           `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot demote them.`,
-                          { mentions: [target] }
+                          { mentions: buildMentions(m, [], target) }
                         );
                       }
                     }
@@ -13056,7 +13094,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ @${phone} assigned to ${rankObj.icon} *${rankObj.name}* (Level ${levelNum})`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -13110,7 +13148,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ Removed rank from @${phone}.`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -13157,7 +13195,7 @@ Commands:
 
                     return reply({
                       text: BOT_MARKER + resp.trim(),
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -13190,7 +13228,7 @@ Commands:
                     saveGroupSettings();
                     return reply({
                       text: BOT_MARKER + `✅ Title set for @${phone}: 🏷️ _${title}_`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -13229,7 +13267,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ Removed title from @${phone}.`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -13546,7 +13584,7 @@ Members are assigned to Rank Tiers (1 to 5).
                         BOT_MARKER +
                         `@${targetUser.split("@")[0]} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
 
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     return;
@@ -13633,7 +13671,7 @@ Members are assigned to Rank Tiers (1 to 5).
                       text:
                         BOT_MARKER +
                         `@${targetUser.split("@")[0]} has been unmuted.`,
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     return;
@@ -14759,7 +14797,7 @@ Admins can:
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -14803,7 +14841,7 @@ Admins can:
                           const message = `${result.message}\n\n@${result.targetJid.split(`@`)[0]} is now a regular member.`;
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -14850,7 +14888,7 @@ Admins can:
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -14912,7 +14950,7 @@ Admins can:
                         );
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
-                          mentions: [targetUser],
+                          mentions: buildMentions(m, [], targetUser),
                         });
                       } catch (err) {
                         console.error("Guild title error:", err);
@@ -15860,7 +15898,7 @@ _Sorted by guild level + XP_
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid role. Use: recruit, member, or officer.` });
                         }
                         const result = await guilds.setMemberRole(senderJid, targetJid, newRole);
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                       } catch (e) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                       }
@@ -16468,7 +16506,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const placerLevel = progression.getLevel(senderJid);
                           const targetLevel = progression.getLevel(targetJid);
                           const result = await bountySystem.placeBounty(senderJid, targetJid, amount, placerLevel, targetLevel);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -16882,7 +16920,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin reset @user\`` });
                           }
                           const result = await abyssSystem.adminResetCooldown(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g abyss admin clear @user
@@ -16893,7 +16931,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin clear @user\`` });
                           }
                           const result = await abyssSystem.adminClearRun(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g abyss admin setfloor @user <floor>
@@ -16905,7 +16943,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\`` });
                           }
                           const result = await abyssSystem.adminSetFloor(targetJid, floor);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g abyss admin purge — purge ALL active runs
@@ -16923,7 +16961,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           }
                           const run = await abyssSystem.adminGetRunById(targetJid);
                           if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.`, mentions: [targetJid] });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.`, mentions: buildMentions(m, [], targetJid) });
                           }
                           let msg = `🔍 *Abyss Run Inspection — ${targetJid.split('@')[0]}*\n\n`;
                           msg += `Floor: ${run.currentFloor} | Status: ${run.status}\n`;
@@ -16932,7 +16970,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           msg += `Loot: ${run.lootAccumulator.xp.toLocaleString()} XP, ${run.lootAccumulator.gold.toLocaleString()} Zeni\n`;
                           msg += `Started: ${new Date(run.startedAt).toLocaleString()}\n`;
                           msg += `Current Enemy: ${run.currentEnemy?.name || 'none'} (HP ${run.currentEnemy?.hp?.toLocaleString() || 0})\n`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [targetJid] });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: buildMentions(m, [], targetJid) });
                           return;
                         }
 
@@ -17137,7 +17175,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin revive @user\`` });
                           }
                           const result = await raidSystem.adminReviveAttacker(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g raid admin kick @user
@@ -17148,7 +17186,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin kick @user\`` });
                           }
                           const result = await raidSystem.adminKickAttacker(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g raid admin skip
@@ -17442,7 +17480,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set the champion.' });
                           }
                           const result = await guildWars.setChampion(senderRole.guildName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17578,7 +17616,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion <guildName> @user\`` });
                           }
                           const result = await guildWars.setChampion(gName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
                         if (adminSub === 'guardian' || adminSub === 'guardians') {
                           // .g war admin guardian <guildName> @u1 @u2 @u3
@@ -17933,7 +17971,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       await sock.sendMessage(chatId, {
                         text: jidInfo,
-                        mentions: [targetUser],
+                        mentions: buildMentions(m, [], targetUser),
                       });
                       return;
                     }
@@ -18843,7 +18881,7 @@ _💡 Reply with another number from your search list!_`.trim();
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `@${targetName} ${roastText}`,
-                          contextInfo: { mentionedJid: [targetJid] },
+                          contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                         });
                         await awardProgression(senderJid, chatId);
                         return;
@@ -19623,7 +19661,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             text:
                               BOT_MARKER +
                               `⭐ *Rating @${targetName}*\n\n${rating}`,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                           await awardProgression(senderJid, chatId);
                           return;
@@ -20836,6 +20874,25 @@ ${senderName} said y'all should know:
                       });
                     }
 
+                    // 💡 FIX 2026-08-03: `.s duel cancel` / `.s duel end` / `.s pvp cancel`
+                    // Manually clears a stuck duel state. Use this if a duel
+                    // got stuck (e.g. image generation failed mid-accept and
+                    // the chat is locked with "A duel is already active").
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel cancel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel end` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp cancel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp end` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} cancel duel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} end duel`
+                    ) {
+                      const result = pvpSystem.cancelDuel(chatId);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + result.message,
+                      });
+                      return;
+                    }
+
                     // Check if it's pvp command being used as a challenge (e.g. .pvp @user)
                     const isPvpChallenge = (
                       (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
@@ -20923,11 +20980,22 @@ ${senderName} said y'all should know:
                             : "";
                         // Note: CHALLENGE_TIMEOUT in pvpSystem.js is 120000ms (2 minutes).
                         // The previous message said "5 minutes" which was incorrect.
+                        //
+                        // 💡 PING RULE: only @-ping the target if the challenger
+                        // explicitly tagged them. If the challenger replied to
+                        // (quoted) the target's message to issue the challenge,
+                        // show their name in the text but do NOT ping them —
+                        // the target didn't ask to be notified.
+                        const challengeMentions = buildMentions(
+                          m,
+                          [senderJid],
+                          target,
+                        );
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
                             `⚔️ *DUEL CHALLENGE!* ⚔️\n\n@${senderName} has challenged @${targetName} to a duel${stakeText}!\n\n✅ Type \`${botConfig.getPrefix()} accept\` to accept\n❌ Type \`${botConfig.getPrefix()} decline\` to decline\n\n⏳ Challenge expires in 2 minutes.`,
-                          mentions: [senderJid, target],
+                          mentions: challengeMentions,
                         });
                       } else {
                         await sock.sendMessage(chatId, {
@@ -22207,7 +22275,8 @@ Examples:
                           await sock.sendMessage(chatId, {
                             image: imgBuf,
                             caption: BOT_MARKER + result.message,
-                            contextInfo: { mentionedJid: [result.receiver] },
+                            // 💡 PING RULE: only ping receiver if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], result.receiver) },
                           });
                         } else {
                           throw new Error("No image buffer");
@@ -22215,7 +22284,8 @@ Examples:
                       } catch (e) {
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
-                          contextInfo: { mentionedJid: [result.receiver] },
+                          // 💡 PING RULE: only ping receiver if explicitly @-mentioned.
+                          contextInfo: { mentionedJid: buildMentions(m, [], result.receiver) },
                         });
                       }
                     } else {
@@ -23383,11 +23453,13 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                             economy.saveUser(targetJid);
                           }
                         } else {
+                          // 💡 PING RULE: only ping if explicitly @-mentioned,
+                          // not if resolved via a reply/quote.
                           return await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
                               `I don't have any data on @${targetName} yet.`,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         }
                       }
@@ -23610,7 +23682,8 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           await sock.sendMessage(chatId, {
                             image: profileCardBuffer,
                             caption: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                           profileCardSent = true;
                         }
@@ -23627,12 +23700,14 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           await sock.sendMessage(chatId, {
                             image: fs.readFileSync(pfpPath),
                             caption: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         } else {
                           await sock.sendMessage(chatId, {
                             text: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         }
                       }

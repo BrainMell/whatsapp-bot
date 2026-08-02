@@ -188,6 +188,34 @@ function declineChallenge(chatId, targetJid) {
     return false;
 }
 
+// 💡 FIX 2026-08-03: Manual duel cancel/end for stuck duels.
+// `.s duel cancel` / `.s duel end` — clears an active duel state for this chat.
+// Refunds stakes if any were paid. Either player or a mod can call it.
+function cancelDuel(chatId) {
+    const duel = activeDuels.get(chatId);
+    if (!duel) {
+        // Also clear any pending invite just in case
+        const hadInvite = duelInvites.has(chatId);
+        if (hadInvite) {
+            const invite = duelInvites.get(chatId);
+            duelInvites.delete(chatId);
+            // Refund stakes if the invite had already taken them
+            // (challengePlayer doesn't take stakes — only acceptChallenge does,
+            // and by then the invite is deleted. So no refund needed here.)
+            return { success: true, message: '🧹 Cleared a stale pending duel invite.' };
+        }
+        return { success: false, message: '❌ No active duel in this chat.' };
+    }
+    // Refund stakes
+    if (duel.stake > 0 && duel.players) {
+        for (const p of duel.players) {
+            try { economy.addMoney(p.jid, duel.stake, 'Duel cancel refund'); } catch (e) {}
+        }
+    }
+    activeDuels.delete(chatId);
+    return { success: true, message: `🚫 Duel cancelled.${duel.stake > 0 ? ` Stakes of ${botConfig.getCurrency().symbol}${duel.stake.toLocaleString()} refunded to both players.` : ''}` };
+}
+
 // ==========================================
 // 🗡️ CHALLENGE SYSTEM
 // ==========================================
@@ -336,27 +364,24 @@ async function acceptChallenge(sock, chatId, targetJid) {
         console.error('[PvP] Summon deploy failed:', e.message);
     }
 
-    // 💡 FIX: wrap image generation in try/catch. If it fails (Go service down/slow),
-    // clean up the duel state so it doesn't get stuck as "active" forever.
+    // 💡 FIX 2026-08-03: Image generation is BEST-EFFORT.
+    // Previously, if the Go service hung/timed out, the ENTIRE duel was
+    // aborted: invite deleted, duel state deleted, stakes refunded. Players
+    // then saw "Duel failed to start" and couldn't retry (invite gone) and
+    // couldn't start a new duel (state stuck). Now: if image fails, the
+    // duel STILL STARTS with a text-only message. Players can play without
+    // an image. The duel state is preserved.
     let image = null;
     try {
         image = await Promise.race([
             generateDuelImage(duelState),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (12s)')), 12000)),
         ]);
     } catch (imgErr) {
-        console.error('[PvP] Duel image generation failed:', imgErr.message);
-        // Clean up — don't leave a stuck duel state
-        activeDuels.delete(chatId);
-        // Refund stakes if they were paid
-        if (invite.stake > 0) {
-            economy.addMoney(invite.challenger, invite.stake, 'Duel stake refund (image failed)');
-            economy.addMoney(resolvedTarget, invite.stake, 'Duel stake refund (image failed)');
-        }
-        return {
-            success: false,
-            message: `❌ Duel failed to start (image rendering timed out). Stakes refunded.\n_Try again in a moment — the image service may be restarting._`,
-        };
+        console.error('[PvP] Duel image generation failed (starting text-only duel):', imgErr.message);
+        // DON'T delete the duel state — players can still duel without an image.
+        // Set image to null so the caller knows to send text-only.
+        image = null;
     }
 
     const p1 = duelState.players[0];
@@ -383,7 +408,8 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
         `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
-        `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
+        `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*` +
+        (image ? '' : `\n\n_⚠️ Image rendering skipped (Go service slow). Duel is active — use the commands above._`);
 
     return { success: true, duel: duelState, image, message: startMsg };
 }
@@ -522,7 +548,17 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
         
         const nextPlayer = duel.players[duel.turn];
-        const imageResult = await generateDuelImage(duel);
+        // 💡 FIX 2026-08-03: best-effort image — don't hang the turn if Go service is slow.
+        let imageResult = null;
+        try {
+            imageResult = await Promise.race([
+                generateDuelImage(duel),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
+            ]);
+        } catch (imgErr) {
+            console.error('[PvP] Turn image generation failed (text-only):', imgErr.message);
+            imageResult = null;
+        }
         
         const statusMsg = statusLog.join('\n');
         let roundMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
@@ -1074,7 +1110,17 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     const nextPlayer = duel.players[duel.turn];
 
-    const imageResult = await generateDuelImage(duel);
+    // 💡 FIX 2026-08-03: best-effort image — don't hang the turn if Go service is slow.
+    let imageResult = null;
+    try {
+        imageResult = await Promise.race([
+            generateDuelImage(duel),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
+        ]);
+    } catch (imgErr) {
+        console.error('[PvP] Turn image generation failed (text-only):', imgErr.message);
+        imageResult = null;
+    }
     
     let statusMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
                     `———————————\n` +
@@ -1263,8 +1309,13 @@ async function generateDuelImage(duel) {
     const attacker = duel.players[duel.turn];
     const defender = duel.players[1 - duel.turn];
     
+    // 💡 FIX 2026-08-03: Pass summons to the Go service so they render in the image.
+    // Previously summons were deployed in duelState.summons (and listed in the
+    // start message text), but never passed to the image generator — so the Go
+    // service received an empty summons array and never drew them.
     return await combatImageGenerator.generateCombatImage(
-        [attacker, defender], [], { combatType: 'PVP' }
+        [attacker, defender], [],
+        { combatType: 'PVP', summons: duel.summons || [] }
     );
 }
 
@@ -1302,5 +1353,6 @@ module.exports = {
     challengePlayer,
     acceptChallenge,
     declineChallenge,
+    cancelDuel,
     handlePvPAction,
 };

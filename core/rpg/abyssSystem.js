@@ -195,10 +195,10 @@ async function startRun(userId, playerStats) {
 
   let startMsg = '🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n';
   if (encounter.type === 'combat') {
-    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + encounter.enemy.hp + '/' + encounter.enemy.maxHp + '_\n\n_Attack with `' + '${P()} combat atk`_\n_Retreat with `${P()} abyss retreat`_';
+    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + encounter.enemy.hp + '/' + encounter.enemy.maxHp + '_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'wild_summon') {
     const species = encounter.wildSummonSpecies;
-    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `${P()} combat atk`_\n_Retreat with `${P()} abyss retreat`_';
+    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'treasure') {
     startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
@@ -414,7 +414,7 @@ function generateFloorEnemy(floor) {
 async function processAttack(userId, playerDamage, playerStats) {
   const run = await AbyssRun.findOne({ userId, status: 'active' });
   if (!run) {
-    return { success: false, message: '❌ No active Abyss run. Start one with `${P()} abyss enter`.' };
+    return { success: false, message: '❌ No active Abyss run. Start one with `' + P() + ' abyss enter`.' };
   }
 
   run.lastActionAt = new Date();
