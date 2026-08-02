@@ -328,6 +328,10 @@ async function acceptChallenge(sock, chatId, targetJid) {
     };
 
     activeDuels.set(chatId, duelState);
+
+    // 💡 Deploy summons for both players
+    await deployPvPSummons(duelState);
+
     const image = await generateDuelImage(duelState);
 
     const p1 = duelState.players[0];
@@ -336,10 +340,20 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `🏟️ *PHANTOM STANDOFF* 🏟️\n` +
         `———————————\n` +
         `🔴 *${p1.name}* \`Lv.${p1.level}\` (${p1.class?.name || 'Fighter'})\n` +
-        `   ↳ ❤️ HP: \`${p1.hp}/${p1.maxHp}\` · ⚡ EN: \`${p1.energy}/${p1.maxEnergy}\`\n` +
+        `   ↳ ❤️ HP: \`${Math.floor(p1.hp)}/${Math.floor(p1.maxHp)}\` · ⚡ EN: \`${Math.floor(p1.energy)}/${Math.floor(p1.maxEnergy)}\`\n` +
         `🔵 *${p2.name}* \`Lv.${p2.level}\` (${p2.class?.name || 'Fighter'})\n` +
-        `   ↳ ❤️ HP: \`${p2.hp}/${p2.maxHp}\` · ⚡ EN: \`${p2.energy}/${p2.maxEnergy}\`\n\n` +
-        `🎯 *${p1.name}* claims the initiative!\n` +
+        `   ↳ ❤️ HP: \`${Math.floor(p2.hp)}/${Math.floor(p2.maxHp)}\` · ⚡ EN: \`${Math.floor(p2.energy)}/${Math.floor(p2.maxEnergy)}\`\n`;
+
+    // Show deployed summons
+    if (duelState.summons && duelState.summons.length > 0) {
+        startMsg += `\n🐉 *SUMMONS DEPLOYED:*\n`;
+        for (const s of duelState.summons) {
+            const owner = duelState.players[s.summonerIndex || 0];
+            startMsg += `${owner === p1 ? '🔴' : '🔵'} ${s.icon || '🐉'} ${s.name} (HP: ${Math.floor(s.currentHP)}/${Math.floor(s.maxHP)})\n`;
+        }
+    }
+
+    startMsg += `\n🎯 *${p1.name}* claims the initiative!\n` +
         `———————————\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
@@ -352,14 +366,8 @@ async function acceptChallenge(sock, chatId, targetJid) {
 function buildDuelPlayer(jid, userData, stats, idx) {
     const classData = economy.getUserClass(jid);
     const progData = progression.getUser(jid);
-    // 💡 FIX §2.9: was capping energy at 100 in PvP, but several ultimate
-    // abilities (Singularity, Total War, etc.) cost 110-162 energy — making
-    // them permanently unusable in PvP. Now uses the player's actual
-    // maxEnergy from their stats (which accounts for level + MAG scaling
-    // via progression.getBaseStats). Falls back to 200 if missing so all
-    // ultimates are castable.
     const maxEnergy = stats.maxEnergy || 200;
-    return {
+    const player = {
         jid,
         name: userData.nickname || jid.split('@')[0],
         hp: stats.maxHp || stats.hp,
@@ -374,6 +382,33 @@ function buildDuelPlayer(jid, userData, stats, idx) {
         buffs: [],
         cooldowns: {},
     };
+    return player;
+}
+
+// 💡 Deploy summons for both PvP players.
+// Called after buildDuelPlayer — adds each player's active summon to the duel.
+async function deployPvPSummons(duelState) {
+    const summonSystem = require('./summonSystem');
+    duelState.summons = [];
+
+    for (let i = 0; i < duelState.players.length; i++) {
+        const player = duelState.players[i];
+        try {
+            const user = economy.getUser(player.jid);
+            if (!user || !user.activeSummonId) continue;
+
+            const summonDoc = await summonSystem.getActiveSummon(user);
+            if (!summonDoc) continue;
+
+            const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
+            if (summonEntity) {
+                summonEntity.summonerIndex = i;
+                duelState.summons.push(summonEntity);
+            }
+        } catch (e) {
+            console.error('[PvP] Summon deploy failed for', player.jid, ':', e.message);
+        }
+    }
 }
 
 // ==========================================
