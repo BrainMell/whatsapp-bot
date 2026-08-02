@@ -559,6 +559,10 @@ function buildCombatEntity(summon, summonerJid) {
     name: summon.nickname || species?.name || summon.species,
     icon: species?.icon || '🐉',
     type: summon.species,
+    // 💡 FIX 2026-08-03: Go service's Summon struct expects `species` (not `type`).
+    // Without this, GetSummonSpritePath receives an empty string and the summon
+    // is silently skipped — root cause of "no summons appearing in combat".
+    species: summon.species,
     archetype: summon.archetype,
     element: summon.element,
 
@@ -566,6 +570,10 @@ function buildCombatEntity(summon, summonerJid) {
     isSummon: true,
     isEnemy: false,
     summonerJid,
+    // 💡 FIX 2026-08-03: Go service expects `ownerIndex` (not `summonerIndex`).
+    // Set by deployPvPSummons / startCombat after the entity is created.
+    // Default to 0 (first player) so it always has a valid value.
+    ownerIndex: 0,
 
     // Stats (transient — rebuilt each combat)
     stats: {
@@ -574,6 +582,10 @@ function buildCombatEntity(summon, summonerJid) {
       hp: stats.maxHp  // start at full HP
     },
     currentHP: stats.maxHp,
+    // 💡 FIX 2026-08-03: Go service expects `maxHp` (lowercase p), not `maxHP`.
+    // Go's json unmarshaling is case-insensitive, but be explicit to avoid
+    // future regression if the Go struct tags change.
+    maxHp: stats.maxHp,
     maxHP: stats.maxHp,
     mana: 100,
     maxMana: 100,

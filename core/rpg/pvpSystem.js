@@ -454,6 +454,10 @@ async function deployPvPSummons(duelState) {
             const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
             if (summonEntity) {
                 summonEntity.summonerIndex = i;
+                // 💡 FIX 2026-08-03: Go service's Summon struct expects `ownerIndex`
+                // (not `summonerIndex`). Without this, the Go service can't
+                // position summons relative to their owner.
+                summonEntity.ownerIndex = i;
                 duelState.summons.push(summonEntity);
             }
         } catch (e) {

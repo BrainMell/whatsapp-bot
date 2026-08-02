@@ -3496,7 +3496,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // Build combat entities from user.activeSummonId, push to state.summons.
   // Summons are added to turnOrder below (alongside players + enemies).
   state.summons = [];
-  for (const player of state.players) {
+  for (let pi = 0; pi < state.players.length; pi++) {
+    const player = state.players[pi];
     if (!player.jid || player.isDead) continue;
     try {
       const user = economy.getUser(player.jid);
@@ -3507,6 +3508,10 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 
       const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
       if (summonEntity) {
+        // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
+        // positioning of summons on the battlefield.
+        summonEntity.ownerIndex = pi;
+        summonEntity.summonerIndex = pi;
         state.summons.push(summonEntity);
       }
     } catch (e) {
