@@ -150,7 +150,7 @@ async function spawnWeeklyRaid(activePlayerCount = 50) {
   return {
     success: true,
     raid,
-    message: `⚔️ *WEEKLY RAID BOSS SPAWNED* ⚔️\n\n${bossDef.flavorText}\n\n👹 *${bossDef.name}*\n❤️ HP: ${bossHp.toLocaleString()}\n⚔️ ATK: ${bossDef.atk} | 🛡️ DEF: ${bossDef.def}\n⏰ Ends in 24h or when defeated\n\n_Join with \`.g raid join\`_`,
+    message: `⚔️ *WEEKLY RAID BOSS SPAWNED* ⚔️\n\n${bossDef.flavorText}\n\n👹 *${bossDef.name}*\n❤️ HP: ${bossHp.toLocaleString()}\n⚔️ ATK: ${bossDef.atk} | 🛡️ DEF: ${bossDef.def}\n⏰ Ends in 24h or when defeated\n\n_Join with \`.s raid join\`_`,
   };
 }
 
@@ -314,7 +314,7 @@ async function castVote(userId, skillIndex) {
   // Check if user has joined
   const attacker = raid.attackers.find(a => a.jid === userId);
   if (!attacker) {
-    return { success: false, message: '❌ You must join the raid first. Use `.g raid join`.' };
+    return { success: false, message: '❌ You must join the raid first. Use `.s raid join`.' };
   }
   if (attacker.isDead) {
     return { success: false, message: '❌ You are dead and cannot vote.' };

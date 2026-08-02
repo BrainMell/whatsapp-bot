@@ -7767,7 +7767,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || "F"}*\n🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*\n\n⚔️ Preparing the battlefield...`;
                           await reply(startMsg);
                         } else {
-                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`.g join\` to enter.`);
+                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`.s join\` to enter.`);
                         }
                       } else {
                         await reply(result.msg);
@@ -16944,7 +16944,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         let msg = `⚔️ *WEEKLY RAID — AVATAR MODE* ⚔️\n\n`;
                         msg += `Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players merge into "The Avatar" — a single entity whose class, stats, and skills are determined by the participants.\n\n`;
                         msg += `*How it works:*\n`;
-                        msg += `• Join the raid with \`.g raid join\`\n`;
+                        msg += `• Join the raid with \`.s raid join\`\n`;
                         msg += `• Each round, vote for which skill the Avatar uses (\`.g raid vote 1-5\`)\n`;
                         msg += `• 60-second voting window per round\n`;
                         msg += `• Most-voted skill is executed, then boss attacks back\n`;
@@ -17017,7 +17017,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g raid join
+                      // .s raid join
                       if (raidSub === 'join') {
                         try {
                           const economy = require('./rpg/economy');

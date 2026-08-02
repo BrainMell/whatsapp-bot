@@ -7824,6 +7824,24 @@ async function endAdventure(sock, sessionKey, victory = true) {
     } catch (e) {}
     progression.awardXP(player.jid, xpToAward);
 
+    // 💡 PHASE 4 (2026-08-01): Award XP to deployed summons + persist changes.
+    try {
+      const summonAI = require('./summonAI');
+      for (const summonEntity of (state.summons || [])) {
+        if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc) {
+          const summonXP = Math.max(10, Math.floor(xpToAward * 0.1));
+          const summonSystem = require('./summonSystem');
+          const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
+          if (xpResult.leveledUp) {
+            msg += `${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!\n`;
+          }
+          await summonAI.persistSummonChanges(summonEntity);
+        }
+      }
+    } catch (summonErr) {
+      console.error('[Combat] Summon XP/persist failed:', summonErr.message);
+    }
+
     const rankUpdate = economy.updateAdventurerRank(player.jid);
     if (rankUpdate && rankUpdate.ranked_up) {
       msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
