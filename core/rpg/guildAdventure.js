@@ -176,7 +176,7 @@ const DUNGEON_ENVIRONMENTS = {
   DRAGON_LAIR: {
     id: "DRAGON_LAIR",
     name: "Dragon’s Lair",
-    asset: "background2.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) → Go service fell back to random bg each render
+    asset: "spark_8.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) → Go service fell back to random bg each render
     mobs: ["DRAKE_SCOUT", "FIRE_BREATHER"],
     bosses: ["ANCIENT_DRAGON_BOSS"],
     modifier: {
@@ -190,7 +190,7 @@ const DUNGEON_ENVIRONMENTS = {
   FIRE_CAVE: {
     id: "FIRE_CAVE",
     name: "Fire Cave",
-    asset: "env1.png",
+    asset: "spark_2.png",
     mobs: ["FLAME", "ELDER_FLAME", "MAGMA_BRUTE", "HELLFIRE_DEMON"],
     bosses: ["INFERNAL_OVERLORD", "PRIMORDIAL_FLAME"],
     modifier: {
@@ -203,7 +203,7 @@ const DUNGEON_ENVIRONMENTS = {
   ICE_CAVE: {
     id: "ICE_CAVE",
     name: "Ice Cave",
-    asset: "ice.png",  // 💡 AUDIT FIX 2026-08-01: was env2.png — ice.png is more thematic
+    asset: "spark_5.png",  // 💡 AUDIT FIX 2026-08-01: was env2.png — ice.png is more thematic
     mobs: ["FROST_GHOUL", "GLACIAL_BEAST", "BLIZZARD_WRAITH"],
     bosses: ["PERMAFROST_TITAN"],
     modifier: {
@@ -216,7 +216,7 @@ const DUNGEON_ENVIRONMENTS = {
   TOXIC_CAVE: {
     id: "TOXIC_CAVE",
     name: "Toxic Cave",
-    asset: "env3.png",
+    asset: "spark_6.png",
     mobs: ["DROWNED_ONE", "TIDE_LURKER", "MIST_WALKER"],
     bosses: ["LEVIATHAN_SPAWN"],
     modifier: {
@@ -229,7 +229,7 @@ const DUNGEON_ENVIRONMENTS = {
   VOID_DIMENSION: {
     id: "VOID_DIMENSION",
     name: "Void Dimension",
-    asset: "background1.png",  // 💡 AUDIT FIX 2026-08-01: was env4.png (doesn't exist)
+    asset: "spark_7.png",  // 💡 AUDIT FIX 2026-08-01: was env4.png (doesn't exist)
     mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
     bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
     modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
@@ -238,7 +238,7 @@ const DUNGEON_ENVIRONMENTS = {
   SCI_FI_CITY: {
     id: "SCI_FI_CITY",
     name: "Sci-Fi City",
-    asset: "background3.png",  // 💡 AUDIT FIX 2026-08-01: was env5.png (doesn't exist)
+    asset: "spark_10.png",  // 💡 AUDIT FIX 2026-08-01: was env5.png (doesn't exist)
     mobs: ["TSUNAMI_WALKER", "ABYSSAL_HORROR"],
     bosses: ["KRAKEN_SPAWN"],
     modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
@@ -247,7 +247,7 @@ const DUNGEON_ENVIRONMENTS = {
   DEMON_CASTLE: {
     id: "DEMON_CASTLE",
     name: "Demon Castle",
-    asset: "env2.png",  // 💡 AUDIT FIX 2026-08-01: was env6.png (doesn't exist)
+    asset: "spark_3.png",  // 💡 AUDIT FIX 2026-08-01: was env6.png (doesn't exist)
     mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
     bosses: [
       "MUTATION_PRIME",
@@ -265,7 +265,7 @@ const DUNGEON_ENVIRONMENTS = {
   DESERT: {
     id: "DESERT",
     name: "Desert",
-    asset: "sand.png",  // 💡 AUDIT FIX 2026-08-01: was env7.png (doesn't exist) — sand.png is thematic
+    asset: "spark_4.png",  // 💡 AUDIT FIX 2026-08-01: was env7.png (doesn't exist) — sand.png is thematic
     mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
     bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
     modifier: {
@@ -278,7 +278,7 @@ const DUNGEON_ENVIRONMENTS = {
   INFECTED_AFTERLIFE: {
     id: "INFECTED_AFTERLIFE",
     name: "Infected Afterlife",
-    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env8.png (doesn't exist)
+    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env8.png (doesn't exist)
     mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
     bosses: ["PERFECT_MUTATION"],
     modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
@@ -287,7 +287,7 @@ const DUNGEON_ENVIRONMENTS = {
   PRE_INFECTED_AFTERLIFE: {
     id: "PRE_INFECTED_AFTERLIFE",
     name: "Pre-Infected Afterlife",
-    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env9.png (doesn't exist)
+    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env9.png (doesn't exist)
     mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
     bosses: ["ELEMENTAL_SOVEREIGN"],
     modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
@@ -296,7 +296,7 @@ const DUNGEON_ENVIRONMENTS = {
   SIMPLE_FOREST: {
     id: "SIMPLE_FOREST",
     name: "Simple Forest",
-    asset: "forest.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) — forest.png is thematic
+    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) — forest.png is thematic
     mobs: ["OBSIDIAN_JUGGERNAUT", "DIAMOND_SENTINEL"],
     bosses: ["MOUNTAIN_COLOSSUS"],
     modifier: { type: "DENSE_FOLIAGE", desc: "Line-of-sight blocked" },
@@ -5560,7 +5560,7 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
     // causing the same random-background bug as regular dungeons (Go
     // service picks random .png when the requested file doesn't exist).
     // Abyss is void-themed → use background1.png (same as VOID_DIMENSION).
-    backgroundPath: 'rpgasset/environment/background1.png',
+    backgroundPath: 'rpgasset/environment/spark_1-night.png',
     // 💡 AUDIT FIX 2026-08-01: also missing stats object (onboarding rule #24).
     // recordEnemyKill has a defensive init, but let's be explicit.
     stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
