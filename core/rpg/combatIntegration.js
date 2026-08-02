@@ -61,20 +61,20 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  *   - Damage dealt, crit, miss, heal
  */
 function buildAnimationAction(turnInfo, options = {}) {
-    // 💡 HOTFIX 2026-07-29: Animated combat (MP4 via ffmpeg) is temporarily
-    // disabled because the Go service on Box 2 (512MB RAM micro instance)
-    // takes 6-27s per MP4 encode, which exceeds the Node bot's 10s Go service
-    // timeout and causes all combat commands to hang for 90s (the command
-    // timeout), pegging CPU at 100% and making the bot unresponsive.
+    // 💡 FIX 2026-08-03: This function now BUILDS the action payload (instead
+    // of returning null) so the static renderer can use it for the turn
+    // indicator (golden ellipse under the active attacker).
     //
-    // The animated combat code is fully written and tested — it just needs
-    // either (a) a bigger Go service instance, (b) async fire-and-forget
-    // MP4 delivery, or (c) reduced frame count. Until then, return null
-    // to fall back to the fast static PNG path.
+    // The ANIMATED MP4 path is still disabled — see updateCombatImage() below,
+    // which now always uses the static PNG path. The action payload is passed
+    // to the static renderer, which uses req.Action.AttackerSide + AttackerIndex
+    // to draw the turn indicator.
     //
-    // To re-enable: delete this early return. The rest of the function is
-    // unchanged and will produce the action payload for the Go animator.
-    return null;
+    // To re-enable animated MP4 combat: re-add the early `return null` here,
+    // AND change updateCombatImage() to route to generateAnimatedCombatImage
+    // when options.action is set. The Go service's /api/combat/animated
+    // endpoint is unchanged and still works — it's just too slow for the
+    // 512MB Box 2 instance (6-27s per MP4 encode).
 
     if (!turnInfo || !turnInfo.action) return null;
     const actionName = String(turnInfo.action.name || '').toLowerCase();

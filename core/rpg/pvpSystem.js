@@ -1312,14 +1312,33 @@ async function finishDuel(chatId, duel, winner, loser) {
 async function generateDuelImage(duel) {
     const attacker = duel.players[duel.turn];
     const defender = duel.players[1 - duel.turn];
-    
+
     // 💡 FIX 2026-08-03: Pass summons to the Go service so they render in the image.
     // Previously summons were deployed in duelState.summons (and listed in the
     // start message text), but never passed to the image generator — so the Go
     // service received an empty summons array and never drew them.
+    //
+    // 💡 FIX 2026-08-03 (turn indicator): Pass the action payload with
+    // attackerSide + attackerIndex so the Go service can draw the golden
+    // turn-indicator ellipse under the active player.
     return await combatImageGenerator.generateCombatImage(
         [attacker, defender], [],
-        { combatType: 'PVP', summons: duel.summons || [] }
+        {
+            combatType: 'PVP',
+            summons: duel.summons || [],
+            action: {
+                attackerSide: 'player',
+                attackerIndex: duel.turn || 0,
+                targetSide: 'player',
+                targetIndex: 1 - (duel.turn || 0),
+                skillName: '',
+                element: 'physical',
+                damage: 0,
+                isCrit: false,
+                missed: false,
+                heal: 0,
+            },
+        }
     );
 }
 

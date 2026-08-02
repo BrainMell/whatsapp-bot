@@ -86,6 +86,12 @@ function buildActionPayload(action = {}) {
 async function generateCombatImage(players, enemies, options = {}) {
     try {
         const payload = buildPayload(players, enemies, options);
+        // 💡 FIX 2026-08-03: Pass the action payload to the STATIC renderer
+        // so it can draw the turn indicator (golden ellipse under the attacker).
+        // The static renderer uses req.Action.AttackerSide + AttackerIndex.
+        if (options.action) {
+            payload.action = buildActionPayload(options.action);
+        }
         const imageBuffer = await goService.generateCombatImage(payload);
         return { success: true, buffer: imageBuffer, mimeType: 'image/png' };
     } catch (error) {
@@ -124,10 +130,18 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
 }
 
 async function updateCombatImage(players, enemies, turnInfo, options = {}) {
-    // If turnInfo has an action, use animated; otherwise static
-    if (turnInfo && turnInfo.action) {
-        return await generateAnimatedCombatImage(players, enemies, { ...options, action: turnInfo.action });
-    }
+    // 💡 FIX 2026-08-03: Always use the STATIC PNG path (not animated MP4).
+    // Animated combat is disabled because the Go service on Box 2 (512MB RAM)
+    // takes 6-27s per MP4 encode, exceeding the 10s Go service timeout.
+    //
+    // The action payload (options.action) is now passed to the static renderer
+    // so it can draw the turn indicator (golden ellipse under the attacker).
+    // Previously this was only used for the animated path, which is disabled.
+    //
+    // To re-enable animated combat: restore the old routing:
+    //   if (turnInfo && turnInfo.action) {
+    //       return await generateAnimatedCombatImage(players, enemies, { ...options, action: turnInfo.action });
+    //   }
     return await generateCombatImage(players, enemies, options);
 }
 
