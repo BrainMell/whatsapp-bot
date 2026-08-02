@@ -5500,6 +5500,11 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
   if (abyssRun.currentEnergy) {
     player.stats.energy = Math.max(0, abyssRun.currentEnergy);
   }
+  // 💡 FIX: sync the Abyss snapshot with the REAL max values from getBaseStats.
+  // This ensures the Abyss status/victory display shows correct max HP/EN
+  // instead of the stale snapshot from run start.
+  abyssRun.playerSnapshot.maxHp = player.stats.maxHp;
+  abyssRun.playerSnapshot.maxEnergy = player.stats.maxEnergy;
 
   const combatEnemy = {
     id: enemy.id || `abyss_${floor}`,
@@ -5601,6 +5606,13 @@ async function handleAbyssVictory(sock, sessionKey) {
   }
   run.currentHp = Math.max(1, player.stats.hp);
   run.currentEnergy = player.stats.energy || 0;
+  // 💡 FIX: update the snapshot with REAL max values from the combat state.
+  // Previously the snapshot kept whatever maxHp was set at run start (often
+  // wrong — e.g. 100 instead of 37000). Now it syncs with the actual
+  // player stats after each combat, so the Abyss status/victory display
+  // shows the correct max HP.
+  if (player.stats.maxHp) run.playerSnapshot.maxHp = player.stats.maxHp;
+  if (player.stats.maxEnergy) run.playerSnapshot.maxEnergy = player.stats.maxEnergy;
   run.monstersKilled = (run.monstersKilled || 0) + 1;
   if (state.enemies[0]?.isBoss) run.bossesKilled = (run.bossesKilled || 0) + 1;
 

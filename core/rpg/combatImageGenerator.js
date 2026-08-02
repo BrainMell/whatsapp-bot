@@ -53,7 +53,7 @@ function buildPayload(players, enemies, options = {}) {
         })),
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),
-        background: String(options.backgroundPath ? options.backgroundPath.split(/[\/\\]/).pop() : 'forest1.png')
+        background: String(options.backgroundPath ? options.backgroundPath.split(/[\/\\]/).pop() : 'forest.png')
     };
 }
 

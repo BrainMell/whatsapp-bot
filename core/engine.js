@@ -16644,7 +16644,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (level < 20) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
                           }
-                          const baseStats = progression.getBaseStats(senderJid, user.class);
+                          // 💡 FIX: use getUserClass (returns object) instead of user.class (string)
+                          // to ensure getBaseStats gets the proper classId for stat calculation.
+                          const userClassObj = economy.getUserClass(senderJid);
+                          const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
+                          const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
                           const playerStats = {
                             hp: baseStats.hp,
                             maxHp: baseStats.hp,
