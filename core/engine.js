@@ -5109,20 +5109,24 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         const isFreshLogin = !state.creds?.me;
         if (!isFreshLogin) {
           // Existing session — load everything before connecting (normal path)
+          // 💡 FIX: system.loadSystemData MUST run BEFORE loadGlobalMods etc.
+          // because mod loading reads from the systemCache (in-memory Map)
+          // that loadSystemData populates. If mods load first, the cache is
+          // empty → system.get returns null → no mods loaded → they appear
+          // "reset" on every bot restart.
+          await system.loadSystemData();
+          await economy.loadEconomy();
+          await guilds.loadGuilds();
+          await guilds.loadChallenges();
+          await loans.loadLoans();
+          await lidResolver.loadLidMappings();
+
+          // NOW load mods (system cache is populated)
           await loadGlobalMods();
-          await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
-          await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
+          await loadRpgMods();
+          await loadCardsMods();
           await loadBlockedUsers();
           await loadBannedUsers();
-
-          await Promise.all([
-            system.loadSystemData(),
-            economy.loadEconomy(),
-            guilds.loadGuilds(),
-            guilds.loadChallenges(),
-            loans.loadLoans(),
-            lidResolver.loadLidMappings(),
-          ]);
 
           // Chess must be loaded after system data is ready
           chess.loadActiveGames();
@@ -5440,19 +5444,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // load all data now that the session is established.
               if (isFreshLogin) {
                 console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
+                // 💡 FIX: system.loadSystemData MUST run BEFORE mod loading.
+                await system.loadSystemData();
+                await economy.loadEconomy();
+                await guilds.loadGuilds();
+                await guilds.loadChallenges();
+                await loans.loadLoans();
+                await lidResolver.loadLidMappings();
+
+                // NOW load mods (system cache is populated)
                 await loadGlobalMods();
-                await loadRpgMods();      // 💡 POLISH 2026-07-17: 3-tier mod system
-                await loadCardsMods();    // 💡 POLISH 2026-07-17: 3-tier mod system
+                await loadRpgMods();
+                await loadCardsMods();
                 await loadBlockedUsers();
-          await loadBannedUsers();
-                await Promise.all([
-                  system.loadSystemData(),
-                  economy.loadEconomy(),
-                  guilds.loadGuilds(),
-                  guilds.loadChallenges(),
-                  loans.loadLoans(),
-                  lidResolver.loadLidMappings(),
-                ]);
+                await loadBannedUsers();
+
                 chess.loadActiveGames();
                 loadEnabledChats();
                 loadGroupSettings();
