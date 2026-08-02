@@ -18,6 +18,8 @@
 //     (alt detection by phone number — same as multi-account detection)
 
 const Bounty = require('../models/Bounty');
+const botConfig = require('../../botConfig');
+const P = () => botConfig.getPrefix();
 const mongoose = require('mongoose');
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
   return {
     success: true,
     bounty,
-    message: `💰 *BOUNTY PLACED*\n\nTarget: @${targetJid.split('@')[0]}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`.g bounty claim @target\`_`,
+    message: `💰 *BOUNTY PLACED*\n\nTarget: @${targetJid.split('@')[0]}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`${P()} bounty claim @target\`_`,
   };
 }
 

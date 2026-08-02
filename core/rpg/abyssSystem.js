@@ -18,6 +18,8 @@
 const AbyssRun = require('../models/AbyssRun');
 const AbyssLeaderboard = require('../models/AbyssLeaderboard');
 const mongoose = require('mongoose');
+const botConfig = require('../../botConfig');
+const P = () => botConfig.getPrefix();
 
 // ─── FLOOR TIER DEFINITIONS ───────────────────────────────────────────────
 function getFloorTier(floor) {
@@ -125,7 +127,7 @@ async function startRun(userId, playerStats) {
     } else {
       return {
         success: false,
-        message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`.g abyss status\` or retreat with \`.g abyss retreat\`._`,
+        message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`${P()} abyss status\` or retreat with \`${P()} abyss retreat\`._`,
       };
     }
   }
@@ -179,18 +181,18 @@ async function startRun(userId, playerStats) {
 
   let startMsg = '🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n';
   if (encounter.type === 'combat') {
-    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + encounter.enemy.hp + '/' + encounter.enemy.maxHp + '_\n\n_Attack with `' + '.s combat atk`_\n_Retreat with `.s abyss retreat`_';
+    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + encounter.enemy.hp + '/' + encounter.enemy.maxHp + '_\n\n_Attack with `' + '${P()} combat atk`_\n_Retreat with `${P()} abyss retreat`_';
   } else if (encounter.type === 'wild_summon') {
     const species = encounter.wildSummonSpecies;
-    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `.s combat atk`_\n_Retreat with `.s abyss retreat`_';
+    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `${P()} combat atk`_\n_Retreat with `${P()} abyss retreat`_';
   } else if (encounter.type === 'treasure') {
-    startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_\n_Skip with \`.g abyss skip\`_`;
+    startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
     startMsg += `${encounter.event.icon} *Floor 1 — ${encounter.event.name}*\n_${encounter.event.desc}_\n\n`;
     encounter.event.choices.forEach(c => {
       startMsg += `\`${c.id}\` — ${c.text}\n`;
     });
-    startMsg += `\n_Choose with \`.g abyss choose <1/2>\`_`;
+    startMsg += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
 
   return {
@@ -398,7 +400,7 @@ function generateFloorEnemy(floor) {
 async function processAttack(userId, playerDamage, playerStats) {
   const run = await AbyssRun.findOne({ userId, status: 'active' });
   if (!run) {
-    return { success: false, message: '❌ No active Abyss run. Start one with `.g abyss enter`.' };
+    return { success: false, message: '❌ No active Abyss run. Start one with `${P()} abyss enter`.' };
   }
 
   run.lastActionAt = new Date();
@@ -476,17 +478,17 @@ async function processAttack(userId, playerDamage, playerStats) {
     run.currentEnergy = Math.min(run.playerSnapshot.maxEnergy, run.currentEnergy + 20);
 
     if (nextEncounter.type === 'combat') {
-      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.s combat atk\`_`;
+      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
     } else if (nextEncounter.type === 'wild_summon') {
-      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${nextEncounter.enemy.stats.hp}/${nextEncounter.enemy.stats.maxHp}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`.s combat atk\`_`;
+      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${nextEncounter.enemy.stats.hp}/${nextEncounter.enemy.stats.maxHp}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat atk\`_`;
     } else if (nextEncounter.type === 'treasure') {
-      attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_`;
+      attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_`;
     } else if (nextEncounter.type === 'event') {
       attackMsg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_${nextEncounter.event.desc}_\n\n`;
       nextEncounter.event.choices.forEach(c => {
         attackMsg += `\`${c.id}\` — ${c.text}\n`;
       });
-      attackMsg += `_Choose with \`.g abyss choose <1/2>\`_`;
+      attackMsg += `_Choose with \`${P()} abyss choose <1/2>\`_`;
     }
     await run.save();
     return { success: true, message: attackMsg, run, enemyDefeated: true };
@@ -594,17 +596,17 @@ async function processTreasure(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.s combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
+    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
+    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
 
   await run.save();
@@ -695,17 +697,17 @@ async function processEventChoice(userId, choiceId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.s combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
+    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
+    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
 
   await run.save();
@@ -727,17 +729,17 @@ async function processSkip(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.s combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
+    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
+    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
 
   await run.save();

@@ -21,6 +21,8 @@
 //   Week 4: ANCIENT_DRAGON (requires dragon seal ring for any damage)
 
 const RaidBoss = require('../models/RaidBoss');
+const botConfig = require('../../botConfig');
+const P = () => botConfig.getPrefix();
 const mongoose = require('mongoose');
 
 // ─── BOSS DEFINITIONS ─────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ async function spawnWeeklyRaid(activePlayerCount = 50) {
   return {
     success: true,
     raid,
-    message: `⚔️ *WEEKLY RAID BOSS SPAWNED* ⚔️\n\n${bossDef.flavorText}\n\n👹 *${bossDef.name}*\n❤️ HP: ${bossHp.toLocaleString()}\n⚔️ ATK: ${bossDef.atk} | 🛡️ DEF: ${bossDef.def}\n⏰ Ends in 24h or when defeated\n\n_Join with \`.s raid join\`_`,
+    message: `⚔️ *WEEKLY RAID BOSS SPAWNED* ⚔️\n\n${bossDef.flavorText}\n\n👹 *${bossDef.name}*\n❤️ HP: ${bossHp.toLocaleString()}\n⚔️ ATK: ${bossDef.atk} | 🛡️ DEF: ${bossDef.def}\n⏰ Ends in 24h or when defeated\n\n_Join with \`${P()} raid join\`_`,
   };
 }
 
@@ -164,7 +166,7 @@ async function joinRaid(userId, userClass, userLevel) {
   // Check if already joined
   const existing = raid.attackers.find(a => a.jid === userId);
   if (existing) {
-    return { success: false, message: `❌ You've already joined this raid. Vote with \`.g raid vote 1-5\`.` };
+    return { success: false, message: `❌ You've already joined this raid. Vote with \`${P()} raid vote 1-5\`.` };
   }
   // Add attacker
   raid.attackers.push({
@@ -185,7 +187,7 @@ async function joinRaid(userId, userClass, userLevel) {
   await raid.save();
   return {
     success: true,
-    message: `✅ Joined the raid against *${raid.bossName}*!\n\n⚔️ The Avatar (Lv ${raid.avatar.class || 'Unknown'})\n❤️ HP: ${raid.avatar.hp.toLocaleString()}/${raid.avatar.maxHp.toLocaleString()}\n👥 Attackers: ${raid.attackerCount}\n\n_Vote with \`.g raid vote 1-5\`_`,
+    message: `✅ Joined the raid against *${raid.bossName}*!\n\n⚔️ The Avatar (Lv ${raid.avatar.class || 'Unknown'})\n❤️ HP: ${raid.avatar.hp.toLocaleString()}/${raid.avatar.maxHp.toLocaleString()}\n👥 Attackers: ${raid.attackerCount}\n\n_Vote with \`${P()} raid vote 1-5\`_`,
   };
 }
 
@@ -314,7 +316,7 @@ async function castVote(userId, skillIndex) {
   // Check if user has joined
   const attacker = raid.attackers.find(a => a.jid === userId);
   if (!attacker) {
-    return { success: false, message: '❌ You must join the raid first. Use `.s raid join`.' };
+    return { success: false, message: '❌ You must join the raid first. Use `${P()} raid join`.' };
   }
   if (attacker.isDead) {
     return { success: false, message: '❌ You are dead and cannot vote.' };

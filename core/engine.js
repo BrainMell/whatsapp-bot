@@ -7262,7 +7262,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         msg += `• \`${botConfig.getPrefix()} pin/unpin\` — pin messages\n`;
                         msg += `• \`${botConfig.getPrefix()} set/unrank rank @user\` — ranks\n\n`;
 
-                        msg += `_Aliases: .g modcom = .g admin = .g mod_\n`;
+                        msg += `_Aliases: ${botConfig.getPrefix()} modcom = ${botConfig.getPrefix()} admin = ${botConfig.getPrefix()} mod_\n`;
                         msg += `_Detailed guide: \`${botConfig.getPrefix()} mod help\`_`;
 
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
@@ -7767,7 +7767,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || "F"}*\n🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*\n\n⚔️ Preparing the battlefield...`;
                           await reply(startMsg);
                         } else {
-                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`.s join\` to enter.`);
+                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`${botConfig.getPrefix()} join\` to enter.`);
                         }
                       } else {
                         await reply(result.msg);
@@ -7975,7 +7975,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       try {
                         const user = economy.getUser(senderJid);
                         if (!user) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Use `.g register` first.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Use `${botConfig.getPrefix()} register` first.' });
                         }
                         const userClass = user.class;
                         if (!userClass) {
@@ -9520,7 +9520,7 @@ Usage: ${newUsage}/5${warningText}`;
                     // Only mods (General/RPG/Cards) or owner can ban
                     if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
                       return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌ Only moderators can use the perma-ban command. WA group admins should use `.g block` instead.",
+                        text: BOT_MARKER + "❌ Only moderators can use the perma-ban command. WA group admins should use `${botConfig.getPrefix()} block` instead.",
                       });
                     }
                     const targetUser = getMentionOrReply(m);
@@ -10888,7 +10888,7 @@ Usage: ${newUsage}/5${warningText}`;
                     // confusing (owner shows up as a mod).
                     if (isBotOwner(target)) {
                       return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "⚠️ The owner doesn't need to be added as a moderator — owners already have full access to everything.\n\n_Add someone else, or use `.s listmods` to see current mods._",
+                        text: BOT_MARKER + "⚠️ The owner doesn't need to be added as a moderator — owners already have full access to everything.\n\n_Add someone else, or use `${botConfig.getPrefix()} listmods` to see current mods._",
                       });
                     }
 
@@ -12642,7 +12642,7 @@ Commands:
                       }
                       const lvl = parseInt(arg, 10);
                       if (isNaN(lvl) || lvl < 1 || lvl > 5) {
-                        return reply('❌ Usage: `.g rank toggleperm <1-5>` or `.g rank toggleperm clear`\nLevels: 1=Wanderer 2=Initiate 3=Guardian 4=Commander 5=Overlord');
+                        return reply('❌ Usage: `${botConfig.getPrefix()} rank toggleperm <1-5>` or `${botConfig.getPrefix()} rank toggleperm clear`\nLevels: 1=Wanderer 2=Initiate 3=Guardian 4=Commander 5=Overlord');
                       }
                       settings.rankToggleAllowedLevels = settings.rankToggleAllowedLevels || [5];
                       if (!settings.rankToggleAllowedLevels.includes(lvl)) {
@@ -12657,13 +12657,13 @@ Commands:
                       if (arg === 'on') {
                         settings.rankToggleLocked = true;
                         saveGroupSettings();
-                        return reply(BOT_MARKER + '🔒 Rank toggle is now LOCKED. No one can change the rank system state until `.g rank togglelock off` is run.');
+                        return reply(BOT_MARKER + '🔒 Rank toggle is now LOCKED. No one can change the rank system state until `${botConfig.getPrefix()} rank togglelock off` is run.');
                       } else if (arg === 'off') {
                         settings.rankToggleLocked = false;
                         saveGroupSettings();
                         return reply(BOT_MARKER + '🔓 Rank toggle is now UNLOCKED.');
                       }
-                      return reply('❌ Usage: `.g rank togglelock on|off`');
+                      return reply('❌ Usage: `${botConfig.getPrefix()} rank togglelock on|off`');
                     }
                   }
 
@@ -16365,7 +16365,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const economy = require('./rpg/economy');
                           const user = economy.getUser(senderJid);
                           if (!user || !user.class) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `.g class`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `${botConfig.getPrefix()} class`.' });
                           }
                           const skillTree = require('./rpg/skillTree');
                           const allClasses = skillTree.SKILL_TREES || {};
@@ -16601,7 +16601,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const _abyssInCombat = _abyssCombatState?.inCombat === true;
                       const _abyssReadOnly = ['status', 'info', 'leaderboard', 'lb', 'best', 'help', 'admin', 'mod'];
                       if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub)) {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ You are in active combat! Finish the round first with `.g combat attack` or `.g combat flee`.' });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ You are in active combat! Finish the round first with `${botConfig.getPrefix()} combat attack` or `${botConfig.getPrefix()} combat flee`.' });
                       }
 
                       // .g abyss — show status or help
@@ -16638,7 +16638,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `.g register`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `${botConfig.getPrefix()} register`.' });
                           }
                           const level = progression.getLevel(senderJid);
                           if (level < 20) {
@@ -16677,7 +16677,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g abyss attack — redirect to combat (Abyss uses real combat now)
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `.g combat attack` to fight.' });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `${botConfig.getPrefix()} combat attack` to fight.' });
                       }
 
                       // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume —
@@ -16691,19 +16691,19 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run to resume.' });
                           }
                           if (run.currentEncounterType !== 'combat' || !run.currentEnemy) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Current floor is not a combat floor. Use `.g abyss status` to see what to do.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Current floor is not a combat floor. Use `${botConfig.getPrefix()} abyss status` to see what to do.' });
                           }
                           const abyssSessionKey = `${chatId}_${senderJid}`;
                           const existingState = guildAdventure.getGameState(abyssSessionKey);
                           if (existingState && existingState.inCombat) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ You are already in combat! Use `.g combat attack` to fight.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ You are already in combat! Use `${botConfig.getPrefix()} combat attack` to fight.' });
                           }
                           await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ *Resuming Abyss combat on floor ${run.currentFloor}...*` });
                           await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, run.currentFloor);
                           return;
                         } catch (e) {
                           console.error('[Abyss resume] failed:', e.message);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Resume failed: ' + e.message + '\n\n_You can still retreat with `.g abyss retreat`._' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Resume failed: ' + e.message + '\n\n_You can still retreat with `${botConfig.getPrefix()} abyss retreat`._' });
                         }
                       }
 
@@ -16712,7 +16712,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         try {
                           const run = await abyssSystem.getRunStatus(senderJid);
                           if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run.\n_Start one with `.g abyss enter`._' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run.\n_Start one with `${botConfig.getPrefix()} abyss enter`._' });
                           }
                           let msg = `🕳️ *ABYSS RUN STATUS*\n\n`;
                           msg += `📊 Floor: ${run.currentFloor}\n`;
@@ -16746,14 +16746,14 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                               msg += `_Type \`${botConfig.getPrefix()} abyss resume\` to restart the fight._\n`;
                               msg += `_Or \`${botConfig.getPrefix()} abyss retreat\` to extract._`;
                             } else {
-                              msg += `\n_Attack with \`.g combat attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                              msg += `\n_Attack with \`${botConfig.getPrefix()} combat attack\`_\n_Retreat with \`${botConfig.getPrefix()} abyss retreat\`_`;
                             }
                           } else if (encounterType === 'treasure') {
-                            msg += `\n💰 *Treasure Floor!*\n_Use \`.g abyss collect\` or \`.g abyss skip\`_`;
+                            msg += `\n💰 *Treasure Floor!*\n_Use \`${botConfig.getPrefix()} abyss collect\` or \`${botConfig.getPrefix()} abyss skip\`_`;
                           } else if (encounterType === 'event') {
-                            msg += `\n❓ *Event Floor!*\n_Use \`.g abyss choose <1|2>\` or \`.g abyss skip\`_`;
+                            msg += `\n❓ *Event Floor!*\n_Use \`${botConfig.getPrefix()} abyss choose <1|2>\` or \`${botConfig.getPrefix()} abyss skip\`_`;
                           } else {
-                            msg += `\n_Use \`.g abyss retreat\` to extract._`;
+                            msg += `\n_Use \`${botConfig.getPrefix()} abyss retreat\` to extract._`;
                           }
                           return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
@@ -16944,8 +16944,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         let msg = `⚔️ *WEEKLY RAID — AVATAR MODE* ⚔️\n\n`;
                         msg += `Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players merge into "The Avatar" — a single entity whose class, stats, and skills are determined by the participants.\n\n`;
                         msg += `*How it works:*\n`;
-                        msg += `• Join the raid with \`.s raid join\`\n`;
-                        msg += `• Each round, vote for which skill the Avatar uses (\`.g raid vote 1-5\`)\n`;
+                        msg += `• Join the raid with \`${botConfig.getPrefix()} raid join\`\n`;
+                        msg += `• Each round, vote for which skill the Avatar uses (\`${botConfig.getPrefix()} raid vote 1-5\`)\n`;
                         msg += `• 60-second voting window per round\n`;
                         msg += `• Most-voted skill is executed, then boss attacks back\n`;
                         msg += `• Continues until boss dies (win) or all attackers dead (loss)\n\n`;
@@ -17255,7 +17255,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         try {
                           const userGuild = guilds.getUserGuild(senderJid);
                           if (!userGuild) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild. Use `.g guild create <name>` or ask an officer to invite you.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild. Use `${botConfig.getPrefix()} guild create <name>` or ask an officer to invite you.' });
                           }
                           const info = await guildWars.getMyWarInfo(userGuild);
                           if (!info) {
@@ -17268,14 +17268,14 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           msg += `*Rank:* ${rank} / ${total}\n`;
                           msg += `*Points:* ${participant.points.toLocaleString()}\n`;
                           if (event?.id === 'champion_tournament') {
-                            msg += `*Champion:* ${participant.championJid ? '✅ ' + participant.championJid.split('@')[0] : '⚠️ Not set — use `.g war champion @user`'}\n`;
+                            msg += `*Champion:* ${participant.championJid ? '✅ ' + participant.championJid.split('@')[0] : '⚠️ Not set — use `${botConfig.getPrefix()} war champion @user`'}\n`;
                             msg += `*Champion wins:* ${participant.championWins || 0}\n`;
                           } else if (event?.id === 'guardian_clash') {
                             msg += `*Guardians:* `;
                             if (participant.guardians && participant.guardians.length > 0) {
                               msg += participant.guardians.map(g => g.split('@')[0]).join(', ') + '\n';
                             } else {
-                              msg += `⚠️ Not set — use \`.g war guardian @u1 @u2 @u3\`\n`;
+                              msg += `⚠️ Not set — use \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\`\n`;
                             }
                             msg += `*Guardian wins:* ${participant.guardianWins || 0}\n`;
                           } else if (event?.id === 'stronghold_siege') {
