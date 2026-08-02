@@ -708,7 +708,7 @@ async function removeRune(userJid, runeId, hasScroll = false) {
   if (!hasScroll) {
     return {
       success: false,
-      message: '❌ Removing a socketed rune requires a *Rune Removal Scroll*. You can get one from the cash shop or as a rare raid drop.\n\n_Warning: removing without a scroll would destroy the rune. Use `.g rune destroy <id>` to destroy the rune without a scroll._',
+      message: '❌ Removing a socketed rune requires a *Rune Removal Scroll*. You can get one from the cash shop or as a rare raid drop.\n\n_Warning: removing without a scroll would destroy the rune. Use `' + require('../../botConfig').getPrefix() + ' rune destroy <id>` to destroy the rune without a scroll._',
     };
   }
 
@@ -938,7 +938,7 @@ async function awardRune(userJid, type, tier, obtainedFrom = null) {
     return {
       success: true,
       rune,
-      message: `💎 *Rune Drop!* ${RUNE_TYPES[type].icon} ${RUNE_TYPES[type].name} (${RUNE_TIERS[tier].name})\n_Use \`.g rune socket <runeId> <skillId>\` to socket it._`,
+      message: `💎 *Rune Drop!* ${RUNE_TYPES[type].icon} ${RUNE_TYPES[type].name} (${RUNE_TIERS[tier].name})\n_Use \`${require('../../botConfig').getPrefix()} rune socket <runeId> <skillId>\` to socket it._`,
     };
   } catch (e) {
     console.error('[RuneSystem] Failed to award rune:', e.message);

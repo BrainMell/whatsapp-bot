@@ -292,7 +292,7 @@ async function setSpawnInterval(minutes, callerJid, isOwner) {
   }
   const mins = Number(minutes);
   if (!Number.isFinite(mins) || mins < 1 || mins > 1440) {
-    return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours).\nExample: `.g spawnset 20` (3 spawns/hour)' };
+    return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours).\nExample: `' + botConfig.getPrefix() + ' spawnset 20` (3 spawns/hour)' };
   }
   inst.spawnIntervalMs = mins * 60 * 1000;
   // Persist to System collection so it survives restarts

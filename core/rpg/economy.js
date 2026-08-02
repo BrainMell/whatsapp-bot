@@ -1395,7 +1395,7 @@ function getRankMissionStatus(userId) {
     canClaim: complete,
     alreadyCompleted: false,
     message: complete
-      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`.g rank mission claim\` to claim your reward and unlock promotion.`
+      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`${botConfig.getPrefix()} rank mission claim\` to claim your reward and unlock promotion.`
       : `📊 Progress for ${gateMission.name}:`,
   };
 }

@@ -5113,7 +5113,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         customMessage ||
         "╭───────────────────╮\n  📢 *BOT UPDATE v" +
           v +
-          "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `.g menu` to see all commands.";
+          "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `" + botConfig.getPrefix() + " menu` to see all commands.";
 
       let sentCount = 0;
       console.log(

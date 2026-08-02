@@ -710,9 +710,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             `• *Check:* Add \`+\` (e.g., \`Bb5+\`)\n` +
             `• *Promotion:* Square + \`=\` + Piece (e.g., \`e8=Q\`)\n\n` +
             `*3. How to Play* 🎮\n` +
-            `1. Challenge someone: \`.g chess @user [bet]\`\n` +
+            `1. Challenge someone: \`${prefix} chess @user [bet]\`\n` +
             `2. The board will be rendered. White moves first.\n` +
-            `3. Type \`.g move e4\` to make your opening move.\n` +
+            `3. Type \`${prefix} move e4\` to make your opening move.\n` +
             `4. The bot will highlight the last move on the board.\n\n` +
             `*4. Pro Tips* ⚖️\n` +
             `• The goal is to put the opponent's King in *Checkmate*.\n` +
