@@ -1963,7 +1963,18 @@ function getDisplayName(jid) {
 function getMentionJid(jid) {
   if (!jid) return jid;
   try {
-    // Resolve to phone JID for the mentions array (WhatsApp matches @<phone>)
+    // 💡 FIX: Return the JID format the user is REGISTERED as in the economy
+    // cache. In LID-privacy groups, users register as @lid — WhatsApp matches
+    // LID mentions in those groups. In regular groups, users register as
+    // @s.whatsapp.net — WhatsApp matches phone mentions there.
+    //
+    // Using the economy cache key ensures the mention JID matches the format
+    // WhatsApp expects for that user's group context.
+    const resolvedId = resolveJidHelper(jid);
+    if (resolvedId && economyData.has(resolvedId)) {
+      return resolvedId;
+    }
+    // Fallback: try phone resolution (for non-LID groups)
     const lidResolver = require('../utils/lidResolver');
     const phoneJid = lidResolver.resolveToPhone(jid);
     if (phoneJid) return phoneJid;
