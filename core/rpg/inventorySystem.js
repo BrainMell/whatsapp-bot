@@ -423,6 +423,11 @@ async function equipItem(userId, itemId, slot) {
     
     // Auto-detect slot if not provided
     let targetSlot = slot;
+    // 💡 FIX 2026-08-03: normalize spaces/dashes to underscores for slot names
+    if (typeof targetSlot === 'string') {
+        targetSlot = targetSlot.toLowerCase().replace(/[\s-]+/g, '_');
+        if (targetSlot === 'weapon') targetSlot = 'main_hand';
+    }
     if (!targetSlot) {
         targetSlot = itemToEquip.slot || itemInfo.slot;
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
@@ -562,7 +567,15 @@ async function equipItem(userId, itemId, slot) {
     
     equipment[slotName] = { ...itemToEquip };
     delete equipment[slotName].quantity;
-    
+
+    // 💡 FIX 2026-08-03 (bug report #1): ensure rarity is set on the equipped
+    // copy. If itemToEquip.rarity was missing (old item added before rarity
+    // was properly tracked), fall back to the DB rarity. This prevents the
+    // "Common" label showing on Mythic/Legendary gear in .char/.bag display.
+    if (!equipment[slotName].rarity) {
+        equipment[slotName].rarity = itemInfo.rarity || 'COMMON';
+    }
+
     // Seed durability
     equipment[slotName].maxDurability = durProfile.max;
     equipment[slotName].durability = durProfile.max;
@@ -594,11 +607,18 @@ async function equipItem(userId, itemId, slot) {
 
 async function unequipItem(userId, slot) {
     const equipment = getEquipment(userId);
-    
+
+    // 💡 FIX 2026-08-03 (bug report #7): normalize spaces to underscores
+    // so '.jk unequip main hand' works the same as '.jk unequip main_hand'.
+    // Also strip dashes — some users type 'main-hand'.
+    if (typeof slot === 'string') {
+        slot = slot.toLowerCase().replace(/[\s-]+/g, '_');
+    }
+
     if (!EQUIPMENT_SLOTS[slot.toUpperCase()]) {
         return {
             success: false,
-            message: `❌ Invalid equipment slot!`
+            message: `❌ Invalid equipment slot: \`${slot}\`\n_Valid slots: main_hand, off_hand, armor, helmet, boots, ring, amulet, cloak, gloves_\n_Tip: spaces are OK (e.g. \`main hand\` works too)._`
         };
     }
     
@@ -910,7 +930,10 @@ function enhanceItem(userId, itemId, stoneId) {
     //
     // Fix: after enhancing the inventory copy, check if this item is
     // equipped in any slot. If so, sync the enhanced fields (stats,
-    // enhancementLevel, enhancementBonus, name) to the equipped copy.
+    // enhancementLevel, enhancementBonus, name, rarity) to the equipped copy.
+    // 💡 FIX 2026-08-03 (bug report #1): also sync `rarity` — the equipped
+    // copy could have a stale rarity label if the item was added before
+    // rarity was properly set, causing "Common" to show for Mythic items.
     const equipment = getEquipment(userId);
     if (equipment) {
         for (const [slot, eqItem] of Object.entries(equipment)) {
@@ -921,6 +944,9 @@ function enhanceItem(userId, itemId, stoneId) {
                 eqItem.enhancementBonus = item.enhancementBonus;
                 eqItem.baseStats = item.baseStats ? JSON.parse(JSON.stringify(item.baseStats)) : undefined;
                 eqItem.name = item.name;
+                // 💡 FIX 2026-08-03: sync rarity too — prevents "Common" label
+                // on Mythic/Legendary items after enhancement.
+                if (item.rarity) eqItem.rarity = item.rarity;
                 break; // an item can only be equipped in one slot
             }
         }

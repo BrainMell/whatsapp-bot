@@ -133,23 +133,27 @@ async function startRun(userId, playerStats) {
   }
 
   // Check cooldown — look at most recent completed/failed run
-  // 💡 RPG Mods are immune to the Abyss cooldown — they can enter at any time.
+  // 💡 RPG Mods AND the bot owner are immune to the Abyss cooldown.
+  // Owner bypass added 2026-08-03 per user request: owner account should
+  // be able to test Abyss at any time without waiting 12h.
   const lastRun = await AbyssRun.findOne({ userId, status: { $in: ['completed', 'failed'] } }).sort({ updatedAt: -1 });
   if (lastRun) {
     const elapsed = Date.now() - new Date(lastRun.updatedAt).getTime();
     if (elapsed < RUN_COOLDOWN_MS) {
-      // Check if user is an RPG mod — bypass cooldown if so
+      // Check if user is the bot owner OR an RPG mod — bypass cooldown if so
+      let isOwner = false;
       let isRpgMod = false;
       try {
-        const botConfig = require('../../botConfig');
-        // Access the engine's isRpgMod via a lazy require to avoid circular dep
         const engine = require('../engine');
+        if (typeof engine.isBotOwner === 'function') {
+          isOwner = engine.isBotOwner(userId);
+        }
         if (typeof engine.isRpgMod === 'function') {
           isRpgMod = engine.isRpgMod(userId);
         }
       } catch (e) {}
 
-      if (!isRpgMod) {
+      if (!isOwner && !isRpgMod) {
         const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
         return {
           success: false,

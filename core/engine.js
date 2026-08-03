@@ -16726,8 +16726,19 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       // .g abyss attack — redirect to combat (Abyss uses real combat now)
+                      // 💡 FIX 2026-08-03: Silent redirect — don't show a warning, just tell
+                      // them the right command. The old message was confusing because it looked
+                      // like an error when they were just trying to attack.
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `${botConfig.getPrefix()} combat attack` to fight.' });
+                        // If they're in active Abyss combat, just route to combat attack
+                        const abyssSessionKey = `${chatId}_${senderJid}`;
+                        const combatState = guildAdventure.getGameState(abyssSessionKey);
+                        if (combatState && combatState.inCombat) {
+                          // They're in combat — redirect to combat attack
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight in the Abyss.` });
+                        }
+                        // Not in combat — they probably want to start
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss combat uses the standard combat system.\n_Start a run with \`${botConfig.getPrefix()} abyss enter\`, then use \`${botConfig.getPrefix()} combat attack\` to fight.` });
                       }
 
                       // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume —
@@ -16978,7 +16989,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} abyss admin\` for help.` });
                       }
 
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown abyss subcommand. Use \`${botConfig.getPrefix()} abyss help\` for usage.` });
+                      // 💡 FIX 2026-08-03: Better error message — tell them the real
+                      // combat commands instead of just "unknown subcommand".
+                      // The old message was confusing players who typed things like
+                      // '.s abyss atk' or '.s abyss fight' during combat.
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._\n_Abyss combat uses: \`${botConfig.getPrefix()} combat attack\`, \`${botConfig.getPrefix()} combat skill <#>\`, \`${botConfig.getPrefix()} combat item\`_` });
                     }
 
                     // ============================================

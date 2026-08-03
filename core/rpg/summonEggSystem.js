@@ -191,8 +191,16 @@ async function craftEgg(userId, targetTier) {
 // Returns a combat-ready enemy object scaled to the floor.
 function generateWildSummonEncounter(floor) {
   // Pick a random species from the registry (weighted by floor depth)
-  const allSpecies = registry.getAllSpecies();
-  const entries = Object.entries(allSpecies);
+  // 💡 FIX 2026-08-03 (bug report #3): getAllSpecies() returns an ARRAY of
+  // species ID strings, not an object. The old code did Object.entries() on
+  // the array, which gave [[0, 'skeleton'], [1, 'skeleton_knight'], ...] —
+  // so 's' was a STRING, s.rarity was undefined, the filter rejected
+  // everything, pool.length was 0, and the function returned null.
+  // Result: Wild Summon encounters NEVER spawned, despite the 10% chance
+  // in generateFloorEncounter(). Players reached floor 75+ with zero
+  // encounters.
+  // Fix: use getSpecies(id) to resolve each ID to the species object.
+  const speciesIds = registry.getAllSpecies();
 
   // Determine which rarities can appear based on floor
   let allowedRarities;
@@ -201,19 +209,26 @@ function generateWildSummonEncounter(floor) {
   else if (floor >= 11) allowedRarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC'];
   else allowedRarities = ['COMMON', 'UNCOMMON', 'RARE'];
 
-  const pool = entries.filter(([, s]) => allowedRarities.includes(s.rarity));
+  // Build pool of {id, species} pairs filtered by allowed rarity
+  const pool = [];
+  for (const id of speciesIds) {
+    const species = registry.getSpecies(id);
+    if (species && allowedRarities.includes(species.rarity)) {
+      pool.push({ id, species });
+    }
+  }
   if (pool.length === 0) return null;
 
   // Weight: lower rarity = more common
   const RARITY_WEIGHT = { COMMON: 50, UNCOMMON: 30, RARE: 15, EPIC: 8, LEGENDARY: 3, MYTHIC: 1 };
   const weighted = [];
-  for (const [id, s] of pool) {
-    const weight = RARITY_WEIGHT[s.rarity] || 1;
+  for (const { id, species } of pool) {
+    const weight = RARITY_WEIGHT[species.rarity] || 1;
     for (let i = 0; i < weight; i++) weighted.push(id);
   }
 
   const speciesId = weighted[Math.floor(Math.random() * weighted.length)];
-  const species = allSpecies[speciesId];
+  const species = registry.getSpecies(speciesId);
   if (!species) return null;
 
   // Scale stats by floor
