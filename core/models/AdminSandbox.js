@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const economy = require('./rpg/economy');
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ADMIN SANDBOX — Isolated Test Characters for RPG Mods (Item #11)
@@ -178,7 +179,7 @@ AdminSandboxSchema.statics.getOrCreate = function(ownerJid, ownerName) {
     {
       $setOnInsert: {
         ownerJid,
-        name: `Sandbox (${ownerName || ownerJid.split('@')[0]})`,
+        name: `Sandbox (${ownerName || economy.getDisplayName(ownerJid)})`,
         isSandbox: true,
       },
       $set: { lastUsedAt: new Date() },

@@ -148,10 +148,10 @@ async function evolveSummon(summon) {
   let msg = `✨ *SUMMON EVOLUTION!*\n\n`;
   msg += `${oldSpecies?.icon || '🐉'} ${oldName} → ${nextSpeciesData.icon} *${nextSpeciesData.name}*\n\n`;
   msg += `📊 *New Stats:*\n`;
-  msg += `❤️ HP: ${nextSpeciesData.baseStats.hp}\n`;
-  msg += `⚔️ ATK: ${nextSpeciesData.baseStats.atk}\n`;
-  msg += `🛡️ DEF: ${nextSpeciesData.baseStats.def}\n`;
-  msg += `🔮 MAG: ${nextSpeciesData.baseStats.mag}\n`;
+  msg += `❤️ HP: ${Math.floor(nextSpeciesData.baseStats.hp)}\n`;
+  msg += `⚔️ ATK: ${Math.floor(nextSpeciesData.baseStats.atk)}\n`;
+  msg += `🛡️ DEF: ${Math.floor(nextSpeciesData.baseStats.def)}\n`;
+  msg += `🔮 MAG: ${Math.floor(nextSpeciesData.baseStats.mag)}\n`;
   msg += `💨 SPD: ${nextSpeciesData.baseStats.spd}\n\n`;
   msg += `🏷️ Tier: ${reqs.tier} | Rarity: ${nextSpeciesData.rarity}\n`;
   msg += `💖 Loyalty: Reset to 100\n\n`;

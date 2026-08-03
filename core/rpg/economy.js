@@ -890,7 +890,7 @@ function transferMoney(fromUserId, toUserId, amount) {
     amount: val,
     wallet: sender.wallet,
     bank: sender.bank,
-    nickname: sender.nickname || sender.userId.split('@')[0]
+    nickname: sender.nickname || economy.getDisplayName(sender.userId)
   };
 }
 
@@ -931,7 +931,7 @@ function deposit(userId, amount) {
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || user.userId.split('@')[0]
+    nickname: user.nickname || economy.getDisplayName(user.userId)
   };
 }
 
@@ -989,7 +989,7 @@ function withdraw(userId, amount) {
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || user.userId.split('@')[0]
+    nickname: user.nickname || economy.getDisplayName(user.userId)
   };
 }
 
@@ -1589,7 +1589,7 @@ function getMoneyLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || userId.split('@')[0],
+      nickname: data.nickname || economy.getDisplayName(userId),
       wallet: data.wallet || 0,
       bank: data.bank || 0,
       total: (data.wallet || 0) + (data.bank || 0)
@@ -1651,7 +1651,7 @@ function getGamblingLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered && data.stats)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || userId.split('@')[0],
+      nickname: data.nickname || economy.getDisplayName(userId),
       stats: data.stats
     }))
     .sort((a, b) => (b.stats.gamesWon || 0) - (a.stats.gamesWon || 0))

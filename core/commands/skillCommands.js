@@ -726,7 +726,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     // Find the Dragon Lord class definition so we can show
                     // the player their alternative path.
                     const dragonLord = classSystem.getClassById('DRAGON_LORD');
-                    const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                    const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                     let redirectMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                     redirectMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
                     redirectMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;

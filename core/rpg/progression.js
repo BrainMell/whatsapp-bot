@@ -547,7 +547,7 @@ function getGPLeaderboard(limit = 10) {
         .filter(u => u.registered && u.progression)
         .map(u => ({
             userId: u.userId,
-            nickname: u.nickname || u.userId.split('@')[0],
+            nickname: u.nickname || economy.getDisplayName(u.userId),
             gp: u.progression.gp || 0,
             totalGP: u.progression.totalGP || 0,
         }))

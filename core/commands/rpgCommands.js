@@ -461,7 +461,7 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
         for (let i = 0; i < leaderboard.length; i++) { 
             const player = leaderboard[i];
             const economyUser = economy.getUser(player.userId);
-            const name = economyUser?.nickname || player.userId.split('@')[0];
+            const name = economyUser?.nickname || economy.getDisplayName(player.userId);
             
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
             msg += `${medal} *${name}*\n   ⚔️ Wins: \`${player.pvpWins || 0}\` | 💀 Losses: \`${player.pvpLosses || 0}\``;
@@ -472,7 +472,7 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
         for (let i = 0; i < leaderboard.length; i++) { 
             const player = leaderboard[i];
             const economyUser = economy.getUser(player.userId);
-            const name = economyUser?.nickname || player.userId.split('@')[0];
+            const name = economyUser?.nickname || economy.getDisplayName(player.userId);
             
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
             msg += `${medal} *${name}*\n   Level ${player.level}`;
@@ -776,7 +776,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             const economyUser = economy.getUser(senderJid) || {};
             // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
             const pfpUrl = await fetchPfpCached(sock, senderJid);
-            const nickname = economyUser.nickname || senderJid.split('@')[0];
+            const nickname = economyUser.nickname || economy.getDisplayName(senderJid);
             const currency = getCurrency();
             
             const cardType = categoryFilter === 'BREWING' ? 'BREW' : (categoryFilter === 'COOKING' ? 'COOK' : (categoryFilter === 'FORGE' ? 'FORGE' : 'CRAFT'));
@@ -1310,7 +1310,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     try {
         // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
         const pfpUrl = await fetchPfpCached(sock, senderJid);
-        const nickname = economyUser.nickname || senderJid.split('@')[0];
+        const nickname = economyUser.nickname || economy.getDisplayName(senderJid);
         const currency = getCurrency();
         
         const imgBuf = await goService.generateTransactionCard({

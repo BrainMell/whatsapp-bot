@@ -2878,7 +2878,7 @@ What to do:
 
       // 6. QUEST & HARDCORE
       const graveyard = system.get("graveyard", []);
-      const name = profile.nickname || userId.split("@")[0];
+      const name = profile.nickname || economy.getDisplayName(userId);
       const deathCount = graveyard.filter((h) => h.name === name).length;
 
       if (deathCount > 5) return "🦴 The Immortal (Noob)";
@@ -2896,7 +2896,7 @@ What to do:
     // --- GRAVEYARD LOGIC ---
     function addToGraveyard(userId, level, className, cause) {
       const graveyard = system.get("graveyard", []);
-      const name = getUserProfile(userId)?.nickname || userId.split("@")[0];
+      const name = getUserProfile(userId)?.nickname || economy.getDisplayName(userId);
 
       graveyard.push({
         name,
@@ -3996,8 +3996,7 @@ What to do:
           context.personJid = mentionedJid;
           context.personName =
             profile?.nickname ||
-            profile?.whatsappName ||
-            mentionedJid.split("@")[0];
+            profile?.whatsappName || economy.getDisplayName(mentionedJid);
           context.personProfile = profile;
           context.isMention = true;
 
@@ -4332,7 +4331,7 @@ What to do:
                   let summaryPrompt = "Summarize the key topics and vibe of this WhatsApp group chat conversation in a single, short sentence (max 20 words):\n\n";
                   for (const msg of oldMessages) {
                     const userObj = economy.getUser(msg.sender);
-                    const name = userObj?.nickname || msg.sender.split("@")[0];
+                    const name = userObj?.nickname || economy.getDisplayName(msg.sender);
                     summaryPrompt += `${name}: ${msg.body || "Media"}\n`;
                   }
 
@@ -6313,8 +6312,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const senderName =
                     user?.nickname ||
                     userProfile?.nickname ||
-                    m.pushName ||
-                    senderJid.split("@")[0];
+                    m.pushName || economy.getDisplayName(senderJid);
 
                   // 3. Relaxed Stub Filter: ONLY skip if there is NO actual message content
                   const hasRealContent =
@@ -7990,7 +7988,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               const DragonGod = require('./models/DragonGod');
                               const existing = await DragonGod.getCurrent();
                               if (existing) {
-                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                                const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                                 msg += `\n🌊 *The Leviathan has already been slain.*\n`;
                                 msg += `Dragon God: *${godName}* (crowned ${new Date(existing.ascendedAt).toLocaleDateString()})\n`;
                                 msg += `_The path to Dragon God is closed. Seek the Dragon Lord path instead._\n`;
@@ -8074,7 +8072,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               const DragonGod = require('./models/DragonGod');
                               const existing = await DragonGod.getCurrent();
                               if (existing) {
-                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                                const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                                 msg += `   🌊 *CLOSED* — Dragon God: ${godName}\n`;
                                 msg += `   _Use the Dragon Lord path instead._\n`;
                               } else {
@@ -8114,7 +8112,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
-                        const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                        const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                         const ascendedAt = new Date(existing.ascendedAt);
                         let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         msg    += `┃  🐲👑 *THE ONE TRUE DRAGON GOD* 👑🐲  ┃\n`;
@@ -9012,7 +9010,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       // XP reward scales with rarity
                       const xpReward = Math.max(5, Math.floor(sellValue / 5));
                       const huntCard = await combatImageGen.generateHuntCard({
-                        playerName: freshUser.nickname || senderJid.split('@')[0],
+                        playerName: freshUser.nickname || economy.getDisplayName(senderJid),
                         playerClass: String(freshUser.class?.id || freshUser.class || 'FIGHTER').toUpperCase(),
                         biome: 'forest',
                         animal: animalName.toUpperCase(),
@@ -19123,8 +19121,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         const p1 = getUserProfile(u1Jid) || {};
                         const p2 = getUserProfile(u2Jid) || {};
 
-                        const name1 = p1.nickname || u1Jid.split("@")[0];
-                        const name2 = p2.nickname || u2Jid.split("@")[0];
+                        const name1 = p1.nickname || economy.getDisplayName(u1Jid);
+                        const name2 = p2.nickname || economy.getDisplayName(u2Jid);
                         namesDisplay = `${name1} & ${name2}`;
 
                         // Format data for AI
@@ -21971,7 +21969,7 @@ ${senderName} said y'all should know:
                       } catch (e) {}
 
                       const cardBuffer = await goService.generateEconomyCard({
-                        nickname: user.nickname || senderJid.split("@")[0],
+                        nickname: user.nickname || economy.getDisplayName(senderJid),
                         wallet: balance.wallet || 0,
                         bank: balance.bank || 0,
                         total: balance.total || 0,
@@ -22186,8 +22184,7 @@ ${senderName} said y'all should know:
                       if (!jid) return false;
                       const norm = jidNormalizedUser(jid);
                       const victimNorm = jidNormalizedUser(victim);
-                      return norm === victimNorm ||
-                             jid.split('@')[0] === victim.split('@')[0];
+                      return norm === victimNorm || economy.getDisplayName(jid) === victim.split('@')[0];
                     });
                     if (isBotTarget) {
                       await sock.sendMessage(chatId, {
@@ -22340,7 +22337,7 @@ Examples:
                                 ? "🥉"
                                 : `${i + 1}.`;
                         const nickname =
-                          user.nickname || user.userId.split("@")[0];
+                          user.nickname || economy.getDisplayName(user.userId);
 
                         text += `${medal} @${economy.getDisplayName(user.userId)}\n`;
                         text += `   💎 ${economy.getZENI()}${user.total.toLocaleString()}\n`;
@@ -25554,7 +25551,7 @@ _(Or reply to their message)_
                           quotedName = botConfig.getBotName();
                         } else {
                           const quotedUser = economy.getOrCreateUser(normalizedQuotedJid);
-                          quotedName = quotedUser?.nickname || normalizedQuotedJid.split("@")[0];
+                          quotedName = quotedUser?.nickname || economy.getDisplayName(normalizedQuotedJid);
                         }
                       }
                       promptWithReply = `[Replying to ${quotedName}'s message: "${quotedText.trim()}"] ${prompt}`;

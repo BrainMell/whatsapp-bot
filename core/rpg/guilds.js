@@ -537,8 +537,7 @@ function leaveGuild(userJid) {
   if (guild) {
     // 💡 QA FIX: loose JID matching for member removal
     const memberJid = (guild.members || []).find(m =>
-      m === userJid ||
-      m.split('@')[0] === userJid.split('@')[0] ||
+      m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
       m.includes(userJid.split('@')[0]) ||
       userJid.includes(m.split('@')[0])
     );
@@ -730,8 +729,7 @@ async function promoteToAdmin(ownerJid, targetJid) {
   // 💡 QA FIX: try to match targetJid against members using loose matching
   // (LID vs phone format may differ)
   const memberJid = guild.members.find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );
@@ -772,8 +770,7 @@ async function demoteAdmin(ownerJid, targetJid) {
 
   // 💡 QA FIX: loose JID matching (same as promoteToAdmin)
   const adminJid = guild.admins.find(a =>
-    a === targetJid ||
-    a.split('@')[0] === targetJid.split('@')[0] ||
+    a === targetJid || economy.getDisplayName(a) === targetJid.split('@')[0] ||
     a.includes(targetJid.split('@')[0]) ||
     targetJid.includes(a.split('@')[0])
   );
@@ -815,8 +812,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
 
   // 💡 QA FIX: loose JID matching
   const memberJid = guild.members.find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );
@@ -891,8 +887,7 @@ function getGuildMember(guildName, userJid) {
 
   // 💡 QA FIX: loose JID matching for member lookup
   const memberJid = (guild.members || []).find(m =>
-    m === userJid ||
-    m.split('@')[0] === userJid.split('@')[0] ||
+    m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
     m.includes(userJid.split('@')[0]) ||
     userJid.includes(m.split('@')[0])
   );
@@ -927,8 +922,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
 
   // 💡 QA FIX: loose JID matching
   const memberJid = (guild.members || []).find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );

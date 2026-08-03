@@ -492,9 +492,9 @@ async function processAttack(userId, playerDamage, playerStats) {
     run.currentEnergy = Math.min(run.playerSnapshot.maxEnergy, run.currentEnergy + 20);
 
     if (nextEncounter.type === 'combat') {
-      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
+      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
     } else if (nextEncounter.type === 'wild_summon') {
-      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${nextEncounter.enemy.stats.hp}/${nextEncounter.enemy.stats.maxHp}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat atk\`_`;
+      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${Math.floor(nextEncounter.enemy.stats.hp)}/${Math.floor(nextEncounter.enemy.stats.maxHp)}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat atk\`_`;
     } else if (nextEncounter.type === 'treasure') {
       attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_`;
     } else if (nextEncounter.type === 'event') {
@@ -513,7 +513,7 @@ async function processAttack(userId, playerDamage, playerStats) {
   run.currentHp = Math.max(0, run.currentHp - enemyDamage);
   attackMsg += `💥 ${enemy.name} counterattacks for ${enemyDamage} damage!\n`;
   attackMsg += `❤️ Your HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
-  attackMsg += `👹 ${enemy.name} HP: ${enemy.hp}/${enemy.maxHp}\n`;
+  attackMsg += `👹 ${enemy.name} HP: ${Math.floor(enemy.hp)}/${Math.floor(enemy.maxHp)}\n`;
 
   // Check if player died
   if (run.currentHp <= 0) {
@@ -610,7 +610,7 @@ async function processTreasure(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -711,7 +711,7 @@ async function processEventChoice(userId, choiceId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -743,7 +743,7 @@ async function processSkip(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';

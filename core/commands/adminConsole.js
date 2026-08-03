@@ -1186,7 +1186,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     //   admin sandbox giveskill <skill> [lvl] — grant a skill to sandbox
     if (sub === 'sandbox') {
         const AdminSandbox = require('../models/AdminSandbox');
-        const senderName = m?.pushName || senderJid.split('@')[0];
+        const senderName = m?.pushName || economy.getDisplayName(senderJid);
         const sandboxSub = (args[1] || '').toLowerCase();
 
         // ── sandbox on — activate sandbox mode ──

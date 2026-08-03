@@ -5466,7 +5466,7 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
 
   const player = {
     jid: senderJid,
-    name: user.nickname || user.profile?.nickname || senderJid.split('@')[0],
+    name: user.nickname || user.profile?.nickname || economy.getDisplayName(senderJid),
     class: userClass,
     isDead: false,
     stats: {
@@ -5705,13 +5705,13 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;
-    msg += `HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}\n`;
+    msg += `HP: ${Math.floor(encounter.enemy.hp)}/${Math.floor(encounter.enemy.maxHp)}\n`;
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
   } else if (encounter.type === 'wild_summon') {
     msg += `🐉 *Floor ${newFloor}* — Wild ${encounter.wildSummonSpecies} appeared!*\n`;
-    msg += `HP: ${encounter.enemy.stats.hp}/${encounter.enemy.stats.maxHp}\n`;
+    msg += `HP: ${Math.floor(encounter.enemy.stats.hp)}/${Math.floor(encounter.enemy.stats.maxHp)}\n`;
     msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
@@ -6212,7 +6212,7 @@ const initAdventure = async (
   if (solo && senderJid) {
     const user = economy.getUser(senderJid);
     const name =
-      user?.nickname || user?.profile?.nickname || senderJid.split("@")[0];
+      user?.nickname || user?.profile?.nickname || economy.getDisplayName(senderJid);
     state.players.push({
       jid: senderJid,
       name: name,
@@ -7472,7 +7472,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       try {
         const DragonGod = require('../models/DragonGod');
         // Try to resolve the player's display name for the historical record.
-        let displayName = player.name || player.pushName || player.jid.split('@')[0];
+        let displayName = player.name || player.pushName || economy.getDisplayName(player.jid);
         if (!displayName || displayName === 'Unknown') {
           // 💡 PERF PATCH 2026-07-27: previously called
           // sock.profilePictureUrl?.(player.jid) with NO timeout — could
@@ -7480,7 +7480,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
           // whose two branches returned the SAME value (player.jid.split('@')[0]),
           // making the entire call dead code that just blocked the event loop.
           // Removed the call; displayName is assigned by the line below.
-          displayName = displayName || player.jid.split('@')[0];
+          displayName = displayName || economy.getDisplayName(player.jid);
         }
         // Also try to fetch the actual WhatsApp pushName from the message
         // (sock might have it cached). Fall back to JID phone number.
@@ -7498,7 +7498,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
           // We lost the race. Another player was crowned first.
           // Roll back: do NOT deduct resources, do NOT change class.
           // Tell the player they will become a Dragon Lord instead.
-          const winnerName = crowned.dragonGodName || crowned.dragonGodJid.split('@')[0];
+          const winnerName = crowned.dragonGodName || economy.getDisplayName(crowned.dragonGodJid);
           let raceLostMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
           raceLostMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
           raceLostMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
@@ -7667,7 +7667,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
         try {
           const DragonGod = require('../models/DragonGod');
           const record = await DragonGod.getCurrent();
-          const godName = (record && record.dragonGodName) || player.name || player.jid.split('@')[0];
+          const godName = (record && record.dragonGodName) || player.name || economy.getDisplayName(player.jid);
 
           let announce = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
           announce    += `┃  🌊🐲 *THE LEVIATHAN HAS FALLEN* 🐲🌊  ┃\n`;

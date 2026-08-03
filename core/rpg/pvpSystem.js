@@ -258,7 +258,7 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0) {
         // between challenge and accept, so we still re-verify at accept time.
         const target = economy.getUser(resolvedTarget);
         if ((target?.wallet || 0) < stake) {
-            return { success: false, message: `❌ ${target?.nickname || resolvedTarget.split('@')[0]} doesn't have enough Zeni to match that stake!` };
+            return { success: false, message: `❌ ${target?.nickname || economy.getDisplayName(resolvedTarget)} doesn't have enough Zeni to match that stake!` };
         }
     }
 
@@ -420,7 +420,7 @@ function buildDuelPlayer(jid, userData, stats, idx) {
     const maxEnergy = stats.maxEnergy || 200;
     const player = {
         jid,
-        name: userData.nickname || jid.split('@')[0],
+        name: userData.nickname || economy.getDisplayName(jid),
         hp: stats.maxHp || stats.hp,
         maxHp: stats.maxHp || stats.hp,
         energy: maxEnergy,
@@ -844,7 +844,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                 if (bountyCheckOnStayer.length > 0) {
                     const penaltyResult = await bountySystem.failedHuntPenalty(fleeingJid, stayingJid);
                     if (penaltyResult.success && penaltyResult.penaltyPaid > 0) {
-                        let fleePenaltyMsg = `\n\n💸 *BOUNTY HUNT FAILED:* ${fleeingUser.nickname || fleeingJid.split('@')[0]} paid ${penaltyResult.penaltyPaid.toLocaleString()} ${ZENI} penalty for fleeing.`;
+                        let fleePenaltyMsg = `\n\n💸 *BOUNTY HUNT FAILED:* ${fleeingUser.nickname || economy.getDisplayName(fleeingJid)} paid ${penaltyResult.penaltyPaid.toLocaleString()} ${ZENI} penalty for fleeing.`;
                         if (penaltyResult.defendedBounties && penaltyResult.defendedBounties.length > 0) {
                             fleePenaltyMsg += `\n🛡️ *BOUNTY DEFENDED!* 3 challengers defeated — bounty cleared!`;
                         }
