@@ -398,6 +398,11 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
 async function renderDetailCard(summon, user) {
   const W = 800;
   const H = 500;
+  // 💡 FIX 2026-08-03: createCanvas was not defined here — it's only
+  // available via getCanvas(). The old code at line 152 destructured it
+  // locally, but this function used it without importing it, causing
+  // 'createCanvas is not defined' → image render failed → text fallback.
+  const { createCanvas } = getCanvas();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
