@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const GuildModel = require('../models/Guild');
 const System = require('../models/System');
 const connectDB = require('../../db');
+const economy = require('./economy');
 
 const BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;
 
@@ -592,7 +593,7 @@ function inviteToGuild(inviterJid, inviteeJid) {
 
   return {
     success: true,
-    message: `✅ Invited @${inviteeJid.split('@')[0]} to "${guildName}"!
+    message: `✅ Invited @${economy.getDisplayName(inviteeJid)} to "${guildName}"!
 
 ⏳ *Time:* 1 hour to accept.
 They can accept with: ${botConfig.getPrefix()} accept`
@@ -749,7 +750,7 @@ async function promoteToAdmin(ownerJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${memberJid.split('@')[0]} promoted to officer!`,
+    message: `✅ @${economy.getDisplayName(memberJid)} promoted to officer!`,
     targetJid: memberJid,
     guildName: guildName
   };
@@ -786,7 +787,7 @@ async function demoteAdmin(ownerJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${adminJid.split('@')[0]} demoted from officer!`,
+    message: `✅ @${economy.getDisplayName(adminJid)} demoted from officer!`,
     targetJid: adminJid,
     guildName: guildName
   };
@@ -840,7 +841,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${memberJid.split('@')[0]} has been kicked from "${guildName}"!`,
+    message: `✅ @${economy.getDisplayName(memberJid)} has been kicked from "${guildName}"!`,
     targetJid: memberJid,
     guildName: guildName
   };
@@ -866,7 +867,7 @@ function setMemberTitle(ownerJid, targetJid, title) {
 
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} title set to: ${title}`
+    message: `✅ @${economy.getDisplayName(targetJid)} title set to: ${title}`
   };
 }
 
@@ -954,7 +955,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
   await syncGuild(guildName);
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} is now a *${newRole}*.`,
+    message: `✅ @${economy.getDisplayName(targetJid)} is now a *${newRole}*.`,
   };
 }
 

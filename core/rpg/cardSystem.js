@@ -491,7 +491,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
   }
 
   const copyInfo = uc ? `\n📋  *Copy:* #${uc.copyNumber} / ${stat?.maxCopies || '?'}` : '';
-  const ownerTag = uc ? `\n👤  *Owner:* @${uc.userId.split('@')[0]}` : '';
+  const ownerTag = uc ? `\n👤  *Owner:* @${economy.getDisplayName(uc.userId)}` : '';
 
   // 💡 FIX: For event cards, show the actual anime series if available.
   // The animeName field currently stores the event name (e.g., "Chinese
@@ -1787,7 +1787,7 @@ async function cmdCltr(reply, chatId, args = []) {
 
     collectors.forEach((col, i) => {
       const emoji = medals[i] || '🔹';
-      msg += `${emoji} *${i + 1}. @${col._id.split('@')[0]}*\n`;
+      msg += `${emoji} *${i + 1}. @${economy.getDisplayName(col._id)}*\n`;
       msg += `   📊 ${col.count} card(s)\n\n`;
       mentions.push(col._id);
     });
@@ -2309,7 +2309,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
     pending.forEach(l => {
       msg += `🆔 ID: \`${l._id}\`\n`;
       msg += `📂 Deck: *${l.deckName}*\n`;
-      msg += `👤 Seller: @${l.sellerId.split('@')[0]}\n`;
+      msg += `👤 Seller: @${economy.getDisplayName(l.sellerId)}\n`;
       msg += `💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
       msg += `━━━━━━━━━━━━━━━\n`;
     });
@@ -2359,7 +2359,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
   active.forEach((l, i) => {
     msg += `*${i + 1}.* 📂 *${l.deckName}*\n`;
     msg += `   💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
-    msg += `   👤 Seller: @${l.sellerId.split('@')[0]}\n\n`;
+    msg += `   👤 Seller: @${economy.getDisplayName(l.sellerId)}\n\n`;
   });
   msg += `💡 Use \`${p} eshop deck buy <number>\` to purchase.`;
   return reply(msg, { mentions: active.map(l => l.sellerId) });
@@ -2575,7 +2575,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${mentioned.split('@')[0]}.`, { mentions: [mentioned] }), true;
+    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${economy.getDisplayName(mentioned)}.`, { mentions: [mentioned] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
@@ -2592,7 +2592,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${mentioned.split('@')[0]}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [mentioned] }), true;
+  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(mentioned)}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [mentioned] }), true;
 }
 
 // 💡 FEATURE 9: Erc — same as Rc but for event cards. Searches by event
@@ -2621,7 +2621,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No event card matching "${query}" found for @${mentioned.split('@')[0]}.`, { mentions: [mentioned] }), true;
+    return reply(`❌ No event card matching "${query}" found for @${economy.getDisplayName(mentioned)}.`, { mentions: [mentioned] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
@@ -2637,7 +2637,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${mentioned.split('@')[0]}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [mentioned] }), true;
+  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(mentioned)}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [mentioned] }), true;
 }
 
 // 💡 FEATURE 10: Tcoll — TRUE collection. Shows ALL cards the user owns,
@@ -2818,7 +2818,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   await uc.save();
 
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🎁 *GIFT SENT!*\n\n@${senderJid.split('@')[0]} gave *${card.cardName}* to @${targetJid.split('@')[0]}!`, { mentions: [senderJid, targetJid] });
+  return reply(`🎁 *GIFT SENT!*\n\n@${economy.getDisplayName(senderJid)} gave *${card.cardName}* to @${economy.getDisplayName(targetJid)}!`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
@@ -2954,7 +2954,7 @@ async function cmdBuyCard(senderJid, reply, args = []) {
     const card = CARD_INDEX()[l.cardId];
     msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
     msg += `   💰 Price: ${ZENI()}${l.price.toLocaleString()}\n`;
-    msg += `   👤 Seller: @${l.sellerId.split('@')[0]}\n\n`;
+    msg += `   👤 Seller: @${economy.getDisplayName(l.sellerId)}\n\n`;
   });
 
   msg += `💡 Use \`${p} buycard <number>\` to purchase.`;
@@ -3088,7 +3088,7 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
 
   try {
     await CardDeck.create({ userId: targetJid, name: name, cards: [] });
-    return reply(`✅ Created custom deck *"${name}"*${targetJid !== senderJid ? ` for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
+    return reply(`✅ Created custom deck *"${name}"*${targetJid !== senderJid ? ` for @${economy.getDisplayName(targetJid)}` : ''}.`, { mentions: [targetJid] });
   } catch (err) {
     if (err.code === 11000) return reply(`❌ A deck with the name *"${name}"* already exists for this user.`);
     return reply('❌ Failed to create deck.');
@@ -3253,12 +3253,12 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name> [@user]`, `${p} delete deck MyDeck`);
 
   const deck = await CardDeck.findOne({ userId: targetJid, name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
-  if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${targetJid.split('@')[0]}` : ''}.`, { mentions: [targetJid] });
+  if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${economy.getDisplayName(targetJid)}` : ''}.`, { mentions: [targetJid] });
 
   try {
     await UserCard.updateMany({ _id: { $in: deck.cards } }, { inCustomDeck: false, customDeckName: null, customDeckSlot: null });
     await CardDeck.findByIdAndDelete(deck._id);
-    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* ${targetJid !== senderJid ? `belonging to @${targetJid.split('@')[0]}` : ''} has been removed. Cards returned to collection.`, { mentions: [targetJid] });
+    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* ${targetJid !== senderJid ? `belonging to @${economy.getDisplayName(targetJid)}` : ''} has been removed. Cards returned to collection.`, { mentions: [targetJid] });
   } catch (err) { return reply('❌ Deletion failed.'); }
 }
 
@@ -3453,7 +3453,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           const engine = require('../engine');
           if (typeof engine.addCardsMod === 'function') engine.addCardsMod(target);
         } catch (e) {}
-        return reply(`✅ @${target.split('@')[0]} is now a Card Moderator.`, { mentions: [target] }), true;
+        return reply(`✅ @${economy.getDisplayName(target)} is now a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'del' || sub === 'remove') {
         const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
@@ -3468,13 +3468,13 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           const engine = require('../engine');
           if (typeof engine.delCardsMod === 'function') engine.delCardsMod(target);
         } catch (e) {}
-        return reply(`✅ @${target.split('@')[0]} is no longer a Card Moderator.`, { mentions: [target] }), true;
+        return reply(`✅ @${economy.getDisplayName(target)} is no longer a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'list') {
         if (inst.modJids.size === 0) return reply('🃏 No card moderators currently assigned.'), true;
         let modMsg = `🃏 *CARD MODERATORS* 🃏\n\n`;
         const modsArr = Array.from(inst.modJids);
-        modsArr.forEach((m, i) => modMsg += `${i+1}. @${m.split('@')[0]}\n`);
+        modsArr.forEach((m, i) => modMsg += `${i+1}. @${economy.getDisplayName(m)}\n`);
         return reply(modMsg, { mentions: modsArr }), true;
       }
       return reply(`🃏 *Card Moderator System*\n\n➥ \`${p} cardmod add @user\`\n➥ \`${p} cardmod del @user\`\n➥ \`${p} cardmod list\``), true;

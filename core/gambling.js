@@ -1,5 +1,6 @@
 const fs = require('fs');
 const botConfig = require('../botConfig');
+const economy = require('./rpg/economy');
 
 // ============================================
 // GAMBLING SYSTEM - 6 Different Games
@@ -194,7 +195,7 @@ function coinflip(userId, amount, choice, economyModule) {
         success: true,
         won: true,
         message: `${coinVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -215,7 +216,7 @@ function coinflip(userId, amount, choice, economyModule) {
       success: true,
       won: true,
       message: `${coinVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *YOU WON!* 🎉
@@ -235,7 +236,7 @@ function coinflip(userId, amount, choice, economyModule) {
       success: true,
       won: false,
       message: `${coinVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *YOU LOST!* 😢
@@ -293,7 +294,7 @@ function diceRoll(userId, amount, economyModule) {
       success: true,
       won: null,
       message: `${diceVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🤝 *IT'S A TIE!* 🤝
@@ -316,7 +317,7 @@ function diceRoll(userId, amount, economyModule) {
         success: true,
         won: true,
         message: `${diceVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -337,7 +338,7 @@ function diceRoll(userId, amount, economyModule) {
       success: true,
       won: true,
       message: `${diceVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *YOU WON!* 🎉
@@ -357,7 +358,7 @@ function diceRoll(userId, amount, economyModule) {
       success: true,
       won: false,
       message: `${diceVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *YOU LOST!* 😢
@@ -455,7 +456,7 @@ function slots(userId, amount, economyModule) {
         success: true,
         won: true,
         message: `${reelVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -475,7 +476,7 @@ function slots(userId, amount, economyModule) {
       success: true,
       won: true,
       message: `${reelVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ${result === 'JACKPOT' ? '🎊 *CONGRATULATIONS! JACKPOT!* 🎊' : '🎉 *CONGRATULATIONS! YOU WIN!* 🎉'}
@@ -494,7 +495,7 @@ ${result === 'JACKPOT' ? '🎊 *CONGRATULATIONS! JACKPOT!* 🎊' : '🎉 *CONGRA
       success: true,
       won: false,
       message: `${reelVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *NO MATCH! BETTER LUCK NEXT TIME!* 😢
@@ -1030,7 +1031,7 @@ function roulette(userId, amount, bet, economyModule) {
 ${spinVisual}
 ━━━━━━━━━━━━━━━
 
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
 
 🎰 *Result:* ${colorEmoji} *${result}* (${color.toUpperCase()})
@@ -1054,7 +1055,7 @@ ${spinVisual}
 ${spinVisual}
 ━━━━━━━━━━━━━━━
 
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${betType} (${getZENI()}${amount.toLocaleString()})
 
 🎰 *Result:* ${colorEmoji} *${result}* (${color.toUpperCase()})
@@ -1179,7 +1180,7 @@ function crash(userId, amount, multiplierStr, economyModule) {
     success: true,
     won: won,
     message: `${crashVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ${outcomeMessage}
@@ -1285,7 +1286,7 @@ function startMines(userId, amount, mineCount, economyModule) {
 ━━━━━━━━━━━━━━━
 ${gridVisual}
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟 *Bet:* ${getZENI()}${amount.toLocaleString()}
 💣 *Mines:* ${mines}
 📈 *Multiplier:* 1.00x
@@ -1333,7 +1334,7 @@ function minesPick(userId, cellIndex, economyModule) {
 ━━━━━━━━━━━━━━━
 ${gridVisual}
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
 
 😢 *YOU HIT A MINE AT CELL ${cellIndex}!*
@@ -1371,7 +1372,7 @@ ${gridVisual}
 ━━━━━━━━━━━━━━━
 ${gridVisual}
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Bet:* ${getZENI()}${game.bet.toLocaleString()}
 📈 *Multiplier:* ${game.multiplier}x
 💵 *Current Value:* ${getZENI()}${Math.floor(game.bet * game.multiplier).toLocaleString()}
@@ -1431,7 +1432,7 @@ function minesCashOut(userId, economyModule) {
 ━━━━━━━━━━━━━━━
 ${gridVisual}
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${game.bet.toLocaleString()}
 
 ${outcomeMessage}
@@ -1487,7 +1488,7 @@ ${horses}
         success: true,
         won: true,
         message: `${horseVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -1507,7 +1508,7 @@ ${horses}
       success: true,
       won: true,
       message: `${horseVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *HORSE ${winner} WON! YOU WIN!* 🎉
@@ -1526,7 +1527,7 @@ ${horses}
       success: true,
       won: false,
       message: `${horseVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *HORSE ${winner} WON!* You lost.
@@ -1582,7 +1583,7 @@ function lottery(userId, amount, economyModule) {
         success: true,
         won: true,
         message: `${lottoVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -1602,7 +1603,7 @@ function lottery(userId, amount, economyModule) {
       success: true,
       won: true,
       message: `${lottoVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎊 *JACKPOT!!! YOU WON THE LOTTERY!* 🎊
@@ -1621,7 +1622,7 @@ function lottery(userId, amount, economyModule) {
       success: true,
       won: false,
       message: `${lottoVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *BETTER LUCK NEXT TIME!*
@@ -1676,7 +1677,7 @@ function rps(userId, amount, choice, economyModule) {
       success: true,
       won: null,
       message: `${rpsVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🤝 *IT'S A TIE!* 🤝
@@ -1699,7 +1700,7 @@ function rps(userId, amount, choice, economyModule) {
         success: true,
         won: true,
         message: `${rpsVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -1719,7 +1720,7 @@ function rps(userId, amount, choice, economyModule) {
       success: true,
       won: true,
       message: `${rpsVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎉 *YOU WON!* 🎉
@@ -1738,7 +1739,7 @@ function rps(userId, amount, choice, economyModule) {
       success: true,
       won: false,
       message: `${rpsVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *YOU LOST!* 😢
@@ -1802,7 +1803,7 @@ function penalty(userId, amount, direction, economyModule) {
         success: true,
         won: true,
         message: `${penaltyVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -1824,7 +1825,7 @@ function penalty(userId, amount, direction, economyModule) {
       success: true,
       won: true,
       message: `${penaltyVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🥅 *GOAL!!! YOU SCORED!* 🎉
@@ -1843,7 +1844,7 @@ function penalty(userId, amount, direction, economyModule) {
       success: true,
       won: false,
       message: `${penaltyVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *MISSED! SAVED BY THE KEEPER!* 🧤
@@ -1901,7 +1902,7 @@ function guessNumber(userId, amount, guess, economyModule) {
         success: true,
         won: true,
         message: `${guessVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ⚠️ *DAILY CAP REACHED!*
@@ -1921,7 +1922,7 @@ function guessNumber(userId, amount, guess, economyModule) {
       success: true,
       won: true,
       message: `${guessVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🎯 *BULLSEYE! CORRECT GUESS!* 🎉
@@ -1940,7 +1941,7 @@ function guessNumber(userId, amount, guess, economyModule) {
       success: true,
       won: false,
       message: `${guessVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 😢 *WRONG GUESS!*
@@ -2003,7 +2004,7 @@ function higherLower(userId, amount, guess, economyModule) {
 ║  Second Card: *${secondCard}*
 ╚═══════════════╝
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 🤝 *IT'S A TIE!* 🤝
@@ -2214,7 +2215,7 @@ function plinko(userId, amount, risk, economyModule) {
 ━━━━━━━━━━━━━━━
 ${pathStr}
 ━━━━━━━━━━━━━━━
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 🎯 *Risk:* ${r.toUpperCase()}
 
@@ -2336,7 +2337,7 @@ function scratchCard(userId, amount, economyModule) {
   return {
     success: true,
     message: `${scratchVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Card Cost:* ${getZENI()}${amount.toLocaleString()}
 
 ${outcomeMessage}
@@ -2422,7 +2423,7 @@ ${finalCups}
   return {
     success: true,
     message: `${cupResultVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 👉 *Picked Cup:* ${cup}
 
@@ -2516,7 +2517,7 @@ function wheelOfFortune(userId, amount, economyModule) {
   return {
     success: true,
     message: `${wheelVisual}
-👤 *Player:* @${user.nickname || userId.split('@')[0]}
+👤 *Player:* @${economy.getDisplayName(userId)}
 🎟️ *Your Bet:* ${getZENI()}${amount.toLocaleString()}
 
 ${outcomeMessage}

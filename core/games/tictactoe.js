@@ -53,7 +53,7 @@ function getLeaderboardText() {
     return sorted.map(([jid, data], i) => {
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
         const score = data.score >= 0 ? `+${data.score}` : data.score;
-        return `${medal} @${jid.split('@')[0]} • ${score} pts`;
+        return `${medal} @${economy.getDisplayName(jid)} • ${score} pts`;
     }).join('\n');
 }
 

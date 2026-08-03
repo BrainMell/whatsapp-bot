@@ -1251,7 +1251,7 @@ async function cmdDuel(sock, chatId, senderJid, args) {
 
   const targetSummon = await summonSystem.getActiveSummon(targetUser);
   if (!targetSummon) {
-    await sock.sendMessage(chatId, { text: `❌ @${targetJid.split('@')[0]} doesn't have an active summon deployed.`, mentions: [targetJid] });
+    await sock.sendMessage(chatId, { text: `❌ @${economy.getDisplayName(targetJid)} doesn't have an active summon deployed.`, mentions: [targetJid] });
     return;
   }
 

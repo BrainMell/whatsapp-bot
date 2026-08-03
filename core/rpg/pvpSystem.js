@@ -570,7 +570,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                         `${statusMsg}\n\n` +
                         `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
                         `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
-                        `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
+                        `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* — It's your turn!\n` +
                         `———————————\n` +
                         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
                         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
@@ -1131,7 +1131,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                     `${actionResult}\n\n` +
                     `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
                     `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
-                    `🎯 *@${nextPlayer.jid.split('@')[0]}* — It's your turn!\n` +
+                    `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* — It's your turn!\n` +
                     `———————————\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
                     `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +

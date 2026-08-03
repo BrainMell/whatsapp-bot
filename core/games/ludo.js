@@ -478,7 +478,7 @@ module.exports = {
 ${playerList}
 
 ┌───────────────┐
-🎯 Current Turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}
+🎯 Current Turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}
 
 📜 *RULES:*
 • Roll 6 to enter
@@ -518,7 +518,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     const movablePieces = game.getMovablePieces(player);
 
     let message = BOT_MARKER + `🎲 *DICE ROLL*\n\n`;
-    message += `@${player.fullJid.split('@')[0]} rolled: *${rollResult.roll}*\n\n`;
+    message += `@${economy.getDisplayName(player.fullJid)} rolled: *${rollResult.roll}*\n\n`;
 
     if (rollResult.burned) {
       message += `⚡ *BURNED!* ⚡\n3 consecutive 6s! Turn skipped!\n\n`;
@@ -528,7 +528,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       // another roll despite being burned.
       game.hasExtraTurn = false;
       game.nextTurn();
-      message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}`;
+      message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
     } else if (movablePieces.length === 0) {
       message += `❌ No movable pieces!\n\n`;
       if (rollResult.extraTurn) {
@@ -536,7 +536,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         game.hasExtraTurn = true;
       } else {
         game.nextTurn();
-        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}`;
+        message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
       }
     } else if (movablePieces.length === 1) {
       const pieceToMove = movablePieces[0];
@@ -548,14 +548,14 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         message += `❌ Move blocked! ${moveResult.error || 'Cannot move there.'}\n\n`;
         game.hasExtraTurn = false;
         game.nextTurn();
-        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}`;
+        message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
       } else {
       if (moveResult.captured) message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
       if (moveResult.reachedHome) message += `🏠 *PIECE HOME!* 🏠\n\n`;
       if (moveResult.won) {
         const reward = 500;
         economy.addMoney(player.fullJid, reward);
-        message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
+        message += `👑 *VICTORY!* 👑\n@${economy.getDisplayName(player.fullJid)} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
         try {
           const socialSystem = require('../rpg/socialSystem');
           const gamePlayers = game.players.map(p => p.fullJid);
@@ -573,7 +573,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
           game.hasExtraTurn = false;
         } else {
           game.nextTurn();
-          message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
+          message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
         }
       }
       } // end of else (moveResult.success)
@@ -612,13 +612,13 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     }
 
     let message = BOT_MARKER + `🎮 *MOVE COMPLETE*\n\n`;
-    message += `@${player.fullJid.split('@')[0]} moved piece ${pieceNum}\n\n`;
+    message += `@${economy.getDisplayName(player.fullJid)} moved piece ${pieceNum}\n\n`;
     if (moveResult.captured) message += `⚔️ *CAPTURED!* ⚔️\nOpponent sent back to base!\n\n`;
     if (moveResult.reachedHome) message += `🏠 *PIECE HOME!* 🏠\n\n`;
     if (moveResult.won) {
       const reward = 500;
       economy.addMoney(player.fullJid, reward);
-      message += `👑 *VICTORY!* 👑\n@${player.fullJid.split('@')[0]} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
+      message += `👑 *VICTORY!* 👑\n@${economy.getDisplayName(player.fullJid)} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
       try {
         const socialSystem = require('../rpg/socialSystem');
         const gamePlayers = game.players.map(p => p.fullJid);
@@ -636,7 +636,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         game.hasExtraTurn = false;
       } else {
         game.nextTurn();
-        message += `Next turn: @${game.getCurrentPlayer().fullJid.split('@')[0]}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
+        message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
       }
     }
 
@@ -656,7 +656,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     const imageBuffer = await renderBoard(game, sock);
     const currentPlayer = game.getCurrentPlayer();
-    const message = BOT_MARKER + `🎲 *LUDO BOARD*\n\nCurrent turn: @${currentPlayer.fullJid.split('@')[0]}\nLast roll: ${game.lastRoll || 'None'}\n\nUse: \`${botConfig.getPrefix()} ludo roll\``;
+    const message = BOT_MARKER + `🎲 *LUDO BOARD*\n\nCurrent turn: @${economy.getDisplayName(currentPlayer.fullJid)}\nLast roll: ${game.lastRoll || 'None'}\n\nUse: \`${botConfig.getPrefix()} ludo roll\``;
     if (imageBuffer) {
       await sock.sendMessage(chatId, { image: imageBuffer, caption: message, mentions: [currentPlayer.fullJid] }, { quoted: m });
     } else {

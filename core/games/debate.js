@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const botConfig = require('../../botConfig');
 const system = require('../utils/system'); // NEW: Database System Module
+const economy = require('../rpg/economy');
 
 // Active debates storage
 let activeDebates = {};
@@ -108,7 +109,7 @@ module.exports = {
 📌 *Topic:* ${topic}
 
 ⚔️ *Debaters:*
-@${debater1Jid.split('@')[0]} vs @${debater2Jid.split('@')[0]}
+@${economy.getDisplayName(debater1Jid)} vs @${economy.getDisplayName(debater2Jid)}
 
 ━━━━━━━━━━━━━━━
 🔒 Group locked
@@ -280,7 +281,7 @@ Respond ONLY in this JSON format:
 
 📌 *Topic:* ${debate.topic}
 
-🏆 *WINNER:* @${winnerJid.split('@')[0]}
+🏆 *WINNER:* @${economy.getDisplayName(winnerJid)}
 
 📊 *SCORES:*
 @${debater1Name}: ${verdict.debater1_score}
@@ -344,7 +345,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         let msg = BOT_MARKER + "🏆 *DEBATE LEADERBOARD* 🏆\n\n";
         sorted.forEach((u, i) => {
             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "👤";
-            msg += `${medal} @${u.jid.split('@')[0]}\n`;
+            msg += `${medal} @${economy.getDisplayName(u.jid)}\n`;
             msg += `   Wins: ${u.wins} | Avg Score: ${Math.round(u.totalScore / u.debates)}\n\n`;
         });
 
@@ -488,7 +489,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
 
         return { 
             success: true, 
-            message: `🎫 @${userId.split('@')[0]} is now a temporary spectator! You have 2 minutes to contribute 1 relevant message.` 
+            message: `🎫 @${economy.getDisplayName(userId)} is now a temporary spectator! You have 2 minutes to contribute 1 relevant message.` 
         };
     },
 
@@ -510,7 +511,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
 
         if (reason) {
             await sock.sendMessage(chatId, { 
-                text: BOT_MARKER + `🎫 @${userId.split('@')[0]}'s spectator pass revoked: ${reason}`,
+                text: BOT_MARKER + `🎫 @${economy.getDisplayName(userId)}'s spectator pass revoked: ${reason}`,
                 contextInfo: { mentionedJid: [userId] }
             });
         }

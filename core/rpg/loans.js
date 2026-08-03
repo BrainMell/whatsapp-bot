@@ -143,7 +143,7 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
 
   return { 
     success: true, 
-    msg: `📝 *LOAN REQUEST SENT*\n\nTo: @${lenderJid.split('@')[0]}
+    msg: `📝 *LOAN REQUEST SENT*\n\nTo: @${economy.getDisplayName(lenderJid)}
 Amount: ${getZENI()}${amount}
 Interest: ${interestRate}%
 Duration: ${durationMinutes} mins
@@ -188,11 +188,11 @@ function acceptLoan(lenderJid) {
   // the borrower got free money and the lender lost nothing — but the loan
   // was still recorded as active, so the borrower would later be forced to
   // repay money they never received.
-  const deductOk = economy.removeMoney(lenderJid, request.amount, `Loan to @${request.borrowerJid.split('@')[0]}`);
+  const deductOk = economy.removeMoney(lenderJid, request.amount, `Loan to @${economy.getDisplayName(request.borrowerJid)}`);
   if (!deductOk) {
     return failAndCleanup(`❌ Failed to deduct funds — your wallet may have changed.`);
   }
-  const creditOk = economy.addMoney(request.borrowerJid, request.amount, `Loan from @${lenderJid.split('@')[0]}`);
+  const creditOk = economy.addMoney(request.borrowerJid, request.amount, `Loan from @${economy.getDisplayName(lenderJid)}`);
   if (!creditOk) {
     // Roll back the deduction so the lender doesn't lose money
     economy.addMoney(lenderJid, request.amount, `Loan rollback (borrower credit failed)`);
@@ -219,7 +219,7 @@ function acceptLoan(lenderJid) {
 
   return { 
     success: true, 
-    msg: `🤝 *LOAN ACTIVE*\n\nSent ${getZENI()}${request.amount} to @${request.borrowerJid.split('@')[0]}
+    msg: `🤝 *LOAN ACTIVE*\n\nSent ${getZENI()}${request.amount} to @${economy.getDisplayName(request.borrowerJid)}
 
 They must repay ${getZENI()}${totalRepayment} in ${request.duration} minutes.
 
@@ -242,7 +242,7 @@ function declineLoan(lenderJid) {
 
   return { 
     success: true, 
-    msg: `❌ *LOAN DECLINED*\n\nYou rejected the loan request from @${request.borrowerJid.split('@')[0]}.`
+    msg: `❌ *LOAN DECLINED*\n\nYou rejected the loan request from @${economy.getDisplayName(request.borrowerJid)}.`
   };
 }
 

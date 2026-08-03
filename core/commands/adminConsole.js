@@ -373,7 +373,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression.statPoints = (user.progression.statPoints || 0) + (level - oldLevel) * 2;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *LEVEL SET*\n\n👤 @${target.split('@')[0]}\n📊 Level: ${oldLevel} → *${level}*\n⚡ XP set to ${xpForLevel.toLocaleString()}\n💎 +${(level - oldLevel) * 2} stat points granted`,
+            text: BOT_MARKER + `✅ *LEVEL SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Level: ${oldLevel} → *${level}*\n⚡ XP set to ${xpForLevel.toLocaleString()}\n💎 +${(level - oldLevel) * 2} stat points granted`,
             mentions: [target]
         });
     }
@@ -395,7 +395,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression.allocatedStats[statName] = value;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *STAT SET*\n\n👤 @${target.split('@')[0]}\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*`,
+            text: BOT_MARKER + `✅ *STAT SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*`,
             mentions: [target]
         });
     }
@@ -413,7 +413,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.wallet = amount;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *WALLET SET*\n\n👤 @${target.split('@')[0]}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${amount.toLocaleString()}*`,
+            text: BOT_MARKER + `✅ *WALLET SET*\n\n👤 @${economy.getDisplayName(target)}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${amount.toLocaleString()}*`,
             mentions: [target]
         });
     }
@@ -442,7 +442,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!result) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to add item.' });
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *ITEM GIVEN*\n\n👤 @${target.split('@')[0]}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}\n🆔 \`${item.id}\``,
+            text: BOT_MARKER + `✅ *ITEM GIVEN*\n\n👤 @${economy.getDisplayName(target)}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}\n🆔 \`${item.id}\``,
             mentions: [target]
         });
     }
@@ -470,7 +470,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!result) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to remove item (not enough in inventory).' });
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *ITEM REMOVED*\n\n👤 @${target.split('@')[0]}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}`,
+            text: BOT_MARKER + `✅ *ITEM REMOVED*\n\n👤 @${economy.getDisplayName(target)}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}`,
             mentions: [target]
         });
     }
@@ -501,7 +501,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.skills[skill.id] = level;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *SKILL GRANTED*\n\n👤 @${target.split('@')[0]}\n✨ *${skill.name}* (Lv.${oldLevel || 0} → *${level}*)\n🆔 \`${skill.id}\``,
+            text: BOT_MARKER + `✅ *SKILL GRANTED*\n\n👤 @${economy.getDisplayName(target)}\n✨ *${skill.name}* (Lv.${oldLevel || 0} → *${level}*)\n🆔 \`${skill.id}\``,
             mentions: [target]
         });
     }
@@ -520,13 +520,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
         if (!user.skills || !user.skills[skill.id]) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ @${target.split('@')[0]} doesn't have that skill.`, mentions: [target] });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ @${economy.getDisplayName(target)} doesn't have that skill.`, mentions: [target] });
         }
         const oldLevel = user.skills[skill.id];
         delete user.skills[skill.id];
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *SKILL REVOKED*\n\n👤 @${target.split('@')[0]}\n❌ *${skill.name}* (was Lv.${oldLevel})\n🆔 \`${skill.id}\``,
+            text: BOT_MARKER + `✅ *SKILL REVOKED*\n\n👤 @${economy.getDisplayName(target)}\n❌ *${skill.name}* (was Lv.${oldLevel})\n🆔 \`${skill.id}\``,
             mentions: [target]
         });
     }
@@ -550,7 +550,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.skills = {};
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *PLAYER RESET*\n\n👤 @${target.split('@')[0]}\n📊 Stats reset to 0 (refunded ${user.progression?.level * 2 || 0} points)\n✨ All skills revoked\n💰 Wallet/level unchanged`,
+            text: BOT_MARKER + `✅ *PLAYER RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Stats reset to 0 (refunded ${user.progression?.level * 2 || 0} points)\n✨ All skills revoked\n💰 Wallet/level unchanged`,
             mentions: [target]
         });
     }
@@ -573,7 +573,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.class = targetClass.id;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *FORCE EVOLVE*\n\n👤 @${target.split('@')[0]}\n🔄 ${oldName} → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n_All requirements bypassed. Stats/items unchanged._`,
+            text: BOT_MARKER + `✅ *FORCE EVOLVE*\n\n👤 @${economy.getDisplayName(target)}\n🔄 ${oldName} → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n_All requirements bypassed. Stats/items unchanged._`,
             mentions: [target]
         });
     }
@@ -592,7 +592,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression.statPoints = oldPoints + amount;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *STAT POINTS GRANTED*\n\n👤 @${target.split('@')[0]}\n💎 Stat Points: ${oldPoints} → *${oldPoints + amount}* (+${amount})`,
+            text: BOT_MARKER + `✅ *STAT POINTS GRANTED*\n\n👤 @${economy.getDisplayName(target)}\n💎 Stat Points: ${oldPoints} → *${oldPoints + amount}* (+${amount})`,
             mentions: [target]
         });
     }
@@ -610,7 +610,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.wallet = oldWallet + amount;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *ZENI GRANTED*\n\n👤 @${target.split('@')[0]}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${(oldWallet + amount).toLocaleString()}* (+${amount.toLocaleString()})`,
+            text: BOT_MARKER + `✅ *ZENI GRANTED*\n\n👤 @${economy.getDisplayName(target)}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${(oldWallet + amount).toLocaleString()}* (+${amount.toLocaleString()})`,
             mentions: [target]
         });
     }
@@ -629,7 +629,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.adventurerRank = rank;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *RANK SET*\n\n👤 @${target.split('@')[0]}\n🏆 Rank: ${oldRank} → *${rank}*`,
+            text: BOT_MARKER + `✅ *RANK SET*\n\n👤 @${economy.getDisplayName(target)}\n🏆 Rank: ${oldRank} → *${rank}*`,
             mentions: [target]
         });
     }
@@ -661,7 +661,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             cleared++;
         }
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *UNSTUCK*\n\n👤 @${target.split('@')[0]}\n🧹 Cleared ${cleared} combat state(s)\n_pendingActions cleared, combatProcessing reset_`,
+            text: BOT_MARKER + `✅ *UNSTUCK*\n\n👤 @${economy.getDisplayName(target)}\n🧹 Cleared ${cleared} combat state(s)\n_pendingActions cleared, combatProcessing reset_`,
             mentions: [target]
         });
     }
@@ -1071,7 +1071,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.skillPoints = amount;
         economy.saveUser(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *SKILL POINTS SET*\n\n👤 @${target.split('@')[0]}\n💎 Skill Points: ${oldPoints} → *${amount}*\n\n_Use \`${prefix} skill tree\` to spend them on abilities._`,
+            text: BOT_MARKER + `✅ *SKILL POINTS SET*\n\n👤 @${economy.getDisplayName(target)}\n💎 Skill Points: ${oldPoints} → *${amount}*\n\n_Use \`${prefix} skill tree\` to spend them on abilities._`,
             mentions: [target]
         });
     }
@@ -1089,7 +1089,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.skillPoints = oldPoints + amount;
         economy.saveUser(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *SKILL POINTS GRANTED*\n\n👤 @${target.split('@')[0]}\n💎 Skill Points: ${oldPoints} → *${oldPoints + amount}* (+${amount})`,
+            text: BOT_MARKER + `✅ *SKILL POINTS GRANTED*\n\n👤 @${economy.getDisplayName(target)}\n💎 Skill Points: ${oldPoints} → *${oldPoints + amount}* (+${amount})`,
             mentions: [target]
         });
     }

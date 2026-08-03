@@ -94,7 +94,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
   return {
     success: true,
     bounty,
-    message: `💰 *BOUNTY PLACED*\n\nTarget: @${targetJid.split('@')[0]}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`${P()} bounty claim @target\`_`,
+    message: `💰 *BOUNTY PLACED*\n\nTarget: @${economy.getDisplayName(targetJid)}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`${P()} bounty claim @target\`_`,
   };
 }
 
@@ -166,7 +166,7 @@ async function claimBounty(hunterJid, targetJid) {
     totalClaimed,
     totalFee,
     claimedBounties,
-    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${targetJid.split('@')[0]} and collected ${totalClaimed.toLocaleString()} Zeni!\nHunter fee: ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
+    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${economy.getDisplayName(targetJid)} and collected ${totalClaimed.toLocaleString()} Zeni!\nHunter fee: ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
   };
 }
 
@@ -215,14 +215,14 @@ async function failedHuntPenalty(hunterJid, targetJid) {
 
   let defenseMsg = '';
   if (defendedBounties.length > 0) {
-    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${targetJid.split('@')[0]} defeated ${DEFENDERS_WIN_THRESHOLD} challengers — ${defendedBounties.length} bounty(ies) cleared!`;
+    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${economy.getDisplayName(targetJid)} defeated ${DEFENDERS_WIN_THRESHOLD} challengers — ${defendedBounties.length} bounty(ies) cleared!`;
   }
 
   return {
     success: true,
     penaltyPaid: actualPenalty,
     defendedBounties,
-    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${targetJid.split('@')[0]}.${defenseMsg}`,
+    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${economy.getDisplayName(targetJid)}.${defenseMsg}`,
   };
 }
 

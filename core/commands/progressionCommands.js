@@ -39,7 +39,7 @@ async function handleCommandReward(sock, userId, chatId, hasGuildRole = false) {
       const newAchievements = progression.checkLevelAchievements(userId, xpResult.newLevel);
       
       let levelUpMsg = `🎉 *LEVEL UP!* 🎉\n\n`;
-      levelUpMsg += `@${userId.split('@')[0]} reached ${progression.getLevelDisplay(xpResult.newLevel)}!\n\n`;
+      levelUpMsg += `@${economy.getDisplayName(userId)} reached ${progression.getLevelDisplay(xpResult.newLevel)}!\n\n`;
       
       if (xpResult.levelsGained > 1) {
         levelUpMsg += `📈 *Jumped ${xpResult.levelsGained} levels!*\n\n`;
@@ -105,7 +105,7 @@ async function handleLevelCommand(sock, chatId, senderJid, args, m) {
     const progressBar = progression.getProgressBar(stats.xp.progress, 15);
     
     const isOwnProfile = targetJid === senderJid;
-    const displayName = isOwnProfile ? 'Your' : `@${targetJid.split('@')[0]}'s`;
+    const displayName = isOwnProfile ? 'Your' : `@${economy.getDisplayName(targetJid)}'s`;
     
     let message = `╔═══════════════════╗\n`;
     message += `║  📊 *${displayName.toUpperCase()} LEVEL* 📊  ║\n`;
@@ -176,7 +176,7 @@ async function handleXPTopCommand(sock, chatId, m) {
       mentions.push(jid);
       
       message += `${rankEmoji} *#${index + 1}* | ${progression.getLevelDisplay(user.level)}\n`;
-      message += `   @${jid.split('@')[0]}\n`;
+      message += `   @${economy.getDisplayName(jid)}\n`;
       message += `   💎 ${user.totalXP.toLocaleString()} XP | 📱 ${user.commandCount} cmds\n\n`;
     });
     
@@ -221,7 +221,7 @@ async function handleGPTopCommand(sock, chatId, m) {
       mentions.push(jid);
       
       message += `${rankEmoji} *#${index + 1}* | ${progression.getLevelDisplay(user.level)}\n`;
-      message += `   @${jid.split('@')[0]}\n`;
+      message += `   @${economy.getDisplayName(jid)}\n`;
       message += `   🎖️ ${user.totalGP.toLocaleString()} Total GP\n`;
       message += `   💰 ${user.gp.toLocaleString()} Current GP\n\n`;
     });
@@ -250,7 +250,7 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
     const targetJid = args[0]?.includes('@') ? args[0] : senderJid;
     const stats = progression.getUserStats(targetJid);
     const isOwnProfile = targetJid === senderJid;
-    const displayName = isOwnProfile ? 'Your' : `@${targetJid.split('@')[0]}'s`;
+    const displayName = isOwnProfile ? 'Your' : `@${economy.getDisplayName(targetJid)}'s`;
     
     let message = `╔═══════════════════╗\n`;
     message += `║  🏅 *${displayName.toUpperCase()} ACHIEVEMENTS* 🏅  ║\n`;

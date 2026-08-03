@@ -3060,11 +3060,11 @@ What to do:
                 if (res.type === "paid") {
                   // Notify both parties
                   await sock.sendMessage(res.borrower, {
-                    text: `💸 Your loan of ${ZENI}${res.amount.toLocaleString()} has been auto-repaid to @${res.lender.split("@")[0]}.`,
+                    text: `💸 Your loan of ${ZENI}${res.amount.toLocaleString()} has been auto-repaid to @${economy.getDisplayName(res.lender)}.`,
                     contextInfo: { mentionedJid: [res.lender] },
                   });
                   await sock.sendMessage(res.lender, {
-                    text: `💰 @${res.borrower.split("@")[0]} has auto-repaid their loan of ${ZENI}${res.amount.toLocaleString()}.`,
+                    text: `💰 @${economy.getDisplayName(res.borrower)} has auto-repaid their loan of ${ZENI}${res.amount.toLocaleString()}.`,
                     contextInfo: { mentionedJid: [res.borrower] },
                   });
                 } else if (res.type === "defaulted") {
@@ -3073,7 +3073,7 @@ What to do:
                     text: `🚨 *LOAN DEFAULT!* 🚨\n\nYou couldn't repay your debt. Your entire balance has been seized and given to the lender.\n\n🚫 You are now BLOCKED from using the bot for ${res.blockTime} minutes.`,
                   });
                   await sock.sendMessage(res.lender, {
-                    text: `🏦 *LOAN DEFAULT!* 🏦\n\n@${res.borrower.split("@")[0]} defaulted on their loan. You have been paid ${ZENI}${res.seized.toLocaleString()} (their entire remaining balance).`,
+                    text: `🏦 *LOAN DEFAULT!* 🏦\n\n@${economy.getDisplayName(res.borrower)} defaulted on their loan. You have been paid ${ZENI}${res.seized.toLocaleString()} (their entire remaining balance).`,
                     contextInfo: { mentionedJid: [res.borrower] },
                   });
                 }
@@ -5965,21 +5965,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       if (action === "promote") {
                         console.log(`🛡️ Undo manual promotion by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to promote members. Reverting promotion...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to promote members. Reverting promotion...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "demote");
                       } else if (action === "demote") {
                         console.log(`🛡️ Undo manual demotion by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to demote members. Reverting demotion...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to demote members. Reverting demotion...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "promote");
                       } else if (action === "remove") {
                         console.log(`🛡️ Undo manual kick by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to kick members. Attempting to add them back...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to kick members. Attempting to add them back...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "add");
@@ -6463,7 +6463,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         if (!allowed) {
                           console.log(`🛡️ Undo manual pin/unpin by unauthorized user: ${senderJid} in group ${chatId}`);
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `⚠️ @${senderJid.split('@')[0]} is not authorized to pin/unpin messages. Reverting...`,
+                            text: BOT_MARKER + `⚠️ @${economy.getDisplayName(senderJid)} is not authorized to pin/unpin messages. Reverting...`,
                             mentions: [senderJid]
                           });
 
@@ -9095,7 +9095,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${senderJid.split("@")[0]} has been **BLOCKED** for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
+                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${economy.getDisplayName(senderJid)} has been **BLOCKED** for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
                           mentions: [senderJid],
                         });
                         return;
@@ -9425,7 +9425,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been blocked from using the bot.`,
+                        `@${economy.getDisplayName(targetUser)} has been blocked from using the bot.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
 
@@ -9502,7 +9502,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} can now use the bot again.`,
+                        `@${economy.getDisplayName(targetUser)} can now use the bot again.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
 
@@ -9536,7 +9536,7 @@ Usage: ${newUsage}/5${warningText}`;
                       `*Blocked Users (${blockedArray.length})*\n\n`;
 
                     blockedArray.slice(0, 20).forEach((userId, i) => {
-                      text += `${i + 1}. @${userId.split("@")[0]}\n`;
+                      text += `${i + 1}. @${economy.getDisplayName(userId)}\n`;
                     });
 
                     if (blockedArray.length > 20) {
@@ -9593,7 +9593,7 @@ Usage: ${newUsage}/5${warningText}`;
                     banUser(targetUser);
                     console.log(`🚫 [PermaBan] ${senderJid} banned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `🚫 @${targetUser.split("@")[0]} has been *permanently banned*.\n\nThey can no longer use the bot in ANY group. Only a moderator can reverse this with \`${botConfig.getPrefix()} unban\`.`,
+                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *permanently banned*.\n\nThey can no longer use the bot in ANY group. Only a moderator can reverse this with \`${botConfig.getPrefix()} unban\`.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
                   }
@@ -9621,7 +9621,7 @@ Usage: ${newUsage}/5${warningText}`;
                     unbanUser(targetUser);
                     console.log(`✅ [PermaBan] ${senderJid} unbanned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `✅ @${targetUser.split("@")[0]} has been unbanned. They can use the bot again.`,
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unbanned. They can use the bot again.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
                   }
@@ -10890,7 +10890,7 @@ Usage: ${newUsage}/5${warningText}`;
                     let modMsg = `🛡️ *GLOBAL MODERATORS* 🛡️\n\n`;
                     const modArray = Array.from(globalMods);
                     modArray.forEach((mod, i) => {
-                      modMsg += `${i + 1}. @${mod.split("@")[0]}\n`;
+                      modMsg += `${i + 1}. @${economy.getDisplayName(mod)}\n`;
                     });
                     modMsg += `\n━━━━━━━━━━━━━━━\n👑 Owners always have full access.`;
                     return await sock.sendMessage(chatId, {
@@ -10941,7 +10941,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
+                        `✅ @${economy.getDisplayName(target)} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -10992,7 +10992,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
+                        `✅ @${economy.getDisplayName(target)} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -11041,7 +11041,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
+                        `✅ @${economy.getDisplayName(target)} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -11084,7 +11084,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} has been removed from RPG Moderators.`,
+                        `✅ @${economy.getDisplayName(target)} has been removed from RPG Moderators.`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -11128,7 +11128,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
+                        `✅ @${economy.getDisplayName(target)} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -11174,7 +11174,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} has been removed from Cards Moderators.`,
+                        `✅ @${economy.getDisplayName(target)} has been removed from Cards Moderators.`,
                       mentions: buildMentions(m, [], target),
                     });
                     return;
@@ -11198,19 +11198,19 @@ Usage: ${newUsage}/5${warningText}`;
                     listMsg += `*General Mods* (${globalMods.size}):\n`;
                     if (globalMods.size === 0) listMsg += `  _none_\n`;
                     for (const jid of globalMods) {
-                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
                     listMsg += `\n*RPG Mods* (${rpgMods.size}):\n`;
                     if (rpgMods.size === 0) listMsg += `  _none_\n`;
                     for (const jid of rpgMods) {
-                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
                     listMsg += `\n*Cards Mods* (${cardsMods.size}):\n`;
                     if (cardsMods.size === 0) listMsg += `  _none_\n`;
                     for (const jid of cardsMods) {
-                      listMsg += `  • @${jid.split('@')[0]}\n`;
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
                     listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
@@ -11294,7 +11294,7 @@ Usage: ${newUsage}/5${warningText}`;
                       if (result) {
                         const user = economy.getUser(targetUser);
                         return await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `✅ Reloaded @${targetUser.split("@")[0]} from DB.\nStat points: ${user?.progression?.statPoints ?? 'unknown'}\nWallet: ${(user?.wallet || 0).toLocaleString()}`,
+                          text: BOT_MARKER + `✅ Reloaded @${economy.getDisplayName(targetUser)} from DB.\nStat points: ${user?.progression?.statPoints ?? 'unknown'}\nWallet: ${(user?.wallet || 0).toLocaleString()}`,
                           mentions: buildMentions(m, [], targetUser),
                         });
                       } else {
@@ -11475,7 +11475,7 @@ Usage: ${newUsage}/5${warningText}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `@${messageAuthor.split("@")[0]} Don't say that shi again dude`,
+                          `@${economy.getDisplayName(messageAuthor)} Don't say that shi again dude`,
                         mentions: [messageAuthor],
                       });
                     } catch (err) {
@@ -11485,7 +11485,7 @@ Usage: ${newUsage}/5${warningText}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `couldn't delete @${messageAuthor.split("@")[0]}'s message. might need different permissions.`,
+                          `couldn't delete @${economy.getDisplayName(messageAuthor)}'s message. might need different permissions.`,
                         mentions: [messageAuthor],
                       });
                     }
@@ -13582,7 +13582,7 @@ Members are assigned to Rank Tiers (1 to 5).
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
+                        `@${economy.getDisplayName(targetUser)} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
 
                       mentions: buildMentions(m, [], targetUser),
                     });
@@ -13670,7 +13670,7 @@ Members are assigned to Rank Tiers (1 to 5).
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been unmuted.`,
+                        `@${economy.getDisplayName(targetUser)} has been unmuted.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
 
@@ -13801,10 +13801,10 @@ Members are assigned to Rank Tiers (1 to 5).
 
                     // Build the announcement text
                     let announcementText = "";
-                    const senderHeader = `\n👤 *Message by:* @${senderJid.split("@")[0]}\n`;
+                    const senderHeader = `\n👤 *Message by:* @${economy.getDisplayName(senderJid)}\n`;
                     let replyTag = "";
                     if (quotedParticipant) {
-                      replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
+                      replyTag = `📢 *Attention:* @${economy.getDisplayName(quotedParticipant)}\n\n`;
                     }
 
                     if (customText) {
@@ -14055,10 +14055,10 @@ ${memberList}`;
                     // Build message with member count info
                     let messageText = customText || contentToSend || "";
 
-                    const senderHeader = `👤 *Message by:* @${senderJid.split("@")[0]}\n`;
+                    const senderHeader = `👤 *Message by:* @${economy.getDisplayName(senderJid)}\n`;
                     let replyTag = "";
                     if (quotedParticipant) {
-                      replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
+                      replyTag = `📢 *Attention:* @${economy.getDisplayName(quotedParticipant)}\n\n`;
                     }
 
                     // Mentions list should include all participants + quoted user
@@ -14555,7 +14555,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
                         if (result.success && result.members) {
                           const memberList = result.members
-                            .map((jid) => `@${jid.split(`@`)[0]}`)
+                            .map((jid) => `@${economy.getDisplayName(jid)}`)
                             .join(", ");
                           const message = `${result.message}\n\n💥 Former members: ${memberList}`;
 
@@ -14687,10 +14687,10 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
                           const inviteText = `🏰 *GUILD INVITATION* 🏰
 
-@${targetUser.split(`@`)[0]} has been invited to join *${myGuildName}*!
+@${economy.getDisplayName(targetUser)} has been invited to join *${myGuildName}*!
 
 ━━━━━━━━━━━━━━━
-📨 @${targetUser.split("@")[0]} - Type:
+📨 @${economy.getDisplayName(targetUser)} - Type:
   • ${botConfig.getPrefix().toLowerCase()} accept - to join
   • ${botConfig.getPrefix().toLowerCase()} decline - to decline
 
@@ -14740,7 +14740,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         const inviteText = `📨 *PENDING GUILD INVITE*
 
 🏰 Guild: *${invite.guildName}*
-👤 From: @${invite.inviter.split(`@`)[0]}
+👤 From: @${economy.getDisplayName(invite.inviter)}
 ⏰ Expires in: ${minutesLeft} minutes
 
 ━━━━━━━━━━━━━━
@@ -14788,7 +14788,7 @@ Type:
                         if (result.success) {
                           const message = `⭐ *GUILD PROMOTION* ⭐
 
-@${result.targetJid.split(`@`)[0]} is now an admin of *${result.guildName}*!
+@${economy.getDisplayName(result.targetJid)} is now an admin of *${result.guildName}*!
 
 Admins can:
   • Invite members
@@ -14838,7 +14838,7 @@ Admins can:
                         );
 
                         if (result.success) {
-                          const message = `${result.message}\n\n@${result.targetJid.split(`@`)[0]} is now a regular member.`;
+                          const message = `${result.message}\n\n@${economy.getDisplayName(result.targetJid)} is now a regular member.`;
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
                             mentions: buildMentions(m, [], result.targetJid),
@@ -14884,7 +14884,7 @@ Admins can:
                         if (result.success) {
                           const message = `💢 *GUILD KICK* 💢
 
-@${result.targetJid.split(`@`)[0]} has been kicked from *${result.guildName}*.`;
+@${economy.getDisplayName(result.targetJid)} has been kicked from *${result.guildName}*.`;
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
@@ -14988,7 +14988,7 @@ Admins can:
 
                       // Owner
                       msg += `👑 *Guild Leader:*\n`;
-                      msg += `  @${guild.owner.split("@")[0]}\n\n`;
+                      msg += `  @${economy.getDisplayName(guild.owner)}\n\n`;
 
                       // Members with titles
                       if (
@@ -14999,7 +14999,7 @@ Admins can:
                         for (const [jid, title] of Object.entries(
                           guild.titles,
                         )) {
-                          msg += `  • ${title}: @${jid.split("@")[0]}\n`;
+                          msg += `  • ${title}: @${economy.getDisplayName(jid)}\n`;
                         }
                         msg += `\n`;
                       }
@@ -15008,7 +15008,7 @@ Admins can:
                       msg += `👥 *All Members (${guild.members.length}):*\n`;
                       guild.members.forEach((jid) => {
                         const title = guild.titles?.[jid] || "Member";
-                        msg += `  • @${jid.split("@")[0]} - ${title}\n`;
+                        msg += `  • @${economy.getDisplayName(jid)} - ${title}\n`;
                       });
 
                       const mentions = guild.members;
@@ -15222,7 +15222,7 @@ Admins can:
                           const classIcon = classData?.icon || "❓";
                           const className = classData?.name || "No Class";
 
-                          text += `${i + 1}. @${jid.split("@")[0]}\n`;
+                          text += `${i + 1}. @${economy.getDisplayName(jid)}\n`;
                           text += `   ├─ Title: ${titleDisplay}\n`;
                           text += `   ├─ Rank: ${rankData.icon} ${rank}\n`;
                           text += `   └─ Class: ${classIcon} ${className} (Lv.${level})\n\n`;
@@ -15884,7 +15884,7 @@ _Sorted by guild level + XP_
                           for (const memberJid of (guild.members || [])) {
                             const memberInfo = guilds.getGuildMember(userGuild, memberJid);
                             const roleIcon = memberInfo?.role === 'leader' ? '👑' : memberInfo?.role === 'officer' ? '⚔️' : memberInfo?.role === 'recruit' ? '💤' : '🌿';
-                            msg += `${roleIcon} @${memberJid.split('@')[0]} — ${memberInfo?.role || 'member'}\n`;
+                            msg += `${roleIcon} @${economy.getDisplayName(memberJid)} — ${memberInfo?.role || 'member'}\n`;
                           }
                           msg += `\n_Set roles: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`_`;
                           const mentions = (guild.members || []).filter(j => j && j.includes('@'));
@@ -16523,7 +16523,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           for (let i = 0; i < top.length; i++) {
                             const entry = top[i];
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} @${entry._id.split('@')[0]}\n   💰 ${entry.totalBounty.toLocaleString()} Zeni (${entry.count} bounties)\n`;
+                            msg += `${medal} @${economy.getDisplayName(entry._id)}\n   💰 ${entry.totalBounty.toLocaleString()} Zeni (${entry.count} bounties)\n`;
                           }
                           msg += `\n_Win a PvP duel against a target to claim their bounties._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: top.map(e => e._id) });
@@ -16544,7 +16544,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           let msg = `⚠️ *BOUNTIES ON YOU* ⚠️\n\n`;
                           for (const b of bounties) {
                             msg += `💰 ${b.amount.toLocaleString()} Zeni\n`;
-                            msg += `  Placed by: @${b.placerJid.split('@')[0]}\n`;
+                            msg += `  Placed by: @${economy.getDisplayName(b.placerJid)}\n`;
                             msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n\n`;
                             total += b.amount;
                           }
@@ -16567,7 +16567,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           }
                           let msg = `💰 *Your Placed Bounties* (${bounties.length} active)\n\n`;
                           for (const b of bounties) {
-                            msg += `💰 ${b.amount.toLocaleString()} Zeni on @${b.targetJid.split('@')[0]}\n`;
+                            msg += `💰 ${b.amount.toLocaleString()} Zeni on @${economy.getDisplayName(b.targetJid)}\n`;
                             msg += `  ID: \`${b.bountyId}\`\n`;
                             msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n`;
                             msg += `  Cancel: \`${botConfig.getPrefix()} bounty cancel ${b.bountyId}\`\n\n`;
@@ -17722,7 +17722,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       let text = BOT_MARKER + `🏆 *Most Active Members* (${periodLabel})\n\n`;
                       sorted.forEach((user, i) => {
                         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-                        text += `${medal} @${user.userId.split("@")[0]} — *${user.count}* msg${user.count !== 1 ? "s" : ""}\n`;
+                        text += `${medal} @${economy.getDisplayName(user.userId)} — *${user.count}* msg${user.count !== 1 ? "s" : ""}\n`;
                       });
                       const mentions = sorted.map((u) => u.userId);
                       await sock.sendMessage(chatId, { text, mentions });
@@ -17773,7 +17773,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       let text = BOT_MARKER + `💤 *Inactive Members* (${periodLabel}) — ${inactive.length} found\n\n`;
                       inactive.slice(0, 20).forEach((p, i) => {
-                        text += `${i + 1}. @${p.id.split("@")[0]}\n`;
+                        text += `${i + 1}. @${economy.getDisplayName(p.id)}\n`;
                       });
                       if (inactive.length > 20) text += `\n...and ${inactive.length - 20} more.`;
                       const mentions = inactive.map((p) => p.id);
@@ -17814,7 +17814,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       const mentions = activity.map((u) => u.userId);
-                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const tagList = mentions.map((id) => `@${economy.getDisplayName(id)}`).join(" ");
                       const msgText = customMsg || `Hey everyone active in the ${periodLabel}! 👋`;
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `📢 *Tagging active members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
@@ -17867,7 +17867,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       const mentions = inactiveMembers.map((p) => p.id);
-                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const tagList = mentions.map((id) => `@${economy.getDisplayName(id)}`).join(" ");
                       const msgText = customMsg || `Hey, we haven't seen you in a while! Come chat 👀`;
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `📢 *Tagging inactive members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
@@ -17900,7 +17900,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const blocked = isBlocked(targetUser);
 
                       let info = BOT_MARKER + `*User Info*\n\n`;
-                      info += `Phone: @${targetUser.split("@")[0]}\n`;
+                      info += `Phone: @${economy.getDisplayName(targetUser)}\n`;
                       if (profile?.nickname)
                         info += `Nickname: ${profile.nickname}\n`;
                       info += `Admin: ${isAdmin ? "Yes" : "No"}\n`;
@@ -20745,7 +20745,7 @@ ${senderName} said y'all should know:
                             react: { text: "🎉", key: m.key }
                           });
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `🎉 *CORRECT!* 🎉\n\n@${senderJid.split("@")[0]} got it right!\n*Answer:* ${triviaData.correctAnswer}\n\n*Rewards:* +${rewardZeni} Zeni | +${rewardXp} XP`,
+                            text: BOT_MARKER + `🎉 *CORRECT!* 🎉\n\n@${economy.getDisplayName(senderJid)} got it right!\n*Answer:* ${triviaData.correctAnswer}\n\n*Rewards:* +${rewardZeni} Zeni | +${rewardXp} XP`,
                             contextInfo: { mentionedJid: [senderJid] }
                           }, { quoted: m });
                           return;
@@ -20796,7 +20796,7 @@ ${senderName} said y'all should know:
                           await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `⭐ *WELCOME!* ⭐\n\n@${senderJid.split("@")[0]} has accepted the invitation and joined *${result.guild}*!`,
+                              `⭐ *WELCOME!* ⭐\n\n@${economy.getDisplayName(senderJid)} has accepted the invitation and joined *${result.guild}*!`,
                             mentions: [senderJid],
                           });
                         } else {
@@ -22342,7 +22342,7 @@ Examples:
                         const nickname =
                           user.nickname || user.userId.split("@")[0];
 
-                        text += `${medal} @${user.userId.split("@")[0]}\n`;
+                        text += `${medal} @${economy.getDisplayName(user.userId)}\n`;
                         text += `   💎 ${economy.getZENI()}${user.total.toLocaleString()}\n`;
                         text += `   💵 Wallet: ${economy.getZENI()}${user.total - (user.bank || 0) >= 0 ? (user.total - (user.bank || 0)).toLocaleString() : "0"}\n`;
                         text += `━━━━━━━━━━━━━━━━━━\n`;

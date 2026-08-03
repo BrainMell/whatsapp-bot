@@ -7,6 +7,7 @@ const classSystem = require('./classSystem');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const connectDB = require('../../db');
+const economy = require('./economy');
 
 // currency shi
 const getCurrency = () => botConfig.getCurrency();
@@ -869,8 +870,8 @@ function transferMoney(fromUserId, toUserId, amount) {
   sender.wallet -= val;
   receiver.wallet += val;
   
-  logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -val, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, val, receiver.wallet);
+  logTransaction(fromUserId, `Transfer to @${economy.getDisplayName(toUserId)}`, -val, sender.wallet);
+  logTransaction(toUserId, `Transfer from @${economy.getDisplayName(fromUserId)}`, val, receiver.wallet);
 
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
@@ -881,7 +882,7 @@ function transferMoney(fromUserId, toUserId, amount) {
 
 ━━━━━━━━━━━━━━━━
 💸 *Sent:* ${getZENI()}${amount.toLocaleString()}
-👤 *To:* @${toUserId.split('@')[0]}
+👤 *To:* @${economy.getDisplayName(toUserId)}
 ━━━━━━━━━━━━━━━━
 
 💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
@@ -1718,14 +1719,14 @@ function robUser(thiefId, victimId) {
     victim.wallet -= amount;
     thief.wallet += amount;
     
-    logTransaction(thiefId, `Robbed @${victimId.split('@')[0]}`, amount, thief.wallet);
-    logTransaction(victimId, `Robbed by @${thiefId.split('@')[0]}`, -amount, victim.wallet);
+    logTransaction(thiefId, `Robbed @${economy.getDisplayName(victimId)}`, amount, thief.wallet);
+    logTransaction(victimId, `Robbed by @${economy.getDisplayName(thiefId)}`, -amount, victim.wallet);
 
     scheduleSave(thiefId);
     scheduleSave(victimId);
     return { 
       success: true, 
-      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${victimId.split('@')[0]}!` 
+      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${economy.getDisplayName(victimId)}!` 
     };
   } else {
     const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
@@ -1918,6 +1919,60 @@ function scheduleWealthTax() {
 }
 //========================================
 
+// ════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-08-03: MENTION DISPLAY HELPERS
+// ════════════════════════════════════════════════════════════════
+// Problem: @-mentions showed raw LID numbers (e.g., "@251453323092189")
+// instead of readable names. LID JIDs are 17-18 digit random numbers
+// that nobody recognizes — broken UX.
+//
+// Solution: these helpers resolve LID→phone JID and use the user's
+// nickname from the economy cache when available.
+//
+// Usage in bot messages:
+//   `@${economy.getDisplayName(jid)} has been blocked.`
+//   mentions: [economy.getMentionJid(jid)]
+//
+// getDisplayName returns the NICKNAME (without @) if available,
+// otherwise the phone number (without @), otherwise the raw ID.
+// The caller should prepend "@" in the template string.
+//
+// getMentionJid returns the resolved phone JID for the mentions array.
+// ════════════════════════════════════════════════════════════════
+
+function getDisplayName(jid) {
+  if (!jid) return 'Unknown';
+  try {
+    // Step 1: resolve to the economy cache key (handles LID↔phone swap)
+    const resolvedId = resolveJidHelper(jid);
+    const user = economyData.get(resolvedId);
+    if (user && user.nickname) return user.nickname;
+  } catch (e) {}
+  // Step 2: fall back to phone number (resolve LID → phone)
+  try {
+    const lidResolver = require('../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid && phoneJid !== jid) {
+      return phoneJid.split('@')[0];
+    }
+  } catch (e) {}
+  // Step 3: last resort — raw ID part (could be LID or phone)
+  return String(jid).split('@')[0];
+}
+
+function getMentionJid(jid) {
+  if (!jid) return jid;
+  try {
+    // Resolve to phone JID for the mentions array (WhatsApp matches @<phone>)
+    const lidResolver = require('../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid) return phoneJid;
+  } catch (e) {}
+  return jid;
+}
+
+//========================================
+
 module.exports = {
   getZENI,
   STARTING_BALANCE,
@@ -2006,6 +2061,10 @@ module.exports = {
   getPersistentHP,
   setPersistentHP,
   healToFull,
+
+  // 💡 FIX 2026-08-03: Mention display helpers — resolve LID→phone, use nicknames
+  getDisplayName,
+  getMentionJid,
 };
 
 // ════════════════════════════════════════════════════════════════
