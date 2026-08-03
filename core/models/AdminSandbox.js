@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const economy = require('./rpg/economy');
+const economy = require('../rpg/economy');
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ADMIN SANDBOX — Isolated Test Characters for RPG Mods (Item #11)
