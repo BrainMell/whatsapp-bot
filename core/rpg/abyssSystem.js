@@ -408,121 +408,14 @@ function generateFloorEnemy(floor) {
   };
 }
 
-// ─── PROCESS ATTACK ───────────────────────────────────────────────────────
-// Player attacks the current floor's enemy. Returns result with messages.
-// Damage is calculated from the player's stats (passed in).
-async function processAttack(userId, playerDamage, playerStats) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
-  if (!run) {
-    return { success: false, message: '❌ No active Abyss run. Start one with `' + P() + ' abyss enter`.' };
-  }
-
-  run.lastActionAt = new Date();
-  const enemy = run.currentEnemy;
-  if (!enemy) {
-    run.status = 'failed';
-    await run.save();
-    return { success: false, message: '⚠️ Run data corrupted — auto-failed. Cooldown applies.' };
-  }
-
-  // Player attacks first
-  let attackMsg = `⚔️ You attack ${enemy.name} for ${playerDamage} damage!\n`;
-  enemy.hp = Math.max(0, enemy.hp - playerDamage);
-
-  // Check if enemy died
-  if (enemy.hp <= 0) {
-    attackMsg += `💀 ${enemy.name} defeated!\n`;
-    run.monstersKilled += 1;
-    if (enemy.isBoss) run.bossesKilled += 1;
-
-    // 💡 QA FIX: track kills for rank missions (was missing entirely)
-    try {
-      const economy = require('./economy');
-      economy.trackMissionStat(userId, 'kills', 1);
-      if (enemy.isBoss) economy.trackMissionStat(userId, 'bossesDefeated', 1);
-    } catch (e) {}
-
-    // Award loot
-    const rewards = getFloorRewards(run.currentFloor, enemy.isBoss);
-    run.lootAccumulator.xp += rewards.xp;
-    run.lootAccumulator.gold += rewards.gold;
-    attackMsg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni\n`;
-
-    // Rune drop chance on boss floors 21+
-    if (enemy.isBoss && run.currentFloor >= 11) {
-      try {
-        const runeSystem = require('./runeSystem');
-        const dropChance = run.currentFloor >= 50 ? 0.50 : 0.35;
-        let drop = runeSystem.rollRuneDrop(dropChance);
-        if (drop && run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') {
-          drop = runeSystem.rollAbyssalRuneDrop(run.currentFloor);
-        }
-        if (drop) {
-          const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_floor_${run.currentFloor}`);
-          if (runeResult.success) {
-            run.lootAccumulator.runes.push(runeResult.rune.runeId);
-            attackMsg += runeResult.message + '\n';
-          }
-        }
-      } catch (e) {
-        console.error('[Abyss] Rune drop failed:', e.message);
-      }
-    }
-
-    // Advance to next floor using encounter system
-    run.currentFloor += 1;
-    const nextEncounter = generateFloorEncounter(run.currentFloor);
-    if (nextEncounter.type === 'combat' || nextEncounter.type === 'wild_summon') {
-      run.currentEnemy = nextEncounter.enemy;
-      run.currentEncounterType = nextEncounter.type;
-      if (nextEncounter.type === 'wild_summon') {
-        run.currentEncounterData = {
-          species: nextEncounter.wildSummonSpecies,
-          rarity: nextEncounter.wildSummonRarity,
-        };
-      } else {
-        run.currentEncounterData = null;
-      }
-    } else {
-      run.currentEnemy = null;
-      run.currentEncounterType = nextEncounter.type;
-      run.currentEncounterData = nextEncounter.treasure || nextEncounter.event;
-    }
-    // Restore some energy between floors
-    run.currentEnergy = Math.min(run.playerSnapshot.maxEnergy, run.currentEnergy + 20);
-
-    if (nextEncounter.type === 'combat') {
-      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
-    } else if (nextEncounter.type === 'wild_summon') {
-      attackMsg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!*\nHP: ${Math.floor(nextEncounter.enemy.stats.hp)}/${Math.floor(nextEncounter.enemy.stats.maxHp)}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat atk\`_`;
-    } else if (nextEncounter.type === 'treasure') {
-      attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_`;
-    } else if (nextEncounter.type === 'event') {
-      attackMsg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_${nextEncounter.event.desc}_\n\n`;
-      nextEncounter.event.choices.forEach(c => {
-        attackMsg += `\`${c.id}\` — ${c.text}\n`;
-      });
-      attackMsg += `_Choose with \`${P()} abyss choose <1/2>\`_`;
-    }
-    await run.save();
-    return { success: true, message: attackMsg, run, enemyDefeated: true };
-  }
-
-  // Enemy survives — counterattack
-  const enemyDamage = Math.max(1, Math.floor(enemy.atk * (1 - (playerStats.def || 0) / 200)));
-  run.currentHp = Math.max(0, run.currentHp - enemyDamage);
-  attackMsg += `💥 ${enemy.name} counterattacks for ${enemyDamage} damage!\n`;
-  attackMsg += `❤️ Your HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
-  attackMsg += `👹 ${enemy.name} HP: ${Math.floor(enemy.hp)}/${Math.floor(enemy.maxHp)}\n`;
-
-  // Check if player died
-  if (run.currentHp <= 0) {
-    return await processDeath(userId, run, attackMsg);
-  }
-
-  await run.save();
-  return { success: true, message: attackMsg, run, enemyDefeated: false };
-}
+// ─── PROCESS ATTACK [REMOVED — DEAD CODE] ─────────────────────────────────
+// 💡 REMOVED 2026-08-03: processAttack() was legacy code from the old
+// Abyss system. It was never called by any module — the real Abyss combat
+// path goes through guildAdventure.startAbyssCombat() → calculateDamage().
+// Keeping it caused confusion and potential conflicts with the new system.
+// All Abyss combat now uses the standard combat commands:
+//   `${P()} combat attack` / `${P()} combat skill <#>` / `${P()} combat item`
+// ──────────────────────────────────────────────────────────────────────────
 
 // ─── PROCESS TREASURE COLLECTION ──────────────────────────────────────────
 async function processTreasure(userId) {
@@ -927,7 +820,6 @@ async function resetWeeklyLeaderboard() {
 
 module.exports = {
   startRun,
-  processAttack,
   retreat,
   processDeath,
   getRunStatus,
