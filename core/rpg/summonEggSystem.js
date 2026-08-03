@@ -97,10 +97,21 @@ async function hatchEgg(userId, eggId) {
     speciesId = STARTER_SPECIES[Math.floor(Math.random() * STARTER_SPECIES.length)];
   } else {
     // Tiered egg: random summon from registry matching the rarity pool
-    const allSpecies = registry.getAllSpecies();
-    const pool = Object.entries(allSpecies)
-      .filter(([id, s]) => tier.rarityPool.includes(s.rarity) && !s.isStarter)
-      .map(([id, s]) => id);
+    // 💡 FIX 2026-08-03 (bug report #3): getAllSpecies() returns an ARRAY of
+    // ID strings, not an object. The old Object.entries() code treated it as
+    // {id: speciesObj}, so s.rarity was undefined, the filter rejected
+    // everything, pool was empty, and tiered eggs ALWAYS fell back to
+    // starters. Players could never hatch rare/epic/legendary/mythic summons
+    // from crafted eggs — they always got a starter.
+    // Fix: use registry.getSpecies(id) to resolve each ID.
+    const speciesIds = registry.getAllSpecies();
+    const pool = [];
+    for (const id of speciesIds) {
+      const s = registry.getSpecies(id);
+      if (s && tier.rarityPool.includes(s.rarity) && !s.isStarter) {
+        pool.push(id);
+      }
+    }
 
     if (pool.length === 0) {
       // Fallback: if no summons of that rarity exist yet, give a starter upgrade

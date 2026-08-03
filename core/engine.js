@@ -251,6 +251,107 @@ function isBanned(userId) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════
+// 💡 OWNER-ONLY HARD MUTE/BAN (2026-08-03, bug report #10)
+// ════════════════════════════════════════════════════════════════
+// Special moderation actions that ONLY the bot owner can apply AND
+// reverse. Regular moderators (global/rpg/cards mods) CANNOT:
+//   - Reverse a hard-ban (unhardban is owner-only)
+//   - Reverse a hard-mute (unhardmute is owner-only)
+// This gives the owner a moderation action that sticks even if a
+// mod tries to undo it.
+// ════════════════════════════════════════════════════════════════
+
+const hardBannedUsers = new Set();
+const hardMutedUsers = new Set(); // global hard-mute (all chats, no expiry)
+
+function saveHardBannedUsers() {
+  const system = require('./utils/system');
+  system.set("_shared_hard_banned_users", Array.from(hardBannedUsers));
+}
+
+function saveHardMutedUsers() {
+  const system = require('./utils/system');
+  system.set("_shared_hard_muted_users", Array.from(hardMutedUsers));
+}
+
+async function loadHardBannedUsers() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_hard_banned_users", []);
+    hardBannedUsers.clear();
+    if (Array.isArray(data)) data.forEach(u => hardBannedUsers.add(u));
+    console.log(`🚫 [Owner] Loaded ${hardBannedUsers.size} hard-banned users`);
+  } catch (e) {
+    console.error("Error loading hard-banned users:", e.message);
+  }
+}
+
+async function loadHardMutedUsers() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_hard_muted_users", []);
+    hardMutedUsers.clear();
+    if (Array.isArray(data)) data.forEach(u => hardMutedUsers.add(u));
+    console.log(`🔇 [Owner] Loaded ${hardMutedUsers.size} hard-muted users`);
+  } catch (e) {
+    console.error("Error loading hard-muted users:", e.message);
+  }
+}
+
+function hardBanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardBannedUsers.add(normalized);
+  // Also add to regular ban so existing isBanned checks catch it
+  bannedUsers.add(normalized);
+  saveBannedUsers();
+  saveHardBannedUsers();
+}
+
+function unhardBanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardBannedUsers.delete(normalized);
+  bannedUsers.delete(normalized);
+  saveBannedUsers();
+  saveHardBannedUsers();
+}
+
+function isHardBanned(userId) {
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    return hardBannedUsers.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
+}
+
+function hardMuteUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardMutedUsers.add(normalized);
+  saveHardMutedUsers();
+}
+
+function unhardMuteUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardMutedUsers.delete(normalized);
+  saveHardMutedUsers();
+}
+
+function isHardMuted(userId) {
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    return hardMutedUsers.has(jidNormalizedUser(userId));
+  } catch (err) {
+    return false;
+  }
+}
+
 // Load global mods from DB
 async function loadGlobalMods() {
   const system = require('./utils/system');
@@ -5164,6 +5265,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await loadCardsMods();
           await loadBlockedUsers();
           await loadBannedUsers();
+          await loadHardBannedUsers();
+          await loadHardMutedUsers();
 
           // Chess must be loaded after system data is ready
           chess.loadActiveGames();
@@ -5495,6 +5598,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 await loadCardsMods();
                 await loadBlockedUsers();
                 await loadBannedUsers();
+                await loadHardBannedUsers();
+                await loadHardMutedUsers();
 
                 chess.loadActiveGames();
                 loadEnabledChats();
@@ -9259,6 +9364,14 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                   }
 
+                  // 💡 CHECK IF USER IS HARD-MUTED (owner-issued, global, no expiry)
+                  // Hard-muted users can see the bot but can't use ANY commands.
+                  // Only the owner can reverse this (unhardmute is owner-only).
+                  if (isHardMuted(senderJid)) {
+                    console.log(`🔇 Hard-muted user tried to use bot: ${senderJid}`);
+                    return;
+                  }
+
                   // Override command - allows user to bypass admin checks
                   if (
                     lowerTxt ===
@@ -9616,10 +9729,136 @@ Usage: ${newUsage}/5${warningText}`;
                     if (!isBanned(targetUser)) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't perma-banned." });
                     }
+                    // 💡 FIX 2026-08-03: mods can't unban hard-banned users
+                    if (isHardBanned(targetUser) && !isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ This user is HARD-BANNED by the owner. Only the owner can reverse this with `" + botConfig.getPrefix() + " unhardban`.",
+                      });
+                    }
                     unbanUser(targetUser);
                     console.log(`✅ [PermaBan] ${senderJid} unbanned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
                       text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unbanned. They can use the bot again.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 OWNER-ONLY HARD MUTE/BAN (2026-08-03, bug report #10)
+                  // Commands: hardban, unhardban, hardmute, unhardmute
+                  // ONLY the bot owner can use these. Mods CANNOT reverse them.
+                  // ═══════════════════════════════════════════════════════════
+
+                  // .g hardban @user — owner-only permanent ban that mods can't undo
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} hardban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} hardban `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can use hard-ban. This action cannot be reversed by moderators.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} hardban @user\`\n\n_Owner-only permanent ban. Mods CANNOT reverse this with_ \`${botConfig.getPrefix()} unban\`_. Only_ \`${botConfig.getPrefix()} unhardban\` _can reverse it._`,
+                      });
+                    }
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-ban yourself." });
+                    }
+                    if (isBotOwner(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-ban the owner." });
+                    }
+                    hardBanUser(targetUser);
+                    console.log(`🚫 [Owner] ${senderJid} hard-banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *HARD-BANNED* by the owner.\n\nThis action is permanent and can ONLY be reversed by the owner with \`${botConfig.getPrefix()} unhardban\`. Mods cannot undo this.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g unhardban @user — owner-only reversal of hard-ban
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unhardban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unhardban `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can reverse a hard-ban.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unhardban @user\``,
+                      });
+                    }
+                    if (!isHardBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't hard-banned." });
+                    }
+                    unhardBanUser(targetUser);
+                    console.log(`✅ [Owner] ${senderJid} unhard-banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unhard-banned. They can use the bot again.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g hardmute @user — owner-only global mute (no expiry, all chats)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} hardmute` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} hardmute `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can use hard-mute.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} hardmute @user\`\n\n_Owner-only global mute. The user can see the bot but can't use ANY commands. Mods CANNOT reverse this._`,
+                      });
+                    }
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-mute yourself." });
+                    }
+                    if (isBotOwner(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-mute the owner." });
+                    }
+                    hardMuteUser(targetUser);
+                    console.log(`🔇 [Owner] ${senderJid} hard-muted ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🔇 @${economy.getDisplayName(targetUser)} has been *HARD-MUTED* by the owner.\n\nThey can see the bot but can't use any commands. This can ONLY be reversed by the owner with \`${botConfig.getPrefix()} unhardmute\`.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g unhardmute @user — owner-only reversal of hard-mute
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unhardmute` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unhardmute `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can reverse a hard-mute.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unhardmute @user\``,
+                      });
+                    }
+                    if (!isHardMuted(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't hard-muted." });
+                    }
+                    unhardMuteUser(targetUser);
+                    console.log(`✅ [Owner] ${senderJid} unhard-muted ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unhard-muted. They can use commands again.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
                   }
@@ -25804,6 +26043,15 @@ module.exports = {
   banUser,
   unbanUser,
   isBanned,
+  // 💡 Owner-only hard mute/ban
+  hardBanUser,
+  unhardBanUser,
+  isHardBanned,
+  hardMuteUser,
+  unhardMuteUser,
+  isHardMuted,
+  loadHardBannedUsers,
+  loadHardMutedUsers,
   loadBannedUsers,
   getBotInstancesHealth: () => botInstancesHealth,
 };

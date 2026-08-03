@@ -5271,6 +5271,38 @@ function recordEnemyKill(state, entity) {
     if (userGuild) {
       guilds.updateBoardProgress(userGuild, entity.type, 1);
     }
+
+    // 💡 FIX 2026-08-03 (bug report #3): Award summon XP for EVERY enemy kill
+    // in ALL combat types (PvE, Abyss, PvP) — not just at end of guild quest.
+    // Previously summon XP was only awarded in endAdventure() (guild quest end),
+    // so Abyss + PvP + raid summons got ZERO XP despite participating.
+    // This fix fires per-kill, giving 10% of the enemy's XP value to each
+    // deployed summon owned by this player.
+    try {
+      if (state.summons && state.summons.length > 0) {
+        const summonSystem = require('./summonSystem');
+        const summonAI = require('./summonAI');
+        // Estimate enemy XP: base 20 + level*5, bosses 5x
+        const enemyLevel = entity.level || entity.stats?.level || Math.floor((state.abyssFloor || state.dungeonRank || 1));
+        const enemyXpValue = (entity.isBoss ? 100 : 20) + (enemyLevel * 5);
+        const summonXpShare = Math.max(5, Math.floor(enemyXpValue * 0.1));
+        for (const summonEntity of state.summons) {
+          // Only award XP to summons owned by this player + still alive
+          if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc &&
+              summonEntity.summonerJid === p.jid) {
+            const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXpShare);
+            if (xpResult.leveledUp) {
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(`✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`);
+            }
+            // Persist async (fire-and-forget — don't block combat)
+            summonAI.persistSummonChanges(summonEntity).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[SummonXP] recordEnemyKill award failed:', e.message);
+    }
   });
 }
 

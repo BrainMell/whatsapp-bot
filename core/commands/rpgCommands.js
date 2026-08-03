@@ -667,22 +667,34 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         );
     }
 
-    // Sort: items without reqLevel first (alphabetically), then items with reqLevel (lowest first)
+    // 💡 FIX 2026-08-03 (bug report #8): Sort by RARITY first (Mythic → Common),
+    // then by reqLevel (lowest first), then alphabetically.
+    // The old sort was reqLevel-only, which made the 144+ item list feel
+    // unsorted — users wanted items grouped by rank/rarity tier.
+    const RARITY_ORDER = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     recipes.sort((a, b) => {
         const aInfo = lootSystem.getItemInfo(a.id) || {};
         const bInfo = lootSystem.getItemInfo(b.id) || {};
+        const aRarity = (aInfo.rarity || 'COMMON').toUpperCase();
+        const bRarity = (bInfo.rarity || 'COMMON').toUpperCase();
+        const aRarityIdx = RARITY_ORDER.indexOf(aRarity);
+        const bRarityIdx = RARITY_ORDER.indexOf(bRarity);
+        const aR = aRarityIdx === -1 ? RARITY_ORDER.length : aRarityIdx;
+        const bR = bRarityIdx === -1 ? RARITY_ORDER.length : bRarityIdx;
+
+        // Primary: rarity (Mythic first)
+        if (aR !== bR) return aR - bR;
+
+        // Secondary: reqLevel (lowest first)
         const aLvl = aInfo.reqLevel;
         const bLvl = bInfo.reqLevel;
-        
-        if (aLvl === undefined && bLvl === undefined) {
-            return a.name.localeCompare(b.name);
-        }
+        if (aLvl === undefined && bLvl === undefined) return a.name.localeCompare(b.name);
         if (aLvl === undefined) return -1;
         if (bLvl === undefined) return 1;
-        if (aLvl === bLvl) {
-            return a.name.localeCompare(b.name);
-        }
-        return aLvl - bLvl;
+        if (aLvl !== bLvl) return aLvl - bLvl;
+
+        // Tertiary: alphabetical
+        return a.name.localeCompare(b.name);
     });
 
     const itemsPerPage = 6;

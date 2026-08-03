@@ -1234,6 +1234,32 @@ async function finishDuel(chatId, duel, winner, loser) {
 
     progression.addXP(winner.jid, xpGain, 'PvP Victory');
 
+    // 💡 FIX 2026-08-03 (bug report #3): Award summon XP to the winner's
+    // deployed summon. PvP combat doesn't go through recordEnemyKill (no
+    // 'enemy' entity — both combatants are players), so we award XP here
+    // at duel end based on the loser's level.
+    try {
+        if (duel.summons && duel.summons.length > 0) {
+            const summonSystem = require('./summonSystem');
+            const summonAI = require('./summonAI');
+            // Winner's summon gets XP based on loser's level (same as player XP)
+            const summonXP = Math.max(10, Math.floor(xpGain * 0.5));
+            for (const summonEntity of duel.summons) {
+                if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc &&
+                    summonEntity.summonerJid === winner.jid) {
+                    const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
+                    if (xpResult.leveledUp) {
+                        rewardMsg += `\n✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`;
+                    }
+                    // Persist async
+                    summonAI.persistSummonChanges(summonEntity).catch(() => {});
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[PvP] Summon XP award failed:', e.message);
+    }
+
     // Update PvP stats
     const winnerUser = economy.getUser(winner.jid);
     const loserUser = economy.getUser(loser.jid);
