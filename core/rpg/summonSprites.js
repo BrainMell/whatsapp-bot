@@ -360,6 +360,50 @@ async function batchFetch(list, opts = {}) {
 // Logs progress but never throws — failures are silently skipped (the
 // emoji fallback handles missing sprites gracefully).
 let _warmupStarted = false;
+
+// 💡 KNOWN_MISSING: species that do NOT exist on the Digimon API (digi-api.com)
+// under any name variant, AND have no local sprite. Fetching them is guaranteed
+// to fail every restart — pure log spam and wasted HTTP requests.
+//
+// These species use the emoji fallback at render time (summonSprites returns
+// null → renderer draws the species emoji icon from the registry).
+//
+// Updated 2026-08-03 after verifying all 27 against the API. If you add a new
+// species and it doesn't have a sprite, either:
+//   (a) add a local PNG to core/rpgasset/summons/ and it'll be found by getSpritePath, OR
+//   (b) add the species ID to this set if no sprite exists anywhere.
+const KNOWN_MISSING = new Set([
+  // Digimon that don't exist on digi-api.com under any name variant
+  'phantomon',
+  'megakabuterimon',
+  'magnaangemon',
+  'angewomon2',
+  'burnermon',
+  'dolphmon',
+  'raijimon',
+  'thundermon',
+  'arachnemon',
+  'doccokumon',
+  'cherrymon',
+  'marinedevimon',
+  'borgmon',
+  'daemon',
+  'emperorgreymon',
+  // Custom RPG species — no Digimon API equivalent, no local sprite
+  'stoneguard',
+  'emberdrake',
+  'mistwisp',
+  'bloompixie',
+  'iron_sentinel',
+  'mountain_titan',
+  'flare_wyrm',
+  'infernal_dragon',
+  'frost_spectre',
+  'abyssal_phantom',
+  'blossom_sylph',
+  'world_tree_spirit',
+]);
+
 async function warmupCache(registryModule) {
   if (_warmupStarted) return;
   _warmupStarted = true;
@@ -377,17 +421,19 @@ async function warmupCache(registryModule) {
     ]);
 
     const missing = [];
+    let skippedKnownMissing = 0;
     for (const id of allSpecies) {
       if (LEGACY.has(id)) continue;
+      if (KNOWN_MISSING.has(id)) { skippedKnownMissing++; continue; }
       if (!getSpritePath(id)) missing.push({ species: id });
     }
 
     if (missing.length === 0) {
-      console.log(`[SummonSprites] Warm-up: all ${allSpecies.length - LEGACY.size} non-legacy species already cached`);
+      console.log(`[SummonSprites] Warm-up: all fetchable species cached (${skippedKnownMissing} known-missing use emoji fallback)`);
       return;
     }
 
-    console.log(`[SummonSprites] Warm-up: fetching ${missing.length} missing sprites in background...`);
+    console.log(`[SummonSprites] Warm-up: fetching ${missing.length} missing sprites (${skippedKnownMissing} known-missing skipped)...`);
     const result = await batchFetch(missing, {
       concurrency: 3,
       onProgress: (done, total, name, ok) => {
