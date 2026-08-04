@@ -4,9 +4,6 @@
 // ONLY summons with dedicated sparklinlabs sprites are in this registry.
 // Each summon maps 1:1 to its own idle.gif — no sprite sharing.
 // 14 animated idle.gif sprites + 3 static ship PNGs = 17 total summons.
-//
-// To add a new summon: add the idle.gif to sparklinlabs/ folder on Box 2,
-// then add an entry here with species = filename (without _idle.gif).
 
 const SUMMON_SPECIES = {
   // ═══════════════════════════════════════════════════════════════
@@ -14,131 +11,132 @@ const SUMMON_SPECIES = {
   // ═══════════════════════════════════════════════════════════════
 
   bat: {
-    name: 'Bat', archetype: 'STALKER', element: 'beast',
-    baseStats: { hp: 80, atk: 15, def: 4, mag: 8, spd: 22 },
+    name: 'Nocturne', archetype: 'STALKER', element: 'shadow',
+    baseStats: { hp: 80, atk: 18, def: 4, mag: 10, spd: 24 },
     rarity: 'COMMON', echoId: 'pack_echo',
     evolutionStages: ['bat'], trialId: 'trial_bat',
-    icon: '🦇', desc: 'A swift bat that strikes from the shadows.',
+    icon: '🦇', desc: 'A shadow bat that strikes from darkness with blinding speed.',
   },
   boar: {
-    name: 'Boar', archetype: 'BRUTE', element: 'beast',
-    baseStats: { hp: 150, atk: 25, def: 12, mag: 5, spd: 10 },
+    name: 'Tuskgore', archetype: 'BRUTE', element: 'earth',
+    baseStats: { hp: 160, atk: 28, def: 14, mag: 5, spd: 10 },
     rarity: 'COMMON', echoId: 'pack_echo',
     evolutionStages: ['boar'], trialId: 'trial_boar',
-    icon: '🐗', desc: 'A wild boar with devastating charges.',
+    icon: '🐗', desc: 'A savage boar whose charges shatter bone and armor alike.',
   },
   chest: {
     name: 'Mimic Chest', archetype: 'TANK', element: 'construct',
-    baseStats: { hp: 200, atk: 15, def: 25, mag: 5, spd: 4 },
+    baseStats: { hp: 220, atk: 15, def: 28, mag: 5, spd: 4 },
     rarity: 'UNCOMMON', echoId: 'guardian_echo',
     evolutionStages: ['chest'], trialId: 'trial_chest',
-    icon: '🧰', desc: 'A treasure chest that bites. Surprisingly durable.',
+    icon: '🧰', desc: 'A treasure chest with razor teeth. Adventurers beware.',
   },
   dino: {
-    name: 'Dino', archetype: 'BRUTE', element: 'beast',
-    baseStats: { hp: 180, atk: 28, def: 14, mag: 8, spd: 12 },
+    name: 'Rexor', archetype: 'BRUTE', element: 'beast',
+    baseStats: { hp: 190, atk: 32, def: 16, mag: 8, spd: 12 },
     rarity: 'UNCOMMON', echoId: 'pack_echo',
     evolutionStages: ['dino'], trialId: 'trial_dino',
-    icon: '🦖', desc: 'A small dinosaur with sharp teeth and thick hide.',
+    icon: '🦖', desc: 'A primal dinosaur with jaws that can crush stone.',
   },
   dragon: {
-    name: 'Dragon', archetype: 'BRUTE', element: 'dragon',
-    baseStats: { hp: 300, atk: 40, def: 20, mag: 25, spd: 15 },
+    name: 'Pyraxis', archetype: 'BRUTE', element: 'fire',
+    baseStats: { hp: 320, atk: 42, def: 22, mag: 28, spd: 15 },
     rarity: 'RARE', echoId: 'dragonfear_echo',
     evolutionStages: ['dragon'], trialId: 'trial_dragon',
-    icon: '🐉', desc: 'A fearsome dragon that breathes fire.',
+    icon: '🐉', desc: 'A fearsome dragon whose breath melts steel.',
   },
   ghost: {
-    name: 'Ghost', archetype: 'STALKER', element: 'undead',
-    baseStats: { hp: 90, atk: 18, def: 6, mag: 20, spd: 18 },
+    name: 'Wraithveil', archetype: 'STALKER', element: 'undead',
+    baseStats: { hp: 95, atk: 20, def: 6, mag: 22, spd: 20 },
     rarity: 'COMMON', echoId: 'bone_echo',
     evolutionStages: ['ghost'], trialId: 'trial_ghost',
-    icon: '👻', desc: 'A spectral entity that phases through attacks.',
+    icon: '👻', desc: 'A spectral wraith that phases through mortal defenses.',
   },
   giant: {
-    name: 'Giant', archetype: 'TANK', element: 'construct',
-    baseStats: { hp: 350, atk: 30, def: 35, mag: 5, spd: 6 },
+    name: 'Colossus', archetype: 'TANK', element: 'earth',
+    baseStats: { hp: 380, atk: 32, def: 38, mag: 5, spd: 6 },
     rarity: 'RARE', echoId: 'guardian_echo',
     evolutionStages: ['giant'], trialId: 'trial_giant',
-    icon: '🗿', desc: 'A massive stone giant. Slow but nearly unkillable.',
+    icon: '🗿', desc: 'A massive stone giant. An immovable wall of living rock.',
   },
   mimic: {
-    name: 'Mimic', archetype: 'STALKER', element: 'construct',
-    baseStats: { hp: 120, atk: 22, def: 10, mag: 15, spd: 16 },
+    name: 'Trickbox', archetype: 'STALKER', element: 'construct',
+    baseStats: { hp: 130, atk: 24, def: 10, mag: 16, spd: 18 },
     rarity: 'UNCOMMON', echoId: 'shrapnel_echo',
     evolutionStages: ['mimic'], trialId: 'trial_mimic',
-    icon: '🎁', desc: 'A cunning mimic that lures prey with false promises.',
+    icon: '🎁', desc: 'A cunning mimic that lures prey with illusions of treasure.',
   },
   mushroom: {
-    name: 'Mushroom', archetype: 'MAGE', element: 'nature',
-    baseStats: { hp: 100, atk: 10, def: 8, mag: 28, spd: 10 },
+    name: 'Sporelord', archetype: 'MAGE', element: 'nature',
+    baseStats: { hp: 110, atk: 10, def: 8, mag: 32, spd: 10 },
     rarity: 'COMMON', echoId: 'ember_echo',
     evolutionStages: ['mushroom'], trialId: 'trial_mushroom',
-    icon: '🍄', desc: 'A sentient mushroom that casts spore magic.',
+    icon: '🍄', desc: 'A sentient mushroom that commands toxic spore magic.',
   },
   octopus: {
-    name: 'Octopus', archetype: 'BRUTE', element: 'water',
-    baseStats: { hp: 160, atk: 24, def: 12, mag: 12, spd: 14 },
+    name: 'Krakenling', archetype: 'BRUTE', element: 'water',
+    baseStats: { hp: 170, atk: 26, def: 14, mag: 14, spd: 14 },
     rarity: 'UNCOMMON', echoId: 'frost_echo',
     evolutionStages: ['octopus'], trialId: 'trial_octopus',
-    icon: '🐙', desc: 'An eight-armed sea creature that crushes enemies.',
+    icon: '🐙', desc: 'A young kraken with eight crushing tentacles.',
   },
   reptile: {
-    name: 'Reptile', archetype: 'STALKER', element: 'beast',
-    baseStats: { hp: 110, atk: 20, def: 8, mag: 6, spd: 20 },
+    name: 'Venomscale', archetype: 'STALKER', element: 'poison',
+    baseStats: { hp: 120, atk: 22, def: 8, mag: 8, spd: 22 },
     rarity: 'COMMON', echoId: 'pack_echo',
     evolutionStages: ['reptile'], trialId: 'trial_reptile',
-    icon: '🦎', desc: 'A quick reptile that strikes with venomous bites.',
+    icon: '🦎', desc: 'A venomous reptile whose bite corrodes armor.',
   },
   slime: {
-    name: 'Slime', archetype: 'TANK', element: 'nature',
-    baseStats: { hp: 130, atk: 8, def: 18, mag: 10, spd: 6 },
+    name: 'Gelatrix', archetype: 'TANK', element: 'nature',
+    baseStats: { hp: 140, atk: 8, def: 20, mag: 12, spd: 6 },
     rarity: 'COMMON', echoId: 'guardian_echo',
     evolutionStages: ['slime'], trialId: 'trial_slime',
-    icon: '🟢', desc: 'A gelatinous blob that absorbs damage.',
+    icon: '🟢', desc: 'A gelatinous blob that absorbs and nullifies damage.',
   },
   snake: {
-    name: 'Snake', archetype: 'STALKER', element: 'beast',
-    baseStats: { hp: 90, atk: 16, def: 6, mag: 10, spd: 24 },
+    name: 'Vipertongue', archetype: 'STALKER', element: 'poison',
+    baseStats: { hp: 95, atk: 18, def: 6, mag: 12, spd: 26 },
     rarity: 'COMMON', echoId: 'pack_echo',
     evolutionStages: ['snake'], trialId: 'trial_snake',
-    icon: '🐍', desc: 'A venomous serpent that strikes with blinding speed.',
+    icon: '🐍', desc: 'A deadly serpent that strikes before you can blink.',
   },
   yeti: {
-    name: 'Yeti', archetype: 'BRUTE', element: 'ice',
-    baseStats: { hp: 250, atk: 35, def: 20, mag: 15, spd: 10 },
+    name: 'Frostbeard', archetype: 'BRUTE', element: 'ice',
+    baseStats: { hp: 270, atk: 38, def: 22, mag: 16, spd: 10 },
     rarity: 'RARE', echoId: 'frost_echo',
     evolutionStages: ['yeti'], trialId: 'trial_yeti',
-    icon: '🦏', desc: 'A towering yeti from frozen peaks.',
+    icon: '🦏', desc: 'A towering yeti from the frozen peaks. Its roar avalanches mountains.',
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // STATIC PNG SUMMONS (ship sprites for Grand Inventor)
+  // GRAND INVENTOR TORRENT SUMMONS (static PNG ship sprites)
+  // These are mechanical summons unique to the Grand Inventor class.
   // ═══════════════════════════════════════════════════════════════
 
   ship_cruiser: {
-    name: 'Cruiser', archetype: 'BRUTE', element: 'construct',
-    baseStats: { hp: 280, atk: 38, def: 22, mag: 10, spd: 12 },
+    name: 'Aegis Cruiser', archetype: 'BRUTE', element: 'construct',
+    baseStats: { hp: 300, atk: 40, def: 24, mag: 10, spd: 12 },
     rarity: 'UNCOMMON', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_cruiser'], trialId: 'trial_ship_cruiser',
-    icon: '🚀', desc: 'A heavy space cruiser with devastating firepower.',
-    isStatic: true, // uses PNG, not idle.gif
+    icon: '🚀', desc: 'A heavy assault cruiser. Broadside cannons devastate all in range.',
+    isStatic: true, isTorrent: true,
   },
   ship_fighter: {
-    name: 'Fighter', archetype: 'STALKER', element: 'construct',
-    baseStats: { hp: 180, atk: 30, def: 12, mag: 8, spd: 28 },
+    name: 'Wraith Fighter', archetype: 'STALKER', element: 'construct',
+    baseStats: { hp: 190, atk: 32, def: 12, mag: 8, spd: 30 },
     rarity: 'UNCOMMON', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_fighter'], trialId: 'trial_ship_fighter',
-    icon: '✈️', desc: 'A nimble space fighter that strikes fast.',
-    isStatic: true,
+    icon: '✈️', desc: 'A nimble strike fighter that outmaneuvers and picks apart enemies.',
+    isStatic: true, isTorrent: true,
   },
   ship_squid: {
-    name: 'Squid', archetype: 'MAGE', element: 'construct',
-    baseStats: { hp: 200, atk: 15, def: 14, mag: 35, spd: 14 },
+    name: 'Void Squid', archetype: 'MAGE', element: 'construct',
+    baseStats: { hp: 210, atk: 16, def: 14, mag: 38, spd: 14 },
     rarity: 'RARE', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_squid'], trialId: 'trial_ship_squid',
-    icon: '🛸', desc: 'A mysterious squid-type vessel with arcane tech.',
-    isStatic: true,
+    icon: '🛸', desc: 'A mysterious biomechanical squid with arcane energy weapons.',
+    isStatic: true, // regular summon, NOT Torrent-specific
   },
 };
 
@@ -193,7 +191,7 @@ function getRarityConfig(rarity) {
   return RARITY_CONFIG[rarity] || RARITY_CONFIG.COMMON;
 }
 
-// Echoes (simplified — all summons share generic echoes now)
+// Echoes
 const ECHOES = {
   pack_echo: { name: 'Pack Echo', desc: 'Nearby beasts gain +5% ATK', icon: '🐺' },
   guardian_echo: { name: 'Guardian Echo', desc: 'On death, owner gains +20% DEF for 3 turns', icon: '🛡️' },
@@ -222,7 +220,7 @@ function getPersonalityModifier(personality) {
   return PERSONALITIES[personality] || PERSONALITIES.STOIC;
 }
 
-// Resonance Web (simplified)
+// Resonance Web
 const RESONANCES = {
   dual_element: { name: 'Dual Element', desc: '+5% all stats', icon: '🔗' },
   tri_element: { name: 'Tri Element', desc: '+10% all stats', icon: '🔗🔗' },
