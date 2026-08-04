@@ -210,16 +210,16 @@ async function cmdPokedex(sock, chatId, senderJid) {
     });
 
     if (gifBuffer && gifBuffer.length > 0) {
-      // 💡 FIX: Baileys requires jpegThumbnail for video messages.
-      // The sock.sendMessage monkey-patch only covers image messages.
-      // Without a thumbnail, the video send silently fails.
-      const FALLBACK_THUMB = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAAUABgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==', 'base64');
-
+      // 💡 NOTE FOR FUTURE REFERENCE: Baileys sends animated GIFs as `image`
+      // with mimetype 'image/gif'. Using `video` + `gifPlayback: true` requires
+      // ffmpeg MP4 conversion which silently fails on Oracle's 954MB box.
+      // The `image` approach lets WhatsApp display the animated GIF natively.
+      // The sock.sendMessage monkey-patch auto-injects jpegThumbnail for ALL
+      // image messages (prevents sharp crash), so no manual thumbnail needed.
       await sock.sendMessage(chatId, {
-        video: gifBuffer,
+        image: gifBuffer,
+        mimetype: 'image/gif',
         caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
-        gifPlayback: true,
-        jpegThumbnail: FALLBACK_THUMB,
       });
       return;
     }
