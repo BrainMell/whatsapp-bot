@@ -265,7 +265,6 @@ function generateWildSummonEncounter(floor) {
       stats: {
         hp, maxHp: hp,
         atk, def, mag, spd,
-        maxHp,
       },
       currentHP: hp,
       maxHP: hp,
