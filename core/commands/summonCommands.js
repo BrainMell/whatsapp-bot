@@ -31,7 +31,8 @@ const getPrefix = () => botConfig.getPrefix();
 
 // 💡 HELPER: Resolve a summon by position number (1, 2, 3) or fallback to summonId
 // This replaces all the old summonId.endsWith(query) lookups.
-async function resolveSummon(summons, query) {
+// SYNCHRONOUS — no I/O, no await needed.
+function resolveSummon(summons, query) {
   if (!query) return null;
   // Try position number first
   const num = parseInt(query);
@@ -512,7 +513,7 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
 
   // Resolve summon by partial ID match (last 8 chars) or nickname
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}". Use \`${getPrefix()} summon list\` to see your IDs.` });
@@ -568,7 +569,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -654,7 +655,7 @@ async function cmdRelease(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -697,7 +698,7 @@ async function cmdTrain(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -731,7 +732,7 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -991,8 +992,8 @@ async function cmdForge(sock, chatId, senderJid, args) {
 
   // Resolve both summons by partial ID
   const summons = await summonSystem.getUserSummons(senderJid);
-  const s1 = await resolveSummon(summons, id1);
-  const s2 = await resolveSummon(summons, id2);
+  const s1 = resolveSummon(summons, id1);
+  const s2 = resolveSummon(summons, id2);
 
   if (!s1 || !s2) {
     await sock.sendMessage(chatId, { text: '❌ One or both summons not found. Use partial IDs from `.summon list`.' });
@@ -1067,7 +1068,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -1269,7 +1270,7 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = await resolveSummon(summons, query);
+  const target = resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -1742,7 +1743,7 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
 
   // Resolve the summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${getPrefix()} summon list\` to see your summons.` });
     return;
@@ -1803,7 +1804,7 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   // Resolve gear item — look up in ITEM_DATABASE for type SUMMON_GEAR
@@ -1888,7 +1889,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   const gear = summon.summonEquipment?.[slot];
@@ -1923,7 +1924,7 @@ async function cmdBond(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -1954,7 +1955,7 @@ async function cmdTraits(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -1989,7 +1990,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = await resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
