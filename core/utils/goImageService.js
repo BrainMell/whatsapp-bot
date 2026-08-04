@@ -243,6 +243,27 @@ class GoImageService {
   }
 
   /*
+   * Generate Summon Roster GIF — NEW 2026-08-03
+   * Renders an animated GIF showing the player's summons doing their
+   * idle.gif animations on a sparklinlabs background, with an info hub.
+   * Payload: { userNickname, slotsUsed, slotsMax, summons[], activeIndex }
+   */
+  async generateSummonRosterGIF(data) {
+    return this._enqueue(async () => {
+      try {
+        const response = await this.client.post("/api/summons/roster", data, {
+          responseType: "arraybuffer",
+          timeout: 30000, // GIF rendering can take 5-15s depending on frame count
+        });
+        return Buffer.from(response.data);
+      } catch (error) {
+        console.error("GoService Summon Roster GIF Error:", error.message);
+        throw error; // let caller handle the fallback
+      }
+    });
+  }
+
+  /*
    * Generate Combat End Screen
    * 💡 UPDATED 2026-07-29: Now accepts a richer payload {text, victory, gold, xp, items}
    * for the new gradient + rewards panel end screen. The text-only path is still

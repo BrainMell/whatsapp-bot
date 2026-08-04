@@ -170,8 +170,58 @@ async function cmdPokedex(sock, chatId, senderJid) {
     return;
   }
 
-  // 💡 Phase C2: Render the roster as an image using node-canvas.
-  // Falls back to text if the renderer fails.
+  // 💡 NEW 2026-08-03: Render the roster as an ANIMATED GIF via the Go service.
+  // Shows summons doing their idle.gif animations on a sparklinlabs background.
+  // Falls back to node-canvas PNG, then text.
+  try {
+    const goService = require('../utils/goImageService');
+    const summonSystem = require('../rpg/summonSystem');
+    const registry = require('../rpg/summonRegistry');
+
+    // Build the payload for the Go service
+    const rosterSummons = summons.map(s => {
+      const stats = summonSystem.computeEffectiveStats(s);
+      const species = registry.getSpecies(s.species);
+      return {
+        species: s.species,
+        nickname: s.nickname || species?.name || s.species,
+        level: s.level || 1,
+        rarity: s.rarity || 'COMMON',
+        element: s.element || species?.element || 'neutral',
+        archetype: s.archetype || species?.archetype || 'BRUTE',
+        loyalty: s.loyalty || 100,
+        hp: stats.hp || 0,
+        atk: stats.atk || 0,
+        def: stats.def || 0,
+        mag: stats.mag || 0,
+        spd: stats.spd || 0,
+        isDeployed: user.activeSummonId === s.summonId,
+      };
+    });
+
+    const activeIdx = summons.findIndex(s => s.summonId === user.activeSummonId);
+
+    const gifBuffer = await goService.generateSummonRosterGIF({
+      userNickname: user.nickname || 'Adventurer',
+      slotsUsed: summons.length,
+      slotsMax: user.summonSlots || 3,
+      summons: rosterSummons,
+      activeIndex: activeIdx,
+    });
+
+    if (gifBuffer && gifBuffer.length > 0) {
+      await sock.sendMessage(chatId, {
+        video: gifBuffer,
+        caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
+        gifPlayback: true,
+      });
+      return;
+    }
+  } catch (e) {
+    console.error('[SummonRoster] GIF render failed, trying PNG fallback:', e.message);
+  }
+
+  // 💡 Fallback: node-canvas PNG (sparklinlabs background, static sprites)
   try {
     const imageBuffer = await rosterRenderer.renderRoster(user, summons);
     if (imageBuffer && imageBuffer.length > 0) {
@@ -182,7 +232,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
       return;
     }
   } catch (e) {
-    console.error('[SummonRoster] Image render failed, falling back to text:', e.message);
+    console.error('[SummonRoster] PNG render failed, falling back to text:', e.message);
   }
 
   // ── Text fallback (same as before) ──
