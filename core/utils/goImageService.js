@@ -202,6 +202,43 @@ class GoImageService {
   }
 
   /*
+   * Generate Combat Image (DIRECT — bypasses _enqueue)
+   *
+   * 💡 FIX 2026-08-04: PvP duel images are static PNGs (fast ~1-3s render).
+   * Routing them through _enqueue caused them to stall behind slow GIF
+   * renders in the 3-slot queue — the roster/detail GIF calls already
+   * bypass _enqueue (they take 8-15s), and when 3 of those were in flight,
+   * a duel PNG waited up to 8s in the queue and then hit the 5s race
+   * timeout in acceptChallenge, falling back to text-only.
+   *
+   * A static PNG is lighter than any GIF, so bypassing the queue is safe.
+   * This mirrors the generateSummonRosterGIF / generateSummonDetailGIF
+   * pattern: direct axios POST with an explicit timeout.
+   *
+   * Used by PvP acceptChallenge + handlePvPAction turn images.
+   */
+  async generateCombatImageDirect(data) {
+    const startTime = Date.now();
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/combat', data, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Combat image (direct): ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Combat image (direct) FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
    * Generate ANIMATED Combat Video (MP4) — NEW 2026-07-29
    * Renders a 12-frame animation as an MP4 with VFX overlays, sprite reactions,
    * HP interpolation, and defeated fade-out. Falls back to static PNG on failure.

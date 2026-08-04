@@ -82,6 +82,13 @@ function buildActionPayload(action = {}) {
 
 /**
  * Generate a static PNG combat image.
+ *
+ * @param {Array} players
+ * @param {Array} enemies
+ * @param {object} options - { combatType, summons, action, backgroundPath, bypassQueue }
+ *   bypassQueue (bool): when true, skip the _enqueue semaphore and POST directly
+ *   to the Go service. Used by PvP duel images (static PNGs that must not stall
+ *   behind slow GIF renders in the queue). Default false (PvE keeps queued behavior).
  */
 async function generateCombatImage(players, enemies, options = {}) {
     try {
@@ -92,7 +99,11 @@ async function generateCombatImage(players, enemies, options = {}) {
         if (options.action) {
             payload.action = buildActionPayload(options.action);
         }
-        const imageBuffer = await goService.generateCombatImage(payload);
+        // 💡 FIX 2026-08-04: bypassQueue for PvP duel images. Static PNGs render
+        // in ~1-3s and should not wait behind slow GIF renders in _enqueue.
+        const imageBuffer = options.bypassQueue
+            ? await goService.generateCombatImageDirect(payload)
+            : await goService.generateCombatImage(payload);
         return { success: true, buffer: imageBuffer, mimeType: 'image/png' };
     } catch (error) {
         console.error('❌ Combat image generation failed:', error.message);

@@ -357,28 +357,33 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     activeDuels.set(chatId, duelState);
 
-    // 💡 Deploy summons for both players (non-blocking — don't let this hold up the duel)
+    // 💡 FIX 2026-08-04: Deploy summons for both players BEFORE rendering the
+    // image. Summons are mandatory — the duel image must show them. The 3s
+    // timeout that was here before was too aggressive (DB queries for 2 players
+    // can briefly exceed 3s under load) and caused summons to be silently
+    // skipped, leaving the duel image without them. 8s is a generous safety
+    // net; normal deploy is <1s.
     try {
         await Promise.race([
             deployPvPSummons(duelState),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Summon deploy timeout (3s)')), 3000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Summon deploy timeout (8s)')), 8000)),
         ]);
     } catch (e) {
-        console.error('[PvP] Summon deploy failed/skipped:', e.message);
-        // Continue without summons — duel still works
+        console.error('[PvP] Summon deploy failed:', e.message);
+        // Continue — duel still works, summons just won't appear in the image.
     }
 
-    // 💡 FIX: Image generation is BEST-EFFORT with short timeout.
-    // The Go service can be slow — don't let it block the duel start.
-    // If image fails, the duel STILL STARTS with text-only.
+    // 💡 FIX 2026-08-04: Duel image is a static PNG (~1-3s render). It now
+    // bypasses the _enqueue queue (see generateDuelImage) so it never stalls
+    // behind slow GIF renders. The direct axios call has its own 10s timeout,
+    // so no outer Promise.race is needed — the image will render or fail on
+    // its own schedule. Text-only is only a fallback for a genuinely down Go
+    // service, not for "the queue was busy".
     let image = null;
     try {
-        image = await Promise.race([
-            generateDuelImage(duelState),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (5s)')), 5000)),
-        ]);
+        image = await generateDuelImage(duelState);
     } catch (imgErr) {
-        console.error('[PvP] Duel image skipped (text-only duel):', imgErr.message);
+        console.error('[PvP] Duel image failed:', imgErr.message);
         image = null;
     }
 
@@ -406,8 +411,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
         `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
-        `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*` +
-        (image ? '' : `\n\n_⚠️ Image rendering skipped (Go service slow). Duel is active — use the commands above._`);
+        `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return { success: true, duel: duelState, image, message: startMsg };
 }
@@ -550,15 +554,15 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
         
         const nextPlayer = duel.players[duel.turn];
-        // 💡 FIX 2026-08-03: best-effort image — don't hang the turn if Go service is slow.
+        // 💡 FIX 2026-08-04: generateDuelImage now bypasses _enqueue and uses a
+        // direct axios call with its own 10s timeout. No outer Promise.race
+        // needed — the image renders on its own schedule. Text-only is only a
+        // fallback for a genuinely unreachable Go service.
         let imageResult = null;
         try {
-            imageResult = await Promise.race([
-                generateDuelImage(duel),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
-            ]);
+            imageResult = await generateDuelImage(duel);
         } catch (imgErr) {
-            console.error('[PvP] Turn image generation failed (text-only):', imgErr.message);
+            console.error('[PvP] Turn image failed:', imgErr.message);
             imageResult = null;
         }
         
@@ -1112,15 +1116,13 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     const nextPlayer = duel.players[duel.turn];
 
-    // 💡 FIX 2026-08-03: best-effort image — don't hang the turn if Go service is slow.
+    // 💡 FIX 2026-08-04: generateDuelImage now bypasses _enqueue and uses a
+    // direct axios call with its own 10s timeout. No outer Promise.race needed.
     let imageResult = null;
     try {
-        imageResult = await Promise.race([
-            generateDuelImage(duel),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (10s)')), 10000)),
-        ]);
+        imageResult = await generateDuelImage(duel);
     } catch (imgErr) {
-        console.error('[PvP] Turn image generation failed (text-only):', imgErr.message);
+        console.error('[PvP] Turn image failed:', imgErr.message);
         imageResult = null;
     }
     
@@ -1345,10 +1347,16 @@ async function generateDuelImage(duel) {
     // 💡 FIX 2026-08-03 (turn indicator): Pass the action payload with
     // attackerSide + attackerIndex so the Go service can draw the golden
     // turn-indicator ellipse under the active player.
+    //
+    // 💡 FIX 2026-08-04 (bypass queue): The duel image is a static PNG (~1-3s
+    // render). Bypassing _enqueue prevents it from stalling behind slow GIF
+    // renders (roster/detail GIFs take 8-15s and already bypass the queue).
+    // The direct axios call has its own 10s timeout, so no outer race needed.
     return await combatImageGenerator.generateCombatImage(
         [attacker, defender], [],
         {
             combatType: 'PVP',
+            bypassQueue: true,
             summons: duel.summons || [],
             action: {
                 attackerSide: 'player',
