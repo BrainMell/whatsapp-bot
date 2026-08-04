@@ -29,6 +29,24 @@ const codexRenderer = require('../rpg/summonCodexRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
+// 💡 HELPER: Resolve a summon by position number (1, 2, 3) or fallback to summonId
+// This replaces all the old summonId.endsWith(query) lookups.
+async function resolveSummon(summons, query) {
+  if (!query) return null;
+  // Try position number first
+  const num = parseInt(query);
+  if (!isNaN(num) && num >= 1 && num <= summons.length) {
+    return summons[num - 1];
+  }
+  // Fallback: summonId match (backwards compat)
+  return summons.find(s =>
+    s.summonId.endsWith(query) ||
+    s.summonId === query ||
+    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
+  ) || null;
+}
+
+
 // ─────────────────────────────────────────────────────────────
 // MAIN COMMAND ROUTER
 // ─────────────────────────────────────────────────────────────
@@ -494,11 +512,7 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
 
   // Resolve summon by partial ID match (last 8 chars) or nickname
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) ||
-    s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}". Use \`${getPrefix()} summon list\` to see your IDs.` });
@@ -554,11 +568,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) ||
-    s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -644,11 +654,7 @@ async function cmdRelease(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) ||
-    s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -691,11 +697,7 @@ async function cmdTrain(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) ||
-    s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -729,11 +731,7 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) ||
-    s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -758,43 +756,96 @@ async function cmdCodex(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Parse page number and element filter from args
+  // Parse page number
   let page = 1;
-  let filter = 'all';
   for (const arg of args) {
     const num = parseInt(arg);
     if (!isNaN(num) && num > 0) page = num;
-    else if (['undead','demon','fire','ice','lightning','beast','dragon','construct','holy'].includes(arg.toLowerCase())) {
-      filter = arg.toLowerCase();
-    }
   }
 
   const p = getPrefix();
+  const PER_PAGE = 5;
+  const allSpecies = registry.getAllSpecies();
+  const totalPages = Math.ceil(allSpecies.length / PER_PAGE);
+  page = Math.max(1, Math.min(page, totalPages));
 
-  // Try image rendering first
+  const startIdx = (page - 1) * PER_PAGE;
+  const pageSpecies = allSpecies.slice(startIdx, startIdx + PER_PAGE);
+
+  // Build payload for Go service — same format as roster but with all species
+  const rosterSummons = pageSpecies.map(speciesId => {
+    const s = registry.getSpecies(speciesId);
+    return {
+      species: speciesId,
+      nickname: s?.name || speciesId,
+      level: 1,
+      rarity: s?.rarity || 'COMMON',
+      element: s?.element || 'neutral',
+      archetype: s?.archetype || 'BRUTE',
+      loyalty: 100,
+      hp: s?.baseStats?.hp || 100,
+      atk: s?.baseStats?.atk || 10,
+      def: s?.baseStats?.def || 5,
+      mag: s?.baseStats?.mag || 5,
+      spd: s?.baseStats?.spd || 10,
+      isDeployed: false,
+    };
+  });
+
+  // Try Go service animated GIF (same as roster, 5 per page)
   try {
-    const result = await codexRenderer.renderCodexPage(registry, page, filter);
-    if (result.buffer && result.buffer.length > 0) {
-      let caption = `SUMMON CODEX — ${result.totalSpecies} species`;
-      if (filter !== 'all') caption += ` (${filter})`;
-      caption += ` | Page ${result.currentPage}/${result.totalPages}`;
-      if (result.totalPages > 1) {
-        caption += `\n${p} summon codex <page> — navigate | ${p} summon codex <element> — filter`;
+    const goService = require('../utils/goImageService');
+    const gifBuffer = await goService.generateSummonRosterGIF({
+      userNickname: 'CODEX',
+      slotsUsed: pageSpecies.length,
+      slotsMax: PER_PAGE,
+      summons: rosterSummons,
+      activeIndex: -1,
+    });
+
+    if (gifBuffer && gifBuffer.length > 0) {
+      // Convert GIF → MP4 via ffmpeg
+      const { execFileSync } = require('child_process');
+      const fs = require('fs');
+      const tmpGif = '/tmp/summon_codex.gif';
+      const tmpMp4 = '/tmp/summon_codex.mp4';
+      fs.writeFileSync(tmpGif, gifBuffer);
+
+      try {
+        execFileSync('ffmpeg', [
+          '-y', '-i', tmpGif,
+          '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
+          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-an',
+          tmpMp4,
+        ], { timeout: 15000, stdio: 'pipe' });
+
+        const mp4Buffer = fs.readFileSync(tmpMp4);
+        let caption = `📖 *SUMMON CODEX* — ${allSpecies.length} species | Page ${page}/${totalPages}`;
+        if (totalPages > 1) caption += `\n💡 \`${p} summon codex <page>\` — navigate`;
+        await sock.sendMessage(chatId, { video: mp4Buffer, gifPlayback: true, caption });
+
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
+        return;
+      } catch (convErr) {
+        console.error('[Codex] ffmpeg failed:', convErr.message);
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
       }
-      await sock.sendMessage(chatId, { image: result.buffer, caption });
-      return;
     }
   } catch (e) {
-    console.error('[Codex] Image render failed, falling back to text:', e.message);
+    console.error('[Codex] GIF render failed, trying text:', e.message);
   }
 
   // Text fallback
-  const allSpecies = registry.getAllSpecies();
-  let msg = `SUMMON CODEX — ALL SPECIES\n`;
+  let msg = `📖 *SUMMON CODEX* — Page ${page}/${totalPages}\n`;
   msg += `Total: ${allSpecies.length} species\n\n`;
-  msg += `Use ${p} summon codex to view the image version.\n`;
-  msg += `Filters: ${p} summon codex <element> (undead, demon, fire, ice, etc.)\n`;
-  msg += `Pages: ${p} summon codex <page number>`;
+  pageSpecies.forEach((id, i) => {
+    const s = registry.getSpecies(id);
+    msg += `${startIdx + i + 1}. ${s?.icon || '🐉'} *${s?.name || id}* — ${s?.rarity || 'COMMON'} ${s?.element || ''}\n`;
+  });
+  if (totalPages > 1) msg += `\n💡 \`${p} summon codex <page>\` — navigate`;
   await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -940,8 +991,8 @@ async function cmdForge(sock, chatId, senderJid, args) {
 
   // Resolve both summons by partial ID
   const summons = await summonSystem.getUserSummons(senderJid);
-  const s1 = summons.find(s => s.summonId.endsWith(id1) || s.summonId === id1 || (s.nickname && s.nickname.toLowerCase() === id1.toLowerCase()));
-  const s2 = summons.find(s => s.summonId.endsWith(id2) || s.summonId === id2 || (s.nickname && s.nickname.toLowerCase() === id2.toLowerCase()));
+  const s1 = await resolveSummon(summons, id1);
+  const s2 = await resolveSummon(summons, id2);
 
   if (!s1 || !s2) {
     await sock.sendMessage(chatId, { text: '❌ One or both summons not found. Use partial IDs from `.summon list`.' });
@@ -1016,10 +1067,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) || s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -1221,10 +1269,7 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const target = summons.find(s =>
-    s.summonId.endsWith(query) || s.summonId === query ||
-    (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())
-  );
+  const target = await resolveSummon(summons, query);
 
   if (!target) {
     await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
@@ -1578,22 +1623,31 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
 
   const sub = (args[0] || '').toLowerCase();
-  const summonIdQuery = args[1] || '';
+  const summonNum = args[1] || '';
   const p = getPrefix();
 
   // .summon skill (no args) — show help
-  if (!sub || !summonIdQuery) {
+  if (!sub || !summonNum) {
     await sock.sendMessage(chatId, {
-      text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <id>\` — view skill tree\n• \`${p} summon skill choose <id> <A|B|C>\` — choose a path (permanent without respec scroll)\n• \`${p} summon skill unlock <id> <A1-A5>\` — unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <id>\` — reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._`
+      text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <#>\` — view skill tree for summon #N\n• \`${p} summon skill choose <#> <A|B|C>\` — choose a path\n• \`${p} summon skill unlock <#> <A1-A5>\` — unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <#>\` — reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._\n_Use summon position number (1, 2, 3) not summon ID._`
     });
     return;
   }
 
-  // Resolve the summon
+  // 💡 FIX: Use position number instead of summonId for lookup
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summonIndex = parseInt(summonNum) - 1;
+  let summon = null;
+
+  if (!isNaN(summonIndex) && summonIndex >= 0 && summonIndex < summons.length) {
+    summon = summons[summonIndex];
+  } else {
+    // Fallback: try summonId match (for backwards compat)
+    summon = summons.find(s => s.summonId.endsWith(summonNum) || s.summonId === summonNum);
+  }
+
   if (!summon) {
-    await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${p} summon list\` to see your summons.` });
+    await sock.sendMessage(chatId, { text: `❌ Summon not found. You have ${summons.length} summons (1-${summons.length}). Use \`${p} summons\` to see them.` });
     return;
   }
 
@@ -1602,7 +1656,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   if (sub === 'choose') {
     const path = (args[2] || '').toUpperCase().trim();
     const result = summonSkillTrees.choosePath(summon, path);
-    await summon.save();
+    if (result.success) await summon.save();
     await sock.sendMessage(chatId, { text: result.message });
     return;
   }
@@ -1688,7 +1742,7 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
 
   // Resolve the summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${getPrefix()} summon list\` to see your summons.` });
     return;
@@ -1749,7 +1803,7 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
 
   // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   // Resolve gear item — look up in ITEM_DATABASE for type SUMMON_GEAR
@@ -1834,7 +1888,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   const gear = summon.summonEquipment?.[slot];
@@ -1869,7 +1923,7 @@ async function cmdBond(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -1900,7 +1954,7 @@ async function cmdTraits(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -1935,7 +1989,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = summons.find(s => s.summonId.endsWith(summonIdQuery) || s.summonId === summonIdQuery);
+  const summon = await resolveSummon(summons, summonNum);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
