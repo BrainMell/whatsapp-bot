@@ -215,20 +215,62 @@ async function cmdPokedex(sock, chatId, senderJid) {
     console.log('[SummonRoster] GIF buffer received:', gifBuffer ? gifBuffer.length + ' bytes' : 'null');
 
     if (gifBuffer && gifBuffer.length > 0) {
-      // 💡 NOTE FOR FUTURE REFERENCE: Baileys sends animated GIFs as `image`
-      // with mimetype 'image/gif'. Using `video` + `gifPlayback: true` requires
-      // ffmpeg MP4 conversion which silently fails on Oracle's 954MB box.
-      // The `image` approach lets WhatsApp display the animated GIF natively.
-      // The sock.sendMessage monkey-patch auto-injects jpegThumbnail for ALL
-      // image messages (prevents sharp crash), so no manual thumbnail needed.
-      console.log('[SummonRoster] Sending GIF as image to WhatsApp...');
-      const sendResult = await sock.sendMessage(chatId, {
-        image: gifBuffer,
-        mimetype: 'image/gif',
-        caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
-      });
-      console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
-      return;
+      // 💡 CRITICAL NOTE FOR FUTURE REFERENCE:
+      // WhatsApp does NOT support GIF as an image format (image: gifBuffer,
+      // mimetype: 'image/gif' silently fails — the bot sends but the user
+      // sees nothing). WhatsApp also can't use video + gifPlayback: true
+      // with a raw GIF buffer (Baileys tries ffmpeg MP4 conversion which
+      // silently fails on Oracle).
+      //
+      // SOLUTION: Convert the GIF to MP4 using ffmpeg on Box 1 (where ffmpeg
+      // IS installed and has enough RAM), THEN send as video + gifPlayback.
+      // The card system already uses this pattern successfully (convertCardImage
+      // returns MP4, sent as video + gifPlayback: true).
+      //
+      // The monkey-patch auto-injects jpegThumbnail for video messages too.
+      console.log('[SummonRoster] Converting GIF to MP4 via ffmpeg...');
+      const { execFileSync } = require('child_process');
+      const fs = require('fs');
+      const tmpGif = '/tmp/summon_roster.gif';
+      const tmpMp4 = '/tmp/summon_roster.mp4';
+      fs.writeFileSync(tmpGif, gifBuffer);
+
+      try {
+        // Convert GIF → MP4 (fast: ~2-5s for a 7-frame GIF)
+        // -preset ultrafast for speed, -crf 23 for quality
+        // Scale to 720x720 square (WhatsApp gifPlayback prefers square)
+        execFileSync('ffmpeg', [
+          '-y', '-i', tmpGif,
+          '-movflags', 'faststart',
+          '-pix_fmt', 'yuv420p',
+          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+          '-an', // no audio
+          tmpMp4,
+        ], { timeout: 15000, stdio: 'pipe' });
+
+        const mp4Buffer = fs.readFileSync(tmpMp4);
+        console.log('[SummonRoster] MP4 converted:', mp4Buffer.length, 'bytes');
+
+        // Send as video with gifPlayback (same pattern as card system)
+        console.log('[SummonRoster] Sending MP4 as video to WhatsApp...');
+        const sendResult = await sock.sendMessage(chatId, {
+          video: mp4Buffer,
+          gifPlayback: true,
+          caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
+        });
+        console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
+
+        // Cleanup
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
+        return;
+      } catch (convErr) {
+        console.error('[SummonRoster] ffmpeg conversion failed:', convErr.message);
+        // Fall through to PNG fallback
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
+      }
     }
   } catch (e) {
     console.error('[SummonRoster] GIF render failed, trying PNG fallback:', e.message);
