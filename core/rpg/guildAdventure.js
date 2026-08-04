@@ -5544,32 +5544,44 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
   abyssRun.playerSnapshot.maxHp = player.stats.maxHp;
   abyssRun.playerSnapshot.maxEnergy = player.stats.maxEnergy;
 
+  // 💡 FIX 2026-08-04: Handle BOTH enemy structures:
+  // - Regular Abyss enemies: hp/maxHp/atk/def at TOP LEVEL (enemy.hp)
+  // - Wild summon enemies: hp/maxHp/atk/def INSIDE enemy.stats (enemy.stats.hp)
+  // Without this, wild summon enemies get NaN HP because enemy.hp is undefined.
+  const enemyHp = enemy.stats?.hp ?? enemy.hp;
+  const enemyMaxHp = enemy.stats?.maxHp ?? enemy.maxHp;
+  const enemyAtk = enemy.stats?.atk ?? enemy.atk;
+  const enemyDef = enemy.stats?.def ?? enemy.def;
+  const enemySpd = enemy.stats?.spd ?? enemy.spd;
+  const enemyMag = enemy.stats?.mag ?? enemy.atk; // fallback to atk if no mag
+
   const combatEnemy = {
     id: enemy.id || `abyss_${floor}`,
     name: enemy.name,
-    icon: enemy.isBoss ? '👹' : '👾',
+    icon: enemy.icon || (enemy.isBoss ? '👹' : '👾'),
     isEnemy: true,
     isBoss: enemy.isBoss || false,
+    isWildSummon: enemy.isWildSummon || false,
     level: enemy.level || floor,
     stats: {
-      hp: enemy.hp,
-      maxHp: enemy.maxHp,
-      atk: enemy.atk,
-      def: enemy.def,
-      spd: enemy.spd,
-      mag: enemy.atk,
+      hp: enemyHp,
+      maxHp: enemyMaxHp,
+      atk: enemyAtk,
+      def: enemyDef,
+      spd: enemySpd,
+      mag: enemyMag,
     },
-    currentHP: enemy.hp,
-    maxHP: enemy.maxHp,
+    currentHP: enemyHp,
+    maxHP: enemyMaxHp,
     mana: 100,
     maxMana: 100,
-    archetype: enemy.isBoss ? 'BOSS' : 'BRUTE',
-    abilities: [],
+    archetype: enemy.archetype || (enemy.isBoss ? 'BOSS' : 'BRUTE'),
+    abilities: enemy.abilities || [],
     statusEffects: [],
     cooldowns: {},
     actionGauge: 0,
-    xpReward: 0,
-    goldReward: 0,
+    xpReward: enemy.xpReward || 0,
+    goldReward: enemy.goldReward || 0,
     isDead: false,
     justDied: false,
   };
@@ -5737,7 +5749,7 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* — ${encounter.enemy.name}\n`;
-    msg += `HP: ${Math.floor(encounter.enemy.hp)}/${Math.floor(encounter.enemy.maxHp)}\n`;
+    msg += `HP: ${Math.floor(encounter.enemy.stats?.hp ?? encounter.enemy.hp)}/${Math.floor(encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp)}\n`;
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);

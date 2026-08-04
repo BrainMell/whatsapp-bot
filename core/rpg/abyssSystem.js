@@ -199,7 +199,7 @@ async function startRun(userId, playerStats) {
 
   let startMsg = '🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n';
   if (encounter.type === 'combat') {
-    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + encounter.enemy.hp + '/' + encounter.enemy.maxHp + '_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
+    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + (encounter.enemy.stats?.hp ?? encounter.enemy.hp) + '/' + (encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp) + '_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'wild_summon') {
     const species = encounter.wildSummonSpecies;
     startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
@@ -507,7 +507,7 @@ async function processTreasure(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -608,7 +608,7 @@ async function processEventChoice(userId, choiceId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -640,7 +640,7 @@ async function processSkip(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
