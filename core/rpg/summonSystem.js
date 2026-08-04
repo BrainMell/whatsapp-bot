@@ -263,14 +263,19 @@ async function getSummon(summonId) {
 async function getUserSummons(ownerJid, opts = {}) {
   // 💡 MAIN DECK SYSTEM: by default, only return Main Deck summons (deployable).
   // Use opts.includeBacklog=true to get ALL summons (Main Deck + Backlog).
+  // 💡 FIX 2026-08-04: Don't filter by inMainDeck in the MongoDB query —
+  // Mongoose strictQuery can strip it for old documents that don't have
+  // the field in their raw BSON. Instead, fetch all and filter in JS.
   const query = { ownerJid };
   if (opts.includeForSale === false) {
     query.forSale = false;
   }
+  let results = await Summon.find(query).sort({ obtainedAt: 1 });
   if (!opts.includeBacklog) {
-    query.inMainDeck = true;
+    // Filter to Main Deck only (inMainDeck defaults to true for old summons)
+    results = results.filter(s => s.inMainDeck !== false);
   }
-  return await Summon.find(query).sort({ deckPosition: 1, obtainedAt: 1 });
+  return results;
 }
 
 /**
@@ -797,14 +802,18 @@ const MAX_DECK_SIZE = 3;
  * Get the user's Main Deck summons (max 3, deployable).
  */
 async function getMainDeck(ownerJid) {
-  return await Summon.find({ ownerJid, inMainDeck: true }).sort({ deckPosition: 1 });
+  // 💡 FIX: filter in JS, not in query (Mongoose strictQuery issue)
+  const all = await Summon.find({ ownerJid }).sort({ obtainedAt: 1 });
+  return all.filter(s => s.inMainDeck !== false);
 }
 
 /**
  * Get the user's Backlog summons (not in Main Deck).
  */
 async function getBacklog(ownerJid) {
-  return await Summon.find({ ownerJid, inMainDeck: false }).sort({ obtainedAt: 1 });
+  // 💡 FIX: filter in JS, not in query (Mongoose strictQuery issue)
+  const all = await Summon.find({ ownerJid }).sort({ obtainedAt: 1 });
+  return all.filter(s => s.inMainDeck === false);
 }
 
 /**
