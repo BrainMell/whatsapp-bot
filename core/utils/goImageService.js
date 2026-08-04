@@ -23,6 +23,11 @@ if (!_explicitGoUrl && !global._goUrlWarned) {
   console.error("    If image commands fail, verify: curl -s -m 5 " + _DEFAULT_GO_URL + "/health");
 }
 
+// 💡 Module-level health cache for isHealthy() — avoids hitting the Go service
+// more than once per 60s. When the service is down, this prevents every
+// image-gen call from wasting 10s on axios timeouts.
+const _healthCache = { value: null, expiresAt: 0 };
+
 class GoImageService {
   constructor(overrideUrl = null) {
     this.baseUrl = overrideUrl || _explicitGoUrl || _DEFAULT_GO_URL;
@@ -176,6 +181,26 @@ class GoImageService {
       }
       return null;
     }
+  }
+
+  /*
+   * Cached health check — returns true/false without hitting the Go service
+   * more than once per 60s. Used to gate image-gen calls so commands don't
+   * waste 10s on axios timeouts when the service is known-down.
+   *
+   * 💡 FIX 2026-08-05: Prevents cascading timeouts when Go service is down.
+   * Without this, every image-gen call waits its full timeout (10-30s)
+   * even when the service has been down for minutes.
+   */
+  async isHealthy() {
+    const now = Date.now();
+    if (now < _healthCache.expiresAt) {
+      return _healthCache.value;
+    }
+    const h = await this.healthCheck();
+    _healthCache.value = !!h;
+    _healthCache.expiresAt = now + 60000; // cache for 60s
+    return _healthCache.value;
   }
 
   /*
@@ -399,6 +424,7 @@ class GoImageService {
       try {
         const response = await this.client.post("/api/chess", data, {
           responseType: "arraybuffer",
+          timeout: 10000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -440,6 +466,7 @@ class GoImageService {
       try {
         const response = await this.client.post("/api/ttt", data, {
           responseType: "arraybuffer",
+          timeout: 10000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -518,6 +545,7 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 15000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
           },
         );
         return Buffer.from(response.data);
@@ -543,6 +571,7 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 10000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
           },
         );
         return Buffer.from(response.data);
@@ -566,6 +595,10 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 10000, // 💡 FIX 2026-08-05: CRITICAL — was missing (120s default).
+            // This is called by background doSpawn timer. When Go service is down,
+            // each call held a queue slot for 120s, clogging _enqueue and causing
+            // ALL other image commands to timeout with "queue timeout (8s)".
           },
         );
         return Buffer.from(response.data);

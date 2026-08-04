@@ -373,15 +373,17 @@ async function acceptChallenge(sock, chatId, targetJid) {
         // Continue — duel still works, summons just won't appear in the image.
     }
 
-    // 💡 FIX 2026-08-04: Duel image is a static PNG (~1-3s render). It now
-    // bypasses the _enqueue queue (see generateDuelImage) so it never stalls
-    // behind slow GIF renders. The direct axios call has its own 10s timeout,
-    // so no outer Promise.race is needed — the image will render or fail on
-    // its own schedule. Text-only is only a fallback for a genuinely down Go
-    // service, not for "the queue was busy".
+    // 💡 FIX 2026-08-05: Health-gate the image gen. If the Go service is
+    // known-down (cached health check), skip image gen entirely — don't waste
+    // 10s on an axios timeout. The duel starts text-only immediately.
     let image = null;
     try {
-        image = await generateDuelImage(duelState);
+        const goService = require('../utils/goImageService');
+        if (await goService.isHealthy()) {
+            image = await generateDuelImage(duelState);
+        } else {
+            console.log('[PvP] Skipping duel image — Go service unhealthy');
+        }
     } catch (imgErr) {
         console.error('[PvP] Duel image failed:', imgErr.message);
         image = null;

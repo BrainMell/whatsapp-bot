@@ -25964,7 +25964,11 @@ _(Or reply to their message)_
                 // if chatId is null. Only send the timeout message if we have a valid chatId.
                 if (_ctx.chatId && typeof _ctx.chatId === 'string' && _ctx.chatId.includes('@')) {
                   try {
-                    await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThis usually means the image rendering service is down. The bot owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                    // 💡 FIX 2026-08-05: Don't always blame the image service — the
+                    // timeout could be from DB hangs, network stalls, or pre-command
+                    // pipeline issues. Give a more accurate message + include the
+                    // command name so the user/operator can correlate with logs.
+                    await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
                   } catch (_) {}
                 }
               }
