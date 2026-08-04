@@ -307,6 +307,18 @@ async function deploySummon(user, summonId) {
     return { success: false, message: '❌ This summon is locked and cannot be deployed.' };
   }
 
+  // 💡 RULE: Only one summon can be deployed at a time. If switching,
+  // the previous one is automatically dismissed.
+  if (user.activeSummonId && user.activeSummonId !== summonId) {
+    user.activeSummonId = summonId;
+    summon.lastUsedAt = new Date();
+    await summon.save();
+    return {
+      success: true,
+      message: `\u2705 Deployed *${summon.nickname || summon.species}*!\n_Previous summon dismissed \u2014 only 1 summon can be active at a time._`,
+    };
+  }
+
   user.activeSummonId = summonId;
   summon.lastUsedAt = new Date();
   await summon.save();

@@ -254,11 +254,27 @@ class GoImageService {
    */
   async generateSummonRosterGIF(data) {
     const startTime = Date.now();
-    console.log('[GoService] Summon roster GIF: starting request...');
+
+    // 💡 CACHE: cache the GIF per user until their summons change.
+    // Key = hash of summon species + levels + activeIndex.
+    // Invalidated when summons are added/removed/leveled/deployed.
+    const crypto = require('crypto');
+    const cacheKey = crypto.createHash('md5').update(
+      data.userNickname + '|' +
+      data.summons.map(s => `${s.species}:${s.level}:${s.isDeployed}`).join(',') + '|' +
+      data.activeIndex
+    ).digest('hex');
+
+    if (this._rosterGifCache && this._rosterGifCache.has(cacheKey)) {
+      const cached = this._rosterGifCache.get(cacheKey);
+      console.log(`[GoService] Summon roster GIF: cache HIT (${cached.length} bytes)`);
+      return cached;
+    }
+
+    console.log('[GoService] Summon roster GIF: cache MISS, generating...');
     try {
       const axios = require('axios');
       const baseURL = this.client.defaults.baseURL;
-      console.log('[GoService] Summon roster GIF: baseURL =', baseURL);
       const response = await axios.post(baseURL + '/api/summons/roster', data, {
         responseType: 'arraybuffer',
         timeout: 30000,
@@ -267,6 +283,16 @@ class GoImageService {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const buffer = Buffer.from(response.data);
       console.log(`[GoService] Summon roster GIF: success! ${buffer.length} bytes in ${elapsed}s`);
+
+      // Cache the result (max 10 entries, 30 min TTL)
+      if (!this._rosterGifCache) this._rosterGifCache = new Map();
+      this._rosterGifCache.set(cacheKey, buffer);
+      // Simple eviction: if cache > 10 entries, clear oldest
+      if (this._rosterGifCache.size > 10) {
+        const firstKey = this._rosterGifCache.keys().next().value;
+        this._rosterGifCache.delete(firstKey);
+      }
+
       return buffer;
     } catch (error) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
