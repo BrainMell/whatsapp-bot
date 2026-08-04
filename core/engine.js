@@ -9774,7 +9774,7 @@ Usage: ${newUsage}/5${warningText}`;
                     hardBanUser(targetUser);
                     console.log(`🚫 [Owner] ${senderJid} hard-banned ${targetUser}`);
                     return await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *HARD-BANNED* by the owner.\n\nThis action is permanent and can ONLY be reversed by the owner with \`${botConfig.getPrefix()} unhardban\`. Mods cannot undo this.`,
+                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *HARD-BANNED* by the owner.\n\nThis action is permanent. Mods cannot undo this.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
                   }
@@ -9831,7 +9831,7 @@ Usage: ${newUsage}/5${warningText}`;
                     hardMuteUser(targetUser);
                     console.log(`🔇 [Owner] ${senderJid} hard-muted ${targetUser}`);
                     return await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + `🔇 @${economy.getDisplayName(targetUser)} has been *HARD-MUTED* by the owner.\n\nThey can see the bot but can't use any commands. This can ONLY be reversed by the owner with \`${botConfig.getPrefix()} unhardmute\`.`,
+                      text: BOT_MARKER + `🔇 @${economy.getDisplayName(targetUser)} has been *HARD-MUTED* by the owner.\n\nThey can see the bot but can't use any commands.`,
                       mentions: buildMentions(m, [], targetUser),
                     });
                   }

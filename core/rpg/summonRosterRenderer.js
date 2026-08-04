@@ -149,84 +149,91 @@ async function renderRoster(user, summons, options = {}) {
   const W = 1024;
   const H = 720;
   ensureFonts();
-  const { createCanvas } = getCanvas();
+  const { createCanvas, loadImage } = getCanvas();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  // ── Background ──
-  const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
-  bgGradient.addColorStop(0, '#1a1a2e');
-  bgGradient.addColorStop(0.5, '#16213e');
-  bgGradient.addColorStop(1, '#0f3460');
-  ctx.fillStyle = bgGradient;
-  ctx.fillRect(0, 0, W, H);
+  // ═══════════════════════════════════════════════════════════════
+  // 💡 NEW UI (2026-08-03): sparklinlabs background + arranged summons
+  // + info hub at bottom. Replaces the old dark-gradient + card layout.
+  // ═══════════════════════════════════════════════════════════════
 
-  // Subtle pattern overlay
-  ctx.fillStyle = 'rgba(255,255,255,0.02)';
-  for (let i = 0; i < W; i += 40) {
-    for (let j = 0; j < H; j += 40) {
-      ctx.fillRect(i, j, 1, 1);
+  // ── 1. Load sparklinlabs background ──
+  const bgPaths = [
+    path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_7.png'),
+    path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_10.png'),
+    path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_8.png'),
+    path.join(__dirname, '..', 'rpgasset', 'backgrounds', 'background1.png'),
+  ];
+  let bgLoaded = false;
+  for (const bgPath of bgPaths) {
+    if (fs.existsSync(bgPath)) {
+      try {
+        const bgImg = await loadImage(bgPath);
+        const scale = Math.max(W / bgImg.width, H / bgImg.height);
+        const dw = bgImg.width * scale;
+        const dh = bgImg.height * scale;
+        ctx.drawImage(bgImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        bgLoaded = true;
+        break;
+      } catch (e) {}
     }
   }
+  if (!bgLoaded) {
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
+    bgGradient.addColorStop(0, '#1a1a2e');
+    bgGradient.addColorStop(0.5, '#16213e');
+    bgGradient.addColorStop(1, '#0f3460');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  // ── Header ──
-  const headerH = 60;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  roundRect(ctx, 20, 15, W - 40, headerH, 8);
+  // ── 2. Dark overlay ──
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── 3. Header ──
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  roundRect(ctx, 20, 15, W - 40, 55, 8);
   ctx.fill();
-
-  // Header border
-  ctx.strokeStyle = 'rgba(255,215,0,0.3)';
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
   ctx.lineWidth = 2;
-  roundRect(ctx, 20, 15, W - 40, headerH, 8);
+  roundRect(ctx, 20, 15, W - 40, 55, 8);
   ctx.stroke();
 
-  // Title
   ctx.fillStyle = '#FFD700';
-  ctx.font = `bold 28px "${FONT_BOLD}", monospace`;
+  ctx.font = `bold 26px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('🐉 MY SUMMONS', 40, 45);
+  ctx.fillText('🐉 SUMMON ROSTER', 40, 42);
 
-  // Slots info
-  const slotText = `${summons.length}/${user.summonSlots || 3} slots`;
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
   ctx.font = `16px "${FONT_REG}", monospace`;
   ctx.textAlign = 'right';
-  ctx.fillText(slotText, W - 40, 45);
+  ctx.fillText(`${summons.length}/${user.summonSlots || 3} slots`, W - 40, 35);
 
-  // Active summon indicator
   if (user.activeSummonId) {
     ctx.fillStyle = '#FFD700';
-    ctx.font = `14px "${FONT_REG}", monospace`;
-    ctx.fillText('⭐ 1 deployed', W - 40, 62);
+    ctx.font = `13px "${FONT_REG}", monospace`;
+    ctx.fillText('⭐ 1 deployed', W - 40, 55);
   }
 
-  // Resonance count
-  const resonances = user.activeResonances || [];
-  if (resonances.length > 0) {
-    ctx.fillStyle = '#4FC3F7';
-    ctx.font = `14px "${FONT_REG}", monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`🔗 ${resonances.length} resonance${resonances.length > 1 ? 's' : ''}`, W / 2, 45);
-  }
+  // ── 4. Summon grid ──
+  const gridTop = 85;
+  const gridBottom = 530;
+  const cardW = 240;
+  const cardH = 130;
+  const cardGap = 12;
+  const cardsPerRow = 4;
+  const gridStartX = (W - (cardsPerRow * cardW + (cardsPerRow - 1) * cardGap)) / 2;
 
-  // ── Summon cards ──
-  const cardsTop = 90;
-  const cardH = 140;
-  const cardW = 480;
-  const cardGap = 10;
-  const cardsPerRow = 2;
-  const cardStartX = 20;
-
-  // Filter summons if needed
   let displaySummons = summons;
   if (options.filter && options.filter !== 'all') {
     displaySummons = summons.filter(s => s.element === options.filter);
   }
 
   if (displaySummons.length === 0) {
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.font = `20px "${FONT_REG}", monospace`;
     ctx.textAlign = 'center';
     ctx.fillText('📭 No summons in your codex yet.', W / 2, H / 2 - 20);
@@ -235,30 +242,198 @@ async function renderRoster(user, summons, options = {}) {
     return canvas.toBuffer('image/png');
   }
 
-  // Draw each summon as a card
-  for (let i = 0; i < Math.min(displaySummons.length, 8); i++) {
+  const maxDisplay = Math.min(displaySummons.length, 8);
+  for (let i = 0; i < maxDisplay; i++) {
     const summon = displaySummons[i];
     const col = i % cardsPerRow;
     const row = Math.floor(i / cardsPerRow);
-    const x = cardStartX + col * (cardW + cardGap);
-    const y = cardsTop + row * (cardH + cardGap);
-
-    await drawSummonCard(ctx, summon, user, x, y, cardW, cardH, i + 1);
+    const x = gridStartX + col * (cardW + cardGap);
+    const y = gridTop + row * (cardH + cardGap);
+    await drawSummonCardOnBackground(ctx, summon, user, x, y, cardW, cardH, i + 1);
   }
 
-  // ── Footer ──
-  const footerY = H - 35;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  roundRect(ctx, 20, footerY - 5, W - 40, 30, 6);
-  ctx.fill();
+  if (displaySummons.length > 8) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = `14px "${FONT_REG}", monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`+${displaySummons.length - 8} more summons...`, W / 2, gridBottom - 5);
+  }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = `13px "${FONT_REG}", monospace`;
+  // ── 5. Info Hub ──
+  const hubY = 545;
+  const hubH = 160;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  roundRect(ctx, 20, hubY, W - 40, hubH, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, 20, hubY, W - 40, hubH, 10);
+  ctx.stroke();
+
+  ctx.fillStyle = '#FFD700';
+  ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('📋 SUMMON INFO HUB', 35, hubY + 10);
+
+  const activeSummon = summons.find(s => s.summonId === user.activeSummonId);
+  if (activeSummon) {
+    const species = registry.getSpecies(activeSummon.species);
+    const stats = summonSystem.computeEffectiveStats(activeSummon);
+    const elementCfg = ELEMENT_CONFIG[activeSummon.element] || ELEMENT_CONFIG.neutral;
+
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
+    ctx.fillText(`⭐ ${activeSummon.nickname || species?.name || activeSummon.species}`, 35, hubY + 35);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.font = `14px "${FONT_REG}", monospace`;
+    ctx.fillText(`Lv.${activeSummon.level} ${activeSummon.rarity} ${elementCfg.label} | ${activeSummon.archetype}`, 35, hubY + 58);
+
+    const statY = hubY + 82;
+    const statLabels = ['HP', 'ATK', 'DEF', 'MAG', 'SPD'];
+    const statValues = [stats.hp, stats.atk, stats.def, stats.mag, stats.spd];
+    const statColors = ['#FF6B6B', '#FFD93D', '#4FC3F7', '#9C27B0', '#4CAF50'];
+    for (let si = 0; si < statLabels.length; si++) {
+      const sx = 35 + si * 140;
+      ctx.fillStyle = statColors[si];
+      ctx.font = `bold 12px "${FONT_BOLD}", monospace`;
+      ctx.fillText(statLabels[si], sx, statY);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = `14px "${FONT_REG}", monospace`;
+      ctx.fillText(Math.floor(statValues[si] || 0).toString(), sx + 30, statY);
+    }
+
+    drawLoyaltyBar(ctx, 35, hubY + 110, 200, activeSummon.loyalty || 0);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = `12px "${FONT_REG}", monospace`;
+    ctx.fillText(`Loyalty: ${Math.floor(activeSummon.loyalty || 0)}%`, 35, hubY + 122);
+
+    const skillPts = activeSummon.skillPoints || 0;
+    if (skillPts > 0) {
+      ctx.fillStyle = '#4FC3F7';
+      ctx.font = `13px "${FONT_REG}", monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`💎 ${skillPts} skill points available`, W - 35, hubY + 35);
+    }
+    if (activeSummon.personality && activeSummon.personality !== 'STOIC') {
+      ctx.fillStyle = '#FF9800';
+      ctx.font = `13px "${FONT_REG}", monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`🧠 ${activeSummon.personality}`, W - 35, hubY + 55);
+    }
+  } else {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = `14px "${FONT_REG}", monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('No summon deployed. Use `.summon <#> deploy` to deploy one.', 35, hubY + 40);
+    const totalLevel = summons.reduce((sum, s) => sum + (s.level || 1), 0);
+    const avgLevel = Math.floor(totalLevel / summons.length);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText(`📊 Collection: ${summons.length} summons | Average level: ${avgLevel}`, 35, hubY + 65);
+    const rarityCounts = {};
+    for (const s of summons) { rarityCounts[s.rarity] = (rarityCounts[s.rarity] || 0) + 1; }
+    const raritySummary = Object.entries(rarityCounts)
+      .sort((a, b) => ['MYTHIC','LEGENDARY','EPIC','RARE','UNCOMMON','COMMON'].indexOf(a[0]) - ['MYTHIC','LEGENDARY','EPIC','RARE','UNCOMMON','COMMON'].indexOf(b[0]))
+      .map(([r, c]) => `${r}: ${c}`).join(' | ');
+    if (raritySummary) { ctx.fillText(`🔮 ${raritySummary}`, 35, hubY + 90); }
+  }
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText('.summon <#> — view details  |  .summon deploy <#> — equip  |  .summon help — all commands', W / 2, footerY + 10);
+  ctx.fillText('.summon <#> — view  |  .summon <#> deploy  |  .summon skill <#>  |  .summon help', W / 2, hubY + hubH - 12);
 
   return canvas.toBuffer('image/png');
 }
+
+// ─────────────────────────────────────────────────────────────
+// Draw a summon card ON the background (translucent, lets bg show)
+// ─────────────────────────────────────────────────────────────
+async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) {
+  const species = registry.getSpecies(summon.species);
+  const elementCfg = ELEMENT_CONFIG[summon.element] || ELEMENT_CONFIG.neutral;
+  const rarityColor = RARITY_COLORS[summon.rarity] || RARITY_COLORS.COMMON;
+  const isActive = user.activeSummonId === summon.summonId;
+  const name = summon.nickname || species?.name || summon.species;
+
+  // Translucent card background (lets sparklinlabs bg show through)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.fill();
+
+  // Rarity-colored border
+  ctx.strokeStyle = isActive ? '#FFD700' : rarityColor;
+  ctx.lineWidth = isActive ? 3 : 1.5;
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.stroke();
+
+  // Element accent strip (left side)
+  ctx.fillStyle = elementCfg.color;
+  roundRect(ctx, x, y, 4, h, 2);
+  ctx.fill();
+
+  // Active star
+  if (isActive) {
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `16px "${FONT_REG}", monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText('⭐', x + w - 10, y + 15);
+  }
+
+  // Index number
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.font = `12px "${FONT_REG}", monospace`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`#${index}`, x + 8, y + 12);
+
+  // Sprite portrait
+  const portraitSize = 70;
+  const portraitX = x + 10;
+  const portraitY = y + 20;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
+  ctx.fill();
+
+  try {
+    const spritePath = await summonSprites.getOrFetchSprite(summon.species);
+    if (spritePath && fs.existsSync(spritePath)) {
+      const { loadImage } = getCanvas();
+      const img = await loadImage(spritePath);
+      const scale = Math.min(portraitSize / img.width, portraitSize / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
+    }
+  } catch (e) {}
+
+  // Name
+  ctx.fillStyle = rarityColor;
+  ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  const shortName = name.length > 16 ? name.substring(0, 14) + '…' : name;
+  ctx.fillText(shortName, portraitX + portraitSize + 8, portraitY + 5);
+
+  // Level + rarity
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.font = `12px "${FONT_REG}", monospace`;
+  ctx.fillText(`Lv.${summon.level} ${summon.rarity}`, portraitX + portraitSize + 8, portraitY + 24);
+
+  // Element
+  ctx.fillStyle = elementCfg.color;
+  ctx.font = `11px "${FONT_REG}", monospace`;
+  ctx.fillText(elementCfg.label, portraitX + portraitSize + 8, portraitY + 42);
+
+  // Loyalty bar
+  drawLoyaltyBar(ctx, portraitX + portraitSize + 8, portraitY + 60, w - portraitSize - 26, summon.loyalty || 0);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.font = `10px "${FONT_REG}", monospace`;
+  ctx.fillText(`Loy: ${Math.floor(summon.loyalty || 0)}%`, portraitX + portraitSize + 8, portraitY + 68);
+}
+
+
 
 // ─────────────────────────────────────────────────────────────
 // Draw a single summon card
