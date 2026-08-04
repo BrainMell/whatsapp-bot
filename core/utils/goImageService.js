@@ -254,12 +254,7 @@ class GoImageService {
    */
   async generateSummonRosterGIF(data) {
     const startTime = Date.now();
-    // 💡 CACHE DISABLED 2026-08-04: was preventing users from seeing visual
-    // updates (shadow fixes, position changes, etc.) because the cached GIF
-    // was returned instead of re-rendering. The cache key only included
-    // species+level+deployed — it didn't account for rendering code changes.
-    // Re-enabling later requires a version tag in the cache key.
-    console.log('[GoService] Summon roster GIF: generating (no cache)...');
+    console.log('[GoService] Summon roster GIF: generating...');
     try {
       const axios = require('axios');
       const baseURL = this.client.defaults.baseURL;
@@ -275,6 +270,33 @@ class GoImageService {
     } catch (error) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       console.error(`[GoService] Summon roster GIF: FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
+   * Generate Summon Detail GIF — NEW 2026-08-04
+   * Renders a single summon's idle.gif large + detailed info hub.
+   * Used by .summon <#> command.
+   */
+  async generateSummonDetailGIF(data) {
+    const startTime = Date.now();
+    console.log('[GoService] Summon detail GIF: generating...');
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/summons/detail', data, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Summon detail GIF: success! ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Summon detail GIF: FAILED after ${elapsed}s:`, error.message);
       throw error;
     }
   }

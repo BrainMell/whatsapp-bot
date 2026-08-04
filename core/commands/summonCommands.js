@@ -372,8 +372,80 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     return await cmdTrial(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
   }
 
-  // Default: show detail card image for this summon
-  // 💡 Phase C2: Try image rendering first, fall back to text cmdInfo
+  // Default: show animated detail GIF via Go service (idle.gif + info hub)
+  // Falls back to node-canvas PNG, then text
+  try {
+    const goService = require('../utils/goImageService');
+    const summonSystem = require('../rpg/summonSystem');
+    const s = summons[index];
+    const stats = summonSystem.computeEffectiveStats(s);
+    const species = registry.getSpecies(s.species);
+
+    const detailGifBuffer = await goService.generateSummonDetailGIF({
+      userNickname: user.nickname || 'Adventurer',
+      slotsUsed: summons.length,
+      slotsMax: user.summonSlots || 3,
+      activeIndex: -1,
+      summons: [{
+        species: s.species,
+        nickname: s.nickname || species?.name || s.species,
+        level: s.level || 1,
+        rarity: s.rarity || 'COMMON',
+        element: s.element || species?.element || 'neutral',
+        archetype: s.archetype || species?.archetype || 'BRUTE',
+        loyalty: s.loyalty || 100,
+        hp: stats.hp || 0,
+        atk: stats.atk || 0,
+        def: stats.def || 0,
+        mag: stats.mag || 0,
+        spd: stats.spd || 0,
+        isDeployed: user.activeSummonId === s.summonId,
+      }],
+    });
+
+    if (detailGifBuffer && detailGifBuffer.length > 0) {
+      // Convert GIF → MP4 via ffmpeg (same as roster)
+      const { execFileSync } = require('child_process');
+      const fs = require('fs');
+      const tmpGif = '/tmp/summon_detail.gif';
+      const tmpMp4 = '/tmp/summon_detail.mp4';
+      fs.writeFileSync(tmpGif, detailGifBuffer);
+
+      try {
+        execFileSync('ffmpeg', [
+          '-y', '-i', tmpGif,
+          '-movflags', 'faststart',
+          '-pix_fmt', 'yuv420p',
+          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+          '-an', tmpMp4,
+        ], { timeout: 15000, stdio: 'pipe' });
+
+        const mp4Buffer = fs.readFileSync(tmpMp4);
+        const name = s.nickname || species?.name || s.species;
+        const active = user.activeSummonId === s.summonId;
+        const p = getPrefix();
+
+        await sock.sendMessage(chatId, {
+          video: mp4Buffer,
+          gifPlayback: true,
+          caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` — equip | \`${p} summon ${index + 1} trial\` — evolve`,
+        });
+
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
+        return;
+      } catch (convErr) {
+        console.error('[SummonDetail] ffmpeg conversion failed:', convErr.message);
+        try { fs.unlinkSync(tmpGif); } catch (e) {}
+        try { fs.unlinkSync(tmpMp4); } catch (e) {}
+      }
+    }
+  } catch (e) {
+    console.error('[SummonDetail] GIF render failed, trying PNG fallback:', e.message);
+  }
+
+  // Fallback: node-canvas PNG
   try {
     const imageBuffer = await rosterRenderer.renderDetailCard(summons[index], user);
     if (imageBuffer && imageBuffer.length > 0) {
@@ -387,7 +459,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
       return;
     }
   } catch (e) {
-    console.error('[SummonDetail] Image render failed, falling back to text:', e.message);
+    console.error('[SummonDetail] PNG render failed, falling back to text:', e.message);
   }
 
   // Text fallback
