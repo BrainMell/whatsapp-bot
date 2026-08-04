@@ -29,7 +29,10 @@ const registry = require('./summonRegistry');
 const summonSystem = require('./summonSystem');
 
 // ─── 4 STARTER SUMMONS ────────────────────────────────────────────
-const STARTER_SPECIES = ['stoneguard', 'emberdrake', 'mistwisp', 'bloompixie'];
+// 💡 FIX 2026-08-05: Use the live registry's starter species. The old
+// hardcoded list (stoneguard, emberdrake, mistwisp, bloompixie) referenced
+// stale species that no longer exist — basic eggs would fail at createSummon.
+const STARTER_SPECIES = registry.STARTER_SPECIES || ['bat', 'slime', 'mushroom', 'snake'];
 
 // ─── EGG TIERS + INCUBATION ───────────────────────────────────────
 const EGG_TIERS = {

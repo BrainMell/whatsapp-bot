@@ -21,55 +21,60 @@ const Summon = require('../models/Summon');
 // (from summonRegistry.js). Not every enemy is captureable — only
 // those that map to a summon species. Bosses S-rank+ are immune.
 
+// 💡 FIX 2026-08-05: Remapped all enemy→species mappings to the current 17
+// live species. The old map pointed to stale species (skeleton, imp,
+// flame_elemental, wolf, wyrmling, turret_mk1, etc.) that no longer exist
+// in the registry — captures were silently failing because createSummon
+// couldn't find the species. Mappings chosen by thematic similarity.
 const ENEMY_TO_SPECIES_MAP = {
-  // Undead-themed enemies → undead summons
-  FROST_GHOUL: 'skeleton',
-  GLACIAL_BEAST: 'skeleton',
-  BLIZZARD_WRAITH: 'lich_minion',
-  FLESH_ABOMINATION: 'skeleton_knight',
+  // Undead-themed enemies → ghost (undead, COMMON)
+  FROST_GHOUL: 'ghost',
+  GLACIAL_BEAST: 'ghost',
+  BLIZZARD_WRAITH: 'ghost',
+  FLESH_ABOMINATION: 'ghost',
 
-  // Demon-themed enemies → demon summons
-  HELLFIRE_DEMON: 'imp',
-  ABYSSAL_HORROR: 'void_walker',
-  VOID_TIDE: 'void_walker',
-  VOID_SEEKER: 'void_walker',
+  // Demon-themed enemies → bat (shadow STALKER) / giant (earth TANK)
+  HELLFIRE_DEMON: 'bat',
+  ABYSSAL_HORROR: 'giant',
+  VOID_TIDE: 'giant',
+  VOID_SEEKER: 'bat',
 
-  // Fire/elemental enemies → fire elemental summons
-  FLAME: 'flame_elemental',
-  ELDER_FLAME: 'flame_elemental',
-  MAGMA_BRUTE: 'flame_elemental',
-  EMBER_SPELLBREAKER: 'flame_elemental',
-  INFERNO_NEMESIS: 'flame_elemental',
-  PHOENIX_CORRUPTED: 'flame_elemental',
+  // Fire/elemental enemies → dragon (fire BRUTE)
+  FLAME: 'dragon',
+  ELDER_FLAME: 'dragon',
+  MAGMA_BRUTE: 'dragon',
+  EMBER_SPELLBREAKER: 'dragon',
+  INFERNO_NEMESIS: 'dragon',
+  PHOENIX_CORRUPTED: 'dragon',
 
-  // Ice/elemental enemies → frost elemental summons
-  TIDE_LURKER: 'frost_elemental',
-  MIST_WALKER: 'frost_elemental',
-  RUNIC_BREAKER: 'frost_elemental',
-  FROST_PHALANX: 'frost_elemental',
-  PERMAFROST_TITAN: 'frost_elemental',
+  // Ice/elemental enemies → yeti (ice BRUTE)
+  TIDE_LURKER: 'yeti',
+  MIST_WALKER: 'yeti',
+  RUNIC_BREAKER: 'yeti',
+  FROST_PHALANX: 'yeti',
+  PERMAFROST_TITAN: 'yeti',
 
-  // Lightning/storm enemies → storm elemental summons
-  FROST_FLAME_WARDEN: 'storm_elemental',
-  TSUNAMI_WALKER: 'storm_elemental',
+  // Lightning/storm enemies → reptile (fast STALKER)
+  FROST_FLAME_WARDEN: 'reptile',
+  TSUNAMI_WALKER: 'reptile',
 
-  // Beast enemies → beast summons
-  DRAKE_SCOUT: 'wolf',
-  SHADOW_STALKER_MUTANT: 'wolf',
-  CHIMERA_BEAST: 'bear',
-  STONE_HULK: 'bear',
+  // Beast enemies → snake / boar
+  DRAKE_SCOUT: 'snake',
+  SHADOW_STALKER_MUTANT: 'snake',
+  CHIMERA_BEAST: 'boar',
+  STONE_HULK: 'boar',
 
-  // Dragon enemies → wyrmling summons
-  FIRE_BREATHER: 'wyrmling',
-  KRAKEN_SPAWN: 'juvenile_dragon',
+  // Dragon enemies → dragon
+  FIRE_BREATHER: 'dragon',
+  KRAKEN_SPAWN: 'dragon',
 
-  // Construct enemies → turret summons
-  CRYSTAL_CORRUPTED: 'turret_mk1',
-  GOLEM_KING: 'cannon_turret',
-  OBSIDIAN_JUGGERNAUT: 'cannon_turret',
-  DIAMOND_SENTINEL: 'turret_mk1',
-  STONE_NEMESIS: 'cannon_turret',
-  MOUNTAIN_COLOSSUS: 'cannon_turret'
+  // Construct enemies → ship sprites (construct)
+  CRYSTAL_CORRUPTED: 'ship_fighter',
+  GOLEM_KING: 'ship_cruiser',
+  OBSIDIAN_JUGGERNAUT: 'ship_cruiser',
+  DIAMOND_SENTINEL: 'ship_fighter',
+  STONE_NEMESIS: 'ship_cruiser',
+  MOUNTAIN_COLOSSUS: 'ship_cruiser'
 };
 
 // ─────────────────────────────────────────────────────────────
