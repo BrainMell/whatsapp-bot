@@ -136,7 +136,11 @@ const SummonSchema = new mongoose.Schema({
     armor: { type: Object, default: null },
     crest: { type: Object, default: null },
     relic: { type: Object, default: null }
-  }
+  },
+
+  // 💡 MAIN DECK / BACKLOG SYSTEM (2026-08-04)
+  inMainDeck: { type: Boolean, default: true },
+  deckPosition: { type: Number, default: 0 }
 
 }, { timestamps: true });
 
@@ -146,3 +150,4 @@ SummonSchema.index({ forSale: 1, salePrice: 1 });
 SummonSchema.index({ ownerJid: 1, forSale: 1 });
 
 module.exports = mongoose.models.Summon || mongoose.model('Summon', SummonSchema);
+

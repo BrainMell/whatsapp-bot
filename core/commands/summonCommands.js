@@ -141,6 +141,13 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'duel':
       return await cmdDuel(sock, chatId, senderJid, rest);
 
+    case 'backlog':
+    case 'storage':
+      return await cmdBacklog(sock, chatId, senderJid, rest);
+
+    case 'swap':
+      return await cmdSwap(sock, chatId, senderJid, rest);
+
     case 'help':
       return await cmdHelp(sock, chatId);
 
@@ -1065,6 +1072,66 @@ async function cmdPassives(sock, chatId, senderJid) {
   }
 
   await sock.sendMessage(chatId, { text: msg });
+}
+
+// ─────────────────────────────────────────────────────────────
+// .summon backlog — view backlog summons
+// .summon swap <backlog#> <deckSlot> — swap backlog into main deck
+// ─────────────────────────────────────────────────────────────
+
+async function cmdBacklog(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+  const p = getPrefix();
+  const backlog = await summonSystem.getBacklog(senderJid);
+
+  if (backlog.length === 0) {
+    await sock.sendMessage(chatId, {
+      text: `📦 *BACKLOG*\n\nYour backlog is empty.\n\nMain Deck summons: \`${p} summons\`\nSwap: \`${p} summon swap <backlog#> <deckSlot>\``,
+    });
+    return;
+  }
+
+  let msg = `📦 *BACKLOG* — ${backlog.length} summons\n━━━━━━━━━━━━━━━\n\n`;
+  backlog.forEach((s, i) => {
+    const species = registry.getSpecies(s.species);
+    const name = s.nickname || species?.name || s.species;
+    msg += `${i + 1}. ${species?.icon || '🐉'} *${name}* — Lv.${s.level} ${s.rarity} ${s.element}\n`;
+  });
+  msg += `\n💡 \`${p} summon swap <backlog#> <deckSlot>\` — swap into Main Deck`;
+  await sock.sendMessage(chatId, { text: msg });
+}
+
+async function cmdSwap(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) {
+    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
+    return;
+  }
+  const p = getPrefix();
+
+  const backlogNum = parseInt(args[0]);
+  const deckSlot = parseInt(args[1]);
+
+  if (!backlogNum || !deckSlot) {
+    await sock.sendMessage(chatId, {
+      text: `❌ Usage: \`${p} summon swap <backlog#> <deckSlot>\`\n\nExample: \`${p} summon swap 1 2\` — swaps backlog summon #1 into Main Deck slot 2.\n\nView backlog: \`${p} summon backlog\`\nView Main Deck: \`${p} summons\``,
+    });
+    return;
+  }
+
+  const backlog = await summonSystem.getBacklog(senderJid);
+  const backlogIndex = backlogNum - 1;
+  if (backlogIndex < 0 || backlogIndex >= backlog.length) {
+    await sock.sendMessage(chatId, { text: `❌ Invalid backlog number. You have ${backlog.length} backlog summons (1-${backlog.length}).` });
+    return;
+  }
+
+  const result = await summonSystem.swapToMainDeck(senderJid, backlog[backlogIndex].summonId, deckSlot - 1);
+  await sock.sendMessage(chatId, { text: result.message });
 }
 
 // ─────────────────────────────────────────────────────────────

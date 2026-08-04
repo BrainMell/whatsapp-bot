@@ -374,21 +374,6 @@ let _warmupStarted = false;
 //   (b) add the species ID to this set if no sprite exists anywhere.
 const KNOWN_MISSING = new Set([
   // Digimon that don't exist on digi-api.com under any name variant
-  'phantomon',
-  'megakabuterimon',
-  'magnaangemon',
-  'angewomon2',
-  'burnermon',
-  'dolphmon',
-  'raijimon',
-  'thundermon',
-  'arachnemon',
-  'doccokumon',
-  'cherrymon',
-  'marinedevimon',
-  'borgmon',
-  'daemon',
-  'emperorgreymon',
   // Custom RPG species — no Digimon API equivalent, no local sprite
   'stoneguard',
   'emberdrake',

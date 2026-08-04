@@ -261,11 +261,16 @@ async function getSummon(summonId) {
  * @returns {Promise<array>}
  */
 async function getUserSummons(ownerJid, opts = {}) {
+  // 💡 MAIN DECK SYSTEM: by default, only return Main Deck summons (deployable).
+  // Use opts.includeBacklog=true to get ALL summons (Main Deck + Backlog).
   const query = { ownerJid };
   if (opts.includeForSale === false) {
     query.forSale = false;
   }
-  return await Summon.find(query).sort({ obtainedAt: 1 });
+  if (!opts.includeBacklog) {
+    query.inMainDeck = true;
+  }
+  return await Summon.find(query).sort({ deckPosition: 1, obtainedAt: 1 });
 }
 
 /**
@@ -781,3 +786,96 @@ module.exports = {
   // Allocation
   allocateStatPoint
 };
+
+// ─────────────────────────────────────────────────────────────
+// 💡 MAIN DECK / BACKLOG SWAP SYSTEM (2026-08-04)
+// ─────────────────────────────────────────────────────────────
+
+const MAX_DECK_SIZE = 3;
+
+/**
+ * Get the user's Main Deck summons (max 3, deployable).
+ */
+async function getMainDeck(ownerJid) {
+  return await Summon.find({ ownerJid, inMainDeck: true }).sort({ deckPosition: 1 });
+}
+
+/**
+ * Get the user's Backlog summons (not in Main Deck).
+ */
+async function getBacklog(ownerJid) {
+  return await Summon.find({ ownerJid, inMainDeck: false }).sort({ obtainedAt: 1 });
+}
+
+/**
+ * Swap a summon from Backlog into Main Deck (replaces a Main Deck slot).
+ * @param {string} ownerJid - Owner's JID
+ * @param {string} backlogSummonId - ID of the summon in backlog to bring in
+ * @param {number} deckSlot - Which Main Deck slot to replace (0, 1, or 2)
+ */
+async function swapToMainDeck(ownerJid, backlogSummonId, deckSlot) {
+  if (deckSlot < 0 || deckSlot >= MAX_DECK_SIZE) {
+    return { success: false, message: `❌ Invalid deck slot. Use 1-${MAX_DECK_SIZE}.` };
+  }
+
+  const backlogSummon = await Summon.findOne({ summonId: backlogSummonId, ownerJid, inMainDeck: false });
+  if (!backlogSummon) {
+    return { success: false, message: '❌ That summon is not in your Backlog.' };
+  }
+
+  // Find the summon currently in that deck slot
+  const oldDeckSummon = await Summon.findOne({ ownerJid, inMainDeck: true, deckPosition: deckSlot });
+
+  // Swap: backlog summon goes to Main Deck, old Main Deck summon goes to Backlog
+  backlogSummon.inMainDeck = true;
+  backlogSummon.deckPosition = deckSlot;
+  await backlogSummon.save();
+
+  if (oldDeckSummon) {
+    oldDeckSummon.inMainDeck = false;
+    oldDeckSummon.deckPosition = 0;
+    await oldDeckSummon.save();
+  }
+
+  // If the old deck summon was the active (deployed) one, clear it
+  const user = economy.getUser(ownerJid);
+  if (user && oldDeckSummon && user.activeSummonId === oldDeckSummon.summonId) {
+    user.activeSummonId = null;
+    economy.saveUser(user);
+  }
+
+  const backlogName = backlogSummon.nickname || registry.getSpecies(backlogSummon.species)?.name || backlogSummon.species;
+  const oldName = oldDeckSummon ? (oldDeckSummon.nickname || registry.getSpecies(oldDeckSummon.species)?.name || oldDeckSummon.species) : '(empty)';
+
+  return {
+    success: true,
+    message: `🔄 Swapped *${backlogName}* into Main Deck slot ${deckSlot + 1}.\n*${oldName}* moved to Backlog.`,
+  };
+}
+
+/**
+ * Move a summon from Main Deck to Backlog (frees up a slot).
+ */
+async function moveToBacklog(ownerJid, deckSlot) {
+  const summon = await Summon.findOne({ ownerJid, inMainDeck: true, deckPosition: deckSlot });
+  if (!summon) {
+    return { success: false, message: `❌ No summon in Main Deck slot ${deckSlot + 1}.` };
+  }
+
+  summon.inMainDeck = false;
+  summon.deckPosition = 0;
+  await summon.save();
+
+  // Clear active if this was the deployed summon
+  const user = economy.getUser(ownerJid);
+  if (user && user.activeSummonId === summon.summonId) {
+    user.activeSummonId = null;
+    economy.saveUser(user);
+  }
+
+  const name = summon.nickname || registry.getSpecies(summon.species)?.name || summon.species;
+  return {
+    success: true,
+    message: `📦 Moved *${name}* to Backlog. Main Deck slot ${deckSlot + 1} is now empty.`,
+  };
+}
