@@ -178,6 +178,8 @@ async function cmdPokedex(sock, chatId, senderJid) {
     const summonSystem = require('../rpg/summonSystem');
     const registry = require('../rpg/summonRegistry');
 
+    console.log('[SummonRoster] Building payload for', summons.length, 'summons');
+
     // Build the payload for the Go service
     const rosterSummons = summons.map(s => {
       const stats = summonSystem.computeEffectiveStats(s);
@@ -201,6 +203,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
 
     const activeIdx = summons.findIndex(s => s.summonId === user.activeSummonId);
 
+    console.log('[SummonRoster] Calling Go service for GIF...');
     const gifBuffer = await goService.generateSummonRosterGIF({
       userNickname: user.nickname || 'Adventurer',
       slotsUsed: summons.length,
@@ -209,6 +212,8 @@ async function cmdPokedex(sock, chatId, senderJid) {
       activeIndex: activeIdx,
     });
 
+    console.log('[SummonRoster] GIF buffer received:', gifBuffer ? gifBuffer.length + ' bytes' : 'null');
+
     if (gifBuffer && gifBuffer.length > 0) {
       // 💡 NOTE FOR FUTURE REFERENCE: Baileys sends animated GIFs as `image`
       // with mimetype 'image/gif'. Using `video` + `gifPlayback: true` requires
@@ -216,11 +221,13 @@ async function cmdPokedex(sock, chatId, senderJid) {
       // The `image` approach lets WhatsApp display the animated GIF natively.
       // The sock.sendMessage monkey-patch auto-injects jpegThumbnail for ALL
       // image messages (prevents sharp crash), so no manual thumbnail needed.
-      await sock.sendMessage(chatId, {
+      console.log('[SummonRoster] Sending GIF as image to WhatsApp...');
+      const sendResult = await sock.sendMessage(chatId, {
         image: gifBuffer,
         mimetype: 'image/gif',
         caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
       });
+      console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
       return;
     }
   } catch (e) {

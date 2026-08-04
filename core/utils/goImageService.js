@@ -247,20 +247,32 @@ class GoImageService {
    * Renders an animated GIF showing the player's summons doing their
    * idle.gif animations on a sparklinlabs background, with an info hub.
    * Payload: { userNickname, slotsUsed, slotsMax, summons[], activeIndex }
+   *
+   * 💡 NOTE: This bypasses _enqueue (the 8s queue timeout is too short
+   * for GIF rendering which takes 8-15s). Uses a direct axios call with
+   * a 30s timeout instead.
    */
   async generateSummonRosterGIF(data) {
-    return this._enqueue(async () => {
-      try {
-        const response = await this.client.post("/api/summons/roster", data, {
-          responseType: "arraybuffer",
-          timeout: 30000, // GIF rendering can take 5-15s depending on frame count
-        });
-        return Buffer.from(response.data);
-      } catch (error) {
-        console.error("GoService Summon Roster GIF Error:", error.message);
-        throw error; // let caller handle the fallback
-      }
-    });
+    const startTime = Date.now();
+    console.log('[GoService] Summon roster GIF: starting request...');
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      console.log('[GoService] Summon roster GIF: baseURL =', baseURL);
+      const response = await axios.post(baseURL + '/api/summons/roster', data, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Summon roster GIF: success! ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Summon roster GIF: FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
   }
 
   /*
