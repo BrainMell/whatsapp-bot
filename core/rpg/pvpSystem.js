@@ -357,30 +357,28 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     activeDuels.set(chatId, duelState);
 
-    // 💡 Deploy summons for both players
+    // 💡 Deploy summons for both players (non-blocking — don't let this hold up the duel)
     try {
-        await deployPvPSummons(duelState);
+        await Promise.race([
+            deployPvPSummons(duelState),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Summon deploy timeout (3s)')), 3000)),
+        ]);
     } catch (e) {
-        console.error('[PvP] Summon deploy failed:', e.message);
+        console.error('[PvP] Summon deploy failed/skipped:', e.message);
+        // Continue without summons — duel still works
     }
 
-    // 💡 FIX 2026-08-03: Image generation is BEST-EFFORT.
-    // Previously, if the Go service hung/timed out, the ENTIRE duel was
-    // aborted: invite deleted, duel state deleted, stakes refunded. Players
-    // then saw "Duel failed to start" and couldn't retry (invite gone) and
-    // couldn't start a new duel (state stuck). Now: if image fails, the
-    // duel STILL STARTS with a text-only message. Players can play without
-    // an image. The duel state is preserved.
+    // 💡 FIX: Image generation is BEST-EFFORT with short timeout.
+    // The Go service can be slow — don't let it block the duel start.
+    // If image fails, the duel STILL STARTS with text-only.
     let image = null;
     try {
         image = await Promise.race([
             generateDuelImage(duelState),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (12s)')), 12000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Duel image timeout (5s)')), 5000)),
         ]);
     } catch (imgErr) {
-        console.error('[PvP] Duel image generation failed (starting text-only duel):', imgErr.message);
-        // DON'T delete the duel state — players can still duel without an image.
-        // Set image to null so the caller knows to send text-only.
+        console.error('[PvP] Duel image skipped (text-only duel):', imgErr.message);
         image = null;
     }
 

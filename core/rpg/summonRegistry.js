@@ -115,7 +115,7 @@ const SUMMON_SPECIES = {
   // ═══════════════════════════════════════════════════════════════
 
   ship_cruiser: {
-    name: 'Aegis Cruiser', archetype: 'BRUTE', element: 'construct',
+    name: 'Torrent Cruiser', archetype: 'BRUTE', element: 'construct',
     baseStats: { hp: 300, atk: 40, def: 24, mag: 10, spd: 12 },
     rarity: 'UNCOMMON', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_cruiser'], trialId: 'trial_ship_cruiser',
@@ -123,7 +123,7 @@ const SUMMON_SPECIES = {
     isStatic: true, isTorrent: true,
   },
   ship_fighter: {
-    name: 'Wraith Fighter', archetype: 'STALKER', element: 'construct',
+    name: 'Torrent Fighter', archetype: 'STALKER', element: 'construct',
     baseStats: { hp: 190, atk: 32, def: 12, mag: 8, spd: 30 },
     rarity: 'UNCOMMON', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_fighter'], trialId: 'trial_ship_fighter',
@@ -131,7 +131,7 @@ const SUMMON_SPECIES = {
     isStatic: true, isTorrent: true,
   },
   ship_squid: {
-    name: 'Void Squid', archetype: 'MAGE', element: 'construct',
+    name: 'Nauticus', archetype: 'MAGE', element: 'construct',
     baseStats: { hp: 210, atk: 16, def: 14, mag: 38, spd: 14 },
     rarity: 'RARE', echoId: 'shrapnel_echo',
     evolutionStages: ['ship_squid'], trialId: 'trial_ship_squid',
