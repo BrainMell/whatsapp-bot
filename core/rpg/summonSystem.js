@@ -13,6 +13,7 @@
 const crypto = require('crypto');
 const Summon = require('../models/Summon');
 const registry = require('./summonRegistry');
+const economy = require('./economy');
 
 // ─────────────────────────────────────────────────────────────
 // FACTORY — create a new summon instance
