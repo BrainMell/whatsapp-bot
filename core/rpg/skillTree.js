@@ -3418,7 +3418,11 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [171, 149, 125],
                         cooldown: 2,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 16.0, 22.0] — nerfed AOE ult
+                        // 💡 FIX 2026-08-05: Rebalanced from [4,5,6] (underpowered — Lich ult
+                        // was weaker than inherited Apprentice Meteor Strike [6.5] despite
+                        // 4.5x energy cost). Now [8,10,12] — Lv.3 = 1200% MAG, ~1.85x Meteor
+                        // Strike, justifying the 125 energy + curse + summon bonuses.
+                        damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         effects: {
@@ -3430,14 +3434,8 @@ const SKILL_TREES = {
                         isAscended: true,
                         effect: (level) => ({
                             type: 'aoe',
-                            // 💡 BUG-12 fix: reconciled with damageMultiplier [4.0, 5.0, 6.0].
-                            // Was `8.0 + (level * 2.0)` = 10/12/14, which didn't match the
-                            // display (400%/500%/600%). The damageMultiplier comment says
-                            // "nerfed AOE ult" — assuming the display values are the intended
-                            // damage. Formula: 3.0 + level = 4/5/6 at levels 1/2/3.
-                            // ASSUMPTION: confirm with Mellow that [4,5,6] is the intended
-                            // nerfed value (not the old [12,16,22] or the mismatched 10/12/14).
-                            multiplier: 3.0 + (level * 1.0),
+                            // 💡 FIX 2026-08-05: Matches damageMultiplier [8,10,12].
+                            multiplier: 6.0 + (level * 2.0),
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
                             cc: 'curse',

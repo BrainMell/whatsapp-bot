@@ -513,8 +513,14 @@ async function resolveRune(userJid, query) {
   }
 
   // 4. Try matching by rune type NAME (display name, e.g. "Power Rune" → POWER)
+  // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
+  // Previous .includes(q) substring match caused ambiguous lookups — e.g. typing
+  // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
+  // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
   for (const [id, rt] of Object.entries(RUNE_TYPES)) {
-    if (rt.name.toUpperCase() === q || rt.name.toUpperCase().includes(q)) {
+    const upperName = rt.name.toUpperCase();              // e.g. "SHOCK INFUSION RUNE"
+    const shortName = upperName.replace(/ RUNE$/, '');    // e.g. "SHOCK INFUSION"
+    if (upperName === q || shortName === q) {
       return await Rune.findOne({
         ownerJid: userJid, type: id,
         onMarket: false, socketedSkillId: null,
@@ -540,8 +546,14 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   // Resolve type
   let matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
   if (!matchedType) {
+    // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
+    // Previous .includes(q) substring match caused ambiguous lookups — e.g. typing
+    // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
+    // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
     for (const [id, rt] of Object.entries(RUNE_TYPES)) {
-      if (rt.name.toUpperCase() === q || rt.name.toUpperCase().includes(q)) {
+      const upperName = rt.name.toUpperCase();              // e.g. "SHOCK INFUSION RUNE"
+      const shortName = upperName.replace(/ RUNE$/, '');    // e.g. "SHOCK INFUSION"
+      if (upperName === q || shortName === q) {
         matchedType = id;
         break;
       }
