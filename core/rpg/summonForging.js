@@ -160,7 +160,9 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   }
 
   // 15. Create the fused summon
-  const fusedSummonId = `sum_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  // 💡 FIX: use short readable ID format (S-XXXX) consistent with createSummon
+  const shortId = crypto.randomBytes(2).toString('hex').toUpperCase();
+  const fusedSummonId = `S-${shortId}`;
   const soulboundUntil = new Date(now + (FORGE_CONFIG.SOULBOUND_DURATION_DAYS * 24 * 60 * 60 * 1000));
 
   const fused = new Summon({
@@ -225,6 +227,7 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   if (user.summonStats) {
     user.summonStats.forged = (user.summonStats.forged || 0) + 1;
   }
+  economy.saveUser(user);  // 💡 FIX: was missing — cooldown + stats didn't persist
 
   // 19. Refresh resonances
   try {

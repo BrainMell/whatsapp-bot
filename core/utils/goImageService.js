@@ -254,24 +254,12 @@ class GoImageService {
    */
   async generateSummonRosterGIF(data) {
     const startTime = Date.now();
-
-    // 💡 CACHE: cache the GIF per user until their summons change.
-    // Key = hash of summon species + levels + activeIndex.
-    // Invalidated when summons are added/removed/leveled/deployed.
-    const crypto = require('crypto');
-    const cacheKey = crypto.createHash('md5').update(
-      data.userNickname + '|' +
-      data.summons.map(s => `${s.species}:${s.level}:${s.isDeployed}`).join(',') + '|' +
-      data.activeIndex
-    ).digest('hex');
-
-    if (this._rosterGifCache && this._rosterGifCache.has(cacheKey)) {
-      const cached = this._rosterGifCache.get(cacheKey);
-      console.log(`[GoService] Summon roster GIF: cache HIT (${cached.length} bytes)`);
-      return cached;
-    }
-
-    console.log('[GoService] Summon roster GIF: cache MISS, generating...');
+    // 💡 CACHE DISABLED 2026-08-04: was preventing users from seeing visual
+    // updates (shadow fixes, position changes, etc.) because the cached GIF
+    // was returned instead of re-rendering. The cache key only included
+    // species+level+deployed — it didn't account for rendering code changes.
+    // Re-enabling later requires a version tag in the cache key.
+    console.log('[GoService] Summon roster GIF: generating (no cache)...');
     try {
       const axios = require('axios');
       const baseURL = this.client.defaults.baseURL;
@@ -283,16 +271,6 @@ class GoImageService {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const buffer = Buffer.from(response.data);
       console.log(`[GoService] Summon roster GIF: success! ${buffer.length} bytes in ${elapsed}s`);
-
-      // Cache the result (max 10 entries, 30 min TTL)
-      if (!this._rosterGifCache) this._rosterGifCache = new Map();
-      this._rosterGifCache.set(cacheKey, buffer);
-      // Simple eviction: if cache > 10 entries, clear oldest
-      if (this._rosterGifCache.size > 10) {
-        const firstKey = this._rosterGifCache.keys().next().value;
-        this._rosterGifCache.delete(firstKey);
-      }
-
       return buffer;
     } catch (error) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

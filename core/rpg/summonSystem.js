@@ -313,6 +313,7 @@ async function deploySummon(user, summonId) {
     user.activeSummonId = summonId;
     summon.lastUsedAt = new Date();
     await summon.save();
+    economy.saveUser(user);  // 💡 FIX: was missing — deploy didn't persist
     return {
       success: true,
       message: `\u2705 Deployed *${summon.nickname || summon.species}*!\n_Previous summon dismissed \u2014 only 1 summon can be active at a time._`,
@@ -322,6 +323,7 @@ async function deploySummon(user, summonId) {
   user.activeSummonId = summonId;
   summon.lastUsedAt = new Date();
   await summon.save();
+  economy.saveUser(user);  // 💡 FIX: was missing — deploy didn't persist
 
   return {
     success: true,
@@ -342,6 +344,7 @@ async function dismissSummon(user) {
 
   const summonId = user.activeSummonId;
   user.activeSummonId = null;
+  economy.saveUser(user);  // 💡 FIX: was missing — dismiss didn't persist
 
   return {
     success: true,
