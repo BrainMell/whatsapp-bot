@@ -3,7 +3,7 @@
 // ============================================
 // ONLY summons with dedicated sparklinlabs sprites are in this registry.
 // Each summon maps 1:1 to its own idle.gif — no sprite sharing.
-// 14 animated idle.gif sprites + 3 static ship PNGs = 17 total summons.
+// 20 animated idle.gif sprites + 3 static ship PNGs = 23 total summons.
 
 const SUMMON_SPECIES = {
   // ═══════════════════════════════════════════════════════════════
@@ -137,6 +137,53 @@ const SUMMON_SPECIES = {
     evolutionStages: ['ship_squid'], trialId: 'trial_ship_squid',
     icon: '🛸', desc: 'A mysterious biomechanical squid with arcane energy weapons.',
     isStatic: true, // regular summon, NOT Torrent-specific
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // BATCH 6 SUMMONS (new animated idle.gif sprites)
+  // ═══════════════════════════════════════════════════════════════
+
+  plaguefang: {
+    name: 'Plaguefang', archetype: 'STALKER', element: 'plague',
+    baseStats: { hp: 100, atk: 20, def: 6, mag: 14, spd: 22 },
+    rarity: 'COMMON', echoId: 'pack_echo',
+    evolutionStages: ['plaguefang'], trialId: 'trial_plaguefang',
+    icon: '🐺', desc: 'A gaunt, hollow-eyed jackal whose hide weeps toxin. Strikes low and silent.',
+  },
+  lumenmoth: {
+    name: 'Lumenmoth', archetype: 'MAGE', element: 'light',
+    baseStats: { hp: 120, atk: 8, def: 8, mag: 30, spd: 14 },
+    rarity: 'UNCOMMON', echoId: 'ember_echo',
+    evolutionStages: ['lumenmoth'], trialId: 'trial_lumenmoth',
+    icon: '🦋', desc: 'A golden moth whose glowing wings calm the battlefield and guide allies.',
+  },
+  emberwick: {
+    name: 'Emberwick', archetype: 'TANK', element: 'fire',
+    baseStats: { hp: 240, atk: 12, def: 26, mag: 10, spd: 5 },
+    rarity: 'UNCOMMON', echoId: 'guardian_echo',
+    evolutionStages: ['emberwick'], trialId: 'trial_emberwick',
+    icon: '🕯️', desc: 'A squat wax creature with a living flame atop its head. Nearly immovable once planted.',
+  },
+  skitterswarm: {
+    name: 'Skitterswarm', archetype: 'STALKER', element: 'plague',
+    baseStats: { hp: 130, atk: 22, def: 8, mag: 12, spd: 24 },
+    rarity: 'UNCOMMON', echoId: 'pack_echo',
+    evolutionStages: ['skitterswarm'], trialId: 'trial_skitterswarm',
+    icon: '🪲', desc: 'A writhing cluster of beetles moving as one. Attacks come from unpredictable angles.',
+  },
+  tidalmaw: {
+    name: 'Tidalmaw', archetype: 'TANK', element: 'water',
+    baseStats: { hp: 340, atk: 26, def: 32, mag: 12, spd: 6 },
+    rarity: 'RARE', echoId: 'frost_echo',
+    evolutionStages: ['tidalmaw'], trialId: 'trial_tidalmaw',
+    icon: '🪸', desc: 'An anemone-like abomination with coiling tentacles around a toothed maw. Little escapes once caught.',
+  },
+  fireguard: {
+    name: 'Fire Guard', archetype: 'TANK', element: 'fire',
+    baseStats: { hp: 400, atk: 30, def: 36, mag: 14, spd: 8 },
+    rarity: 'RARE', echoId: 'guardian_echo',
+    evolutionStages: ['fireguard'], trialId: 'trial_fireguard',
+    icon: '🔥', desc: 'A hulking molten-armored sentinel wreathed in flame. The heaviest frontline piece — built to outlast.',
   },
 };
 
