@@ -45,6 +45,7 @@ async function displayShop(sock, chatId, category = 'all') {
         // 💡 Only basic_summon_egg is buyable — higher-tier eggs come from crafting fragments
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
+                             id === 'summon_healing_pill' || // 💡 NEW: buyable from summon shop
                              id.includes('_fragment') ||
                              id.includes('summon_essence') ||
                              id.includes('skill_respec_scroll');
@@ -214,6 +215,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         // Summon items (only basic egg is buyable — others come from crafting fragments)
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
+                             id === 'summon_healing_pill' || // 💡 NEW: buyable from summon shop
                              id.includes('_fragment') ||
                              id.includes('summon_essence') ||
                              id.includes('skill_respec_scroll');

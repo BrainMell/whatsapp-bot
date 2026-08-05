@@ -1492,7 +1492,12 @@ async function cmdMarketMy(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon duel @user — PvP summon vs summon
+// .summon duel @user [wager] — PvP summon vs summon
+// 💡 REWORKED 2026-08-05: Now uses the REAL PvP engine (turn-based,
+// abilities, accept/decline flow). The old flat-damage-roll simulator
+// is gone. This command issues a challenge with mode='summon'; the
+// target uses `.s accept` to accept, then both players use
+// `.s pvp attack/ability/flee` to fight.
 // ─────────────────────────────────────────────────────────────
 
 async function cmdDuel(sock, chatId, senderJid, args) {
@@ -1506,7 +1511,7 @@ async function cmdDuel(sock, chatId, senderJid, args) {
   const mentioned = args[0];
   if (!mentioned || !mentioned.includes('@')) {
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${getPrefix()} summon duel @user\`\n\nChallenge another player's active summon to a 1v1 duel. Both players must have a summon deployed.`
+      text: `❌ Usage: \`${getPrefix()} summon duel @user [wager]\`\n\nChallenge another player's active summon to a real turn-based duel. Both players must have a summon deployed.\n\nAfter challenging, the target uses \`${getPrefix()} accept\` to accept. Then both players take turns using:\n  • \`${getPrefix()} pvp attack\` — basic attack\n  • \`${getPrefix()} pvp ability <n>\` — use an ability\n  • \`${getPrefix()} pvp item\` — use a Summon Healing Pill\n  • \`${getPrefix()} pvp flee\` — forfeit (loyalty penalty)`
     });
     return;
   }
@@ -1531,86 +1536,42 @@ async function cmdDuel(sock, chatId, senderJid, args) {
     }
   } catch (e) {}
 
-  const targetUser = economy.getUser(targetJid);
-  if (!targetUser || !targetUser.registered) {
-    await sock.sendMessage(chatId, { text: '❌ Target is not registered.' });
+  // Parse wager (optional 2nd arg)
+  const wager = args[1] ? parseInt(args[1]) : 0;
+  if (args[1] && (isNaN(wager) || wager < 0)) {
+    await sock.sendMessage(chatId, { text: '❌ Wager must be a positive number.' });
     return;
   }
 
-  // Both players must have active summons
+  // Issue the challenge via the PvP engine with mode='summon'
+  const pvpSystem = require('../rpg/pvpSystem');
+  const result = pvpSystem.challengePlayer(chatId, senderJid, targetJid, wager, { mode: 'summon' });
+
+  if (!result.success) {
+    await sock.sendMessage(chatId, { text: result.message });
+    return;
+  }
+
+  // Get summon names for the challenge message
   const mySummon = await summonSystem.getActiveSummon(user);
-  if (!mySummon) {
-    await sock.sendMessage(chatId, { text: `❌ You don't have an active summon. Deploy one with \`${getPrefix()} summon deploy <id>\`.` });
-    return;
+  const targetUser = economy.getUser(targetJid);
+  const targetSummon = targetUser ? await summonSystem.getActiveSummon(targetUser) : null;
+  const mySpecies = mySummon ? registry.getSpecies(mySummon.species) : null;
+  const targetSpecies = targetSummon ? registry.getSpecies(targetSummon.species) : null;
+  const myName = mySummon?.nickname || mySpecies?.name || 'Summon';
+  const targetName = targetSummon?.nickname || targetSpecies?.name || 'Summon';
+
+  const ZENI = economy.getCurrencySymbol ? economy.getCurrencySymbol() : 'Ƶ';
+  let msg = `🐉 *SUMMON DUEL CHALLENGE!*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `${mySpecies?.icon || '🐉'} *${myName}* (Lv.${mySummon?.level || 1}) challenges `;
+  msg += `${targetSpecies?.icon || '🐉'} *${targetName}* (Lv.${targetSummon?.level || 1})!\n\n`;
+  if (wager > 0) {
+    msg += `💰 Wager: ${ZENI}${wager.toLocaleString()}\n\n`;
   }
-
-  const targetSummon = await summonSystem.getActiveSummon(targetUser);
-  if (!targetSummon) {
-    await sock.sendMessage(chatId, { text: `❌ @${economy.getDisplayName(targetJid)} doesn't have an active summon deployed.`, mentions: [targetJid] });
-    return;
-  }
-
-  // Simulate the duel
-  const myStats = summonSystem.computeEffectiveStats(mySummon);
-  const targetStats = summonSystem.computeEffectiveStats(targetSummon);
-  const mySpecies = registry.getSpecies(mySummon.species);
-  const targetSpecies = registry.getSpecies(targetSummon.species);
-
-  let myHp = myStats.hp;
-  let targetHp = targetStats.hp;
-  const log = [];
-  let round = 0;
-  const maxRounds = 15;
-
-  while (myHp > 0 && targetHp > 0 && round < maxRounds) {
-    round++;
-
-    // My summon attacks
-    const myDmg = Math.max(1, Math.floor(myStats.atk * (0.8 + Math.random() * 0.4) - targetStats.def * 0.5));
-    targetHp -= myDmg;
-    log.push(`R${round}: ${mySpecies?.name || 'Summon'} hits for ${myDmg}!`);
-
-    if (targetHp <= 0) break;
-
-    // Target summon attacks
-    const targetDmg = Math.max(1, Math.floor(targetStats.atk * (0.8 + Math.random() * 0.4) - myStats.def * 0.5));
-    myHp -= targetDmg;
-    log.push(`R${round}: ${targetSpecies?.name || 'Summon'} hits for ${targetDmg}!`);
-  }
-
-  const victory = targetHp <= 0 && myHp > 0;
-  const draw = myHp <= 0 && targetHp <= 0;
-
-  // Update ELO
-  if (user.summonStats) {
-    if (victory) user.summonStats.arenaWins = (user.summonStats.arenaWins || 0) + 1;
-    else if (!draw) user.summonStats.arenaLosses = (user.summonStats.arenaLosses || 0) + 1;
-  }
-  if (targetUser.summonStats) {
-    if (!victory && !draw) targetUser.summonStats.arenaWins = (targetUser.summonStats.arenaWins || 0) + 1;
-    else if (victory) targetUser.summonStats.arenaLosses = (targetUser.summonStats.arenaLosses || 0) + 1;
-  }
-
-  // Loyalty cost (both summons lose some loyalty from the fight)
-  mySummon.loyalty = Math.max(0, mySummon.loyalty - 3);
-  await mySummon.save();
-  targetSummon.loyalty = Math.max(0, targetSummon.loyalty - 3);
-  await targetSummon.save();
-
-  let msg = `⚔️ *SUMMON DUEL!*\n`;
-  msg += `━━━━━━━━━━━━━━━\n\n`;
-  msg += `${mySpecies?.icon || '🐉'} *${mySummon.nickname || mySpecies?.name}* vs ${targetSpecies?.icon || '🐉'} *${targetSummon.nickname || targetSpecies?.name}*\n\n`;
-  msg += log.join('\n') + '\n\n';
-
-  if (victory) {
-    msg += `🏆 *${mySummon.nickname || mySpecies?.name} WINS!*`;
-  } else if (draw) {
-    msg += `🤝 *DRAW — both summons fell!*`;
-  } else {
-    msg += `💀 *${targetSummon.nickname || targetSpecies?.name} WINS!*`;
-  }
-
-  msg += `\n\n💖 Both summons lost 3 loyalty from the fight.`;
+  msg += `@${economy.getDisplayName(targetJid)}, use \`${getPrefix()}accept\` to accept the summon duel!\n`;
+  msg += `(Expires in 2 minutes)\n\n`;
+  msg += `_Real turn-based combat — abilities, energy, cooldowns. May the best summon win._`;
 
   await sock.sendMessage(chatId, { text: msg, mentions: [targetJid] });
 }

@@ -1117,7 +1117,10 @@ const ITEM_DATABASE = {
     // Summon consumables
     'loyalty_crystal':         { name: 'Loyalty Crystal',       description: 'Restores a summon\'s loyalty to 100. Use via the summon system.', rarity: 'RARE', value: 5000, type: 'CONSUMABLE', usable: false },
     'summon_rename_tag':       { name: 'Summon Rename Tag',     description: 'Renames a summon. Cosmetic.', rarity: 'UNCOMMON', value: 2000, type: 'CONSUMABLE', usable: false },
-    'memory_tonic':            { name: 'Memory Tonic',          description: 'Resets a summon\'s personality to STOIC. Rare drop.', rarity: 'EPIC', value: 15000, type: 'CONSUMABLE', usable: false }
+    'memory_tonic':            { name: 'Memory Tonic',          description: 'Resets a summon\'s personality to STOIC. Rare drop.', rarity: 'EPIC', value: 15000, type: 'CONSUMABLE', usable: false },
+    // 💡 NEW 2026-08-05: Summon Healing Pill — mid-battle heal for summon duels.
+    // Restores 30% of max HP when used via `.s pvp item` during a summon duel.
+    'summon_healing_pill':     { name: 'Summon Healing Pill',   description: 'Heals 30% of max HP mid-battle. Used in summon duels via .s pvp item.', rarity: 'UNCOMMON', value: 3000, type: 'CONSUMABLE', usable: false, summonItem: true }
 };
 
 function getItemInfo(itemId) {

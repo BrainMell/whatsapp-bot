@@ -242,6 +242,43 @@ function computeEffectiveStats(summon) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// COMBAT POWER (CP) — derived rating for matchmaking + flee penalty
+// ─────────────────────────────────────────────────────────────
+// 💡 NEW 2026-08-05: CP is a single-number rating that summarizes a summon's
+// overall combat strength. Used for:
+//   - Summon PvP flee penalty (fleeing reduces CP by a flat amount)
+//   - Future matchmaking (matching summon duels by CP)
+//   - Display in roster/detail cards
+//
+// Formula: weighted sum of effective stats + level + rarity multiplier.
+// Higher rarity = higher CP ceiling. CP is NOT persisted — it's derived
+// from current stats + level + loyalty + equipment, recomputed on demand.
+
+function computeCP(summon) {
+  if (!summon) return 0;
+  const stats = computeEffectiveStats(summon);
+  const rarityConfig = registry.getRarityConfig(summon.rarity);
+  const rarityMult = rarityConfig.statGrowthMult || 1.0;
+
+  // Weighted stat sum (atk/mag weighted higher than def/spd; hp scaled down)
+  const statScore =
+    (stats.hp || 0) * 0.3 +
+    (stats.atk || 0) * 2.0 +
+    (stats.def || 0) * 1.5 +
+    (stats.mag || 0) * 2.0 +
+    (stats.spd || 0) * 1.0 +
+    (stats.crit || 0) * 3.0 +
+    (stats.evasion || 0) * 2.0;
+
+  // Level bonus: +2% per level above 1
+  const levelBonus = 1 + ((summon.level || 1) - 1) * 0.02;
+
+  // Rarity multiplier applied last
+  const cp = Math.floor(statScore * levelBonus * rarityMult);
+  return cp;
+}
+
+// ─────────────────────────────────────────────────────────────
 // PERSISTENCE
 // ─────────────────────────────────────────────────────────────
 
@@ -793,6 +830,7 @@ module.exports = {
   // Stats
   computeEffectiveStats,
   applyLevelGrowth,
+  computeCP,
 
   // Resonances
   computeResonances,
