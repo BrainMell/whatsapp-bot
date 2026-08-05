@@ -1253,6 +1253,13 @@ async function finishDuel(chatId, duel, winner, loser) {
                     if (xpResult.leveledUp) {
                         rewardMsg += `\n✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`;
                     }
+                    // 💡 NEW 2026-08-05: Notify newly unlocked abilities
+                    if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
+                        rewardMsg += `\n🔓 *NEW ABILITIES UNLOCKED* for ${summonEntity.name}:`;
+                        for (const ab of xpResult.newlyUnlockedAbilities) {
+                            rewardMsg += `\n   • *${ab.name}* (Lv.${ab.levelReq}+${ab.cost > 0 ? `, ${ab.cost} EN` : ''})`;
+                        }
+                    }
                     // Persist async
                     summonAI.persistSummonChanges(summonEntity).catch(() => {});
                 }

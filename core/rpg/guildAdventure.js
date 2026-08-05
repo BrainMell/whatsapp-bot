@@ -5295,6 +5295,13 @@ function recordEnemyKill(state, entity) {
               state.roundLog = state.roundLog || [];
               state.roundLog.push(`✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`);
             }
+            // 💡 NEW 2026-08-05: Notify newly unlocked abilities
+            if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
+              state.roundLog = state.roundLog || [];
+              for (const ab of xpResult.newlyUnlockedAbilities) {
+                state.roundLog.push(`🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)`);
+              }
+            }
             // Persist async (fire-and-forget — don't block combat)
             summonAI.persistSummonChanges(summonEntity).catch(() => {});
           }
@@ -7896,6 +7903,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
           const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
           if (xpResult.leveledUp) {
             msg += `${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!\n`;
+          }
+          // 💡 NEW 2026-08-05: Notify newly unlocked abilities
+          if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
+            for (const ab of xpResult.newlyUnlockedAbilities) {
+              msg += `🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)\n`;
+            }
           }
           await summonAI.persistSummonChanges(summonEntity);
         }

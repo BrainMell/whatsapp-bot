@@ -136,6 +136,11 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
     case 'aimode':
       return await cmdAIMode(sock, chatId, senderJid, rest);
 
+    case 'abilities':
+    case 'ability':
+    case 'moves':
+      return await cmdAbilities(sock, chatId, senderJid, rest);
+
     case 'equip':
     case 'gear':
       return await cmdSummonEquip(sock, chatId, senderJid, rest);
@@ -1972,6 +1977,80 @@ async function cmdTraits(sock, chatId, senderJid, args) {
 // ─────────────────────────────────────────────────────────────
 // .summon ai <id> <mode> — set AI behavior mode (Phase 4)
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// .summon abilities — list auto-unlocked abilities for active summon
+// 💡 NEW 2026-08-05: Summons auto-unlock abilities at level milestones.
+// This command shows what's unlocked + what's coming next.
+// ─────────────────────────────────────────────────────────────
+async function cmdAbilities(sock, chatId, senderJid, args) {
+  const user = economy.getUser(senderJid);
+  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
+
+  const summon = await summonSystem.getActiveSummon(user);
+  if (!summon) {
+    await sock.sendMessage(chatId, {
+      text: `❌ No active summon. Deploy one first with \`${getPrefix()}summon deploy <#>\``,
+    });
+    return;
+  }
+
+  const species = registry.getSpecies(summon.species);
+  const monsterSkills = require('../rpg/monsterSkills');
+  const arch = monsterSkills.MONSTER_ARCHETYPES[summon.archetype];
+
+  if (!arch) {
+    await sock.sendMessage(chatId, {
+      text: `❌ This summon's archetype (${summon.archetype}) has no ability kit defined.`,
+    });
+    return;
+  }
+
+  const p = getPrefix();
+  const name = summon.nickname || species?.name || summon.species;
+  const icon = species?.icon || '🐉';
+
+  let msg = `${icon} *${name}* — Abilities (Lv.${summon.level} ${summon.archetype})\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n\n`;
+
+  // Unlocked abilities
+  const unlocked = Object.entries(arch.skills)
+    .filter(([, s]) => !s.isFollowUp && summon.level >= s.levelReq)
+    .map(([id, s]) => ({ id, ...s }));
+
+  // Locked abilities (coming at future levels)
+  const locked = Object.entries(arch.skills)
+    .filter(([, s]) => !s.isFollowUp && summon.level < s.levelReq)
+    .map(([id, s]) => ({ id, ...s }))
+    .sort((a, b) => a.levelReq - b.levelReq);
+
+  msg += `✅ *UNLOCKED (${unlocked.length}):*\n`;
+  if (unlocked.length === 0) {
+    msg += `   _No abilities yet — reach Lv.${locked[0]?.levelReq || 1} to unlock the first._\n`;
+  } else {
+    for (const ab of unlocked) {
+      const costStr = ab.cost > 0 ? ` · ${ab.cost} EN` : '';
+      msg += `   • *${ab.name}* (Lv.${ab.levelReq}+${costStr})\n`;
+      if (ab.msg) msg += `     _"${ab.msg}"_\n`;
+    }
+  }
+
+  // Next to unlock
+  if (locked.length > 0) {
+    msg += `\n🔒 *NEXT TO UNLOCK:*\n`;
+    const next = locked.slice(0, 3);
+    for (const ab of next) {
+      const costStr = ab.cost > 0 ? ` · ${ab.cost} EN` : '';
+      msg += `   • *${ab.name}* — unlocks at Lv.${ab.levelReq}${costStr}\n`;
+    }
+    if (locked.length > 3) {
+      msg += `   _...and ${locked.length - 3} more at higher levels_\n`;
+    }
+  }
+
+  msg += `\n💡 Abilities auto-unlock as your summon levels up. Use \`${p}summon train\` to gain XP.`;
+  await sock.sendMessage(chatId, { text: msg });
+}
 
 async function cmdAIMode(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);

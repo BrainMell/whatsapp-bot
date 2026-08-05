@@ -525,14 +525,15 @@ function restoreLoyalty(summon, amount) {
  * @returns {{leveledUp: boolean, newLevel: number, statPointsGained: number}}
  */
 function addSummonXP(summon, amount) {
-  if (!summon) return { leveledUp: false, newLevel: 1, statPointsGained: 0 };
+  if (!summon) return { leveledUp: false, newLevel: 1, statPointsGained: 0, newlyUnlockedAbilities: [] };
 
   const val = Math.floor(Number(amount));
-  if (!Number.isFinite(val) || val <= 0) return { leveledUp: false, newLevel: summon.level, statPointsGained: 0 };
+  if (!Number.isFinite(val) || val <= 0) return { leveledUp: false, newLevel: summon.level, statPointsGained: 0, newlyUnlockedAbilities: [] };
 
   summon.xp += val;
   let leveledUp = false;
   let statPointsGained = 0;
+  const newlyUnlockedAbilities = []; // 💡 NEW: track abilities unlocked this level-up
   summon.statPoints = summon.statPoints || 0;  // defensive — prevent NaN on undefined
   const rarityConfig = registry.getRarityConfig(summon.rarity);
   const maxLevel = rarityConfig.maxLevel;
@@ -542,12 +543,38 @@ function addSummonXP(summon, amount) {
     if (summon.xp < xpNeeded) break;
 
     summon.xp -= xpNeeded;
+    const oldLevel = summon.level;
     summon.level += 1;
     summon.statPoints += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
     statPointsGained += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
     // 💡 PHASE 2 (2026-08-01): grant 1 skill point per level
     summon.skillPoints = (summon.skillPoints || 0) + 1;
     leveledUp = true;
+
+    // 💡 NEW 2026-08-05: Detect abilities that unlocked at the new level.
+    // Summon abilities auto-unlock at levelReq milestones (from monsterSkills.js).
+    // Check which abilities became available between oldLevel+1 and new level.
+    try {
+      const monsterSkills = require('./monsterSkills');
+      const arch = monsterSkills.MONSTER_ARCHETYPES[summon.archetype];
+      if (arch) {
+        for (const [skillId, skill] of Object.entries(arch.skills)) {
+          if (skill.isFollowUp) continue;
+          // Ability unlocked if its levelReq is > oldLevel AND <= new level
+          if (skill.levelReq > oldLevel && skill.levelReq <= summon.level) {
+            newlyUnlockedAbilities.push({
+              id: skillId,
+              name: skill.name,
+              levelReq: skill.levelReq,
+              msg: skill.msg || '',
+              cost: skill.cost || 0,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // monsterSkills not available — skip ability detection
+    }
 
     // Re-grow base stats to new level
     applyLevelGrowth(summon, summon.level);
@@ -557,7 +584,7 @@ function addSummonXP(summon, amount) {
     summon.xp = 0;  // cap XP at max level
   }
 
-  return { leveledUp, newLevel: summon.level, statPointsGained };
+  return { leveledUp, newLevel: summon.level, statPointsGained, newlyUnlockedAbilities };
 }
 
 // ─────────────────────────────────────────────────────────────
