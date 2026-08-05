@@ -52,7 +52,7 @@ function resolveSummon(summons, query) {
 // MAIN COMMAND ROUTER
 // ─────────────────────────────────────────────────────────────
 
-async function handleCommand(sock, chatId, senderJid, senderName, args) {
+async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
   const sub = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
@@ -163,7 +163,7 @@ async function handleCommand(sock, chatId, senderJid, senderName, args) {
       return await cmdMarket(sock, chatId, senderJid, rest);
 
     case 'duel':
-      return await cmdDuel(sock, chatId, senderJid, rest);
+      return await cmdDuel(sock, chatId, senderJid, rest, m);
 
     case 'backlog':
     case 'storage':
@@ -1501,26 +1501,37 @@ async function cmdMarketMy(sock, chatId, senderJid) {
 // `.s pvp attack/ability/flee` to fight.
 // ─────────────────────────────────────────────────────────────
 
-async function cmdDuel(sock, chatId, senderJid, args) {
+async function cmdDuel(sock, chatId, senderJid, args, m) {
   const user = economy.getUser(senderJid);
   if (!user) {
     await sock.sendMessage(chatId, { text: '❌ Not registered.' });
     return;
   }
 
-  // Get target from mention or reply
-  const mentioned = args[0];
-  if (!mentioned || !mentioned.includes('@')) {
+  // Get target from mention OR reply-to-message
+  let targetJid = null;
+  let mentioned = args[0];
+
+  // 💡 FIX 2026-08-05: Support reply-to-message as target (no @mention needed)
+  if (!mentioned && m?.message?.extendedTextMessage?.contextInfo?.participant) {
+    targetJid = m.message.extendedTextMessage.contextInfo.participant;
+  } else if (m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
+    targetJid = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
+  }
+
+  // Fallback to parsing the mention string
+  if (!targetJid && mentioned && mentioned.includes('@')) {
+    targetJid = mentioned.replace(/[@!]/g, '').includes('s.whatsapp.net')
+      ? mentioned.replace(/[@!]/g, '')
+      : mentioned.replace(/[@!]/g, '') + '@s.whatsapp.net';
+  }
+
+  if (!targetJid) {
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${getPrefix()} summon duel @user [wager]\`\n\nChallenge another player's active summon to a real turn-based duel. Both players must have a summon deployed.\n\nAfter challenging, the target uses \`${getPrefix()} accept\` to accept. Then both players take turns using:\n  • \`${getPrefix()} pvp attack\` — basic attack\n  • \`${getPrefix()} pvp ability <n>\` — use an ability\n  • \`${getPrefix()} pvp item\` — use a Summon Healing Pill\n  • \`${getPrefix()} pvp flee\` — forfeit (loyalty penalty)`
+      text: `❌ Usage: \`${getPrefix()} summon duel @user [wager]\`\n\nChallenge another player's active summon to a real turn-based duel. Both players must have a summon deployed.\n\nAfter challenging, the target uses \`${getPrefix()} accept\` to accept. Then both players take turns using:\n  • \`${getPrefix()} combat attack\` — basic attack\n  • \`${getPrefix()} combat ability <n>\` — use an ability\n  • \`${getPrefix()} combat item\` — use a Summon Healing Pill\n  • \`${getPrefix()} combat flee\` — forfeit (loyalty penalty)\n\n💡 You can also reply to a player's message and run \`${getPrefix()} summon duel\` to target them.`
     });
     return;
   }
-
-  // Clean mention to JID
-  const targetJid = mentioned.replace(/[@!]/g, '').includes('s.whatsapp.net')
-    ? mentioned.replace(/[@!]/g, '')
-    : mentioned.replace(/[@!]/g, '') + '@s.whatsapp.net';
 
   if (targetJid === senderJid) {
     await sock.sendMessage(chatId, { text: '❌ Cannot duel yourself.' });
@@ -1537,11 +1548,13 @@ async function cmdDuel(sock, chatId, senderJid, args) {
     }
   } catch (e) {}
 
-  // Parse wager (optional 2nd arg)
-  const wager = args[1] ? parseInt(args[1]) : 0;
-  if (args[1] && (isNaN(wager) || wager < 0)) {
-    await sock.sendMessage(chatId, { text: '❌ Wager must be a positive number.' });
-    return;
+  // Parse wager (optional — only if mentioned arg was a number, or 2nd arg)
+  let wager = 0;
+  if (mentioned && !mentioned.includes('@') && !isNaN(parseInt(mentioned))) {
+    wager = parseInt(mentioned);
+  } else if (args[1]) {
+    const w = parseInt(args[1]);
+    if (!isNaN(w) && w >= 0) wager = w;
   }
 
   // Issue the challenge via the PvP engine with mode='summon'
@@ -1591,8 +1604,14 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
 
   const sub = (args[0] || '').toLowerCase();
-  const summonNum = args[1] || '';
+  let summonNum = args[1] || '';
   const p = getPrefix();
+
+  // 💡 FIX 2026-08-05: .s summon skill <#> — args[0] is the summon number,
+  // not a subcommand. Detect numeric args[0] and treat as summonNum directly.
+  if (/^\d+$/.test(sub)) {
+    summonNum = sub;
+  }
 
   // .summon skill (no args) — show help
   if (!sub || !summonNum) {

@@ -192,12 +192,12 @@ const SUMMON_SPECIES = {
 // ════════════════════════════════════════════════════════════════
 
 const RARITY_CONFIG = {
-  COMMON: { maxLevel: 30, statPointsPerLevel: 3, softCapThreshold: 50, softCapMult: 0.5, marketValue: 5000 },
-  UNCOMMON: { maxLevel: 40, statPointsPerLevel: 3, softCapThreshold: 60, softCapMult: 0.5, marketValue: 15000 },
-  RARE: { maxLevel: 50, statPointsPerLevel: 4, softCapThreshold: 70, softCapMult: 0.5, marketValue: 50000 },
-  EPIC: { maxLevel: 50, statPointsPerLevel: 4, softCapThreshold: 80, softCapMult: 0.5, marketValue: 150000 },
-  LEGENDARY: { maxLevel: 60, statPointsPerLevel: 5, softCapThreshold: 90, softCapMult: 0.5, marketValue: 500000 },
-  MYTHIC: { maxLevel: 75, statPointsPerLevel: 5, softCapThreshold: 100, softCapMult: 0.5, marketValue: 1500000 },
+  COMMON: { maxLevel: 30, statPointsPerLevel: 3, softCapThreshold: 50, softCapMult: 0.5, marketValue: 5000, statGrowthMult: 1.0 },
+  UNCOMMON: { maxLevel: 40, statPointsPerLevel: 3, softCapThreshold: 60, softCapMult: 0.5, marketValue: 15000, statGrowthMult: 1.2 },
+  RARE: { maxLevel: 50, statPointsPerLevel: 4, softCapThreshold: 70, softCapMult: 0.5, marketValue: 50000, statGrowthMult: 1.4 },
+  EPIC: { maxLevel: 50, statPointsPerLevel: 4, softCapThreshold: 80, softCapMult: 0.5, marketValue: 150000, statGrowthMult: 1.55 },
+  LEGENDARY: { maxLevel: 60, statPointsPerLevel: 5, softCapThreshold: 90, softCapMult: 0.5, marketValue: 500000, statGrowthMult: 1.7 },
+  MYTHIC: { maxLevel: 75, statPointsPerLevel: 5, softCapThreshold: 100, softCapMult: 0.5, marketValue: 1500000, statGrowthMult: 1.9 },
 };
 
 // ════════════════════════════════════════════════════════════════

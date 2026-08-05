@@ -519,6 +519,9 @@ async function buildSummonDuelPlayer(ownerJid, idx) {
         maxHp:       entity.maxHp,
         energy:      entity.mana || 100,
         maxEnergy:   entity.maxMana || 100,
+        // 💡 NEW 2026-08-05: mode + species for Go service sprite rendering
+        mode:        'summon',
+        species:     summonDoc.species,
         // Summon-specific (for finishDuel rewards + loyalty/CP)
         _summonDoc:  summonDoc,
         _isSummon:   true,

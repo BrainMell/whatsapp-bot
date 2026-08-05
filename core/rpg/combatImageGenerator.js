@@ -29,7 +29,10 @@ function buildPayload(players, enemies, options = {}) {
             energy: Math.floor(Number(p.stats?.energy || p.energy || 100)),
             maxEnergy: Math.floor(Number(p.stats?.maxEnergy || p.maxEnergy || 100)),
             adventurerRank: String(p.adventurerRank || 'F'),
-            spriteIndex: Math.floor(Number(p.spriteIndex) || 0)
+            spriteIndex: Math.floor(Number(p.spriteIndex) || 0),
+            // 💡 NEW 2026-08-05: Pass mode + species so Go service renders summon sprites
+            mode: String(p.mode || (p._isSummon ? 'summon' : '') || ''),
+            species: String(p.species || p.type || '')
         })),
         enemies: enemies.map(e => ({
             name: String(e.name || 'Enemy'),

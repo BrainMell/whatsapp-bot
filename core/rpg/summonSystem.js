@@ -854,7 +854,15 @@ module.exports = {
   DAILY_TRAINING_XP,
 
   // Allocation
-  allocateStatPoint
+  allocateStatPoint,
+
+  // 💡 FIX 2026-08-05: Main Deck / Backlog functions were defined after
+  // module.exports but never added to the exports object — caused
+  // TypeError in cmdBacklog/cmdSwap (reported as "0.0s timeout").
+  getMainDeck,
+  getBacklog,
+  swapToMainDeck,
+  moveToBacklog
 };
 
 // ─────────────────────────────────────────────────────────────
