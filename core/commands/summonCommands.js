@@ -636,7 +636,8 @@ async function cmdInfo(sock, chatId, senderJid, args) {
     msg += `\n`;
   }
 
-  msg += '🆔 ID: `' + target.summonId + '`\n';
+  // 💡 FIX 2026-08-05: Removed summon ID from display (user feedback: too cluttered).
+  // The ID is still stored internally for lookups — just not shown on the card.
   msg += `📅 Obtained: ${target.obtainedAt?.toLocaleDateString() || 'unknown'} via ${target.obtainedFrom || 'unknown'}`;
 
   await sock.sendMessage(chatId, { text: msg });
