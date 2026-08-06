@@ -709,12 +709,78 @@ async function socketRune(userJid, runeId, skillId) {
   };
 }
 
+// ─── RESOLVE A SOCKETED RUNE (for remove/destroy) ─────────────────────────
+// 💡 NEW 2026-08-06: Mirrors resolveRune but filters for SOCKETED runes
+// (socketedSkillId: { $ne: null }). resolveRune only finds unsocketed runes,
+// so remove/destroy can't use it. This resolves friendly names like
+// "void_conversion-greater" or "void_conversion" to actual socketed runes.
+async function resolveSocketedRune(userJid, query) {
+  if (!query) return null;
+  const q = query.toUpperCase().trim();
+
+  // 1. Old-style ID (R-XXXX or rune_XXXX)
+  if (q.startsWith('R-') || q.startsWith('RUNE_')) {
+    return await Rune.findOne({ ownerJid: userJid, runeId: query, socketedSkillId: { $ne: null } });
+  }
+
+  // 2. Type-Tier format (e.g. "VOID_CONVERSION-GREATER")
+  if (q.includes('-')) {
+    const [typePart, tierPart] = q.split('-');
+    const type = typePart.trim();
+    const tier = tierPart.trim();
+    const matchedType = Object.keys(RUNE_TYPES).find(t => t === type || t.replace('_', '') === type);
+    if (matchedType && RUNE_TIERS[tier]) {
+      return await Rune.findOne({
+        ownerJid: userJid, type: matchedType, tier,
+        socketedSkillId: { $ne: null },
+      }).sort({ socketedAt: 1 });
+    }
+  }
+
+  // 3. Just type name (e.g. "VOID_CONVERSION" or "VOIDCONVERSION")
+  const matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
+  if (matchedType) {
+    return await Rune.findOne({
+      ownerJid: userJid, type: matchedType,
+      socketedSkillId: { $ne: null },
+    }).sort({ tier: 1, socketedAt: 1 });
+  }
+
+  // 4. Try matching by display name (e.g. "Void Conversion Rune" → VOID_CONVERSION)
+  for (const [id, rt] of Object.entries(RUNE_TYPES)) {
+    const upperName = rt.name.toUpperCase();
+    const shortName = upperName.replace(/ RUNE$/, '');
+    if (upperName === q || shortName === q) {
+      return await Rune.findOne({
+        ownerJid: userJid, type: id,
+        socketedSkillId: { $ne: null },
+      }).sort({ tier: 1, socketedAt: 1 });
+    }
+  }
+
+  return null;
+}
+
+// ─── GET ALL SOCKETED RUNES (for .s rune sockets command) ─────────────────
+// 💡 NEW 2026-08-06: Returns all runes socketed across all skills.
+async function getAllSocketedRunes(userJid) {
+  return await Rune.find({
+    ownerJid: userJid,
+    socketedSkillId: { $ne: null },
+  }).sort({ socketedSkillId: 1, socketedAt: -1 });
+}
+
 // ─── REMOVE A RUNE FROM A SKILL ───────────────────────────────────────────
 // Requires a Rune Removal Scroll (passed as hasScroll=true from the command
 // handler, which checks the user's inventory).
-async function removeRune(userJid, runeId, hasScroll = false) {
-  const rune = await Rune.findOne({ runeId, ownerJid: userJid });
-  if (!rune) return { success: false, message: '❌ Rune not found.' };
+// 💡 FIX 2026-08-06: Now accepts friendly names (void_conversion-greater,
+// void_conversion) via resolveSocketedRune, not just raw R-XXXX IDs.
+async function removeRune(userJid, runeQuery, hasScroll = false) {
+  // Try direct runeId lookup first (R-XXXX format)
+  let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
+  // Fall back to name-based resolution (socketed runes only)
+  if (!rune) rune = await resolveSocketedRune(userJid, runeQuery);
+  if (!rune) return { success: false, message: '❌ Rune not found. Use `' + require('../../botConfig').getPrefix() + ' rune sockets` to see your socketed runes.' };
   if (!rune.socketedSkillId) return { success: false, message: '❌ This rune is not socketed.' };
 
   if (!hasScroll) {
@@ -736,13 +802,15 @@ async function removeRune(userJid, runeId, hasScroll = false) {
 }
 
 // ─── DESTROY A SOCKETED RUNE (no scroll needed) ───────────────────────────
-async function destroyRune(userJid, runeId) {
-  const rune = await Rune.findOne({ runeId, ownerJid: userJid });
-  if (!rune) return { success: false, message: '❌ Rune not found.' };
+// 💡 FIX 2026-08-06: Now accepts friendly names via resolveSocketedRune.
+async function destroyRune(userJid, runeQuery) {
+  let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
+  if (!rune) rune = await resolveSocketedRune(userJid, runeQuery);
+  if (!rune) return { success: false, message: '❌ Rune not found. Use `' + require('../../botConfig').getPrefix() + ' rune sockets` to see your socketed runes.' };
   if (!rune.socketedSkillId) return { success: false, message: '❌ This rune is not socketed.' };
   if (rune.onMarket) return { success: false, message: '❌ Cancel the market listing first.' };
 
-  await Rune.deleteOne({ runeId });
+  await Rune.deleteOne({ runeId: rune.runeId });
   return {
     success: true,
     message: `💀 Destroyed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}). It's gone forever.`,
@@ -975,6 +1043,8 @@ module.exports = {
   createRune,
   getRuneInventory,
   resolveRune,
+  resolveSocketedRune,
+  getAllSocketedRunes,
   fuseRunesByName,
   getSocketedRunes,
   socketRune,

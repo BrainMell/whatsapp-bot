@@ -2210,10 +2210,17 @@ function calculateDamage(
   }
 
   // Defense mitigation
-  let def =
-    type === "physical"
-      ? Number(target.stats.def) || 0
-      : (Number(target.stats.mag) || 0) * 0.5;
+  // 💡 FIX 2026-08-06: TRUE damage bypasses ALL defense (def = 0).
+  // Previously, 'true' fell into the else branch and used MAG*0.5 as def —
+  // which is wrong. TRUE damage should ignore mitigation entirely.
+  let def = 0;
+  if (type === "physical") {
+    def = Number(target.stats.def) || 0;
+  } else if (type === "magic") {
+    def = (Number(target.stats.mag) || 0) * 0.5;
+  } else if (type === "true") {
+    def = 0; // TRUE damage ignores all mitigation
+  }
 
   // Apply attack buffs from attacker.buffs
   let attackBuffPercent = 0;

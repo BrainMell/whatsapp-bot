@@ -16688,6 +16688,36 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
+                      // 💡 NEW 2026-08-06: .s rune sockets — list ALL socketed runes across all skills
+                      if (runeSub === 'sockets') {
+                        try {
+                          const socketed = await runeSystem.getAllSocketedRunes(senderJid);
+                          if (socketed.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Socketed Runes*\n\n_No runes socketed. Use `' + botConfig.getPrefix() + ' rune socket <runeName> <skillId>` to socket one._' });
+                          }
+                          const bySkill = {};
+                          for (const r of socketed) {
+                            if (!bySkill[r.socketedSkillId]) bySkill[r.socketedSkillId] = [];
+                            bySkill[r.socketedSkillId].push(r);
+                          }
+                          let msg = `💎 *Socketed Runes* (${socketed.length} total, ${Object.keys(bySkill).length} skills)\n\n`;
+                          for (const [skillId, runes] of Object.entries(bySkill)) {
+                            msg += `*${skillId}* (${runes.length} rune${runes.length > 1 ? 's' : ''}):\n`;
+                            for (const r of runes) {
+                              const rt = runeSystem.RUNE_TYPES[r.type];
+                              const tt = runeSystem.RUNE_TIERS[r.tier];
+                              msg += `  ${rt?.icon || '💎'} ${rt?.name || r.type} (${tt?.name || r.tier}) — \`${r.runeId}\`\n`;
+                            }
+                            msg += `\n`;
+                          }
+                          msg += `_Use \`${botConfig.getPrefix()} rune remove <runeId>\` to remove (needs scroll) or \`${botConfig.getPrefix()} rune destroy <runeId>\` to destroy._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
                       // Unknown subcommand
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune subcommand. Use \`${botConfig.getPrefix()} rune help\` for usage.` });
                     }
@@ -25956,20 +25986,32 @@ _(Or reply to their message)_
                 // real timeout error and producing an unhandled rejection.
                 const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
                 const _ctx = _cmdContext || {};
-                console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'} | chat=${_ctx.chatId?.split('@')[0] || 'unknown'}`);
-                console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
-                console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
-                // 💡 FIX 2026-07-30: Guard against null/undefined chatId — Baileys
-                // calls jidDecode(chatId) internally which crashes with
-                // "Cannot destructure property 'user' of 'jidDecode(...)' as it is undefined"
-                // if chatId is null. Only send the timeout message if we have a valid chatId.
+
+                // 💡 FIX 2026-08-06: Distinguish real timeouts (≥5s) from sync errors
+                // that escaped the inner catch (elapsed < 1s). Sync errors were being
+                // misreported as "0.0s timeout" which is misleading — they're actually
+                // TypeErrors or missing-function calls, not backend service issues.
+                const isRealTimeout = parseFloat(elapsed) >= 4.5;
+                if (isRealTimeout) {
+                  console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'} | chat=${_ctx.chatId?.split('@')[0] || 'unknown'}`);
+                  console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
+                  console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
+                } else {
+                  // Sync error escaped the inner catch — log with full stack for debugging
+                  console.error(`🔴🔴🔴 SYNC ERROR (misreported as timeout) after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'}`);
+                  console.error(`    Error: ${_cmdTimeoutErr?.message || _cmdTimeoutErr}`);
+                  console.error(`    Stack: ${_cmdTimeoutErr?.stack?.split('\n').slice(0, 5).join('\n    ') || 'no stack'}`);
+                }
+
                 if (_ctx.chatId && typeof _ctx.chatId === 'string' && _ctx.chatId.includes('@')) {
                   try {
-                    // 💡 FIX 2026-08-05: Don't always blame the image service — the
-                    // timeout could be from DB hangs, network stalls, or pre-command
-                    // pipeline issues. Give a more accurate message + include the
-                    // command name so the user/operator can correlate with logs.
-                    await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
+                    if (isRealTimeout) {
+                      await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
+                    } else {
+                      // 💡 FIX 2026-08-06: Sync error — show actual error message, not "timeout"
+                      const errMsg = _cmdTimeoutErr?.message?.slice(0, 200) || 'Unknown error';
+                      await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `🔴 Command failed: ${errMsg}\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`\n\nThe owner has been notified. Use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                    }
                   } catch (_) {}
                 }
               }

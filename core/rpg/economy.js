@@ -7,7 +7,14 @@ const classSystem = require('./classSystem');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const connectDB = require('../../db');
-const economy = require('./economy');
+// 💡 FIX 2026-08-06: Removed self-require `const economy = require('./economy')`.
+// This created a circular dependency: at require time, module.exports was
+// still the default empty {}, so the `economy` variable pointed to that
+// empty object. When module.exports was reassigned later (line ~1987),
+// the `economy` variable still pointed to the OLD empty object.
+// Result: economy.getDisplayName was undefined → TypeError on rob/transfer
+// → misreported as "0.0s timeout".
+// Fix: call getDisplayName() directly (it's a hoisted function declaration).
 
 // currency shi
 const getCurrency = () => botConfig.getCurrency();
@@ -870,8 +877,8 @@ function transferMoney(fromUserId, toUserId, amount) {
   sender.wallet -= val;
   receiver.wallet += val;
   
-  logTransaction(fromUserId, `Transfer to @${economy.getDisplayName(toUserId)}`, -val, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${economy.getDisplayName(fromUserId)}`, val, receiver.wallet);
+  logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
+  logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, val, receiver.wallet);
 
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
@@ -882,7 +889,7 @@ function transferMoney(fromUserId, toUserId, amount) {
 
 ━━━━━━━━━━━━━━━━
 💸 *Sent:* ${getZENI()}${amount.toLocaleString()}
-👤 *To:* @${economy.getDisplayName(toUserId)}
+👤 *To:* @${getDisplayName(toUserId)}
 ━━━━━━━━━━━━━━━━
 
 💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
@@ -890,7 +897,7 @@ function transferMoney(fromUserId, toUserId, amount) {
     amount: val,
     wallet: sender.wallet,
     bank: sender.bank,
-    nickname: sender.nickname || economy.getDisplayName(sender.userId)
+    nickname: sender.nickname || getDisplayName(sender.userId)
   };
 }
 
@@ -931,7 +938,7 @@ function deposit(userId, amount) {
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || economy.getDisplayName(user.userId)
+    nickname: user.nickname || getDisplayName(user.userId)
   };
 }
 
@@ -989,7 +996,7 @@ function withdraw(userId, amount) {
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || economy.getDisplayName(user.userId)
+    nickname: user.nickname || getDisplayName(user.userId)
   };
 }
 
@@ -1589,7 +1596,7 @@ function getMoneyLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || economy.getDisplayName(userId),
+      nickname: data.nickname || getDisplayName(userId),
       wallet: data.wallet || 0,
       bank: data.bank || 0,
       total: (data.wallet || 0) + (data.bank || 0)
@@ -1651,7 +1658,7 @@ function getGamblingLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered && data.stats)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || economy.getDisplayName(userId),
+      nickname: data.nickname || getDisplayName(userId),
       stats: data.stats
     }))
     .sort((a, b) => (b.stats.gamesWon || 0) - (a.stats.gamesWon || 0))
@@ -1719,14 +1726,14 @@ function robUser(thiefId, victimId) {
     victim.wallet -= amount;
     thief.wallet += amount;
     
-    logTransaction(thiefId, `Robbed @${economy.getDisplayName(victimId)}`, amount, thief.wallet);
-    logTransaction(victimId, `Robbed by @${economy.getDisplayName(thiefId)}`, -amount, victim.wallet);
+    logTransaction(thiefId, `Robbed @${getDisplayName(victimId)}`, amount, thief.wallet);
+    logTransaction(victimId, `Robbed by @${getDisplayName(thiefId)}`, -amount, victim.wallet);
 
     scheduleSave(thiefId);
     scheduleSave(victimId);
     return { 
       success: true, 
-      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${economy.getDisplayName(victimId)}!` 
+      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${getDisplayName(victimId)}!` 
     };
   } else {
     const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
@@ -1930,7 +1937,7 @@ function scheduleWealthTax() {
 // nickname from the economy cache when available.
 //
 // Usage in bot messages:
-//   `@${economy.getDisplayName(jid)} has been blocked.`
+//   `@${getDisplayName(jid)} has been blocked.`
 //   mentions: [economy.getMentionJid(jid)]
 //
 // getDisplayName returns the NICKNAME (without @) if available,
