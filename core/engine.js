@@ -21097,17 +21097,13 @@ ${senderName} said y'all should know:
                       const loanRequest = loans.getPendingRequest(senderJid);
                       if (loanRequest) {
                         const result = loans.acceptLoan(loanRequest.lenderJid);
-                        if (result.success) {
-                          await sock.sendMessage(chatId, {
-                            text:
-                              BOT_MARKER +
-                              `✅ Loan of ${ZENI}${result.amount.toLocaleString()} accepted! funds transferred to your wallet.`,
-                          });
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + result.msg,
-                          });
-                        }
+                        // 💡 FIX 2026-08-06: acceptLoan returns { success, msg } —
+                        // it does NOT return `amount`. Previous code tried to read
+                        // result.amount.toLocaleString() → TypeError → 0.1s timeout.
+                        // Now we just use result.msg for both success and failure.
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.msg,
+                        });
                         return;
                       }
 
