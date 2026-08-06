@@ -792,26 +792,59 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
 
         currentPlayer.energy -= energyCost;
-        if (cooldownVal) currentPlayer.cooldowns[ability.id] = cooldownVal;
+        // 💡 FIX 2026-08-06: Apply cooldown rune modifiers (COOLDOWN, QUICK_CAST).
+        // cooldownMult: multiply base cooldown (0.5 = half cooldown).
+        // cooldownFlatReduction: subtract flat turns (QUICK_CAST).
+        const runeCooldownMult = Number(effect?.cooldownMult) || 1;
+        const runeCooldownFlat = Number(effect?.cooldownFlatReduction) || 0;
+        const effectiveCooldown = cooldownVal
+            ? Math.max(0, Math.ceil(cooldownVal * runeCooldownMult) - runeCooldownFlat)
+            : cooldownVal;
+        if (effectiveCooldown) currentPlayer.cooldowns[ability.id] = effectiveCooldown;
 
         let hasResolved = false;
         const attackerStats = getEffectiveStats(currentPlayer);
         const defenderStats = getEffectiveStats(opponent);
 
         if (effect?.type === 'damage' || effect?.type === 'aoe' || effect?.type === 'damage_dot' || effect?.type === 'multi_hit' || effect?.type === 'damage_heal') {
-            const statBase = (effect.damageType === 'magic' ? attackerStats.mag : attackerStats.atk) || attackerStats.atk;
+            const statBase = (effect.damageType === 'magic' || effect.damageType === 'TRUE' ? attackerStats.mag : attackerStats.atk) || attackerStats.atk;
             damage = Math.floor(statBase * (effect.multiplier || 1.2) * PVP_ABILITY_MULT);
-            // Partial defense mitigation
-            const defReduction = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
+            // 💡 FIX 2026-08-06: Rune ignoreDefense / TRUE damage — skip/reduce DEF mitigation
+            const ignoreDefPct = Math.min(100, Number(effect.ignoreDefense) || 0);
+            const isTrueDamage = String(effect.damageType).toUpperCase() === 'TRUE';
+            let defReduction;
+            if (isTrueDamage || ignoreDefPct >= 100) {
+                defReduction = 0; // TRUE damage or 100% ignore = no mitigation
+            } else {
+                const fullDef = Math.min(defenderStats.def * 0.2, damage * PVP_DEFENSE_CAP);
+                defReduction = Math.floor(fullDef * (1 - ignoreDefPct / 100));
+            }
             damage = Math.max(20, Math.floor(damage - defReduction));
-            // Crit Check
-            isCrit = Math.random() * 100 < (attackerStats.crit || 5);
+            // 💡 FIX 2026-08-06: Rune guaranteedCrit — force crit
+            isCrit = effect.guaranteedCrit || (Math.random() * 100 < (attackerStats.crit || 5));
             if (isCrit) damage = Math.floor(damage * PVP_CRIT_MULT);
             opponent.hp -= damage;
             if (isCrit) {
                 actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💢 ★ *CRITICAL HIT!* ★ — Deals *${damage}* damage to *${opponent.name}*!`;
             } else {
                 actionResult = `${ability.animation || '✨'} *${currentPlayer.name}* used *${ability.name}*!\n💥 Deals *${damage}* damage to *${opponent.name}*!`;
+            }
+            // 💡 FIX 2026-08-06: Rune lifestealPercent — heal attacker
+            if (effect.lifestealPercent && damage > 0) {
+                const healAmt = Math.floor(damage * effect.lifestealPercent / 100);
+                if (healAmt > 0) {
+                    currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healAmt);
+                    actionResult += `\n🩸 ${currentPlayer.name} drains ${healAmt} HP!`;
+                }
+            }
+            // 💡 FIX 2026-08-06: Rune executeThreshold + executeBonus — bonus damage on low HP targets
+            if (effect.executeThreshold && effect.executeBonus > 1) {
+                const hpPct = (opponent.hp / opponent.maxHp) * 100;
+                if (hpPct > 0 && hpPct <= effect.executeThreshold) {
+                    const execBonus = Math.floor(damage * (effect.executeBonus - 1));
+                    opponent.hp -= execBonus;
+                    actionResult += `\n⚡ *EXECUTE!* +${execBonus} bonus damage!`;
+                }
             }
         } else if (effect?.type === 'execute') {
             const hpPercent = (opponent.hp / opponent.maxHp) * 100;
