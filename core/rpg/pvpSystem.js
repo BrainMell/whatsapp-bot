@@ -724,6 +724,13 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         }
 
     } else if (action === 'ability') {
+        // 💡 FIX 2026-08-06: Check silence status — silenced players can't use abilities.
+        if ((currentPlayer.statusEffects || []).some(e => e.type === 'silence')) {
+            return {
+                success: false,
+                message: `🤐 *${currentPlayer.name}* is SILENCED and cannot use abilities! Use \`${botConfig.getPrefix()} combat attack\` instead.`
+            };
+        }
         if (!target || isNaN(parseInt(target))) {
             return { success: false, message: `❌ Please specify a valid ability number! Example: \`${require('../../botConfig').getPrefix()} combat ability 1\`` };
         }
@@ -755,6 +762,20 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
             const skillLevel = economy.getUser(currentPlayer.jid)?.skills?.[abilityObj.id] || 1;
             effect = skillTree.getSkillEffect(abilityObj, skillLevel);
+
+            // 💡 FIX 2026-08-06: Apply rune modifiers in PvP (was missing entirely).
+            // Without this, socketed runes had zero effect in PvP — no silence,
+            // no damage mult, no element conversion, no lifesteal, nothing.
+            try {
+                const runeSystem = require('./runeSystem');
+                const socketedRunes = await runeSystem.getSocketedRunes(currentPlayer.jid, abilityObj.id);
+                if (socketedRunes && socketedRunes.length > 0) {
+                    effect = runeSystem.applyRuneModifiers(effect, socketedRunes);
+                }
+            } catch (e) {
+                // Rune system is optional — fall through with unmodified effect
+            }
+
             energyCost = effect?.cost || 20;
             cooldownVal = effect?.cooldown !== undefined ? effect.cooldown : abilityObj.cooldown;
         }
@@ -893,7 +914,20 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                 }
             }
         }
-        
+
+        // 💡 NEW 2026-08-06: Apply rune addStatuses (silence, poison, bleed, etc.)
+        // These come from SILENCE_INFUSION, POISON_INFUSION, BLEED_INFUSION, etc.
+        // runes via applyRuneModifiers (called above in the ability branch).
+        // Without this, socketed infusion runes had zero effect in PvP.
+        if (effect?.addStatuses && effect.addStatuses.length > 0) {
+            for (const statusDef of effect.addStatuses) {
+                // Roll chance if defined
+                if (statusDef.chance !== undefined && Math.random() * 100 >= statusDef.chance) continue;
+                applyStatusEffect(opponent, statusDef.type, statusDef.duration || 1, statusDef.value || 0);
+                actionResult += `\n✨ *${statusDef.type.toUpperCase()}* applied to *${opponent.name}* for ${statusDef.duration || 1} turn(s)!`;
+            }
+        }
+
     } else if (action === 'flee') {
         // 💡 NEW 2026-08-05: Summon duel flee — CP penalty instead of player XP/wallet/item loss.
         // Fleeing summon loses CP (combat power) rating via temporary loyalty reduction.
