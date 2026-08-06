@@ -4800,6 +4800,15 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       }
 
       // --- USE SKILL ---
+      // 💡 FIX 2026-08-06: Silence status effect — enemies silenced can't use
+      // abilities, fall back to basic attack. Previously silence was only
+      // checked for players (useAbility at line ~8244), never for enemies.
+      if (decision.action === "skill" && (enemy.statusEffects || []).some(e => e.type === 'silence')) {
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`🤐 ${enemy.name} is SILENCED — cannot use abilities, falls back to a basic attack!`);
+        decision = { action: 'attack', target: decision.target };
+      }
+
       if (decision.action === "skill") {
         const skill = decision.skill;
         const target = decision.target;

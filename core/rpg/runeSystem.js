@@ -920,6 +920,29 @@ function applyRuneModifiers(effect, socketedRunes) {
   }
 
   // Apply damage multiplier
+  // 💡 FIX 2026-08-06: Skip the damageMult penalty if the base skill already
+  // ignores DEF (ignoreDefense >= 100) or deals TRUE damage. VOID_CONVERSION
+  // rune's benefit is "ignore DEF" — if the skill already does that, the rune
+  // provides zero benefit and the damageMult penalty would be pure harm.
+  // This was the root cause of "Void Conversion breaks Def-ignoring skills".
+  const baseSkillIgnoresDef =
+    (effect.ignoreDefense !== undefined && effect.ignoreDefense >= 100) ||
+    String(effect.damageType).toUpperCase() === 'TRUE';
+  const hasVoidConversion = socketedRunes.some(r => r.type === 'VOID_CONVERSION');
+  if (hasVoidConversion && baseSkillIgnoresDef) {
+    // VOID_CONVERSION is redundant — don't apply any damageMult from it.
+    // Other runes' damageMult still applies (they're not redundant).
+    // Recalculate damageMult excluding VOID_CONVERSION's contribution.
+    let recalculatedMult = 1.0;
+    for (const rune of socketedRunes) {
+      if (rune.type === 'VOID_CONVERSION') continue; // skip redundant rune
+      const rt = RUNE_TYPES[rune.type];
+      if (!rt) continue;
+      const tIdx = RUNE_TIERS[rune.tier]?.multIndex ?? 0;
+      if (rt.damageMult) recalculatedMult *= rt.damageMult[tIdx];
+    }
+    damageMult = recalculatedMult;
+  }
   if (damageMult !== 1.0) {
     modifiedEffect.multiplier = (Number(modifiedEffect.multiplier) || 1) * damageMult;
   }

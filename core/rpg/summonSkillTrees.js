@@ -134,7 +134,7 @@ const SUMMON_SKILL_TREES = {
         B2: { name: 'Mana Flow', type: 'passive', levelReq: 10, effect: { energyRegen: 10 }, desc: '+10 energy per turn' },
         B3: { name: 'Arcane Blast', type: 'active', levelReq: 15, effect: { damageMult: 2.5, damageType: 'magic', energyCost: 30 }, desc: '2.5× MAG but costs 30 energy' },
         B4: { name: 'Spell Power', type: 'passive', levelReq: 25, effect: { stat: 'mag', value: 35, crit: 10 }, desc: '+35 MAG, +10% magic crit' },
-        B5: { name: 'Arcane Nova Ultimate', type: 'active', levelReq: 35, effect: { damageMult: 4.0, damageType: 'magic', targeting: 'ALL_ENEMIES', silenceChance: 50 }, desc: '4× MAG to all + 50% silence' },
+        B5: { name: 'Arcane Nova Ultimate', type: 'active', levelReq: 35, effect: { damageMult: 4.0, damageType: 'magic', targeting: 'ALL_ENEMIES', silence: true, silenceChance: 50, silenceDuration: 2 }, desc: '4× MAG to all + 50% silence' },
       }
     },
     C: {
