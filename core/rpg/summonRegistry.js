@@ -3,7 +3,7 @@
 // ============================================
 // ONLY summons with dedicated sparklinlabs sprites are in this registry.
 // Each summon maps 1:1 to its own idle.gif — no sprite sharing.
-// 20 animated idle.gif sprites + 3 static ship PNGs = 23 total summons.
+// 23 animated idle.gif sprites + 3 static ship PNGs = 26 total summons.
 
 const SUMMON_SPECIES = {
   // ═══════════════════════════════════════════════════════════════
@@ -184,6 +184,32 @@ const SUMMON_SPECIES = {
     rarity: 'RARE', echoId: 'guardian_echo',
     evolutionStages: ['fireguard'], trialId: 'trial_fireguard',
     icon: '🔥', desc: 'A hulking molten-armored sentinel wreathed in flame. The heaviest frontline piece — built to outlast.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // BATCH 7 SUMMONS (new animated idle.gif sprites)
+  // ═══════════════════════════════════════════════════════════════
+
+  boglurk: {
+    name: 'Boglurk', archetype: 'TANK', element: 'nature',
+    baseStats: { hp: 250, atk: 12, def: 28, mag: 8, spd: 5 },
+    rarity: 'COMMON', echoId: 'guardian_echo',
+    evolutionStages: ['boglurk'], trialId: 'trial_boglurk',
+    icon: '🟫', desc: 'A hulking mound of packed swamp-earth with sprouts growing from its back. Slow, heavy, and hard to shift.',
+  },
+  frostpeep: {
+    name: 'Frostpeep', archetype: 'MAGE', element: 'ice',
+    baseStats: { hp: 90, atk: 8, def: 6, mag: 28, spd: 14 },
+    rarity: 'COMMON', echoId: 'frost_echo',
+    evolutionStages: ['frostpeep'], trialId: 'trial_frostpeep',
+    icon: '❄️', desc: 'A round downy chick-spirit with icy plumage. A glowing ice crystal sits at its chest, channeling sharp cold.',
+  },
+  starnail: {
+    name: 'Starnail', archetype: 'BRUTE', element: 'crystal',
+    baseStats: { hp: 300, atk: 40, def: 20, mag: 18, spd: 12 },
+    rarity: 'RARE', echoId: 'dragonfear_echo',
+    evolutionStages: ['starnail'], trialId: 'trial_starnail',
+    icon: '💎', desc: 'A hermit-crab creature dragging a cracked meteorite shard on its back. Hits like the meteor it carries.',
   },
 };
 
