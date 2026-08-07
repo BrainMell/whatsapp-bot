@@ -391,7 +391,14 @@ async function dismissSummon(user) {
 
   const summonId = user.activeSummonId;
   user.activeSummonId = null;
-  economy.saveUser(user);  // 💡 FIX: was missing — dismiss didn't persist
+  // 💡 FIX 2026-08-07: saveUser takes userId (string), not user object.
+  // Was passing the object — economy.saveUser(user) tried to use it as a
+  // string key, silently failing. Now passes user.userId.
+  if (user.userId) {
+    await economy.saveUser(user.userId);
+  } else if (user.jid) {
+    await economy.saveUser(user.jid);
+  }
 
   return {
     success: true,
