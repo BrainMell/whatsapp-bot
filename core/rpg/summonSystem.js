@@ -309,8 +309,11 @@ async function getUserSummons(ownerJid, opts = {}) {
   }
   let results = await Summon.find(query).sort({ obtainedAt: 1 });
   if (!opts.includeBacklog) {
-    // Filter to Main Deck only (inMainDeck defaults to true for old summons)
-    results = results.filter(s => s.inMainDeck !== false);
+    // 💡 FIX 2026-08-07: Changed from '!== false' to '=== true' for consistency
+    // with getMainDeck. Old summons with inMainDeck=undefined were appearing
+    // in getUserSummons (deck) AND getBacklog simultaneously, causing the
+    // "summons keep appearing/disappearing" bug.
+    results = results.filter(s => s.inMainDeck === true);
   }
   return results;
 }
