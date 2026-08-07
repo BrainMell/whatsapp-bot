@@ -992,6 +992,25 @@ async function useItem(sock, chatId, senderJid, target) {
         const item = invData.items[parseInt(itemInput) - 1];
         if (item) itemId = item.id;
     }
+
+    // 💡 FIX 2026-08-07: Redirect summon egg items to the hatch system.
+    // Previously, `.s use <egg>` tried to use the egg as a regular consumable
+    // → "❌ You don't have this item!" because useItem doesn't handle eggs.
+    // Now it detects egg items and calls summonEggSystem.hatchEgg instead.
+    if (itemId.includes('summon_egg') || itemId.includes('_egg')) {
+        const summonEggSystem = require('../rpg/summonEggSystem');
+        const result = await summonEggSystem.hatchEgg(senderJid, itemId);
+        await sock.sendMessage(chatId, { text: result.message });
+        if (result.success) {
+            try {
+                const summonSystem = require('../rpg/summonSystem');
+                const user = economy.getUser(senderJid);
+                if (user) await summonSystem.refreshUserResonances(user);
+            } catch (e) {}
+        }
+        return;
+    }
+
     const result = inventorySystem.useItem(senderJid, itemId, targetSlot);
     if (result.success) await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
     else await sock.sendMessage(chatId, { text: `❌ ${result.message}` });

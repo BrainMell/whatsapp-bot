@@ -196,7 +196,7 @@ async function craftEgg(userId, targetTier) {
   const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;
   return {
     success: true,
-    message: `✨ *EGG CRAFTED!*\n\nUsed ${fragCount}x ${fragName} → ${eggName}\n\n_Use \`${botConfig.getPrefix()} use ${tier.eggId}\` to hatch it!_`
+    message: `✨ *EGG CRAFTED!*\n\nUsed ${fragCount}x ${fragName} → ${eggName}\n\n_Use \`${botConfig.getPrefix()} summon hatch ${tier.eggId}\` to hatch it!_`
   };
 }
 
