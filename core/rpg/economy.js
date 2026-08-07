@@ -380,7 +380,7 @@ function getUser(userId) {
 
   // Lazy migration: Summoner System (added 2026-07-28)
   // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  if (user.summonSlots === undefined) user.summonSlots = 3;
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
   if (user.activeSummonId === undefined) user.activeSummonId = null;
   if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
   if (!user.activeResonances) user.activeResonances = [];
@@ -506,7 +506,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
 
   // Lazy migration: Summoner System (added 2026-07-28)
   // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  if (user.summonSlots === undefined) user.summonSlots = 3;
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
   if (user.activeSummonId === undefined) user.activeSummonId = null;
   if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
   if (!user.activeResonances) user.activeResonances = [];

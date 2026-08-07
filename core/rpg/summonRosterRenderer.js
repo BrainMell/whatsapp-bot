@@ -210,7 +210,7 @@ async function renderRoster(user, summons, options = {}) {
   ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
   ctx.font = `16px "${FONT_REG}", monospace`;
   ctx.textAlign = 'right';
-  ctx.fillText(`${summons.length}/${user.summonSlots || 3} slots`, W - 40, 35);
+  ctx.fillText(`${summons.length}/${user.summonSlots || 5} slots`, W - 40, 35);
 
   if (user.activeSummonId) {
     ctx.fillStyle = '#FFD700';

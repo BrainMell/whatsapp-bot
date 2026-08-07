@@ -303,7 +303,7 @@ function applyReward(user, reward) {
 
     case 'summon_slots':
       const slots = Number(reward.value) || 0;
-      user.summonSlots = (user.summonSlots || 3) + slots;
+      user.summonSlots = (user.summonSlots || 5) + slots;
       break;
   }
 }

@@ -132,10 +132,10 @@ async function hatchEgg(userId, eggId) {
   // Check summon slot space
   const user = economy.getUser(userId);
   const userSummons = await summonSystem.getUserSummons(userId);
-  if (userSummons.length >= (user.summonSlots || 3)) {
+  if (userSummons.length >= (user.summonSlots || 5)) {
     return {
       success: false,
-      message: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 3}). Release a summon or buy more slots.`
+      message: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 5}). Release a summon or buy more slots.`
     };
   }
 
@@ -158,7 +158,7 @@ async function hatchEgg(userId, eggId) {
       success: true,
       summon,
       speciesId,
-      message: `🥚 *EGG HATCHED!*\n\n${species.icon} *${species.name}*${roleLabel}\n${species.desc}\n\n_Rarity: ${species.rarity}_\n_Element: ${species.element}_\n\n💡 Use \`${botConfig.getPrefix()} summon deploy ${summon.summonId}\` to deploy it in combat!`
+      message: `🥚 *EGG HATCHED!*\n\n${species.icon} *${species.name}*${roleLabel}\n${species.desc}\n\n_Rarity: ${species.rarity}_\n_Element: ${species.element}_\n\n💡 Use \`${botConfig.getPrefix()} summons\` to view your roster, then \`${botConfig.getPrefix()} summon deploy <#>\` to deploy it!`
     };
   } catch (e) {
     console.error('[SummonEgg] hatchEgg failed:', e.message);
