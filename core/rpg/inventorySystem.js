@@ -200,7 +200,7 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         success: true,
         itemId,
         quantity,
-        totalQuantity: inventory[itemId].quantity
+        totalQuantity: typeof inventory[itemId] === 'number' ? inventory[itemId] : (inventory[itemId]?.quantity || quantity)
     };
 }
 
