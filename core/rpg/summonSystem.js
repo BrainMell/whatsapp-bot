@@ -870,39 +870,43 @@ module.exports = {
 // 💡 MAIN DECK / BACKLOG SWAP SYSTEM (2026-08-04)
 // ─────────────────────────────────────────────────────────────
 
-const MAX_DECK_SIZE = 3;
+const MAX_DECK_SIZE = 5;
 
 /**
- * Get the user's Main Deck summons (max 3, deployable).
+ * Get the user's Main Deck summons (max 5, deployable).
+ * 💡 FIX 2026-08-07: Changed from !== false to === true for consistency.
+ * Old summons without inMainDeck field were appearing in BOTH deck and backlog.
  */
 async function getMainDeck(ownerJid) {
-  // 💡 FIX: filter in JS, not in query (Mongoose strictQuery issue)
   const all = await Summon.find({ ownerJid }).sort({ obtainedAt: 1 });
-  return all.filter(s => s.inMainDeck !== false);
+  return all.filter(s => s.inMainDeck === true);
 }
 
 /**
  * Get the user's Backlog summons (not in Main Deck).
+ * 💡 FIX 2026-08-07: Changed from === false to !== true for consistency.
+ * Old summons without inMainDeck field should go to backlog (not deck).
  */
 async function getBacklog(ownerJid) {
-  // 💡 FIX: filter in JS, not in query (Mongoose strictQuery issue)
   const all = await Summon.find({ ownerJid }).sort({ obtainedAt: 1 });
-  return all.filter(s => s.inMainDeck === false);
+  return all.filter(s => s.inMainDeck !== true);
 }
 
 /**
  * Swap a summon from Backlog into Main Deck (replaces a Main Deck slot).
  * @param {string} ownerJid - Owner's JID
  * @param {string} backlogSummonId - ID of the summon in backlog to bring in
- * @param {number} deckSlot - Which Main Deck slot to replace (0, 1, or 2)
+ * @param {number} deckSlot - Which Main Deck slot to replace (0-4)
  */
 async function swapToMainDeck(ownerJid, backlogSummonId, deckSlot) {
   if (deckSlot < 0 || deckSlot >= MAX_DECK_SIZE) {
     return { success: false, message: `❌ Invalid deck slot. Use 1-${MAX_DECK_SIZE}.` };
   }
 
-  const backlogSummon = await Summon.findOne({ summonId: backlogSummonId, ownerJid, inMainDeck: false });
-  if (!backlogSummon) {
+  // 💡 FIX 2026-08-07: Use !== true instead of === false for backlog lookup.
+  // Old summons without inMainDeck field should be in backlog.
+  const backlogSummon = await Summon.findOne({ summonId: backlogSummonId, ownerJid });
+  if (!backlogSummon || backlogSummon.inMainDeck === true) {
     return { success: false, message: '❌ That summon is not in your Backlog.' };
   }
 

@@ -238,7 +238,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
     const gifBuffer = await goService.generateSummonRosterGIF({
       userNickname: user.nickname || 'Adventurer',
       slotsUsed: summons.length,
-      slotsMax: user.summonSlots || 3,
+      slotsMax: user.summonSlots || 5,
       summons: rosterSummons,
       activeIndex: activeIdx,
     });
@@ -288,7 +288,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
         const sendResult = await sock.sendMessage(chatId, {
           video: mp4Buffer,
           gifPlayback: true,
-          caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
+          caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
         });
         console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
 
@@ -313,7 +313,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
     if (imageBuffer && imageBuffer.length > 0) {
       await sock.sendMessage(chatId, {
         image: imageBuffer,
-        caption: `🐉 *SUMMON CODEX* — ${summons.length}/${user.summonSlots || 3} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`
+        caption: `🐉 *SUMMON CODEX* — ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`
       });
       return;
     }
@@ -326,7 +326,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
 
   let msg = `🐉 *SUMMON CODEX*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📦 ${summons.length}/${user.summonSlots || 3} slots`;
+  msg += `📦 ${summons.length}/${user.summonSlots || 5} slots`;
   if (activeResonances.length > 0) {
     msg += ` | 🔗 ${activeResonances.length} resonance${activeResonances.length > 1 ? 's' : ''}`;
   }
@@ -415,7 +415,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     const detailGifBuffer = await goService.generateSummonDetailGIF({
       userNickname: user.nickname || 'Adventurer',
       slotsUsed: summons.length,
-      slotsMax: user.summonSlots || 3,
+      slotsMax: user.summonSlots || 5,
       activeIndex: -1,
       summons: [{
         species: s.species,
@@ -1382,8 +1382,8 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
 
   // Check slot space
   const userSummons = await summonSystem.getUserSummons(senderJid);
-  if (userSummons.length >= (user.summonSlots || 3)) {
-    await sock.sendMessage(chatId, { text: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 3}).` });
+  if (userSummons.length >= (user.summonSlots || 5)) {
+    await sock.sendMessage(chatId, { text: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 5}).` });
     return;
   }
 
