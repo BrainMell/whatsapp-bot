@@ -4245,11 +4245,14 @@ What to do:
         if (isBot) {
           return botConfig.getBotName();
         }
+        // 💡 FIX 2026-08-07 (#6): Prefer pushName (real WhatsApp name) over
+        // user.nickname (bot-set nickname like "jk off"). The pushName is the
+        // player's actual display name on WhatsApp — it should take priority.
+        if (pName && pName.trim() && pName !== 'undefined') return pName;
         const userObj = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
         const profile = userObj?.profile;
         if (userObj?.nickname && userObj.nickname !== "Adventurer") return userObj.nickname;
         if (profile?.nickname && profile.nickname !== "Adventurer") return profile.nickname;
-        if (pName) return pName;
         if (profile?.whatsappName) return profile.whatsappName;
         return jid.split("@")[0];
       }

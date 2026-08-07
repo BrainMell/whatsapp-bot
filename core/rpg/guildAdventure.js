@@ -6928,8 +6928,8 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
             "MUTATION PRIME": "boss_4_N.png",
             "ELEMENTAL ARCHON": "boss_5_N.png",
             // Mid-level bosses
-            "THE INFECTED COLOSSUS": "midlevelbosses (1).png",
-            "INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "THE INFECTED COLOSSUS": "boss_6_N.png",
+            "INFECTED COLOSSUS": "boss_6_N.png",
             "CORRUPTED GUARDIAN": "midlevelbosses (2).png",
             "STONE HULK": "midlevelbosses (3).png",
             "CRYSTAL CORRUPTED": "midlevelbosses (4).png",
