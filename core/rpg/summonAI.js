@@ -264,22 +264,33 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
       actionMsg += `⚔️ ${summonEntity.name} attacks but misses!`;
     }
   } else if (decision.action === 'skill' && decision.skill && decision.target) {
-    // Skill — delegate to applyAbilityEffect via guildAdventure
-    // For Phase 2, we implement a simplified version: summon uses the skill's effect
-    // directly. Full integration with applyAbilityEffect comes in Phase 3+ when
-    // we rework Necromancer skills.
+    // 💡 FIX 2026-08-07: Full skill execution via applyAbilityEffect (was a stub).
+    // Previously only read effect.multiplier — buffs/debuffs/CC/heals didn't work.
+    // Now delegates to the same applyAbilityEffect used by players and enemies.
     try {
       const skill = decision.skill;
-      const effect = typeof skill.effect === 'function' ? skill.effect(summonEntity.level) : skill.effect;
-      if (effect && effect.multiplier) {
-        const baseStat = effect.damageType === 'magic'
-          ? (summonEntity.stats.mag || summonEntity.stats.atk || 10)
-          : (summonEntity.stats.atk || 10);
-        const damage = Math.floor(baseStat * effect.multiplier);
-        decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage);
-        decision.target.currentHP = decision.target.stats.hp;
-        actionMsg += `✨ ${summonEntity.icon} ${summonEntity.name} uses ${skill.name} on ${decision.target.name} for ${damage} damage!`;
-        if (decision.target.stats.hp <= 0) {
+      const effect = skill.currentEffect ||
+        (typeof skill.effect === 'function' ? skill.effect(summonEntity.level || 1) : skill.effect);
+      if (effect) {
+        // Consume mana + set cooldown (same as performEnemyAction)
+        if (typeof skill.cost === 'number' && skill.cost > 0) {
+          summonEntity.mana = Math.max(0, (summonEntity.mana ?? 100) - skill.cost);
+        }
+        if (typeof skill.cooldown === 'number' && skill.cooldown > 0) {
+          summonEntity.cooldowns = summonEntity.cooldowns || {};
+          summonEntity.cooldowns[skill.id] = skill.cooldown;
+        }
+        const targetIndex = state.enemies.indexOf(decision.target);
+        const abilityRes = await guildAdventure.applyAbilityEffect(
+          sock, summonEntity, skill, effect, targetIndex, chatId
+        );
+        if (abilityRes && abilityRes.msg) {
+          actionMsg += abilityRes.msg;
+        } else {
+          actionMsg += `✨ ${summonEntity.icon} ${summonEntity.name} uses ${skill.name || 'a skill'}!`;
+        }
+        // Check for kills
+        if (decision.target.stats && decision.target.stats.hp <= 0) {
           actionMsg += `\n💀 ${decision.target.name} was defeated!`;
           await guildAdventure.handleDeath(sock, decision.target, sessionKey, summonEntity.name);
         }
@@ -296,13 +307,33 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
     actionMsg += `${summonEntity.icon} ${summonEntity.name} hesitates.`;
   }
 
-  // 7. Send the action message
+  // 7. Send the action message + generate combat image
   if (actionMsg.trim()) {
     try {
       await sock.sendMessage(chatId, { text: actionMsg.trim() });
     } catch (e) {
       console.error('[SummonAI] sendMessage failed:', e?.message || e);
     }
+  }
+
+  // 💡 NEW 2026-08-07: Generate combat image for the summon's turn.
+  // Previously summon turns were text-only — no visual feedback. Now we
+  // build a turnInfo and call nextTurn to render the combat scene with
+  // the summon as the active actor (turn indicator under the summon).
+  try {
+    const turnInfo = {
+      actor: summonEntity,
+      action: { name: decision.skill?.name || (decision.action === 'attack' ? 'Attack' : decision.action) },
+      target: decision.target,
+      damage: 0,
+      healing: 0,
+      effects: [],
+      turnNumber: state.turnCount || 0,
+    };
+    await guildAdventure.nextTurn(sock, turnInfo, sessionKey);
+  } catch (e) {
+    console.error('[SummonAI] nextTurn (image) failed:', e?.message || e);
+    // Non-fatal — combat continues without the image
   }
 
   // 8. Track behavior for personality development

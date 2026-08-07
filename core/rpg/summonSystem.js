@@ -689,6 +689,7 @@ function buildCombatEntity(summon, summonerJid) {
     justDied: false,
 
     // Summon-specific
+    level: summon.level || 1, // 💡 NEW 2026-08-07: needed for skill scaling in evaluateAction
     personality: summon.personality,
     behaviorScore: { ...summon.behaviorScore },
     loyalty: summon.loyalty,

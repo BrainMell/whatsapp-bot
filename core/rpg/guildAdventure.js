@@ -9911,4 +9911,7 @@ module.exports = {
   gameStates,
   calculateDamage,
   handleDeath,
+  // 💡 NEW 2026-08-07: Export for summonAI to generate combat images + full skill effects
+  nextTurn,
+  applyAbilityEffect,
 };
