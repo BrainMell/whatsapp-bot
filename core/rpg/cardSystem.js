@@ -3480,10 +3480,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return reply(`🃏 *Card Moderator System*\n\n➥ \`${p} cardmod add @user\`\n➥ \`${p} cardmod del @user\`\n➥ \`${p} cardmod list\``), true;
 
     case 'cards':
-      // 💡 FIX 2026-08-08: Add permission check — was missing entirely.
-      // Any user could enable/disable card spawns in any group.
-      if (!isOwner && !isMod && !isCardMod && !senderIsAdmin) {
-        return reply('❌ Only admins and moderators can toggle the card system.'), true;
+      // 💡 FIX 2026-08-08: Only card mods, global mods, and owner can toggle.
+      // NOT RPG mods, NOT WA group admins — card system is card-mod territory.
+      if (!isOwner && !isMod && !isCardMod) {
+        return reply('❌ Only Card Mods, Global Mods, or the Owner can toggle the card system.'), true;
       }
       if (args[0] === 'on') {
         if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.'), true;
