@@ -647,7 +647,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         const statusMsg = statusLog.join('\n');
         const result = await finishDuel(chatId, duel, opponent, currentPlayer);
         activeDuels.delete(chatId);
-        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + result };
+        const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
+        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg };
     }
 
     if (skipTurn) {
@@ -1333,7 +1334,8 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         loser.hp = 0;
         const result = await finishDuel(chatId, duel, winner, loser);
         activeDuels.delete(chatId);
-        return { success: true, finished: true, message: actionResult + '\n\n' + result };
+        const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
+        return { success: true, finished: true, message: actionResult + '\n\n' + resultMsg };
     }
 
     // ── Advance turn ──────────────────────────────
@@ -1675,24 +1677,15 @@ async function finishDuel(chatId, duel, winner, loser) {
 // ==========================================
 
 async function generateDuelImage(duel) {
-    const attacker = duel.players[duel.turn];
-    const defender = duel.players[1 - duel.turn];
+    // 💡 FIX 2026-08-08: Players array is ALWAYS [player1, player2] in fixed slot order.
+    // Previously this was [attacker, defender] which swapped the array order each turn,
+    // causing sprites to swap positions/facing/HP bars. The turn indicator
+    // (action.attackerIndex) handles highlighting the correct player without
+    // needing to reorder the array.
+    const players = duel.players; // Fixed slot order: [0]=left, [1]=right
 
-    // 💡 FIX 2026-08-03: Pass summons to the Go service so they render in the image.
-    // Previously summons were deployed in duelState.summons (and listed in the
-    // start message text), but never passed to the image generator — so the Go
-    // service received an empty summons array and never drew them.
-    //
-    // 💡 FIX 2026-08-03 (turn indicator): Pass the action payload with
-    // attackerSide + attackerIndex so the Go service can draw the golden
-    // turn-indicator ellipse under the active player.
-    //
-    // 💡 FIX 2026-08-04 (bypass queue): The duel image is a static PNG (~1-3s
-    // render). Bypassing _enqueue prevents it from stalling behind slow GIF
-    // renders (roster/detail GIFs take 8-15s and already bypass the queue).
-    // The direct axios call has its own 10s timeout, so no outer race needed.
     return await combatImageGenerator.generateCombatImage(
-        [attacker, defender], [],
+        players, [],
         {
             combatType: 'PVP',
             bypassQueue: true,
