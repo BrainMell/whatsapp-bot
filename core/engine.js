@@ -6857,6 +6857,23 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     }
                   }
 
+                  // 💡 FIX 2026-08-08: Move mute/ban/hardmute checks BEFORE card system.
+                  // Previously, card commands were processed at line 6861 BEFORE the
+                  // mute check at line 9341 — so muted/banned/hard-muted users could
+                  // still use ALL card commands (.jk cards on, .jk spawn, etc.).
+                  // Now we check permissions first and block card access for
+                  // muted/banned/hard-muted users.
+                  if (isMuted(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
+                  if (isBlocked(senderJid)) return;
+                  if (isBanned(senderJid)) return;
+                  if (isHardMuted(senderJid)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
+
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
                     lowerTxt, // cleaned, lowercased text
@@ -9375,8 +9392,10 @@ _💡 Reply with another number from your search list!_`.trim();
                   // 💡 CHECK IF USER IS HARD-MUTED (owner-issued, global, no expiry)
                   // Hard-muted users can see the bot but can't use ANY commands.
                   // Only the owner can reverse this (unhardmute is owner-only).
+                  // 💡 FIX 2026-08-08: Also DELETE the message (was just returning).
                   if (isHardMuted(senderJid)) {
                     console.log(`🔇 Hard-muted user tried to use bot: ${senderJid}`);
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
                     return;
                   }
 
