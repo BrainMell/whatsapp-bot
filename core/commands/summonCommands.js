@@ -391,7 +391,24 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
   // Check if there's a subcommand after the number (e.g., ".summon 3 deploy")
   const action = (rest[0] || '').toLowerCase();
   if (action === 'deploy' || action === 'equip') {
-    return await cmdDeploy(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+    // 💡 FIX 2026-08-08: Deploy DIRECTLY using the already-resolved summonId.
+    // Previously this called cmdDeploy which called getUserSummons AGAIN,
+    // causing a double-fetch that could resolve to a different summon if the
+    // roster changed between calls. Now we call summonSystem.deploySummon
+    // directly with the summon we already resolved by index.
+    const deployResult = await summonSystem.deploySummon(user, summons[index].summonId);
+    await sock.sendMessage(chatId, { text: deployResult.message });
+    if (deployResult.success) {
+      try {
+        await summonSystem.refreshUserResonances(user);
+        const activeRes = user.activeResonances || [];
+        if (activeRes.length > 0) {
+          const resonanceNames = activeRes.map(r => registry.getResonance(r)?.name || r).join(', ');
+          await sock.sendMessage(chatId, { text: `🔗 Active resonances: ${resonanceNames}` });
+        }
+      } catch (e) {}
+    }
+    return;
   }
   if (action === 'release') {
     return await cmdRelease(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
@@ -517,7 +534,9 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
   }
 
   // Resolve summon by partial ID match (last 8 chars) or nickname
-  const summons = await summonSystem.getUserSummons(senderJid);
+  // 💡 FIX 2026-08-08: Use includeBacklog:true so backlog summons can be deployed too.
+  // deploySummon handles deck membership internally.
+  const summons = await summonSystem.getUserSummons(senderJid, { includeBacklog: true });
   const target = resolveSummon(summons, query);
 
   if (!target) {
