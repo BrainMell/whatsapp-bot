@@ -203,8 +203,16 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // This function strips any mention-like args and returns {target, remaining}.
     function parseAdminArgs(getMentionOrReply, m, senderJid, args) {
         const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        // Filter out mention-like args (contain @ or are phone numbers)
-        const remaining = args.filter(a => !a.includes('@') && !/^\d{10,}@/.test(a));
+        // Filter out mention-like args:
+        // - Contains '@' (JID format: 251453323092189@lid or @s.whatsapp.net)
+        // - Bare phone numbers / LIDs (10+ consecutive digits, no @)
+        //   These were passing the filter and getting parsed as the amount,
+        //   causing "givezeni 251453323092189 200" to give 251 TRILLION Zeni.
+        const remaining = args.filter(a =>
+            !a.includes('@') &&
+            !/^\d{10,}$/.test(a) &&  // bare phone/LID (10+ digits, no @)
+            !/^\d{10,}@/.test(a)      // JID format (digits@...)
+        );
         const isSelfTarget = target === senderJid && !getMentionOrReply(m);
         return { target, remaining, isSelfTarget };
     }

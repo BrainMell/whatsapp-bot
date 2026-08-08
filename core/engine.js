@@ -5560,13 +5560,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (heartbeatInterval) clearInterval(heartbeatInterval);
               const writeHeartbeat = async () => {
                 try {
-                  // 💡 FIX: botConfig.get() returns the active config STORE (for
-                  // AsyncLocalStorage), not a key-value getter. Use getSiblings().
+                  // 💡 FIX 2026-08-08: Read actual status from botInstancesHealth
+                  // instead of hard-coding 'connected'. This fixes the health
+                  // command showing all bots as Online even when disconnected.
+                  const selfHealth = botInstancesHealth.get(BOT_ID);
+                  const selfStatus = selfHealth?.status || 'connected';
                   const siblings = botConfig.getSiblings();
                   await system.set('heartbeat_' + BOT_ID, {
                     botId: BOT_ID,
                     name: BOT_NAME,
-                    status: 'connected',
+                    status: selfStatus,
+                    error: selfHealth?.error || null,
                     lastSeen: Date.now(),
                     startedAt: botStartTime || Date.now(),
                     uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
