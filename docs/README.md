@@ -29,6 +29,13 @@ For modifying level scaling, boss fights, loot drops, professions, or duels:
 * [Cooking](rpg/cook.md) — Meal stats.
 * [Guild System](guilds/guilds.md) | [Daily Guild Boards](guilds/guild_board.md) — Guild creation, contributions, and daily hunting.
 * [Social Relationships](rpg/social.md) | [Reset Sprite Index](rpg/reset_sprite.md) — Affection metrics and avatar rerolling.
+* [Summon System](rpg/summon.md) — Eggs, fragments, deck/backlog, deploy, soul forge, market, summon PvP duels, summon AI.
+* [Abyss System](rpg/abyss.md) — Endless dungeon, floor rewards, fragment drops, persistent HP, boss floors.
+* [Rune System](rpg/runes.md) — Socketed runes, PvP effects, VOID_CONVERSION, silence, cooldown modifiers.
+* [Raid System](rpg/raid.md) — Weekly raid bosses, reward tiers by damage ranking.
+* [Bounty System](rpg/bounty.md) — Place/claim bounties, hunter fees, failed hunt penalties.
+* [Stock Market & Loans](rpg/stocks_loans.md) — 5 stock symbols, price fluctuation, P2P loans, auto-repayment.
+* [Mining](rpg/mine.md) — Mining locations, ore drops, lucky Zeni finds.
 
 ### 💰 Economy & Gambling (`docs/economy/` and `docs/gambling/`)
 For adjusting Zeni payouts, fixed investments, loans, or casino minigames:
@@ -39,6 +46,7 @@ For adjusting Zeni payouts, fixed investments, loans, or casino minigames:
 * [P2P Loans System](economy/loan.md) — Loan requests, collateral, interest rates, and wagers.
 * [Stock Market](economy/stocks.md) | [Fixed Investments](economy/invest.md) — Stock trading portfolios, volatile stock tickers, and fixed deposits.
 * [Casino Games Index](gambling/cups.md) — Command files and layouts for Blackjack, Roulette, Coinflip, Cups, Crash, Dice, Slots, Plinko, Penalty, Wheel, Horse Racing, and Scratch Cards.
+* **Gambling Anti-Abuse:** House edge (3-10% scaling), daily profit cap (2M Zeni), forced loss system (0-10% after 20 rounds), bet limits (50-500K). See [Economy Report PDF](../download/economy_report.pdf) for full details.
 
 ### 🎮 Group Games & Minigames (`docs/games/`)
 * [Chess Matches](games/chess.md) — 1v1 chess against players or the bot.

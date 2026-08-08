@@ -442,3 +442,43 @@ Fleeing from a duel carries heavy penalties applied instantly to the fleeing pla
 * **Wallet Penalty**: Loss of `50%` of all Zeni currently in their wallet.
 * **Bag Penalty**: Loss of exactly `1` random item from their inventory bag (if bag is not empty).
 * **Win/Loss Record**: Fleeing player gets `+1 pvpLosses`, and the opponent is awarded `+1 pvpWins` along with standard victory rewards.
+
+---
+
+## Recent Changes (2026-08-08)
+
+### Summon Duels
+- New `mode='summon'` in duel state for summon-vs-summon combat
+- Both players must have a deployed summon (`activeSummonId`)
+- `buildSummonDuelPlayer()` wraps summon as combat entity with mode+species fields
+- Rewards: summon XP (max(20, 50 + loser.level * 10)), loyalty (winner -1, loser -2), ELO
+- Flee penalty: -10 loyalty (no player gold/XP/item loss)
+- End-of-duel: `finishSummonDuel()` handles winner announcement, XP, loyalty, ELO, cleanup
+
+### Fixed Slot Order
+- `generateDuelImage()` now passes `duel.players` in fixed order `[player1, player2]`
+- Previously passed `[attacker, defender]` which SWAPPED the array each turn
+- This caused sprites to swap positions, facing, and HP bar assignments
+- Turn indicator (golden ellipse) is driven by `action.attackerIndex` — independent of array order
+
+### [object Object] Crash Fix
+- `finishDuel()` returns `{ message: string }`, but `handlePvPAction` was concatenating the entire object
+- Fixed: extract `result.message` before string concatenation (2 call sites)
+
+### PvP Panel Rendering
+- Both PvP-1v1 and PvP-summon use full mirrored player_state panels
+- Text name labels (auto-shrinking font) replace portrait crops
+- HP/EN bars: left panel fills L-to-R, right panel fills R-to-L (panel-local L-to-R)
+- `drawBarFlipped()` helper for mirrored bar fill
+- Right panel positioned with 22px margin from right edge (mirrors left panel)
+
+### Stakes
+- Stakes deducted from both players when challenge accepted (escrow)
+- Winner receives stake * 2 (full pot)
+- Cancelled duels: full refund to both players
+- No-stake prize: `floor(150 + loser.level * 40)` gold + `floor(80 + loser.level * 15)` XP
+
+### Deploy Consolidation
+- `.summon deploy <#>` and `.summon <#> deploy` now use the SAME code path
+- `cmdNavigate` calls `summonSystem.deploySummon()` directly (no double getUserSummons fetch)
+- `cmdDeploy` uses `includeBacklog: true` so backlog summons can be deployed

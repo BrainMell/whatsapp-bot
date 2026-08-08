@@ -504,3 +504,38 @@ Boss encounters operate under advanced mechanics tracked by `BossPhaseManager` a
 * **Enrage Mechanics**:
   * **Hard Enrage**: Instant death trigger if turn count exceeds `boss.enrageTimer`.
   * **Soft Enrage**: Stacking stat growth (`boss.stats[effect.stat] += effect.value`) per turn after the turn threshold `boss.softEnrage.turnThreshold` is met.
+
+---
+
+## Recent Changes (2026-08-08)
+
+### Summon Autonomous Turns
+- Summons now take their own turns in PvE combat via `summonAI.performSummonAction()`
+- Uses gauge-based turn order (summons included in `turnOrder` since Phase 2)
+- Full skill execution via `guildAdventure.applyAbilityEffect()` (not a stub)
+- Combat image generated after summon action via `nextTurn()`
+
+### Abyss Integration
+- Abyss combat uses the same engine as PvE
+- `startAbyssCombat()` creates a game state with `abyssFloor` field
+- HP/energy carry over between floors within a run
+- Banner shows "FLOOR N" instead of rank (Go `Floor` field)
+
+### PvP Combat Image
+- `generateDuelImage()` uses FIXED slot order `[player1, player2]` (not `[attacker, defender]`)
+- Prevents sprite position/facing/HP bar swapping between turns
+- Turn indicator (golden ellipse) is a separate overlay driven by `action.attackerIndex`
+- Both PvP-1v1 and PvP-summon use text name labels (no portrait crops)
+- Dedicated `isPvPSummonDuel` render path with larger sprites (180px height) and elliptical shadows
+
+### Combat Image Rendering (Go Service)
+- `floor` field added to CombatRequest for Abyss banner
+- Boss sprite lookup falls back to EnemyNameSprites (not just BossNameSprites)
+- Enemy formation: 2x2 grid (was overlapping at sub=1 and sub=2)
+- Death tint: dark purple (80,0,80,180) — visible on fire-type enemies
+- Shadow: elliptical (DrawShadowEllipse) for PvP, circular (DrawShadow) for PvE
+
+### Error Handling
+- Engine error handler distinguishes sync errors (<4.5s) from real timeouts (≥4.5s)
+- `[object Object]` crash fixed: finishDuel result.message extracted before concatenation
+- 10s timeout on combat image generation prevents bot from hanging
