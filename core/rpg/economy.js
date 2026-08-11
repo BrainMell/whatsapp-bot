@@ -285,15 +285,32 @@ To save creation, the Divine bestowed fragments of celestial power upon chosen m
 
 👤 *Player:* ${nickname}
 💰 *Starting Balance:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
-
-${starterClass.icon} *Class Assigned:* ${starterClass.name}
+${starterClass.icon} *Class:* ${starterClass.name}
 📝 ${starterClass.desc}
-🏆 *Adventurer Rank:* F-Rank
+🏆 *Rank:* F-Rank
 
 ━━━━━━━━━━━━━━━
-⚔️ *MISSION:*
-Cleanse the corruption!
-━━━━━━━━━━━━━━━`
+🚀 *GETTING STARTED*
+━━━━━━━━━━━━━━━
+1️⃣ \`${botConfig.getPrefix()} quest\` — Fight enemies, gain XP & gold
+2️⃣ \`${botConfig.getPrefix()} allocate <stat> <n>\` — Spend stat points
+3️⃣ \`${botConfig.getPrefix()} skill tree\` — View & unlock abilities
+4️⃣ \`${botConfig.getPrefix()} shop\` — Buy gear & items
+5️⃣ \`${botConfig.getPrefix()} daily\` — Free daily Zeni reward
+
+━━━━━━━━━━━━━━━
+🎯 *FEATURES TO EXPLORE*
+━━━━━━━━━━━━━━━
+🕳️ \`${botConfig.getPrefix()} abyss\` — Endless dungeon (fragments for eggs!)
+🐉 \`${botConfig.getPrefix()} summon\` — Collect & battle monsters
+⚔️ \`${botConfig.getPrefix()} duel @user\` — PvP combat
+🃏 \`${botConfig.getPrefix()} cards on\` — Trading card game
+🎰 \`${botConfig.getPrefix()} slots\` — Casino gambling
+⚒️ \`${botConfig.getPrefix()} mine\` — Mining for materials
+🏰 \`${botConfig.getPrefix()} guild\` — Join a guild
+
+💡 Type \`${botConfig.getPrefix()} tutorial\` for a full walkthrough!
+💡 Type \`${botConfig.getPrefix()} menu\` to see ALL commands!`
   };
 }
 //========================================
