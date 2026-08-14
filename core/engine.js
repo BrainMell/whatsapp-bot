@@ -5400,7 +5400,41 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // Wrap event registrations in the storage context to ensure isolation
         await botConfig.storage.run(configInstance, async () => {
           sock.ev.on("creds.update", saveCreds);
-          botStartTime = Date.now();
+          // 💡 FIX 2026-08-14: Only set botStartTime on FIRST connect, not on
+          // every reconnect. This prevents uptime from resetting when the bot
+          // temporarily disconnects and reconnects (which happens frequently
+          // with WhatsApp's connection management).
+          //
+          // We also check MongoDB for a persisted startedAt from a previous
+          // run of this bot instance. If found and the PID is different (process
+          // restarted), we use the CURRENT time (fresh start). If the PID is
+          // the same (reconnect within same process), we keep the original
+          // startedAt so uptime doesn't reset.
+          if (!botStartTime) {
+            try {
+              const System = require('./models/System');
+              const existingHb = await System.findOne({ key: 'heartbeat_' + BOT_ID }).lean();
+              if (existingHb && existingHb.value) {
+                const prev = existingHb.value;
+                if (prev.pid === process.pid && prev.startedAt) {
+                  // Same process — this is a reconnect, not a restart.
+                  // Keep the original startedAt so uptime doesn't reset.
+                  botStartTime = prev.startedAt;
+                  console.log(`⏱️ [${BOT_ID}] Uptime preserved: ${formatUptime(Date.now() - botStartTime)} (reconnect, same PID ${process.pid})`);
+                } else {
+                  // Different PID — process restarted. Fresh start.
+                  botStartTime = Date.now();
+                  console.log(`⏱️ [${BOT_ID}] Fresh start time set (PID ${process.pid})`);
+                }
+              } else {
+                botStartTime = Date.now();
+                console.log(`⏱️ [${BOT_ID}] First start time set (PID ${process.pid})`);
+              }
+            } catch (e) {
+              botStartTime = Date.now();
+              console.log(`⏱️ [${BOT_ID}] Start time set (fallback, PID ${process.pid})`);
+            }
+          }
 
           sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
