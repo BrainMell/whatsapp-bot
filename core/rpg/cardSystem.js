@@ -3572,7 +3572,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     // ── TOKEN EVENT & ESHOP COMMANDS ──────────────────
     case 't2edeck':
-      await cmdT2EDeck(senderJid, reply, args, isOwner, isMod);
+      // 💡 FIX 2026-08-14: Card mods can also manage the eShop deck (add/remove/price/clear).
+      // Was passing isMod (global mod only) — card mods were blocked.
+      await cmdT2EDeck(senderJid, reply, args, isOwner, isMod || isCardMod);
       return true;
 
     case 't2ecoll':
@@ -3595,7 +3597,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       ), true;
 
     case 'event':
-      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can control the token event.'), true;
+      // 💡 FIX 2026-08-14: Card mods can also control token events.
+      if (!isOwner && !isMod && !isCardMod) return reply('❌ Only Card Mods, Global Mods, or the Owner can control the token event.'), true;
       const eventSub = args[0]?.toLowerCase();
       if (eventSub === 'start') {
         const result = await startTokenEvent(senderJid);
@@ -3613,7 +3616,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'setprice':
       // .j setprice edeck <slot> <price>
-      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can set eShop prices.'), true;
+      // 💡 FIX 2026-08-14: Card mods can also set eShop prices.
+      if (!isOwner && !isMod && !isCardMod) return reply('❌ Only Card Mods, Global Mods, or the Owner can set eShop prices.'), true;
       if (args[0]?.toLowerCase() === 'edeck') {
         const slot = parseInt(args[1]);
         const price = parseInt(args[2]);

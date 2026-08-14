@@ -6485,11 +6485,42 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   if (isGroupChat && isHardMuted(senderJid)) {
                     // Don't delete the bot's own messages or protocol messages
                     if (!m.key.fromMe && !m.message?.protocolMessage) {
+                      // 💡 Enhanced logging (2026-08-14): log the message key structure
+                      // and the delete result so we can see exactly what's happening.
+                      const _hmKey = {
+                        remoteJid: m.key.remoteJid,
+                        id: m.key.id,
+                        fromMe: m.key.fromMe,
+                        participant: m.key.participant || null
+                      };
+                      
+                      // Fetch group metadata to check admin status for logging
+                      let _hmBotAdmin = 'unknown';
+                      let _hmAdminList = [];
                       try {
-                        await sock.sendMessage(chatId, { delete: m.key });
-                        console.log(`🔇 [Hardmute] Delete attempted for ${senderJid} in ${chatId}`);
+                        const _hmMeta = await getGroupMetadata(chatId);
+                        if (_hmMeta && _hmMeta.participants) {
+                          const _hmBotId = jidNormalizedUser(sock.user.id);
+                          const _hmBotLid = sock.authState?.creds?.me?.lid ? jidNormalizedUser(sock.authState.creds.me.lid) : null;
+                          const _hmBotEntry = _hmMeta.participants.find(p =>
+                            p.id === _hmBotId || p.id === _hmBotLid ||
+                            p.id.split(':')[0] === _hmBotId.split(':')[0] ||
+                            (_hmBotLid && p.id.split(':')[0] === _hmBotLid.split(':')[0])
+                          );
+                          _hmBotAdmin = _hmBotEntry ? (_hmBotEntry.admin || 'member') : 'not_in_group';
+                          _hmAdminList = _hmMeta.participants
+                            .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+                            .map(p => p.id);
+                        }
                       } catch (e) {
-                        console.log(`🔇 [Hardmute] Delete failed in ${chatId}: ${e.message}`);
+                        _hmBotAdmin = 'fetch_error: ' + e.message;
+                      }
+
+                      try {
+                        const _result = await sock.sendMessage(chatId, { delete: m.key });
+                        console.log(`🔇 [Hardmute] Delete result for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | botId=${jidNormalizedUser(sock.user.id)} | botLid=${sock.authState?.creds?.me?.lid || 'none'} | admins=[${_hmAdminList.join(',')}] | result=${_result ? 'received' : 'null'}`);
+                      } catch (e) {
+                        console.log(`🔇 [Hardmute] Delete FAILED for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | error=${e.message}`);
                       }
                     }
                     return; // Stop all further processing for hard-muted users
@@ -7763,12 +7794,9 @@ _💡 Reply with another number from your search list!_`.trim();
                         const now = Date.now();
                         const STALE_THRESHOLD = 2 * 60 * 1000;   // 2 min → STALE
                         const DEAD_THRESHOLD  = 5 * 60 * 1000;   // 5 min → DEAD
-                        const SELF_TAG = ' (you)';
+                        const SELF_TAG = ' ◄';
 
-                        let out = `🖥️ *BOT INSTANCE STATUS*\n`;
-                        out += `_Checked at ${new Date().toLocaleTimeString()} — ${allIds.length} instances_\n\n`;
-
-                        let aliveCount = 0, staleCount = 0, deadCount = 0, unknownCount = 0;
+                        let aliveCount = 0, staleCount = 0, deadCount = 0;
 
                         // Sort: self first, then others alphabetically
                         allIds.sort((a, b) => {
@@ -7777,86 +7805,59 @@ _💡 Reply with another number from your search list!_`.trim();
                           return a.localeCompare(b);
                         });
 
+                        // 💡 Compact stylish format: one line per bot
+                        // Format: 🔵 Jake  🟢 2m  312MB  .jk
+                        let out = `╭─ 🖥️ INSTANCE STATUS ─╮\n`;
+                        out += `│  _${new Date().toLocaleTimeString()}_  \n`;
+                        out += `│\n`;
+
                         for (const id of allIds) {
                           const hb = heartbeatMap[id];
-                          let statusIcon, statusLabel, lastSeenStr, uptimeStr, detailStr;
+                          let icon, status, uptimeShort, ram, prefix;
 
                           if (!hb) {
-                            // No heartbeat record at all — instance never started
-                            // since the heartbeat feature was deployed, OR its
-                            // heartbeat was cleared. Treat as DEAD.
-                            statusIcon = '⚫';
-                            statusLabel = 'NEVER_SEEN';
-                            lastSeenStr = '—';
-                            uptimeStr = '—';
-                            detailStr = 'No heartbeat record. Instance may be offline or running a pre-heartbeat version.';
+                            icon = '⚫'; status = 'offline';
+                            uptimeShort = '—'; ram = ''; prefix = '';
                             deadCount++;
                           } else {
                             const ageMs = now - (hb.lastSeen || 0);
                             const isSelf = (id === selfId);
 
-                            // Self reports its own connection state directly;
-                            // siblings are judged by heartbeat freshness.
                             if (isSelf) {
                               const selfHealth = botInstancesHealth.get(BOT_ID);
                               const selfStatus = selfHealth?.status || 'unknown';
                               if (selfStatus === 'connected') {
-                                statusIcon = '🟢'; statusLabel = 'ONLINE';
-                                aliveCount++;
+                                icon = '🟢'; status = 'online'; aliveCount++;
                               } else if (selfStatus === 'connecting') {
-                                statusIcon = '🟡'; statusLabel = 'CONNECTING';
-                                staleCount++;
+                                icon = '🟡'; status = 'connecting'; staleCount++;
                               } else {
-                                statusIcon = '🔴'; statusLabel = String(selfStatus).toUpperCase();
-                                deadCount++;
+                                icon = '🔴'; status = String(selfStatus); deadCount++;
                               }
                             } else if (hb.status === 'disconnected' || hb.status === 'logged_out') {
-                              statusIcon = '🔴'; statusLabel = String(hb.status).toUpperCase();
-                              detailStr = hb.error ? `Error: ${hb.error}` : 'Connection closed';
-                              deadCount++;
+                              icon = '🔴'; status = 'offline'; deadCount++;
                             } else if (ageMs < STALE_THRESHOLD) {
-                              statusIcon = '🟢'; statusLabel = 'ONLINE';
-                              aliveCount++;
+                              icon = '🟢'; status = 'online'; aliveCount++;
                             } else if (ageMs < DEAD_THRESHOLD) {
-                              statusIcon = '🟡'; statusLabel = 'STALE';
-                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000)}s ago — may be lagging or restarting.`;
-                              staleCount++;
+                              icon = '🟡'; status = 'stale'; staleCount++;
                             } else {
-                              statusIcon = '⚫'; statusLabel = 'DEAD';
-                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000 / 60)}m ago — instance is likely down.`;
-                              deadCount++;
+                              icon = '⚫'; status = 'dead'; deadCount++;
                             }
 
-                          lastSeenStr = hb.lastSeen
-                              ? `${Math.floor((now - hb.lastSeen) / 1000)}s ago`
-                              : '—';
-                            uptimeStr = hb.startedAt
-                              ? formatUptime(now - hb.startedAt)
-                              : '—';
+                            uptimeShort = hb.startedAt ? formatUptime(now - hb.startedAt) : '—';
+                            ram = hb.ramUsage ? `${hb.ramUsage}MB` : '';
+                            prefix = hb.prefix || '';
                           }
 
-                          out += `${statusIcon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
-                          out += `   Status: ${statusLabel}\n`;
-                          out += `   Last seen: ${lastSeenStr}\n`;
-                          if (uptimeStr && uptimeStr !== '—') out += `   Uptime: ${uptimeStr}\n`;
-                          if (hb?.ramUsage) out += `   RAM Usage: ${hb.ramUsage} MB\n`;
-                          if (hb?.version) out += `   Version: ${hb.version}\n`;
-                          if (hb?.prefix) out += `   Prefix: ${hb.prefix}\n`;
-                          if (detailStr) out += `   ⚠️ ${detailStr}\n`;
-                          out += `\n`;
+                          out += `│  ${icon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
+                          let detailLine = `│     ${status}`;
+                          if (uptimeShort && uptimeShort !== '—') detailLine += `  ⏱ ${uptimeShort}`;
+                          if (ram) detailLine += `  💾 ${ram}`;
+                          if (prefix) detailLine += `  ▸ ${prefix}`;
+                          out += `${detailLine}\n`;
                         }
 
-                        // Summary line
-                        out += `━━━━━━━━━━━━━━━━━━━━\n`;
-                        out += `Summary: 🟢 ${aliveCount} online · 🟡 ${staleCount} stale · 🔴 ${deadCount} down · ${allIds.length} total\n`;
-
-                        // Action recommendations
-                        if (deadCount > 0) {
-                          out += `\n⚠️ *Action needed:* ${deadCount} instance(s) are down. Check their deployment/logs.`;
-                        }
-                        if (staleCount > 0) {
-                          out += `\n🟡 *Watch:* ${staleCount} instance(s) are stale — may be restarting or lagging.`;
-                        }
+                        out += `│\n`;
+                        out += `╰─ 🟢${aliveCount} 🟡${staleCount} 🔴${deadCount} / ${allIds.length} total ─╯`;
 
                         await sock.sendMessage(chatId, { text: BOT_MARKER + out });
                         return;
