@@ -1155,6 +1155,33 @@ async function startBot(configInstance) {
     const ZENI = CURRENCY.symbol;
     let BOT_MARKER = `\u200B`; // Invisible marker for messages
 
+    // 💡 SIBLING PREFIX AWARENESS (2026-08-14):
+    // Load sibling bot prefixes so this bot can ignore commands meant for a sibling.
+    // Problem: Jake's prefix is ".jk" and Joker's is ".j". When Joker sees ".jk char",
+    // it matches ".j" prefix and tries to run "k char" → error.
+    // Fix: Load each sibling's botConfig.json and collect their prefixes. When a message
+    // starts with a sibling's prefix (but NOT this bot's own prefix), skip it entirely.
+    const siblingPrefixes = [];
+    const instancesRoot = path.join(__dirname, '..', 'instances');
+    const siblingNames = botConfig.getSiblings() || [];
+    for (const sibId of siblingNames) {
+      try {
+        const sibConfigPath = path.join(instancesRoot, sibId, 'botConfig.json');
+        if (fs.existsSync(sibConfigPath)) {
+          const sibConfig = JSON.parse(fs.readFileSync(sibConfigPath, 'utf8'));
+          if (sibConfig.prefix && sibConfig.prefix !== PREFIX) {
+            siblingPrefixes.push(sibConfig.prefix.toLowerCase());
+          }
+        }
+      } catch (e) {}
+    }
+    if (siblingPrefixes.length > 0) {
+      console.log(`🔗 [${BOT_ID}] Sibling prefixes loaded: ${siblingPrefixes.join(', ')} — will ignore commands using these prefixes`);
+    }
+    // Sort by length DESCENDING so we match the LONGEST prefix first.
+    // e.g. ".jk" is checked before ".j" — prevents ".jk char" matching ".j" + "k char"
+    siblingPrefixes.sort((a, b) => b.length - a.length);
+
     // Initialize Search Caches
     global[`__${BOT_ID}_anime_search_cache_by_chat`] =
       global[`__${BOT_ID}_anime_search_cache_by_chat`] || new Map();
@@ -6670,6 +6697,56 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.videoMessage?.caption;
 
                   const txt = text ? text.trim() : "";
+
+                  // 💡 SIBLING PREFIX COLLISION GUARD (2026-08-14):
+                  // If the message starts with a sibling bot's prefix, skip it entirely.
+                  // This prevents Jake's ".jk char" from being misread by Joker as
+                  // ".j" + "k char" → error.
+                  //
+                  // CRITICAL: Own prefix is checked FIRST. If the message starts with our
+                  // own prefix, we process it — even if a sibling prefix is a substring.
+                  // Example: Jake's prefix is ".jk", Joker's is ".j". When Jake sees
+                  // ".jk char", it starts with ".jk" (own prefix) → process it (do NOT
+                  // check siblings). When Joker sees ".jk char", it does NOT start with
+                  // ".j" as an exact prefix match... wait, ".jk" DOES start with ".j".
+                  //
+                  // So the real logic is: check own prefix first (exact startswith). If
+                  // it matches, process. If it does NOT match own prefix, THEN check
+                  // siblings. But ".jk char" starts with ".j" (Joker's prefix) AND ".jk"
+                  // (Jake's prefix). Joker needs to realize ".jk" is a sibling prefix
+                  // and is LONGER than ".j", so the message is for Jake, not Joker.
+                  //
+                  // Solution: check ALL prefixes (own + siblings), pick the LONGEST match.
+                  // If the longest match is a sibling prefix, skip. If it's our own, process.
+                  if (txt.length > 1 && siblingPrefixes.length > 0) {
+                    const lowerTxtForPrefix = txt.toLowerCase();
+                    const ownPrefixLower = PREFIX.toLowerCase();
+
+                    // Find the longest matching prefix (own or sibling)
+                    let longestMatch = null;
+                    let longestMatchIsOwn = false;
+
+                    // Check own prefix
+                    if (lowerTxtForPrefix.startsWith(ownPrefixLower)) {
+                      longestMatch = ownPrefixLower;
+                      longestMatchIsOwn = true;
+                    }
+
+                    // Check sibling prefixes (sorted longest-first)
+                    for (const sibPrefix of siblingPrefixes) {
+                      if (lowerTxtForPrefix.startsWith(sibPrefix)) {
+                        if (!longestMatch || sibPrefix.length > longestMatch.length) {
+                          longestMatch = sibPrefix;
+                          longestMatchIsOwn = false;
+                        }
+                      }
+                    }
+
+                    // If the longest match is a sibling prefix (not our own), skip
+                    if (longestMatch && !longestMatchIsOwn) {
+                      return; // Skip silently — message is for a sibling bot
+                    }
+                  }
 
                   // ── PIPELINE STAGE 2: TEXT PARSED ──────────
                   const _looksLikeCmd = txt.startsWith('.') || txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase());
