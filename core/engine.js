@@ -1061,6 +1061,8 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
   );
 }
 
+let _moduleSock = null;
+
 async function startBot(configInstance) {
   let sock;
   let qrShown = false;
@@ -5344,6 +5346,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // Default to empty array — Baileys will use WhatsApp's hosts.
           customUploadHosts: [],
         });
+        _moduleSock = sock; // 💡 FIX: module-level ref so getSock() works from outside startBot()
 
         sendQueue.bind(sock);
         const originalQueueSend = sendQueue.send.bind(sendQueue);
@@ -6441,6 +6444,56 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 4. Diagnostic Log
                   console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
+                  // 💡 HARDMUTE AUTO-DELETE (2026-08-14):
+                  // Check VERY EARLY — before MongoDB persist, before any command processing.
+                  // If the sender is hard-muted AND this is a group chat, attempt to delete
+                  // their message immediately. This runs for EVERY message (not just commands)
+                  // so the hard-muted user is silenced across every GC where the bot sees them.
+                  //
+                  // The bot can only delete messages in GCs where it is an admin. If the bot
+                  // is NOT admin, the delete will fail silently — that's expected and logged.
+                  // We fetch metadata on-demand here (not relying on the shouldFetchEarly
+                  // optimization above) so the delete works even in large groups where
+                  // metadata was skipped for idle messages.
+                  if (isGroupChat && isHardMuted(senderJid)) {
+                    // Don't delete the bot's own messages or protocol messages
+                    if (!m.key.fromMe && !m.message?.protocolMessage) {
+                      let _botIsAdminForHardmute = false;
+                      try {
+                        // Check cache first, then fetch if missing
+                        const _cachedEntry = adminSetCache.get(chatId);
+                        if (_cachedEntry && Date.now() < _cachedEntry.expires) {
+                          const _botPhoneJid = lidResolver.resolveToPhone(jidNormalizedUser(sock.user.id), configInstance.getAuthPath());
+                          _botIsAdminForHardmute = _cachedEntry.admins.has(_botPhoneJid) || _cachedEntry.admins.has(jidNormalizedUser(sock.user.id));
+                        } else {
+                          // Cache miss — fetch metadata and build admin set
+                          const _meta = await getGroupMetadata(chatId);
+                          if (_meta && _meta.participants) {
+                            const _adminSet = buildAdminCache(chatId, _meta.participants);
+                            if (_adminSet) {
+                              const _botPhoneJid = lidResolver.resolveToPhone(jidNormalizedUser(sock.user.id), configInstance.getAuthPath());
+                              _botIsAdminForHardmute = _adminSet.has(_botPhoneJid) || _adminSet.has(jidNormalizedUser(sock.user.id));
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.log(`🔇 [Hardmute] Failed to check admin status in ${chatId}: ${e.message}`);
+                      }
+
+                      if (_botIsAdminForHardmute) {
+                        try {
+                          await sock.sendMessage(chatId, { delete: m.key });
+                          console.log(`🔇 [Hardmute] Deleted message from ${senderJid} in ${chatId} (bot is admin)`);
+                        } catch (e) {
+                          console.log(`🔇 [Hardmute] Failed to delete in ${chatId}: ${e.message}`);
+                        }
+                      } else {
+                        console.log(`🔇 [Hardmute] Bot is NOT admin in ${chatId} — cannot delete message from ${senderJid}`);
+                      }
+                    }
+                    return; // Stop all further processing for hard-muted users
+                  }
+
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
                     m.message.conversation ||
@@ -6869,10 +6922,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   }
                   if (isBlocked(senderJid)) return;
                   if (isBanned(senderJid)) return;
-                  if (isHardMuted(senderJid)) {
-                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
-                    return;
-                  }
+                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
+                  // If we reach here, the user is NOT hard-muted (or it's a DM).
+                  // No need to re-check here.
 
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
@@ -9427,15 +9479,8 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                   }
 
-                  // 💡 CHECK IF USER IS HARD-MUTED (owner-issued, global, no expiry)
-                  // Hard-muted users can see the bot but can't use ANY commands.
-                  // Only the owner can reverse this (unhardmute is owner-only).
-                  // 💡 FIX 2026-08-08: Also DELETE the message (was just returning).
-                  if (isHardMuted(senderJid)) {
-                    console.log(`🔇 Hard-muted user tried to use bot: ${senderJid}`);
-                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
-                    return;
-                  }
+                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
+                  // If we reach here, the user is NOT hard-muted. No re-check needed.
 
                   // Override command - allows user to bypass admin checks
                   if (
@@ -11169,6 +11214,97 @@ Usage: ${newUsage}/5${warningText}`;
                         "kick @troublemaker",
                         "You can also reply to their message.",
                       );
+                    }
+                    return;
+                  }
+
+                  // 💡 NUKE — remove everyone in the GC that the bot can remove
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nuke`) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner or global mods can nuke a group.",
+                      });
+                    }
+                    if (!chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ This command only works in group chats.",
+                      });
+                    }
+
+                    try {
+                      const groupInfo = await sock.groupMetadata(chatId);
+                      const participants = groupInfo.participants || [];
+
+                      // Don't remove: the bot itself, other bots, group admins, owner, mods
+                      const protectedJids = new Set();
+                      // Add bot's own JIDs
+                      protectedJids.add(botJid);
+                      if (botLid) protectedJids.add(botLid);
+                      // Add owner phones
+                      for (const phone of BOT_OWNER_PHONES) {
+                        protectedJids.add(`${phone}@s.whatsapp.net`);
+                        protectedJids.add(`${phone}@lid`);
+                      }
+                      // Add all global mods
+                      for (const mod of globalMods) protectedJids.add(mod);
+                      // Add all RPG mods
+                      for (const mod of rpgMods) protectedJids.add(mod);
+                      // Add all card mods
+                      for (const mod of cardsMods) protectedJids.add(mod);
+                      // Add override users
+                      for (const ou of overrideUsers) protectedJids.add(ou);
+
+                      // Build list of targets — exclude admins and protected users
+                      const targets = [];
+                      for (const p of participants) {
+                        const pid = p.id;
+                        const isAdmin = p.admin === "admin" || p.admin === "superadmin";
+                        if (isAdmin) continue;
+                        if (protectedJids.has(pid)) continue;
+                        // Also check phone-based owner match
+                        const phone = pid.split("@")[0];
+                        if (BOT_OWNER_PHONES.includes(phone)) continue;
+                        targets.push(pid);
+                      }
+
+                      if (targets.length === 0) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "⚠️ No removable participants found (all are admins or protected).",
+                        });
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `☢️ *NUKE INCOMING*\n\nRemoving ${targets.length} participants...\n_This cannot be undone._`,
+                      });
+
+                      // WhatsApp allows max ~50 per groupParticipantsUpdate call
+                      // Process in batches of 50
+                      let removed = 0;
+                      let failed = 0;
+                      for (let i = 0; i < targets.length; i += 50) {
+                        const batch = targets.slice(i, i + 50);
+                        try {
+                          const result = await sock.groupParticipantsUpdate(chatId, batch, "remove");
+                          for (const r of result) {
+                            if (r.status === "200") removed++;
+                            else failed++;
+                          }
+                        } catch (e) {
+                          failed += batch.length;
+                        }
+                        // Small delay between batches to avoid rate limiting
+                        if (i + 50 < targets.length) {
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `☢️ *NUKE COMPLETE*\n\n✅ Removed: ${removed}\n❌ Failed (admins/bots): ${failed}\n📊 Total targeted: ${targets.length}`,
+                      });
+                    } catch (err) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Nuke failed: ${err.message}`,
+                      });
                     }
                     return;
                   }
@@ -26117,7 +26253,7 @@ _(Or reply to their message)_
 }
 
 function getSock() {
-  return sock;
+  return _moduleSock;
 }
 
 module.exports = {
