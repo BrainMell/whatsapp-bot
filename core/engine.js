@@ -6450,45 +6450,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // their message immediately. This runs for EVERY message (not just commands)
                   // so the hard-muted user is silenced across every GC where the bot sees them.
                   //
-                  // The bot can only delete messages in GCs where it is an admin. If the bot
-                  // is NOT admin, the delete will fail silently — that's expected and logged.
-                  // We fetch metadata on-demand here (not relying on the shouldFetchEarly
-                  // optimization above) so the delete works even in large groups where
-                  // metadata was skipped for idle messages.
+                  // We attempt the delete unconditionally (no botIsAdmin pre-check) because
+                  // the LID/phone JID admin check is unreliable — group metadata can return
+                  // the bot's JID in LID format, and resolveToPhone may not always map it
+                  // correctly. WhatsApp will return an error if the bot isn't admin, which
+                  // we catch silently. Better to try and fail than to skip the delete entirely.
                   if (isGroupChat && isHardMuted(senderJid)) {
                     // Don't delete the bot's own messages or protocol messages
                     if (!m.key.fromMe && !m.message?.protocolMessage) {
-                      let _botIsAdminForHardmute = false;
                       try {
-                        // Check cache first, then fetch if missing
-                        const _cachedEntry = adminSetCache.get(chatId);
-                        if (_cachedEntry && Date.now() < _cachedEntry.expires) {
-                          const _botPhoneJid = lidResolver.resolveToPhone(jidNormalizedUser(sock.user.id), configInstance.getAuthPath());
-                          _botIsAdminForHardmute = _cachedEntry.admins.has(_botPhoneJid) || _cachedEntry.admins.has(jidNormalizedUser(sock.user.id));
-                        } else {
-                          // Cache miss — fetch metadata and build admin set
-                          const _meta = await getGroupMetadata(chatId);
-                          if (_meta && _meta.participants) {
-                            const _adminSet = buildAdminCache(chatId, _meta.participants);
-                            if (_adminSet) {
-                              const _botPhoneJid = lidResolver.resolveToPhone(jidNormalizedUser(sock.user.id), configInstance.getAuthPath());
-                              _botIsAdminForHardmute = _adminSet.has(_botPhoneJid) || _adminSet.has(jidNormalizedUser(sock.user.id));
-                            }
-                          }
-                        }
+                        await sock.sendMessage(chatId, { delete: m.key });
+                        console.log(`🔇 [Hardmute] Delete attempted for ${senderJid} in ${chatId}`);
                       } catch (e) {
-                        console.log(`🔇 [Hardmute] Failed to check admin status in ${chatId}: ${e.message}`);
-                      }
-
-                      if (_botIsAdminForHardmute) {
-                        try {
-                          await sock.sendMessage(chatId, { delete: m.key });
-                          console.log(`🔇 [Hardmute] Deleted message from ${senderJid} in ${chatId} (bot is admin)`);
-                        } catch (e) {
-                          console.log(`🔇 [Hardmute] Failed to delete in ${chatId}: ${e.message}`);
-                        }
-                      } else {
-                        console.log(`🔇 [Hardmute] Bot is NOT admin in ${chatId} — cannot delete message from ${senderJid}`);
+                        console.log(`🔇 [Hardmute] Delete failed in ${chatId}: ${e.message}`);
                       }
                     }
                     return; // Stop all further processing for hard-muted users
