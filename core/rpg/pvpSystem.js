@@ -91,12 +91,23 @@ function applyBuff(player, type, value, duration) {
 
 function applyStatusEffect(player, type, duration, value) {
     if (!player.statusEffects) player.statusEffects = [];
+
+    // 💡 FIX #5/Bug6 (2026-08-15): Stun DR — reject CC if player has stun immunity.
+    // When a CC effect expires, the player gets 2 turns of immunity to prevent
+    // infinite stun locks. This check is ONLY for hard CC (stun/freeze/sleep/charm).
+    if (['stun', 'freeze', 'sleep', 'charm', 'cc'].includes(type)) {
+        if (player.stunImmunityTurns > 0) {
+            return false; // Immune — effect not applied
+        }
+    }
+
     player.statusEffects.push({
         type,
         duration,
         value,
         icon: getDebuffIcon(type)
     });
+    return true; // Effect applied successfully
 }
 
 function getEffectiveStats(player) {
@@ -599,7 +610,12 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     // Tick current player's status effects at the beginning of their turn
     let statusLog = [];
     let skipTurn = false;
-    
+
+    // 💡 FIX #5/Bug6: Decrement stun immunity each turn
+    if (currentPlayer.stunImmunityTurns > 0) {
+        currentPlayer.stunImmunityTurns--;
+    }
+
     if (currentPlayer.statusEffects && currentPlayer.statusEffects.length > 0) {
         for (let i = currentPlayer.statusEffects.length - 1; i >= 0; i--) {
             const effect = currentPlayer.statusEffects[i];
@@ -626,6 +642,14 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             if (effect.duration <= 0) {
                 currentPlayer.statusEffects.splice(i, 1);
                 statusLog.push(`✨ *${effect.type.toUpperCase()}* has worn off.`);
+                // 💡 FIX #5/Bug6: Set stun immunity after CC expires (2 turns).
+                // This prevents infinite stun locks where a player is repeatedly
+                // CC'd before they can act. The 2-turn immunity gives them a
+                // window to fight back.
+                if (['stun', 'freeze', 'sleep', 'charm', 'cc'].includes(effect.type)) {
+                    currentPlayer.stunImmunityTurns = 2;
+                    statusLog.push(`🛡️ *${currentPlayer.name}* is immune to CC for 2 turns!`);
+                }
             }
         }
     }
@@ -1318,6 +1342,36 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
     if (statusLog.length > 0) {
         actionResult = statusLog.join('\n') + '\n\n' + actionResult;
+    }
+
+    // 💡 FIX #5 (2026-08-15): PvP summon participation — after the player acts,
+    // their summon auto-attacks the opponent. This makes summons actively
+    // participate in PvP instead of being passive stat sticks. The summon
+    // uses a simplified attack formula (not the full PvE summonAI which
+    // depends on gameStates/sock.sendMessage).
+    if (duel.summons && duel.summons.length > 0 && action !== 'flee') {
+        const playerSummon = duel.summons.find(s =>
+            s.summonerIndex === duel.turn && !s.isDead && s.stats?.hp > 0
+        );
+        if (playerSummon && opponent.hp > 0) {
+            // Simplified summon attack: summon ATK vs opponent DEF
+            const summonAtk = playerSummon.stats?.atk || 20;
+            const oppDef = opponent.stats?.def || opponent.def || 10;
+            let summonDmg = Math.max(1, Math.floor(summonAtk * (100 / (100 + oppDef))));
+            // 15% crit chance for summons
+            const summonCrit = Math.random() < 0.15;
+            if (summonCrit) summonDmg = Math.floor(summonDmg * 1.5);
+            // 10% miss chance
+            if (Math.random() < 0.10) {
+                actionResult += `\n🐉 ${playerSummon.icon || '🐲'} ${playerSummon.name} attacks but *MISSES*!`;
+            } else {
+                opponent.hp = Math.max(0, opponent.hp - summonDmg);
+                actionResult += `\n${playerSummon.icon || '🐲'} ${playerSummon.name} attacks *${opponent.name}* for 💥 ${summonDmg} damage${summonCrit ? ' (CRIT!)' : ''}!`;
+                if (opponent.hp <= 0) {
+                    actionResult += `\n💀 ${opponent.name} was defeated by ${playerSummon.name}!`;
+                }
+            }
+        }
     }
 
     // ── Check for win ─────────────────────────────
