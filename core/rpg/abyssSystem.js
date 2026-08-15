@@ -106,6 +106,11 @@ async function startRun(userId, playerStats) {
       console.log(`[Abyss] Auto-retreating stale run for ${userId} (age: ${Math.floor(age / 60000)}min)`);
       try {
         // Award full loot (same as manual retreat)
+        // 💡 FIX 2026-08-15: require progression + economy locally — they
+        // were referenced but never imported at this scope, causing
+        // "progression is not defined" ReferenceError.
+        const progression = require('./progression');
+        const economy = require('./economy');
         const loot = existing.lootAccumulator || {};
         if (loot.xp > 0) progression.awardXP(userId, loot.xp, 'Abyss (auto-retreat)');
         if (loot.gold > 0) economy.addMoney(userId, loot.gold, 'Abyss (auto-retreat)', 'abyss');
