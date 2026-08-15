@@ -1384,6 +1384,22 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.isEnemy = true;
     scaled.isBoss = true;
     scaled.currentPhase = 0;
+    // 💡 FIX P0 (2026-08-16): Copy phases from the boss definition onto the
+    // scaled combat entity. checkBossPhase() in guildAdventure.js:5278 reads
+    // boss.phases to trigger phase transitions at HP thresholds — but this
+    // field was never copied here, so phase transitions silently never fired
+    // for ANY boss. The bossMechanics.js bosses (HIVE_COMMANDER_BOSS etc.)
+    // have proper phase objects with thresholds/abilities/effects/messages;
+    // classEncounters.js bosses currently have string-array phases (handled
+    // separately in Commit B). Only copy if phases is an array of objects
+    // (not strings) to avoid breaking checkBossPhase's .threshold lookup.
+    if (boss.phases && Array.isArray(boss.phases) && boss.phases.length > 0) {
+        if (typeof boss.phases[0] === 'object' && boss.phases[0] !== null) {
+            scaled.phases = boss.phases;
+        }
+        // String-array phases (e.g. ['Normal', 'Enraged']) are left uncopied —
+        // checkBossPhase can't use them. Commit B converts these to objects.
+    }
     // Use BOSS archetype skill objects so AI can evaluate them properly
     const bossArchetype = boss.archetype || 'BOSS';
     scaled.archetype = bossArchetype;
