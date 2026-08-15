@@ -1155,33 +1155,6 @@ async function startBot(configInstance) {
     const ZENI = CURRENCY.symbol;
     let BOT_MARKER = `\u200B`; // Invisible marker for messages
 
-    // 💡 SIBLING PREFIX AWARENESS (2026-08-14):
-    // Load sibling bot prefixes so this bot can ignore commands meant for a sibling.
-    // Problem: Jake's prefix is ".jk" and Joker's is ".j". When Joker sees ".jk char",
-    // it matches ".j" prefix and tries to run "k char" → error.
-    // Fix: Load each sibling's botConfig.json and collect their prefixes. When a message
-    // starts with a sibling's prefix (but NOT this bot's own prefix), skip it entirely.
-    const siblingPrefixes = [];
-    const instancesRoot = path.join(__dirname, '..', 'instances');
-    const siblingNames = botConfig.getSiblings() || [];
-    for (const sibId of siblingNames) {
-      try {
-        const sibConfigPath = path.join(instancesRoot, sibId, 'botConfig.json');
-        if (fs.existsSync(sibConfigPath)) {
-          const sibConfig = JSON.parse(fs.readFileSync(sibConfigPath, 'utf8'));
-          if (sibConfig.prefix && sibConfig.prefix !== PREFIX) {
-            siblingPrefixes.push(sibConfig.prefix.toLowerCase());
-          }
-        }
-      } catch (e) {}
-    }
-    if (siblingPrefixes.length > 0) {
-      console.log(`🔗 [${BOT_ID}] Sibling prefixes loaded: ${siblingPrefixes.join(', ')} — will ignore commands using these prefixes`);
-    }
-    // Sort by length DESCENDING so we match the LONGEST prefix first.
-    // e.g. ".jk" is checked before ".j" — prevents ".jk char" matching ".j" + "k char"
-    siblingPrefixes.sort((a, b) => b.length - a.length);
-
     // Initialize Search Caches
     global[`__${BOT_ID}_anime_search_cache_by_chat`] =
       global[`__${BOT_ID}_anime_search_cache_by_chat`] || new Map();
@@ -5217,28 +5190,37 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       }
     }
 
-    async function broadcastUpdate(sock, customMessage = null) {
+    async function broadcastUpdate(sock, customMessage = null, selectedGroups = null) {
       const v = botConfig.getVersion();
 
       let allGroups = [];
+      let groupNames = {};
       try {
-        // Dynamically fetch every group the bot is currently a member of
         const groupsData = await sock.groupFetchAllParticipating();
         allGroups = Object.keys(groupsData);
+        for (const id of allGroups) {
+          groupNames[id] = groupsData[id].subject || id.split('@')[0];
+        }
       } catch (err) {
-        console.error(
-          "❌❌ Failed to fetch groups from WhatsApp:",
-          err.message,
-        );
-        // Fallback to groupSettings if WhatsApp fetch fails
-        allGroups = Array.from(groupSettings.keys()).filter((id) =>
-          id.endsWith("@g.us"),
-        );
+        console.error("❌❌ Failed to fetch groups from WhatsApp:", err.message);
+        allGroups = Array.from(groupSettings.keys()).filter((id) => id.endsWith("@g.us"));
+        for (const id of allGroups) {
+          groupNames[id] = id.split('@')[0];
+        }
       }
 
       if (allGroups.length === 0) {
         console.log("📢 No groups found to broadcast to.");
-        return 0;
+        return { count: 0, skipped: 0 };
+      }
+
+      // 💡 GC SELECTION: if selectedGroups is provided, only send to those.
+      // If null, send to all (original behavior).
+      let targetGroups = allGroups;
+      let skippedCount = 0;
+      if (selectedGroups && Array.isArray(selectedGroups) && selectedGroups.length > 0) {
+        targetGroups = allGroups.filter(g => selectedGroups.includes(g));
+        skippedCount = allGroups.length - targetGroups.length;
       }
 
       const m =
@@ -5249,20 +5231,96 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
       let sentCount = 0;
       console.log(
-        `📡 Starting live broadcast to ${allGroups.length} groups...`,
+        `📡 Starting broadcast to ${targetGroups.length} groups (${skippedCount} skipped)...`,
       );
 
-      for (const g of allGroups) {
+      for (const g of targetGroups) {
         try {
           await sock.sendMessage(g, { text: BOT_MARKER + m });
           sentCount++;
-          // Anti-spam gap: 1.5 seconds between groups for safety
           await new Promise((r) => setTimeout(r, 1500));
         } catch (e) {
           console.error(`❌❌ Failed broadcast to ${g}:`, e.message);
         }
       }
-      return sentCount;
+      return { count: sentCount, skipped: skippedCount, groups: groupNames };
+    }
+
+    // 💡 BROADCAST GC SELECTION (2026-08-15):
+    // Shows a numbered list of all GCs the bot is in, lets the user select
+    // which ones to broadcast to (bulk selection: "1,3,5" or "all" or "1-5").
+    async function showBroadcastSelection(sock, chatId, senderJid, customMsg) {
+      let allGroups = [];
+      let groupNames = {};
+      try {
+        const groupsData = await sock.groupFetchAllParticipating();
+        allGroups = Object.keys(groupsData);
+        for (const id of allGroups) {
+          groupNames[id] = groupsData[id].subject || id.split('@')[0];
+        }
+      } catch (err) {
+        allGroups = Array.from(groupSettings.keys()).filter((id) => id.endsWith("@g.us"));
+        for (const id of allGroups) {
+          groupNames[id] = id.split('@')[0];
+        }
+      }
+
+      if (allGroups.length === 0) {
+        return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No groups found to broadcast to." });
+      }
+
+      let msg = `📢 *BROADCAST — SELECT GROUPS*\n\n`;
+      msg += `_Found ${allGroups.length} groups. Reply with:_\n`;
+      msg += `• _Numbers: \`1,3,5\` (specific groups)_\n`;
+      msg += `• _Range: \`1-5\` (groups 1 through 5)_\n`;
+      msg += `• _Mix: \`1,3-5,8\` (combo)_\n`;
+      msg += `• _\`all\` (send to every group)_\n`;
+      msg += `• _\`cancel\` (abort)_\n\n`;
+      msg += `*Available Groups:*\n`;
+      for (let i = 0; i < allGroups.length; i++) {
+        msg += `\`${i + 1}\` — ${groupNames[allGroups[i]]}\n`;
+      }
+
+      // Store pending broadcast context
+      pendingBroadcasts.set(senderJid, {
+        groups: allGroups,
+        names: groupNames,
+        customMsg: customMsg,
+        timestamp: Date.now(),
+      });
+
+      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+    }
+
+    // Pending broadcast selections: senderJid -> { groups, names, customMsg, timestamp }
+    const pendingBroadcasts = new Map();
+
+    // Parse selection string like "1,3-5,8" into array of 0-based indices
+    function parseGroupSelection(input, maxCount) {
+      input = input.trim().toLowerCase();
+      if (input === 'all') {
+        return Array.from({ length: maxCount }, (_, i) => i);
+      }
+      if (input === 'cancel' || input === 'abort' || input === 'stop') {
+        return null;
+      }
+      const indices = new Set();
+      const parts = input.split(',');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        const rangeMatch = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          const start = parseInt(rangeMatch[1]);
+          const end = parseInt(rangeMatch[2]);
+          for (let i = start; i <= end; i++) {
+            if (i >= 1 && i <= maxCount) indices.add(i - 1);
+          }
+        } else {
+          const num = parseInt(trimmed);
+          if (num >= 1 && num <= maxCount) indices.add(num - 1);
+        }
+      }
+      return Array.from(indices).sort((a, b) => a - b);
     }
 
     async function initSocket() {
@@ -5400,41 +5458,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // Wrap event registrations in the storage context to ensure isolation
         await botConfig.storage.run(configInstance, async () => {
           sock.ev.on("creds.update", saveCreds);
-          // 💡 FIX 2026-08-14: Only set botStartTime on FIRST connect, not on
-          // every reconnect. This prevents uptime from resetting when the bot
-          // temporarily disconnects and reconnects (which happens frequently
-          // with WhatsApp's connection management).
-          //
-          // We also check MongoDB for a persisted startedAt from a previous
-          // run of this bot instance. If found and the PID is different (process
-          // restarted), we use the CURRENT time (fresh start). If the PID is
-          // the same (reconnect within same process), we keep the original
-          // startedAt so uptime doesn't reset.
-          if (!botStartTime) {
-            try {
-              const System = require('./models/System');
-              const existingHb = await System.findOne({ key: 'heartbeat_' + BOT_ID }).lean();
-              if (existingHb && existingHb.value) {
-                const prev = existingHb.value;
-                if (prev.pid === process.pid && prev.startedAt) {
-                  // Same process — this is a reconnect, not a restart.
-                  // Keep the original startedAt so uptime doesn't reset.
-                  botStartTime = prev.startedAt;
-                  console.log(`⏱️ [${BOT_ID}] Uptime preserved: ${formatUptime(Date.now() - botStartTime)} (reconnect, same PID ${process.pid})`);
-                } else {
-                  // Different PID — process restarted. Fresh start.
-                  botStartTime = Date.now();
-                  console.log(`⏱️ [${BOT_ID}] Fresh start time set (PID ${process.pid})`);
-                }
-              } else {
-                botStartTime = Date.now();
-                console.log(`⏱️ [${BOT_ID}] First start time set (PID ${process.pid})`);
-              }
-            } catch (e) {
-              botStartTime = Date.now();
-              console.log(`⏱️ [${BOT_ID}] Start time set (fallback, PID ${process.pid})`);
-            }
-          }
+          botStartTime = Date.now();
 
           sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
@@ -6505,61 +6529,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 4. Diagnostic Log
                   console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
-                  // 💡 HARDMUTE AUTO-DELETE (2026-08-14):
-                  // Check VERY EARLY — before MongoDB persist, before any command processing.
-                  // If the sender is hard-muted AND this is a group chat, attempt to delete
-                  // their message immediately. This runs for EVERY message (not just commands)
-                  // so the hard-muted user is silenced across every GC where the bot sees them.
-                  //
-                  // We attempt the delete unconditionally (no botIsAdmin pre-check) because
-                  // the LID/phone JID admin check is unreliable — group metadata can return
-                  // the bot's JID in LID format, and resolveToPhone may not always map it
-                  // correctly. WhatsApp will return an error if the bot isn't admin, which
-                  // we catch silently. Better to try and fail than to skip the delete entirely.
-                  if (isGroupChat && isHardMuted(senderJid)) {
-                    // Don't delete the bot's own messages or protocol messages
-                    if (!m.key.fromMe && !m.message?.protocolMessage) {
-                      // 💡 Enhanced logging (2026-08-14): log the message key structure
-                      // and the delete result so we can see exactly what's happening.
-                      const _hmKey = {
-                        remoteJid: m.key.remoteJid,
-                        id: m.key.id,
-                        fromMe: m.key.fromMe,
-                        participant: m.key.participant || null
-                      };
-                      
-                      // Fetch group metadata to check admin status for logging
-                      let _hmBotAdmin = 'unknown';
-                      let _hmAdminList = [];
-                      try {
-                        const _hmMeta = await getGroupMetadata(chatId);
-                        if (_hmMeta && _hmMeta.participants) {
-                          const _hmBotId = jidNormalizedUser(sock.user.id);
-                          const _hmBotLid = sock.authState?.creds?.me?.lid ? jidNormalizedUser(sock.authState.creds.me.lid) : null;
-                          const _hmBotEntry = _hmMeta.participants.find(p =>
-                            p.id === _hmBotId || p.id === _hmBotLid ||
-                            p.id.split(':')[0] === _hmBotId.split(':')[0] ||
-                            (_hmBotLid && p.id.split(':')[0] === _hmBotLid.split(':')[0])
-                          );
-                          _hmBotAdmin = _hmBotEntry ? (_hmBotEntry.admin || 'member') : 'not_in_group';
-                          _hmAdminList = _hmMeta.participants
-                            .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
-                            .map(p => p.id);
-                        }
-                      } catch (e) {
-                        _hmBotAdmin = 'fetch_error: ' + e.message;
-                      }
-
-                      try {
-                        const _result = await sock.sendMessage(chatId, { delete: m.key });
-                        console.log(`🔇 [Hardmute] Delete result for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | botId=${jidNormalizedUser(sock.user.id)} | botLid=${sock.authState?.creds?.me?.lid || 'none'} | admins=[${_hmAdminList.join(',')}] | result=${_result ? 'received' : 'null'}`);
-                      } catch (e) {
-                        console.log(`🔇 [Hardmute] Delete FAILED for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | error=${e.message}`);
-                      }
-                    }
-                    return; // Stop all further processing for hard-muted users
-                  }
-
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
                     m.message.conversation ||
@@ -6763,56 +6732,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   const txt = text ? text.trim() : "";
 
-                  // 💡 SIBLING PREFIX COLLISION GUARD (2026-08-14):
-                  // If the message starts with a sibling bot's prefix, skip it entirely.
-                  // This prevents Jake's ".jk char" from being misread by Joker as
-                  // ".j" + "k char" → error.
-                  //
-                  // CRITICAL: Own prefix is checked FIRST. If the message starts with our
-                  // own prefix, we process it — even if a sibling prefix is a substring.
-                  // Example: Jake's prefix is ".jk", Joker's is ".j". When Jake sees
-                  // ".jk char", it starts with ".jk" (own prefix) → process it (do NOT
-                  // check siblings). When Joker sees ".jk char", it does NOT start with
-                  // ".j" as an exact prefix match... wait, ".jk" DOES start with ".j".
-                  //
-                  // So the real logic is: check own prefix first (exact startswith). If
-                  // it matches, process. If it does NOT match own prefix, THEN check
-                  // siblings. But ".jk char" starts with ".j" (Joker's prefix) AND ".jk"
-                  // (Jake's prefix). Joker needs to realize ".jk" is a sibling prefix
-                  // and is LONGER than ".j", so the message is for Jake, not Joker.
-                  //
-                  // Solution: check ALL prefixes (own + siblings), pick the LONGEST match.
-                  // If the longest match is a sibling prefix, skip. If it's our own, process.
-                  if (txt.length > 1 && siblingPrefixes.length > 0) {
-                    const lowerTxtForPrefix = txt.toLowerCase();
-                    const ownPrefixLower = PREFIX.toLowerCase();
-
-                    // Find the longest matching prefix (own or sibling)
-                    let longestMatch = null;
-                    let longestMatchIsOwn = false;
-
-                    // Check own prefix
-                    if (lowerTxtForPrefix.startsWith(ownPrefixLower)) {
-                      longestMatch = ownPrefixLower;
-                      longestMatchIsOwn = true;
-                    }
-
-                    // Check sibling prefixes (sorted longest-first)
-                    for (const sibPrefix of siblingPrefixes) {
-                      if (lowerTxtForPrefix.startsWith(sibPrefix)) {
-                        if (!longestMatch || sibPrefix.length > longestMatch.length) {
-                          longestMatch = sibPrefix;
-                          longestMatchIsOwn = false;
-                        }
-                      }
-                    }
-
-                    // If the longest match is a sibling prefix (not our own), skip
-                    if (longestMatch && !longestMatchIsOwn) {
-                      return; // Skip silently — message is for a sibling bot
-                    }
-                  }
-
                   // ── PIPELINE STAGE 2: TEXT PARSED ──────────
                   const _looksLikeCmd = txt.startsWith('.') || txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase());
                   if (_looksLikeCmd) {
@@ -6936,6 +6855,50 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     return;
                   }
 
+                  // 💡 BROADCAST SELECTION REPLY HANDLER (2026-08-15):
+                  // When the user has a pending broadcast selection and sends
+                  // a message that isn't a command, treat it as their GC selection.
+                  if (pendingBroadcasts.has(senderJid)) {
+                    const pending = pendingBroadcasts.get(senderJid);
+                    // Expire after 5 minutes
+                    if (Date.now() - pending.timestamp > 300000) {
+                      pendingBroadcasts.delete(senderJid);
+                    } else if (!_looksLikeCmd) {
+                      // User replied with a selection (not a command)
+                      pendingBroadcasts.delete(senderJid);
+                      const indices = parseGroupSelection(txt, pending.groups.length);
+
+                      if (indices === null) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Broadcast cancelled." });
+                        return;
+                      }
+
+                      if (indices.length === 0) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No valid groups selected. Use numbers like \`1,3,5\` or \`1-5\` or \`all\`." });
+                        return;
+                      }
+
+                      const selectedGroups = indices.map(i => pending.groups[i]);
+                      const selectedNames = indices.map(i => pending.names[pending.groups[i]]);
+
+                      let confirmMsg = `📢 *BROADCAST CONFIRMATION*\n\n`;
+                      confirmMsg += `Sending to *${selectedGroups.length}* group(s):\n`;
+                      selectedNames.forEach((name, i) => {
+                        confirmMsg += `${i + 1}. ${name}\n`;
+                      });
+                      confirmMsg += `\n🔄 Broadcasting...`;
+
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + confirmMsg });
+
+                      const result = await broadcastUpdate(sock, pending.customMsg, selectedGroups);
+                      let doneMsg = `✅ Broadcast complete!\n`;
+                      doneMsg += `📤 Sent to: ${result.count} group(s)\n`;
+                      if (result.skipped > 0) doneMsg += `⏭️ Skipped: ${result.skipped} group(s)`;
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + doneMsg });
+                      return;
+                    }
+                  }
+
                   // 💡 SKILL/CLASS CREATION REPLY HANDLER — when a mod replies to
                   // the template message from .g admin createskill/createclass
                   const _quotedCtx = m.message?.extendedTextMessage?.contextInfo;
@@ -7038,9 +7001,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   }
                   if (isBlocked(senderJid)) return;
                   if (isBanned(senderJid)) return;
-                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
-                  // If we reach here, the user is NOT hard-muted (or it's a DM).
-                  // No need to re-check here.
+                  if (isHardMuted(senderJid)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
 
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
@@ -7828,9 +7792,12 @@ _💡 Reply with another number from your search list!_`.trim();
                         const now = Date.now();
                         const STALE_THRESHOLD = 2 * 60 * 1000;   // 2 min → STALE
                         const DEAD_THRESHOLD  = 5 * 60 * 1000;   // 5 min → DEAD
-                        const SELF_TAG = ' ◄';
+                        const SELF_TAG = ' (you)';
 
-                        let aliveCount = 0, staleCount = 0, deadCount = 0;
+                        let out = `🖥️ *BOT INSTANCE STATUS*\n`;
+                        out += `_Checked at ${new Date().toLocaleTimeString()} — ${allIds.length} instances_\n\n`;
+
+                        let aliveCount = 0, staleCount = 0, deadCount = 0, unknownCount = 0;
 
                         // Sort: self first, then others alphabetically
                         allIds.sort((a, b) => {
@@ -7839,59 +7806,86 @@ _💡 Reply with another number from your search list!_`.trim();
                           return a.localeCompare(b);
                         });
 
-                        // 💡 Compact stylish format: one line per bot
-                        // Format: 🔵 Jake  🟢 2m  312MB  .jk
-                        let out = `╭─ 🖥️ INSTANCE STATUS ─╮\n`;
-                        out += `│  _${new Date().toLocaleTimeString()}_  \n`;
-                        out += `│\n`;
-
                         for (const id of allIds) {
                           const hb = heartbeatMap[id];
-                          let icon, status, uptimeShort, ram, prefix;
+                          let statusIcon, statusLabel, lastSeenStr, uptimeStr, detailStr;
 
                           if (!hb) {
-                            icon = '⚫'; status = 'offline';
-                            uptimeShort = '—'; ram = ''; prefix = '';
+                            // No heartbeat record at all — instance never started
+                            // since the heartbeat feature was deployed, OR its
+                            // heartbeat was cleared. Treat as DEAD.
+                            statusIcon = '⚫';
+                            statusLabel = 'NEVER_SEEN';
+                            lastSeenStr = '—';
+                            uptimeStr = '—';
+                            detailStr = 'No heartbeat record. Instance may be offline or running a pre-heartbeat version.';
                             deadCount++;
                           } else {
                             const ageMs = now - (hb.lastSeen || 0);
                             const isSelf = (id === selfId);
 
+                            // Self reports its own connection state directly;
+                            // siblings are judged by heartbeat freshness.
                             if (isSelf) {
                               const selfHealth = botInstancesHealth.get(BOT_ID);
                               const selfStatus = selfHealth?.status || 'unknown';
                               if (selfStatus === 'connected') {
-                                icon = '🟢'; status = 'online'; aliveCount++;
+                                statusIcon = '🟢'; statusLabel = 'ONLINE';
+                                aliveCount++;
                               } else if (selfStatus === 'connecting') {
-                                icon = '🟡'; status = 'connecting'; staleCount++;
+                                statusIcon = '🟡'; statusLabel = 'CONNECTING';
+                                staleCount++;
                               } else {
-                                icon = '🔴'; status = String(selfStatus); deadCount++;
+                                statusIcon = '🔴'; statusLabel = String(selfStatus).toUpperCase();
+                                deadCount++;
                               }
                             } else if (hb.status === 'disconnected' || hb.status === 'logged_out') {
-                              icon = '🔴'; status = 'offline'; deadCount++;
+                              statusIcon = '🔴'; statusLabel = String(hb.status).toUpperCase();
+                              detailStr = hb.error ? `Error: ${hb.error}` : 'Connection closed';
+                              deadCount++;
                             } else if (ageMs < STALE_THRESHOLD) {
-                              icon = '🟢'; status = 'online'; aliveCount++;
+                              statusIcon = '🟢'; statusLabel = 'ONLINE';
+                              aliveCount++;
                             } else if (ageMs < DEAD_THRESHOLD) {
-                              icon = '🟡'; status = 'stale'; staleCount++;
+                              statusIcon = '🟡'; statusLabel = 'STALE';
+                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000)}s ago — may be lagging or restarting.`;
+                              staleCount++;
                             } else {
-                              icon = '⚫'; status = 'dead'; deadCount++;
+                              statusIcon = '⚫'; statusLabel = 'DEAD';
+                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000 / 60)}m ago — instance is likely down.`;
+                              deadCount++;
                             }
 
-                            uptimeShort = hb.startedAt ? formatUptime(now - hb.startedAt) : '—';
-                            ram = hb.ramUsage ? `${hb.ramUsage}MB` : '';
-                            prefix = hb.prefix || '';
+                          lastSeenStr = hb.lastSeen
+                              ? `${Math.floor((now - hb.lastSeen) / 1000)}s ago`
+                              : '—';
+                            uptimeStr = hb.startedAt
+                              ? formatUptime(now - hb.startedAt)
+                              : '—';
                           }
 
-                          out += `│  ${icon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
-                          let detailLine = `│     ${status}`;
-                          if (uptimeShort && uptimeShort !== '—') detailLine += `  ⏱ ${uptimeShort}`;
-                          if (ram) detailLine += `  💾 ${ram}`;
-                          if (prefix) detailLine += `  ▸ ${prefix}`;
-                          out += `${detailLine}\n`;
+                          out += `${statusIcon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
+                          out += `   Status: ${statusLabel}\n`;
+                          out += `   Last seen: ${lastSeenStr}\n`;
+                          if (uptimeStr && uptimeStr !== '—') out += `   Uptime: ${uptimeStr}\n`;
+                          if (hb?.ramUsage) out += `   RAM Usage: ${hb.ramUsage} MB\n`;
+                          if (hb?.version) out += `   Version: ${hb.version}\n`;
+                          if (hb?.prefix) out += `   Prefix: ${hb.prefix}\n`;
+                          if (detailStr) out += `   ⚠️ ${detailStr}\n`;
+                          out += `\n`;
                         }
 
-                        out += `│\n`;
-                        out += `╰─ 🟢${aliveCount} 🟡${staleCount} 🔴${deadCount} / ${allIds.length} total ─╯`;
+                        // Summary line
+                        out += `━━━━━━━━━━━━━━━━━━━━\n`;
+                        out += `Summary: 🟢 ${aliveCount} online · 🟡 ${staleCount} stale · 🔴 ${deadCount} down · ${allIds.length} total\n`;
+
+                        // Action recommendations
+                        if (deadCount > 0) {
+                          out += `\n⚠️ *Action needed:* ${deadCount} instance(s) are down. Check their deployment/logs.`;
+                        }
+                        if (staleCount > 0) {
+                          out += `\n🟡 *Watch:* ${staleCount} instance(s) are stale — may be restarting or lagging.`;
+                        }
 
                         await sock.sendMessage(chatId, { text: BOT_MARKER + out });
                         return;
@@ -9565,8 +9559,15 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                   }
 
-                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
-                  // If we reach here, the user is NOT hard-muted. No re-check needed.
+                  // 💡 CHECK IF USER IS HARD-MUTED (owner-issued, global, no expiry)
+                  // Hard-muted users can see the bot but can't use ANY commands.
+                  // Only the owner can reverse this (unhardmute is owner-only).
+                  // 💡 FIX 2026-08-08: Also DELETE the message (was just returning).
+                  if (isHardMuted(senderJid)) {
+                    console.log(`🔇 Hard-muted user tried to use bot: ${senderJid}`);
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
 
                   // Override command - allows user to bypass admin checks
                   if (
@@ -17206,30 +17207,27 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       // .g abyss — show status or help
                       if (!abyssSub || abyssSub === 'help') {
                         let msg = `🕳️ *ABYSS — ENDLESS DUNGEON* 🕳️\n\n`;
-                        msg += `Procedural floors with increasing difficulty. Death = lose 90% of loot. Retreat = keep 100%.\n\n`;
+                        msg += `Procedural floors that get harder the deeper you go. Death = lose 90% of run loot. Retreat = keep 100%.\n\n`;
                         msg += `*Floor Structure:*\n`;
-                        msg += `• Floors 1-2: F-rank mobs (rats, bats, slimes)\n`;
-                        msg += `• Floors 3-6: C-rank, boss every 5th floor\n`;
-                        msg += `• Floors 7-10: A-rank, tougher mobs\n`;
-                        msg += `• Floors 11-20: S-rank, mini-boss every 3rd floor\n`;
-                        msg += `• Floors 21-49: SS+ rank, boss every 5th floor\n`;
+                        msg += `• Floors 1-10: F→A rank enemies\n`;
+                        msg += `• Floors 11-20: S rank, mini-boss every 3rd floor\n`;
+                        msg += `• Floors 21-49: SS+ rank, every floor is a boss\n`;
                         msg += `• Floors 50+: SSS rank, brutal\n`;
-                        msg += `• Floor 100: The Abyssal God\n\n`;
-                        msg += `*Combat Commands (standard):*\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat attack\` — attack\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat skill <#>\` — use skill\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat item\` — use item\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat flee\` — flee (penalty)\n\n`;
-                        msg += `*Abyss Commands:*\n`;
+                        msg += `• Floor 100: The Abyssal God (final boss)\n\n`;
+                        msg += `*Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss resume\` — restart combat after disconnect\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — event choice\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat attack\` — attack current floor enemy\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat skill <#>\` — use a skill in combat\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat item\` — use an item in combat\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat flee\` — flee combat (penalty)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss resume\` — restart combat after bot restart\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure on current floor\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — respond to event encounter\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss skip\` — skip treasure/event floor\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your run\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your active run\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss retreat\` — extract with 100% loot\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run\n\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs this week\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run ever\n\n`;
                         msg += `*Rewards:* XP + Zeni per floor, rune drops on floor 21+ bosses, leaderboard glory.\n`;
                         msg += `*Score:* deepestFloor × 100 + monstersKilled × 5`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
@@ -17243,12 +17241,14 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first. Use \`${botConfig.getPrefix()} register\`.` });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `${botConfig.getPrefix()} register`.' });
                           }
                           const level = progression.getLevel(senderJid);
                           if (level < 20) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
                           }
+                          // 💡 FIX: use getUserClass (returns object) instead of user.class (string)
+                          // to ensure getBaseStats gets the proper classId for stat calculation.
                           const userClassObj = economy.getUserClass(senderJid);
                           const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
                           const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
@@ -17264,6 +17264,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (!result.success) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
+                          // If first floor is combat, start real combat engine
                           const run = result.run;
                           if (run.currentEncounterType === 'combat' && run.currentEnemy) {
                             try {
@@ -17271,28 +17272,30 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                               await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
                             } catch (combatErr) {
                               console.error('[Abyss] Failed to start combat:', combatErr.message);
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize. Use `' + botConfig.getPrefix() + ' abyss resume` to retry.' });
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize.' });
                             }
                           } else {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
-                          // 💡 FIX 2026-08-15: MUST return here. Without this return,
-                          // the code fell through to "Unknown Abyss command: enter" even
-                          // though the run started successfully.
-                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss attack/atk/fight — redirect to standard combat
+                      // .g abyss attack — redirect to combat (Abyss uses real combat now)
+                      // 💡 FIX 2026-08-03: Silent redirect — don't show a warning, just tell
+                      // them the right command. The old message was confusing because it looked
+                      // like an error when they were just trying to attack.
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
+                        // If they're in active Abyss combat, just route to combat attack
                         const abyssSessionKey = `${chatId}_${senderJid}`;
                         const combatState = guildAdventure.getGameState(abyssSessionKey);
                         if (combatState && combatState.inCombat) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight.` });
+                          // They're in combat — redirect to combat attack
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight in the Abyss.` });
                         }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss uses standard combat.\n_Start: \`${botConfig.getPrefix()} abyss enter\`\n_Attack: \`${botConfig.getPrefix()} combat attack\`_` });
+                        // Not in combat — they probably want to start
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss combat uses the standard combat system.\n_Start a run with \`${botConfig.getPrefix()} abyss enter\`, then use \`${botConfig.getPrefix()} combat attack\` to fight.` });
                       }
 
                       // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume —
@@ -17377,7 +17380,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       // .g abyss retreat — extract with loot
-                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee' || abyssSub === 'leave' || abyssSub === 'exit') {
+                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
@@ -17390,11 +17393,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (abyssSub === 'collect' || abyssSub === 'take' || abyssSub === 'loot') {
                         try {
                           const result = await abyssSystem.processTreasure(senderJid);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                          // 💡 FIX 2026-08-15: Start combat if next floor is combat.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
-                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
-                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17405,13 +17404,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         try {
                           const choiceId = abyssArgs[1] || '1';
                           const result = await abyssSystem.processEventChoice(senderJid, choiceId);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                          // 💡 FIX 2026-08-15: If the next floor is combat, start it!
-                          // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
-                          // but never actually started combat — so the player got "Not in combat!" when they tried.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
-                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
-                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17421,11 +17414,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (abyssSub === 'skip' || abyssSub === 'next') {
                         try {
                           const result = await abyssSystem.processSkip(senderJid);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                          // 💡 FIX 2026-08-15: Same fix as choose — start combat if next floor is combat.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
-                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
-                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17557,8 +17546,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} abyss admin\` for help.` });
                       }
 
-                      // 💡 FIX 2026-08-15: Cleaner unknown command message.
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._` });
+                      // 💡 FIX 2026-08-03: Better error message — tell them the real
+                      // combat commands instead of just "unknown subcommand".
+                      // The old message was confusing players who typed things like
+                      // '.s abyss atk' or '.s abyss fight' during combat.
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._\n_Abyss combat uses: \`${botConfig.getPrefix()} combat attack\`, \`${botConfig.getPrefix()} combat skill <#>\`, \`${botConfig.getPrefix()} combat item\`_` });
                     }
 
                     // ============================================
@@ -24492,6 +24484,11 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                   }
 
                   // `${botConfig.getPrefix().toLowerCase()}` updateall [custom_message] - OWNER ONLY manual broadcast
+                  // 💡 2026-08-15: Now shows a GC selection menu first.
+                  // Usage:
+                  //   .j updateall           → show GC selection list
+                  //   .j updateall <message> → show GC selection list (message saved for after selection)
+                  // Then reply with: 1,3,5 or 1-5 or all or cancel
                   if (
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} updateall` ||
@@ -24513,19 +24510,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           .length,
                       )
                       .trim();
-                    await sock.sendMessage(chatId, {
-                      text: BOT_MARKER + "🔄 Starting group broadcast...",
-                    });
-
-                    const count = await broadcastUpdate(
-                      sock,
-                      customMsg || null,
-                    );
-                    await sock.sendMessage(chatId, {
-                      text:
-                        BOT_MARKER +
-                        `✅ Broadcast complete! Sent to ${count} groups.`,
-                    });
+                    await showBroadcastSelection(sock, chatId, senderJid, customMsg || null);
                     return;
                   }
 
