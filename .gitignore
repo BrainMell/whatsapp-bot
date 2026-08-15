@@ -37,3 +37,10 @@ instances/*/database/
 instances/*/downloads/
 scripts/.monitor_marker
 scripts/monitor_loop.sh
+
+# Secrets - never commit env files or their backups.
+# Added after scratch scripts with a hardcoded MONGO_URI were found
+# staged for a push to a PUBLIC repo.
+.env.*
+!.env.example
+*.env.backup
