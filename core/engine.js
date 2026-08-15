@@ -5217,7 +5217,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       }
     }
 
-    async function broadcastUpdate(sock, customMessage = null) {
+    async function broadcastUpdate(sock, customMessage = null, selectedGroups = null) {
       const v = botConfig.getVersion();
 
       let allGroups = [];
@@ -5241,6 +5241,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         return 0;
       }
 
+      let targetGroups = allGroups;
+      let skippedCount = 0;
+      if (selectedGroups && Array.isArray(selectedGroups) && selectedGroups.length > 0) {
+        targetGroups = allGroups.filter(g => selectedGroups.includes(g));
+        skippedCount = allGroups.length - targetGroups.length;
+      }
+
       const m =
         customMessage ||
         "╭───────────────────╮\n  📢 *BOT UPDATE v" +
@@ -5252,7 +5259,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         `📡 Starting live broadcast to ${allGroups.length} groups...`,
       );
 
-      for (const g of allGroups) {
+      for (const g of targetGroups) {
         try {
           await sock.sendMessage(g, { text: BOT_MARKER + m });
           sentCount++;
@@ -5262,7 +5269,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           console.error(`❌❌ Failed broadcast to ${g}:`, e.message);
         }
       }
-      return sentCount;
+      return { count: sentCount, skipped: skippedCount };
     }
 
     async function initSocket() {
@@ -17190,6 +17197,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const abyssArgs = txt.trim().split(/\s+/).slice(2);
                       const abyssSub = abyssArgs[0]?.toLowerCase();
                       const abyssSystem = require('./rpg/abyssSystem');
+const broadcastHelpers = require('./rpg/broadcastHelpers');
 
                       // 💡 FIX 2026-07-31 Bug #3: Block Abyss sub-commands during
                       // active combat to prevent state corruption. Players in combat
