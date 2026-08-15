@@ -7,8 +7,10 @@
 // synergy, adaptive counters, damage reflection, etc.
 // ============================================
 
-const MONSTER_ARCHETYPES = {
+// 💡 FIX #6 (2026-08-15): Threat-based target selection
+const threatSystem = require('./threatSystem');
 
+const MONSTER_ARCHETYPES = {
     // ─── TANK: Endures, protects, taunts ─────────
 
     TANK: {
@@ -559,37 +561,17 @@ function evaluateAction(enemy, players, allies = []) {
     const livePlayers = players.filter(p => !p.isDead && p.currentHP > 0);
     if (livePlayers.length === 0) return { action: 'attack', target: players[0] };
 
-    // ── SMARTER TARGET SELECTION ────────────────────
-    // Previously: random live player. Now: prioritize vulnerable targets.
-    // 1. First priority: execute-eligible targets (below 30% HP) — finish them off.
-    // 2. Second priority: CC'd targets (stunned/frozen — can't dodge).
-    // 3. Third priority: lowest-HP target (focus fire to reduce party DPS).
-    // 4. Fallback: random (adds variety so the AI isn't 100% predictable).
-    const executeThreshold = 0.30;
-    const vulnerableTarget = livePlayers.find(p => {
-        const maxHp = p.maxHp || p.stats?.maxHp || 100;
-        return (p.currentHP / maxHp) < executeThreshold;
-    });
-    const ccTarget = livePlayers.find(p =>
-        p.statusEffects?.some(e => ['stun', 'freeze', 'sleep', 'root'].includes(e.type))
-    );
-    const lowestHpTarget = livePlayers.reduce((lowest, p) => {
-        const pRatio = p.currentHP / (p.maxHp || p.stats?.maxHp || 1);
-        const lRatio = lowest.currentHP / (lowest.maxHp || lowest.stats?.maxHp || 1);
-        return pRatio < lRatio ? p : lowest;
-    }, livePlayers[0]);
-
-    // 70% chance to pick a smart target, 30% random (keeps some unpredictability).
-    let defaultTarget;
-    if (vulnerableTarget && Math.random() < 0.75) {
-        defaultTarget = vulnerableTarget; // Finish the kill
-    } else if (ccTarget && Math.random() < 0.6) {
-        defaultTarget = ccTarget; // Punish CC'd players
-    } else if (Math.random() < 0.65) {
-        defaultTarget = lowestHpTarget; // Focus fire
-    } else {
-        defaultTarget = livePlayers[Math.floor(Math.random() * livePlayers.length)];
-    }
+    // 💡 FIX #6 (2026-08-15): Threat-based target selection.
+    // Replaces the old "lowest HP only" targeting with a 3-way split:
+    //   - 50% chance: highest-threat combatant (tanks hold aggro)
+    //   - 30% chance: lowest-HP combatant (finish kills)
+    //   - 20% chance: random (unpredictability)
+    // Also checks for taunt (force_target) — if any combatant has taunt
+    // active, they are ALWAYS the target.
+    //
+    // CC'd targets are still prioritized when the roll lands on them via
+    // the lowest-HP path (CC'd targets often have lower HP from taking hits).
+    let defaultTarget = threatSystem.selectTargetByThreat(livePlayers);
 
     // ── COUNTERMAGE (SPELLBREAKER) AI ────────────────
     if (aiType === 'COUNTERMAGE') {

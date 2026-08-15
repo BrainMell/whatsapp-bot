@@ -10,6 +10,8 @@
 // - Actual challenge and risk
 
 const fs = require("fs");
+// 💡 FIX #6 (2026-08-15): Threat/aggro system for PvE combat
+const threatSystem = require('./threatSystem');
 const path = require("path");
 const botConfig = require('../../botConfig');
 const economy = require("./economy");
@@ -3503,6 +3505,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // Build combat entities from user.activeSummonId, push to state.summons.
   // Summons are added to turnOrder below (alongside players + enemies).
   state.summons = [];
+  // 💡 FIX #6: Reset threat for all players at combat start
+  if (state.players) threatSystem.resetThreat(state.players);
   for (let pi = 0; pi < state.players.length; pi++) {
     const player = state.players[pi];
     if (!player.jid || player.isDead) continue;
@@ -4239,6 +4243,11 @@ async function performAction(sock, player, action, sessionKey) {
       } else {
         resolvedTarget.stats.hp -= damage;
         resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
+
+        // 💡 FIX #6 (2026-08-15): Generate threat for the attacker.
+        // Tanks generate 1.5× threat, DPS 1.0×, mages 0.8×, healers 0.6×.
+        // Enemies use threat to decide who to attack (see monsterSkills.js).
+        threatSystem.generateThreat(player, damage);
 
         const durabilitySystem = require('./durabilitySystem');
         durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
