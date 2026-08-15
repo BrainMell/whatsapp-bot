@@ -35,9 +35,14 @@ function getFloorTier(floor) {
 }
 
 function isBossFloor(floor) {
-  if (floor >= 21) return true;        // every floor 21+ is a boss
-  if (floor >= 11) return floor % 3 === 0; // mini-boss every 3rd floor
-  return floor % 5 === 0;              // boss every 5th floor in 1-10
+  // 💡 FIX 2026-08-15: Removed "every floor 21+ is a boss" — that caused
+  // the player to face the same boss repeatedly with no regular mob breaks.
+  // New pattern: boss every 5th floor (5, 10, 15, 20, 25, ...) with
+  // mini-bosses every 3rd floor in the S-tier range (11-20) for extra
+  // challenge. Deeper floors (21+) still get a boss every 5th floor but
+  // the in-between floors are regular mobs — so the player gets breaks.
+  if (floor >= 11 && floor <= 20) return floor % 3 === 0; // mini-boss every 3rd floor in S-tier
+  return floor % 5 === 0;              // boss every 5th floor everywhere else
 }
 
 // ─── ENEMY SCALING ────────────────────────────────────────────────────────
@@ -60,16 +65,20 @@ const ABYSS_ENEMY_POOLS = {
   GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
 };
 
+// 💡 FIX 2026-08-15: Boss pools now have MULTIPLE bosses per tier so the
+// player doesn't face the same boss every time. Previously each tier had
+// exactly one boss (e.g. F-tier always = INFECTED_COLOSSUS). Now each tier
+// has 2-3 bosses and generateFloorEnemy picks one randomly.
 const ABYSS_BOSS_POOL = {
-  F: 'INFECTED_COLOSSUS',
-  C: 'CORRUPTED_GUARDIAN',
-  B: 'MUTATION_PRIME',
-  A: 'ELEMENTAL_ARCHON',
-  S: 'ELDER_CHAOS',
-  SS: 'VOID_TITAN',
-  SSS: 'ABYSSAL_GOD',
-  ABYSSAL_GOD: 'ABYSSAL_GOD',
-  GOD: 'ABYSSAL_GOD',
+  F: ['INFECTED_COLOSSUS', 'CORRUPTED_GUARDIAN', 'MUTATED_OVERSEER'],
+  C: ['CORRUPTED_GUARDIAN', 'MUTATION_PRIME', 'STONE_HULK'],
+  B: ['MUTATION_PRIME', 'BOULDER_TITAN', 'INFERNO_LORD'],
+  A: ['ELEMENTAL_ARCHON', 'STORM_CALLER', 'VOID_HARBINGER'],
+  S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
+  SS: ['VOID_TITAN', 'MUTATION_PRIME', 'ELEMENTAL_ARCHON'],
+  SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'],
+  ABYSSAL_GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
+  GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
 };
 
 // ─── REWARDS PER FLOOR ────────────────────────────────────────────────────
@@ -381,7 +390,12 @@ function generateFloorEnemy(floor) {
 
   let name, baseStats;
   if (isBoss) {
-    const bossId = ABYSS_BOSS_POOL[tier] || 'INFECTED_COLOSSUS';
+    // 💡 FIX 2026-08-15: ABYSS_BOSS_POOL[tier] is now an ARRAY of boss IDs.
+    // Pick one randomly so the player doesn't face the same boss every time.
+    const bossPool = ABYSS_BOSS_POOL[tier] || ABYSS_BOSS_POOL.F;
+    const bossId = Array.isArray(bossPool)
+      ? bossPool[Math.floor(Math.random() * bossPool.length)]
+      : bossPool;
     name = bossId.replace(/_/g, ' ');
     // Boss base stats — scaled hard
     baseStats = {

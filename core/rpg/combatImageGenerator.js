@@ -56,6 +56,7 @@ function buildPayload(players, enemies, options = {}) {
         })),
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),
+        floor: Math.floor(Number(options.floor) || 0),
         background: String(options.backgroundPath ? options.backgroundPath.split(/[\/\\]/).pop() : 'spark_1.png')
     };
 }

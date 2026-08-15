@@ -14,6 +14,7 @@ async function renderCombatStart(players, enemies, encounterInfo) {
     try {
         const result = await combatImageGen.generateCombatImage(players, enemies, {
             rank: encounterInfo.rank,
+            floor: encounterInfo.floor || 0,
             backgroundPath: encounterInfo.backgroundPath,
             // 💡 Phase 7: Pass summons through to the Go service
             summons: encounterInfo.summons || []
@@ -38,6 +39,7 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
             playersToShow, enemiesToShow, turnInfo,
             {
                 rank: options.rank,
+                floor: options.floor || 0,
                 backgroundPath: options.backgroundPath,
                 summons: options.summons || [],
                 action: animAction  // null if no actionable attack
@@ -338,6 +340,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         rewards = null,
         backgroundPath = null,
         rank = null,
+        floor = 0,
         summons = []  // 💡 Phase 7: summons passed from guildAdventure.js
     } = options;
 
@@ -346,13 +349,13 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
 
     switch (phase) {
         case 'START':
-            imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, summons });
+            imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, floor, summons });
             caption = generateStartCaption(players, enemies, encounterInfo);
             break;
 
         case 'TURN':
             imageResult = await renderCombatTurn(players, enemies, turnInfo, {
-                backgroundPath, rank, summons,
+                backgroundPath, rank, floor, summons,
                 // Pass full arrays so buildAnimationAction can resolve actor/target indices
                 _allPlayers: players,
                 _allEnemies: enemies
@@ -361,7 +364,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
             break;
 
         case 'END':
-            imageResult = await renderCombatEnd(players, enemies, victory, rewards, { rank, backgroundPath });
+            imageResult = await renderCombatEnd(players, enemies, victory, rewards, { rank, floor, backgroundPath });
             caption = generateEndCaption(players, enemies, victory, rewards);
             break;
 

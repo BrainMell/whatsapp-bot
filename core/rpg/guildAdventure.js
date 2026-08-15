@@ -3578,17 +3578,20 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 
   // NEW: Generate combat image and caption (with Turn Order merged)
   // 💡 FIX 2026-07-31: 10s timeout — if Go service is slow, skip image
+  // 💡 FIX 2026-08-15: Pass floor so Abyss renders "FLOOR N" banner, not rank.
   const scenePromise = combatIntegration.generateCombatScene(
     state.players,
     state.enemies,
     "START",
     {
       rank: state.dungeonRank,
+      floor: state.isAbyss ? state.abyssFloor : 0,
       backgroundPath: state.backgroundPath,
       summons: state.summons || [],
       encounterInfo: {
         ...encounter,
         rank: state.dungeonRank,
+        floor: state.isAbyss ? state.abyssFloor : 0,
         backgroundPath: state.backgroundPath,
         turnOrderStr: turnOrderStr,
         theme: encounter.theme || {
@@ -5428,6 +5431,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           turnInfo: lastTurnInfo,
           backgroundPath: state.backgroundPath,
           rank: state.dungeonRank,
+          floor: state.isAbyss ? state.abyssFloor : 0,
           summons: state.summons || [],
         },
       );
