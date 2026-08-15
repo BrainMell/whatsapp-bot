@@ -4712,9 +4712,13 @@ async function performEnemyAction(sock, enemy, sessionKey) {
   return new Promise(async (resolve) => {
     try {
       // 🧠 AI DECISION MAKING
+      // 💡 FIX #1 (2026-08-15): include summons in the target list so enemies
+      // can attack summons. Previously only state.players was passed, making summons
+      // invincible — they attacked but were never targeted. This is the root cause
+      // of "summons don't participate in combat".
       const decision = monsterSkills.evaluateAction(
         enemy,
-        state.players,
+        [...state.players, ...(state.summons || [])],
         state.enemies,
       );
 
@@ -4738,8 +4742,9 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             enemy.archetype,
             followUpId,
           );
-          const target =
-            enemy.chargeTarget || state.players.find((p) => !p.isDead);
+          // 💡 FIX #1: include summons in charge-release target fallback
+        const target =
+            enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
 
           try {
             await sock.sendMessage(chatId, {
@@ -4935,7 +4940,8 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       // --- DEFAULT ATTACK ---
       let target = decision.target;
       if (!target || target.isDead) {
-        const alive = state.players.filter((p) => !p.isDead);
+        // 💡 FIX #1: include summons in the fallback target list
+        const alive = [...state.players, ...(state.summons || [])].filter((p) => !p.isDead);
         if (alive.length === 0) {
           setTimeout(() => resolve(), turnDelay);
           return;
