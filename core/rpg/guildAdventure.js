@@ -4782,10 +4782,66 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         turnNumber: state?.turnCount || 0,
       };
 
+      // --- CHARGE ACTION (P2 Fix: boss ultimate telegraph) ---
+      // 💡 FIX P2 (2026-08-15): When a boss decides to use a skill with
+      // chargeTime, it enters charging mode instead of firing immediately.
+      // The skill fires on the next turn via release_charge. This gives
+      // players a warning window to prepare.
+      if (decision.action === "charge" && decision.skill) {
+        enemy.isCharging = true;
+        enemy.chargingSkill = decision.skill.id;
+        enemy.chargeTarget = decision.target;
+        try {
+          await sock.sendMessage(chatId, {
+            text: decision.skill.msg || `⚠️ *${enemy.name}* is CHARGING UP a devastating attack!`,
+          });
+        } catch (err) {}
+        turnInfo.action.name = "Charging";
+        turnInfo.target = decision.target;
+        resultMsg += `⚠️ *${enemy.name}* begins charging *${decision.skill.name}* — brace yourselves!`;
+        try {
+          await sock.sendMessage(chatId, { text: resultMsg });
+        } catch (e) {}
+        setTimeout(() => resolve(), turnDelay);
+        return;
+      }
+
       // --- RELEASE CHARGE ---
       if (decision.action === "release_charge") {
         const skillId = decision.skillId;
         const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
+
+        // 💡 FIX P2 (2026-08-15): If the charged skill has NO nextSkill
+        // (e.g. BOSS ultimate), fire the skill directly instead of looking
+        // for a follow-up. This handles the chargeTime pattern where the
+        // same skill fires after a delay.
+        if (skillData && !skillData.nextSkill) {
+          const target = enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
+          try {
+            await sock.sendMessage(chatId, {
+              text: `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!`,
+            });
+          } catch (err) {}
+          const effect = skillData.currentEffect || skillData.effect(enemy.level || 1);
+          const abilityRes = await applyAbilityEffect(
+            sock, enemy, skillData, effect,
+            state.players.indexOf(target), chatId,
+          );
+          enemy.isCharging = false;
+          enemy.chargingSkill = null;
+          enemy.chargeTarget = null;
+          if (await checkCombatEnd(sock, state, sessionKey)) { resolve(); return; }
+          turnInfo.action.name = skillData.name;
+          turnInfo.target = target;
+          const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          if (abilityRes && abilityRes.message) {
+            const fullMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!\n\n${abilityRes.message.trim()}`;
+            try { await sock.sendMessage(chatId, { text: fullMsg }); } catch (e) {}
+          }
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
 
         if (skillData && skillData.nextSkill) {
           const followUpId = skillData.nextSkill;

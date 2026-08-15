@@ -961,11 +961,17 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: phaseShift, target: enemy, targetType: 'self' };
         }
 
-        // 💡 HARDER BOSS AI: charge ultimate earlier (50% HP instead of 30%)
-        // and more often (80% chance instead of 80%). Bosses now threaten
-        // the party sooner and more reliably.
+        // 💡 FIX P2 (2026-08-15): Respect chargeTime on the ultimate.
+        // Previously, the BOSS AI returned { action: 'skill' } which fired
+        // the ultimate immediately — 36× ATK instakill on turn 1 with no
+        // warning. Now: if the ultimate has chargeTime > 0, return a
+        // 'charge' action so the boss telegraphs the attack for 2 turns
+        // before firing. This gives players a window to prepare/heal/shield.
         const ultimateSkill = available.find(s => s.id === 'ultimate' || s.chargeTime);
         if (ultimateSkill && hpPct < 0.5 && Math.random() > 0.10) {
+            if (ultimateSkill.chargeTime && ultimateSkill.chargeTime > 0) {
+                return { action: 'charge', skill: ultimateSkill, target: defaultTarget, chargeTime: ultimateSkill.chargeTime };
+            }
             return { action: 'skill', skill: ultimateSkill, target: defaultTarget };
         }
 
