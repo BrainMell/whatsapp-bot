@@ -2302,9 +2302,11 @@ function calculateDamage(
       }
     }
   }
-  // Cap at 90% so enemies/bosses can't become fully immune via stacking.
-  totalDmgReduction = Math.min(90, Math.max(0, totalDmgReduction));
-  damage = damage * (1 - totalDmgReduction / 100);
+  // 💡 FIX #4 (2026-08-15): Save DR total for combined cap application
+  // below. Don't apply to damage yet — the passive DR will be folded in
+  // and the combined 75% cap applied after. Was: cap 90 here + separate
+  // passive multiplier = 95% effective DR. Now: all sources summed, 75% cap.
+  // (totalDmgReduction is used below in the passive block)
 
   // 💡 CLASS PASSIVE WIRE-UP (inline damage): apply attacker's outgoing
   // damage multiplier from damage_when_low_hp, damage_per_hit,
@@ -2322,17 +2324,25 @@ function calculateDamage(
     } catch (e) {
       console.error('[Passive] getClassPassiveDamageMult failed:', e?.message || e);
     }
-    // 💡 CLASS PASSIVE WIRE-UP (inline damage reduction): apply target's
-    // damage_reduction passive (e.g. Paladin's Unbreakable -15%). Stacks
-    // additively with the buff-based dmgReduction above, capped at 90% total.
-    try {
-      const passiveReduction = getClassPassiveDamageReduction(target);
-      if (passiveReduction > 0) {
-        damage = damage * (1 - Math.min(90, passiveReduction) / 100);
-      }
-    } catch (e) {
-      console.error('[Passive] getClassPassiveDamageReduction failed:', e?.message || e);
+  }
+
+  // 💡 FIX #4 (2026-08-15): Apply combined 75% DR cap.
+  // Sum stat+buff DR (computed above) + class passive DR, cap at 75%,
+  // then apply to damage. Previously: stat+buff capped at 90% + passive
+  // as SEPARATE multiplier (also 90%) = 95% effective. Now: all sources
+  // summed, single 75% cap. Also moved OUTSIDE if(!attacker.isEnemy)
+  // so player defensive passives actually work when being attacked.
+  try {
+    const passiveReduction = getClassPassiveDamageReduction(target) || 0;
+    const combinedDR = Math.min(75, Math.max(0, totalDmgReduction) + passiveReduction);
+    if (combinedDR > 0) {
+      damage = damage * (1 - combinedDR / 100);
     }
+  } catch (e) {
+    console.error('[Passive] getClassPassiveDamageReduction failed:', e?.message || e);
+    // Fallback: apply stat+buff DR with 75% cap
+    const fallbackDR = Math.min(75, Math.max(0, totalDmgReduction));
+    if (fallbackDR > 0) damage = damage * (1 - fallbackDR / 100);
   }
 
   // 💡 STATUS EFFECT: Shield — absorb incoming damage from the shield's
@@ -2454,6 +2464,11 @@ function calculateDamage(
       }
     }
   }
+
+  // 💡 FIX #6 (2026-08-15): Global evasion cap at 50%. Previously there
+  // was no cap — KAGE L100 with Mirror Image + veil_of_the_void + foggy
+  // weather could reach 185% (guaranteed dodge). Now capped at 50%.
+  evasionChance = Math.min(50, Math.max(0, evasionChance));
 
   if (Math.random() * 100 < evasionChance) {
     return { damage: 0, isCrit: false, wasEvaded: true };
