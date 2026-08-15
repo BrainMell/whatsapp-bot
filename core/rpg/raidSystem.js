@@ -107,8 +107,10 @@ async function spawnWeeklyRaid(activePlayerCount = 50) {
   }
 
   const bossDef = getCurrentBoss();
-  // HP scales with sqrt of active player count
-  const hpScale = Math.max(1, Math.sqrt(activePlayerCount));
+  // 💡 FIX P2 #11 (2026-08-15): Linear HP scaling (was sqrt).
+  // With sqrt: 100-player raid = 10x HP (10x easier per-capita).
+  // With linear: 100-player raid = 100x HP (constant difficulty per player).
+  const hpScale = Math.max(1, activePlayerCount);
   const bossHp = Math.floor(bossDef.baseHp * hpScale);
 
   const endsAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h

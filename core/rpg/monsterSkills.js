@@ -589,7 +589,7 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 2: Spell Absorption shield when HP > 60%
         const absorbSkill = available.find(s => s.id === 'spell_absorption');
-        if (absorbSkill && hpPct > 0.4 && !enemy.statusEffects?.some(e => e.type === 'spellAbsorb') && Math.random() > 0.20) {
+        if (absorbSkill && hpPct > 0.4 && !(enemy.buffs || []).some(e => e.type === 'spellAbsorb') && !(enemy.statusEffects || []).some(e => e.type === 'spellAbsorb') && Math.random() > 0.20) {
             return { action: 'skill', skill: absorbSkill, target: enemy, targetType: 'self' };
         }
 
@@ -635,7 +635,7 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 3: Shield Wall when allies present
         const shieldWall = available.find(s => s.id === 'shield_wall');
-        if (shieldWall && liveAllies.length >= 2 && !enemy.statusEffects?.some(e => e.type === 'defense') && Math.random() > 0.20) {
+        if (shieldWall && liveAllies.length >= 2 && !(enemy.buffs || []).some(e => e.type === 'defense') && !(enemy.statusEffects || []).some(e => e.type === 'defense') && Math.random() > 0.20) {
             return { action: 'skill', skill: shieldWall, target: enemy, targetType: 'self' };
         }
 
