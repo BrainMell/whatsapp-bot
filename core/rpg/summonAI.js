@@ -239,6 +239,19 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   let actionMsg = '';
   if (decision.msg) actionMsg += decision.msg + '\n';
 
+  // 💡 FIX #2 (2026-08-15): Clear any previous guard this summon had set.
+  // The guard lasts only until the summon's next turn — if the summon chooses
+  // a different action, the old guard is removed. This prevents stale guards
+  // from persisting across multiple turns.
+  if (state && state.players) {
+    for (const p of state.players) {
+      if (p.guardedBy === summonEntity.id) {
+        delete p.guardedBy;
+        delete p.guardInterceptPct;
+      }
+    }
+  }
+
   if (decision.action === 'guard' && decision.target) {
     // Guard mode: summon intercepts damage for the target
     decision.target.guardedBy = summonEntity.id;

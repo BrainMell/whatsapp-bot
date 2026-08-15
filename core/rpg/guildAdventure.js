@@ -3800,7 +3800,13 @@ async function processCombatTurn(sock, sessionKey) {
           if (cEffects.some((e) => e.type === "curse" || e.type === "weak"))
             speed *= 0.8;
 
-          c.actionGauge = (c.actionGauge || 0) + Math.max(1, speed);
+          // 💡 FIX #3 (2026-08-15): Rubber-band gauge increment — every combatant
+          // gains at least 15% of gaugeThreshold per tick. This prevents low-SPD
+          // summons (SPD 40) from being starved when the party has a high-SPD player
+          // (SPD 500). Before: summon needed 25 ticks/turn (12.5:1 ratio vs player).
+          // After: summon needs max 7 ticks/turn (3.5:1 ratio). Enemies also benefit
+          // so they get turns even when the player is much faster.
+          c.actionGauge = (c.actionGauge || 0) + Math.max(gaugeThreshold * 0.15, speed);
         }
         // Pick the combatant with the HIGHEST gauge among those >= threshold.
         // Ties are broken by turnOrder position (earlier combatant wins).
@@ -4979,12 +4985,37 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           return;
         }
 
-        target.stats.hp -= damage;
+        // 💡 FIX #2 (2026-08-15): Summon guard/intercept — if the target is being
+        // guarded by a summon (guardedBy flag set by summonAI.js:244), redirect
+        // guardInterceptPct% of the damage to the summon. This wires up what was
+        // previously dead code: summonAI set the flags but nothing read them.
+        let actualDamage = damage;
+        let interceptMsg = '';
+        if (target.guardedBy && state.summons) {
+          const guardian = state.summons.find(s =>
+            s.id === target.guardedBy && !s.isDead && s.stats?.hp > 0
+          );
+          if (guardian && target.guardInterceptPct > 0) {
+            const intercepted = Math.floor(damage * target.guardInterceptPct / 100);
+            if (intercepted > 0) {
+              guardian.stats.hp = Math.max(0, (guardian.stats.hp || 0) - intercepted);
+              guardian.currentHP = guardian.stats.hp;
+              actualDamage = damage - intercepted;
+              interceptMsg = `\n🛡️ ${guardian.icon || '🐉'} ${guardian.name} intercepts ${intercepted} damage for ${target.name}!`;
+              if (guardian.stats.hp <= 0) {
+                guardian.isDead = true;
+                guardian.justDied = true;
+                interceptMsg += `\n💀 ${guardian.name} falls protecting ${target.name}!`;
+              }
+            }
+          }
+        }
+        target.stats.hp -= actualDamage;
         target.currentHP = Math.max(0, target.stats.hp);
 
         const durabilitySystem = require('./durabilitySystem');
         durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
-        resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? " (CRIT!)" : ""}`;
+        resultMsg += `attacks ${target.name} for 💥 ${actualDamage} damage!${isCrit ? " (CRIT!)" : ""}${interceptMsg}`;
         turnInfo.damage = damage;
         turnInfo.target = target;
 
