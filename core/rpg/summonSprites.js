@@ -372,6 +372,16 @@ let _warmupStarted = false;
 // species and it doesn't have a sprite, either:
 //   (a) add a local PNG to core/rpgasset/summons/ and it'll be found by getSpritePath, OR
 //   (b) add the species ID to this set if no sprite exists anywhere.
+//
+// 💡 2026-08-15: Added 9 sparklinlabs custom species. These DO have sprites on
+// the Go image service (assets/rpgasset/summons/sparklinlabs/<species>_idle.gif)
+// and render correctly in combat via GetSummonSpritePath() in sprites.go. But
+// the JS-side renderers (profile card, roster, codex) use node-canvas which
+// cannot decode GIF, and no PNG export exists in this repo. So on the JS side
+// they fall back to emoji. Adding them here stops warmupCache from trying to
+// fetch them from the Digimon API every restart (was producing 9 "Failed to
+// fetch" log lines per boot). To enable JS-side rendering later, add PNG
+// exports to core/rpgasset/summons/sparklinlabs/ and remove from this set.
 const KNOWN_MISSING = new Set([
   // Digimon that don't exist on digi-api.com under any name variant
   // Custom RPG species — no Digimon API equivalent, no local sprite
@@ -387,6 +397,17 @@ const KNOWN_MISSING = new Set([
   'abyssal_phantom',
   'blossom_sylph',
   'world_tree_spirit',
+  // Sparklinlabs custom species — sprites exist as _idle.gif on the Go service
+  // (Box 2) but not as PNG in this repo. JS renderers use emoji fallback.
+  'boglurk',
+  'emberwick',
+  'fireguard',
+  'frostpeep',
+  'lumenmoth',
+  'plaguefang',
+  'skitterswarm',
+  'starnail',
+  'tidalmaw',
 ]);
 
 async function warmupCache(registryModule) {
