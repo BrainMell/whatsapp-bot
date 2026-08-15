@@ -17081,27 +17081,30 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       // .g abyss — show status or help
                       if (!abyssSub || abyssSub === 'help') {
                         let msg = `🕳️ *ABYSS — ENDLESS DUNGEON* 🕳️\n\n`;
-                        msg += `Procedural floors that get harder the deeper you go. Death = lose 90% of run loot. Retreat = keep 100%.\n\n`;
+                        msg += `Procedural floors with increasing difficulty. Death = lose 90% of loot. Retreat = keep 100%.\n\n`;
                         msg += `*Floor Structure:*\n`;
-                        msg += `• Floors 1-10: F→A rank enemies, boss every 5th floor\n`;
-                        msg += `• Floors 11-20: S rank, mini-boss every 3rd floor\n`;
+                        msg += `• Floors 1-2: F-rank mobs (rats, bats, slimes)\n`;
+                        msg += `• Floors 3-6: C-rank, boss every 5th floor\n`;
+                        msg += `• Floors 7-10: A-rank, tougher mobs\n`;
+                        msg += `• Floors 11-20: S-rank, mini-boss every 3rd floor\n`;
                         msg += `• Floors 21-49: SS+ rank, boss every 5th floor\n`;
-                        msg += `• Floors 50+: SSS rank, brutal difficulty\n`;
-                        msg += `• Floor 100: The Abyssal God (final boss)\n\n`;
-                        msg += `*Commands:*\n`;
+                        msg += `• Floors 50+: SSS rank, brutal\n`;
+                        msg += `• Floor 100: The Abyssal God\n\n`;
+                        msg += `*Combat Commands (standard):*\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat attack\` — attack\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat skill <#>\` — use skill\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat item\` — use item\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat flee\` — flee (penalty)\n\n`;
+                        msg += `*Abyss Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat attack\` — attack current floor enemy\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat skill <#>\` — use a skill in combat\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat item\` — use an item in combat\n`;
-                        msg += `• \`${botConfig.getPrefix()} combat flee\` — flee combat (penalty)\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss resume\` — restart combat after bot restart\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure on current floor\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — respond to event encounter\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss resume\` — restart combat after disconnect\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — event choice\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss skip\` — skip treasure/event floor\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your active run\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your run\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss retreat\` — extract with 100% loot\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs this week\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run ever\n\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run\n\n`;
                         msg += `*Rewards:* XP + Zeni per floor, rune drops on floor 21+ bosses, leaderboard glory.\n`;
                         msg += `*Score:* deepestFloor × 100 + monstersKilled × 5`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
@@ -17115,14 +17118,12 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `${botConfig.getPrefix()} register`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first. Use \`${botConfig.getPrefix()} register\`.` });
                           }
                           const level = progression.getLevel(senderJid);
                           if (level < 20) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
                           }
-                          // 💡 FIX: use getUserClass (returns object) instead of user.class (string)
-                          // to ensure getBaseStats gets the proper classId for stat calculation.
                           const userClassObj = economy.getUserClass(senderJid);
                           const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
                           const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
@@ -17138,7 +17139,6 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (!result.success) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
-                          // If first floor is combat, start real combat engine
                           const run = result.run;
                           if (run.currentEncounterType === 'combat' && run.currentEnemy) {
                             try {
@@ -17146,30 +17146,28 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                               await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
                             } catch (combatErr) {
                               console.error('[Abyss] Failed to start combat:', combatErr.message);
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize.' });
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize. Use `' + botConfig.getPrefix() + ' abyss resume` to retry.' });
                             }
                           } else {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
+                          // 💡 FIX 2026-08-15: MUST return here. Without this return,
+                          // the code fell through to "Unknown Abyss command: enter" even
+                          // though the run started successfully.
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss attack — redirect to combat (Abyss uses real combat now)
-                      // 💡 FIX 2026-08-03: Silent redirect — don't show a warning, just tell
-                      // them the right command. The old message was confusing because it looked
-                      // like an error when they were just trying to attack.
+                      // .g abyss attack/atk/fight — redirect to standard combat
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
-                        // If they're in active Abyss combat, just route to combat attack
                         const abyssSessionKey = `${chatId}_${senderJid}`;
                         const combatState = guildAdventure.getGameState(abyssSessionKey);
                         if (combatState && combatState.inCombat) {
-                          // They're in combat — redirect to combat attack
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight in the Abyss.` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight.` });
                         }
-                        // Not in combat — they probably want to start
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss combat uses the standard combat system.\n_Start a run with \`${botConfig.getPrefix()} abyss enter\`, then use \`${botConfig.getPrefix()} combat attack\` to fight.` });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss uses standard combat.\n_Start: \`${botConfig.getPrefix()} abyss enter\`\n_Attack: \`${botConfig.getPrefix()} combat attack\`_` });
                       }
 
                       // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume —
@@ -17254,7 +17252,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       // .g abyss retreat — extract with loot
-                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee') {
+                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee' || abyssSub === 'leave' || abyssSub === 'exit') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
@@ -17267,7 +17265,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (abyssSub === 'collect' || abyssSub === 'take' || abyssSub === 'loot') {
                         try {
                           const result = await abyssSystem.processTreasure(senderJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 FIX 2026-08-15: Start combat if next floor is combat.
+                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17278,7 +17280,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         try {
                           const choiceId = abyssArgs[1] || '1';
                           const result = await abyssSystem.processEventChoice(senderJid, choiceId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 FIX 2026-08-15: If the next floor is combat, start it!
+                          // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
+                          // but never actually started combat — so the player got "Not in combat!" when they tried.
+                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17288,7 +17296,11 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (abyssSub === 'skip' || abyssSub === 'next') {
                         try {
                           const result = await abyssSystem.processSkip(senderJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 FIX 2026-08-15: Same fix as choose — start combat if next floor is combat.
+                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -17420,11 +17432,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} abyss admin\` for help.` });
                       }
 
-                      // 💡 FIX 2026-08-03: Better error message — tell them the real
-                      // combat commands instead of just "unknown subcommand".
-                      // The old message was confusing players who typed things like
-                      // '.s abyss atk' or '.s abyss fight' during combat.
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._\n_Abyss combat uses: \`${botConfig.getPrefix()} combat attack\`, \`${botConfig.getPrefix()} combat skill <#>\`, \`${botConfig.getPrefix()} combat item\`_` });
+                      // 💡 FIX 2026-08-15: Cleaner unknown command message.
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._` });
                     }
 
                     // ============================================

@@ -5,11 +5,23 @@
 // Procedural endless dungeon. Each floor gets harder. Death = lose 90% of
 // run loot. Retreat = keep 100%. Weekly leaderboard resets every Monday.
 //
+// LORE:
+//   The Abyss is a vast underground network of caverns and ruins that predates
+//   recorded history. Long before the Infection spread, these depths were home
+//   to natural creatures — cave bats, rats, slimes, and territorial beasts that
+//   evolved in darkness. When the Infection seeped up from below, it twisted
+//   some creatures into monstrous versions of themselves (Infected Colossus,
+//   Corrupted Guardian) while others remained unchanged, coexisting with the
+//   infected in a strange ecological balance. Deeper floors hold ancient
+//   constructs and void-touched entities that predate even the natural life.
+//
 // Floor structure:
-//   1-10:   F→A rank enemies, normal bosses every 5th floor
-//   11-20:  S rank, mini-bosses every 3rd floor
-//   21-49:  SS+ rank, every floor has a boss
-//   50+:    SSS rank, every floor is a boss + environmental hazard
+//   1-2:    F-rank natural mobs (rats, bats, slimes)
+//   3-6:    C-rank, stone hulks, golems, boss every 5th floor
+//   7-10:   A-rank, storm callers, void harbingers
+//   11-20:  S-rank, mini-boss every 3rd floor
+//   21-49:  SS+ rank, boss every 5th floor
+//   50+:    SSS rank, brutal difficulty
 //   100:    The Abyssal God (final boss, unique drops)
 //
 // Entry: free, but only 1 run per 12 hours (anti-farm).
@@ -53,9 +65,14 @@ function getFloorMultiplier(floor) {
 }
 
 // ─── ENEMY POOLS BY FLOOR TIER ────────────────────────────────────────────
+// 💡 FIX 2026-08-15: Rebalanced F-tier — was spawning STONE_HULK (a big rock
+// golem) on Floor 1. F-tier should be weak introductory mobs (rats, bats,
+// small slimes). STONE_HULK moved to C-tier where it belongs.
+// Also: lore mentions natural monsters that existed before the infection,
+// so some pools now include natural creatures alongside infected ones.
 const ABYSS_ENEMY_POOLS = {
-  F: ['FLAME', 'DROWNED_ONE', 'STONE_HULK', 'FROST_WISP', 'EMBER_SPAWN'],
-  C: ['MUTATED_HOUND', 'CRYSTAL_GOLEM', 'SHADOW_STALKER', 'VENOM_SPIDER'],
+  F: ['RABID_RAT', 'CAVE_BAT', 'EMBER_SPAWN', 'FROST_WISP', 'SLIME'],
+  C: ['STONE_HULK', 'MUTATED_HOUND', 'CRYSTAL_GOLEM', 'SHADOW_STALKER', 'VENOM_SPIDER'],
   B: ['INFERNO_KNIGHT', 'TIDAL_FURY', 'BOULDER_TITAN', 'GLACIAL_WRAITH'],
   A: ['STORM_CALLER', 'VOID_HARBINGER', 'BLOOD_REAVER', 'ANCIENT_GUARDIAN'],
   S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
@@ -213,10 +230,10 @@ async function startRun(userId, playerStats) {
 
   let startMsg = '🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n';
   if (encounter.type === 'combat') {
-    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + (encounter.enemy.stats?.hp ?? encounter.enemy.hp) + '/' + (encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp) + '_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
+    startMsg += '⚔️ *Floor 1 — ' + encounter.enemy.name + '*\n_HP: ' + (encounter.enemy.stats?.hp ?? encounter.enemy.hp) + '/' + (encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp) + '_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'wild_summon') {
     const species = encounter.wildSummonSpecies;
-    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat atk`_\n_Retreat with `' + P() + ' abyss retreat`_';
+    startMsg += '🐉 *Floor 1 — Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'treasure') {
     startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
@@ -526,7 +543,7 @@ async function processTreasure(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -627,7 +644,7 @@ async function processEventChoice(userId, choiceId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -659,7 +676,7 @@ async function processSkip(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat atk\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
