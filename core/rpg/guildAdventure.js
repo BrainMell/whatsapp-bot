@@ -5010,6 +5010,45 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             }
           }
         }
+
+        // 💡 FIX #4 (2026-08-15): AI auto-intercept — protective summons
+        // automatically jump in front of attacks when their owner is below
+        // 30% HP. This makes summons feel "alive" without player input.
+        // Unlike the committed guard (Fix #2), this is reactive and free —
+        // it doesn't consume the summon's turn. The 30% chance prevents
+        // it from triggering every attack.
+        //
+        // Conditions: no active guard, target is a player, HP < 30%,
+        // summon is PROTECTIVE with loyalty >= 50 and HP > 50%.
+        if (!target.guardedBy && !target.isSummon && !target.isEnemy &&
+            target.jid && state.summons && actualDamage > 0) {
+          const targetMaxHp = target.maxHp || target.stats?.maxHp || 1;
+          if (target.currentHP / targetMaxHp < 0.30) {
+            const protector = state.summons.find(s =>
+              !s.isDead &&
+              s.stats?.hp > 0 &&
+              s.summonerJid === target.jid &&
+              s.personality === 'PROTECTIVE' &&
+              (s.loyalty || 0) >= 50 &&
+              s.stats.hp > (s.maxHp || s.stats?.maxHp || 1) * 0.5 &&
+              s.id !== target.guardedBy  // don't double-intercept
+            );
+            if (protector && Math.random() < 0.30) {
+              // Summon takes the FULL hit
+              const intercepted = actualDamage;
+              protector.stats.hp = Math.max(0, (protector.stats.hp || 0) - intercepted);
+              protector.currentHP = protector.stats.hp;
+              actualDamage = 0;
+              interceptMsg += `\n🛡️ ${protector.icon || '🐉'} ${protector.name} jumps in front of ${target.name}, taking the full blow (${intercepted} damage)!`;
+              if (protector.stats.hp <= 0) {
+                protector.isDead = true;
+                protector.justDied = true;
+                interceptMsg += `\n💀 ${protector.name} sacrifices itself to save ${target.name}!`;
+              }
+            }
+          }
+        }
+
         target.stats.hp -= actualDamage;
         target.currentHP = Math.max(0, target.stats.hp);
 
