@@ -267,6 +267,9 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
         decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage.damage);
         decision.target.currentHP = decision.target.stats.hp;
         actionMsg += `⚔️ ${summonEntity.icon} ${summonEntity.name} attacks ${decision.target.name} for ${damage.damage} damage!`;
+        // 💡 FIX #6: Generate threat for the summon (0.7× multiplier — lower
+        // than tanks so tanks hold aggro better, but summons still pull some)
+        try { require('./threatSystem').generateThreat(summonEntity, damage.damage); } catch(e) {}
         if (decision.target.stats.hp <= 0) {
           actionMsg += `\n💀 ${decision.target.name} was defeated!`;
           await guildAdventure.handleDeath(sock, decision.target, sessionKey, summonEntity.name);
