@@ -12,6 +12,14 @@
 const fs = require("fs");
 // 💡 FIX #6 (2026-08-15): Threat/aggro system for PvE combat
 const threatSystem = require('./threatSystem');
+
+// 💡 FIX #7 (2026-08-15): Summon death cooldown — in-memory map of
+// summonId -> expiry timestamp. When a summon dies in combat, it can't
+// be redeployed for 5 minutes. This gives summon death a consequence
+// (JRPG research: disposable decoy model). In-memory only — resets on
+// bot restart, which is acceptable for a soft penalty.
+const summonDeathCooldowns = new Map();
+const SUMMON_DEATH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const path = require("path");
 const botConfig = require('../../botConfig');
 const economy = require("./economy");
@@ -3517,6 +3525,19 @@ async function startCombat(sock, groq, encounter, sessionKey) {
       const summonDoc = await summonSystem.getActiveSummon(user);
       if (!summonDoc) continue;  // stale activeSummonId — already cleared by getActiveSummon
 
+      // 💡 FIX #7: Check summon death cooldown — if the summon died in a
+      // recent combat, it can't be redeployed yet. Skip silently (the player
+      // will notice their summon isn't there).
+      const cooldownExpiry = summonDeathCooldowns.get(summonDoc.summonId);
+      if (cooldownExpiry && Date.now() < cooldownExpiry) {
+        const remaining = Math.ceil((cooldownExpiry - Date.now()) / 60000);
+        console.log(`[SummonDeploy] ${summonDoc.nickname || summonDoc.species} on death cooldown for ${remaining}min`);
+        continue;
+      } else if (cooldownExpiry) {
+        // Cooldown expired — clean up
+        summonDeathCooldowns.delete(summonDoc.summonId);
+      }
+
       const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
       if (summonEntity) {
         // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
@@ -5896,6 +5917,19 @@ async function endCombat(sock, victory, sessionKey) {
     `[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`,
   );
   state.inCombat = false;
+
+  // 💡 FIX #7: Set death cooldown for any summons that died during combat.
+  // They can't be redeployed for 5 minutes. This gives summon death a
+  // consequence — players can't just throw their summon into every fight
+  // without caring if it dies.
+  if (state.summons) {
+    for (const summon of state.summons) {
+      if (summon.isDead && summon.id) {
+        summonDeathCooldowns.set(summon.id, Date.now() + SUMMON_DEATH_COOLDOWN_MS);
+        console.log(`[SummonCooldown] ${summon.name} died — cooldown set for 5min`);
+      }
+    }
+  }
 
   // 💡 FIX §2.8: Clean up per-player combat state so it doesn't bleed into
   // the next fight. Previously, skillCooldowns, passiveCombo, passiveKillBonus,
