@@ -62,7 +62,7 @@ const RUNE_TYPES = {
     icon: '🛡️',
     desc: 'Skill ignores target DEF at the cost of lower damage',
     defIgnorePct: [0.20, 0.30, 0.40, 0.60], // ignores 20/30/40% of target DEF
-    damageMult: [0.95, 0.90, 0.85],   // -5/10/15% damage
+    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries — was 3, caused NaN at ABYSSAL tier)
   },
   PIERCE: {
     id: 'PIERCE',
@@ -70,7 +70,7 @@ const RUNE_TYPES = {
     icon: '⚔️',
     desc: 'Skill cannot be evaded, at the cost of lower damage',
     cannotEvade: true,
-    damageMult: [0.95, 0.90, 0.85],   // -5/10/15% damage
+    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries — was 3, caused NaN at ABYSSAL tier)
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -175,7 +175,8 @@ const RUNE_TYPES = {
     icon: '🏹',
     desc: 'Splits one hit into 5 very weak hits (0.25x each). Great vs shields.',
     splitIntoHits: [3, 4, 5, 6],
-    splitDamageMult: 0.25,
+    splitDamageMult: 0.50,  // P2 Fix #10a: was 0.25, now 0.50 (per-hit mult). 5 hits × 0.50 = 2.5x total (under 3x cap)
+    maxTotalMult: 3.0,     // P2 Fix #10a: total BARRAGE damage capped at 3x ATK
     bypassShield: true,
     damageMult: [1.0, 1.0, 1.0, 1.0],
   },
@@ -297,7 +298,7 @@ const RUNE_TYPES = {
     name: 'Lifesteal Rune',
     icon: '🩸💚',
     desc: 'Heal for 25% of damage dealt.',
-    lifestealPercent: [15, 25, 35, 50],
+    lifestealPercent: [15, 20, 25, 25],  // P2 Fix #10c: was [15,25,35,50], capped at 25%
     damageMult: [0.92, 0.94, 0.96, 0.98],
   },
   MANA_DRAIN: {
@@ -313,9 +314,9 @@ const RUNE_TYPES = {
     name: 'Soul Rip Rune',
     icon: '💀💚',
     desc: 'Lifesteal 50% + executes targets below 20% HP (true damage).',
-    lifestealPercent: [30, 40, 50, 65],
+    lifestealPercent: [15, 20, 25, 25],  // P2 Fix #10c: was [30,40,50,65], capped at 25%
     executeThreshold: 20,  // % HP
-    executeBonus: [2.0, 2.5, 3.0, 4.0],
+    executeBonus: [1.5, 1.75, 2.0, 2.0],  // P2 Fix #10b: was [2.0,2.5,3.0,4.0], capped at 2.0
     damageMult: [0.95, 0.96, 0.97, 0.98],
   },
 
@@ -371,7 +372,7 @@ const RUNE_TYPES = {
     desc: 'Reduces skill cooldown. Higher tiers can halve or remove it entirely.',
     // Per-tier cooldown multiplier: LESSER 0.75, NORMAL 0.50, GREATER 0.25, ABYSSAL 0.00
     // (ABYSSAL = no cooldown at all — skill usable every turn)
-    cooldownMult: [0.75, 0.50, 0.25, 0.00],
+    cooldownMult: [0.75, 0.50, 0.40, 0.40],  // P2 Fix #10e: was [0.75,0.50,0.25,0.00], floored at 0.40 (ABYSSAL no longer removes cooldown entirely)
     // Small energy cost penalty so cooldown runes aren't strictly free
     energyCostMult: [1.15, 1.20, 1.25, 1.30],
   },
