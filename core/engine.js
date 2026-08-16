@@ -514,7 +514,26 @@ function isCardsMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
     const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
-    return cardsMods.has(jidNormalizedUser(realJid));
+    const normalized = jidNormalizedUser(realJid);
+    // Direct check
+    if (cardsMods.has(normalized)) return true;
+    // 💡 P3 (2026-08-16): LID ↔ phone resolution. Card mods may be stored
+    // as @lid but the user sends from @s.whatsapp.net (or vice versa).
+    // Use the LID resolver to check both forms.
+    try {
+      const lidResolver = require('./utils/lidResolver');
+      const resolved = lidResolver.resolveJid(normalized);
+      if (resolved && cardsMods.has(resolved)) return true;
+      // Also try swapping @lid ↔ @s.whatsapp.net manually
+      if (normalized.endsWith('@lid')) {
+        const phone = normalized.replace('@lid', '@s.whatsapp.net');
+        if (cardsMods.has(phone)) return true;
+      } else if (normalized.endsWith('@s.whatsapp.net')) {
+        const lid = normalized.replace('@s.whatsapp.net', '@lid');
+        if (cardsMods.has(lid)) return true;
+      }
+    } catch (e) {}
+    return false;
   } catch (err) {
     return false;
   }

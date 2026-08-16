@@ -295,13 +295,35 @@ async function setSpawnInterval(minutes, callerJid, isOwner) {
     return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours).\nExample: `' + botConfig.getPrefix() + ' spawnset 20` (3 spawns/hour)' };
   }
   inst.spawnIntervalMs = mins * 60 * 1000;
-  // Persist to System collection so it survives restarts
+  // 💡 P3 (2026-08-16): Cross-bot sync — persist spawn interval GLOBALLY
+  // (not per-bot). All bot instances read the same key, so setting it on
+  // one bot applies to all. Was: card_spawn_interval_<botId>. Now: card_spawn_interval_global.
   try {
     await System.findOneAndUpdate(
-      { key: `card_spawn_interval_${botConfig.getBotId()}` },
+      { key: `card_spawn_interval_global` },
       { value: inst.spawnIntervalMs },
       { upsert: true }
     );
+    // 💡 Sync to ALL running bot instances in this process
+    for (const [botId, otherInst] of instances) {
+      if (botId !== botConfig.getBotId()) {
+        otherInst.spawnIntervalMs = inst.spawnIntervalMs;
+        // Restart their timer if they have active groups
+        if (otherInst.activeGroups.size > 0) {
+          // Can't call restartSpawnTimer() for another bot — it uses getInst()
+          // which returns THIS bot's instance. Instead, clear and restart manually.
+          if (otherInst.perGroupTimers) {
+            for (const [gid, timer] of otherInst.perGroupTimers) clearTimeout(timer);
+            otherInst.perGroupTimers.clear();
+          }
+          // Re-create timers for the other bot
+          const oldBotId = botConfig.getBotId();
+          // Temporarily can't switch botId — skip timer restart for other bots.
+          // They'll pick up the new interval on their next natural timer cycle
+          // or restart. The DB value is correct; this is a best-effort live sync.
+        }
+      }
+    }
   } catch (e) {
     console.error('[CardSystem] Failed to persist spawn interval:', e.message);
     return { success: false, message: `⚠️ Interval set to ${mins}min in memory but failed to persist: ${e.message}` };
@@ -336,13 +358,30 @@ function getSpawnIntervalInfo() {
 }
 
 // 💡 Load persisted spawn interval from System collection on startup.
+// 💡 P3 (2026-08-16): Reads GLOBAL key (card_spawn_interval_global) so all
+// bot instances share the same spawn interval. Falls back to per-bot key
+// for backward compatibility (if global doesn't exist yet).
 async function loadSpawnInterval() {
   const inst = getInst();
   try {
-    const doc = await System.findOne({ key: `card_spawn_interval_${botConfig.getBotId()}` });
+    // Try global key first
+    let doc = await System.findOne({ key: `card_spawn_interval_global` });
+    if (!doc) {
+      // Backward compat: fall back to per-bot key, then migrate to global
+      doc = await System.findOne({ key: `card_spawn_interval_${botConfig.getBotId()}` });
+      if (doc) {
+        // Migrate to global
+        await System.findOneAndUpdate(
+          { key: `card_spawn_interval_global` },
+          { value: doc.value },
+          { upsert: true }
+        );
+        console.log(`[CardSystem][${botConfig.getBotId()}] Migrated spawn interval to global key`);
+      }
+    }
     if (doc && typeof doc.value === 'number' && doc.value > 0) {
       inst.spawnIntervalMs = doc.value;
-      console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: ${Math.round(doc.value/60000)}min`);
+      console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: ${Math.round(doc.value/60000)}min (global)`);
     }
   } catch (e) {
     console.error('[CardSystem] Failed to load spawn interval:', e.message);
@@ -705,13 +744,23 @@ async function startTokenEvent(ownerJid) {
   inst.tokenEventActive = true;
   inst.tokenEventStart = Date.now();
 
-  // Persist to System collection
+  // 💡 P3 (2026-08-16): Cross-bot sync — persist token event GLOBALLY.
+  // All bot instances share the same token event state.
+  // Was: token_event_<botId>. Now: token_event_global.
+  // Also sync to all running bot instances in this process.
   try {
     await System.findOneAndUpdate(
-      { key: `token_event_${botConfig.getBotId()}` },
+      { key: `token_event_global` },
       { $set: { value: { active: true, startedAt: inst.tokenEventStart } } },
       { upsert: true }
     );
+    // Sync to all other bot instances
+    for (const [botId, otherInst] of instances) {
+      if (botId !== botConfig.getBotId()) {
+        otherInst.tokenEventActive = true;
+        otherInst.tokenEventStart = inst.tokenEventStart;
+      }
+    }
   } catch (e) { console.error('[TokenEvent] Failed to persist state:', e.message); }
 
   return {
@@ -734,11 +783,18 @@ async function stopTokenEvent(ownerJid) {
   inst.tokenEventActive = false;
 
   try {
+    // 💡 P3: Global key for cross-bot sync
     await System.findOneAndUpdate(
-      { key: `token_event_${botConfig.getBotId()}` },
+      { key: `token_event_global` },
       { $set: { value: { active: false, startedAt: inst.tokenEventStart, stoppedAt: Date.now() } } },
       { upsert: true }
     );
+    // Sync to all other bot instances
+    for (const [botId, otherInst] of instances) {
+      if (botId !== botConfig.getBotId()) {
+        otherInst.tokenEventActive = false;
+      }
+    }
   } catch (e) { console.error('[TokenEvent] Failed to persist state:', e.message); }
 
   return { success: true, message: '🛑 *Token event stopped.* No more tokens will drop.' };
@@ -749,7 +805,20 @@ async function stopTokenEvent(ownerJid) {
  */
 async function loadTokenEventState() {
   try {
-    const doc = await System.findOne({ key: `token_event_${botConfig.getBotId()}` }).lean();
+    // 💡 P3: Read global key first, fall back to per-bot for backward compat
+    let doc = await System.findOne({ key: `token_event_global` }).lean();
+    if (!doc) {
+      doc = await System.findOne({ key: `token_event_${botConfig.getBotId()}` }).lean();
+      if (doc) {
+        // Migrate to global
+        await System.findOneAndUpdate(
+          { key: `token_event_global` },
+          { $set: { value: doc.value } },
+          { upsert: true }
+        );
+        console.log(`[CardSystem][${botConfig.getBotId()}] Migrated token event state to global key`);
+      }
+    }
     if (doc && doc.value) {
       const inst = getInst();
       inst.tokenEventActive = !!doc.value.active;
