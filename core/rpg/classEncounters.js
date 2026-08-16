@@ -1109,8 +1109,17 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
     // Calculate average player level and speed
     const avgLevel = Math.floor(players.reduce((sum, p) => sum + (p.level || 1), 0) / players.length);
     const avgSpeed = Math.floor(players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / players.length);
-    
+
     const enemies = [];
+
+    // 💡 FIX P2 (2026-08-16): Group-dungeon party-level scaling.
+    // Enemy HP scales with HIGHEST party level (so a carry can't trivialize
+    // content by joining a low-level party). Enemy ATK scales with AVERAGE
+    // party level (so weaker players can still survive).
+    const maxLevel = Math.max(...players.map(p => p.level || 1));
+    // HP multiplier: if maxLevel > avgLevel, scale HP up by the ratio.
+    // e.g. L100 carry + L20 party: avgLevel=40, maxLevel=100 → HP × (100/40) = 2.5×
+    const hpLevelMult = avgLevel > 0 ? Math.max(1, maxLevel / avgLevel) : 1;
     
     if (encounterType === 'BOSS') {
         // Single boss
@@ -1138,7 +1147,20 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
             enemies.push(scaleEnemyStats(enemy, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     }
-    
+
+    // 💡 FIX P2: Apply HP multiplier for party-level scaling.
+    // If maxLevel > avgLevel (carry in party), scale all enemy HP up.
+    if (hpLevelMult > 1) {
+        for (const e of enemies) {
+            if (e.stats && e.stats.hp) {
+                e.stats.hp = Math.floor(e.stats.hp * hpLevelMult);
+                e.stats.maxHp = e.stats.hp;
+                e.currentHP = e.stats.hp;
+                e.maxHP = e.stats.hp;
+            }
+        }
+    }
+
     return {
         type: encounterType,
         enemies,

@@ -405,10 +405,14 @@ function allocateStatPoint(userId, stat, amount = 1) {
     
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
     
-    // Soft cap: after 20 points invested in a single stat, each additional point
+    // Soft cap: after N points invested in a single stat, each additional point
     // is worth only half. This discourages pure min-maxing without blocking it.
+    // 💡 FIX P2 (2026-08-16): Soft cap scales with level — was fixed at 20,
+    // meaning 86% of L100 stat points were at half-value. Now:
+    // SOFT_CAP = 20 + floor(level / 5). At L100 → 40, allowing meaningful
+    // investment in 2-3 stats without making min-maxing trivial.
     const pointsAlreadyInStat = (user.allocatedStatPoints?.[s] || 0);
-    const SOFT_CAP = 20;
+    const SOFT_CAP = 20 + Math.floor((user.level || 1) / 5);
     let effectiveMult = tierMultiplier;
     if (pointsAlreadyInStat >= SOFT_CAP) {
         effectiveMult = tierMultiplier * 0.5; // half-value after soft cap

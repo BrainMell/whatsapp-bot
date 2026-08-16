@@ -394,7 +394,9 @@ async function acceptChallenge(sock, chatId, targetJid) {
         stake: invite.stake,
         mode, // 💡 NEW: stored on duelState so handlePvPAction + finishDuel can branch
         round: 1,
-        turn: 0, // index into players[]
+        // 💡 FIX #8 (2026-08-16): Speed-based initiative — faster player goes
+        // first. Was always turn: 0 (P1 always first). Now compare SPD.
+        turn: (players[0].stats?.spd || 0) >= (players[1].stats?.spd || 0) ? 0 : 1,
         lastAction: Date.now(),
         history: [],
         players,

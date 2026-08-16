@@ -2193,10 +2193,12 @@ function calculateDamage(
       SSS: 9,
     };
     const rankVal = rankValueMap[attacker.adventurerRank] || 1;
-    if (rankVal >= 3) {
-      // D-rank is 3
-      damage *= 2.0;
-    }
+    // 💡 FIX #3 (2026-08-16): Gradual rank damage scaling.
+    // Was: flat 2.0× for D-rank and above (rankVal >= 3).
+    // Now: 1.0 + (rankVal - 1) × 0.20, scaling from F to SSS.
+    //   F(1)=1.0×, E(2)=1.2×, D(3)=1.4×, C(4)=1.6×, B(5)=1.8×,
+    //   A(6)=2.0×, S(7)=2.2×, SS(8)=2.4×, SSS(9)=2.6×
+    damage *= 1.0 + (rankVal - 1) * 0.20;
   }
 
   // 💡 ENVIRONMENT MODIFIERS
@@ -2417,16 +2419,23 @@ function calculateDamage(
   }
 
   // Critical hit
+  // 💡 FIX #5 (2026-08-16): Crit cap 60% + overflow to crit damage.
+  // Was: no cap — crit above 100% was wasted. KAGE L100 had 1297% crit.
+  // Now: cap at 60%, overflow × 0.5 adds to crit damage multiplier.
+  //   e.g. 1200% crit → 60% chance × (1.5 + (1200-60)*0.5/100) = 60% × 7.2×
   let isCrit = false;
-  if (Math.random() * 100 < (Number(attacker.stats.crit) || 0)) {
+  const rawCrit = Number(attacker.stats.crit) || 0;
+  const cappedCrit = Math.min(60, rawCrit);
+  const critOverflow = Math.max(0, rawCrit - 60);
+  if (Math.random() * 100 < cappedCrit) {
     const targetCloak = target.equipment?.cloak?.id || target.equipment?.cloak;
     if (targetCloak === "mantlet_of_chaos") {
       isCrit = false;
     } else {
-      let critMult = 1.5;
+      let critMult = 1.5 + (critOverflow * 0.5 / 100); // overflow → crit damage
       const ringId = attacker.equipment?.ring?.id || attacker.equipment?.ring;
       if (ringId === "loop_of_forever" || ringId === "entropy_loop") {
-        critMult = 2.0; // Double crit damage multiplier
+        critMult = 2.0 + (critOverflow * 0.5 / 100); // Double crit damage multiplier
       }
       damage *= critMult;
       isCrit = true;
@@ -6442,8 +6451,10 @@ const initAdventure = async (
     const userRankIndex = ranks.indexOf(adventurerRank);
     const dungeonRankIndex = ranks.indexOf(upperRank);
 
-    // Only play 3 ranks above current one
-    const maxSoloRankIndex = userRankIndex + 3;
+    // 💡 FIX P2 (2026-08-16): L1 F-rank dungeon gate — cap at rankIndex+1
+    // instead of +3. Was: F-rank could solo up to D-rank (3 above), making
+    // early game trivial. Now: F-rank can solo up to E-rank (1 above).
+    const maxSoloRankIndex = userRankIndex + 1;
 
     if (dungeonRankIndex > maxSoloRankIndex) {
       const maxRank = ranks[Math.min(maxSoloRankIndex, ranks.length - 1)];
@@ -9135,8 +9146,10 @@ async function applyAbilityEffect(
           const hMult = chatHealMult * (player.passiveHealingBoost || 1);
           const rawHeal = Number(effData.value) || 0;
           const maxHpVal = target.stats.maxHp || target.stats.hp || 100;
+          // 💡 FIX #9 (2026-08-16): Heal cap 30% max HP per turn
           const healAmount = Math.max(0, Math.min(
             Math.floor(rawHeal * hMult),
+            Math.floor(maxHpVal * 0.30),
             maxHpVal - target.stats.hp,
           ));
           target.stats.hp += healAmount;
@@ -9158,8 +9171,10 @@ async function applyAbilityEffect(
         for (const ally of friendlySide) {
           const rawHealT = Number(effData.value) || 0;
           const maxHpT = ally.stats.maxHp || ally.stats.hp || 100;
+          // 💡 FIX #9: Heal cap 30% max HP per turn
           const healAmount = Math.max(0, Math.min(
             Math.floor(rawHealT * hMult),
+            Math.floor(maxHpT * 0.30),
             maxHpT - ally.stats.hp,
           ));
           ally.stats.hp += healAmount;
@@ -9563,6 +9578,7 @@ async function applyAbilityEffect(
         const maxHpE = target.stats.maxHp || target.stats.hp || 100;
         const healAmount = Math.max(0, Math.min(
           Math.floor(rawHealE * hMult),
+          Math.floor(maxHpE * 0.30), // FIX #9: heal cap 30% maxHp
           maxHpE - target.stats.hp,
         ));
         target.stats.hp += healAmount;
@@ -9589,6 +9605,7 @@ async function applyAbilityEffect(
         const maxHpET = ally.stats.maxHp || ally.stats.hp || 100;
         const healAmount = Math.max(0, Math.min(
           Math.floor(rawHealET * hMult),
+          Math.floor(maxHpET * 0.30), // FIX #9: heal cap 30% maxHp
           maxHpET - ally.stats.hp,
         ));
         ally.stats.hp += healAmount;

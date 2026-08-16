@@ -511,8 +511,11 @@ async function distributeRewards(raid) {
   const runeSystem = require('./runeSystem');
   const guildPerks = require('./guildPerks');
 
-  // Sort attackers by contribution
-  const sorted = [...raid.attackers].sort((a, b) => b.contribution - a.contribution);
+  // 💡 FIX P2 (2026-08-16): Raid contribution ranked by damageDealt, not votes.
+  // Was: sort by contribution (which was based on votes cast). Now: sort by
+  // damageDealt (actual combat contribution). This rewards players who
+  // participated in winning attacks, not just those who voted more.
+  const sorted = [...raid.attackers].sort((a, b) => (b.damageDealt || 0) - (a.damageDealt || 0));
   let summary = `🏆 *REWARDS DISTRIBUTED*\n\n`;
 
   for (let i = 0; i < sorted.length; i++) {
