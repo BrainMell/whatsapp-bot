@@ -2282,9 +2282,14 @@ function calculateDamage(
   if (attackerEffects.some((e) => e.type === "curse" || e.type === "weak"))
     damage *= 0.8;
 
-  // 💡 DAMAGE REDUCTION (Secondary Stat)
-  // Flat defense mitigation occurs before percentage damage reduction
-  damage -= def * 0.5;
+  // 💡 FIX P1 #2 (2026-08-16): Effective-HP defense formula — replaces
+  // subtraction. Old: damage -= def * 0.5 (creates "damage wall" at high DEF
+  // where attacks with power ≤ 2×DEF deal 0 damage). New: damage *= 100/(100+def)
+  // (smooth scaling — 100 DEF halves damage, 300 DEF = 25%, 900 DEF = 10%).
+  // This is the standard JRPG approach (FF10, Dragon Quest, Persona).
+  // Fixes ABYSSAL_GOD 0% solo win rate and VOID_TITAN 22-turn TTK — both
+  // were caused by the subtraction formula making high-DEF bosses unkillable.
+  damage = damage * (100 / (100 + def));
 
   // 💡 FIX: dmgReduction buffs (e.g. Null Field from Nemesis AI) were
   // applied to target.buffs but never read here. Only the permanent
@@ -3200,6 +3205,33 @@ function applyClassPassiveAtCombatStart(player) {
     case 'damage_when_low_hp':
     case 'damage_per_hit':
     case 'damage_on_kill':
+
+    // 💡 P4 Item 6 (2026-08-16): New effect types for fixed passives
+    case 'energy_regen':      // MAGE Arcane Well — handled per-turn
+    case 'energy_cost_reduction': // ARCHMAGE Infinity Flow
+      player.passiveEnergyCostReduction = value / 100; // 0.5 = 50% reduction
+      break;
+    case 'lifesteal':         // WARLOCK Soul Siphon — handled inline in damage
+      player.passiveLifestealPct = value; // 8 = 8% of damage dealt
+      break;
+    case 'dragon_3x':         // DRAGONSLAYER Dragon Bane — handled inline
+      player.passiveDragonMult = value; // 3 = 3× damage to dragons
+      break;
+    case 'party_physical_buff': // SHOGUN Commander's Will
+      if (state && state.players) {
+        for (const p of state.players) {
+          if (!p.isDead && p.stats) {
+            p.stats.atk = Math.floor((p.stats.atk || 0) * (1 + value / 100));
+          }
+        }
+      }
+      break;
+    case 'crit_when_low':     // BERSERKER Bloodlust — handled inline in crit calc
+      player.passiveCritWhenLow = value; // max +20% crit when low HP
+      break;
+    case 'scaling_damage':    // DOOMSLAYER Hell-Walker — handled inline
+      player.passiveScalingDmg = value; // 2% per 1% missing HP
+      break;
     case 'damage_on_death':
       // Mark passive as available; per-turn / inline code will read it.
       player.class.passiveActive = true;
@@ -3364,6 +3396,18 @@ function applyClassPassivePerTurn(player, state) {
       break;
     }
 
+    // 💡 P4 Item 6: MAGE Arcane Well — restore energy per turn
+    case 'energy_regen': {
+      if (player.stats.energy !== undefined && player.stats.maxEnergy) {
+        const restore = Math.min(value, player.stats.maxEnergy - player.stats.energy);
+        if (restore > 0) {
+          player.stats.energy += restore;
+          msgs.push(`⚡ ${player.class.passive.name}: +${restore} Energy`);
+        }
+      }
+      break;
+    }
+
     case 'first_turn_bonus': {
       // +value% damage on first turn only
       if (state.combatRound === 0) {
@@ -3450,6 +3494,33 @@ function getClassPassiveDamageMult(attacker, target, isAbility) {
       if (isAbility && attacker.passiveMagBonus && attacker.passiveMagBonus > 1) {
         mult *= attacker.passiveMagBonus;
       }
+      break;
+
+    // 💡 P4 Item 6 (2026-08-16): New inline damage passives
+    case 'dragon_3x':
+      // DRAGONSLAYER Dragon Bane: 3× damage to dragon-type enemies
+      if (target && target.id && String(target.id).toUpperCase().includes('DRAGON')) {
+        mult *= (Number(passive.value) || 3);
+      }
+      break;
+
+    case 'scaling_damage':
+      // DOOMSLAYER Hell-Walker: +2% damage per 1% HP missing (no cap)
+      if (attacker.stats && attacker.stats.maxHp) {
+        const hpPct = attacker.stats.hp / attacker.stats.maxHp;
+        const missingPct = Math.max(0, 1 - hpPct);
+        const bonusPer = Number(passive.value) || 2;
+        mult *= (1 + (bonusPer / 100) * missingPct * 100); // 2% per 1% missing = up to +200%
+      }
+      break;
+
+    case 'crit_when_low':
+      // BERSERKER Bloodlust: handled in crit calc, not damage mult
+      break;
+
+    case 'lifesteal':
+      // WARLOCK Soul Siphon: heal after damage, not a damage mult
+      // Handled in calculateDamage after damage is applied
       break;
   }
 

@@ -483,11 +483,15 @@ function buildDuelPlayer(jid, userData, stats, idx) {
     const classData = economy.getUserClass(jid);
     const progData = progression.getUser(jid);
     const maxEnergy = stats.maxEnergy || 200;
+    // 💡 FIX P1 #7 (2026-08-16): PvP HP normalization — L1 vs L100 ratio
+    // was 221× (26K HP vs 120 HP). Now: hp = 5000 + level × 30.
+    // L1 = 5,030, L100 = 8,000, max ratio 1.6× as specified in the audit.
+    const normalizedHp = 5000 + (progData?.level || 1) * 30;
     const player = {
         jid,
         name: userData.nickname || economy.getDisplayName(jid),
-        hp: stats.maxHp || stats.hp,
-        maxHp: stats.maxHp || stats.hp,
+        hp: normalizedHp,
+        maxHp: normalizedHp,
         energy: maxEnergy,
         maxEnergy: maxEnergy,
         stats,

@@ -129,7 +129,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 220, atk: 18, def: 12, mag: 1, spd: 6, luck: 4, crit: 15 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'MUTATION_PRIME' },
         evolutionCost: 0,
-        passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.`, effect: 'damage_when_low_hp', value: 20 },
+        passive: { name: 'Bloodlust', desc: `CRIT chance increases by 1% for every 5% HP missing. Max +20%.`, effect: 'crit_when_low', value: 20 },
         evolves_into: ['DOOMSLAYER'],
     },
     DOOMSLAYER: {
@@ -143,7 +143,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 600, atk: 55, def: 25, mag: 2, spd: 18, luck: 5, crit: 30 },
         requirement: { level: 50, questsCompleted: 100, kills: 500, gold: 100000, trialBoss: 'DEMON_LORD' },
         evolutionCost: 100000,
-        passive: { name: 'Hell-Walker', desc: `Damage increases by 2% for every 1% of HP missing. No cap.`, effect: 'damage_when_low_hp', value: 50 },
+        passive: { name: 'Hell-Walker', desc: `Damage increases by 2% for every 1% of HP missing. No cap.`, effect: 'scaling_damage', value: 2 },
         // SHELVED: evolves_into: ['ANNIHILATOR'],
     },
 
@@ -224,7 +224,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 190, atk: 16, def: 15, mag: 4, spd: 8, luck: 8, crit: 12 },
         requirement: { level: 40, questsCompleted: 30, gold: 150000, trialBoss: 'ELDER_FLAME' },
         evolutionCost: 150000,
-        passive: { name: 'Dragon Bane', desc: `Deal 3× damage to dragon-type enemies. Immune to fire DoT.`, effect: 'damage_per_hit', value: 15 },
+        passive: { name: 'Dragon Bane', desc: `Deal 3× damage to dragon-type enemies. Immune to fire DoT.`, effect: 'dragon_3x', value: 3 },
         evolves_into: ['DRAGON_GOD', 'DRAGON_LORD'],
     },
     DRAGON_GOD: {
@@ -432,7 +432,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 320, atk: 50, def: 28, mag: 15, spd: 25, luck: 20, crit: 35 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_TITAN' },
         evolutionCost: 100000,
-        passive: { name: `Commander's Will`, desc: `Party deals +20% physical damage.`, effect: 'all_stats', value: 15 },
+        passive: { name: `Commander's Will`, desc: `Party deals +20% physical damage.`, effect: 'party_physical_buff', value: 20 },
         // SHELVED: evolves_into: ['TENNO'],
     },
 
@@ -515,7 +515,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 110, atk: 8, def: 8, mag: 35, spd: 12, luck: 12, crit: 8 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'ARCANE_SENTINEL' },
         evolutionCost: 0,
-        passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn.`, effect: 'magic_damage', value: 10 },
+        passive: { name: 'Arcane Well', desc: `Regenerates 10 Energy per turn.`, effect: 'energy_regen', value: 10 },
         evolves_into: ['ARCHMAGE'],
     },
     ARCHMAGE: {
@@ -529,7 +529,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 200, atk: 12, def: 18, mag: 75, spd: 22, luck: 22, crit: 22 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'LICH_KING' },
         evolutionCost: 100000,
-        passive: { name: 'Infinity Flow', desc: `Energy costs reduced by 50%.`, effect: 'magic_damage', value: 25 },
+        passive: { name: 'Infinity Flow', desc: `Energy costs reduced by 50%.`, effect: 'energy_cost_reduction', value: 50 },
         // SHELVED: evolves_into: ['DEMIURGE'],
     },
 
@@ -563,7 +563,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 7, def: 6, mag: 26, spd: 8, luck: 10, crit: 12 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUL_EATER' },
         evolutionCost: 0,
-        passive: { name: 'Soul Siphon', desc: `Heals for 8% of magic damage dealt.`, effect: 'healing_boost', value: 20 },
+        passive: { name: 'Soul Siphon', desc: `Heals for 8% of magic damage dealt.`, effect: 'lifesteal', value: 8 },
         evolves_into: ['VOIDWALKER'],
     },
     VOIDWALKER: {
