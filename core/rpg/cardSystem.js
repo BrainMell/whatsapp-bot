@@ -2420,11 +2420,25 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
 
 async function cmdT2Coll(senderJid, reply, args = []) {
   const p = P();
-  if (!args.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2] [slot3]...`, `${p} t2coll 1\n${p} t2coll 1 3 5`);
+  if (!args.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2]... | all`, `${p} t2coll 1\n${p} t2coll 1 3 5\n${p} t2coll all`);
+
+  // 💡 P3 (2026-08-16): "all" — empty entire main deck back to collection.
+  if (args[0]?.toLowerCase() === 'all') {
+    const allDecked = await UserCard.find({ userId: senderJid, inMainDeck: true });
+    if (!allDecked.length) return reply('❌ Your main deck is already empty.');
+    let count = 0;
+    for (const uc of allDecked) {
+      uc.inMainDeck = false;
+      uc.mainDeckSlot = null;
+      await uc.save();
+      count++;
+    }
+    return reply(`📦 *${count}* card(s) moved from your main deck back to collection!\n\n💡 Your deck is now empty.`);
+  }
 
   // Parse all slot numbers (skip non-numbers), deduplicate
   const slots = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
-  if (!slots.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2] [slot3]...`, `${p} t2coll 1 3 5`);
+  if (!slots.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2]... | all`, `${p} t2coll 1\n${p} t2coll 1 3 5\n${p} t2coll all`);
 
   const results = [];
   for (const slot of slots) {
@@ -3945,6 +3959,30 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `_Use \`${p} spawnset <minutes>\` for interval, \`${p} spawnset tier\` for tier config._`
       ), true;
     }
+
+    // 💡 P3 (2026-08-16): Trc — admin remove tokens from a player.
+    case 'trc':
+      if (!isCardMod) return reply('❌ Only moderators and above can remove tokens.'), true;
+      await cmdTrc(senderJid, reply, args, m);
+      return true;
+
+    // 💡 P3 (2026-08-16): Ci — admin lookup, count of players holding a card.
+    case 'ci':
+      if (!isCardMod) return reply('❌ Only moderators and above can use card lookup.'), true;
+      await cmdCi(senderJid, reply, args);
+      return true;
+
+    // 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
+    case 'endauction':
+      if (!isOwner) return reply('❌ Only the owner can end auctions early.'), true;
+      await cmdEndAuction(senderJid, reply, chatId);
+      return true;
+
+    // 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
+    case 'cardlb':
+    case 'clb':
+      await cmdCardLB(senderJid, reply, args);
+      return true;
   }
 
   return false;
@@ -4124,6 +4162,130 @@ async function cmdT2EColl(senderJid, reply, args) {
   });
 
   msg += `💡 Use \`${p} info <name> event | <anime>\` to search.`;
+  return reply(msg);
+}
+
+// 💡 P3 (2026-08-16): Trc — admin remove tokens from a player.
+// Usage: .g trc @player <amount>
+async function cmdTrc(senderJid, reply, args, m) {
+  const p = P();
+  if (!m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+    return reply(`❌ Usage: \`${p} trc @player <amount>\`\n💡 Mention the player and specify the token amount to remove.`);
+  }
+  const targetJid = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
+  const amount = parseInt(args.find(a => /^\d+$/.test(a)));
+  if (isNaN(amount) || amount < 1) {
+    return reply(`❌ Invalid amount. Usage: \`${p} trc @player <amount>\``);
+  }
+  const currentBal = economy.getTokens(targetJid);
+  const toRemove = Math.min(amount, currentBal);
+  if (toRemove <= 0) return reply(`❌ That player has 0 tokens.`);
+  economy.removeTokens(targetJid, toRemove);
+  const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
+  return reply(`🎫 *TOKEN REMOVAL*\n\n👤 Player: ${displayName}\n💸 Removed: *${toRemove} tokens*\n💰 Remaining: *${currentBal - toRemove} tokens*`);
+}
+
+// 💡 P3 (2026-08-16): Ci — admin card lookup, count of players holding a card.
+// Usage: .g Ci "Edward Elric" | 5
+async function cmdCi(senderJid, reply, args) {
+  const p = P();
+  const fullQuery = args.join(' ').trim();
+  if (!fullQuery || !fullQuery.includes('|')) {
+    return reply(`❌ Usage: \`${p} Ci "<card name>" | <tier>\`\n💡 Example: \`${p} Ci "Edward Elric" | 5\``);
+  }
+  const [namePart, tierPart] = fullQuery.split('|').map(s => s.trim());
+  const tier = parseInt(tierPart);
+  if (isNaN(tier) || tier < 1 || tier > 7) {
+    return reply(`❌ Invalid tier. Use a number 1-7.`);
+  }
+  // Search card index for matching name
+  const cardIndex = CARD_INDEX();
+  const matchingCards = Object.values(cardIndex).filter(c =>
+    c.cardName?.toLowerCase().includes(namePart.toLowerCase()) && c.tier === tier
+  );
+  if (!matchingCards.length) {
+    return reply(`❌ No card found matching "${namePart}" in Tier ${tier}.`);
+  }
+  const card = matchingCards[0];
+  // Count how many players hold this card
+  const holders = await UserCard.find({ cardId: card.id }).distinct('userId');
+  const totalCopies = await UserCard.countDocuments({ cardId: card.id });
+  return reply(
+    `🔍 *CARD LOOKUP*\n\n` +
+    `🎴 Card: *${card.cardName}* (T${tier})\n` +
+    `🆔 ID: \`${card.id}\`\n` +
+    `👥 Players holding: *${holders.length}*\n` +
+    `📦 Total copies: *${totalCopies}*\n\n` +
+    `💡 Use \`${p} info ${card.id}\` for full card details.`
+  );
+}
+
+// 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
+// Usage: .g endauction (closes auction in current chat)
+async function cmdEndAuction(senderJid, reply, chatId) {
+  const p = P();
+  const CardAuction = require('../models/CardAuction');
+  const auction = await CardAuction.findOne({ chatId, active: true });
+  if (!auction) return reply('❌ No active auction in this chat.');
+  // Find highest bid
+  auction.bids.sort((a, b) => b.amount - a.amount);
+  const winner = auction.bids[0];
+  auction.active = false;
+  auction.endedAt = new Date();
+  auction.endedBy = 'manual';
+  if (winner) {
+    auction.winner = winner.userId;
+    auction.winningBid = winner.amount;
+  }
+  await auction.save();
+  if (winner) {
+    const winnerName = economy.getDisplayName(winner.userId) || winner.userId.split('@')[0];
+    return reply(
+      `🔨 *AUCTION ENDED*\n\n` +
+      `🎴 Card: *${auction.cardName || auction.cardId}*\n` +
+      `🏆 Winner: ${winnerName}\n` +
+      `💰 Final bid: *${winner.amount} Zeni*\n\n` +
+      `💡 Use \`${p} transfer\` to complete the trade.`
+    );
+  }
+  return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${auction.cardName || auction.cardId}* has been closed.`);
+}
+
+// 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
+// Usage: .g cardlb          (overall top 10)
+//        .g cardlb 5        (tier 5 top 10)
+//        .g cardlb --t3     (tier 3 top 10)
+async function cmdCardLB(senderJid, reply, args) {
+  const p = P();
+  let tier = null;
+  if (args.length > 0) {
+    const arg = args[0].replace('--t', '').replace('t', '');
+    const parsed = parseInt(arg);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 7) tier = parsed;
+  }
+
+  // Aggregate: count cards per player, optionally filtered by tier
+  const match = tier ? { 'card.tier': tier } : {};
+  const pipeline = [
+    { $lookup: { from: 'cards', localField: 'cardId', foreignField: 'id', as: 'card' } },
+    { $unwind: '$card' },
+    ...(tier ? [{ $match: match }] : []),
+    { $group: { _id: '$userId', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 }
+  ];
+  const results = await UserCard.aggregate(pipeline);
+  if (!results.length) return reply('📭 No cards found for this leaderboard.');
+
+  const title = tier ? `Tier ${tier} Card Leaderboard` : 'Overall Card Leaderboard';
+  let msg = `🏆 *${title}* 🏆\n\n`;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const name = economy.getDisplayName(r._id) || r._id.split('@')[0];
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    msg += `${medal} ${name} — *${r.count} cards*\n`;
+  }
+  msg += `\n💡 Use \`${p} cardlb <tier 1-7>\` for per-tier leaderboards.`;
   return reply(msg);
 }
 
