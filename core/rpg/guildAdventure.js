@@ -5290,14 +5290,45 @@ async function checkBossPhase(sock, boss, chatId) {
     let msg = `🌟 *BOSS PHASE TRANSITION* 🌟\n\n`;
     msg += `${boss.icon} *${boss.name}*: ${nextPhase.message}\n`;
 
-    // Apply phase effects
+    // 💡 FIX P0 Commit B (2026-08-16): Stat boosts now apply ADDITIVELY
+    // against the boss's base stat, not multiplicatively against the
+    // current (already-boosted) stat. Previously, +30/+50/+80 stacked
+    // as: base × 1.30 × 1.50 × 1.80 = base × 3.51 (compounding).
+    // Now: base × (1 + 0.30 + 0.50 + 0.80) = base × 2.60 (additive).
+    // This prevents late-phase bosses from becoming unkillable.
+    //
+    // Implementation: on first phase transition, snapshot the base stats
+    // into boss._baseStats. On every transition, sum ALL accumulated
+    // stat_boost effects from phases 1..currentPhaseIdx and apply the
+    // total to the base stat.
+    if (!boss._baseStats) {
+      boss._baseStats = { ...boss.stats };
+    }
+    // Sum all stat_boost effects from phases 1 through currentPhaseIdx
+    const accumulatedBoosts = {}; // stat -> total % boost
+    for (let i = 1; i <= nextPhaseIdx; i++) {
+      const phase = boss.phases[i];
+      if (phase && phase.effects) {
+        for (const eff of phase.effects) {
+          if (eff.type === "stat_boost") {
+            accumulatedBoosts[eff.stat] = (accumulatedBoosts[eff.stat] || 0) + eff.value;
+          }
+        }
+      }
+    }
+    // Apply accumulated boosts additively to base stats
+    for (const [stat, totalBoost] of Object.entries(accumulatedBoosts)) {
+      if (boss._baseStats[stat] !== undefined) {
+        boss.stats[stat] = Math.floor(boss._baseStats[stat] * (1 + totalBoost / 100));
+      }
+    }
+
+    // Apply phase effects (heal still applies normally — not a stat boost)
     if (nextPhase.effects) {
       nextPhase.effects.forEach((eff) => {
         if (eff.type === "stat_boost") {
-          boss.stats[eff.stat] = Math.floor(
-            boss.stats[eff.stat] * (1 + eff.value / 100),
-          );
-          msg += `\n📈 ${boss.name}'s ${eff.stat.toUpperCase()} increased!`;
+          // Already handled above via accumulated boosts — just log the message
+          msg += `\n📈 ${boss.name}'s ${eff.stat.toUpperCase()} increased! (total +${accumulatedBoosts[eff.stat]}%)`;
         }
         if (eff.type === "heal") {
           boss.stats.hp = Math.min(boss.stats.maxHp, boss.stats.hp + eff.value);
