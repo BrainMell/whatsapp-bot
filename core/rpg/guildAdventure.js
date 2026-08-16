@@ -6108,8 +6108,9 @@ async function endCombat(sock, victory, sessionKey) {
   const bossName = state.enemies[0]?.type || state.enemies[0]?.id || null;
 
   // Distribute rewards — only when we have alive players (prevents jid crash on defeat)
+  // 💡 FIX P4: Skip loot distribution for Abyss — rewards go to lootAccumulator instead
   let lootResults = { items: [], gold: totalGold, announcements: [] };
-  if (victory && alivePlayers.length > 0) {
+  if (victory && alivePlayers.length > 0 && !state.isAbyss) {
     try {
       lootResults = await lootSystem.distributeLoot(
         alivePlayers,
@@ -6176,26 +6177,46 @@ async function endCombat(sock, victory, sessionKey) {
     // Clear flags for next stage
     state.isProcessing = false;
 
-    for (const player of alivePlayers) {
-      player.xpEarned += xpPerPlayer;
-      player.goldEarned += goldPerPlayer;
-      // Gold and Items are now handled inside lootSystem.distributeLoot
+    // 💡 FIX P4 (2026-08-16): Abyss reward mismatch — skip immediate
+    // XP/gold distribution for Abyss combat. Abyss rewards are accumulated
+    // in run.lootAccumulator by handleAbyssVictory and paid out on
+    // retreat/death. Without this guard, endCombat pays XP/gold
+    // immediately AND handleAbyssVictory adds to lootAccumulator —
+    // double payment. The floor-by-floor messages showed only the
+    // lootAccumulator total, not the immediate payment, causing the
+    // "rewards don't match" discrepancy reported in the system report.
+    if (!state.isAbyss) {
+      for (const player of alivePlayers) {
+        player.xpEarned += xpPerPlayer;
+        player.goldEarned += goldPerPlayer;
+        // Gold and Items are now handled inside lootSystem.distributeLoot
 
-      const levelUpResult = progression.addXP(player.jid, xpPerPlayer, "Quest");
+        const levelUpResult = progression.addXP(player.jid, xpPerPlayer, "Quest");
 
-      // Fractional quest progress
-      let progress = 0.05;
-      if (state.enemies.some((e) => e.isBoss)) progress = 1.0;
-      else if (state.enemies.some((e) => e.name.includes("Elite")))
-        progress = 0.2;
+        // Fractional quest progress
+        let progress = 0.05;
+        if (state.enemies.some((e) => e.isBoss)) progress = 1.0;
+        else if (state.enemies.some((e) => e.name.includes("Elite")))
+          progress = 0.2;
 
-      // 💡 QA FIX: was passing won=true per-combat, which incremented
-      // questsWon by 1 for EVERY combat encounter in the dungeon.
-      // Combined with the final-act call, a 5-encounter dungeon
-      // incremented questsWon by 6. Now: pass won=false per-combat
-      // (only progress is tracked), and the final-act call at
-      // endAdventure passes won=true once.
-      economy.addQuestProgress(player.jid, progress, false);
+        // 💡 QA FIX: was passing won=true per-combat, which incremented
+        // questsWon by 1 for EVERY combat encounter in the dungeon.
+        // Combined with the final-act call, a 5-encounter dungeon
+        // incremented questsWon by 6. Now: pass won=false per-combat
+        // (only progress is tracked), and the final-act call at
+        // endAdventure passes won=true once.
+        economy.addQuestProgress(player.jid, progress, false);
+      }
+    } else {
+      // Abyss mode: only track quest progress (no immediate XP/gold).
+      // Rewards are handled by handleAbyssVictory → lootAccumulator.
+      for (const player of alivePlayers) {
+        let progress = 0.05;
+        if (state.enemies.some((e) => e.isBoss)) progress = 1.0;
+        else if (state.enemies.some((e) => e.name.includes("Elite")))
+          progress = 0.2;
+        economy.addQuestProgress(player.jid, progress, false);
+      }
     }
 
     // 🟢 CLEAR all enemies and their states

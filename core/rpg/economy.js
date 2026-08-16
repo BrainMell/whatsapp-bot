@@ -934,6 +934,36 @@ function deposit(userId, amount) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${val.toLocaleString()}` };
   }
 
+  // 💡 FIX P4 (2026-08-16): Deposit cap bug — check MAX_BANK BEFORE
+  // deducting from wallet. Previously, deposit added to bank without
+  // checking the cap, then clampWallet() ran on next user load and
+  // silently clamped the bank down — the wallet was already deducted
+  // but the bank excess vanished. Now we reject the deposit if it
+  // would exceed the cap, or partial-deposit up to the cap.
+  const newBankTotal = user.bank + val;
+  if (newBankTotal > MAX_BANK) {
+    const canDeposit = MAX_BANK - user.bank;
+    if (canDeposit <= 0) {
+      return {
+        success: false,
+        message: `❌ *BANK CAP REACHED*\n\n🏦 Your bank is at the maximum capacity of ${getZENI()}${MAX_BANK.toLocaleString()}.\n💡 Withdraw some funds first or keep zeni in your wallet.`
+      };
+    }
+    // Partial deposit — only deposit up to the cap
+    user.wallet -= canDeposit;
+    user.bank += canDeposit;
+    logTransaction(userId, "Bank Deposit (capped)", -canDeposit, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL DEPOSIT (BANK CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Deposited:* ${getZENI()}${canDeposit.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()} (MAX)\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your bank is now at maximum capacity. The remaining ${getZENI()}${(val - canDeposit).toLocaleString()} stayed in your wallet.`,
+      amount: canDeposit,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
+  }
+
   user.wallet -= val;
   user.bank += val;
 
@@ -971,6 +1001,32 @@ function withdraw(userId, amount) {
 
   if (user.bank < val) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${val.toLocaleString()}` };
+  }
+
+  // 💡 FIX P4 (2026-08-16): Withdraw cap bug — same as deposit cap but
+  // for wallet. Check MAX_WALLET before withdrawing. If withdrawal would
+  // exceed wallet cap, partial-withdraw up to the cap.
+  const newWalletTotal = user.wallet + val;
+  if (newWalletTotal > MAX_WALLET) {
+    const canWithdraw = MAX_WALLET - user.wallet;
+    if (canWithdraw <= 0) {
+      return {
+        success: false,
+        message: `❌ *WALLET CAP REACHED*\n\n💰 Your wallet is at the maximum capacity of ${getZENI()}${MAX_WALLET.toLocaleString()}.\n💡 Deposit some funds to your bank first.`
+      };
+    }
+    user.bank -= canWithdraw;
+    user.wallet += canWithdraw;
+    logTransaction(userId, "Bank Withdrawal (capped)", canWithdraw, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL WITHDRAWAL (WALLET CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Withdrawn:* ${getZENI()}${canWithdraw.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()} (MAX)\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your wallet is at maximum capacity. The remaining ${getZENI()}${(val - canWithdraw).toLocaleString()} stayed in your bank.`,
+      amount: canWithdraw,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
   }
 
   user.bank -= val;
