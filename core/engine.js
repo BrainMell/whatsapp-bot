@@ -519,19 +519,35 @@ function isCardsMod(userId) {
     if (cardsMods.has(normalized)) return true;
     // 💡 P3 (2026-08-16): LID ↔ phone resolution. Card mods may be stored
     // as @lid but the user sends from @s.whatsapp.net (or vice versa).
-    // Use the LID resolver to check both forms.
+    // Use the LID resolver's caches to look up the actual mapping.
+    // The LID number and phone number are DIFFERENT — can't just swap suffixes.
     try {
       const lidResolver = require('./utils/lidResolver');
-      const resolved = lidResolver.resolveJid(normalized);
-      if (resolved && cardsMods.has(resolved)) return true;
-      // Also try swapping @lid ↔ @s.whatsapp.net manually
+      // Extract the number part (before @)
+      const numberPart = normalized.split('@')[0];
+      // Strip :device suffix
+      const colonIdx = numberPart.indexOf(':');
+      const cleanNumber = colonIdx > 0 ? numberPart.substring(0, colonIdx) : numberPart;
+
       if (normalized.endsWith('@lid')) {
-        const phone = normalized.replace('@lid', '@s.whatsapp.net');
-        if (cardsMods.has(phone)) return true;
+        // Input is @lid → look up phone via lidCache
+        const phone = lidResolver.lidCache.get(cleanNumber);
+        if (phone) {
+          const phoneJid = `${phone}@s.whatsapp.net`;
+          if (cardsMods.has(phoneJid)) return true;
+        }
       } else if (normalized.endsWith('@s.whatsapp.net')) {
-        const lid = normalized.replace('@s.whatsapp.net', '@lid');
-        if (cardsMods.has(lid)) return true;
+        // Input is @s.whatsapp.net → look up LID via phoneCache
+        const lid = lidResolver.phoneCache.get(cleanNumber);
+        if (lid) {
+          const lidJid = `${lid}@lid`;
+          if (cardsMods.has(lidJid)) return true;
+        }
       }
+
+      // Also try resolveJid as a fallback (works when economy.economyData is populated)
+      const resolved = lidResolver.resolveJid(normalized);
+      if (resolved && resolved !== normalized && cardsMods.has(resolved)) return true;
     } catch (e) {}
     return false;
   } catch (err) {
