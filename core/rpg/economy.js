@@ -34,6 +34,40 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap — 5 raids/quests per day.
+// Enforced server-side at quest entry. Resets at UTC midnight.
+const DAILY_QUEST_CAP = 5;
+function checkDailyQuestCap(userId) {
+  const user = getUser(userId);
+  if (!user) return { allowed: true }; // fail open if user not loaded yet
+
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  if (user.dailyQuests.count >= DAILY_QUEST_CAP) {
+    return {
+      allowed: false,
+      count: user.dailyQuests.count,
+      cap: DAILY_QUEST_CAP,
+      message: `❌ *DAILY QUEST CAP REACHED*\n\nYou've completed ${DAILY_QUEST_CAP} quests/raids today.\n📊 Cap resets at UTC midnight.\n\n💡 Come back tomorrow or play other game modes (PvP, Abyss, Cards).`
+    };
+  }
+  return { allowed: true, count: user.dailyQuests.count, cap: DAILY_QUEST_CAP };
+}
+
+function incrementDailyQuestCount(userId) {
+  const user = getUser(userId);
+  if (!user) return;
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  user.dailyQuests.count += 1;
+  scheduleSave(userId);
+  return user.dailyQuests.count;
+}
+
 // CACHE: Stores all active user data in memory for instant access
 const economyData = new Map();
 
@@ -630,8 +664,49 @@ function addMoney(userId, amount, description = "Money Added") {
 
   // Floor to integer — Zeni doesn't have fractional units, and floating-point
   // math would otherwise accumulate rounding errors over many transactions.
-  const val = Math.floor(Number(amount));
+  let val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
+
+  // 💡 P4 Item 5: Market cap circuit breaker — block rewards if cap reached.
+  // (unchanged from above)
+  if (_marketCap !== null) {
+    let quickTotal = 0;
+    for (const [jid, u] of economyData) {
+      quickTotal += (u.wallet || 0) + (u.bank || 0);
+      if (quickTotal >= _marketCap) break;
+    }
+    if (quickTotal >= _marketCap) {
+      console.log(`[MarketCap] Reward blocked: ${description} for ${userId} (cap reached)`);
+      return false;
+    }
+  }
+
+  // 💡 P4 (2026-08-16): Auto-debt deduction — if the player has an active
+  // debt, ALL money they earn is automatically deducted to pay it off.
+  // This replaces the old P2P loan system with a simpler debt-to-system
+  // model. When a player earns 1000 zeni and has 5000 debt, they receive
+  // 0 zeni and the debt drops to 4000. When debt reaches 0, normal
+  // earnings resume. This prevents debt-dodging — players can't just
+  // ignore the debt and keep earning.
+  if (user.debt && user.debt.amount > 0) {
+    const deducted = Math.min(val, user.debt.amount);
+    user.debt.amount -= deducted;
+    const remainingEarned = val - deducted;
+    if (deducted > 0) {
+      console.log(`[Debt] Auto-deducted ${deducted} from ${userId} (debt: ${user.debt.amount} remaining)`);
+      recordSettlement(userId, 'sink', 'debt_repayment', -deducted, {
+        preWallet: user.wallet, postWallet: user.wallet,
+        description: `Auto-debt repayment (debt: ${user.debt.amount} remaining)`
+      });
+    }
+    // If there's still earned money left after debt, add it to wallet
+    if (remainingEarned <= 0) {
+      scheduleSave(userId);
+      return user.wallet; // All earnings went to debt
+    }
+    // Partial — add remaining to wallet
+    val = remainingEarned;
+  }
 
   const preWallet = user.wallet;
   user.wallet += val;
@@ -2155,6 +2230,112 @@ function getMentionJid(jid) {
   return jid;
 }
 
+// 💡 P4 Items 10-11 (2026-08-16): Economy monitoring + market cap circuit breaker.
+// Default cap: 500 million total zeni across all players.
+// Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
+// reward table (F=1K, SSS=50K) means a player doing 5 quests/day at SSS
+// earns ~250K/day. With 3700 active players, that's ~925M/day if everyone
+// maxes out — the cap prevents runaway inflation. Admin can adjust live.
+const DEFAULT_MARKET_CAP = 500_000_000;
+let _marketCap = null; // cached from DB
+let _marketCapChecked = 0; // timestamp of last check
+
+async function getMarketCap() {
+  // Cache for 60 seconds to avoid hitting MongoDB on every reward
+  if (_marketCap !== null && Date.now() - _marketCapChecked < 60000) {
+    return _marketCap;
+  }
+  try {
+    const System = require('../models/System');
+    const doc = await System.findOne({ key: 'economy_market_cap' }).lean();
+    _marketCap = doc?.value || DEFAULT_MARKET_CAP;
+    _marketCapChecked = Date.now();
+    return _marketCap;
+  } catch (e) {
+    return DEFAULT_MARKET_CAP;
+  }
+}
+
+async function setMarketCap(amount) {
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 1) return { success: false, message: '❌ Invalid amount.' };
+  try {
+    const System = require('../models/System');
+    await System.findOneAndUpdate(
+      { key: 'economy_market_cap' },
+      { value: val },
+      { upsert: true }
+    );
+    _marketCap = val;
+    _marketCapChecked = Date.now();
+    return { success: true, message: `✅ Market cap set to ${getZENI()}${val.toLocaleString()}` };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// Check if the economy is at the cap. Called at reward-grant time.
+// Returns true if rewards should be BLOCKED (cap reached).
+async function isMarketCapReached() {
+  const cap = await getMarketCap();
+  let totalZeni = 0;
+  for (const [jid, user] of economyData) {
+    totalZeni += (user.wallet || 0) + (user.bank || 0);
+  }
+  return { reached: totalZeni >= cap, total: totalZeni, cap };
+}
+
+// Get total community zeni across all players
+function getTotalCommunityZeni() {
+  let totalWallet = 0, totalBank = 0, playerCount = 0;
+  for (const [jid, user] of economyData) {
+    totalWallet += (user.wallet || 0);
+    totalBank += (user.bank || 0);
+    playerCount++;
+  }
+  return {
+    totalWallet,
+    totalBank,
+    total: totalWallet + totalBank,
+    playerCount,
+  };
+}
+
+// 💡 P4 (2026-08-16): Debt management functions.
+// Replaces the old P2P loan system. Admins can set debt on a player;
+// all earnings auto-deduct until debt is cleared.
+function setDebt(userId, amount, reason = '') {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 0) return { success: false, message: '❌ Invalid amount.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: val, reason: reason || 'Admin-set debt', setAt: Date.now() };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt set for ${getDisplayName(userId)}: ${getZENI()}${val.toLocaleString()}\n📊 Previous: ${getZENI()}${oldDebt.toLocaleString()}\n💡 All future earnings will auto-deduct until debt is cleared.`
+  };
+}
+
+function getDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { amount: 0, reason: '' };
+  return user.debt || { amount: 0, reason: '' };
+}
+
+function clearDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: 0, reason: '', setAt: 0 };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt cleared for ${getDisplayName(userId)}. Was: ${getZENI()}${oldDebt.toLocaleString()}`
+  };
+}
+
 //========================================
 
 module.exports = {
@@ -2179,6 +2360,17 @@ module.exports = {
   getOrCreateUser,
   logTransaction,
   recordSettlement,
+  checkDailyQuestCap,
+  incrementDailyQuestCount,
+  DAILY_QUEST_CAP,
+  getMarketCap,
+  setMarketCap,
+  isMarketCapReached,
+  getTotalCommunityZeni,
+  DEFAULT_MARKET_CAP,
+  setDebt,
+  getDebt,
+  clearDebt,
   
   getBalance,
   addMoney,

@@ -4059,10 +4059,38 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     // 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
+    // 💡 P4 Item 13 (2026-08-16): Restricted to owner-designated auction GC.
+    // Set the GC via: .g setauctiongc <gc_id>
     case 'endauction':
       if (!isOwner) return reply('❌ Only the owner can end auctions early.'), true;
+      {
+        // Check if this is the designated auction GC
+        const auctionGcDoc = await System.findOne({ key: 'auction_gc_id' }).lean();
+        const auctionGcId = auctionGcDoc?.value;
+        if (auctionGcId && chatId !== auctionGcId) {
+          return reply(`❌ Auctions can only be ended in the designated auction group chat.\n💡 Use \`${p} setauctiongc\` to set or check the designated GC.`), true;
+        }
+      }
       await cmdEndAuction(senderJid, reply, chatId, args);
       return true;
+
+    // 💡 P4 Item 13: Set the designated auction GC (owner-only)
+    case 'setauctiongc':
+      if (!isOwner) return reply('❌ Only the owner can set the auction GC.'), true;
+      {
+        const gcId = args[0]?.trim();
+        if (!gcId) {
+          const doc = await System.findOne({ key: 'auction_gc_id' }).lean();
+          return reply(`📢 *Auction GC Setting*\n\nCurrent: ${doc?.value || 'Not set'}\n\n💡 Use \`${p} setauctiongc <gc_id>\` to set.\n💡 Use \`${p} setauctiongc here\` to set this GC.`), true;
+        }
+        const targetGc = gcId === 'here' ? chatId : gcId;
+        await System.findOneAndUpdate(
+          { key: 'auction_gc_id' },
+          { value: targetGc },
+          { upsert: true }
+        );
+        return reply(`✅ Auction GC set to: ${targetGc}`), true;
+      }
 
     // 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
     case 'cardlb':

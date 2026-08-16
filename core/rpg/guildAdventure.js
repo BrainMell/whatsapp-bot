@@ -6078,29 +6078,43 @@ async function endCombat(sock, victory, sessionKey) {
     return sum + (isNaN(xpVal) ? 0 : xpVal);
   }, 0);
 
-  const totalGold =
-    state.enemies.reduce((sum, e) => {
-      let goldVal = 0;
-      if (e.gold) goldVal = Number(e.gold);
-      else if (e.goldReward) {
-        if (Array.isArray(e.goldReward)) {
-          const [min, max] = e.goldReward;
-          goldVal =
-            Math.floor(Math.random() * (Number(max) - Number(min) + 1)) +
-            Number(min);
-        } else {
-          goldVal = Number(e.goldReward);
-        }
-      }
-      return sum + (isNaN(goldVal) ? 0 : goldVal);
-    }, 0) * (5 + (state.difficulty || 1)); // 💡 FIX: Scale gold multiplier with
-    // dungeon difficulty. Was a flat 3x historically; now scales as (5 + difficulty):
-    //   F=5.8×, E=6.2×, D=8×, C=10×, B=15×, A=23×, S=40×, SS=80×, SSS=85×
-    // This makes high-rank dungeons significantly more rewarding.
+  // 💡 P4 Item 4 (2026-08-16): Rank-based zeni reward table.
+  // Replaces the old (5 + difficulty) × baseGold multiplier which produced
+  // rewards 10-100× too high. New averages per rank:
+  //   F=1K, E=3K, D=5-7K, C=8-10K, B=11-15K, A=16-20K,
+  //   S=21-30K, SS=31-40K, SSS=41-50K
+  // Individual payout scales within the range based on enemies defeated
+  // (contribution proxy: more enemies = higher end of range).
+  const RANK_GOLD_TABLE = {
+    F:   [800, 1200],     // avg ~1K
+    E:   [2500, 3500],    // avg ~3K
+    D:   [5000, 7000],    // avg ~6K
+    C:   [8000, 10000],   // avg ~9K
+    B:   [11000, 15000],  // avg ~13K
+    A:   [16000, 20000],  // avg ~18K
+    S:   [21000, 30000],  // avg ~25K
+    SS:  [31000, 40000],  // avg ~35K
+    SSS: [41000, 50000],  // avg ~45K
+    GOD: [51000, 60000],  // avg ~55K
+  };
+  const rankKey = state.dungeonRank || 'F';
+  const goldRange = RANK_GOLD_TABLE[rankKey] || RANK_GOLD_TABLE.F;
+  // Scale within range based on enemy count (more enemies = higher reward)
+  const enemyCount = Math.max(1, state.enemies.length);
+  const isBossFight = state.enemies.some(e => e.isBoss);
+  const contributionFactor = Math.min(1, enemyCount / 4); // 1 enemy = 25%, 4+ = 100%
+  const minGold = goldRange[0];
+  const maxGold = goldRange[1];
+  // Boss fights get the max, regular fights scale by contribution
+  const baseGold = isBossFight
+    ? maxGold
+    : Math.floor(minGold + (maxGold - minGold) * contributionFactor);
 
   // Distribute rewards
   const alivePlayers = state.players.filter((p) => !p.isDead);
   const playerCount = Math.max(1, alivePlayers.length);
+  // Total gold = base × player count (boss fights don't multiply by player count)
+  const totalGold = baseGold * (isBossFight ? 1 : playerCount);
   const xpPerPlayer = Math.floor(totalXP / playerCount);
   const goldPerPlayer = Math.floor(totalGold / playerCount);
 
@@ -6464,6 +6478,15 @@ const initAdventure = async (
   }
 
   // Rank Restriction Logic (Skip for Special Dungeons or apply specific ones)
+  // 💡 P4 Item 5 (2026-08-16): Daily quest cap — 5 quests/raids per day.
+  // Check BEFORE rank restriction so players get a clear "cap reached" message.
+  if (senderJid && !rankData.isSpecial) {
+    const capCheck = economy.checkDailyQuestCap(senderJid);
+    if (!capCheck.allowed) {
+      return { success: false, msg: capCheck.message };
+    }
+  }
+
   if (solo && senderJid && !rankData.isSpecial) {
     const user = economy.getUser(senderJid);
     const adventurerRank = user?.adventurerRank || "F";
@@ -8109,6 +8132,10 @@ async function endAdventure(sock, sessionKey, victory = true) {
       }
 
       economy.addMoney(player.jid, totalGoldThisRun);
+      // 💡 P4 Item 5: Increment daily quest count when quest completes
+      if (victory) {
+        economy.incrementDailyQuestCount(player.jid);
+      }
       // 💡 FIX #2: Fleeing (victory=false) was hitting this alive path and
       // calling addQuestProgress(jid, 0.2, true) → questsWon++ — so fleeing
       // a dungeon counted as a WIN. Players could farm the Trial of Combat
