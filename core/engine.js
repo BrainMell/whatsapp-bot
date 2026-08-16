@@ -11191,6 +11191,124 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // 💡 P4 (2026-08-16): .j networth [@user] — mod net-worth command
+                  // Shows total assets: wallet + bank + card value + equipment value + debt owed
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} networth`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} nw`,
+                    )
+                  ) {
+                    // Determine target user (self or @mentioned)
+                    let targetJid = senderJid;
+                    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                    if (mentioned) targetJid = mentioned;
+
+                    // Permission: can view own networth always; viewing others requires mod+
+                    if (targetJid !== senderJid && !isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ You can only view your own net worth. Mention a player as a moderator to view theirs.',
+                      });
+                    }
+
+                    const targetUser = economy.getUser(targetJid);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ User not found.',
+                      });
+                    }
+
+                    const wallet = targetUser.wallet || 0;
+                    const bank = targetUser.bank || 0;
+                    const debt = targetUser.debt?.amount || 0;
+
+                    // Card value: count UserCard docs × estimated avg value per tier
+                    // Using the rank-based reward table: T1=1K, T2=3K, T3=6K, T4=9K, T5=13K, T6=18K, S=25K, E=35K
+                    let cardValue = 0;
+                    try {
+                      const UserCard = require('./models/UserCard');
+                      const cardCount = await UserCard.countDocuments({ userId: targetJid });
+                      // Conservative estimate: avg 5K per card (mix of tiers)
+                      cardValue = cardCount * 5000;
+                    } catch (e) {}
+
+                    // Equipment value: sum of equipped item values
+                    let equipValue = 0;
+                    if (targetUser.equipment) {
+                      for (const slot of ['main_hand', 'off_hand', 'helmet', 'armor', 'gloves', 'boots', 'ring', 'cloak']) {
+                        const item = targetUser.equipment[slot];
+                        if (item && item.id) {
+                          // Conservative: 10K per equipped item
+                          equipValue += 10000;
+                        }
+                      }
+                    }
+
+                    const totalAssets = wallet + bank + cardValue + equipValue;
+                    const netWorth = totalAssets - debt;
+                    const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
+
+                    let msg = `📊 *NET WORTH — ${displayName}*\n\n`;
+                    msg += `━━━━━━━━━━━━━━━\n`;
+                    msg += `💰 Wallet: ${economy.getZENI()}${wallet.toLocaleString()}\n`;
+                    msg += `🏦 Bank: ${economy.getZENI()}${bank.toLocaleString()}\n`;
+                    msg += `🎴 Cards (est.): ${economy.getZENI()}${cardValue.toLocaleString()}\n`;
+                    msg += `⚔️ Equipment (est.): ${economy.getZENI()}${equipValue.toLocaleString()}\n`;
+                    msg += `━━━━━━━━━━━━━━━\n`;
+                    msg += `📈 Total Assets: ${economy.getZENI()}${totalAssets.toLocaleString()}\n`;
+                    if (debt > 0) {
+                      msg += `📉 Debt Owed: ${economy.getZENI()}${debt.toLocaleString()}\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `💎 Net Worth: ${economy.getZENI()}${netWorth.toLocaleString()}\n`;
+                    } else {
+                      msg += `💎 Net Worth: ${economy.getZENI()}${netWorth.toLocaleString()}\n`;
+                    }
+
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                  }
+
+                  // 💡 P4 (2026-08-16): .j setmarketprice <tier> <amount> — admin command
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} setmarketprice`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ Only moderators and above can set market prices.',
+                      });
+                    }
+                    const parts = lowerTxt.split(/\s+/);
+                    const tier = parts[2]?.toUpperCase();
+                    const price = parseInt(parts[3]);
+                    if (!tier || isNaN(price) || price < 0) {
+                      // Show current prices
+                      const System = require('./models/System');
+                      const doc = await System.findOne({ key: 'market_prices' }).lean();
+                      const prices = doc?.value || {};
+                      let priceMsg = `📊 *MARKET PRICES*\n\n`;
+                      for (const [t, p] of Object.entries(prices)) {
+                        priceMsg += `Tier ${t}: ${economy.getZENI()}${p.toLocaleString()}\n`;
+                      }
+                      priceMsg += `\n💡 Usage: \`${botConfig.getPrefix()} setmarketprice <tier> <amount>\`\nExample: \`${botConfig.getPrefix()} setmarketprice 5 25000\``;
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + priceMsg });
+                    }
+                    const System = require('./models/System');
+                    const doc = await System.findOne({ key: 'market_prices' }).lean();
+                    const prices = doc?.value || {};
+                    prices[tier] = price;
+                    await System.findOneAndUpdate(
+                      { key: 'market_prices' },
+                      { value: prices },
+                      { upsert: true }
+                    );
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ Market price for Tier ${tier} set to ${economy.getZENI()}${price.toLocaleString()}`,
+                    });
+                  }
+
                   // .j sell <n> [qty] - Sell item from inventory
                   if (
                     lowerTxt.startsWith(
