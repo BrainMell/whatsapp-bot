@@ -1860,6 +1860,7 @@ async function cmdFc(senderJid, reply, args = []) {
     if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
       matches.push({
         card,
+        cardId: uc.cardId,
         location: `Main Deck (Slot #${uc.mainDeckSlot})`,
         ucId: uc._id,
       });
@@ -1877,6 +1878,7 @@ async function cmdFc(senderJid, reply, args = []) {
         if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
           matches.push({
             card,
+            cardId: uc.cardId,
             location: `Deck: ${cd.name} (Slot #${i + 1})`,
             ucId: uc._id,
           });
@@ -1893,6 +1895,7 @@ async function cmdFc(senderJid, reply, args = []) {
     if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
       matches.push({
         card,
+        cardId: uc.cardId,
         location: `Collection (Coll #${i + 1})`,
         ucId: uc._id,
       });
@@ -1908,6 +1911,13 @@ async function cmdFc(senderJid, reply, args = []) {
   let msg = `🔍 *Found ${matches.length} card(s)* matching "${query}":\n\n`;
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
+    // 💡 P3 (2026-08-16): Flag cards not in the database
+    if (!m.card) {
+      msg += `⚠️ *Unknown Card* (not in database)\n`;
+      msg += `   📍 ${m.location}\n`;
+      msg += `   🆔 Card ID: \`${m.cardId || '???'}\` — this card is not in cards_data.json\n\n`;
+      continue;
+    }
     const icon = tierIcons[String(m.card?.tier)] || '🃏';
     msg += `${icon} *${m.card?.cardName}* (Tier ${m.card?.tier})\n`;
     msg += `   📍 ${m.location}\n`;
@@ -2027,6 +2037,13 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
       const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer' });
       return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
     } catch (e) { return reply(caption); }
+  }
+
+  // 💡 P3 (2026-08-16): If query looks like a card ID (N-NNNNN format) but
+  // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
+  // instead of falling through to a generic name search.
+  if (/^\d+-\d+$/.test(query) || /^E-\d+$/.test(query) || /^S-\d+$/.test(query)) {
+    return reply(`⚠️ Card ID *"${query}"* is not in the database.\n\nThis card ID follows the standard format (tier-number) but no card with this ID exists in cards_data.json. It may have been removed or never existed.\n\n💡 Use \`${p} info <card name>\` to search by name instead.`);
   }
 
   // Partial name search
@@ -3226,7 +3243,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
 
     if (gifBuffer) {
-        return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
+        return await getInst().sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 
