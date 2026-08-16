@@ -3014,11 +3014,15 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             // Verify return values: previously removeMoney and addMoney were
             // called without checking, so if either failed the card might
             // transfer without payment (or payment without card transfer).
+            // 💡 P4 Item 6: 10% tax on card sales — buyer pays full price,
+            // seller gets 90%, 10% evaporates (genuine sink).
+            const taxAmount = Math.floor(listing.price * 0.10);
+            const sellerGets = listing.price - taxAmount;
             const paid = economy.removeMoney(senderJid, listing.price, `Bought card ${listing.cardId}`);
             if (!paid) {
               return reply('❌ Purchase failed: wallet balance changed during transaction.');
             }
-            const credited = economy.addMoney(listing.sellerId, listing.price, `Sold card ${listing.cardId}`);
+            const credited = economy.addMoney(listing.sellerId, sellerGets, `Sold card ${listing.cardId} (after 10% tax)`);
             if (!credited) {
               // Roll back the buyer's payment
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (seller credit failed)`);
@@ -3460,9 +3464,11 @@ async function finalizeAuctions(sock) {
   for (const a of expired) {
     try {
       if (a.highBidderId) {
-        // Transfer Zeni
+        // Transfer Zeni — 💡 P4 Item 6: 10% tax on auction sales
+        const taxAmount = Math.floor(a.currentBid * 0.10);
+        const sellerGets = a.currentBid - taxAmount;
         economy.removeMoney(a.highBidderId, a.currentBid);
-        economy.addMoney(a.sellerId, a.currentBid);
+        economy.addMoney(a.sellerId, sellerGets, `Auction sale (after 10% tax)`);
 
         // Transfer Card
         await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null });
