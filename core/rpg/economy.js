@@ -2,6 +2,13 @@
 const fs = require('fs');
 const botConfig = require('../../botConfig');
 const classSystem = require('./classSystem');
+// 💡 P4 (2026-08-16): Settlement record system — canonical audit log
+// for every currency-moving action. Lazy-loaded to avoid circular dep.
+let _Settlement = null;
+function getSettlementModel() {
+  if (!_Settlement) _Settlement = require('../models/Settlement');
+  return _Settlement;
+}
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
@@ -337,6 +344,39 @@ function logTransaction(userId, description, amount, newBalance) {
   }
 }
 
+// 💡 P4 (2026-08-16): Canonical settlement record — persists to MongoDB.
+// Every currency-moving function should call this AFTER updating balances.
+//
+// @param {string} userId - The user whose balance changed
+// @param {string} type - 'source' (reward), 'sink' (spent/lost), 'transfer' (P2P)
+// @param {string} category - e.g. 'quest', 'tax', 'gambling', 'card_sale', 'deposit'
+// @param {number} amount - Positive if user gained, negative if lost
+// @param {object} opts - { counterpartyId, description, preWallet, postWallet, preBank, postBank, chatId }
+function recordSettlement(userId, type, category, amount, opts = {}) {
+  try {
+    const Settlement = getSettlementModel();
+    const entry = new Settlement({
+      userId,
+      counterpartyId: opts.counterpartyId || null,
+      type,
+      category,
+      description: opts.description || '',
+      amount,
+      preWallet: opts.preWallet ?? null,
+      postWallet: opts.postWallet ?? null,
+      preBank: opts.preBank ?? null,
+      postBank: opts.postBank ?? null,
+      botId: botConfig.getBotId ? botConfig.getBotId() : null,
+      chatId: opts.chatId || null,
+    });
+    // Fire-and-forget — don't block the calling function
+    entry.save().catch(e => console.error('[Settlement] save failed:', e.message));
+  } catch (e) {
+    // Non-fatal — settlement logging should never break a transaction
+    console.error('[Settlement] recordSettlement error:', e.message);
+  }
+}
+
 function getUser(userId) {
   const resolvedId = resolveJidHelper(userId);
   if (!economyData.has(resolvedId)) {
@@ -593,12 +633,17 @@ function addMoney(userId, amount, description = "Money Added") {
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
 
+  const preWallet = user.wallet;
   user.wallet += val;
   // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
   if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
   user.stats.totalEarned += val;
 
   logTransaction(userId, description, val, user.wallet);
+  // 💡 P4: Record canonical settlement (source = zeni created from nothing)
+  recordSettlement(userId, 'source', description.toLowerCase().replace(/\s+/g, '_'), val, {
+    preWallet, postWallet: user.wallet, description
+  });
 
   scheduleSave(userId);
   return user.wallet;
@@ -612,10 +657,15 @@ function removeMoney(userId, amount, description = "Money Removed") {
   if (!Number.isFinite(val) || val <= 0) return false;
   if (user.wallet < val) return false;
 
+  const preWallet = user.wallet;
   user.wallet -= val;
   user.stats.totalSpent += val;
 
   logTransaction(userId, description, -val, user.wallet);
+  // 💡 P4: Record canonical settlement (sink = zeni destroyed)
+  recordSettlement(userId, 'sink', description.toLowerCase().replace(/\s+/g, '_'), -val, {
+    preWallet, postWallet: user.wallet, description
+  });
 
   scheduleSave(userId);
   return true;
@@ -890,12 +940,41 @@ function transferMoney(fromUserId, toUserId, amount) {
   if (sender.wallet < val) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
   }
-  
+
+  // 💡 P4 Item 6 (2026-08-16): Universal 10% tax on all currency movement.
+  // Sender pays 100, receiver gets 90, 10 evaporates from circulation (genuine sink).
+  const taxRate = 0.10;
+  const taxAmount = Math.floor(val * taxRate);
+  const receiverGets = val - taxAmount;
+
+  const senderPreWallet = sender.wallet;
+  const receiverPreWallet = receiver.wallet;
+
   sender.wallet -= val;
-  receiver.wallet += val;
-  
+  receiver.wallet += receiverGets;
+  // Clamp receiver to MAX_WALLET
+  if (receiver.wallet > MAX_WALLET) receiver.wallet = MAX_WALLET;
+
   logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, val, receiver.wallet);
+  logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, receiverGets, receiver.wallet);
+
+  // 💡 P4: Settlement records (3 entries: sender transfer, tax sink, receiver transfer)
+  recordSettlement(fromUserId, 'transfer', 'p2p_transfer', -val, {
+    counterpartyId: toUserId,
+    preWallet: senderPreWallet, postWallet: sender.wallet,
+    description: `Transfer to ${getDisplayName(toUserId)}`
+  });
+  if (taxAmount > 0) {
+    recordSettlement(fromUserId, 'sink', 'transfer_tax', -taxAmount, {
+      preWallet: sender.wallet, postWallet: sender.wallet,
+      description: `10% tax on ${val} zeni transfer`
+    });
+  }
+  recordSettlement(toUserId, 'transfer', 'p2p_transfer', receiverGets, {
+    counterpartyId: fromUserId,
+    preWallet: receiverPreWallet, postWallet: receiver.wallet,
+    description: `Transfer from ${getDisplayName(fromUserId)}`
+  });
 
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
@@ -905,13 +984,17 @@ function transferMoney(fromUserId, toUserId, amount) {
     message: `✅ *TRANSFER SUCCESSFUL!*
 
 ━━━━━━━━━━━━━━━━
-💸 *Sent:* ${getZENI()}${amount.toLocaleString()}
+💸 *Sent:* ${getZENI()}${val.toLocaleString()}
 👤 *To:* @${getDisplayName(toUserId)}
+📊 *Tax (10%):* ${getZENI()}${taxAmount.toLocaleString()}
+💵 *Received by ${getDisplayName(toUserId)}:* ${getZENI()}${receiverGets.toLocaleString()}
 ━━━━━━━━━━━━━━━━
 
 💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
     receiver: toUserId,
     amount: val,
+    taxAmount,
+    receiverGets,
     wallet: sender.wallet,
     bank: sender.bank,
     nickname: sender.nickname || getDisplayName(sender.userId)
@@ -968,6 +1051,11 @@ function deposit(userId, amount) {
   user.bank += val;
 
   logTransaction(userId, "Bank Deposit", -val, user.wallet);
+  // 💡 P4: Settlement record for deposit (transfer between wallet↔bank, same user)
+  recordSettlement(userId, 'transfer', 'deposit', -val, {
+    preWallet: user.wallet + val, postWallet: user.wallet,
+    preBank: user.bank - val, postBank: user.bank, description: 'Bank Deposit'
+  });
 
   scheduleSave(userId);
 
@@ -1052,6 +1140,11 @@ function withdraw(userId, amount) {
   user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + val;
 
   logTransaction(userId, "Bank Withdrawal", val, user.wallet);
+  // 💡 P4: Settlement record for withdrawal (transfer between bank↔wallet, same user)
+  recordSettlement(userId, 'transfer', 'withdrawal', val, {
+    preWallet: user.wallet - val, postWallet: user.wallet,
+    preBank: user.bank + val, postBank: user.bank, description: 'Bank Withdrawal'
+  });
 
   scheduleSave(userId);
 
@@ -2085,6 +2178,7 @@ module.exports = {
   getUser,
   getOrCreateUser,
   logTransaction,
+  recordSettlement,
   
   getBalance,
   addMoney,
