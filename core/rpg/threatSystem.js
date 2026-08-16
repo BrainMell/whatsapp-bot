@@ -46,7 +46,15 @@ function getThreatMult(combatant) {
   // Summons have a fixed 0.7× multiplier (lower than tanks)
   if (combatant.isSummon) return 0.7;
 
-  const cls = (combatant.class || combatant.classId || '').toUpperCase();
+  // 💡 FIX (2026-08-16): combatant.class is an OBJECT (from classSystem.getClassById),
+  // not a string. Calling .toUpperCase() on an object throws TypeError.
+  // Extract the class ID string from the object, or fall back to classId/class string.
+  const rawClass = combatant.class;
+  const cls = String(
+    (rawClass && typeof rawClass === 'object' && rawClass.id) ? rawClass.id :
+    (typeof rawClass === 'string') ? rawClass :
+    combatant.classId || ''
+  ).toUpperCase();
   if (TANK_CLASSES.has(cls)) return 1.5;
   if (DPS_CLASSES.has(cls)) return 1.0;
   if (MAGIC_CLASSES.has(cls)) return 0.8;

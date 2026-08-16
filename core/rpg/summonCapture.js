@@ -173,7 +173,14 @@ async function attemptCapture(state, entity, killerJid) {
   const user = economy.getUser(killerJid);
   if (!user) return { captured: false };
 
-  const userClass = (user.class || '').toUpperCase();
+  // 💡 FIX (2026-08-16): user.class is a STRING in the raw user object
+  // (e.g. 'NECROMANCER'), but can also be an object if passed from combat
+  // code that already resolved it. Handle both safely.
+  const rawUserClass = user.class;
+  const userClass = String(
+    (rawUserClass && typeof rawUserClass === 'object' && rawUserClass.id) ? rawUserClass.id :
+    (typeof rawUserClass === 'string') ? rawUserClass : ''
+  ).toUpperCase();
   if (userClass !== 'NECROMANCER' && userClass !== 'LICH') {
     return { captured: false };
   }
