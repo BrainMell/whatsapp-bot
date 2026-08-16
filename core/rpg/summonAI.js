@@ -440,15 +440,47 @@ function applySoulEcho(summoner, summonEntity) {
   // Remove any existing echo buff (only one echo active at a time)
   summoner.buffs = summoner.buffs.filter(b => !b.isEcho);
 
-  // Add the new echo buff
+  // 💡 FIX P2 (2026-08-16): Handle different buff types from the ECHOES dict.
+  // Some echoes buff the summoner, some debuff enemies, some deal damage.
+  const buffType = echo.buff.type;
+
+  if (buffType === 'enemy_damage') {
+    // Shrapnel Echo — deal instant damage to all enemies (no buff, just damage)
+    // The actual damage application happens in guildAdventure's handleDeath
+    // where applySoulEcho is called. We store the damage on the summoner
+    // so the caller can apply it.
+    summoner.pendingEchoDamage = echo.buff.value;
+    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+  }
+
+  if (buffType === 'enemy_debuff_def') {
+    // Dragon Fear — debuff all enemies' DEF
+    // Store the debuff for the caller to apply to enemies
+    summoner.pendingEchoEnemyDebuff = { stat: 'def', value: echo.buff.value, duration: echo.buff.duration };
+    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+  }
+
+  if (buffType === 'shield') {
+    // Void Shield — add a shield status effect to the summoner
+    if (!summoner.statusEffects) summoner.statusEffects = [];
+    summoner.statusEffects.push({
+      type: 'shield',
+      value: echo.buff.value,
+      duration: echo.buff.duration,
+      icon: echo.icon,
+    });
+    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+  }
+
+  // Standard buff types (atk, defense, magic_damage, spd, all)
   const buff = {
-    type: echo.buff.type,
+    type: buffType,
     value: echo.buff.value,
     duration: echo.buff.duration,
     icon: echo.icon,
     name: echo.name,
-    isEcho: true,  // flag so we can identify + replace echoes
-    justApplied: true  // BUG-08/09 fix: don't tick on apply turn
+    isEcho: true,
+    justApplied: true,
   };
   summoner.buffs.push(buff);
 

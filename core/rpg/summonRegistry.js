@@ -264,16 +264,43 @@ function getRarityConfig(rarity) {
   return RARITY_CONFIG[rarity] || RARITY_CONFIG.COMMON;
 }
 
-// Echoes
+// Echoes — 💡 FIX P2 (2026-08-16): Added missing .buff field to all 8 echoes.
+// applySoulEcho() in summonAI.js checks `if (!echo.buff) return ''` — without
+// this field, every echo was a no-op. Now each echo has a buff that applies
+// to the summoner on summon death.
 const ECHOES = {
-  pack_echo: { name: 'Pack Echo', desc: 'Nearby beasts gain +5% ATK', icon: '🐺' },
-  guardian_echo: { name: 'Guardian Echo', desc: 'On death, owner gains +20% DEF for 3 turns', icon: '🛡️' },
-  bone_echo: { name: 'Bone Echo', desc: 'On death, owner gains +15% MAG for 3 turns', icon: '💀' },
-  ember_echo: { name: 'Ember Echo', desc: 'On death, owner gains +15% ATK for 3 turns', icon: '🔥' },
-  frost_echo: { name: 'Frost Echo', desc: 'On death, owner gains +15% SPD for 3 turns', icon: '❄️' },
-  dragonfear_echo: { name: 'Dragon Fear', desc: 'On death, enemies lose -10% DEF for 3 turns', icon: '🐉' },
-  shrapnel_echo: { name: 'Shrapnel Echo', desc: 'On death, deal 50 damage to all enemies', icon: '💥' },
-  void_shield_echo: { name: 'Void Shield', desc: 'On death, owner gains shield for 100 HP', icon: '🛡️' },
+  pack_echo: {
+    name: 'Pack Echo', desc: 'Nearby beasts gain +5% ATK', icon: '🐺',
+    buff: { type: 'all', value: 5, duration: 3 },
+  },
+  guardian_echo: {
+    name: 'Guardian Echo', desc: 'On death, owner gains +20% DEF for 3 turns', icon: '🛡️',
+    buff: { type: 'defense', value: 20, duration: 3 },
+  },
+  bone_echo: {
+    name: 'Bone Echo', desc: 'On death, owner gains +15% MAG for 3 turns', icon: '💀',
+    buff: { type: 'magic_damage', value: 15, duration: 3 },
+  },
+  ember_echo: {
+    name: 'Ember Echo', desc: 'On death, owner gains +15% ATK for 3 turns', icon: '🔥',
+    buff: { type: 'atk', value: 15, duration: 3 },
+  },
+  frost_echo: {
+    name: 'Frost Echo', desc: 'On death, owner gains +15% SPD for 3 turns', icon: '❄️',
+    buff: { type: 'spd', value: 15, duration: 3 },
+  },
+  dragonfear_echo: {
+    name: 'Dragon Fear', desc: 'On death, enemies lose -10% DEF for 3 turns', icon: '🐉',
+    buff: { type: 'enemy_debuff_def', value: -10, duration: 3 },
+  },
+  shrapnel_echo: {
+    name: 'Shrapnel Echo', desc: 'On death, deal 50 damage to all enemies', icon: '💥',
+    buff: { type: 'enemy_damage', value: 50, duration: 0 },
+  },
+  void_shield_echo: {
+    name: 'Void Shield', desc: 'On death, owner gains shield for 100 HP', icon: '🛡️',
+    buff: { type: 'shield', value: 100, duration: 3 },
+  },
 };
 
 function getEcho(echoId) {

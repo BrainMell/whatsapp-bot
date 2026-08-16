@@ -224,6 +224,24 @@ function computeEffectiveStats(summon) {
   const gearMultFinal = 1 + gearAllStatsMult;
 
   // Derived stats with skill + trait + bond + equipment bonuses
+  // 💡 FIX P2 (2026-08-16): Wire the 12 dead trait effect keys.
+  // Previously only 7 keys were consumed (atkMult, defMult, magMult, spdMult,
+  // hpMult, allStatsMult, damageMult). The remaining 12 were defined in
+  // SUMMON_TRAITS but never read. Now stored on the stats object so combat
+  // code can read them.
+  const traitCritBoost = traitEffects.critBoost || 0;
+  const traitEvasionBoost = traitEffects.evasionBoost || 0;
+  const traitLifestealPct = traitEffects.lifestealPct || 0;
+  const traitHpRegenPct = traitEffects.hpRegenPct || 0;
+  const traitGoldBoost = traitEffects.goldBoost || 0;
+  const traitDropRateBoost = traitEffects.dropRateBoost || 0;
+  const traitXpBoost = traitEffects.xpBoost || 0;
+  const traitPoisonOnHit = traitEffects.poisonOnHit || 0;
+  const traitBurnOnHit = traitEffects.burnOnHit || 0;
+  const traitFreezeOnHit = traitEffects.freezeOnHit || 0;
+  const traitInstakillChance = traitEffects.instakillChance || 0;
+  const traitLowHpDamageBoost = traitEffects.lowHpDamageBoost || 0;
+
   return {
     hp: Math.floor(((baseHp + skillHp) * traitHpMult + gearHp) * bondMultFinal * gearMultFinal),
     maxHp: Math.floor(((baseHp + skillHp) * traitHpMult + gearHp) * bondMultFinal * gearMultFinal),
@@ -233,11 +251,23 @@ function computeEffectiveStats(summon) {
     spd: Math.floor(((baseSpd + skillSpd) * traitSpdMult + gearSpd) * bondMultFinal * gearMultFinal),
     energy: 100,
     maxEnergy: 100,
-    crit: 5 + Math.floor(summon.level * 0.2) + skillCrit,
-    evasion: Math.min(60, Math.floor(baseSpd * 0.12) + (skillBonuses.evasion || 0)),
+    crit: 5 + Math.floor(summon.level * 0.2) + skillCrit + traitCritBoost,
+    evasion: Math.min(60, Math.floor(baseSpd * 0.12) + (skillBonuses.evasion || 0) + traitEvasionBoost),
     dmgReduction: Math.min(75, Math.floor(baseDef * 0.55) + (skillBonuses.dmgReduction || 0)),
-    // 💡 PHASE 2: store special skill effects on the stats object so combat can read them
+    // 💡 P2: Store trait effects on stats for combat code to read
     skillEffects: skillBonuses,
+    traitEffects: {
+      lifestealPct: traitLifestealPct + gearLifesteal,
+      hpRegenPct: traitHpRegenPct,
+      goldBoost: traitGoldBoost,
+      dropRateBoost: traitDropRateBoost,
+      xpBoost: traitXpBoost,
+      poisonOnHit: traitPoisonOnHit,
+      burnOnHit: traitBurnOnHit,
+      freezeOnHit: traitFreezeOnHit,
+      instakillChance: traitInstakillChance,
+      lowHpDamageBoost: traitLowHpDamageBoost,
+    },
   };
 }
 
