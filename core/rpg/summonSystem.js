@@ -488,8 +488,13 @@ function computeResonances(summons) {
   }
 
   // Check each resonance
+  // 💡 FIX P2 (2026-08-16): Was registry.RESONANCE_WEB (doesn't exist).
+  // Correct name is registry.RESONANCES. This caused every
+  // refreshUserResonances call to throw TypeError, silently swallowed
+  // by try/catch wrappers — user.activeResonances stayed empty forever.
   const activeResonances = [];
-  for (const [resonanceId, resonance] of Object.entries(registry.RESONANCE_WEB)) {
+  const resonances = registry.RESONANCES || {};
+  for (const [resonanceId, resonance] of Object.entries(resonances)) {
     const requires = resonance.requires;
     let met = true;
     for (const [element, count] of Object.entries(requires)) {

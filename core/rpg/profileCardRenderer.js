@@ -365,7 +365,13 @@ async function renderProfileCard(params) {
   ctx.fillText('STATS', statsX + 15, y + 12);
 
   for (let i = 0; i < statList.length; i++) {
-    const s = statList[i], sy = y + 40 + i * 28, total = s.base + s.equip;
+    // 💡 FIX P2 (2026-08-16): Was s.base + s.equip, but s.base already
+    // includes equipment stats (getBaseStats adds them). This caused
+    // the profile to show ~2× the actual equipment bonus, making
+    // combat stats look "halved" by comparison. Now: total = s.base
+    // (which is the real total including equipment). The s.equip display
+    // is kept for informational purposes but NOT added to the total.
+    const s = statList[i], sy = y + 40 + i * 28, total = s.base;
     const color = STAT_COLORS[s.key] || '#9E9E9E';
 
     ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = `12px "${FONT_REG}", monospace`;
@@ -375,7 +381,7 @@ async function renderProfileCard(params) {
 
     if (s.equip > 0) {
       ctx.fillStyle = '#4CAF50'; ctx.font = `10px "${FONT_REG}", monospace`;
-      ctx.fillText(`+${s.equip}`, statsX + 100, sy + 1);
+      ctx.fillText(`(+${s.equip} equip)`, statsX + 100, sy + 1);
     }
 
     drawBar(ctx, statsX + 140, sy + 3, statsW - 165, 8, total / s.max, color);
