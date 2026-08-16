@@ -1039,6 +1039,24 @@ function applyRuneModifiers(effect, socketedRunes) {
     modifiedEffect.addStatuses = (modifiedEffect.addStatuses || []).concat(addStatuses);
   }
 
+  // 💡 PHASE 5 STAGE 2 (2026-08-17): Rune Synergy Engine
+  // After all individual rune effects are applied, check for synergies
+  // between the statuses being applied + statuses already on target.
+  try {
+    const runeSynergies = require('./runeSynergies');
+    const runeTypes = socketedRunes.map(r => r.type);
+    const synergyResult = runeSynergies.applySynergyEffects(modifiedEffect, null, runeTypes);
+    if (synergyResult.synergies.length > 0) {
+      // Merge synergy modifications into the modified effect
+      Object.assign(modifiedEffect, synergyResult.modifiedEffect);
+      // Store synergy info for the combat log
+      modifiedEffect.synergies = synergyResult.synergies.map(s => `${s.icon} ${s.name}`);
+      modifiedEffect.consumeStatuses = synergyResult.consumeStatuses;
+    }
+  } catch (e) {
+    console.error('[RuneSystem] Synergy engine error (non-fatal):', e.message);
+  }
+
   return modifiedEffect;
 }
 
