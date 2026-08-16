@@ -5121,32 +5121,6 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           }
         }
 
-        // 💡 P3 (2026-08-16): Player-commanded summon intercept.
-        // If the player used "combat intercept", their summon takes the
-        // FULL hit. This is checked BEFORE auto-intercept (Fix #4) because
-        // it's a deliberate player action, not a reactive AI behavior.
-        if (target.summonIntercept && target.summonInterceptor && state.summons) {
-          const interceptor = state.summons.find(s =>
-            s.id === target.summonInterceptor && !s.isDead && s.stats?.hp > 0
-          );
-          if (interceptor) {
-            const intercepted = actualDamage;
-            interceptor.stats.hp = Math.max(0, (interceptor.stats.hp || 0) - intercepted);
-            interceptor.currentHP = interceptor.stats.hp;
-            actualDamage = 0;
-            interceptMsg += `\n🛡️ ${interceptor.icon || '🐉'} ${interceptor.name} intercepts the attack for ${target.name}, taking the full blow (${intercepted} damage)!`;
-            if (interceptor.stats.hp <= 0) {
-              interceptor.isDead = true;
-              interceptor.justDied = true;
-              interceptMsg += `\n💀 ${interceptor.name} falls protecting ${target.name}!`;
-            }
-            // Consume the intercept flag + summon's next turn
-            target.summonIntercept = false;
-            target.summonInterceptor = null;
-            interceptor.actionGauge = 0;
-          }
-        }
-
         // 💡 FIX #4 (2026-08-15): AI auto-intercept — protective summons
         // automatically jump in front of attacks when their owner is below
         // 30% HP. This makes summons feel "alive" without player input.
@@ -8346,32 +8320,6 @@ const handleCombatAction = async (
   if (actionType === "atk") normalizedAction = "attack";
   if (actionType === "def") normalizedAction = "defend";
   if (actionType === "skill") normalizedAction = "ability";
-
-  // 💡 P3 (2026-08-16): Player-commanded summon intercept.
-  // Player types "combat intercept" to order their active summon to
-  // intercept the next incoming attack. Sets summonIntercept = true
-  // on the player; performEnemyAction checks this and redirects the
-  // attack to the summon (full hit, consumes summon's next turn).
-  if (actionType === "intercept") {
-    const playerSummons = (state.summons || []).filter(s =>
-      s.summonerJid === senderJid && !s.isDead && s.stats?.hp > 0
-    );
-    if (playerSummons.length === 0) {
-      return "❌ You have no active summon to intercept for you!";
-    }
-    // Only PROTECTIVE summons will intercept (others refuse)
-    const willing = playerSummons.find(s =>
-      s.personality === 'PROTECTIVE' || (s.loyalty || 0) >= 50
-    );
-    if (!willing) {
-      return "❌ Your summon refuses to intercept! (Needs PROTECTIVE personality or loyalty ≥ 50)";
-    }
-    player.summonIntercept = true;
-    player.summonInterceptor = willing.id;
-    // Consume the player's turn (intercept is a full action)
-    state.pendingActions[senderJid] = { type: 'intercept' };
-    return `🛡️ *${willing.name || 'Summon'} stands ready to intercept the next attack against you!`;
-  }
 
   let action = { type: normalizedAction };
 
