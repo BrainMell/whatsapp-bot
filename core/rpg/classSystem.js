@@ -577,7 +577,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 300, atk: 18, def: 25, mag: 65, spd: 18, luck: 15, crit: 18 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'ABYSSAL_WHISPER' },
         evolutionCost: 100000,
-        passive: { name: 'Abyssal Aura', desc: `Reduces nearby enemies' ATK and DEF by 15%.`, effect: 'magic_damage', value: 20 },
+        passive: { name: 'Abyssal Aura', desc: `Reduces nearby enemies' ATK and DEF by 15%.`, effect: 'enemy_debuff', value: 15 },
         // SHELVED: evolves_into: ['VOIDLORD'],
     },
 
@@ -664,7 +664,7 @@ const EVOLVED_CLASSES = {
         // The actual +30% undead summon stat bonus is applied via
         // summonCapture.applyClassSummonBonus in summonSystem.buildCombatEntity.
         // The 'value: 30' now matches the description (+30% stats).
-        passive: { name: `Death's Apprentice`, desc: `Undead summons have +30% stats. Capture souls with Army of the Dead.`, effect: 'summon_buff', value: 30 },
+        passive: { name: `Death's Apprentice`, desc: `Undead summons have +30% stats.`, effect: 'summon_buff', value: 30 },
         evolves_into: ['LICH'],
     },
     LICH: {
@@ -678,7 +678,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 300, atk: 15, def: 25, mag: 68, spd: 20, luck: 18, crit: 20 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'VOID_NECROMANCER' },
         evolutionCost: 100000,
-        passive: { name: 'Phylactery', desc: `Revives at 50% HP once per quest.`, effect: 'damage_reduction', value: 25 },
+        passive: { name: 'Phylactery', desc: `Revives at 50% HP once per quest.`, effect: 'revive', value: 50 },
         // SHELVED: evolves_into: ['NEKROS'],
     },
 
@@ -712,7 +712,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 88, atk: 6, def: 6, mag: 28, spd: 14, luck: 13, crit: 12 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'CHRONOS_WARDEN' },
         evolutionCost: 0,
-        passive: { name: 'Temporal Flow', desc: `Cooldowns reduced by 1.`, effect: 'magic_damage', value: 15 },
+        passive: { name: 'Temporal Flow', desc: `Cooldowns reduced by 1.`, effect: 'cooldown_reduction', value: 1 },
         evolves_into: ['TIMELORD'],
     },
     TIMELORD: {
@@ -726,7 +726,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 240, atk: 15, def: 20, mag: 72, spd: 60, luck: 30, crit: 25 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'TIME_EATER' },
         evolutionCost: 100000,
-        passive: { name: 'Temporal Mastery', desc: `Takes 2 actions per turn.`, effect: 'all_stats', value: 20 },
+        passive: { name: 'Temporal Mastery', desc: `Takes 2 actions per turn.`, effect: 'extra_action', value: 1 },
         // SHELVED: evolves_into: ['CHRONARCH'],
     },
 
@@ -906,7 +906,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 100, atk: 8, def: 7, mag: 16, spd: 12, luck: 14, crit: 10 },
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'SOUND_REAPER' },
         evolutionCost: 0,
-        passive: { name: 'Inspiring Song', desc: `Party gain +10% to all stats.`, effect: 'team_healing', value: 20 },
+        passive: { name: 'Inspiring Song', desc: `Party gain +10% to all stats.`, effect: 'party_all_buff', value: 10 },
         evolves_into: ['VIRTUOSO'],
     },
     VIRTUOSO: {
@@ -920,7 +920,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 280, atk: 18, def: 20, mag: 55, spd: 30, luck: 40, crit: 25 },
         requirement: { level: 50, questsCompleted: 100, gold: 100000, trialBoss: 'MAESTRO_OF_VOID' },
         evolutionCost: 100000,
-        passive: { name: 'Grand Finale', desc: `Revive fallen allies.`, effect: 'healing_boost', value: 30 },
+        passive: { name: 'Grand Finale', desc: `Revive fallen allies.`, effect: 'revive', value: 30 },
         // SHELVED: evolves_into: ['HARMONIA'],
     },
 

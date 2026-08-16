@@ -3232,6 +3232,37 @@ function applyClassPassiveAtCombatStart(player) {
     case 'scaling_damage':    // DOOMSLAYER Hell-Walker — handled inline
       player.passiveScalingDmg = value; // 2% per 1% missing HP
       break;
+
+    // 💡 P4 Item 6 (2026-08-16): Remaining class passives
+    case 'revive':            // LICH Phylactery, VIRTUOSO Grand Finale
+      player.passiveRevive = { hpPct: value, used: false };
+      break;
+    case 'cooldown_reduction': // CHRONOMANCER Temporal Flow
+      player.passiveCooldownReduction = value; // flat turns reduced
+      break;
+    case 'extra_action':      // TIMELORD Temporal Mastery
+      player.passiveExtraAction = value; // 1 = 2 actions per turn
+      break;
+    case 'summon_buff':       // NECROMANCER Death's Apprentice
+      player.passiveSummonBuff = value; // +30% summon stats
+      break;
+    case 'enemy_debuff':      // VOIDWALKER Abyssal Aura
+      player.passiveEnemyDebuff = value; // -15% enemy ATK/DEF
+      break;
+    case 'party_all_buff':    // BARD Inspiring Song
+      if (state && state.players) {
+        for (const p of state.players) {
+          if (!p.isDead && p.stats) {
+            for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+              if (typeof p.stats[stat] === 'number') {
+                p.stats[stat] = Math.floor(p.stats[stat] * (1 + value / 100));
+              }
+            }
+          }
+        }
+      }
+      break;
+
     case 'damage_on_death':
       // Mark passive as available; per-turn / inline code will read it.
       player.class.passiveActive = true;
