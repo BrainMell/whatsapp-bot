@@ -292,6 +292,7 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0, opts = {})
         stake,
         timestamp: Date.now(),
         mode, // 💡 NEW: 'player' (default) or 'summon'
+        equalise: opts.equalise || false, // 💡 P4: --equalise mode uses HP normalization
     });
 
     return { success: true };
@@ -384,8 +385,8 @@ async function acceptChallenge(sock, chatId, targetJid) {
         }
 
         players = [
-            buildDuelPlayer(invite.challenger, p1Data, capPvPStats(p1Stats), 0),
-            buildDuelPlayer(targetJid, p2Data, capPvPStats(p2Stats), 1),
+            buildDuelPlayer(invite.challenger, p1Data, capPvPStats(p1Stats), 0, invite.equalise),
+            buildDuelPlayer(targetJid, p2Data, capPvPStats(p2Stats), 1, invite.equalise),
         ];
     }
 
@@ -393,6 +394,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         chatId,
         stake: invite.stake,
         mode, // 💡 NEW: stored on duelState so handlePvPAction + finishDuel can branch
+        equalise: invite.equalise || false, // 💡 P4: track mode for display
         round: 1,
         // 💡 FIX #8 (2026-08-16): Speed-based initiative — faster player goes
         // first. Was always turn: 0 (P1 always first). Now compare SPD.
@@ -445,13 +447,15 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     // 💡 NEW 2026-08-05: Summon duel start message — different header + commands
     const isSummonDuel = duelState.mode === 'summon';
+    const isEqualise = duelState.equalise === true;
     const header = isSummonDuel ? `🐉 *SUMMON DUEL* 🐉` : `🏟️ *PHANTOM STANDOFF* 🏟️`;
+    const modeTag = isEqualise ? ` ⚖️ *EQUALISED*` : ``;
     const fleeWarning = isSummonDuel
         ? `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Summon loses 10 loyalty!)*`
         : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     let startMsg =
-        `${header}\n` +
+        `${header}${modeTag}\n` +
         `———————————\n` +
         `🔴 *${p1.name}* \`Lv.${p1.level}\` (${p1.class?.name || (isSummonDuel ? p1.archetype : 'Fighter')})\n` +
         `   ↳ ❤️ HP: \`${Math.floor(p1.hp)}/${Math.floor(p1.maxHp)}\` · ⚡ EN: \`${Math.floor(p1.energy)}/${Math.floor(p1.maxEnergy)}\`\n` +
@@ -479,19 +483,23 @@ async function acceptChallenge(sock, chatId, targetJid) {
     return { success: true, duel: duelState, image, message: startMsg };
 }
 
-function buildDuelPlayer(jid, userData, stats, idx) {
+function buildDuelPlayer(jid, userData, stats, idx, equalise = false) {
     const classData = economy.getUserClass(jid);
     const progData = progression.getUser(jid);
     const maxEnergy = stats.maxEnergy || 200;
-    // 💡 FIX P1 #7 (2026-08-16): PvP HP normalization — L1 vs L100 ratio
-    // was 221× (26K HP vs 120 HP). Now: hp = 5000 + level × 30.
-    // L1 = 5,030, L100 = 8,000, max ratio 1.6× as specified in the audit.
-    const normalizedHp = 5000 + (progData?.level || 1) * 30;
+    // 💡 P4 (2026-08-16): PvP HP mode split.
+    // Regular PvP: use raw player HP (stats.maxHp) — reverts Fix #7's global normalization.
+    // --equalise PvP: use normalized HP (5000 + level × 30) — the Fix #7 formula.
+    // This gives players a choice: raw stats for high-level players who want their
+    // full HP pool, or equalised for fair fights regardless of level gap.
+    const playerHp = equalise
+        ? (5000 + (progData?.level || 1) * 30)
+        : (stats.maxHp || stats.hp || 5000);
     const player = {
         jid,
         name: userData.nickname || economy.getDisplayName(jid),
-        hp: normalizedHp,
-        maxHp: normalizedHp,
+        hp: playerHp,
+        maxHp: playerHp,
         energy: maxEnergy,
         maxEnergy: maxEnergy,
         stats,

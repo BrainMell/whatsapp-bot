@@ -21585,11 +21585,15 @@ ${senderName} said y'all should know:
                           ? parseInt(lastWord)
                           : 0;
 
+                      // 💡 P4 (2026-08-16): Parse --equalise flag for equalised PvP
+                      const equalise = txt.includes('--equalise') || txt.includes('--equalized') || txt.includes('--equal');
+
                       const result = pvpSystem.challengePlayer(
                         chatId,
                         senderJid,
                         target,
                         stake,
+                        { equalise },
                       );
 
                       if (result.success) {
