@@ -376,6 +376,37 @@ const RUNE_TYPES = {
     // Small energy cost penalty so cooldown runes aren't strictly free
     energyCostMult: [1.15, 1.20, 1.25, 1.30],
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 💡 PHASE 5 STAGE 1 (2026-08-16): New runes from Rune_System_and_Synergy_Mechanics.docx
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── STATUS PRIMING RUNES ────────────────────────────────────────────────
+  WET: {
+    id: 'WET',
+    name: 'Wet Rune',
+    icon: '💧',
+    desc: 'Applies WET to affected targets. Reduces movement stability, enables Shock/Frost/Burn synergies.',
+    // WET is a status priming rune — it doesn't modify damage/cost, it adds a status
+    statusApplied: 'wet',
+    statusDuration: [2, 2, 3, 3],
+    statusChance: [80, 90, 100, 100],
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
+  STAR: {
+    id: 'STAR',
+    name: 'Star Rune',
+    icon: '⭐',
+    desc: 'Applies STELLAR to affected targets. Increases crit damage for user, chance to inflict BURN.',
+    statusApplied: 'stellar',
+    statusDuration: [2, 2, 3, 3],
+    statusChance: [60, 70, 80, 90],
+    // Also has a chance to apply burn
+    secondaryStatus: 'burn',
+    secondaryChance: [10, 15, 20, 25],
+    critDamageBonus: [0.1, 0.15, 0.2, 0.25], // +crit damage multiplier
+    damageMult: [0.95, 0.96, 0.97, 0.98],
+  },
 };
 
 // ─── TIER DEFINITIONS ─────────────────────────────────────────────────────
