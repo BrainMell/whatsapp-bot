@@ -753,7 +753,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'Massive infected amalgamation',
             stats: { hp: 300, atk: 45, def: 25, mag: 5, spd: 10, luck: 8, crit: 8 },
             skills: ['Colossal Slam', 'Infection Spread', 'Rampage', 'Rage Mode'],
-            phases: ['Normal', 'Enraged', 'Desperate'],
+            phases: [
+                { name: 'Normal', threshold: 100, effects: [], message: 'The Infected Colossus lumbers forward.' },
+                { name: 'Enraged', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🦠 The Colossus roars — its infections spread faster!' },
+                { name: 'Desperate', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'heal', value: 0 }], message: '💀 Desperation fuels the Colossus — it won\'t go quietly!' },
+            ],
             xpReward: 3000,
             goldReward: [800, 1400],
             levelRange: [1, 60]
@@ -765,7 +769,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'Ancient guardian turned by corruption',
             stats: { hp: 600, atk: 55, def: 35, mag: 8, spd: 8, luck: 10, crit: 10 },
             skills: ['Guardian Strike', 'Ancient Barrier', 'Judgement', 'Corrupted Fury'],
-            phases: ['Defensive', 'Balanced', 'Aggressive'],
+            phases: [
+                { name: 'Defensive', threshold: 100, effects: [], message: 'The Corrupted Guardian raises its shield.' },
+                { name: 'Balanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 20 }, { type: 'stat_boost', stat: 'def', value: 20 }], message: '⚖️ The Guardian drops its guard — balanced offense and defense!' },
+                { name: 'Aggressive', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }], message: '⚔️ The Guardian abandons defense — all-out assault!' },
+            ],
             xpReward: 3500,
             goldReward: [900, 1600],
             levelRange: [1, 60]
@@ -781,7 +789,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'Supreme elemental infected',
             stats: { hp: 1200, atk: 450, def: 50, mag: 550, spd: 35, luck: 30, crit: 30 },
             skills: ['Elemental Storm', 'Prismatic Ray', 'Element Shift', 'Cataclysm'],
-            phases: ['Fire Phase', 'Water Phase', 'Final Form'],
+            phases: [
+                { name: 'Fire Phase', threshold: 100, effects: [], message: 'The Elemental Archon burns with primal fire.' },
+                { name: 'Water Phase', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌊 The Archon shifts — elemental currents realign!' },
+                { name: 'Final Form', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '✨ The Archon unleashes its true elemental fury!' },
+            ],
             xpReward: 6000,
             goldReward: [1500, 2500],
             levelRange: [61, 90]
@@ -793,7 +805,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'The perfect mutation specimen',
             stats: { hp: 2500, atk: 520, def: 45, mag: 480, spd: 40, luck: 35, crit: 35 },
             skills: ['Adaptive Assault', 'Genetic Overload', 'Evolution Burst', 'Perfect Form'],
-            phases: ['Basic', 'Advanced', 'Perfect'],
+            phases: [
+                { name: 'Basic', threshold: 100, effects: [], message: 'Mutation Prime stirs in its basic form.' },
+                { name: 'Advanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🧬 Mutation Prime evolves — taking a more advanced form!' },
+                { name: 'Perfect', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'stat_boost', stat: 'def', value: 30 }], message: '👑 Perfection achieved — Mutation Prime is unstoppable!' },
+            ],
             xpReward: 8000,
             goldReward: [2000, 3200],
             levelRange: [61, 90]
@@ -809,7 +825,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'Infected by the void itself',
             stats: { hp: 5000, atk: 880, def: 60, mag: 1100, spd: 45, luck: 40, crit: 45 },
             skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion'],
-            phases: ['Contained', 'Unleashed', 'Transcendent'],
+            phases: [
+                { name: 'Contained', threshold: 100, effects: [], message: 'The Void entity strains against containment.' },
+                { name: 'Unleashed', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌀 Containment breached — the void spills forth!' },
+                { name: 'Transcendent', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '👁️ The void entity transcends its mortal shell!' },
+            ],
             xpReward: 15000,
             goldReward: [4000, 7000],
             levelRange: [91, 110]
@@ -821,7 +841,11 @@ const BOSS_ENCOUNTERS = {
             desc: 'The source of all corruption',
             stats: { hp: 10000, atk: 1100, def: 70, mag: 1400, spd: 50, luck: 45, crit: 50 },
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang'],
-            phases: ['Awakening', 'Chaos Form', 'True Chaos'],
+            phases: [
+                { name: 'Awakening', threshold: 100, effects: [], message: 'Primordial Chaos stirs from the abyss.' },
+                { name: 'Chaos Form', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 The chaos awakens — reality bends!' },
+                { name: 'True Chaos', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '🌌 True chaos is unleashed — all is lost!' },
+            ],
             xpReward: 25000,   // FIX: was 8000 (regression vs VOID_CORRUPTED's 15000)
             goldReward: [8000, 14000],
             levelRange: [95, 120]
@@ -836,7 +860,12 @@ const BOSS_ENCOUNTERS = {
             desc: 'An ancient manifestation of the primordial chaos, awakened after eons of slumber',
             stats: { hp: 18000, atk: 1600, def: 90, mag: 2000, spd: 60, luck: 50, crit: 55 },
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang', 'Eternal Collapse'],
-            phases: ['Awakening', 'Chaos Form', 'True Chaos', 'Eternal Form'],
+            phases: [
+                { name: 'Awakening', threshold: 100, effects: [], message: 'The Chaos Sovereign awakens.' },
+                { name: 'Chaos Form', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 The Sovereign\'s chaos form takes hold!' },
+                { name: 'True Chaos', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }], message: '🌌 True chaos emanates from the Sovereign!' },
+                { name: 'Eternal Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '♾️ Eternal form achieved — the Sovereign cannot be stopped!' },
+            ],
             xpReward: 60000,
             goldReward: [10000, 17500], // Economy rebalance: cut 50% (was [20000, 35000])
             levelRange: [100, 120]
@@ -849,7 +878,12 @@ const BOSS_ENCOUNTERS = {
             desc: 'A colossal being born from the void between worlds',
             stats: { hp: 32000, atk: 2400, def: 120, mag: 2800, spd: 70, luck: 55, crit: 60 },
             skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion', 'Titan Crush', 'Dimensional Rend'],
-            phases: ['Contained', 'Unleashed', 'Transcendent', 'Astral Form'],
+            phases: [
+                { name: 'Contained', threshold: 100, effects: [], message: 'The Void Titan strains against its bonds.' },
+                { name: 'Unleashed', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '💥 The Titan breaks containment!' },
+                { name: 'Transcendent', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'stat_boost', stat: 'def', value: 30 }], message: '⚡ The Titan transcends mortal limits!' },
+                { name: 'Astral Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'atk', value: 80 }, { type: 'heal', value: 0 }], message: '🌟 Astral form — the Titan becomes a cosmic horror!' },
+            ],
             xpReward: 150000,
             goldReward: [25000, 45000], // Economy rebalance: cut 50% (was [50000, 90000])
             levelRange: [100, 120]
@@ -863,7 +897,13 @@ const BOSS_ENCOUNTERS = {
             stats: { hp: 60000, atk: 3500, def: 160, mag: 4000, spd: 85, luck: 65, crit: 70 },
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang',
                      'Abyssal Verdict', 'Divine Annihilation', 'Reality End'],
-            phases: ['Slumbering', 'Awakening', 'Chaos Form', 'True Chaos', 'Divine Form'],
+            phases: [
+                { name: 'Slumbering', threshold: 100, effects: [], message: 'The Abyssal God slumbers... for now.' },
+                { name: 'Awakening', threshold: 80, effects: [{ type: 'stat_boost', stat: 'mag', value: 20 }], message: '👁️ The Abyssal God stirs from slumber!' },
+                { name: 'Chaos Form', threshold: 60, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 Chaos form — reality fractures!' },
+                { name: 'True Chaos', threshold: 40, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }], message: '🌌 True chaos — the abyss consumes all!' },
+                { name: 'Divine Form', threshold: 20, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '⚡ Divine form — the Abyssal God reveals its true power!' },
+            ],
             xpReward: 400000,
             goldReward: [75000, 140000], // Economy rebalance: cut 50% (was [150000, 280000])
             levelRange: [100, 120]
