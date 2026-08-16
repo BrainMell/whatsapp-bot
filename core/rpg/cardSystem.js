@@ -3975,7 +3975,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     // 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
     case 'endauction':
       if (!isOwner) return reply('❌ Only the owner can end auctions early.'), true;
-      await cmdEndAuction(senderJid, reply, chatId);
+      await cmdEndAuction(senderJid, reply, chatId, args);
       return true;
 
     // 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
@@ -4221,34 +4221,54 @@ async function cmdCi(senderJid, reply, args) {
 }
 
 // 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
-// Usage: .g endauction (closes auction in current chat)
-async function cmdEndAuction(senderJid, reply, chatId) {
+// Usage: .g endauction (closes the oldest active auction)
+//        .g endauction <cardId> (closes auction for a specific card)
+async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   const p = P();
-  const CardAuction = require('../models/CardAuction');
-  const auction = await CardAuction.findOne({ chatId, active: true });
-  if (!auction) return reply('❌ No active auction in this chat.');
+  // Auctions are stored in CardMarket with type: 'auction', status: 'active'
+  // (NOT a separate CardAuction model — that was a bug in the original impl)
+  const query = { type: 'auction', status: 'active' };
+  const cardIdArg = args[0];
+  if (cardIdArg) query.cardId = cardIdArg;
+
+  const auction = await CardMarket.findOne(query).sort({ auctionEndsAt: 1 });
+  if (!auction) return reply('❌ No active auction found.');
+
   // Find highest bid
-  auction.bids.sort((a, b) => b.amount - a.amount);
-  const winner = auction.bids[0];
-  auction.active = false;
-  auction.endedAt = new Date();
-  auction.endedBy = 'manual';
+  const sortedBids = [...(auction.bids || [])].sort((a, b) => b.amount - a.amount);
+  const winner = sortedBids[0];
+
+  // Close the auction
+  auction.status = 'sold';
+  auction.completedAt = new Date();
   if (winner) {
-    auction.winner = winner.userId;
-    auction.winningBid = winner.amount;
+    auction.highBidderId = winner.bidderId;
+    auction.currentBid = winner.amount;
   }
   await auction.save();
+
+  // Also unflag the UserCard
+  if (auction.userCardId) {
+    await UserCard.updateOne(
+      { _id: auction.userCardId },
+      { $set: { inAuction: false } }
+    );
+  }
+
+  const card = CARD_INDEX()[auction.cardId];
+  const cardName = card?.cardName || auction.cardId || 'Unknown card';
+
   if (winner) {
-    const winnerName = economy.getDisplayName(winner.userId) || winner.userId.split('@')[0];
+    const winnerName = economy.getDisplayName(winner.bidderId) || winner.bidderId.split('@')[0];
     return reply(
       `🔨 *AUCTION ENDED*\n\n` +
-      `🎴 Card: *${auction.cardName || auction.cardId}*\n` +
+      `🎴 Card: *${cardName}*\n` +
       `🏆 Winner: ${winnerName}\n` +
-      `💰 Final bid: *${winner.amount} Zeni*\n\n` +
+      `💰 Final bid: *${winner.amount.toLocaleString()} Zeni*\n\n` +
       `💡 Use \`${p} transfer\` to complete the trade.`
     );
   }
-  return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${auction.cardName || auction.cardId}* has been closed.`);
+  return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${cardName}* has been closed.`);
 }
 
 // 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
