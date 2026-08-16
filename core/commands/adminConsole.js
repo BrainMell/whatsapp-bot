@@ -1737,7 +1737,11 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
         const lines = replyText.split('\n');
         const data = {};
         for (const line of lines) {
-            const match = line.match(/^(\w+):\s*(.+)$/);
+            // 💡 FIX (2026-08-16): Was /^(\w+):\s*(.+)$/ which fails on leading
+            // whitespace (WhatsApp adds spaces to reply messages). Now allows
+            // optional leading whitespace and strips code-block backticks.
+            const cleaned = line.replace(/^```/, '').replace(/```$/, '').trim();
+            const match = cleaned.match(/^(\w+):\s*(.+)$/);
             if (match) data[match[1]] = match[2].trim();
         }
 
@@ -1801,7 +1805,9 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         const lines = replyText.split('\n');
         const data = {};
         for (const line of lines) {
-            const match = line.match(/^(\w+):\s*(.+)$/);
+            // 💡 FIX (2026-08-16): Same leading-whitespace + backtick fix as skill creator
+            const cleaned = line.replace(/^```/, '').replace(/```$/, '').trim();
+            const match = cleaned.match(/^(\w+):\s*(.+)$/);
             if (match) data[match[1]] = match[2].trim();
         }
 
