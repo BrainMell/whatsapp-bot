@@ -105,17 +105,31 @@ function getTotalDebt() {
 // Request a loan
 function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinutes) {
   // Basic validation
-  // Coerce all numeric inputs — same JS-comparison-coercion trap as in
-  // investment.startInvestment: a non-numeric string would slip past every
-  // numeric comparison below (NaN < x is always false) and then break the
-  // transfer logic.
   const amt = Number(amount);
   const interest = Number(interestRate);
   const duration = Number(durationMinutes);
   if (!Number.isFinite(amt) || amt <= 0) return { success: false, msg: `❌ Amount must be a positive number.` };
+
+  // 💡 EMERGENCY FIX (2026-08-16): Hard interest cap — 50% max.
+  // Reasoning: real-world predatory lending caps at 36% (US federal).
+  // A game economy has no consumer protection, so 50% is generous while
+  // still preventing the 999999999900% exploit that corrupted 2 quintillion
+  // in fake debt. A 50% interest rate on a 100M loan = 150M repayment,
+  // which is meaningful but not economy-destroying.
+  const MAX_INTEREST_RATE = 50;
   if (!Number.isFinite(interest) || interest < 0) return { success: false, msg: `❌ Interest cannot be negative.` };
+  if (interest > MAX_INTEREST_RATE) {
+    return { success: false, msg: `❌ Interest rate cannot exceed ${MAX_INTEREST_RATE}%. (You entered ${interest}%).\n💡 This cap prevents predatory lending exploits.` };
+  }
+
   if (!Number.isFinite(duration) || duration < 1) return { success: false, msg: `❌ Duration must be at least 1 minute.` };
   if (borrowerJid === lenderJid) return { success: false, msg: `❌ You can't loan money to yourself.` };
+
+  // Also cap duration to prevent absurd timeframes
+  const MAX_DURATION_MINUTES = 30 * 24 * 60; // 30 days
+  if (duration > MAX_DURATION_MINUTES) {
+    return { success: false, msg: `❌ Duration cannot exceed 30 days (43,200 minutes).` };
+  }
 
   // Check if lender has liquid wallet funds. We use `wallet` (not `total`)
   // because economy.removeMoney only deducts from the wallet — a previous
