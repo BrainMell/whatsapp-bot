@@ -8,6 +8,7 @@
 'use strict';
 
 const fs      = require('fs');
+const itemMarket = require('./itemMarket');
 const path    = require('path');
 const axios   = require('axios');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
@@ -3758,6 +3759,28 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'auction':
       await cmdAuction(senderJid, reply, args);
       return true;
+
+    // 💡 P4 Item Market (2026-08-17): player-to-player item/gear listings.
+    case 'listitem':
+    case 'li':
+      await itemMarket.cmdListItem(senderJid, reply, args);
+      return true;
+
+    case 'unlistitem':
+    case 'uli':
+      await itemMarket.cmdUnlistItem(senderJid, reply, args);
+      return true;
+
+    case 'buyitem':
+    case 'bi':
+      await itemMarket.cmdBuyItem(senderJid, reply, args);
+      return true;
+
+    case 'itemmarket':
+    case 'im':
+      await itemMarket.cmdItemMarket(senderJid, reply, args);
+      return true;
+
 
     case 'bid':
       await cmdBid(senderJid, reply, args);

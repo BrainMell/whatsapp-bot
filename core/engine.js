@@ -7058,7 +7058,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     const disabledCats = system.get(botConfig.getBotId() + "_disabled_categories", []);
                     const normalizedDisabled = disabledCats.map(c => c.toLowerCase());
                     if (normalizedDisabled.includes('cards')) {
-                      const cardCmds = ['claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'swap card', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'list decks', 'create deck', 'cdeck', 'rename deck', 'delete deck', 'tokens', 'event', 'setprice', 'esummon'];
+                      const cardCmds = ['claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'swap card', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'list decks', 'create deck', 'cdeck', 'rename deck', 'delete deck', 'tokens', 'event', 'setprice', 'esummon', 'listitem', 'unlistitem', 'buyitem', 'itemmarket'];
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
