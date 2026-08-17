@@ -811,6 +811,19 @@ const ITEM_DATABASE = {
     'lich_phylactery': { name: 'Lich Phylactery', description: 'Contains the soul of a powerful necromancer.', rarity: 'EPIC', value: 15000, type: 'MATERIAL' },
     'dragon_scale': { name: 'Dragon Scale', description: 'Nearly indestructible plate from a dragon.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
     'demon_horn': { name: 'Demon Horn', description: 'Razor sharp and warm to the touch.', rarity: 'EPIC', value: 8000, type: 'MATERIAL' },
+  // 💡 FIX 2026-08-18: Added missing entry — was showing as "Unknown item" in inventory.
+  // Stats sourced from guildAdventure.js SHOP_LIST (cost=150K, 25% MAX HP true dmg).
+  'abyssal_detonator': {
+    name: 'Abyssal Detonator',
+    description: 'Deals 25% of target MAX HP as true damage.',
+    rarity: 'MYTHIC',
+    value: 50000,
+    type: 'CONSUMABLE',
+    icon: '💥🌀',
+    usable: true,
+    effect: 'percent_hp_damage',
+    effectValue: 0.25
+  },
     'infernal_crown': { name: 'Infernal Crown', description: 'A crown forged in the deepest pits of hell.', rarity: 'MYTHIC', value: 50000, type: 'MATERIAL' },
     'golem_core': { name: 'Golem Core', description: 'A pulsating heart of stone and magic.', rarity: 'RARE', value: 6000, type: 'MATERIAL' },
     'titan_heart': { name: 'Titan Heart', description: 'The power source of a colossal golem.', rarity: 'LEGENDARY', value: 20000, type: 'MATERIAL' },

@@ -7986,7 +7986,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     ) {
                       const target = getMentionOrReply(m);
                       if (target) {
-                        const targetName = target.split("@")[0];
+                        const targetName = economy.getDisplayName(target); // 💡 FIX 2026-08-18: was target.split("@")[0] which showed raw LID for @lid targets
                         await shopCommands.displayCharacter(
                           sock,
                           chatId,
@@ -21715,7 +21715,7 @@ ${senderName} said y'all should know:
                       );
 
                       if (result.success) {
-                        const targetName = target.split("@")[0];
+                        const targetName = economy.getDisplayName(target); // 💡 FIX 2026-08-18: was target.split("@")[0] which showed raw LID like @176429438373975 for @lid targets
                         const stakeText =
                           stake > 0
                             ? ` with a *${economy.getZENI() || "💰"}${stake.toLocaleString()}* stake`

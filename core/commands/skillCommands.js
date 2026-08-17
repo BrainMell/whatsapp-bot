@@ -440,7 +440,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
             : `${group.classIcon} _${group.className} Heritage_`;
         msg += `━━━ ${label} ━━━\n`;
         for (const ability of group.skills) {
-            const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : `✨ Passive`;
+            const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? `✨ Passive` : `⚡ 0`); // 💡 FIX 2026-08-18: 0-cost ACTIVE abilities (e.g. Perfect Strike) were mislabeled "Passive"
             const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
             const animation = ability.animation || ability.effect?.animation || '🔮';
             
@@ -456,9 +456,9 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
                 } else if (e.type === 'heal' || e.type === 'heal_team') {
                     msg += `   💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}\n`;
                 } else if (e.type === 'buff_self' && e.value) {
-                    msg += `   ✨ +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
+                    msg += `   ✨ +${e.value} ${e.buffType || 'stats'} for ${e.duration}t\n`; // 💡 FIX 2026-08-18: removed misleading % — value is FLAT bonus. (PvP halves it, see pvpSystem.js applyBuff.)
                 } else if (e.type === 'buff_team' && e.value) {
-                    msg += `   ✨ Party +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
+                    msg += `   ✨ Party +${e.value} ${e.buffType || 'stats'} for ${e.duration}t\n`; // 💡 FIX 2026-08-18: removed misleading % — value is FLAT bonus.
                 } else if (e.type === 'damage_cc') {
                     msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} + ${e.ccChance}% ${e.cc || 'CC'}\n`;
                 } else if (e.type === 'execute') {

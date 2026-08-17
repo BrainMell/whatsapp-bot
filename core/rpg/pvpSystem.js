@@ -143,6 +143,12 @@ function getEffectiveStats(player) {
                 stats.atk = Math.floor((stats.atk || 0) * 0.8);
             }
             if (effect.type === 'slow') {
+                // 💡 DESIGN LIMITATION (2026-08-18): SLOW reduces effective SPD by 20%,
+                // but turn order in PvP is determined ONCE at duel start (line 407)
+                // and alternates thereafter. SLOW does NOT delay the affected player's
+                // turn. It only affects dodge/evasion calculations that read spd.
+                // To make SLOW affect turn order, the initiative would need to be
+                // recalculated each round (significant rework — flagged for future).
                 stats.spd = Math.floor((stats.spd || 0) * 0.8);
             }
         }
@@ -477,7 +483,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         }
     }
 
-    startMsg += `\n🎯 *${p1.name}* claims the initiative!\n` +
+    startMsg += `\n🎯 *${duelState.players[duelState.turn].name}* claims the initiative!\n` + // 💡 FIX 2026-08-18: was hardcoded to p1.name even when turn=1 (P2 has higher SPD)
         `———————————\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
