@@ -332,7 +332,7 @@ async function runDailyInterest() {
 
       let interest = Math.floor(balance * rate);
       // Cap at 1M per day
-      interest = Math.min(interest, 1000000);
+      interest = Math.min(interest, 100000) // 💡 Rebalanced 2026-08-17: 1M cap was 2% of community cap per guild/day.;
       if (interest <= 0) continue;
 
       guild.balance = balance + interest;

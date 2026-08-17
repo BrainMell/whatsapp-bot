@@ -59,19 +59,19 @@ const GUILD_UPGRADES = {
   hall: {
     name: 'Guild Hall',
     maxLevel: 5,
-    baseCost: 500,
+    baseCost: 25000, // 💡 Rebalanced 2026-08-17
     benefit: 'Increases max member capacity by +5 per level.'
   },
   training: {
     name: 'Training Ground',
     maxLevel: 5,
-    baseCost: 1000,
+    baseCost: 50000, // 💡 Rebalanced 2026-08-17
     benefit: 'Gives all members +5% XP bonus per level.'
   },
   treasury: {
     name: 'Treasury',
     maxLevel: 5,
-    baseCost: 1500,
+    baseCost: 100000, // 💡 Rebalanced 2026-08-17
     benefit: 'Gives all members +10% Zeni bonus from quests per level.'
   }
 };

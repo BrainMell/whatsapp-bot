@@ -440,7 +440,7 @@ async function handleRespecCommand(sock, chatId, senderJid, m) {
     }
 
     // Cost: 100K × level. Level 10 = 1M, level 50 = 5M, level 100 = 10M.
-    const RESPEC_COST = 100000 * Math.max(1, level);
+    const RESPEC_COST = 1000 * Math.max(1, level); // 💡 Rebalanced 2026-08-17: 100K×L at L50 = 5M (impossible). 1K×L at L50 = 50K (~2 days).
     const balance = economy.getBalance(senderJid);
 
     if (balance < RESPEC_COST) {

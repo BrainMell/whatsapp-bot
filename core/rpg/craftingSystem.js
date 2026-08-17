@@ -626,7 +626,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
       }
       const RARITY_GOLD_COST = {
         'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
-        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 500000,
+        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // 💡 Rebalanced 2026-08-17: 500K was 0.1% of community cap per craft.
       };
       goldCost = RARITY_GOLD_COST[rarity] || 0;
     }

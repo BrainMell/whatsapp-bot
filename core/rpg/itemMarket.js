@@ -16,6 +16,9 @@ const economy = require('./economy');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
 
+const MIN_LISTING = 100; // 💡 Rebalanced 2026-08-17: prevent 1-zeni spam listings.
+const MAX_LISTING = 5000000; // 💡 Rebalanced 2026-08-17: cap so a single listing can't absorb 1% of community cap.
+
 const { getInventory, removeItem, addItem, saveUserRef } = (() => {
   return {
     getInventory: inventorySystem.getInventory,
@@ -55,7 +58,7 @@ async function cmdListItem(senderJid, reply, args = []) {
   const price = parseInt(args[1]);
   const qty = args[2] !== undefined ? parseInt(args[2]) : 1;
 
-  if (isNaN(slot) || slot < 1 || isNaN(price) || price < 1 || isNaN(qty) || qty < 1) {
+  if (isNaN(slot) || slot < 1 || isNaN(price) || price < MIN_LISTING || isNaN(qty) || qty < 1 || price > MAX_LISTING) {
     return reply(
       `❌ Usage: \`listitem <slot> <price> [qty]\`\n` +
       `Example: \`listitem 3 5000 5\` — list 5 of slot-3 item for 5,000 total.\n` +

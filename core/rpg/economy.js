@@ -28,7 +28,7 @@ const getCurrency = () => botConfig.getCurrency();
 const getZENI = () => getCurrency().symbol;
 const getPlaceholderPFP = () => botConfig.getAssetPath("placeholder.png");
 const STARTING_BALANCE = 1000;
-const DAILY_REWARD = 500;
+const DAILY_REWARD = 2000; // 💡 Rebalanced 2026-08-17: 500 was below common-item floor; 2K = 2× common potion, fits daily bonus band.
 
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -631,8 +631,8 @@ function getBalance(userId) {
 // Prevents the runaway currency/stat inflation documented in the QA audit.
 // Players can still earn and spend normally — the caps are high enough that
 // only genuinely broken values (exploits, bugs) get clamped.
-const MAX_WALLET = 2_000_000_000;  // 2 billion Zeni
-const MAX_BANK = 10_000_000_000;   // 10 billion Zeni
+const MAX_WALLET = 5_000_000; // 💡 Rebalanced 2026-08-17: was 2B — single player could absorb entire 500M community cap. Now ~5 weeks of D-rank earnings.  // 2 billion Zeni
+const MAX_BANK = 100_000_000; // 💡 Rebalanced 2026-08-17: was 10B — now 10× MAX_WALLET, holds weeks of hoarding without breaking market cap.   // 10 billion Zeni
 const MAX_STAT_VALUE = 1_000_000;  // 1 million per individual stat
 
 function clampWallet(user) {

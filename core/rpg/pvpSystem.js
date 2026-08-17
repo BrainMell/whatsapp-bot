@@ -8,6 +8,8 @@
 // ============================================ 
 
 const economy = require('./economy');
+const MIN_STAKE = 10; // 💡 Rebalanced 2026-08-17: min PvP wager so stakes are meaningful but never bankrupting.
+const MAX_STAKE = 500; // 💡 Rebalanced 2026-08-17: max PvP wager so a losing streak can't wipe a wallet.
 const progression = require('./progression');
 const skillTree = require('./skillTree');
 const botConfig = require('../../botConfig');
@@ -232,6 +234,10 @@ function cancelDuel(chatId) {
 // ==========================================
 
 function challengePlayer(chatId, challengerJid, targetJid, stake = 0, opts = {}) {
+    // 💡 P4 rebalance 2026-08-17: stake bounds prevent wallet-wiping stakes + 1-zeni spam.
+    if (stake > 0 && (stake < MIN_STAKE || stake > MAX_STAKE)) {
+        return { success: false, message: `❌ Stake must be between ${MIN_STAKE} and ${MAX_STAKE}.` };
+    }
     if (activeDuels.has(chatId)) {
         return { success: false, message: '❌ A duel is already active in this chat!' };
     }
@@ -452,7 +458,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
     const modeTag = isEqualise ? ` ⚖️ *EQUALISED*` : ``;
     const fleeWarning = isSummonDuel
         ? `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Summon loses 10 loyalty!)*`
-        : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
+        : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 10% Wallet (max 5K), and 1 random item!)*`;
 
     let startMsg =
         `${header}${modeTag}\n` +
@@ -1043,10 +1049,10 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
             }
         }
 
-        // 2. Money Loss: 50% of wallet
+        // 2. Money Loss: 10% of wallet (max 5K) — rebalanced 2026-08-17
         let moneyLost = 0;
         if (fleeingUser) {
-            moneyLost = Math.floor((fleeingUser.wallet || 0) * 0.50);
+            moneyLost = Math.min(5000, Math.floor((fleeingUser.wallet || 0) * 0.10)); // 💡 Rebalanced 2026-08-17: 50% of wallet was brutal. Now 10% capped at 5K.
             if (moneyLost > 0) {
                 economy.removeMoney(fleeingJid, moneyLost, "PvP Flee Penalty");
             }

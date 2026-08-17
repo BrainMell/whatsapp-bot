@@ -17,7 +17,7 @@ const INVENTORY_CONFIG = {
     BASE_SLOTS: 20,          // Starting inventory size
     MAX_SLOTS: 100,          // Maximum inventory size
     SLOTS_PER_UPGRADE: 5,    // Slots gained per upgrade
-    UPGRADE_COST_BASE: 1000, // Base cost for upgrade
+    UPGRADE_COST_BASE: 2000, // 💡 Rebalanced 2026-08-17: 1K was trivially cheap at new D-rank earnings (~30K/day). 2K base × 1.5^level scaling.
     UPGRADE_COST_SCALING: 1.5 // Cost multiplier per upgrade
 };
 
@@ -1103,17 +1103,21 @@ function sellItem(userId, itemId, quantity = 1) {
     if (targetItemId === 'gold' || targetItemId === 'gold_pile') sellMultiplier = 15.0;
     
     const totalValue = Math.floor(baseValue * sellMultiplier * quantity);
-    let sellValue = totalValue;
+    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
+    // same as P2P transfer + market sales). Guild 5% then applies to the post-tax amount.
+    const economyTax = Math.floor(totalValue * 0.10);
+    let sellValue = totalValue - economyTax;
     let guildContribution = null;
 
     // Remove item
     const removeResult = removeItem(userId, targetItemId, quantity);
     if (!removeResult.success) return removeResult;
 
-    // Guild House Contribution System (5% tax)
+    // Guild House Contribution System (5% tax — applied to POST-economy-tax amount)
     const guildName = guilds.getUserGuild(userId);
     if (guildName) {
-        const taxAmount = Math.floor(totalValue * 0.05);
+        const guildTaxable = totalValue - economyTax;
+        const taxAmount = Math.floor(guildTaxable * 0.05);
         if (taxAmount > 0) {
             const guildXP = Math.floor(taxAmount * 0.6);
             const guildBank = taxAmount - guildXP;
@@ -1121,7 +1125,7 @@ function sellItem(userId, itemId, quantity = 1) {
             guilds.addGuildPoints(guildName, guildXP, `Tax from ${itemId} sale`);
             guilds.addGuildBalance(guildName, guildBank);
             
-            sellValue = totalValue - taxAmount;
+            sellValue = guildTaxable - taxAmount;
             guildContribution = {
                 amount: taxAmount,
                 xp: guildXP,
@@ -1129,8 +1133,8 @@ function sellItem(userId, itemId, quantity = 1) {
                 guildName: guildName
             };
         }
-        // Merchant Tracking: Log Zeni earned to guild board
-        guilds.updateBoardProgress(guildName, 'EARN_ZENI', totalValue);
+        // Merchant Tracking: Log Zeni earned to guild board (post-tax amount)
+        guilds.updateBoardProgress(guildName, 'EARN_ZENI', sellValue);
     }
     
     economy.addMoney(userId, sellValue);
@@ -1140,6 +1144,7 @@ function sellItem(userId, itemId, quantity = 1) {
         itemId,
         quantity,
         totalValue: totalValue,
+        economyTax: economyTax,
         soldFor: sellValue,
         guildContribution: guildContribution,
         remaining: removeResult.remaining

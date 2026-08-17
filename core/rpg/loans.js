@@ -109,6 +109,7 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
   const interest = Number(interestRate);
   const duration = Number(durationMinutes);
   if (!Number.isFinite(amt) || amt <= 0) return { success: false, msg: `❌ Amount must be a positive number.` };
+  if (amt < MIN_LOAN || amt > MAX_LOAN) return { success: false, msg: `❌ Loan amount must be between ${MIN_LOAN.toLocaleString()} and ${MAX_LOAN.toLocaleString()}.` };
 
   // 💡 EMERGENCY FIX (2026-08-16): Hard interest cap — 50% max.
   // Reasoning: real-world predatory lending caps at 36% (US federal).
@@ -126,7 +127,9 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
   if (borrowerJid === lenderJid) return { success: false, msg: `❌ You can't loan money to yourself.` };
 
   // Also cap duration to prevent absurd timeframes
-  const MAX_DURATION_MINUTES = 30 * 24 * 60; // 30 days
+  const MAX_DURATION_MINUTES = 30 * 24 * 60;
+const MIN_LOAN = 1000; // 💡 Rebalanced 2026-08-17: prevent spammy micro-loans.
+const MAX_LOAN = 5000000; // 💡 Rebalanced 2026-08-17: a single loan can't exceed MAX_WALLET or absorb a chunk of the community cap.
   if (duration > MAX_DURATION_MINUTES) {
     return { success: false, msg: `❌ Duration cannot exceed 30 days (43,200 minutes).` };
   }

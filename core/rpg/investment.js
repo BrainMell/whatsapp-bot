@@ -8,7 +8,7 @@ const INVESTMENT_PLANS = {
     'BOND': { name: 'Low-Risk Bond', durationHours: 2, interest: 0.05, minDeposit: 1000, risk: 0 },
     'FUND': { name: 'Balanced Fund', durationHours: 6, interest: 0.15, minDeposit: 5000, risk: 0.02 },
     'GROWTH': { name: 'High-Growth', durationHours: 12, interest: 0.35, minDeposit: 10000, risk: 0.05 },
-    'VENTURE': { name: 'Venture Capital', durationHours: 24, interest: 0.80, minDeposit: 25000, risk: 0.12 } // 12% chance of total loss
+    'VENTURE': { name: 'Venture Capital', durationHours: 24, interest: 0.50, minDeposit: 10000, risk: 0.12 } // 💡 Rebalanced 2026-08-17: 25K was above 1K-10K range; 1.8× was above 1.1-1.5× band. Was 12% loss chance, kept.
 };
 
 function startInvestment(userId, planId, amount) {
@@ -113,8 +113,12 @@ function claimInvestment(userId) {
     let msg = `📊 *CLAIM SUMMARY*\n\n`;
     
     if (totalPayout > 0) {
-        economy.addMoney(userId, totalPayout, "Matured Investment Payout");
-        msg += `✅ *Success:* Received ${economy.getZENI()}${totalPayout.toLocaleString()}\n`;
+        // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax on investment payouts
+        // (genuine sink, same as P2P transfer + market sales).
+        const tax = Math.floor(totalPayout * 0.10);
+        const netPayout = totalPayout - tax;
+        economy.addMoney(userId, netPayout, "Matured Investment Payout (after 10% tax)");
+        msg += `✅ *Success:* Received ${economy.getZENI()}${netPayout.toLocaleString()} (10% tax: ${economy.getZENI()}${tax.toLocaleString()})\n`;
     }
     
     if (totalLoss > 0) {

@@ -23,8 +23,8 @@ const P = () => botConfig.getPrefix();
 const mongoose = require('mongoose');
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
-const MIN_BOUNTY = 100000;
-const MAX_BOUNTY = 50000000;
+const MIN_BOUNTY = 5000; // 💡 Rebalanced 2026-08-17: 100K excluded most players; 5K is ~1 D-rank day.
+const MAX_BOUNTY = 5000000; // 💡 Rebalanced 2026-08-17: 50M = 10% of community cap per single bounty. 5M cap.
 const MAX_ACTIVE_PER_TARGET = 3;
 const PLACER_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 const BOUNTY_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -132,13 +132,18 @@ async function claimBounty(hunterJid, targetJid) {
   const guildPerks = require('./guildPerks');
   let totalClaimed = 0;
   let totalFee = 0;
+  let totalTax = 0;
   const claimedBounties = [];
 
   for (const bounty of bounties) {
-    // Hunter fee to guild treasury
-    const fee = Math.floor(bounty.amount * HUNTER_FEE_PCT);
-    const hunterPayout = bounty.amount - fee;
-    economy.addMoney(hunterJid, hunterPayout, `Bounty claim: ${bounty.bountyId}`);
+    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
+    // same as P2P transfer + card/item market). THEN 5% hunter fee to guild treasury
+    // is computed on the post-tax amount.
+    const economyTax = Math.floor(bounty.amount * 0.10);
+    const afterTax = bounty.amount - economyTax;
+    const fee = Math.floor(afterTax * HUNTER_FEE_PCT);
+    const hunterPayout = afterTax - fee;
+    economy.addMoney(hunterJid, hunterPayout, `Bounty claim (10% tax + ${HUNTER_FEE_PCT*100}% fee): ${bounty.bountyId}`);
     // Fee to hunter's guild treasury if they have one
     const hunterGuild = guilds.getUserGuild(hunterJid);
     if (hunterGuild && fee > 0) {
@@ -147,6 +152,7 @@ async function claimBounty(hunterJid, targetJid) {
     }
     totalClaimed += hunterPayout;
     totalFee += fee;
+    totalTax += economyTax;
     bounty.status = 'claimed';
     bounty.claimedByJid = hunterJid;
     bounty.claimedAt = new Date();
@@ -165,8 +171,9 @@ async function claimBounty(hunterJid, targetJid) {
     claimed: true,
     totalClaimed,
     totalFee,
+    totalTax,
     claimedBounties,
-    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${economy.getDisplayName(targetJid)} and collected ${totalClaimed.toLocaleString()} Zeni!\nHunter fee: ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
+    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${economy.getDisplayName(targetJid)} and collected ${totalClaimed.toLocaleString()} Zeni!\nEconomy tax (10%): ${totalTax.toLocaleString()} Zeni evaporated.\nHunter fee (${HUNTER_FEE_PCT*100}%): ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
   };
 }
 

@@ -526,7 +526,7 @@ async function distributeRewards(raid) {
     if (i < 3) {
       // Top 3
       xpReward = 500000;
-      goldReward = 200000;
+      goldReward = 50000; // 💡 Rebalanced 2026-08-17: was 200K = ~7 days SSS earnings for one placement.
       // 💡 Runes are now Abyss-exclusive drops. Raid rewards were the only
       // non-Abyss rune source, so the previously-guaranteed greater rune
       // reward for top 3 is removed. Players chasing runes should descend
@@ -536,13 +536,13 @@ async function distributeRewards(raid) {
     } else if (i < 10) {
       // Top 10
       xpReward = 200000;
-      goldReward = 100000;
+      goldReward = 25000; // 💡 Rebalanced 2026-08-17: trimmed proportionally.
       // (Runes removed — Abyss-exclusive now, see comment above.)
       label = `🏆 Top 10`;
     } else if (i < 50) {
       // Top 50
       xpReward = 100000;
-      goldReward = 50000;
+      goldReward = 10000; // 💡 Rebalanced 2026-08-17: trimmed proportionally.
       label = `🎖️ Top 50`;
     } else {
       // Everyone else
