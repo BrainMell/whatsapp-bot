@@ -7320,24 +7320,34 @@ _💡 Reply with another number from your search list!_`.trim();
                       if (isRpgCommand) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
                         if (!bypass) {
-                          // Try to send a 404-style maintenance image card via Go service
+                          // 💡 FIX 2026-08-29: Use a direct construction/repair image URL
+                          // (was: Go service boss splash with sprite — wrong visual for a maintenance page)
                           let cardSent = false;
                           try {
-                            const goService = require('./utils/goImageService');
-                            if (await goService.isHealthy()) {
-                              const cardBuf = await goService.generateBossSplash({
-                                sprite: 'enemies/boss_0_N.png',
-                                name: 'RPG UNDER MAINTENANCE',
-                                flavorText: 'The RPG is currently under maintenance indefinitely. Only Game Testers and Mods can access RPG features during this testing phase.',
-                                rank: '???',
-                                floor: 404
-                              });
-                              if (cardBuf) {
-                                await sock.sendMessage(chatId, { image: cardBuf, caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.' }, { quoted: m });
-                                cardSent = true;
-                              }
+                            // Free online asset (Unsplash, hotlink-safe): construction workers
+                            const imgUrl = 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+                            const axios = require('axios');
+                            const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 8000 });
+                            if (imgRes.data && imgRes.data.length > 1000) {
+                              const imgBuf = Buffer.from(imgRes.data);
+                              await sock.sendMessage(chatId, {
+                                image: imgBuf,
+                                caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\n🔧 Game Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                              }, { quoted: m });
+                              cardSent = true;
                             }
-                          } catch (e) { console.error('[TestMode] card gen failed:', e.message); }
+                          } catch (e) { console.error('[TestMode] image fetch failed:', e.message); }
+                          // Fallback: try direct URL send (no buffer)
+                          if (!cardSent) {
+                            try {
+                              const imgUrl = 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+                              await sock.sendMessage(chatId, {
+                                image: { url: imgUrl },
+                                caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\n🔧 Game Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                              }, { quoted: m });
+                              cardSent = true;
+                            } catch (e) { console.error('[TestMode] URL send failed:', e.message); }
+                          }
                           if (!cardSent) {
                             return await sock.sendMessage(chatId, {
                               text: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
@@ -11929,6 +11939,7 @@ Usage: ${newUsage}/5${warningText}`;
                       ...globalMods,
                       ...rpgMods,
                       ...cardsMods,
+                      ...gameTesters,
                     ]);
 
                     let listMsg = `🛡️ *MODERATOR ROSTER*\n\n`;
@@ -11950,7 +11961,13 @@ Usage: ${newUsage}/5${warningText}`;
                       listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
-                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
+                    listMsg += `\n*Game Testers* (${gameTesters.size}):\n`;
+                    if (gameTesters.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of gameTesters) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + listMsg,
                       mentions: Array.from(allModJids).filter(j => j && j.includes('@')),
@@ -12008,7 +12025,8 @@ Usage: ${newUsage}/5${warningText}`;
                     if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can toggle test mode." });
                     }
-                    const sub = txt.split(" ")[1] && txt.split(" ")[1].toLowerCase();
+                    const _tmParts = txt.split(/\s+/);
+                    const sub = _tmParts[2] && _tmParts[2].toLowerCase();
                     if (sub === 'on') {
                       await testerSystem.setTestMode(true);
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "🚧 *RPG TEST MODE ACTIVATED*\n\nAll regular players will now see a maintenance card when trying to use RPG commands. Game Testers, RPG Mods, and Global Mods bypass the lock. Tester GCs also bypass." });
@@ -12025,15 +12043,12 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // .j testgc add|remove|list [@gid] — Manage tester GC list
-                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testtc`)) {
-                    // typo-friendly alias testgc as well
-                  }
                   if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testgc`)) {
                     if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can manage tester GCs." });
                     }
                     const partsArr = txt.split(/\s+/);
-                    const sub = partsArr[1] && partsArr[1].toLowerCase();
+                    const sub = partsArr[2] && partsArr[2].toLowerCase();
                     if (sub === 'add') {
                       const target = getMentionOrReply(m) || (partsArr[2] && partsArr[2].includes("@") ? partsArr[2] : null) || chatId;
                       if (!target || !target.endsWith('@g.us')) {
@@ -12061,6 +12076,12 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // .j bug <text> — Submit a tester issue
+                  // Handle .j bug with no args — show usage instead of "Unknown command"
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} bug` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} bug `) {
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📝 *BUG REPORT*\n\nUsage: \`${botConfig.getPrefix()} bug <description>\`\n\nOptional [category:severity] prefix:\n  \`${botConfig.getPrefix()} bug [bug:high] PvP initiative is wrong\`\n  \`${botConfig.getPrefix()} bug [balance:normal] SLOW doesn't affect turn order\`\n\nCategories: bug, balance, missing-feature, feedback, general\nSeverities: low, normal, high, critical`
+                    });
+                  }
                   if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bug `)) {
                     const body = txt.slice((botConfig.getPrefix() + ' bug ').length).trim();
                     if (!body || body.length < 5) {
