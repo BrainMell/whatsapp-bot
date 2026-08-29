@@ -426,6 +426,93 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
+    // ── SMART GIVE (PHASE 7 FIX 2026-08-29) ──────────────────────────────────
+    // Auto-detects: if query matches a summon species → givesummon.
+    // If query matches a rune type → giverune. Otherwise → giveitem.
+    if (sub === 'give' || sub === 'additem') {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!target || remaining.length < 1) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Summon species (bat, slime, mushroom, ...) → gives summon\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} admin give @user bat 5\` (bat summon, level 5)\n  \`${prefix} admin give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} admin give @user health_potion 5\` (5 health potions)` });
+        }
+        const query = remaining[0];
+        const extra1 = remaining[1] || '';
+        const extra2 = remaining[2] || '';
+
+        // 1. Try summon species
+        let summonSystem, registry;
+        try {
+            summonSystem = require('../../rpg/summonSystem');
+            registry = require('../../rpg/summonRegistry');
+        } catch (e) {}
+        if (registry && summonSystem) {
+            const speciesData = registry.getSpecies(query.toLowerCase());
+            if (speciesData) {
+                let level = 1;
+                const lvl = parseInt(extra1);
+                if (!isNaN(lvl) && lvl > 0) level = lvl;
+                try {
+                    const summon = await summonSystem.createSummon(target, query.toLowerCase(), {
+                        level, obtainedFrom: 'admin_grant', loyalty: 100
+                    });
+                    return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `✅ *SUMMON GIVEN (via smart give)*\n\n👤 @${economy.getDisplayName(target)}\n🐉 ${speciesData.icon || '🐉'} *${speciesData.name}*\n📊 Level: ${level}\n🆔 \`${summon.summonId}\``,
+                        mentions: [target]
+                    });
+                } catch (e) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give summon: ${e.message}` });
+                }
+            }
+        }
+
+        // 2. Try rune type
+        let runeSystem;
+        try { runeSystem = require('../../rpg/runeSystem'); } catch (e) {}
+        if (runeSystem && runeSystem.RUNE_TYPES[query.toUpperCase()]) {
+            let tier = 'NORMAL';
+            if (extra1 && runeSystem.RUNE_TIERS[extra1.toUpperCase()]) tier = extra1.toUpperCase();
+            try {
+                const result = runeSystem.awardRune(target, query.toUpperCase(), tier, 'admin_grant');
+                const resolved = await Promise.resolve(result);
+                if (!resolved.success) {
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${resolved.message}` });
+                }
+                return await sock.sendMessage(chatId, {
+                    text: BOT_MARKER + `✅ *RUNE GIVEN (via smart give)*\n\n👤 @${economy.getDisplayName(target)}\n🔮 *${query.toUpperCase()}* (${tier})\n🆔 \`${resolved.rune.runeId}\``,
+                    mentions: [target]
+                });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give rune: ${e.message}` });
+            }
+        }
+
+        // 3. Fall through to inventory item
+        const item = resolveItem(query);
+        if (!item) {
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `❌ \`${query}\` is not a summon species, rune type, or inventory item.\n\nUse \`${prefix} summon codex\` to see summon species, or \`${prefix} rune types\` for rune types.`
+            });
+        }
+        // Block special RPG objects (same as giveitem)
+        const SPECIAL_RPG_OBJECTS = new Set([
+            'summon', 'summons', 'rune', 'runes', 'card', 'cards',
+            'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
+        ]);
+        if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Cannot give \`${item.id}\` — use the dedicated command (forceevolve / giveskill).` });
+        }
+        // Parse quantity
+        let qty = 1;
+        const q = parseInt(extra1);
+        if (!isNaN(q) && q > 0) qty = q;
+        const result = economy.addItem(target, item.id, qty);
+        if (!result) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to add item.' });
+        economy.scheduleSave(target);
+        return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `✅ *ITEM GIVEN (via smart give)*\n\n👤 @${economy.getDisplayName(target)}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}\n🆔 \`${item.id}\``,
+            mentions: [target]
+        });
+    }
+
     // ── GIVE ITEM ──────────────────────────────────────────────────────────
     if (sub === 'giveitem') {
         const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));

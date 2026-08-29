@@ -455,10 +455,41 @@ async function saveRpgMods() {
 // ═══════════════════════════════════════════════════════════════════════
 const testerSystem = require('./rpg/testerSystem');
 
-async function loadGameTesters() { return await testerSystem.loadGameTesters(); }
-async function addGameTester(userId) { return await testerSystem.addGameTester(userId); }
-async function delGameTester(userId) { return await testerSystem.delGameTester(userId); }
-function isGameTester(userId) { return testerSystem.isGameTester(userId); }
+// PHASE 7 FIX 2026-08-29: engine.js owns the gameTesters Set (mirrors rpgMods pattern).
+// testerSystem is now used only for tester GC + test mode + issue storage.
+// The Set lives in engine.js so .j listmods / listtesters / reloadmods can read it directly.
+async function loadGameTesters() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_game_testers", null);
+    if (Array.isArray(data)) data.forEach((userId) => gameTesters.add(userId));
+    console.log(`🎮 [${botConfig.getBotId()}] Loaded ${gameTesters.size} Game Testers`);
+  } catch (err) { console.error("Error loading Game Testers:", err.message); }
+}
+async function saveGameTesters() {
+  const system = require('./utils/system');
+  await system.set("_shared_game_testers", Array.from(gameTesters));
+}
+async function addGameTester(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  gameTesters.add(normalized);
+  await saveGameTesters();
+}
+async function delGameTester(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  gameTesters.delete(normalized);
+  await saveGameTesters();
+}
+function isGameTester(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  try {
+    const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return gameTesters.has(jidNormalizedUser(realJid));
+  } catch (err) { return false; }
+}
 
 
 async function loadCardsMods() {
@@ -7311,12 +7342,28 @@ _💡 Reply with another number from your search list!_`.trim();
                     _cmdContext.txt = txt;
 
                     const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
-                  // 💡 PHASE 7 2026-08-29: RPG TEST MODE LOCK
+                  // 💡 PHASE 7 FIX 2026-08-29: RPG TEST MODE LOCK — fixed category lookup
+                  // PHASE 7 FIX 2026-08-29: RPG test-mode lock — fixed category lookup
                   if (await testerSystem.getTestMode()) {
                     try {
+                      // Iterate the COMMAND_REGISTRY to find primaryCmd's category.
+                      // (The old code did `CMD_REGISTRY.commandRegistry[primaryCmd].category` which is wrong —
+                      // the registry is exported directly, not nested, and entries have no .category field.
+                      // That bug meant the lock NEVER fired for ANY command.)
                       const CMD_REGISTRY = require('./utils/commandRegistry');
-                      const registryCat = CMD_REGISTRY.commandRegistry && CMD_REGISTRY.commandRegistry[primaryCmd] && CMD_REGISTRY.commandRegistry[primaryCmd].category;
-                      const isRpgCommand = registryCat && (registryCat === 'RPG' || registryCat === 'RPG_PVP' || registryCat === 'RPG_CRAFTING' || registryCat === 'RPG_SUMMON' || registryCat === 'RPG_ABILITY' || registryCat === 'RPG_CLASS' || registryCat === 'RPG_QUEST' || registryCat === 'RPG_ECONOMY');
+                      let isRpgCommand = false;
+                      for (const [catName, cmdList] of Object.entries(CMD_REGISTRY)) {
+                        if (cmdList && cmdList.some(c => c.cmd && c.cmd.toLowerCase() === primaryCmd.toLowerCase())) {
+                          // Lock if the command is in any of these user-facing categories:
+                          // rpg (RPG + GUILDS + PROGRESSION), cards (CARDS), gambling (GAMBLING).
+                          // ECONOMY category is also locked since it's part of the RPG economy.
+                          if (catName === 'RPG' || catName === 'GUILDS' || catName === 'PROGRESSION'
+                              || catName === 'CARDS' || catName === 'GAMBLING' || catName === 'ECONOMY') {
+                            isRpgCommand = true;
+                          }
+                          break;
+                        }
+                      }
                       if (isRpgCommand) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
                         if (!bypass) {
@@ -12070,8 +12117,16 @@ Usage: ${newUsage}/5${warningText}`;
                     if (gcs.length === 0) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 *No tester GCs registered.*\n\nUse `" + botConfig.getPrefix() + " testgc add` (inside the GC) to add one." });
                     }
+                    // PHASE 7 FIX 2026-08-29: resolve tester GC names
                     let msg = `📋 *TESTER GCs* (${gcs.length})\n\n`;
-                    gcs.forEach((g, i) => { msg += `${i + 1}. ${g}\n`; });
+                    for (let i = 0; i < gcs.length; i++) {
+                      let gName = gcs[i];
+                      try {
+                        const meta = await getGroupMetadata(gcs[i]);
+                        if (meta && meta.subject) gName = meta.subject;
+                      } catch (e) { /* fall back to JID */ }
+                      msg += `${i + 1}. ${gName}\n   _${gcs[i]}_\n`;
+                    }
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                   }
 
@@ -12092,13 +12147,19 @@ Usage: ${newUsage}/5${warningText}`;
                     if (!isTester && !inTesterGc) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can submit bug reports, or run this command inside a registered tester GC." });
                     }
+                    // PHASE 7 FIX 2026-08-29: bug regex allows hyphens + validation
                     let category = 'general';
                     let severity = 'normal';
                     let actualBody = body;
-                    const tagMatch = body.match(/^\[(\w+):(\w+)\]\s*(.+)$/);
+                    const VALID_CATEGORIES = ['bug', 'balance', 'missing-feature', 'feedback', 'general'];
+                    const VALID_SEVERITIES = ['low', 'normal', 'high', 'critical'];
+                    const tagMatch = body.match(/^\[([\w-]+):(\w+)\]\s*(.+)$/);
                     if (tagMatch) {
-                      category = tagMatch[1].toLowerCase();
-                      severity = tagMatch[2].toLowerCase();
+                      const parsedCat = tagMatch[1].toLowerCase();
+                      const parsedSev = tagMatch[2].toLowerCase();
+                      // Validate — only accept known values, fall back to defaults otherwise
+                      if (VALID_CATEGORIES.includes(parsedCat)) category = parsedCat;
+                      if (VALID_SEVERITIES.includes(parsedSev)) severity = parsedSev;
                       actualBody = tagMatch[3];
                     }
                     try {
@@ -12195,9 +12256,11 @@ Usage: ${newUsage}/5${warningText}`;
                       globalMods.clear();
                       rpgMods.clear();
                       cardsMods.clear();
+                      gameTesters.clear();
                       await loadGlobalMods();
                       await loadRpgMods();
                       await loadCardsMods();
+                      await loadGameTesters();
 
                       // Also reload card system roles
                       let cardModCount = 0;
@@ -12225,6 +12288,136 @@ Usage: ${newUsage}/5${warningText}`;
                     }
                     return;
                   }
+                  // .j editissue <id> [cat:sev] — Edit an existing issue's category/severity
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} editissue`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isGameTester(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, RPG Mod, or Game Tester can edit issues." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const issueIdShort = partsArr[1];
+                    if (!issueIdShort || issueIdShort.length < 6) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " editissue <issueId> [category:severity]`\\nExample: `" + botConfig.getPrefix() + " editissue 922135 bug:high`" });
+                    }
+                    const tag = partsArr[2] || '';
+                    let newCat = null, newSev = null;
+                    const tagMatch = tag.match(/^([\w-]+):(\w+)$/);
+                    if (tagMatch) {
+                      newCat = tagMatch[1].toLowerCase();
+                      newSev = tagMatch[2].toLowerCase();
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      // Find by short ID (last 6 chars of _id)
+                      const all = await Issue.find({}).lean();
+                      const target = all.find(i => i._id.toString().slice(-6) === issueIdShort);
+                      if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Issue with ID \`${issueIdShort}\` not found.` });
+                      const update = {};
+                      if (newCat) update.category = newCat;
+                      if (newSev) update.severity = newSev;
+                      if (Object.keys(update).length === 0) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No category:severity specified. Usage: `" + botConfig.getPrefix() + " editissue <id> [cat:sev]`" });
+                      }
+                      await Issue.findByIdAndUpdate(target._id, { $set: update });
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Issue \`${issueIdShort}\` updated.\\nCategory: ${newCat || target.category}\\nSeverity: ${newSev || target.severity}` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Edit failed: " + e.message });
+                    }
+                  }
+
+                  // .j deleteissue <id> — Permanently delete a single issue
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} deleteissue`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can delete issues." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const issueIdShort = partsArr[1];
+                    if (!issueIdShort) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " deleteissue <issueId>`" });
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      const all = await Issue.find({}).lean();
+                      const target = all.find(i => i._id.toString().slice(-6) === issueIdShort);
+                      if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Issue \`${issueIdShort}\` not found.` });
+                      await Issue.findByIdAndDelete(target._id);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Issue \`${issueIdShort}\` deleted.\\nOriginal body: ${target.body.slice(0, 120)}` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Delete failed: " + e.message });
+                    }
+                  }
+
+                  // .j clearissues — Delete ALL collected issues (Owner/RpgMod only)
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} clearissues`) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can clear all issues." });
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      const r = await Issue.deleteMany({});
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Cleared all tester issues. ${r.deletedCount} documents deleted.` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Clear failed: " + e.message });
+                    }
+                  }
+
+                  // .j lookupban @user — Diagnostic: which ban/block list is the user on?
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} lookupban`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can look up bans." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to look up." });
+                    const system = require('./utils/system');
+                    const lists = ['_shared_banned_users', '_shared_hard_banned_users', '_shared_blocked_users'];
+                    let msg = `🔍 *BAN LOOKUP for @${economy.getDisplayName(target)}*\\n\\nJID: ${target}\\n\\n`;
+                    for (const listKey of lists) {
+                      const arr = system.get(listKey, []);
+                      const onList = arr.some(j => j === target || jidNormalizedUser(j) === jidNormalizedUser(target));
+                      msg += `${listKey}: ${onList ? '⚠️ ON LIST' : '✅ not on list'}\\n`;
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [target] });
+                  }
+
+                  // .j pardon @user — Unified unblock+unban+unhardban (Owner/GlobalMod only)
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pardon`)) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner or Global Mod can pardon users." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to pardon." });
+                    const system = require('./utils/system');
+                    let cleared = [];
+                    // Clear from banned list
+                    const bans = system.get('_shared_banned_users', []);
+                    if (bans.includes(target) || bans.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = bans.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_banned_users', filtered);
+                      cleared.push('banned');
+                    }
+                    // Clear from hard-banned list
+                    const hardBans = system.get('_shared_hard_banned_users', []);
+                    if (hardBans.includes(target) || hardBans.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = hardBans.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_hard_banned_users', filtered);
+                      cleared.push('hard-banned');
+                    }
+                    // Clear from blocked list
+                    const blocks = system.get('_shared_blocked_users', []);
+                    if (blocks.includes(target) || blocks.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = blocks.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_blocked_users', filtered);
+                      cleared.push('blocked');
+                    }
+                    // Also clear in-memory Sets
+                    try { bannedUsers.delete(target); bannedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    try { hardBannedUsers.delete(target); hardBannedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    try { blockedUsers.delete(target); blockedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    if (cleared.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `ℹ️ @${economy.getDisplayName(target)} is not on any ban/block list.`, mentions: [target] });
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *PARDONED* @${economy.getDisplayName(target)}\\n\\nCleared from: ${cleared.join(', ')}\\n\\nThe user can now use the bot again.`, mentions: [target] });
+                  }
+
 
                   // .g reloaduser @user — force-reload user from DB (mod+ only)
                   // 💡 Used when an external script modifies the DB directly
