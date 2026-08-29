@@ -7099,6 +7099,53 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     );
                   }
 
+                  // ── EXPANDED RPG TEST-MODE LOCK (PHASE 7 FIX 2026-08-29) ──────────
+                  // PHASE 7 FIX 2026-08-29: expanded RPG lock — hardcoded command list
+                  // The lock at line ~7298 (after isCommandDisabled) only catches commands
+                  // registered in commandRegistry. But many RPG commands are inline if-blocks
+                  // in engine.js (rank, profile, me, evolve, trial, combat, etc.) that aren't
+                  // registered, AND cards commands are intercepted by cardSystem.handleCommand
+                  // BEFORE the lock fires. This hardcoded list check sits BEFORE the card
+                  // intercept so all RPG commands are caught regardless of dispatch path.
+                  if (_looksLikeCmd && await testerSystem.getTestMode()) {
+                    try {
+                      const words = lowerTxt.split(' ');
+                      const prefixPart = botConfig.getPrefix().toLowerCase();
+                      const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
+                      const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
+                      if (isRpg) {
+                        const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
+                        if (!bypass) {
+                          // Try image card via Go service
+                          let cardSent = false;
+                          try {
+                            const goService = require('./utils/goImageService');
+                            if (await goService.isHealthy()) {
+                              const cardBuf = await goService.generateBossSplash({
+                                sprite: 'enemies/boss_0_N.png',
+                                name: 'RPG UNDER MAINTENANCE',
+                                flavorText: 'The RPG is currently under maintenance indefinitely. Only Game Testers and Mods can access RPG features during this testing phase.',
+                                rank: '???',
+                                floor: 404
+                              });
+                              if (cardBuf) {
+                                await sock.sendMessage(chatId, { image: cardBuf, caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.' }, { quoted: m });
+                                cardSent = true;
+                              }
+                            }
+                          } catch (e) { console.error('[TestMode-ExpandLock] card gen failed:', e.message); }
+                          if (!cardSent) {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                            }, { quoted: m });
+                          }
+                          return;
+                        }
+                      }
+                    } catch (expandLockErr) { console.error('[TestMode-ExpandLock] error:', expandLockErr.message); }
+                  }
+
                   // ── CARD SYSTEM INTERCEPT ──────────────────
                   if (_looksLikeCmd) {
                     const disabledCats = system.get(botConfig.getBotId() + "_disabled_categories", []);
