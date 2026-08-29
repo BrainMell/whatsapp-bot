@@ -126,6 +126,9 @@ const busyUsers = createInstanceBoundSet(busyUsersByBot);
 // 💡 POLISH 2026-07-17: 3-tier mod role sets
 const rpgMods = createInstanceBoundSet(rpgModsByBot);
 const cardsMods = createInstanceBoundSet(cardsModsByBot);
+// 💡 PHASE 7 2026-08-29: Game Tester role
+const gameTestersByBot = new Map();
+const gameTesters = createInstanceBoundSet(gameTestersByBot);
 
 function resolveLidToPhone(jid, authPath) {
   return lidResolver.resolveLidToPhone(jid, authPath);
@@ -446,6 +449,17 @@ async function saveRpgMods() {
   const system = require('./utils/system');
   await system.set("_shared_rpg_mods", Array.from(rpgMods));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 PHASE 7 2026-08-29: Game Tester role (delegates to testerSystem)
+// ═══════════════════════════════════════════════════════════════════════
+const testerSystem = require('./rpg/testerSystem');
+
+async function loadGameTesters() { return await testerSystem.loadGameTesters(); }
+async function addGameTester(userId) { return await testerSystem.addGameTester(userId); }
+async function delGameTester(userId) { return await testerSystem.delGameTester(userId); }
+function isGameTester(userId) { return testerSystem.isGameTester(userId); }
+
 
 async function loadCardsMods() {
   const system = require('./utils/system');
@@ -5336,6 +5350,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // NOW load mods (system cache is populated)
           await loadGlobalMods();
           await loadRpgMods();
+    try { await loadGameTesters(); } catch(e) { console.error('Game Tester load failed:', e.message); }
           await loadCardsMods();
           await loadBlockedUsers();
           await loadBannedUsers();
@@ -7296,6 +7311,44 @@ _💡 Reply with another number from your search list!_`.trim();
                     _cmdContext.txt = txt;
 
                     const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
+                  // 💡 PHASE 7 2026-08-29: RPG TEST MODE LOCK
+                  if (await testerSystem.getTestMode()) {
+                    try {
+                      const CMD_REGISTRY = require('./utils/commandRegistry');
+                      const registryCat = CMD_REGISTRY.commandRegistry && CMD_REGISTRY.commandRegistry[primaryCmd] && CMD_REGISTRY.commandRegistry[primaryCmd].category;
+                      const isRpgCommand = registryCat && (registryCat === 'RPG' || registryCat === 'RPG_PVP' || registryCat === 'RPG_CRAFTING' || registryCat === 'RPG_SUMMON' || registryCat === 'RPG_ABILITY' || registryCat === 'RPG_CLASS' || registryCat === 'RPG_QUEST' || registryCat === 'RPG_ECONOMY');
+                      if (isRpgCommand) {
+                        const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
+                        if (!bypass) {
+                          // Try to send a 404-style maintenance image card via Go service
+                          let cardSent = false;
+                          try {
+                            const goService = require('./utils/goImageService');
+                            if (await goService.isHealthy()) {
+                              const cardBuf = await goService.generateBossSplash({
+                                sprite: 'enemies/boss_0_N.png',
+                                name: 'RPG UNDER MAINTENANCE',
+                                flavorText: 'The RPG is currently under maintenance indefinitely. Only Game Testers and Mods can access RPG features during this testing phase.',
+                                rank: '???',
+                                floor: 404
+                              });
+                              if (cardBuf) {
+                                await sock.sendMessage(chatId, { image: cardBuf, caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.' }, { quoted: m });
+                                cardSent = true;
+                              }
+                            }
+                          } catch (e) { console.error('[TestMode] card gen failed:', e.message); }
+                          if (!cardSent) {
+                            return await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                            }, { quoted: m });
+                          }
+                          return;
+                        }
+                      }
+                    } catch (lockErr) { console.error('[TestMode] lock check error:', lockErr.message); }
+                  }
+
                     if (disabledCat) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `❌ The *${disabledCat}* category is currently disabled for this bot instance.`,
@@ -11904,6 +11957,204 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                     return;
                   }
+
+                  // ════════════════════════════════════════════════════════════════
+                  // 💡 PHASE 7 2026-08-29: Game Tester + tester GC + test mode + bug/issues
+                  // ════════════════════════════════════════════════════════════════
+
+                  // .j addgtester @user — Promote to Game Tester (Owner/GlobalMod/RpgMod)
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addgtester`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can add Game Testers." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to add as a Game Tester." });
+                    await addGameTester(target);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(target)} is now a *Game Tester*.\n\nThey have limited RPG access for testing. They can use the RPG in tester GCs and submit bug reports via \`${botConfig.getPrefix()} bug <text>\`.`,
+                      mentions: buildMentions(m, [], target)
+                    });
+                  }
+
+                  // .j delgtester @user — Demote Game Tester
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} delgtester`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can remove Game Testers." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to remove from Game Testers." });
+                    await delGameTester(target);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(target)} has been removed from Game Testers.`,
+                      mentions: buildMentions(m, [], target)
+                    });
+                  }
+
+                  // .j listtesters — List current Game Testers
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listtesters`)) {
+                    const testerArr = Array.from(gameTesters);
+                    if (testerArr.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "🎮 *No Game Testers appointed.*\n\nUse `" + botConfig.getPrefix() + " addgtester @user` to add one (Owner/GlobalMod/RpgMod only)." });
+                    }
+                    let msg = `🎮 *GAME TESTERS* (${testerArr.length})\n\n`;
+                    for (let i = 0; i < testerArr.length; i++) {
+                      msg += `${i + 1}. @${economy.getDisplayName(testerArr[i])}\n`;
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: testerArr });
+                  }
+
+                  // .j testmode on|off|status — Toggle RPG test mode
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testmode`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can toggle test mode." });
+                    }
+                    const sub = txt.split(" ")[1] && txt.split(" ")[1].toLowerCase();
+                    if (sub === 'on') {
+                      await testerSystem.setTestMode(true);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "🚧 *RPG TEST MODE ACTIVATED*\n\nAll regular players will now see a maintenance card when trying to use RPG commands. Game Testers, RPG Mods, and Global Mods bypass the lock. Tester GCs also bypass." });
+                    }
+                    if (sub === 'off') {
+                      await testerSystem.setTestMode(false);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ *RPG TEST MODE DEACTIVATED*\n\nRegular players can use RPG commands normally again." });
+                    }
+                    const on = await testerSystem.getTestMode();
+                    const gcs = await testerSystem.loadTesterGcs();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📊 *RPG TEST MODE STATUS*\n\nState: ${on ? '🚧 ON (maintenance lock active)' : '✅ OFF (regular play)'}\nGame Testers: ${gameTesters.size}\nTester GCs: ${gcs.length}\n\nUse \`${botConfig.getPrefix()} testmode on|off\` to toggle.`
+                    });
+                  }
+
+                  // .j testgc add|remove|list [@gid] — Manage tester GC list
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testtc`)) {
+                    // typo-friendly alias testgc as well
+                  }
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testgc`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can manage tester GCs." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const sub = partsArr[1] && partsArr[1].toLowerCase();
+                    if (sub === 'add') {
+                      const target = getMentionOrReply(m) || (partsArr[2] && partsArr[2].includes("@") ? partsArr[2] : null) || chatId;
+                      if (!target || !target.endsWith('@g.us')) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag a group chat (or run this command inside the tester GC) to add it." });
+                      }
+                      await testerSystem.addTesterGc(target);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Added GC to tester list: ${target}\n\nAll players in this GC will bypass the RPG maintenance lock.` });
+                    }
+                    if (sub === 'remove') {
+                      const target = getMentionOrReply(m) || (partsArr[2] && partsArr[2].includes("@") ? partsArr[2] : null) || chatId;
+                      if (!target || !target.endsWith('@g.us')) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag a group chat to remove." });
+                      }
+                      await testerSystem.removeTesterGc(target);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Removed GC from tester list: ${target}` });
+                    }
+                    // list / default
+                    const gcs = await testerSystem.loadTesterGcs();
+                    if (gcs.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 *No tester GCs registered.*\n\nUse `" + botConfig.getPrefix() + " testgc add` (inside the GC) to add one." });
+                    }
+                    let msg = `📋 *TESTER GCs* (${gcs.length})\n\n`;
+                    gcs.forEach((g, i) => { msg += `${i + 1}. ${g}\n`; });
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                  }
+
+                  // .j bug <text> — Submit a tester issue
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bug `)) {
+                    const body = txt.slice((botConfig.getPrefix() + ' bug ').length).trim();
+                    if (!body || body.length < 5) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Bug report body is empty. Usage: `" + botConfig.getPrefix() + " bug <description of the issue>`" });
+                    }
+                    const isTester = isGameTester(senderJid) || isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid);
+                    const inTesterGc = await testerSystem.isTesterGc(chatId);
+                    if (!isTester && !inTesterGc) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can submit bug reports, or run this command inside a registered tester GC." });
+                    }
+                    let category = 'general';
+                    let severity = 'normal';
+                    let actualBody = body;
+                    const tagMatch = body.match(/^\[(\w+):(\w+)\]\s*(.+)$/);
+                    if (tagMatch) {
+                      category = tagMatch[1].toLowerCase();
+                      severity = tagMatch[2].toLowerCase();
+                      actualBody = tagMatch[3];
+                    }
+                    try {
+                      const issue = await testerSystem.submitIssue({
+                        reporterId: senderJid,
+                        reporterName: economy.getDisplayName(senderJid),
+                        chatId,
+                        chatName: chatId,
+                        body: actualBody,
+                        category, severity, attachments: []
+                      });
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `✅ *BUG REPORTED*\n\n🆔 \`${issue._id.toString().slice(-6)}\`\n🏷️ Category: ${category}\n⚠️ Severity: ${severity}\n📝 ${actualBody.slice(0, 200)}${actualBody.length > 200 ? '...' : ''}\n\nReported by @${economy.getDisplayName(senderJid)}. Use \`${botConfig.getPrefix()} issues\` to view collected reports.`,
+                        mentions: [senderJid]
+                      });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to submit bug: " + e.message });
+                    }
+                  }
+
+                  // .j issues [n] [status] — View collected tester issues
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issues`)) {
+                    const isTester = isGameTester(senderJid) || isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid);
+                    const inTesterGc = await testerSystem.isTesterGc(chatId);
+                    if (!isTester && !inTesterGc) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can view bug reports." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const limit = Math.min(parseInt(partsArr[1]) || 10, 30);
+                    const statusFilter = partsArr[2] || 'open';
+                    const issues = await testerSystem.listIssues(limit, statusFilter);
+                    const openCount = await testerSystem.countOpenIssues();
+                    if (issues.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `📭 No issues found (filter: ${statusFilter}). ${openCount} open issues total.` });
+                    }
+                    let msg = `📋 *TESTER ISSUES* (${issues.length} of ${openCount} open)\n\n`;
+                    issues.forEach((iss, i) => {
+                      msg += `*${i + 1}.* 🆔 \`${iss._id.toString().slice(-6)}\` [${iss.category}/${iss.severity}]\n`;
+                      msg += `   👤 @${iss.reporterName} · 📅 ${new Date(iss.submittedAt).toLocaleDateString()}\n`;
+                      msg += `   📝 ${iss.body.slice(0, 120)}${iss.body.length > 120 ? '...' : ''}\n`;
+                      if (iss.status !== 'open') msg += `   📌 Status: ${iss.status}\n`;
+                      msg += '\n';
+                    });
+                    msg += `💡 Use \`${botConfig.getPrefix()} organizeissues\` to send all open issues to Groq for cleanup.`;
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: issues.map(i => i.reporterId) });
+                  }
+
+                  // .j organizeissues — Send all open issues to Groq for organization
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} organizeissues`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can organize issues." });
+                    }
+                    const openCount = await testerSystem.countOpenIssues();
+                    if (openCount === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📭 No open issues to organize." });
+                    }
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `🔄 Organizing ${openCount} open issues with Groq... (this may take 30-60s)` });
+                    try {
+                      const result = await testerSystem.organizeIssuesWithGroq(senderJid);
+                      if (!result.success) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ " + result.message });
+                      }
+                      const organized = result.organized;
+                      if (organized.length <= 4000) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ORGANIZED ISSUES* (${result.issuesProcessed} processed)\n\n` + organized });
+                      }
+                      const chunks = organized.match(/[\s\S]{1,3800}/g) || [];
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ORGANIZED ISSUES* (${result.issuesProcessed} processed, ${chunks.length} parts)\n\n*PART 1:*\n\n` + chunks[0] });
+                      for (let i = 1; i < chunks.length; i++) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `*PART ${i + 1}:*\n\n` + chunks[i] });
+                      }
+                      return;
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Organize failed: " + e.message });
+                    }
+                  }
+
 
                   // .g reloadmods — reload ALL mod lists from DB (owner/mod only)
                   // 💡 Used when an external script (like clear_all_mods.js)
@@ -26528,6 +26779,7 @@ module.exports = {
   delRpgMod,
   isRpgMod,
   loadRpgMods,
+isGameTester, loadGameTesters,
   addCardsMod,
   delCardsMod,
   isCardsMod,

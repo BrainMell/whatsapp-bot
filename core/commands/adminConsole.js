@@ -446,6 +446,16 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!item) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Item "${itemQuery}" not found. Try the item ID.` });
         }
+        // 💡 PHASE 7 2026-08-29: Block "special RPG objects" that aren't inventory items.
+        const SPECIAL_RPG_OBJECTS = new Set([
+            'summon', 'summons', 'rune', 'runes', 'card', 'cards',
+            'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
+        ]);
+        if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `❌ Cannot give special RPG object \`${item.id}\` via giveitem.\n\nUse the dedicated command instead:\n  • \`${prefix} admin givesummon <@user> <species> [level]\`\n  • \`${prefix} admin giverune <@user> <type> [tier]\`\n  • \`${prefix} admin forceevolve <@user> <class>\`\n  • \`${prefix} admin giveskill <@user> <skill> [level]\``
+            });
+        }
         const result = economy.addItem(target, item.id, qty);
         if (!result) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to add item.' });
         economy.scheduleSave(target);
@@ -453,6 +463,69 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             text: BOT_MARKER + `✅ *ITEM GIVEN*\n\n👤 @${economy.getDisplayName(target)}\n📦 ${item.icon || '📦'} *${item.name}* ×${qty}\n🆔 \`${item.id}\``,
             mentions: [target]
         });
+    }
+
+    // ── GIVE SUMMON (PHASE 7 2026-08-29) ─────────────────────────────────────
+    if (sub === 'givesummon') {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!target || remaining.length < 1) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givesummon <@user> <species> [level]\`\nExample: \`${prefix} admin givesummon @user bat 5\`\n\nUse \`${prefix} summon codex\` to see all species.` });
+        }
+        let species = remaining[0];
+        let level = 1;
+        if (remaining.length >= 2) {
+            const lvl = parseInt(remaining[1]);
+            if (!isNaN(lvl) && lvl > 0) level = lvl;
+        }
+        const summonSystem = require('../../rpg/summonSystem');
+        const registry = require('../../rpg/summonRegistry');
+        const speciesData = registry.getSpecies(species.toLowerCase());
+        if (!speciesData) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown summon species: \`${species}\`\nUse \`${prefix} summon codex\` to see all species.` });
+        }
+        try {
+            const summon = await summonSystem.createSummon(target, species.toLowerCase(), {
+                level, obtainedFrom: 'admin_grant', loyalty: 100
+            });
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ *SUMMON GIVEN*\n\n👤 @${economy.getDisplayName(target)}\n🐉 ${speciesData.icon || '🐉'} *${speciesData.name}*\n📊 Level: ${level}\n🆔 \`${summon.summonId}\`\n\n💡 Recipient can deploy with \`${prefix} summon deploy <#>\`.`,
+                mentions: [target]
+            });
+        } catch (e) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give summon: ${e.message}` });
+        }
+    }
+
+    // ── GIVE RUNE (PHASE 7 2026-08-29) ───────────────────────────────────────
+    if (sub === 'giverune') {
+        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!target || remaining.length < 1) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giverune <@user> <type> [tier]\`\nExample: \`${prefix} admin giverune @user POWER GREATER\`\n\nTypes: POWER, EFFICIENCY, FOCUS, ENDURANCE, PIERCE, FROST_CONVERSION, WET, STAR, etc.\nTiers: LESSER, NORMAL, GREATER, ABYSSAL (default: NORMAL).` });
+        }
+        let type = remaining[0].toUpperCase();
+        let tier = 'NORMAL';
+        if (remaining.length >= 2) tier = remaining[1].toUpperCase();
+        const runeSystem = require('../../rpg/runeSystem');
+        if (!runeSystem.RUNE_TYPES[type]) {
+            const valid = Object.keys(runeSystem.RUNE_TYPES).join(', ');
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune type: \`${type}\`\nValid types: ${valid}` });
+        }
+        if (!runeSystem.RUNE_TIERS[tier]) {
+            const valid = Object.keys(runeSystem.RUNE_TIERS).join(', ');
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune tier: \`${tier}\`\nValid tiers: ${valid}` });
+        }
+        try {
+            const result = runeSystem.awardRune(target, type, tier, 'admin_grant');
+            if (!result.success) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ ${result.message}` });
+            }
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + `✅ *RUNE GIVEN*\n\n👤 @${economy.getDisplayName(target)}\n🔮 *${type}* (${tier})\n🆔 \`${result.rune.runeId}\`\n\n💡 Recipient can socket with \`${prefix} rune socket ${type} <skillId>\`.`,
+                mentions: [target]
+            });
+        } catch (e) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give rune: ${e.message}` });
+        }
     }
 
     // ── TAKE ITEM ──────────────────────────────────────────────────────────
