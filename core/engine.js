@@ -12341,11 +12341,12 @@ Usage: ${newUsage}/5${warningText}`;
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, RPG Mod, or Game Tester can edit issues." });
                     }
                     const partsArr = txt.split(/\s+/);
-                    const issueIdShort = partsArr[1];
+                    const issueIdShort = partsArr[2];
+                    // 💡 PHASE 7 FIX 2026-08-29: editissue ID is at partsArr[2], tag at partsArr[3]
                     if (!issueIdShort || issueIdShort.length < 6) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " editissue <issueId> [category:severity]`\\nExample: `" + botConfig.getPrefix() + " editissue 922135 bug:high`" });
                     }
-                    const tag = partsArr[2] || '';
+                    const tag = partsArr[3] || '';
                     let newCat = null, newSev = null;
                     const tagMatch = tag.match(/^([\w-]+):(\w+)$/);
                     if (tagMatch) {
@@ -12377,7 +12378,9 @@ Usage: ${newUsage}/5${warningText}`;
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can delete issues." });
                     }
                     const partsArr = txt.split(/\s+/);
-                    const issueIdShort = partsArr[1];
+                    // 💡 PHASE 7 FIX 2026-08-29: ID is at partsArr[2], not partsArr[1]
+                    // (partsArr[0]=prefix, partsArr[1]=deleteissue, partsArr[2]=issueId)
+                    const issueIdShort = partsArr[2];
                     if (!issueIdShort) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " deleteissue <issueId>`" });
                     }
