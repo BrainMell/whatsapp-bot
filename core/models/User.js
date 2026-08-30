@@ -163,6 +163,30 @@ const UserSchema = new mongoose.Schema({
     }
   },
 
+  // 💡 CRITICAL FIX 2026-08-31: gamblingProfile / dailyQuests / debt were
+  // NEVER in the schema — Mongoose strict mode silently stripped them from
+  // every saveUser() $set, so on every restart the daily gambling anti-abuse
+  // (house edge ramp, forced-loss, 2M/day net cap, wallet cap), the 5/day
+  // quest cap, and auto-debt tracking all reset. Adding the paths makes them
+  // persist. Field set mirrors economy.js:449-453 / gambling.js:73-88 /
+  // economy.js:2313.
+  gamblingProfile: {
+    dayKey: { type: String, default: '' },
+    roundsToday: { type: Number, default: 0 },
+    entryWalletToday: { type: Number, default: 0 },
+    withdrawnToday: { type: Number, default: 0 },
+    netToday: { type: Number, default: 0 },
+  },
+  dailyQuests: {
+    date: { type: String, default: '' },
+    count: { type: Number, default: 0 },
+  },
+  debt: {
+    amount: { type: Number, default: 0 },
+    reason: { type: String, default: '' },
+    setAt: { type: Number, default: 0 },
+  },
+
   // Event Tokens (for token events — earned by claiming cards, spent in eShop)
   eventTokens: { type: Number, default: 0 },
 

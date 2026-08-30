@@ -17,6 +17,21 @@ const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
 
+// 💡 ECONOMY FIX 2026-08-31: MYTHIC shop pricing.
+// Shop-bought MYTHIC gear could be resold at 1.2× sellMultiplier (×0.9 after
+// tax = 1.08×) — a guaranteed 8% profit per buy/sell cycle (infinite money
+// printer). All other rarities have sellMultiplier ≤ 1.0 so resale is always
+// at a loss. Fix: price MYTHIC shop gear 35% above base value so resale
+// (max 1.08× base) is always a loss. NOTE: handleEquipment() stores the DB
+// BASE value (not this cost) so the markup cannot compound on resale.
+function shopPrice(item) {
+    const base = item.value;
+    if ((item.rarity || '').toUpperCase() === 'MYTHIC' && Number.isFinite(base)) {
+        return Math.ceil(base * 1.35);
+    }
+    return base;
+}
+
 // ==========================================
 // 🏪 SHOP DISPLAY
 // ==========================================
@@ -60,7 +75,7 @@ async function displayShop(sock, chatId, category = 'all') {
                       id.includes('skill_respec') ? '📜' :
                       item.type === 'SUMMON_GEAR' ? '⚙️' : '🧪',
                 desc: item.description,
-                cost: item.value,
+                cost: shopPrice(item),
                 rarity: item.rarity || 'COMMON',
                 category: 'SUMMON',
                 type: 'ITEM',
@@ -79,7 +94,7 @@ async function displayShop(sock, chatId, category = 'all') {
                 name: item.name,
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
-                cost: item.value,
+                cost: shopPrice(item),
                 rarity: item.rarity || 'COMMON',
                 category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
                 type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
@@ -230,7 +245,7 @@ async function buyItem(sock, chatId, senderJid, input) {
                       id.includes('skill_respec') ? '📜' :
                       item.type === 'SUMMON_GEAR' ? '⚙️' : '🧪',
                 desc: item.description,
-                cost: item.value,
+                cost: shopPrice(item),
                 rarity: item.rarity || 'COMMON',
                 type: 'ITEM',
                 category: 'SUMMON',
@@ -249,7 +264,7 @@ async function buyItem(sock, chatId, senderJid, input) {
                 name: item.name,
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
                 desc: item.description,
-                cost: item.value,
+                cost: shopPrice(item),
                 rarity: item.rarity || 'COMMON',
                 type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
                 category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
@@ -459,7 +474,11 @@ async function handleEquipment(senderJid, item) {
         rarity: item.rarity || 'COMMON',
         stats: item.stats,
         slot: item.slot,
-        value: item.cost,
+        // 💡 ECONOMY FIX 2026-08-31: store the DB BASE value, not item.cost.
+        // Storing cost made resale compound off the shop price (with the
+        // MYTHIC sellMultiplier this produced an infinite buy→sell profit loop).
+        // Base value keeps sell price anchored to the item's intrinsic worth.
+        value: (lootSystem.getItemInfo(item.id) || {}).value || item.cost,
         reqLevel: item.reqLevel  // 💡 FIX GAP #1: persist reqLevel so equipItem can check it
     });
     

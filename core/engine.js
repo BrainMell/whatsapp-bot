@@ -9768,10 +9768,19 @@ _💡 Reply with another number from your search list!_`.trim();
                   // If we reach here, the user is NOT hard-muted. No re-check needed.
 
                   // Override command - allows user to bypass admin checks
+                  // 💡 SECURITY FIX 2026-08-31: this was UNGATED — any user who
+                  // typed the phrase got full admin (kick/ban/card-mod/market).
+                  // Now restricted to the bot owner only.
                   if (
                     lowerTxt ===
                     `${botConfig.getPrefix().toLowerCase()} mellowisking`
                   ) {
+                    if (!isBotOwner(senderJid)) {
+                      await reply(
+                        "❌ This command is restricted to the bot owner.",
+                      );
+                      return;
+                    }
                     if (overrideUsers.has(senderJid)) {
                       overrideUsers.delete(senderJid);
                       await reply(`failed`);
@@ -11474,7 +11483,12 @@ Usage: ${newUsage}/5${warningText}`;
                   ) {
                     const parts = txt.split(" ");
                     const itemNum = parts[2];
-                    const qty = parseInt(parts[3]) || 1;
+                    // 💡 SECURITY FIX 2026-08-31: validate qty BEFORE passing down.
+                    // parseInt("-5") is truthy so `|| 1` let negatives through,
+                    // enabling the negative-sell item duplication exploit.
+                    const parsedQty = parseInt(parts[3]);
+                    const qty =
+                      !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1;
 
                     if (!itemNum) {
                       return await sendUsage(
@@ -11486,6 +11500,12 @@ Usage: ${newUsage}/5${warningText}`;
                         "sell 1 5",
                         "Use your inventory index number to sell items.",
                       );
+                    }
+                    if (!isNaN(parsedQty) && parsedQty <= 0) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER +
+                          "❌ Quantity must be a positive number.",
+                      });
                     }
 
                     await rpgCommands.sellItem(
@@ -22067,6 +22087,19 @@ ${senderName} said y'all should know:
                       // 3. Check Loan Invites
                       const loanRequest = loans.getPendingRequest(senderJid);
                       if (loanRequest) {
+                        // 💡 SECURITY FIX 2026-08-31: getPendingRequest matches
+                        // by lender OR borrower — previously the BORROWER could
+                        // type `.g accept` to force-accept their own request,
+                        // draining the lender's wallet without consent.
+                        // Only the lender may accept a loan request.
+                        if (loanRequest.lenderJid !== senderJid) {
+                          await sock.sendMessage(chatId, {
+                            text:
+                              BOT_MARKER +
+                              "⏳ You have a pending loan request — wait for the *lender* to accept it.",
+                          });
+                          return;
+                        }
                         const result = loans.acceptLoan(loanRequest.lenderJid);
                         // 💡 FIX 2026-08-06: acceptLoan returns { success, msg } —
                         // it does NOT return `amount`. Previous code tried to read
