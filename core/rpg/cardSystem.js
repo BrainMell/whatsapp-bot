@@ -105,10 +105,13 @@ function getInst() {
         'S': DEFAULT_S_CHANCE,
         'E': DEFAULT_E_CHANCE,
       },
-      // 💡 SPAWN INTERVAL — per-bot configurable via '.g spawnset <minutes>'.
-      // Default 20 min (= 3 spawns/hour). Persisted in System collection
-      // (key: card_spawn_interval_<botId>) so it survives restarts.
-      spawnIntervalMs: 20 * 60 * 1000,
+      // 💡 PHASE 7 FIX 2026-08-30: random spawn interval — pick a random delay
+      // in [min, max] for each fire instead of a fixed interval.
+      // Backward compat: spawnIntervalMs is still read in places that expect a single value;
+      // it's kept at the max value for legacy code paths.
+      spawnIntervalMinMs: 20 * 60 * 1000,
+      spawnIntervalMaxMs: 20 * 60 * 1000,
+      spawnIntervalMs: 20 * 60 * 1000,  // legacy alias = max (for old code that reads this)
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
       // 💡 PERF 2026-07-27: per-user render mode cache (hybrid vs static).
@@ -232,7 +235,17 @@ function ensureTimerRunning() {
   // fire is randomized within [0, interval), and subsequent fires
   // follow at interval spacing — so over time, spawns distribute
   // naturally across the clock minute.
-  const intervalMs = inst.spawnIntervalMs || (20 * 60 * 1000);
+  // 💡 PHASE 7 FIX 2026-08-30: random spawn delay — pick a random delay
+  // in [spawnIntervalMinMs, spawnIntervalMaxMs] for each fire.
+  const minMs = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+  const maxMs = inst.spawnIntervalMaxMs || minMs;
+  const intervalMs = maxMs;  // legacy alias for any code that reads inst.spawnIntervalMs
+
+  // Pick a random delay in [min, max] (inclusive)
+  const randomDelay = () => {
+    if (minMs === maxMs) return minMs;
+    return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+  };
 
   // Track per-group timers
   if (!inst.perGroupTimers) inst.perGroupTimers = new Map();
@@ -241,22 +254,20 @@ function ensureTimerRunning() {
   for (const gid of inst.activeGroups) {
     if (inst.perGroupTimers.has(gid)) continue; // already has a timer
 
-    // Random initial delay in [0, intervalMs) so groups desync.
-    const initialDelay = Math.floor(Math.random() * intervalMs);
+    // Random initial delay in [0, maxMs) so groups desync on first fire.
+    const initialDelay = Math.floor(Math.random() * maxMs);
 
-    // Use a recursive setTimeout chain instead of setInterval so we can
-    // inject the random initial delay only on the FIRST fire. After that,
-    // spacing is exactly intervalMs (predictable cadence per group).
+    // Use a recursive setTimeout chain so each fire uses a fresh random delay
+    // in [minMs, maxMs]. This makes spawns feel unpredictable to players.
     const scheduleNext = (delay) => {
       const timer = setTimeout(() => {
-        // Check if group is still active
         if (!inst.activeGroups.has(gid)) {
           inst.perGroupTimers.delete(gid);
           return;
         }
         doSpawn(null, null, false, gid);
-        // Schedule the next fire at the standard interval
-        scheduleNext(intervalMs);
+        // Schedule the next fire at a fresh random delay
+        scheduleNext(randomDelay());
       }, delay);
       inst.perGroupTimers.set(gid, timer);
     };
@@ -265,7 +276,7 @@ function ensureTimerRunning() {
 
   // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
   inst.spawnTimer = true;
-  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=${Math.round(intervalMs/60000)}min each (staggered first-fire)`);
+  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=random ${Math.round(minMs/60000)}-${Math.round(maxMs/60000)}min (staggered first-fire)`);
 }
 
 // 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
@@ -283,32 +294,58 @@ function restartSpawnTimer() {
   ensureTimerRunning();
 }
 
-// 💡 Persist + apply a new spawn interval for this bot instance.
-// minutes must be a number between 1 and 1440 (24 hours).
+// 💡 PHASE 7 FIX 2026-08-30: setSpawnInterval supports range syntax (min-max).
+// Three call modes:
+//   setSpawnInterval(20)              → sets both min=max=20 (backward compat)
+//   setSpawnInterval('15-30')        → random within 15-30 min (string with dash)
+//   setSpawnInterval(15, 30)          → random within 15-30 min (two args)
+// Persists { min, max } to card_spawn_interval_global. Backward-compat: if old
+// single-number value exists in DB, loadSpawnInterval migrates it to { min: x, max: x }.
 // Returns { success, message }.
-async function setSpawnInterval(minutes, callerJid, isOwner) {
+async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) {
   const inst = getInst();
   if (!isOwner) {
     return { success: false, message: '❌ Only moderators and above can change the spawn interval.' };
   }
-  const mins = Number(minutes);
-  if (!Number.isFinite(mins) || mins < 1 || mins > 1440) {
-    return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours).\nExample: `' + botConfig.getPrefix() + ' spawnset 20` (3 spawns/hour)' };
+  // Parse the input: support "20", "15-30", 20 (number), or two args (15, 30)
+  let minMins, maxMins;
+  if (typeof minutesOrRange === 'string' && minutesOrRange.includes('-')) {
+    const parts = minutesOrRange.split('-').map(s => Number(s.trim()));
+    if (parts.length !== 2 || parts.some(n => !Number.isFinite(n) || n < 1 || n > 1440)) {
+      return { success: false, message: '❌ Invalid range. Use `<min>-<max>` where both are between 1 and 1440 minutes.\nExample: `15-30` for random 15-30 min intervals.' };
+    }
+    [minMins, maxMins] = parts;
+  } else {
+    minMins = Number(minutesOrRange);
+    maxMins = maxMinutes !== undefined ? Number(maxMinutes) : minMins;
   }
-  inst.spawnIntervalMs = mins * 60 * 1000;
+  if (!Number.isFinite(minMins) || minMins < 1 || minMins > 1440
+      || !Number.isFinite(maxMins) || maxMins < 1 || maxMins > 1440) {
+    return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours), or `<min>-<max>` for a random range.\nExample: `20` (fixed) or `15-30` (random range)' };
+  }
+  if (minMins > maxMins) {
+    // Swap so min <= max (don't reject — user may have typed them backwards)
+    [minMins, maxMins] = [maxMins, minMins];
+  }
+  inst.spawnIntervalMinMs = minMins * 60 * 1000;
+  inst.spawnIntervalMaxMs = maxMins * 60 * 1000;
+  inst.spawnIntervalMs = inst.spawnIntervalMaxMs;  // legacy alias = max
   // 💡 P3 (2026-08-16): Cross-bot sync — persist spawn interval GLOBALLY
   // (not per-bot). All bot instances read the same key, so setting it on
   // one bot applies to all. Was: card_spawn_interval_<botId>. Now: card_spawn_interval_global.
   try {
+    // 💡 PHASE 7 FIX 2026-08-30: persist {min, max} object (was single number)
     await System.findOneAndUpdate(
       { key: `card_spawn_interval_global` },
-      { value: inst.spawnIntervalMs },
+      { value: { min: inst.spawnIntervalMinMs, max: inst.spawnIntervalMaxMs } },
       { upsert: true }
     );
     // 💡 Sync to ALL running bot instances in this process
     for (const [botId, otherInst] of instances) {
       if (botId !== botConfig.getBotId()) {
         otherInst.spawnIntervalMs = inst.spawnIntervalMs;
+        otherInst.spawnIntervalMinMs = inst.spawnIntervalMinMs;
+        otherInst.spawnIntervalMaxMs = inst.spawnIntervalMaxMs;
         // Restart their timer if they have active groups
         if (otherInst.activeGroups.size > 0) {
           // Can't call restartSpawnTimer() for another bot — it uses getInst()
@@ -327,30 +364,52 @@ async function setSpawnInterval(minutes, callerJid, isOwner) {
     }
   } catch (e) {
     console.error('[CardSystem] Failed to persist spawn interval:', e.message);
-    return { success: false, message: `⚠️ Interval set to ${mins}min in memory but failed to persist: ${e.message}` };
+    return { success: false, message: `⚠️ Interval set in memory but failed to persist: ${e.message}` };
   }
   // Restart timer if it's running
   if (inst.activeGroups.size > 0) {
     restartSpawnTimer();
   }
-  const spawnsPerHour = Math.round(60 / mins * 10) / 10;
-  const tokensPerHour = spawnsPerHour / 3; // every 3rd spawn = guaranteed token
+  // 💡 PHASE 7 FIX 2026-08-30: message uses min/max + isRandom
+  const intervalLabel = minMins === maxMins ? `${minMins} minutes` : `${minMins}-${maxMins} minutes (random)`;
+  const avgMinutes = (minMins + maxMins) / 2;
+  const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
+  const tokensPerHour = Math.round(spawnsPerHour / 3 * 10) / 10;
   return {
     success: true,
-    message: `✅ Spawn interval set to *${mins} minutes* for ${botConfig.getBotId()}.\n\n📊 Approximate rates:\n• ${spawnsPerHour} spawns/hour\n• ${tokensPerHour} guaranteed event tokens/hour (during events)\n• +25% RNG token bonus on non-guaranteed spawns\n\n_Interval persists across bot restarts._`
+    message: `✅ Spawn interval set to *${intervalLabel}* for ${botConfig.getBotId()}.
+
+📊 Approximate rates (based on avg ${avgMinutes} min):
+• ${spawnsPerHour} spawns/hour
+• ${tokensPerHour} guaranteed event tokens/hour (during events)
+• +25% RNG token bonus on non-guaranteed spawns
+
+_Interval persists across bot restarts._`
   };
 }
 
 // 💡 Get current spawn interval info for display.
+// 💡 PHASE 7 FIX 2026-08-30: getSpawnIntervalInfo returns min/max + isRandom
 function getSpawnIntervalInfo() {
   const inst = getInst();
-  const ms = inst.spawnIntervalMs || (20 * 60 * 1000);
-  const mins = Math.round(ms / 60000);
-  const spawnsPerHour = Math.round(60 / mins * 10) / 10;
+  const minMs = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+  const maxMs = inst.spawnIntervalMaxMs || minMs;
+  const ms = maxMs;  // legacy
+  const minMinutes = Math.round(minMs / 60000);
+  const maxMinutes = Math.round(maxMs / 60000);
+  const isRandom = minMs !== maxMs;
+  // Average rate based on midpoint of range
+  const avgMinutes = (minMinutes + maxMinutes) / 2;
+  const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
   const tokensPerHour = Math.round(spawnsPerHour / 3 * 10) / 10;
   return {
-    minutes: mins,
+    minutes: maxMinutes,  // legacy field (kept for backward compat)
+    minMinutes,
+    maxMinutes,
+    isRandom,
     ms,
+    minMs,
+    maxMs,
     spawnsPerHour,
     tokensPerHour,
     activeGroups: inst.activeGroups.size,
@@ -380,9 +439,21 @@ async function loadSpawnInterval() {
         console.log(`[CardSystem][${botConfig.getBotId()}] Migrated spawn interval to global key`);
       }
     }
-    if (doc && typeof doc.value === 'number' && doc.value > 0) {
-      inst.spawnIntervalMs = doc.value;
-      console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: ${Math.round(doc.value/60000)}min (global)`);
+    // 💡 PHASE 7 FIX 2026-08-30: loadSpawnInterval handles both formats
+    if (doc) {
+      if (doc.value && typeof doc.value === 'object' && typeof doc.value.min === 'number' && typeof doc.value.max === 'number') {
+        // New format: { min, max }
+        inst.spawnIntervalMinMs = doc.value.min;
+        inst.spawnIntervalMaxMs = doc.value.max;
+        inst.spawnIntervalMs = doc.value.max;  // legacy alias = max
+        console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: random ${Math.round(doc.value.min/60000)}-${Math.round(doc.value.max/60000)}min (global)`);
+      } else if (typeof doc.value === 'number' && doc.value > 0) {
+        // Old format: single number. Migrate to {min: x, max: x} so future saves use new format.
+        inst.spawnIntervalMinMs = doc.value;
+        inst.spawnIntervalMaxMs = doc.value;
+        inst.spawnIntervalMs = doc.value;
+        console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: ${Math.round(doc.value/60000)}min (global, legacy — will migrate to range on next save)`);
+      }
     }
   } catch (e) {
     console.error('[CardSystem] Failed to load spawn interval:', e.message);
@@ -4044,17 +4115,21 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(
           `🔧 *Spawn Interval Configuration*\n\n` +
           `Usage:\n` +
-          `• \`${p} spawnset <minutes>\` — set interval (1 to 1440)\n` +
+          `• \`${p} spawnset <minutes>\` — set fixed interval (1 to 1440 min)\n` +
+          `• \`${p} spawnset <min>-<max>\` — random interval within range (e.g. \`15-30\`)\n` +
           `• \`${p} spawnset reset\` — restore default (20 min)\n` +
+          `• \`${p} spawnset tier <...>\` — tier spawn weights/chances (unchanged)\n` +
           `• \`${p} spawninfo\` — view current settings\n\n` +
           `Examples:\n` +
-          `• \`${p} spawnset 20\` → 3 spawns/hour (default)\n` +
-          `• \`${p} spawnset 15\` → 4 spawns/hour\n` +
-          `• \`${p} spawnset 30\` → 2 spawns/hour\n` +
-          `• \`${p} spawnset 60\` → 1 spawn/hour\n\n` +
-          `_Interval is unique per bot instance and persists across restarts._`
+          `• \`${p} spawnset 20\` → fixed 20 min (default, 3 spawns/hour)\n` +
+          `• \`${p} spawnset 15-30\` → random 15-30 min (avg ~4 spawns/hour)\n` +
+          `• \`${p} spawnset 10-45\` → random 10-45 min (more varied)\n` +
+          `• \`${p} spawnset 60\` → fixed 1 spawn/hour\n\n` +
+          `_Random ranges make spawns feel less predictable to players.\n` +
+          `_Interval is shared across all bot instances and persists across restarts._`
         ), true;
       }
+      // Pass the raw sub string so setSpawnInterval can parse "15-30" as a range
       const res = await setSpawnInterval(sub, senderJid, isOwner || isMod);
       return reply(res.message), true;
     }
@@ -4062,16 +4137,20 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'spawninfo': {
       const info = getSpawnIntervalInfo();
       const inst = getInst();
+      // 💡 PHASE 7 FIX 2026-08-30: spawninfo + spawnset help
+      const intervalLabel = info.isRandom
+        ? `Random ${info.minMinutes}-${info.maxMinutes} minutes`
+        : `Fixed ${info.minutes} minutes`;
       return reply(
         `📊 *Spawn Configuration — ${botConfig.getBotId()}*\n\n` +
-        `⏱️ Interval: *${info.minutes} minutes*\n` +
-        `📈 Rate: *${info.spawnsPerHour} spawns/hour*\n` +
+        `⏱️ Interval: *${intervalLabel}*\n` +
+        `📈 Rate (avg): *${info.spawnsPerHour} spawns/hour*\n` +
         `🎫 Guaranteed tokens: *${info.tokensPerHour}/hour* (during events)\n` +
         `🎲 RNG token bonus: *25%* on non-guaranteed spawns\n\n` +
         `🏠 Active groups: *${info.activeGroups}*\n` +
         `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
         `📋 *Tier Spawn Config:*\n${formatTierConfig(inst)}\n\n` +
-        `_Use \`${p} spawnset <minutes>\` for interval, \`${p} spawnset tier\` for tier config._`
+        `_Use \`${p} spawnset <minutes>\` (fixed) or \`${p} spawnset <min>-<max>\` (random range) for interval._`
       ), true;
     }
 
