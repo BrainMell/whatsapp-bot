@@ -125,6 +125,16 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
 }
 
 async function addItem(userId, itemId, quantity = 1, itemData = {}) {
+    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
+    // Negative quantities were exploited via `.j sell <#> -N` to DUPLICATE items
+    // (removeItem subtracting a negative adds items). Same guard class as
+    // economy.js addItem/removeItem.
+    const qAdd = Math.floor(Number(quantity));
+    if (!Number.isFinite(qAdd) || qAdd <= 0) {
+        return { success: false, message: '❌ Invalid quantity.' };
+    }
+    quantity = qAdd;
+
     const inventory = getInventory(userId);
     const itemInfo = lootSystem.getItemInfo(itemId);
 
@@ -206,7 +216,15 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
 
 function removeItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
-    
+
+    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
+    // `quantity -= -N` ADDS items — this was the root of the negative-sell dupe.
+    const qRem = Math.floor(Number(quantity));
+    if (!Number.isFinite(qRem) || qRem <= 0) {
+        return { success: false, message: '❌ Invalid quantity.' };
+    }
+    quantity = qRem;
+
     if (!inventory[itemId]) {
         return {
             success: false,
@@ -1067,7 +1085,16 @@ function repairUserEquipmentStats(userId) {
 
 function sellItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
-    
+
+    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
+    // Negative qty passed the `currentQuantity < quantity` check and made
+    // removeItem ADD items to the stack (infinite duplication exploit).
+    const qSell = Math.floor(Number(quantity));
+    if (!Number.isFinite(qSell) || qSell <= 0) {
+        return { success: false, message: '❌ Invalid quantity — must be a positive number.' };
+    }
+    quantity = qSell;
+
     // Loose matching for underscores and spaces
     let targetItemId = itemId;
     const cleanItemId = (itemId || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
