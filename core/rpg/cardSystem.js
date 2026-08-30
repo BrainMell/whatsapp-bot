@@ -79,6 +79,7 @@ function getInst() {
   const id = botConfig.getBotId();
   if (!instances.has(id)) {
     instances.set(id, {
+      botId:         id, // 💡 2026-08-31: needed by rebuildSpawnTimersForInstance when rebuilding OTHER bots' timers
       sock_ref:      null,
       activeGroups:  new Set(),
       spawnTimer:    null,
@@ -216,49 +217,41 @@ async function loadRoles() {
   }
 }
 
-function ensureTimerRunning() {
-  const inst = getInst();
-  if (inst.spawnTimer) return; // already running
-  if (inst.activeGroups.size === 0) return;
+// 💡 FIX 2026-08-31: shared per-instance timer (re)builder. Works for ANY
+// instance (not just the current getInst()) so cross-bot sync can rebuild
+// other bots' timers instead of clearing them and leaving them dead.
+function rebuildSpawnTimersForInstance(inst) {
+  if (!inst) return;
+  if (inst.perGroupTimers) {
+    for (const [gid, timer] of inst.perGroupTimers) clearTimeout(timer);
+    inst.perGroupTimers.clear();
+  } else {
+    inst.perGroupTimers = new Map();
+  }
+  if (inst.activeGroups.size === 0) {
+    inst.spawnTimer = null;
+    return;
+  }
 
-  // 💡 FIX §8: per-group spawn timers instead of a single shared timer.
-  // Previously, one timer rotated through groups, so each group only got
-  // a spawn every interval × numberOfGroups. Now each group gets its own
-  // independent timer at the configured interval.
-  //
-  // 💡 FIX (Item #13 — "card spawn hive mind"): stagger the first spawn
-  // for each group by a random offset within the interval, so groups
-  // don't all spawn at the same wall-clock minute. Without this, every
-  // group's setInterval fires at t=interval, t=2*interval, t=3*interval...
-  // all in lockstep — making the bot look like a single hive mind
-  // spawning cards simultaneously across every chat. Now the first
-  // fire is randomized within [0, interval), and subsequent fires
-  // follow at interval spacing — so over time, spawns distribute
-  // naturally across the clock minute.
-  // 💡 PHASE 7 FIX 2026-08-30: random spawn delay — pick a random delay
-  // in [spawnIntervalMinMs, spawnIntervalMaxMs] for each fire.
   const minMs = inst.spawnIntervalMinMs || (20 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
-  const intervalMs = maxMs;  // legacy alias for any code that reads inst.spawnIntervalMs
 
-  // Pick a random delay in [min, max] (inclusive)
+  // 💡 FIX 2026-08-31 (stale closure): read the interval LIVE from `inst` at
+  // every fire instead of closing over minMs/maxMs — a running timer chain
+  // now adopts new spawnset values on the next fire.
   const randomDelay = () => {
-    if (minMs === maxMs) return minMs;
-    return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+    const lo = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+    const hi = inst.spawnIntervalMaxMs || lo;
+    if (lo === hi) return lo;
+    return Math.floor(Math.random() * (hi - lo + 1)) + lo;
   };
 
-  // Track per-group timers
-  if (!inst.perGroupTimers) inst.perGroupTimers = new Map();
-
-  // Start a timer for each active group
   for (const gid of inst.activeGroups) {
     if (inst.perGroupTimers.has(gid)) continue; // already has a timer
 
     // Random initial delay in [0, maxMs) so groups desync on first fire.
     const initialDelay = Math.floor(Math.random() * maxMs);
 
-    // Use a recursive setTimeout chain so each fire uses a fresh random delay
-    // in [minMs, maxMs]. This makes spawns feel unpredictable to players.
     const scheduleNext = (delay) => {
       const timer = setTimeout(() => {
         if (!inst.activeGroups.has(gid)) {
@@ -276,22 +269,44 @@ function ensureTimerRunning() {
 
   // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
   inst.spawnTimer = true;
-  console.log(`[CardSystem][${botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=random ${Math.round(minMs/60000)}-${Math.round(maxMs/60000)}min (staggered first-fire)`);
+  console.log(`[CardSystem][${inst.botId || botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=random ${Math.round(minMs/60000)}-${Math.round(maxMs/60000)}min (staggered first-fire)`);
+}
+
+function ensureTimerRunning() {
+  const inst = getInst();
+  // 💡 FIX 2026-08-31: NO early return on `inst.spawnTimer` — that boolean
+  // gate made ensureTimerRunning a one-shot: groups enabled AFTER the first
+  // call never received a per-group timer (one immediate spawn, then silence
+  // until restart). The per-group loop below is idempotent (line: `if
+  // (perGroupTimers.has(gid)) continue`), so calling this repeatedly is safe.
+  if (inst.activeGroups.size === 0) return;
+  if (!inst.perGroupTimers) inst.perGroupTimers = new Map();
+  if (inst.spawnTimer && inst.perGroupTimers.size >= inst.activeGroups.size) {
+    // Every active group already has a timer — nothing to do.
+    return;
+  }
+
+  // 💡 FIX §8: per-group spawn timers instead of a single shared timer.
+  // Previously, one timer rotated through groups, so each group only got
+  // a spawn every interval × numberOfGroups. Now each group gets its own
+  // independent timer at the configured interval.
+  //
+  // 💡 FIX (Item #13 — "card spawn hive mind"): stagger the first spawn
+  // for each group by a random offset within the interval, so groups
+  // don't all spawn at the same wall-clock minute.
+  // 💡 PHASE 7 FIX 2026-08-30: random spawn delay — pick a random delay
+  // in [spawnIntervalMinMs, spawnIntervalMaxMs] for each fire.
+  // NOTE: rebuild clears + recreates chains only when at least one group
+  // is missing a timer (checked above), so a fully-timered instance is
+  // left untouched and keeps its stagger clock.
+  rebuildSpawnTimersForInstance(inst);
 }
 
 // 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
 // Clears the existing timer and re-creates it with the new interval.
 function restartSpawnTimer() {
   const inst = getInst();
-  // Clear per-group timers (setTimeout chain — use clearTimeout, not clearInterval)
-  if (inst.perGroupTimers) {
-    for (const [gid, timer] of inst.perGroupTimers) {
-      clearTimeout(timer);
-    }
-    inst.perGroupTimers.clear();
-  }
-  inst.spawnTimer = null;
-  ensureTimerRunning();
+  rebuildSpawnTimersForInstance(inst);
 }
 
 // 💡 PHASE 7 FIX 2026-08-30: setSpawnInterval supports range syntax (min-max).
@@ -346,19 +361,15 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
         otherInst.spawnIntervalMs = inst.spawnIntervalMs;
         otherInst.spawnIntervalMinMs = inst.spawnIntervalMinMs;
         otherInst.spawnIntervalMaxMs = inst.spawnIntervalMaxMs;
-        // Restart their timer if they have active groups
+        // 💡 FIX 2026-08-31: previously this CLEARED the other bot's
+        // per-group timers but never re-created them ("can't switch botId"),
+        // and their `spawnTimer` stayed `true` so ensureTimerRunning
+        // early-returned forever — every other bot went spawn-dead until
+        // process restart. rebuildSpawnTimersForInstance() takes the inst
+        // directly (no getInst()/ALS dependency), so we can now properly
+        // rebuild their timers with the new interval.
         if (otherInst.activeGroups.size > 0) {
-          // Can't call restartSpawnTimer() for another bot — it uses getInst()
-          // which returns THIS bot's instance. Instead, clear and restart manually.
-          if (otherInst.perGroupTimers) {
-            for (const [gid, timer] of otherInst.perGroupTimers) clearTimeout(timer);
-            otherInst.perGroupTimers.clear();
-          }
-          // Re-create timers for the other bot
-          const oldBotId = botConfig.getBotId();
-          // Temporarily can't switch botId — skip timer restart for other bots.
-          // They'll pick up the new interval on their next natural timer cycle
-          // or restart. The DB value is correct; this is a best-effort live sync.
+          rebuildSpawnTimersForInstance(otherInst);
         }
       }
     }
@@ -704,8 +715,19 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     card = CARD_INDEX()[forceCardId];
     if (!card) {
       const q = forceCardId.toLowerCase();
-      card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && (!forceTier || String(c.tier) === String(forceTier)));
-      if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && (!forceTier || String(c.tier) === String(forceTier)));
+      // 💡 FIX 2026-08-31: 'E' is a VIRTUAL tier — event cards carry their
+      // real tier (1-6/S) with an 'E-' ID prefix, so `String(c.tier)==='E'`
+      // never matched and `.g espawn <name>` ALWAYS failed (only exact
+      // E-XXXXX IDs worked). When forceTier is 'E', match event cards by
+      // ID prefix instead of tier.
+      const tierOk = (c) => {
+        if (!forceTier) return true;
+        if (String(c.tier) === String(forceTier)) return true;
+        if (String(forceTier).toUpperCase() === 'E' && isEventCard(c)) return true;
+        return false;
+      };
+      card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && tierOk(c));
+      if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && tierOk(c));
     }
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
@@ -726,8 +748,14 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       for (const [t, w] of entries) { roll -= w; if (roll <= 0) return t; }
       return entries[0][0];
     })();
-    
-    const pool = [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c));
+
+    // 💡 FIX 2026-08-31: 'E' is a virtual tier — there is no CARDS_BY_TIER['E']
+    // bucket (event cards live in their real-tier buckets), so a random 'E'
+    // roll produced an EMPTY pool and silently degraded to the T1 fallback.
+    // Use the EVENT_CARDS list instead.
+    const pool = String(tier).toUpperCase() === 'E'
+      ? [...(inst.EVENT_CARDS || [])]
+      : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -1023,15 +1051,17 @@ async function eshopBuy(senderJid, slot) {
   // Grant the card to the user
   try {
     // Get the card stat to find the next copy number
+    // 💡 FIX 2026-08-31 (duplicate copy numbers): read-modify-write across an
+    // await let two concurrent buyers compute the SAME copyNumber and rewound
+    // each other's counters. Use atomic $inc and read the post-increment value.
     const stat = await getOrInitStat(entry.cardId, entry.tier);
-    stat.totalCirculation += 1;
-    // 💡 FIX: Use totalCirculation for the copy number, NOT totalSpawned.
-    // eShop purchases aren't "spawns" so totalSpawned stays unchanged,
-    // but the copy number must still be unique. Using totalSpawned+1
-    // would collide with the next natural spawn's copy number.
-    const copyNumber = stat.totalCirculation;
+    const updatedStat = await CardStat.findOneAndUpdate(
+      { _id: stat._id },
+      { $inc: { totalCirculation: 1 } },
+      { new: true }
+    );
+    const copyNumber = (updatedStat && updatedStat.totalCirculation) || (stat.totalCirculation + 1);
     await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
-    await stat.save();
 
     const newBalance = economy.getTokens(senderJid);
     return {
@@ -1173,17 +1203,33 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     return reply(`❌ No active card with ID \`${cardIdInput}\` in this group.`);
   }
 
+  // 💡 FIX 2026-08-31 (claim race): remove the spawn from activeSpawns
+  // IMMEDIATELY — BEFORE any await. Previously the delete happened after
+  // 3 awaits (findOne/create/save); two players claiming in the same tick
+  // both passed the check and BOTH created a UserCard with the same
+  // copyNumber. Now the first claimer atomically "takes" the spawn; if the
+  // DB write then fails we restore it (rollback) so the spawn isn't lost.
+  const claimKey = `${chatId}_${spawn.card.id}`;
+  inst.activeSpawns.delete(claimKey);
+
   try {
     // Check if the user already owns at least one copy of this card.
     const alreadyOwned = await UserCard.findOne({ userId: senderJid, cardId: spawn.card.id }).lean();
 
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
-    spawn.stat.totalCirculation += 1;
-    if (!alreadyOwned) {
-      spawn.stat.uniqueOwners += 1;
-    }
-    await spawn.stat.save();
-    inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
+    // 💡 FIX 2026-08-31 (stale stat write): spawn.stat is a Mongoose doc loaded
+    // at SPAWN time (up to 30 min stale). Full-document save() rewound
+    // totalSpawned/uniqueOwners when the same card spawned again meanwhile,
+    // causing duplicate copy numbers. Use atomic $inc instead.
+    await CardStat.updateOne(
+      { _id: spawn.stat._id },
+      {
+        $inc: {
+          totalCirculation: 1,
+          uniqueOwners: alreadyOwned ? 0 : 1,
+        },
+      }
+    );
 
     // 💡 TOKEN EVENT: two-layer drop mechanic.
     //   1) GUARANTEED: every 3rd spawn is marked hasToken=true at spawn time.
@@ -1221,7 +1267,13 @@ async function cmdClaim(args, senderJid, reply, chatId) {
       return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n${TIER_STARS[_claimTier] || '✆'} ${_claimLabel} | Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_${tokenMsg}`);
   } catch (err) {
     console.error('[Claim Error]', err);
-    return reply('❌ Claim failed.');
+    // 💡 FIX 2026-08-31 (rollback): restore the spawn so a transient DB
+    // failure doesn't destroy the card for everyone in the group.
+    // Only restore if nobody else has claimed it in the meantime.
+    if (!inst.activeSpawns.has(claimKey)) {
+      inst.activeSpawns.set(claimKey, spawn);
+    }
+    return reply('❌ Claim failed — the card is back up for grabs.');
   }
 }
 
@@ -3083,30 +3135,49 @@ async function cmdBuyCard(senderJid, reply, args = []) {
         if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
 
         try {
-            // Verify return values: previously removeMoney and addMoney were
-            // called without checking, so if either failed the card might
-            // transfer without payment (or payment without card transfer).
+            // 💡 FIX 2026-08-31 (double-sell race): ATOMICALLY claim the listing
+            // before moving any money. Previously two concurrent buyers both read
+            // status:'active', both paid, seller was credited twice, and the card
+            // went to whichever update landed last — one buyer paid for nothing.
+            const claimed = await CardMarket.findOneAndUpdate(
+              { _id: listing._id, status: 'active' },
+              { $set: { status: 'pending' } },
+              { new: true }
+            );
+            if (!claimed) {
+              return reply('❌ This listing was just bought by someone else.');
+            }
+
             // 💡 P4 Item 6: 10% tax on card sales — buyer pays full price,
             // seller gets 90%, 10% evaporates (genuine sink).
             const taxAmount = Math.floor(listing.price * 0.10);
             const sellerGets = listing.price - taxAmount;
             const paid = economy.removeMoney(senderJid, listing.price, `Bought card ${listing.cardId}`);
             if (!paid) {
+              await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
               return reply('❌ Purchase failed: wallet balance changed during transaction.');
             }
             const credited = economy.addMoney(listing.sellerId, sellerGets, `Sold card ${listing.cardId} (after 10% tax)`);
             if (!credited) {
               // Roll back the buyer's payment
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (seller credit failed)`);
+              await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
               return reply('❌ Purchase failed: seller could not be credited. Try again later.');
             }
 
             // Transfer card ownership
-            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null });
+            // 💡 FIX 2026-08-31 (deck corruption): sc only lists DECK cards
+            // (inMainDeck:true), so the buyer inherited the seller's deck slot —
+            // decks could exceed 12 cards with slot collisions. Clear deck state
+            // like finalizeAuctions does.
+            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null });
             if (!updated) {
-              // Roll back the transaction — neither party should lose out
+              // Roll back the transaction — neither party should lose out.
+              // 💡 FIX 2026-08-31: refund the seller the 90% they actually
+              // received (was: full price removed from seller).
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (card not found)`);
-              economy.removeMoney(listing.sellerId, listing.price, `Card sale rollback (card not found)`);
+              economy.removeMoney(listing.sellerId, sellerGets, `Card sale rollback (card not found)`);
+              await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
               return reply('❌ Purchase failed: card listing was stale. Try the market listing again.');
             }
 
@@ -3114,9 +3185,11 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             listing.completedAt = new Date();
             await listing.save();
             const card = CARD_INDEX()[listing.cardId];
-            return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card.cardName}* for ${ZENI()}${listing.price.toLocaleString()}.`);
+            return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card?.cardName || listing.cardId}* for ${ZENI()}${listing.price.toLocaleString()}.`);
         } catch (err) {
             console.error('[CardMarket] Purchase error:', err);
+            // Best-effort un-claim so the listing isn't stuck in 'pending'
+            try { await CardMarket.updateOne({ _id: listing._id, status: 'pending' }, { $set: { status: 'active' } }); } catch (_) {}
             return reply('❌ Purchase failed: ' + (err.message || 'unknown error'));
         }
     }
@@ -3147,6 +3220,11 @@ async function cmdSC(senderJid, reply, args = []) {
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
   if (uc.isLocked) return reply('❌ This card is locked! Unlock it first.');
+  // 💡 FIX 2026-08-31 (double-commit): a card already listed for sale or in an
+  // auction could be listed AGAIN — two buyers, one card, feeding the
+  // double-sell race. Block listing a committed card.
+  if (uc.forSale) return reply('❌ This card is already listed for sale! Unlist it first.');
+  if (uc.inAuction) return reply('❌ This card is in an active auction! Wait for it to end.');
 
   try {
     uc.forSale = true;
@@ -3469,6 +3547,10 @@ async function cmdAuction(senderJid, reply, args = []) {
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
   if (uc.isLocked) return reply('❌ This card is locked!');
+  // 💡 FIX 2026-08-31 (double-commit): block auctioning a card that's already
+  // listed for sale or in another auction — same class of bug as sc.
+  if (uc.forSale) return reply('❌ This card is listed for sale! Unlist it first.');
+  if (uc.inAuction) return reply('❌ This card is already in an active auction!');
 
   try {
     uc.inAuction = true;
@@ -3485,7 +3567,7 @@ async function cmdAuction(senderJid, reply, args = []) {
       auctionEndsAt: endsAt
     });
     const card = CARD_INDEX()[uc.cardId];
-    return reply(`🔨 *AUCTION STARTED!*\n\n*${card.cardName}* is up for bidding!\n💰 Min Bid: ${ZENI()}${minBid.toLocaleString()}\n⏳ Ends at: ${endsAt.toLocaleString()}`);
+    return reply(`🔨 *AUCTION STARTED!*\n\n*${card?.cardName || uc.cardId}* is up for bidding!\n💰 Min Bid: ${ZENI()}${minBid.toLocaleString()}\n⏳ Ends at: ${endsAt.toLocaleString()}`);
   } catch (err) { return reply('❌ Failed to start auction.'); }
 }
 
@@ -3528,31 +3610,65 @@ async function cmdBid(senderJid, reply, args = []) {
   } catch (err) { return reply('❌ Failed to place bid.'); }
 }
 
+// 💡 FIX 2026-08-31: shared auction settlement — moves money AND card, with
+// checked return values. Used by BOTH the automatic sweeper (finalizeAuctions)
+// and the manual `.g endauction` (which previously marked auctions 'sold' and
+// announced a winner WITHOUT transferring card or Zeni — a fake sale).
+// Outcomes: 'ok' | 'payment_failed' (bidder can't pay) | 'seller_credit_failed'
+async function settleAuction(a) {
+  if (!a) return { outcome: 'error' };
+  if (a.highBidderId) {
+    // Transfer Zeni — 💡 P4 Item 6: 10% tax on auction sales
+    // 💡 FIX 2026-08-31 (money minting): removeMoney() returns false when
+    // the bidder's wallet can't cover the bid (bids place no escrow — a
+    // bidder could spend their balance after winning). Previously the
+    // seller was paid regardless → Zeni created from thin air. Now a
+    // failed debit voids the sale (card returns to seller, no payout).
+    const taxAmount = Math.floor(a.currentBid * 0.10);
+    const sellerGets = a.currentBid - taxAmount;
+    const bidderPaid = economy.removeMoney(a.highBidderId, a.currentBid);
+    if (!bidderPaid) {
+      console.warn(`[AuctionSettle] bidder ${a.highBidderId} could not pay ${a.currentBid} — voiding sale, card returns to seller ${a.sellerId}`);
+      await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
+      a.status = 'expired';
+      a.completedAt = new Date();
+      await a.save();
+      return { outcome: 'payment_failed' };
+    }
+    // 💡 FIX 2026-08-31: if crediting the seller fails (unregistered /
+    // market cap), refund the bidder instead of destroying the Zeni.
+    const sellerCredited = economy.addMoney(a.sellerId, sellerGets, `Auction sale (after 10% tax)`);
+    if (!sellerCredited) {
+      economy.addMoney(a.highBidderId, a.currentBid, `Auction refund (seller credit failed)`);
+      console.error(`[AuctionSettle] FAILED to credit seller ${a.sellerId} — bidder ${a.highBidderId} refunded`);
+      await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
+      a.status = 'expired';
+      a.completedAt = new Date();
+      await a.save();
+      return { outcome: 'seller_credit_failed' };
+    }
+
+    // Transfer Card
+    await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null });
+    a.status = 'sold';
+  } else {
+    // No bidders, return card
+    await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
+    a.status = 'expired';
+  }
+  a.completedAt = new Date();
+  await a.save();
+  return { outcome: 'ok' };
+}
+
 // Finalize auctions
 async function finalizeAuctions(sock) {
   const expired = await CardMarket.find({ status: 'active', type: 'auction', auctionEndsAt: { $lte: new Date() } });
   if (!Array.isArray(expired)) return;
-  
+
   for (const a of expired) {
     try {
-      if (a.highBidderId) {
-        // Transfer Zeni — 💡 P4 Item 6: 10% tax on auction sales
-        const taxAmount = Math.floor(a.currentBid * 0.10);
-        const sellerGets = a.currentBid - taxAmount;
-        economy.removeMoney(a.highBidderId, a.currentBid);
-        economy.addMoney(a.sellerId, sellerGets, `Auction sale (after 10% tax)`);
-
-        // Transfer Card
-        await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null });
-        
-        a.status = 'sold';
-      } else {
-        // No bidders, return card
-        await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
-        a.status = 'expired';
-      }
-      a.completedAt = new Date();
-      await a.save();
+      await settleAuction(a);
     } catch (err) { console.error('Finalize auction failed:', err); }
   }
 }
@@ -3752,7 +3868,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 't2edeck':
       // 💡 FIX 2026-08-14: Card mods can also manage the eShop deck (add/remove/price/clear).
       // Was passing isMod (global mod only) — card mods were blocked.
-      await cmdT2EDeck(senderJid, reply, args, isOwner, isMod || isCardMod);
+      await cmdT2EDeck(senderJid, reply, args, isOwner, isMod || isCardMod, chatId);
       return true;
 
     case 't2ecoll':
@@ -4108,7 +4224,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
 
       if (sub === 'reset' || sub === 'default') {
-        const res = await setSpawnInterval(20, senderJid, isOwner || isMod);
+        // 💡 FIX 2026-08-31: permission mismatch — the router gate above accepts
+        // card mods (isCardMod) but setSpawnInterval() internally required
+        // isOwner, so card mods always got rejected AFTER passing the gate.
+        // Pass the same permission the gate checked.
+        const res = await setSpawnInterval(20, senderJid, isOwner || isMod || isCardMod);
         return reply(res.message), true;
       }
       if (!sub) {
@@ -4130,7 +4250,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         ), true;
       }
       // Pass the raw sub string so setSpawnInterval can parse "15-30" as a range
-      const res = await setSpawnInterval(sub, senderJid, isOwner || isMod);
+      // 💡 FIX 2026-08-31: same permission mismatch as 'reset' above.
+      const res = await setSpawnInterval(sub, senderJid, isOwner || isMod || isCardMod);
       return reply(res.message), true;
     }
 
@@ -4243,12 +4364,17 @@ async function init(sock, admins = [], mods = [], owner = null) {
   // before any commands are processed. Previously these were fire-and-
   // forget, causing a race condition where commands ran before tier
   // config / eShop deck / token event state was loaded.
+  // 💡 FIX 2026-08-31 (load order): loadSpawnInterval() must complete
+  // BEFORE loadActiveGroups() — loadActiveGroups calls ensureTimerRunning
+  // as soon as its query resolves, and when it won the Promise.all race the
+  // per-group timer chains were built with the DEFAULT 20min interval
+  // instead of the persisted configured range.
+  await loadSpawnInterval();
   await Promise.all([
     loadActiveGroups(),
     loadRoles(),
     loadTokenEventState(),
     loadEShopDeck(),
-    loadSpawnInterval(),
     loadTierConfig(),
   ]);
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
@@ -4267,7 +4393,7 @@ async function init(sock, admins = [], mods = [], owner = null) {
  *   t2edeck price <slot> <price> → Set price for a slot
  *   t2edeck clear              → Clear all slots
  */
-async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod) {
+async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod, chatId) {
   const p = P();
 
   if (!isOwner && !isMod) {
@@ -4332,9 +4458,14 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod) {
     caption += `➥ \`${p} t2edeck price <slot> <price>\`\n`;
     caption += `➥ \`${p} t2edeck clear\``;
     try {
-      return await getInst().sock_ref.sendMessage(reply._chatId || reply.chatId, { image: imageBuffer, caption });
+      // 💡 FIX 2026-08-31: `reply` is a plain function — reply._chatId /
+      // reply.chatId were always undefined, so sendMessage(undefined)
+      // threw and the 4x4 deck editor image was unreachable dead code.
+      // Use the chatId passed in from handleCommand.
+      return await getInst().sock_ref.sendMessage(chatId, { image: imageBuffer, caption });
     } catch (err) {
       // Fall through to text list
+      console.error('[T2EDeck] image send failed:', err.message);
     }
   }
 
@@ -4421,9 +4552,12 @@ async function cmdCi(senderJid, reply, args) {
     return reply(`❌ Invalid tier. Use a number 1-7.`);
   }
   // Search card index for matching name
+  // 💡 FIX 2026-08-31: cards_data.json stores tier as STRING ("5"), but tier
+  // here is a Number (parseInt) — strict === never matched, so this lookup
+  // ALWAYS returned "no card found". Compare as strings.
   const cardIndex = CARD_INDEX();
   const matchingCards = Object.values(cardIndex).filter(c =>
-    c.cardName?.toLowerCase().includes(namePart.toLowerCase()) && c.tier === tier
+    c.cardName?.toLowerCase().includes(namePart.toLowerCase()) && String(c.tier) === String(tier)
   );
   if (!matchingCards.length) {
     return reply(`❌ No card found matching "${namePart}" in Tier ${tier}.`);
@@ -4445,6 +4579,11 @@ async function cmdCi(senderJid, reply, args) {
 // 💡 P3 (2026-08-16): EndAuction — owner manually closes an auction early.
 // Usage: .g endauction (closes the oldest active auction)
 //        .g endauction <cardId> (closes auction for a specific card)
+// 💡 FIX 2026-08-31: previously this marked the auction 'sold' + announced a
+// winner but NEVER transferred the card or the Zeni (the suggested `.g
+// transfer` is a money-only command). Now it runs the SAME settlement path
+// as the automatic sweeper (settleAuction): bidder pays, seller gets 90%,
+// card transfers to the winner.
 async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   const p = P();
   // Auctions are stored in CardMarket with type: 'auction', status: 'active'
@@ -4459,22 +4598,27 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   // Find highest bid
   const sortedBids = [...(auction.bids || [])].sort((a, b) => b.amount - a.amount);
   const winner = sortedBids[0];
-
-  // Close the auction
-  auction.status = 'sold';
-  auction.completedAt = new Date();
   if (winner) {
     auction.highBidderId = winner.bidderId;
     auction.currentBid = winner.amount;
   }
-  await auction.save();
 
-  // Also unflag the UserCard
-  if (auction.userCardId) {
-    await UserCard.updateOne(
-      { _id: auction.userCardId },
-      { $set: { inAuction: false } }
-    );
+  // Atomically claim the auction so the sweeper can't double-settle it,
+  // then run the shared settlement (money + card transfer).
+  const claimed = await CardMarket.findOneAndUpdate(
+    { _id: auction._id, status: 'active' },
+    { $set: { status: 'pending' } },
+    { new: true }
+  );
+  if (!claimed) return reply('❌ This auction was already closed.');
+
+  let result;
+  try {
+    result = await settleAuction(auction);
+  } catch (err) {
+    console.error('[EndAuction] settlement error:', err);
+    try { await CardMarket.updateOne({ _id: auction._id, status: 'pending' }, { $set: { status: 'active' } }); } catch (_) {}
+    return reply('❌ Failed to end auction — it remains active.');
   }
 
   const card = CARD_INDEX()[auction.cardId];
@@ -4482,15 +4626,30 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
 
   if (winner) {
     const winnerName = economy.getDisplayName(winner.bidderId) || winner.bidderId.split('@')[0];
+    if (result.outcome === 'payment_failed') {
+      return reply(
+        `🔨 *AUCTION VOIDED*\n\n` +
+        `🎴 Card: *${cardName}*\n` +
+        `🏆 Winner: ${winnerName} could not pay ${ZENI()}${winner.amount.toLocaleString()}.\n\n` +
+        `The card has been returned to the seller.`
+      );
+    }
+    if (result.outcome === 'seller_credit_failed') {
+      return reply(
+        `🔨 *AUCTION VOIDED*\n\n` +
+        `🎴 Card: *${cardName}*\n\n` +
+        `The seller could not be credited — the winner was refunded and the card returned to the seller.`
+      );
+    }
     return reply(
-      `🔨 *AUCTION ENDED*\n\n` +
+      `🔨 *AUCTION ENDED — SOLD!*\n\n` +
       `🎴 Card: *${cardName}*\n` +
       `🏆 Winner: ${winnerName}\n` +
       `💰 Final bid: *${winner.amount.toLocaleString()} Zeni*\n\n` +
-      `💡 Use \`${p} transfer\` to complete the trade.`
+      `✅ Card transferred to the winner.\n✅ Seller paid *${ZENI()}${Math.floor(winner.amount * 0.9).toLocaleString()}* (after 10% tax).`
     );
   }
-  return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${cardName}* has been closed.`);
+  return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${cardName}* has been closed and the card returned to the seller.`);
 }
 
 // 💡 P3 (2026-08-16): CardLB — card leaderboard (overall + per-tier).
@@ -4507,16 +4666,26 @@ async function cmdCardLB(senderJid, reply, args) {
   }
 
   // Aggregate: count cards per player, optionally filtered by tier
-  const match = tier ? { 'card.tier': tier } : {};
-  const pipeline = [
-    { $lookup: { from: 'cards', localField: 'cardId', foreignField: 'id', as: 'card' } },
-    { $unwind: '$card' },
-    ...(tier ? [{ $match: match }] : []),
-    { $group: { _id: '$userId', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ];
-  const results = await UserCard.aggregate(pipeline);
+  // 💡 FIX 2026-08-31: the old pipeline used $lookup from a 'cards' Mongo
+  // collection that DOESN'T EXIST (card data lives in cards_data.json) —
+  // $unwind dropped every doc and cardlb always returned empty. Now we
+  // aggregate per-(user,card) copy counts in Mongo and join tier data from
+  // the in-memory CARD_INDEX in JS.
+  const pairs = await UserCard.aggregate([
+    { $group: { _id: { userId: '$userId', cardId: '$cardId' }, copies: { $sum: 1 } } }
+  ]);
+  const idx = CARD_INDEX();
+  const totals = new Map(); // userId -> count
+  for (const pair of pairs) {
+    const card = idx[pair._id.cardId];
+    if (!card) continue;
+    if (tier && String(card.tier) !== String(tier)) continue;
+    totals.set(pair._id.userId, (totals.get(pair._id.userId) || 0) + pair.copies);
+  }
+  const results = [...totals.entries()]
+    .map(([_id, count]) => ({ _id, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
   if (!results.length) return reply('📭 No cards found for this leaderboard.');
 
   const title = tier ? `Tier ${tier} Card Leaderboard` : 'Overall Card Leaderboard';
