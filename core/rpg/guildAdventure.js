@@ -3139,7 +3139,12 @@ function generateEventEncounter(chatId) {
 // won't double-apply combat-start passives because we stamp p.passivesApplied
 // after the first run.
 // ═══════════════════════════════════════════════════════════════════════════
-function applyClassPassiveAtCombatStart(player) {
+// 💡 FIX 2026-08-31: added `state` parameter — the party_* passive cases
+// referenced a `state` that was never in this function's scope, throwing
+// ReferenceError (swallowed by the caller's try/catch) so SHOGUN's
+// Commander's Will (+20% party ATK) and BARD's Inspiring Song (+10% party
+// stats) NEVER applied.
+function applyClassPassiveAtCombatStart(player, state) {
   if (!player || !player.class || !player.class.passive) return;
   if (player.passivesApplied) return;  // idempotent
 
@@ -3628,6 +3633,23 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   const chatId = state.chatId;
   if (!groq) groq = state.groq;
   state.inCombat = true;
+
+  // 💡 FIX 2026-08-31: re-apply combat-start class passives. endCombat resets
+  // p.passivesApplied=false + p.passiveMagBonus=1 intending re-application at
+  // the next encounter, but this function never called the appliers — so
+  // MAGE/APPRENTICE magic_damage (+20%/+10%) and every other combat-start
+  // passive was active ONLY during encounter 1 of multi-encounter dungeons.
+  // Both calls are idempotent (guarded by passivesApplied/skillPassivesApplied).
+  if (state.players) {
+    for (const p of state.players) {
+      try { applyClassPassiveAtCombatStart(p, state); } catch (e) {
+        console.error('[Passive] re-apply at startCombat failed:', e?.message || e);
+      }
+      try { applySkillPassivesAtCombatStart(p); } catch (e) {
+        console.error('[Passive] re-apply skill passives at startCombat failed:', e?.message || e);
+      }
+    }
+  }
 
   // Restore catalog enemies
   state.enemies = encounter.enemies;
@@ -6941,7 +6963,7 @@ async function startJourney(sock, sessionKey) {
     // Inline passives (damage_when_low_hp, etc.) are read from
     // calculateDamage / recordEnemyKill. Idempotent via p.passivesApplied.
     try {
-      applyClassPassiveAtCombatStart(p);
+      applyClassPassiveAtCombatStart(p, state);
     } catch (e) {
       console.error('[Passive] applyClassPassiveAtCombatStart failed:', e?.message || e);
     }

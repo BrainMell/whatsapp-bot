@@ -393,7 +393,10 @@ async function deploySummon(user, summonId) {
     user.activeSummonId = summonId;
     summon.lastUsedAt = new Date();
     await summon.save();
-    economy.saveUser(user);  // 💡 FIX: was missing — deploy didn't persist
+    // 💡 FIX 2026-08-31: was passing the user OBJECT — saveUser(userId) does
+    // economyData.get(userId), so an object key never matched and the call
+    // silently no-op'd (deploy lost on restart). Pass the canonical key.
+    economy.saveUser(user.userId);
     return {
       success: true,
       message: `\u2705 Deployed *${summon.nickname || summon.species}*!\n_Previous summon dismissed \u2014 only 1 summon can be active at a time._`,
@@ -403,7 +406,8 @@ async function deploySummon(user, summonId) {
   user.activeSummonId = summonId;
   summon.lastUsedAt = new Date();
   await summon.save();
-  economy.saveUser(user);  // 💡 FIX: was missing — deploy didn't persist
+  // 💡 FIX 2026-08-31: same as above — pass user.userId, not the object.
+  economy.saveUser(user.userId);
 
   return {
     success: true,

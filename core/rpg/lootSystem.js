@@ -607,9 +607,22 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
+                    // 💡 FIX 2026-08-31: normalize array quantities — same fix
+                    // the guaranteed-drop loop got above. ABYSSAL_GOD's
+                    // summon_egg_common uses quantity:[1,2], which was passed
+                    // through RAW, stored as the stack quantity, and bricked
+                    // the inventory slot permanently (NaN math, unremovable
+                    // stack, hasItem always false).
+                    let specialQty;
+                    if (Array.isArray(specialDrop.quantity)) {
+                        const [sMin, sMax] = specialDrop.quantity;
+                        specialQty = Math.floor(Math.random() * (sMax - sMin + 1)) + sMin;
+                    } else {
+                        specialQty = specialDrop.quantity;
+                    }
                     drops.push({
                         id: specialDrop.id,
-                        quantity: specialDrop.quantity,
+                        quantity: specialQty,
                         rarity: specialDrop.rarity || dbInfo?.rarity || 'COMMON',
                         announcement: specialDrop.announcement,
                         source: enemyName
