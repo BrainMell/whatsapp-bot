@@ -8873,12 +8873,22 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   }
 
   // Apply ability effect (using rune-modified effect if runes are socketed)
+  // 💡 FIX 2026-08-31 (target off-by-one): `targetIndex` here is the RAW
+  // 1-based user input ("combat ability 1 2" → "2"), but getTargets indexes
+  // arrays 0-based — player abilities hit the enemy AFTER the one selected.
+  // The enemy AI path (performEnemyAction) passes 0-based indexOf() results
+  // directly, so we normalize ONLY string input here.
+  let normalizedTargetIndex = targetIndex;
+  if (typeof targetIndex === 'string' && targetIndex.trim() !== '' && !isNaN(parseInt(targetIndex))) {
+    normalizedTargetIndex = parseInt(targetIndex) - 1;
+  }
+
   const result = await applyAbilityEffect(
     sock,
     player,
     ability,
     runeModifiedEffect,
-    targetIndex,
+    normalizedTargetIndex,
     chatId,
   );
 
@@ -8949,7 +8959,7 @@ async function applyAbilityEffect(
             }
         }
     }
-    const targets = getTargets(player, effect, targetIndex, chatId);
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
     for (let _tIdx = 0; _tIdx < targets.length; _tIdx++) {
       const target = targets[_tIdx];
       if (target.stats.hp <= 0) continue;
@@ -9360,11 +9370,11 @@ async function applyAbilityEffect(
   if (effect.resolvedEffects) {
     for (const [effId, effData] of Object.entries(effect.resolvedEffects)) {
       if (effId === "heal") {
-        const target = getHealTarget(player, targetIndex, chatId);
+        const target = getHealTarget(player, targetIndex, sessionKey);
         if (target) {
           // 💡 BUG-11 fix: apply healer's passiveHealingBoost (Cleric +25%, Saint +50%, etc.)
           // Was set at combat start but never read — healing classes got zero bonus.
-          const chatHealMult = getHealMult(chatId);
+          const chatHealMult = getHealMult(sessionKey);
           const hMult = chatHealMult * (player.passiveHealingBoost || 1);
           const rawHeal = Number(effData.value) || 0;
           const maxHpVal = target.stats.maxHp || target.stats.hp || 100;
@@ -9389,7 +9399,7 @@ async function applyAbilityEffect(
           ? state.enemies.filter((e) => e.stats.hp > 0)
           : state.players.filter((p) => !p.isDead);
         // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
-        const hMult = getHealMult(chatId) * (player.passiveHealingBoost || 1);
+        const hMult = getHealMult(sessionKey) * (player.passiveHealingBoost || 1);
         for (const ally of friendlySide) {
           const rawHealT = Number(effData.value) || 0;
           const maxHpT = ally.stats.maxHp || ally.stats.hp || 100;
@@ -9444,14 +9454,14 @@ async function applyAbilityEffect(
         msg += `✨ Team gains +${effData.value}% DEF for ${effData.duration} turns!\n`;
       }
       else if (effId === "buff_target") {
-        const target = getHealTarget(player, targetIndex, chatId);
+        const target = getHealTarget(player, targetIndex, sessionKey);
         if (target) {
           applyBuff(target, effData.stat, effData.value, effData.duration);
           msg += `✨ ${target.name} gains +${effData.value}% ${effData.stat}!\n`;
         }
       }
       else if (effId === "debuff_target") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         const target = targets[0];
         if (target) {
           applyDebuff(target, effData.stat, effData.value, effData.duration);
@@ -9468,7 +9478,7 @@ async function applyAbilityEffect(
         msg += `💀 All enemies receive -${effData.value}% ${effData.stat}!\n`;
       }
       else if (effId === "stun" || effId === "freeze" || effId === "sleep") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         for (const target of targets) {
           if (Math.random() * 100 < (effData.chance || 100)) {
             applyStatusEffect(target, effId, effData.duration || 1);
@@ -9477,7 +9487,7 @@ async function applyAbilityEffect(
         }
       }
       else if (effId === "haste") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         for (const target of targets) {
           applyStatusEffect(target, "haste", effData.duration || 3, effData.value || 30);
           msg += `⚡ ${target.name} gains Haste!\n`;
@@ -9514,7 +9524,7 @@ async function applyAbilityEffect(
       // 💡 FIX: magDebuff was declared by mana_drain (skillTree.js:1177)
       // but had no handler — Magick defense was never reduced on target.
       else if (effId === "magDebuff") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         for (const target of targets) {
           applyDebuff(target, 'mag', effData.value, effData.duration || 2);
         }
@@ -9526,7 +9536,7 @@ async function applyAbilityEffect(
       // CLEANSE — remove all negative status effects from target(s).
       // Used by CLERIC.cleanse and DIVINE_FIST.heavenly_step.
       else if (effId === "cleanse") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         // For self-targeting skills, target the caster
         const cleanseTargets = (effect.targeting || '').toUpperCase() === 'SELF'
           ? [player]
@@ -9681,7 +9691,7 @@ async function applyAbilityEffect(
     // multiple weaker hits. Each hit goes through calculateDamage separately,
     // so crit/evasion/DEF apply per-hit. bypassShield (BARRAGE) skips shields.
     if (effect.splitIntoHits && effect.splitIntoHits > 0) {
-      const targets = getTargets(player, effect, targetIndex, chatId);
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
       const target = targets[0];
       if (target && target.stats.hp > 0) {
         const splitMult = effect.splitDamageMult || 0.4;
@@ -9742,7 +9752,7 @@ async function applyAbilityEffect(
     // 💡 RUNE: chainBounces (CHAIN_BOUNCE rune) — hit primary target, then
     // arc to nearby enemies with decay. Each bounce deals less damage.
     if (effect.chainBounces && effect.chainBounces > 0) {
-      const targets = getTargets(player, effect, targetIndex, chatId);
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
       const primaryTarget = targets[0];
       if (primaryTarget && primaryTarget.stats.hp > 0) {
         const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
@@ -9791,10 +9801,10 @@ async function applyAbilityEffect(
     // as single-target, once in the heal_team block below). Changed to strict
     // equality so only pure "heal" type triggers this block.
     if (effect.type === "heal") {
-      const target = getHealTarget(player, targetIndex, chatId);
+      const target = getHealTarget(player, targetIndex, sessionKey);
       if (target) {
         // 💡 BUG-11 fix: apply healer's passiveHealingBoost
-        const chatHealMult = getHealMult(chatId);
+        const chatHealMult = getHealMult(sessionKey);
         const hMult = chatHealMult * (player.passiveHealingBoost || 1);
         const rawHealE = Number(effect.value) || 0;
         const maxHpE = target.stats.maxHp || target.stats.hp || 100;
@@ -9821,7 +9831,7 @@ async function applyAbilityEffect(
         ? state.enemies.filter((e) => e.stats.hp > 0)
         : state.players.filter((p) => !p.isDead);
       // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
-      const hMult = getHealMult(chatId) * (player.passiveHealingBoost || 1);
+      const hMult = getHealMult(sessionKey) * (player.passiveHealingBoost || 1);
       for (const ally of friendlySide) {
         const rawHealET = Number(effect.value) || 0;
         const maxHpET = ally.stats.maxHp || ally.stats.hp || 100;
@@ -9877,7 +9887,7 @@ async function applyAbilityEffect(
         }
         msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;
       } else if (effect.type === "buff_target") {
-        const target = getHealTarget(player, targetIndex, chatId);
+        const target = getHealTarget(player, targetIndex, sessionKey);
         if (target) {
           applyBuff(target, effect.buffType, effect.value, effect.duration);
           msg += `✨ ${target.name} gains +${effect.value}% ${effect.buffType}!\n`;
@@ -9888,7 +9898,7 @@ async function applyAbilityEffect(
     // DEBUFF ABILITIES
     if (effect.type.includes("debuff")) {
       if (effect.type === "debuff_target") {
-        const targets = getTargets(player, effect, targetIndex, chatId);
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
         const target = targets[0];
         if (target) {
           applyDebuff(target, effect.debuffType, effect.value, effect.duration);
@@ -9929,7 +9939,7 @@ async function applyAbilityEffect(
 
     // MULTI-HIT
     if (effect.type === "multi_hit") {
-      const targets = getTargets(player, effect, targetIndex, chatId);
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
       const target = targets[0];
       if (target) {
         let totalMultiDamage = 0;
@@ -10019,7 +10029,7 @@ async function applyAbilityEffect(
         } else if (targeting === "SELF") {
           targets = [player];
         } else {
-          targets = [getHealTarget(player, targetIndex, chatId)];
+          targets = [getHealTarget(player, targetIndex, sessionKey)];
         }
 
         for (const target of targets) {
@@ -10072,7 +10082,7 @@ async function applyAbilityEffect(
   // simpler than rewriting the damage loop. This gives a follow-up true-damage
   // proc when the target is execution-eligible.)
   if (effect.executeThreshold && effect.executeBonus > 1) {
-    const targets = getTargets(player, effect, targetIndex, chatId);
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
     for (const target of targets) {
       if (!target || target.isDead || !target.stats || !target.stats.maxHp) continue;
       const hpPct = (target.stats.hp / target.stats.maxHp) * 100;
@@ -10093,7 +10103,7 @@ async function applyAbilityEffect(
   // 💡 RUNE: addStatuses — apply extra status effects from infusion runes
   // (POISON_INFUSION, BLEED_INFUSION, BURN_INFUSION, FREEZE_INFUSION, etc.)
   if (effect.addStatuses && effect.addStatuses.length > 0) {
-    const targets = getTargets(player, effect, targetIndex, chatId);
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
     for (const statusDef of effect.addStatuses) {
       // Roll chance if defined
       if (statusDef.chance !== undefined && Math.random() * 100 >= statusDef.chance) continue;
@@ -10143,7 +10153,7 @@ async function applyAbilityEffect(
 
   // 💡 RUNE: applyWet — prime targets for SHOCK synergy (WET + SHOCK = STUN)
   if (effect.applyWet) {
-    const targets = getTargets(player, effect, targetIndex, chatId);
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
     for (const target of targets) {
       if (!target || target.isDead) continue;
       applyStatusEffect(target, 'wet', 2, 0, player.name);
