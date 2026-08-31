@@ -328,11 +328,22 @@ async function castVote(userId, skillIndex) {
   }
 
   // Check if voting window is open
-  if (!raid.votingClosesAt || new Date() > new Date(raid.votingClosesAt)) {
-    // Open a new voting window
+  // 💡 FIX 2026-08-31 (vote-window griefing): a vote arriving AFTER the 60s
+  // window closed (but before the 30s resolver tick) used to wipe the
+  // round's votes and re-arm the window — that round was never executed.
+  // A single user voting every <60s could stall the raid FOREVER (rounds
+  // voided, raid ends 'fled' at 24h). Now a closed window REJECTS the vote;
+  // only the resolver (resolveVotingRound) may open the next round.
+  if (!raid.votingClosesAt) {
+    // No window has ever been opened — open the first one
     raid.votingClosesAt = new Date(Date.now() + 60 * 1000); // 60s
     raid.currentVotes = [];
     raid.votingRound += 1;
+  } else if (new Date() > new Date(raid.votingClosesAt)) {
+    return {
+      success: false,
+      message: '⏳ Voting for this round is closed — the round is being resolved. Try again in a few seconds.',
+    };
   }
 
   // Check if user already voted this round
