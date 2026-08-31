@@ -566,7 +566,16 @@ async function distributeRewards(raid) {
       try { progression.awardXP(a.jid, xpReward); } catch (e) {}
     }
     if (goldReward > 0) {
-      try { economy.addMoney(a.jid, goldReward, `Raid reward (${label})`); } catch (e) {}
+      // 💡 FIX 2026-08-31: addMoney returns false on failure (unresolvable
+      // JID / market cap) — it does NOT throw, so the catch never fired and
+      // the reward silently vanished while the summary still claimed it.
+      // Log failures so ops can see them; retry once via the canonical JID.
+      let paid = false;
+      try { paid = economy.addMoney(a.jid, goldReward, `Raid reward (${label})`); } catch (e) {}
+      if (!paid) {
+        try { paid = economy.addMoney(economy.resolveJid ? economy.resolveJid(a.jid) : a.jid, goldReward, `Raid reward (${label})`); } catch (e) {}
+      }
+      if (!paid) console.warn(`[RaidRewards] FAILED to pay ${goldReward} to ${a.jid} (${label})`);
     }
     // Award guild XP + war points for raid participation
     try {
@@ -592,7 +601,10 @@ async function distributeConsolationRewards(raid) {
   for (const a of raid.attackers) {
     try {
       progression.awardXP(a.jid, 10000);
-      economy.addMoney(a.jid, 5000, 'Raid consolation');
+      // 💡 FIX 2026-08-31: check the return — silent failure paid nothing
+      // while the message said everyone got consolation rewards.
+      const consoPaid = economy.addMoney(a.jid, 5000, 'Raid consolation');
+      if (!consoPaid) console.warn(`[RaidConsolation] FAILED to pay 5000 to ${a.jid}`);
       guildPerks.awardGuildXp(a.jid, 10, 'Raid consolation');
       guildPerks.awardWarPoints(a.jid, 5, 'raid_consolation');
     } catch (e) {}

@@ -6818,6 +6818,13 @@ const joinAdventure = (chatId, senderJid, senderName) => {
   // Initialize player with default stats (class assigned later)
   state.players.push({
     jid: senderJid,
+    // 💡 FIX 2026-08-31: players had no `id` — the back-to-back-turn guard
+    // (`activeActor.id === state.lastActorId`, line ~4023) compares
+    // undefined === undefined and NEVER fires for players, letting a
+    // high-SPD player act many times consecutively (the exact bug the guard
+    // was written to prevent for bosses). No other code reads player.id
+    // (grep-verified), so this is purely additive.
+    id: `player_${senderJid}`,
     name: senderName || "Unknown Hero",
     class: null,
     level: 1,
