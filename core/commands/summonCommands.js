@@ -1894,7 +1894,10 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  // 💡 FIX 2026-08-31: referenced `summonNum` (a variable of a DIFFERENT
+  // function) — ReferenceError on every .summon unequip; the command was
+  // completely non-functional. Use this handler's own query variable.
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   const gear = summon.summonEquipment?.[slot];
@@ -1905,7 +1908,13 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
 
   // Return to inventory
   const inventorySystem = require('../rpg/inventorySystem');
-  inventorySystem.addItem(senderJid, gear.id, 1);
+  // 💡 FIX 2026-08-31: await + check — a full bag previously destroyed the
+  // gear permanently (slot nulled first, addItem failure ignored).
+  const returnResult = await inventorySystem.addItem(senderJid, gear.id, 1);
+  if (!returnResult || !returnResult.success) {
+    await sock.sendMessage(chatId, { text: `❌ ${returnResult?.message || 'Bag full — make space first.'}` });
+    return;
+  }
   summon.summonEquipment[slot] = null;
   await summon.save();
 

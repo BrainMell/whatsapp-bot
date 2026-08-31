@@ -261,7 +261,13 @@ function awardWarPoints(userId, amount, reason) {
 }
 
 function getWeekKey(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` — LOCAL Y/M/D
+  // interpreted as UTC. On any server with TZ >= UTC+2 the week key flipped
+  // ~1-2h BEFORE the UTC Sunday war deadline, leaving the expiring war
+  // unreachable by weekKey (rewards never paid, war stuck 'active') and
+  // spawning the next war with an instant expiry. Use true UTC components.
+  if (!date) date = new Date();
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = (d.getUTCDay() + 6) % 7; // Monday = 0
   d.setUTCDate(d.getUTCDate() - dayNum + 3); // nearest Thursday
   const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));

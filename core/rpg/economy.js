@@ -1402,8 +1402,11 @@ const MEMBERSHIP_TIERS = {
 
 function buyMembership(userId, tierId) {
     const user = getUser(userId);
+    // 💡 FIX 2026-08-31: unregistered users crashed with TypeError (user is
+    // null) instead of getting the standard register-first message.
+    if (!user) return { success: false, message: `❌ You need to register first!` };
     const tier = MEMBERSHIP_TIERS[tierId.toUpperCase()];
-    
+
     if (!tier) return { success: false, message: "❌ Invalid membership tier!" };
     if (user.wallet < tier.cost) return { success: false, message: `❌ Need ${getZENI()}${tier.cost.toLocaleString()} to upgrade!` };
     

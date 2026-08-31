@@ -1642,6 +1642,12 @@ async function finishSummonDuel(chatId, duel, winner, loser) {
         }
         if (loser._summonDoc) {
             loser._summonDoc.loyalty = Math.max(0, (loser._summonDoc.loyalty || 0) - 2);
+            // 💡 FIX 2026-08-31: persist the loser's loyalty penalty — only the
+            // winner's doc was ever saved, so "-2 loyalty on loss" never
+            // reached the database.
+            try { await loser._summonDoc.save(); } catch (saveErr) {
+                console.error('[PvP] Failed to persist loser summon loyalty:', saveErr.message);
+            }
         }
         rewardMsg += `\n💖 Loyalty: ${winner._speciesName} -1, ${loser._speciesName} -2`;
     } catch (e) {}

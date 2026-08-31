@@ -17006,7 +17006,21 @@ _Sorted by guild level + XP_
                         guild.balance = bankBalance - amount;
                         await guilds.syncGuild(userGuild);
                         const economy = require('./rpg/economy');
-                        economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
+                        // 💡 FIX 2026-08-31: check the payout — addMoney returns
+                        // false for unregistered/JID-mismatched users (and
+                        // auto-debt can swallow the loan). Previously the guild
+                        // bank was debited and the loan recorded even when the
+                        // borrower received NOTHING — Zeni permanently destroyed
+                        // on a debt the player still owed. Roll everything back
+                        // on failure.
+                        const loanPaid = economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
+                        if (!loanPaid) {
+                          // Roll back the loan record + bank debit
+                          guild.balance = bankBalance;
+                          guild.loans = guild.loans.filter(l => !l.takenAt || (l.amount !== amount) || l.repaid);
+                          await guilds.syncGuild(userGuild);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan failed: could not credit your wallet (registration or JID issue). Nothing was deducted from the guild bank.' });
+                        }
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${botConfig.getPrefix()} guild loan repay <amount>\`_` });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });

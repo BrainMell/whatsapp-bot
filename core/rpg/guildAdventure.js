@@ -6122,10 +6122,14 @@ async function handleAbyssVictory(sock, sessionKey) {
       const fragDrop = summonEggSystem.getFragmentDrop(state.abyssFloor, wildRarity);
       if (fragDrop) {
         const { fragmentId, quantity } = fragDrop;
-        inventorySystem.addItem(senderJid, fragmentId, quantity);
+        // 💡 FIX 2026-08-31: await the addItem and check the result — a full
+        // inventory silently failed while the message still announced the drop.
+        const fragResult = await inventorySystem.addItem(senderJid, fragmentId, quantity);
         const fragInfo = lootSystem.getItemInfo(fragmentId);
         const fragName = fragInfo?.name || fragmentId;
-        fragmentMsg = `\n💎 *SUMMON FRAGMENT DROP!* +${quantity}x ${fragName}`;
+        fragmentMsg = fragResult && fragResult.success
+          ? `\n💎 *SUMMON FRAGMENT DROP!* +${quantity}x ${fragName}`
+          : `\n⚠️ Summon fragments wouldn't fit in your bag (bag full)!`;
       }
     } catch (e) {
       console.error('[Abyss] Fragment drop failed:', e.message);

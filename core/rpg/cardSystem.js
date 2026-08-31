@@ -258,7 +258,13 @@ function rebuildSpawnTimersForInstance(inst) {
           inst.perGroupTimers.delete(gid);
           return;
         }
-        doSpawn(null, null, false, gid);
+        // 💡 FIX 2026-08-31: catch async failures — doSpawn hits Mongo
+        // (getOrInitStat/stat.save); an unhandled rejection from a timer
+        // callback kills the process on Node >=15. The chain must ALSO
+        // continue scheduling on failure or the group goes spawn-dead.
+        Promise.resolve(doSpawn(null, null, false, gid)).catch((spawnErr) => {
+          console.error(`[CardSystem] timer doSpawn failed for ${gid}:`, spawnErr?.message || spawnErr);
+        });
         // Schedule the next fire at a fresh random delay
         scheduleNext(randomDelay());
       }, delay);
@@ -1163,6 +1169,37 @@ setInterval(() => {
     }
     if (decksEvicted > 0 || collsEvicted > 0) {
         console.log(`🃏 [GifCache] Swept ${decksEvicted} deck + ${collsEvicted} collection entries (TTL ${GIF_CACHE_TTL_MS/1000}s).`);
+    }
+
+    // 💡 FIX 2026-08-31: sweep EXPIRED card spawns + stale pendingBurns.
+    // activeSpawns entries were only removed when someone tried to CLAIM that
+    // exact card — unclaimed spawns (expired after 30 min) stayed in the Map
+    // forever, each pinning the full card object + a live CardStat Mongoose
+    // doc. On a 954MB box this is a slow unbounded leak (~3 spawns/hour per
+    // group, forever). pendingBurns entries likewise never expired if the
+    // owner never accepted/declined.
+    let spawnsSwept = 0, burnsSwept = 0;
+    for (const [, inst] of instances) {
+        if (inst.activeSpawns) {
+            for (const [key, spawn] of inst.activeSpawns.entries()) {
+                if (!spawn || Date.now() > (spawn.expiresAt || 0)) {
+                    inst.activeSpawns.delete(key);
+                    spawnsSwept++;
+                }
+            }
+        }
+        if (inst.pendingBurns) {
+            const BURN_TTL = 10 * 60 * 1000; // 10 min to accept a burn
+            for (const [key, req] of inst.pendingBurns.entries()) {
+                if (!req || (req.ts && Date.now() - req.ts > BURN_TTL)) {
+                    inst.pendingBurns.delete(key);
+                    burnsSwept++;
+                }
+            }
+        }
+    }
+    if (spawnsSwept > 0 || burnsSwept > 0) {
+        console.log(`🃏 [SpawnSweep] Swept ${spawnsSwept} expired spawn(s) + ${burnsSwept} stale burn request(s).`);
     }
 }, 2 * 60 * 1000);
 
