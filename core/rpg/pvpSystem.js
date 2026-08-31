@@ -329,9 +329,19 @@ async function acceptChallenge(sock, chatId, targetJid) {
     // or one of the players unregistered in the meantime). Previously the
     // invite stayed in `duelInvites` and blocked all new challenges in that
     // chat until the 2-minute timeout elapsed — bad UX.
+    // 💡 FIX 2026-08-31: refund escrowed stakes on post-payment failure.
+    // Stakes are deducted at line ~354-355 BEFORE the duel state is built;
+    // if building fails afterwards (summon gone, data load error) the money
+    // simply vanished. cleanupAndFail now refunds when stakes were taken.
+    let stakesEscrowed = false;
     const cleanupAndFail = (msg) => {
         duelInvites.delete(chatId);
-        return { success: false, message: msg };
+        if (stakesEscrowed && invite.stake > 0) {
+            try { economy.addMoney(invite.challenger, invite.stake, 'Duel accept-failure refund (challenger)'); } catch (e) {}
+            try { economy.addMoney(resolvedTarget, invite.stake, 'Duel accept-failure refund (target)'); } catch (e) {}
+            console.warn(`[PvP] Refunded ${invite.stake} stakes to both players after failed accept: ${msg}`);
+        }
+        return { success: false, message: msg + (stakesEscrowed && invite.stake > 0 ? '\n💸 Stakes refunded.' : '') };
     };
 
     if (!economy.isRegistered(invite.challenger)) {
@@ -353,6 +363,8 @@ async function acceptChallenge(sock, chatId, targetJid) {
         }
         economy.removeMoney(invite.challenger, invite.stake);
         economy.removeMoney(resolvedTarget, invite.stake);
+        // 💡 FIX 2026-08-31: mark stakes as taken so later failures refund them
+        stakesEscrowed = true;
     }
 
     duelInvites.delete(chatId);
@@ -361,7 +373,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
     const p1Data = economy.getUser(invite.challenger);
     const p2Data = economy.getUser(resolvedTarget);
     if (!p1Data || !p2Data) {
-        return { success: false, message: '❌ Failed to load player data for the duel!' };
+        return cleanupAndFail('❌ Failed to load player data for the duel!');
     }
 
     const mode = invite.mode || 'player'; // 💡 NEW: 'player' or 'summon'
@@ -381,7 +393,13 @@ async function acceptChallenge(sock, chatId, targetJid) {
         players = [p1Summon, p2Summon];
     } else {
         const p1Stats = progression.getBaseStats(invite.challenger, p1Data.class);
-        const p2Stats = progression.getBaseStats(targetJid, p2Data.class);
+        // 💡 FIX 2026-08-31: P2 was built with the RAW targetJid while P1 got
+        // the RESOLVED challenger JID — for LID↔phone-mapped users the turn
+        // check (`currentPlayer.jid !== resolvedSender`) failed FOREVER with
+        // "It's not your turn!" until the duel expired (and the stakes were
+        // destroyed). Summon mode already used resolvedTarget; player mode
+        // now does too.
+        const p2Stats = progression.getBaseStats(resolvedTarget, p2Data.class);
 
         // Cap extreme stat differences to make PvP more fair
         function capPvPStats(stats) {
@@ -398,7 +416,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
         players = [
             buildDuelPlayer(invite.challenger, p1Data, capPvPStats(p1Stats), 0, invite.equalise),
-            buildDuelPlayer(targetJid, p2Data, capPvPStats(p2Stats), 1, invite.equalise),
+            buildDuelPlayer(resolvedTarget, p2Data, capPvPStats(p2Stats), 1, invite.equalise),
         ];
     }
 
@@ -621,7 +639,29 @@ async function deployPvPSummons(duelState) {
 // ⚔️ HANDLE PVP ACTION
 // ==========================================
 
+// 💡 FIX 2026-08-31 (double-action race): handlePvPAction validates the turn
+// at the top, but the state that ENDS the turn (turn flip / activeDuels.delete)
+// only mutates after several awaits (rune fetch, bounty queries inside
+// finishDuel). Two rapid messages both passed the turn check before the first
+// finished — a killing blow processed twice paid the pot TWICE, and a
+// double-tapped flee applied penalties twice. This synchronous `processing`
+// guard (set before any await) makes re-entrant calls impossible.
 async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
+    const duelForLock = activeDuels.get(chatId);
+    if (duelForLock && duelForLock.processing) {
+        return { success: false, message: '⏳ Hold on — still processing the previous action!' };
+    }
+    if (duelForLock) duelForLock.processing = true;
+    try {
+        return await _handlePvPActionInner(sock, chatId, senderJid, action, target, m);
+    } finally {
+        // Clear only if this duel is still the live one (it's deleted on finish).
+        const stillLive = activeDuels.get(chatId);
+        if (duelForLock && stillLive === duelForLock) duelForLock.processing = false;
+    }
+}
+
+async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m) {
     const resolvedSender = resolveJid(senderJid);
     const duel = activeDuels.get(chatId);
     if (!duel) return { success: false, message: '❌ No active duel here!' };
@@ -1025,10 +1065,28 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
                 try { await currentPlayer._summonDoc.save(); } catch (e) {}
             }
             const oldCP = summonSystem.computeCP(currentPlayer._summonDoc);
+            // 💡 FIX 2026-08-31: pay the staked pot to the winner. Both owners
+            // paid the stake at accept; previously a summon-mode forfeit simply
+            // deleted the duel — the entire pot was destroyed and the stayer
+            // got nothing (player mode pays at the equivalent point below).
+            let stakeMsg = '';
+            if (duel.stake > 0 && opponent?.jid) {
+                const pot = duel.stake * 2;
+                const paid = economy.addMoney(opponent.jid, pot, 'Summon duel won by forfeit (staked pot)');
+                if (paid) {
+                    stakeMsg = `\n💰 *${opponent._speciesName}'s owner* wins the pot: ${botConfig.getCurrency().symbol}${pot.toLocaleString()}!`;
+                } else {
+                    // Winner can't be credited — refund both sides instead of
+                    // destroying the money.
+                    try { economy.addMoney(currentPlayer.jid, duel.stake, 'Summon duel forfeit refund'); } catch (e) {}
+                    try { economy.addMoney(opponent.jid, duel.stake, 'Summon duel forfeit refund'); } catch (e) {}
+                    stakeMsg = `\n💸 Pot could not be paid — stakes refunded to both owners.`;
+                }
+            }
             const fleeMsg = `🏃 *${currentPlayer._speciesName}* fled the summon duel!\n\n` +
                            `⚠️ *Flee Penalty:* ${currentPlayer._speciesName} lost *${cpPenalty}* loyalty (CP reduced).\n` +
                            `Current CP: ${oldCP}\n\n` +
-                           `🏆 *${opponent._speciesName}* wins by forfeit!`;
+                           `🏆 *${opponent._speciesName}* wins by forfeit!${stakeMsg}`;
             activeDuels.delete(chatId);
             return { success: true, finished: true, fled: true, message: fleeMsg };
         }
@@ -1613,7 +1671,11 @@ async function finishSummonDuel(chatId, duel, winner, loser) {
         const engine = require('../engine');
         const sock = engine.getSock();
         if (sock) {
-            await sock.sendMessage(chatId, { text: BOT_MARKER + finalMsg });
+            // 💡 FIX 2026-08-31: BOT_MARKER is not defined in this module —
+            // this line threw ReferenceError (swallowed by the catch), making
+            // the direct send dead code. The caller already delivers the
+            // returned message; the marker is engine-side anyway.
+            await sock.sendMessage(chatId, { text: finalMsg });
         }
     } catch (e) {}
 
@@ -1802,11 +1864,22 @@ setInterval(() => {
     for (const [chatId, duel] of activeDuels.entries()) {
         if (now - duel.lastAction > PVP_TIMEOUT_MS) {
             activeDuels.delete(chatId);
+            // 💡 FIX 2026-08-31: refund escrowed stakes on timeout. Both
+            // players' stakes were deducted at accept; previously the sweeper
+            // just deleted the state — the entire pot was destroyed and both
+            // players silently lost their stake to a 2-minute AFK.
+            let refundMsg = '';
+            if (duel.stake > 0 && duel.players) {
+                for (const p of duel.players) {
+                    try { economy.addMoney(p.jid, duel.stake, 'Duel timeout refund'); } catch (e) {}
+                }
+                refundMsg = `\n💸 Stakes of ${botConfig.getCurrency().symbol}${duel.stake.toLocaleString()} refunded to both players.`;
+            }
             const engine = require('../engine');
             const sock = engine.getSock();
             if (sock) {
                 sock.sendMessage(chatId, { 
-                    text: `⌛ *DUEL EXPIRED!*\n\nThe duel was cancelled due to ${Math.floor(PVP_TIMEOUT_MS / 60000)} minutes of inactivity.`
+                    text: `⌛ *DUEL EXPIRED!*\n\nThe duel was cancelled due to ${Math.floor(PVP_TIMEOUT_MS / 60000)} minutes of inactivity.${refundMsg}`
                 }).catch(() => {});
             }
         }

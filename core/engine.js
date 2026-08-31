@@ -22184,6 +22184,11 @@ ${senderName} said y'all should know:
                     // Manually clears a stuck duel state. Use this if a duel
                     // got stuck (e.g. image generation failed mid-accept and
                     // the chat is locked with "A duel is already active").
+                    // 💡 FIX 2026-08-31: PARTICIPANT/MOD PERMISSION CHECK —
+                    // previously ANYONE could cancel any duel: a player about
+                    // to lose a staked duel could refund their own stake by
+                    // typing `duel cancel`, and trolls could kill any ongoing
+                    // duel. Now only the duel participants or a mod+ can cancel.
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel cancel` ||
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel end` ||
@@ -22192,6 +22197,24 @@ ${senderName} said y'all should know:
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} cancel duel` ||
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} end duel`
                     ) {
+                      const liveDuel = pvpSystem.getDuel(chatId);
+                      if (liveDuel && liveDuel.players) {
+                        const isParticipant = liveDuel.players.some(
+                          (p) => p.jid === senderJid || p.jid === jidNormalizedUser(senderJid),
+                        );
+                        const isModCancel =
+                          isBotOwner(senderJid) ||
+                          isGlobalMod(senderJid) ||
+                          isRpgMod(senderJid);
+                        if (!isParticipant && !isModCancel) {
+                          await sock.sendMessage(chatId, {
+                            text:
+                              BOT_MARKER +
+                              "❌ Only the duel participants (or a mod) can cancel this duel.",
+                          });
+                          return;
+                        }
+                      }
                       const result = pvpSystem.cancelDuel(chatId);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
