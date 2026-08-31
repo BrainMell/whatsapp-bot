@@ -2355,7 +2355,11 @@ module.exports = {
   getZENI,
   STARTING_BALANCE,
   getPlaceholderPFP,
-  
+  // 💡 2026-08-31: exported so callers (e.g. raidSystem reward retry) can
+  // canonicalize JIDs before paying — addMoney fails silently for
+  // wrong-format JIDs.
+  resolveJid: resolveJidHelper,
+
   isRegistered,
   registerUser,
   syncUserFromDB,
