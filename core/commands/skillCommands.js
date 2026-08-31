@@ -272,6 +272,12 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     user.skills[targetSkill.id] = currentLevel + 1;
     user.skillPoints -= cost;
+    // 💡 FIX 2026-08-31: record the ACTUAL cost paid so respec refunds are
+    // exact. Without this ledger, calculateSpentPoints recomputed costs from
+    // the CURRENT (evolved) class schedule — starter-class prices (1pt/level)
+    // refunded at evolved-class rates ([2,3,4,5,6]...) = free skill points.
+    if (!user.skillSpend || typeof user.skillSpend !== 'object') user.skillSpend = {};
+    user.skillSpend[targetSkill.id] = (user.skillSpend[targetSkill.id] || 0) + cost;
     economy.saveUser(senderJid);
     
     const newLevel = currentLevel + 1;
@@ -345,6 +351,9 @@ async function resetSkills(sock, chatId, senderJid) {
     const spentPoints = skillTree.calculateSpentPoints(user, userClass.id);
     const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
+    // 💡 FIX 2026-08-31: clear the spend ledger with the skills — the refund
+    // already credited every recorded point.
+    user.skillSpend = {};
     user.skillPoints = totalPoints;
     economy.removeMoney(senderJid, RESET_COST);
     economy.saveUser(senderJid);

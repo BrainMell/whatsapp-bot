@@ -115,6 +115,12 @@ const UserSchema = new mongoose.Schema({
   // Skills & History
   skillPoints: { type: Number, default: 0 },
   skills: { type: Map, of: Number, default: {} }, // Skill levels
+  // 💡 FIX 2026-08-31: actual skill points spent per skill (skillId -> total
+  // spent). Respec refunds previously recomputed cost from the CURRENT
+  // (evolved) class schedule — skills learned cheaply as a starter class
+  // were refunded at the evolved class's escalating rates (up to +44 free
+  // points per respec). This ledger records what was actually paid.
+  skillSpend: { type: mongoose.Schema.Types.Mixed, default: {} },
   borrowedSkills: { type: Array, default: [] },
   completedTrials: { type: [String], default: [] },
   evolutionHistory: { type: Array, default: [] },

@@ -5954,7 +5954,19 @@ function calculateSpentPoints(user, userClassId) {
 
     for (const [skillId, level] of Object.entries(user.skills)) {
         if (level <= 0) continue;
-        
+
+        // 💡 FIX 2026-08-31: prefer the ACTUAL spend ledger. The heuristic
+        // below resolves the skill against the CURRENT lineage (evolved class
+        // first) — shared starter/evolved skills (cleave, fireball, smite...)
+        // defined WITHOUT skillPointCost in the starter tree but WITH
+        // escalating arrays in the evolved tree refunded MORE than was paid.
+        if (user.skillSpend && typeof user.skillSpend === 'object' &&
+            user.skillSpend[skillId] !== undefined &&
+            Number.isFinite(Number(user.skillSpend[skillId]))) {
+            totalSpent += Number(user.skillSpend[skillId]);
+            continue;
+        }
+
         // Find skill definition in lineage
         let targetSkill = null;
         for (const classId of lineage) {
