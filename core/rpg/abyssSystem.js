@@ -204,6 +204,12 @@ async function startRun(userId, playerStats) {
       maxHp: playerStats.maxHp,
       energy: playerStats.energy,
       maxEnergy: playerStats.maxEnergy,
+      // 💡 FIX 2026-08-31: snapshot atk/def/spd too — TRAP events roll
+      // against these (playerStats[choice.stat]); previously they were
+      // dropped here, so def/spd checks always failed.
+      atk: playerStats.atk || 10,
+      def: playerStats.def || 5,
+      spd: playerStats.spd || 5,
     },
     currentHp: playerStats.hp,
     currentEnergy: playerStats.energy,
@@ -539,11 +545,39 @@ async function processTreasure(userId) {
   // Advance to next floor
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
+  // 💡 FIX 2026-08-31: shared applier — adds the missing wild_summon branch
+  // (previously a wild-summon roll left the PREVIOUS floor's encounter data
+  // in place, allowing repeated treasure collection = loot duplication).
+  msg += applyNextEncounter(run, nextEncounter);
+
+  await run.save();
+  return { success: true, message: msg, run };
+}
+
+// ─── PROCESS EVENT CHOICE ─────────────────────────────────────────────────
+// 💡 FIX 2026-08-31: shared next-encounter applier. The three advance
+// functions (processTreasure / processEventChoice / processSkip) each had
+// if/else-if chains covering only combat|treasure|event — a 'wild_summon'
+// roll (10% of non-boss floors) fell through WITHOUT setting anything, so
+// the run kept the PREVIOUS floor's encounterType/data: the same treasure
+// could be collected again (loot duplication) and the wild-summon floor was
+// silently skipped. handleAbyssVictory already handled wild_summon correctly
+// — this helper mirrors its logic for all advance paths.
+function applyNextEncounter(run, nextEncounter) {
+  let msg = '';
   if (nextEncounter.type === 'combat') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
     msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
+  } else if (nextEncounter.type === 'wild_summon') {
+    run.currentEnemy = nextEncounter.enemy;
+    run.currentEncounterType = 'wild_summon';
+    run.currentEncounterData = {
+      species: nextEncounter.wildSummonSpecies,
+      rarity: nextEncounter.wildSummonRarity,
+    };
+    msg += `\n🐉 *Floor ${run.currentFloor}* — Wild ${nextEncounter.wildSummonSpecies} appeared!\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -555,12 +589,9 @@ async function processTreasure(userId) {
     run.currentEncounterData = nextEncounter.event;
     msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
-
-  await run.save();
-  return { success: true, message: msg, run };
+  return msg;
 }
 
-// ─── PROCESS EVENT CHOICE ─────────────────────────────────────────────────
 async function processEventChoice(userId, choiceId) {
   const run = await AbyssRun.findOne({ userId, status: 'active' });
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
@@ -640,22 +671,10 @@ async function processEventChoice(userId, choiceId) {
   // Advance to next floor
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
-  if (nextEncounter.type === 'combat') {
-    run.currentEnemy = nextEncounter.enemy;
-    run.currentEncounterType = 'combat';
-    run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
-  } else if (nextEncounter.type === 'treasure') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'treasure';
-    run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
-  } else if (nextEncounter.type === 'event') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'event';
-    run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
-  }
+  // 💡 FIX 2026-08-31: shared applier — adds the missing wild_summon branch
+  // (previously a wild-summon roll left the PREVIOUS floor's encounter data
+  // in place, allowing repeated treasure collection = loot duplication).
+  msg += applyNextEncounter(run, nextEncounter);
 
   await run.save();
   return { success: true, message: msg, run };

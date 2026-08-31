@@ -17955,13 +17955,19 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             maxEnergy: baseStats.maxEnergy || 100,
                             atk: baseStats.atk || 10,
                             def: baseStats.def || 5,
+                            // 💡 FIX 2026-08-31: pass spd too — TRAP events
+                            // roll against it (was never snapshotted).
+                            spd: baseStats.spd || 5,
                           };
                           const result = await abyssSystem.startRun(senderJid, playerStats);
                           if (!result.success) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
                           const run = result.run;
-                          if (run.currentEncounterType === 'combat' && run.currentEnemy) {
+                          // 💡 FIX 2026-08-31: wild_summon floors (10% of floors)
+                          // were never combat-started from `enter` — the run
+                          // soft-locked with "Not in combat!" on attack.
+                          if ((run.currentEncounterType === 'combat' || run.currentEncounterType === 'wild_summon') && run.currentEnemy) {
                             try {
                               await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                               await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
@@ -18001,7 +18007,11 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           if (!run) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run to resume.' });
                           }
-                          if (run.currentEncounterType !== 'combat' || !run.currentEnemy) {
+                          // 💡 FIX 2026-08-31: accept wild_summon floors too —
+                          // previously resume rejected them ("not a combat
+                          // floor") even though they REQUIRE combat.
+                          const runEncType = run.currentEncounterType;
+                          if ((runEncType !== 'combat' && runEncType !== 'wild_summon') || !run.currentEnemy) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Current floor is not a combat floor. Use `${botConfig.getPrefix()} abyss status` to see what to do.' });
                           }
                           const abyssSessionKey = `${chatId}_${senderJid}`;
@@ -18088,9 +18098,13 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           const result = await abyssSystem.processTreasure(senderJid);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 FIX 2026-08-15: Start combat if next floor is combat.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN —
+                          // previously fell through to "Unknown Abyss command: collect"
+                          // after every successful collection.
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
                             await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
                           }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -18105,9 +18119,12 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           // 💡 FIX 2026-08-15: If the next floor is combat, start it!
                           // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
                           // but never actually started combat — so the player got "Not in combat!" when they tried.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN —
+                          // previously fell through to "Unknown Abyss command: choose".
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
                             await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
                           }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -18119,9 +18136,12 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           const result = await abyssSystem.processSkip(senderJid);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 FIX 2026-08-15: Same fix as choose — start combat if next floor is combat.
-                          if (result.run && result.run.currentEncounterType === 'combat' && result.run.currentEnemy) {
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN —
+                          // previously fell through to "Unknown Abyss command: skip".
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
                             await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
                           }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }

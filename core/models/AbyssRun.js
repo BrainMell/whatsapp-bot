@@ -20,29 +20,32 @@ const AbyssRunSchema = new mongoose.Schema({
     items: [{ type: String }], // itemIds dropped during the run
   },
   // Combat state — the current floor's enemy/boss
-  currentEnemy: {
-    id: { type: String, default: null },
-    name: { type: String, default: null },
-    hp: { type: Number, default: 0 },
-    maxHp: { type: Number, default: 0 },
-    atk: { type: Number, default: 0 },
-    def: { type: Number, default: 0 },
-    spd: { type: Number, default: 0 },
-    isBoss: { type: Boolean, default: false },
-    level: { type: Number, default: 1 },
-  },
+  // 💡 FIX 2026-08-31: changed from a strict flat sub-schema to Mixed.
+  // Wild-summon encounters store their stats NESTED (enemy.stats.{hp,...})
+  // plus extra fields (isWildSummon, icon, abilities, xpReward, goldReward)
+  // — the strict sub-schema stripped all of them on save, feeding NaN-HP
+  // unkillable enemies into startAbyssCombat. Readers already handle both
+  // shapes (`enemy.stats?.hp ?? enemy.hp`), so Mixed is safe for regular
+  // flat enemies too.
+  currentEnemy: { type: mongoose.Schema.Types.Mixed, default: null },
   // 💡 FIX 2026-07-31 Bug #1: These fields were referenced in code but NOT
   // in the schema. Mongoose strict mode silently stripped them on save,
   // causing treasure/event floors to be completely broken (the encounter
   // type was lost between commands). Now properly defined.
-  currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event'
+  currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event' | 'wild_summon'
   currentEncounterData: { type: mongoose.Schema.Types.Mixed, default: null },
   // Player state snapshot at run start (so we can restore on death)
+  // 💡 FIX 2026-08-31: added atk/def/spd — TRAP events roll against these
+  // stats (playerStats[choice.stat]), but only hp/energy were snapshotted,
+  // so def/spd checks always fell back to 10 and ALWAYS failed.
   playerSnapshot: {
     hp: { type: Number, default: 0 },
     maxHp: { type: Number, default: 0 },
     energy: { type: Number, default: 0 },
     maxEnergy: { type: Number, default: 0 },
+    atk: { type: Number, default: 10 },
+    def: { type: Number, default: 5 },
+    spd: { type: Number, default: 5 },
   },
   // Current player HP/energy during the run (separate from playerSnapshot
   // so we can track damage taken during the run)

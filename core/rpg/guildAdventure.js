@@ -2414,7 +2414,11 @@ function calculateDamage(
   damage *= variance;
 
   // 💡 ELEMENTAL MODIFIER
-  const targetElement = target.element || "PHYSICAL";
+  // 💡 FIX 2026-08-31: enemies define element in LOWERCASE ('fire') while
+  // ELEMENT_CHART uses UPPERCASE keys — without normalizing the TARGET's
+  // element, strongVs/weakTo .includes() never matched and the entire
+  // 1.5x/0.75x elemental affinity system was dead in PvE.
+  const targetElement = (target.element || "PHYSICAL").toUpperCase();
   const chart = ELEMENT_CHART[element.toUpperCase()] || ELEMENT_CHART.PHYSICAL;
 
   if (chart.strongVs.includes(targetElement)) {
@@ -4604,7 +4608,13 @@ async function performAction(sock, player, action, sessionKey) {
     if (!item || !item.usable) {
       resultMsg += `❌ Invalid item!`;
     } else {
-      inventorySystem.removeItem(player.jid, itemKey, 1);
+      // 💡 FIX 2026-08-31 (item consumption order): removeItem used to run
+      // BEFORE target validation — a Phoenix Down (3500g) was consumed even
+      // when the revive could never work (positive-item targets were filtered
+      // with `!p.isDead`, so a dead ally was unreachable: "Target not found"
+      // or "(Target was already alive)" — item gone either way). Now the
+      // target is resolved and validated FIRST; the item is only consumed
+      // when the effect can actually fire.
       let target;
       const isNegative = [
         "damage_aoe",
@@ -4614,12 +4624,15 @@ async function performAction(sock, player, action, sessionKey) {
         "bribe",
         "percent_hp_damage",
       ].includes(item.effect);
+      const isRevive = item.effect === "revive" || item.effect === "team_revive";
       if (action.targetIndex !== undefined) {
         target = isNegative
           ? state.enemies[action.targetIndex]
+          // Revive items must be able to reach DEAD allies (that's their
+          // whole purpose) — only filter the dead for non-revive items.
           : state.players.find(
               (p) =>
-                !p.isDead && state.players.indexOf(p) === action.targetIndex,
+                state.players.indexOf(p) === action.targetIndex && (isRevive || !p.isDead),
             );
       } else {
         target = isNegative
@@ -4627,13 +4640,38 @@ async function performAction(sock, player, action, sessionKey) {
           : player;
       }
 
+      // Negative items with an explicit target must hit a LIVING enemy —
+      // using one on a corpse (or out-of-range index) wastes the item.
+      if (isNegative && action.targetIndex !== undefined) {
+        const enemyTarget = state.enemies[action.targetIndex];
+        if (!enemyTarget || (enemyTarget.stats && enemyTarget.stats.hp <= 0) || enemyTarget.isDead) {
+          target = null;
+        }
+      }
+
       if (
         !target &&
         item.effect !== "damage_aoe" &&
-        item.effect !== "team_revive"
+        !isRevive
       ) {
         resultMsg += `❌ Target not found!`;
+      } else if (isRevive && !target) {
+        // No dead ally reachable — do NOT consume the revive item.
+        resultMsg += `❌ No fallen ally to revive — item not used.`;
+      } else if (
+        isRevive &&
+        target &&
+        !target.isDead &&
+        action.targetIndex !== undefined
+      ) {
+        // Explicitly targeted ally is alive — do NOT consume the item.
+        resultMsg += `❌ ${target.name} is still alive — save the revive for a fallen ally!`;
       } else {
+        // Target is valid — NOW consume the item.
+        const consumed = inventorySystem.removeItem(player.jid, itemKey, 1);
+        if (!consumed || !consumed.success) {
+          resultMsg += `❌ You don't have that item anymore!`;
+        } else {
         resultMsg += `🎒 Uses *${item.name}*! `;
         turnInfo.action = { name: item.name };
 
@@ -4803,6 +4841,9 @@ async function performAction(sock, player, action, sessionKey) {
           default:
             resultMsg += `\n(Item effect activated)`;
         }
+        // 💡 2026-08-31: closes the `consumed.success` else
+        }
+        // 💡 2026-08-31: closes the valid-target else (item consumption fix)
       }
     }
   }
@@ -4878,7 +4919,11 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       // can attack summons. Previously only state.players was passed, making summons
       // invincible — they attacked but were never targeted. This is the root cause
       // of "summons don't participate in combat".
-      const decision = monsterSkills.evaluateAction(
+      // 💡 FIX 2026-08-31: const -> let — the silence fallback below
+      // reassigns `decision`, throwing "Assignment to constant variable"
+      // (swallowed by the outer catch) and silently skipping the enemy's
+      // turn whenever a silenced enemy picked a skill.
+      let decision = monsterSkills.evaluateAction(
         enemy,
         [...state.players, ...(state.summons || [])],
         state.enemies,
@@ -4909,10 +4954,15 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         } catch (err) {}
         turnInfo.action.name = "Charging";
         turnInfo.target = decision.target;
-        resultMsg += `⚠️ *${enemy.name}* begins charging *${decision.skill.name}* — brace yourselves!`;
-        try {
-          await sock.sendMessage(chatId, { text: resultMsg });
-        } catch (e) {}
+        // 💡 FIX 2026-08-31 (TDZ crash): this block previously did
+        // `resultMsg += ...` — but `resultMsg` is declared with `let` at
+        // line ~5183 (AFTER this point), so every boss charge threw
+        // `ReferenceError: Cannot access 'resultMsg' before initialization`,
+        // silently consumed the boss's turn (outer catch), and spammed the
+        // error log. The charge telegraph is ALREADY sent above — the
+        // duplicated send is removed entirely.
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`⚠️ *${enemy.name}* is charging *${decision.skill.name}* — brace yourselves!`);
         setTimeout(() => resolve(), turnDelay);
         return;
       }
