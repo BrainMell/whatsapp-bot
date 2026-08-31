@@ -184,7 +184,13 @@ function isBlocked(userId) {
     if (blockedUsers.has(norm) || blockedUsers.has(userId)) return true;
     // Also try resolving LID ↔ phone
     const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
-    const authPath = configInstance?.getAuthPath ? configInstance.getAuthPath() : null;
+    // 💡 FIX 2026-08-31: `configInstance` is only a startBot() parameter — it
+    // does NOT exist at module scope, so this line threw ReferenceError on
+    // every call that reached it (swallowed below → return false). That
+    // silently disabled BOTH the cross-format block lookup AND the loan-block
+    // check. botConfig.getAuthPath() is ALS-aware and safe at module scope.
+    let authPath = null;
+    try { authPath = botConfig.getAuthPath ? botConfig.getAuthPath() : null; } catch (_) {}
     const phone = resolveToPhone(userId, authPath);
     if (phone && blockedUsers.has(jidNormalizedUser(phone))) return true;
     const loans = require('./rpg/loans');
@@ -244,14 +250,34 @@ function unbanUser(userId) {
   saveBannedUsers();
 }
 
-function isBanned(userId) {
+// 💡 FIX 2026-08-31: shared cross-format membership test. Bans/hardmutes are
+// stored under whatever JID format the admin's mention produced (@lid or
+// @s.whatsapp.net), but the sender's messages can arrive in the OTHER
+// format — exact-match checks let banned users through whenever the formats
+// diverged. isBlocked already did this; isBanned/isHardBanned/isHardMuted
+// didn't. This helper resolves LID↔phone both ways before checking the Set.
+function crossFormatSetMatch(set, userId) {
   if (!userId) return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
-    return bannedUsers.has(jidNormalizedUser(userId));
+    const norm = jidNormalizedUser(userId);
+    if (set.has(norm) || set.has(userId)) return true;
+    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+    let authPath = null;
+    try { authPath = botConfig.getAuthPath ? botConfig.getAuthPath() : null; } catch (_) {}
+    const phone = resolveToPhone(userId, authPath);
+    if (phone && set.has(jidNormalizedUser(phone))) return true;
+    const canonical = resolveJid(userId, authPath);
+    if (canonical && set.has(jidNormalizedUser(canonical))) return true;
+    return false;
   } catch (err) {
     return false;
   }
+}
+
+function isBanned(userId) {
+  if (!userId) return false;
+  return crossFormatSetMatch(bannedUsers, userId);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -323,12 +349,7 @@ function unhardBanUser(userId) {
 
 function isHardBanned(userId) {
   if (!userId) return false;
-  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
-  try {
-    return hardBannedUsers.has(jidNormalizedUser(userId));
-  } catch (err) {
-    return false;
-  }
+  return crossFormatSetMatch(hardBannedUsers, userId);
 }
 
 function hardMuteUser(userId) {
@@ -347,12 +368,7 @@ function unhardMuteUser(userId) {
 
 function isHardMuted(userId) {
   if (!userId) return false;
-  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
-  try {
-    return hardMutedUsers.has(jidNormalizedUser(userId));
-  } catch (err) {
-    return false;
-  }
+  return crossFormatSetMatch(hardMutedUsers, userId);
 }
 
 // Load global mods from DB
@@ -12254,9 +12270,14 @@ Usage: ${newUsage}/5${warningText}`;
                     if (!isTester && !inTesterGc) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can view bug reports." });
                     }
+                    // 💡 FIX 2026-08-31: partsArr = [prefix, 'issues', count?, status?] —
+                    // limit was parsed from the literal word "issues" (always
+                    // NaN→10) and statusFilter read the user's COUNT (".j
+                    // issues 5" filtered by status "5" → always empty).
+                    // Correct indices: count = partsArr[2], status = partsArr[3].
                     const partsArr = txt.split(/\s+/);
-                    const limit = Math.min(parseInt(partsArr[1]) || 10, 30);
-                    const statusFilter = partsArr[2] || 'open';
+                    const limit = Math.min(parseInt(partsArr[2]) || 10, 30);
+                    const statusFilter = partsArr[3] || 'open';
                     const issues = await testerSystem.listIssues(limit, statusFilter);
                     const openCount = await testerSystem.countOpenIssues();
                     if (issues.length === 0) {
@@ -22413,7 +22434,11 @@ ${senderName} said y'all should know:
                           `❌ Usage: \`${botConfig.getPrefix()} item <num> [target]\``,
                       });
                     }
-                    // const target = parts[3]; // Handled above
+                    // 💡 FIX 2026-08-31: `target` was commented out but still
+                    // referenced below — ReferenceError on EVERY use, swallowed
+                    // by the catch with no reply (the documented .j item
+                    // shortcut was 100% dead). Restore the declaration.
+                    const target = parts[3];
 
                     try {
                       const result = await guildAdventure.handleCombatAction(
@@ -22431,6 +22456,11 @@ ${senderName} said y'all should know:
                         "Combat item shortcut failed:",
                         err.message,
                       );
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Item use failed: " + (err.message || "unknown error"),
+                      }).catch(() => {});
                     }
                     return;
                   }

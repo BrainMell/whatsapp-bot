@@ -781,7 +781,11 @@ async function dismantleItem(userId, itemId) {
         addedSoFar.push([id, qty]);
     }
 
-    let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;
+    // 💡 FIX 2026-08-31: `itemData` doesn't exist in dismantleItem (renamed to
+    // itemSnapshot in an earlier QA fix) — every successful dismantle threw
+    // ReferenceError AFTER the item was destroyed and materials granted,
+    // showing the user an error for a dismantle that actually worked.
+    let msg = `♻️ *DISMANTLED: ${itemSnapshot?.name || itemId}*\n\nRecovered materials:\n`;
     for (const [id, qty] of Object.entries(returned)) {
         msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`;
     }
