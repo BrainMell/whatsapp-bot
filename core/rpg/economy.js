@@ -115,6 +115,16 @@ async function loadEconomy() {
       economyData.set(user.userId, user);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
+    // 💡 FIX 2026-08-31: warm the market-cap cache at startup. addMoney() gates
+    // rewards on _marketCap, which was ONLY initialized by getMarketCap() —
+    // and getMarketCap has zero runtime callers, so _marketCap stayed null
+    // forever and the 500M anti-inflation circuit breaker never armed.
+    try {
+      await getMarketCap();
+      console.log(`💰 Market cap circuit breaker armed: ${_marketCap !== null ? getZENI() + _marketCap.toLocaleString() : 'default ' + getZENI() + DEFAULT_MARKET_CAP.toLocaleString()}`);
+    } catch (capErr) {
+      console.warn('⚠️ Could not load market cap (breaker uses default):', capErr.message);
+    }
   } catch (err) {
     console.error("Error loading economy from DB:", err.message);
   }
