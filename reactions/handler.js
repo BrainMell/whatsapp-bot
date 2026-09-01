@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-const { WAIFU_PICS_MAP, NEKOS_BEST_MAP } = require('./fallbacks');
+const { NEKOS_BEST_MAP, NEKOS_LIFE_CATS, NEKOS_LIFE_REDIRECT, PURRBOT_CATS, PURRBOT_REDIRECT } = require('./fallbacks');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
@@ -34,47 +34,60 @@ function resolveTarget(msg) {
 }
 
 /**
- * Resolves and fetches the GIF URL from Nekos.best (Primary) or falls back to Waifu.pics (Backup).
+ * Resolves and fetches the GIF URL via a 3-source fallback chain.
+ *
+ * 💡 2026-09-01 ENDPOINT OVERHAUL (Task 4 — dead endpoint + .gif kill fix).
+ * The original chain (nekos.best → waifu.pics) went fully dead:
+ *   - nekos.best: Cloudflare JS challenge (403) on all datacenter requests.
+ *     Kept first because the 403 fails fast (~0.2s) and the source auto-
+ *     recovers if protection is ever lifted — it has the best coverage.
+ *   - api.waifu.pics: NXDOMAIN — domain decommissioned. Removed.
+ * New working sources (verified 2026-09-01 from the production host):
+ *   - nekos.life v2       → GET /api/v2/img/<cat>      → { url }
+ *   - api.purrbot.site/v2 → GET /v2/img/sfw/<cat>/gif  → { link }
+ * Every reaction type maps to the closest category each source actually
+ * has (see reactions/fallbacks.js maps).
  */
 async function fetchGifUrl(category) {
-  // Try 1: Nekos.best API (Primary - extremely fast & reliable on this host)
+  // Try 1: Nekos.best API (original primary — currently Cloudflare-blocked
+  // from datacenter IPs; fast-fails with 403 so staying in the chain is cheap)
   try {
     const nekosCat = NEKOS_BEST_MAP[category] || category;
-    const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 10000 });
+    const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 4000 });
     if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
       return res.data.results[0].url;
     }
   } catch (err) {
-    console.warn(`Nekos.best fetch failed for ${category}: ${err.message}`);
+    // expected while the Cloudflare challenge is active — fall through
   }
 
-  // Try 2: Waifu.pics (Standard - Fallback backup)
-  try {
-    const waifuCat = WAIFU_PICS_MAP[category] || category;
-    const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, { timeout: 10000 });
-    if (res.data && res.data.url) return res.data.url;
-  } catch (err) {
-    console.warn(`Waifu.pics standard fetch failed for ${category}: ${err.message}`);
+  // Try 2: nekos.life v2 (NEW 2026-09-01)
+  const nlCat = NEKOS_LIFE_REDIRECT[category] ||
+    (NEKOS_LIFE_CATS.includes(category) ? category : null);
+  if (nlCat) {
+    try {
+      const res = await axios.get(`https://nekos.life/api/v2/img/${nlCat}`, { timeout: 8000 });
+      if (res.data && res.data.url) return res.data.url;
+    } catch (err) {
+      console.warn(`nekos.life fetch failed for ${category} (${nlCat}): ${err.message}`);
+    }
   }
 
-  // Try 3: Waifu.pics (Browser headers - Fallback backup)
-  try {
-    const waifuCat = WAIFU_PICS_MAP[category] || category;
-    const res = await axios.get(`https://api.waifu.pics/sfw/${waifuCat}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-      },
-      timeout: 10000
-    });
-    let data = res.data;
-    if (typeof data === 'string') data = JSON.parse(data);
-    if (data && data.url) return data.url;
-  } catch (err) {
-    console.warn(`Waifu.pics browser-header fetch failed for ${category}: ${err.message}`);
+  // Try 3: PurrBot v2 (NEW 2026-09-01)
+  const pbCat = PURRBOT_REDIRECT[category] ||
+    (PURRBOT_CATS.includes(category) ? category : null);
+  if (pbCat) {
+    try {
+      const res = await axios.get(`https://api.purrbot.site/v2/img/sfw/${pbCat}/gif`, { timeout: 8000 });
+      if (res.data && res.data.link) return res.data.link;
+    } catch (err) {
+      console.warn(`PurrBot fetch failed for ${category} (${pbCat}): ${err.message}`);
+    }
   }
 
-  throw new Error('All SFW GIF endpoints (Nekos.best and Waifu.pics) timed out or failed to connect.');
+  // (waifu.pics REMOVED 2026-09-01 — api.waifu.pics returns NXDOMAIN, domain dead)
+
+  throw new Error('All SFW GIF endpoints failed (nekos.best is Cloudflare-blocked; nekos.life and PurrBot both failed).');
 }
 
 /**
@@ -175,7 +188,7 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
       }, quoteOption);
     }
   } catch (error) {
-    console.error(`Waifu.pics command failed for ${type}:`, error);
+    console.error(`Reaction GIF failed for ${type}:`, error);
     await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ Couldn't load the gif: ${error.message}` });
   } finally {
     // Clean up temporary files
@@ -190,5 +203,6 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
 
 module.exports = {
   resolveTarget,
-  handleReaction
+  handleReaction,
+  fetchGifUrl
 };
