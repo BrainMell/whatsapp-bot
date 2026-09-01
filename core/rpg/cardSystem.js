@@ -2091,6 +2091,7 @@ async function cmdFc(senderJid, reply, args = []) {
       matches.push({
         card,
         cardId: uc.cardId,
+        copyNumber: uc.copyNumber,
         location: `Main Deck (Slot #${uc.mainDeckSlot})`,
         ucId: uc._id,
       });
@@ -2109,6 +2110,7 @@ async function cmdFc(senderJid, reply, args = []) {
           matches.push({
             card,
             cardId: uc.cardId,
+            copyNumber: uc.copyNumber,
             location: `Deck: ${cd.name} (Slot #${i + 1})`,
             ucId: uc._id,
           });
@@ -2126,6 +2128,7 @@ async function cmdFc(senderJid, reply, args = []) {
       matches.push({
         card,
         cardId: uc.cardId,
+        copyNumber: uc.copyNumber,
         location: `Collection (Coll #${i + 1})`,
         ucId: uc._id,
       });
@@ -2136,7 +2139,17 @@ async function cmdFc(senderJid, reply, args = []) {
     return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
   }
 
-  // Build the result message
+  return reply(buildFcResultsMessage(query, matches));
+}
+
+// 💡 FIX (issue 567139, 2026-09-01): the .fc result list used to show the raw
+// MongoDB ObjectId (a 24-char hex string like 66f0a3b2c1d4e5f6a7b8c9d0) in the
+// 🆔 line. No command accepts that hex as input and it means nothing to users.
+// Now each match shows the card library ID (the cards_data.json .id field,
+// e.g. "3-04521") plus the global Copy #, which is how every other card
+// display (claim, trade, market) identifies a copy. Rendering extracted into
+// this pure function so it is unit-testable without a DB connection.
+function buildFcResultsMessage(query, matches) {
   const tierIcons = { '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'S': '👑', 'E': '🎁' };
   let msg = `🔍 *Found ${matches.length} card(s)* matching "${query}":\n\n`;
   for (let i = 0; i < matches.length; i++) {
@@ -2152,15 +2165,16 @@ async function cmdFc(senderJid, reply, args = []) {
     msg += `${icon} *${m.card?.cardName}* (Tier ${m.card?.tier})\n`;
     msg += `   📍 ${m.location}\n`;
     if (matches.length > 1) {
-      msg += `   🆔 \`${m.ucId}\`\n`;
+      // 💡 issue 567139: cardId + copyNumber instead of raw hex ucId
+      const copyLabel = (typeof m.copyNumber === 'number') ? ` · Copy #${m.copyNumber}` : '';
+      msg += `   🆔 \`${m.cardId}\`${copyLabel}\n`;
     }
     msg += `\n`;
   }
   if (matches.length > 1) {
-    msg += `_Use the Coll # or card ID to reference a specific copy._`;
+    msg += `_Reference a copy by its Coll # (collection) or Card ID + Copy #._`;
   }
-
-  return reply(msg);
+  return msg;
 }
 
 async function cmdInfo(reply, chatId, args = [], perms = {}) {
@@ -4740,6 +4754,7 @@ async function cmdCardLB(senderJid, reply, args) {
 module.exports = {
   init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
   bindSocket,
+  buildFcResultsMessage,
   // 💡 Token event & eShop exports
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
