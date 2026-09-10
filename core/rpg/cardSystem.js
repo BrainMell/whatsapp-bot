@@ -136,6 +136,19 @@ function isEventCard(card) {
   return card && card.id && String(card.id).startsWith('E-');
 }
 
+// 💡 FIX 2026-09-11: single source of truth for "is this card animated".
+// Tier 6/S and event cards are animated by convention, but ANY card whose
+// imageUrl points at a .gif/.webp/.webm is animated too — new drops can
+// attach animated assets to lower tiers (owners report animated 5-star
+// cards). Used by grid flagging AND every single-card view so the two
+// paths can never disagree again.
+const ANIMATED_URL_RE = /\.(gif|webp|webm)(\?|$)/i;
+function isAnimatedCard(card) {
+  if (!card) return false;
+  return String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card) ||
+    ANIMATED_URL_RE.test(String(card.imageUrl || ''));
+}
+
 // 💡 Helper: escape regex special characters in a deck name before using it
 // in `new RegExp(...)`. Without this, deck names like "Best (Girls)" or
 // "S+ Tiers" throw SyntaxError or silently fail to match.
@@ -792,7 +805,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   const caption = buildSpawnCaption(card, stat.totalSpawned, stat.maxCopies, price);
 
   try {
-    if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
+    if (isAnimatedCard(card)) {
       const gifBuffer = await goService.convertCardImage(card.imageUrl);
       if (gifBuffer) {
         await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
@@ -1341,11 +1354,10 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      // 💡 FIX 2026-09-10: also trust the URL itself, not just the tier.
-      // Tier 6/S/E remains the primary signal, but any card whose imageUrl
-      // is literally a .gif/.webp/.webm is animated regardless of tier.
-      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card) ||
-        /\.(gif|webp|webm)(\?|$)/i.test(String(card.imageUrl || '')),
+      // 💡 FIX 2026-09-11: delegate to the shared isAnimatedCard() predicate
+      // (tier 6/S/E convention + URL-extension detection) so grids and
+      // single-card views always agree on what animates.
+      animated: isAnimatedCard(card),
       // 💡 Pass card name + tier so the Go grid renderer can overlay them
       name: card.cardName || '',
       tier: String(card.tier || ''),
@@ -1583,7 +1595,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, 'Collection', collIndex, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
+        if (isAnimatedCard(card)) {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1643,6 +1655,13 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
           console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer.length} bytes (${hybridContentType})`);
+          // 💡 FIX 2026-09-11: surface silent animation loss. The Go endpoint
+          // falls back to the styled static PNG when ffmpeg fails; without
+          // this line the only symptom was "animated cards render as stills".
+          const animFlagCount = imageUrls.filter(u => u && u.animated).length;
+          if (animFlagCount > 0 && hybridContentType && !hybridContentType.includes('video')) {
+            console.log(`⚠️ [cmdColl] hybrid PNG fallback despite ${animFlagCount} animated card(s) — check go service [HybridGrid] logs`);
+          }
           gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, mode: modeKey, contentType: hybridContentType, ts: Date.now() });
         } else {
           console.log(`🃏 [cmdColl] generateHybridGrid returned null`);
@@ -1710,7 +1729,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
             const ownerName = await getUserName(uc.userId);
             const caption = buildCardDetailCaption(card, uc, stat, 'Main Deck', slot, ownerName);
             try {
-                if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
+                if (isAnimatedCard(card)) {
                     const gifBuffer = await goService.convertCardImage(card.imageUrl);
                     if (gifBuffer) {
                         return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
@@ -1762,6 +1781,11 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
         if (hybridResult) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
+          // 💡 FIX 2026-09-11: surface silent animation loss (see cmdColl note).
+          const animFlagCount = imageUrls.filter(u => u && u.animated).length;
+          if (animFlagCount > 0 && hybridContentType && !hybridContentType.includes('video')) {
+            console.log(`⚠️ [cmdDeck] hybrid PNG fallback despite ${animFlagCount} animated card(s) — check go service [HybridGrid] logs`);
+          }
           gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer, mode: modeKey, contentType: hybridContentType, ts: Date.now() });
         }
     } else {
@@ -2255,7 +2279,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
         const stat = await CardStat.findOne({ cardId: exactEventCard.id });
         const caption = buildCardDetailCaption(exactEventCard, null, stat, 'Event Database');
         try {
-          if (String(exactEventCard.tier) === '6' || String(exactEventCard.tier) === 'S' || isEventCard(exactEventCard)) {
+          if (isAnimatedCard(exactEventCard)) {
             const gifBuffer = await goService.convertCardImage(exactEventCard.imageUrl);
             if (gifBuffer) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2289,7 +2313,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
-      if (String(exact.tier) === '6' || String(exact.tier) === 'S' || isEventCard(exact)) {
+      if (isAnimatedCard(exact)) {
         const gifBuffer = await goService.convertCardImage(exact.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2320,7 +2344,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     const stat = await CardStat.findOne({ cardId: card.id });
     const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
     try {
-      if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
+      if (isAnimatedCard(card)) {
         const gifBuffer = await goService.convertCardImage(card.imageUrl);
         if (gifBuffer) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -3492,7 +3516,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
       const ownerName = await getUserName(uc.userId);
       const caption = buildCardDetailCaption(card, uc, stat, `Deck: ${deck.name}`, slot, ownerName);
       try {
-        if (String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card)) {
+        if (isAnimatedCard(card)) {
           const gifBuffer = await goService.convertCardImage(card.imageUrl);
           if (gifBuffer) {
             return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -4230,7 +4254,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         const stat = await CardStat.findOne({ cardId: directCard.id });
         const caption = buildCardDetailCaption(directCard, null, stat, 'Event Database');
         try {
-          if (String(directCard.tier) === '6' || String(directCard.tier) === 'S' || isEventCard(directCard)) {
+          if (isAnimatedCard(directCard)) {
             const gifBuffer = await goService.convertCardImage(directCard.imageUrl);
             if (gifBuffer) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
