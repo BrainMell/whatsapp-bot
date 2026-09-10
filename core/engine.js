@@ -692,6 +692,7 @@ const shopCommands = require('./commands/shopCommands');
 const repairCommands = require('./commands/repairCommands');
 const skillCommands = require('./commands/skillCommands');
 const classCommands = require('./commands/classCommands');
+const opsCheckCommands = require('./commands/opsCheckCommands');
 // 💡 Summoner System (Phase 4) — see download/SUMMONER_SYSTEM_DESIGN.md
 const summonCommands = require('./commands/summonCommands');
 const pvpSystem = require('./rpg/pvpSystem');
@@ -7519,6 +7520,12 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderJid,
                         senderName
                       );
+                      return;
+                    }
+
+                    // .j opscheck — deploy-pipeline verification (2026-09 rebuild test)
+                    if (primaryCmd === "opscheck") {
+                      await opsCheckCommands.handleOpsCheck(sock, chatId);
                       return;
                     }
 
