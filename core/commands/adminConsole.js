@@ -1886,8 +1886,10 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────
+    // 💡 2026-09-10: pointer now aims at the Mod Terminal (<prefix> mod) —
+    // the single command browser — not the legacy admin console.
     return await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `❌ Unknown admin command: \`${sub}\`\nUse \`${prefix} admin\` to see all commands.`
+        text: BOT_MARKER + `❌ Unknown command: \`${sub}\`\nUse \`${prefix} mod\` to see all commands.`
     });
 }
 

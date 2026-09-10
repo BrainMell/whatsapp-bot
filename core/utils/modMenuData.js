@@ -4,6 +4,9 @@
 // Mirrors the regular menu UX: main grid ->
 // category drill-down -> command explain mode.
 //
+// Categories are deliberately ONE WORD each — the drill-down is
+//   <prefix> mod rpg | cards | management | system | admin
+//
 // tier = minimum role to SEE the category:
 //   'owner' : bot owner only
 //   'gmod'  : owner + global mods
@@ -13,9 +16,9 @@
 // ============================================
 
 const MOD_MENU = {
-  PLAYER: {
-    name: "Player Tools",
-    emoji: "👤",
+  RPG: {
+    name: "RPG",
+    emoji: "🧬",
     tier: "rpg",
     commands: [
       { cmd: "setlevel", desc: "Set a player's level (1-100), instant + cache flushed.", usage: "mod setlevel <@user> <1-100>" },
@@ -39,14 +42,8 @@ const MOD_MENU = {
       { cmd: "godmode", desc: "Sandbox godmode toggle — testing only, never live.", usage: "mod godmode" },
       { cmd: "sandbox", desc: "Enter the sandbox test environment.", usage: "mod sandbox" },
       { cmd: "modclass", desc: "Switch YOUR class freely (no args = class list).", usage: "modclass <name or ID>" },
-    ],
-  },
 
-  CONTENT: {
-    name: "Content Forge",
-    emoji: "🎨",
-    tier: "rpg",
-    commands: [
+      // ── Content Forge (merged into RPG — 2026-09-10, one-word groups) ──
       { cmd: "createskill", desc: "Interactive skill creator (bot DMs you).", usage: "mod createskill" },
       { cmd: "createclass", desc: "Interactive class creator.", usage: "mod createclass" },
       { cmd: "enableskill", desc: "Re-enable a disabled skill.", usage: "mod enableskill <name>" },
@@ -57,8 +54,8 @@ const MOD_MENU = {
     ],
   },
 
-  MANAGE: {
-    name: "Mod Management",
+  MANAGEMENT: {
+    name: "Management",
     emoji: "🛡️",
     tier: "gmod",
     commands: [
@@ -66,7 +63,7 @@ const MOD_MENU = {
       { cmd: "delmod", desc: "Remove a global moderator.", usage: "mod delmod @user" },
       { cmd: "addrpgmod", desc: "Add an RPG mod (player tools tier).", usage: "mod addrpgmod @user" },
       { cmd: "delrpgmod", desc: "Remove an RPG mod.", usage: "mod delrpgmod @user" },
-      { cmd: "addcardsmod", desc: "Add a card mod (card ops tier).", usage: "mod addcardsmod @user" },
+      { cmd: "addcardsmod", desc: "Add a card mod (cards tier).", usage: "mod addcardsmod @user" },
       { cmd: "delcardsmod", desc: "Remove a card mod.", usage: "mod delcardsmod @user" },
       { cmd: "mods", desc: "List all 3 mod categories.", usage: "mod mods" },
       { cmd: "ban", desc: "Perma-ban a user from the bot.", usage: "mod ban @user" },
@@ -77,7 +74,7 @@ const MOD_MENU = {
   },
 
   CARDS: {
-    name: "Card Ops",
+    name: "Cards",
     emoji: "🎴",
     tier: "card",
     commands: [
@@ -120,8 +117,8 @@ const MOD_MENU = {
     ],
   },
 
-  GROUP: {
-    name: "Group Admin",
+  ADMIN: {
+    name: "Admin",
     emoji: "⚔️",
     tier: "any",
     commands: [
@@ -140,7 +137,7 @@ const MOD_MENU = {
 };
 
 // 💡 MOD TIPS: one randomly chosen each time the terminal opens.
-// Covers GM tooling, card ops, system admin + group moderation —
+// Covers GM tooling, cards, system admin + group moderation —
 // not just RPG (parity with the regular menu's rotating tips).
 const MOD_TIPS = [
   `Run \`{p} mod inspect\` before \`{p} mod resetplayer\` — resets wipe stats AND skills, no undo.`,
