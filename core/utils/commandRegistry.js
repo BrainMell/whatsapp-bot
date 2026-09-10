@@ -403,7 +403,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'backflip', desc: 'Do a backflip.', usage: 'backflip' }
   ],
   MODERATOR: [
-    { cmd: 'modcom', desc: 'Show all moderator commands by permission level.', usage: 'modcom' },
+    { cmd: 'mod', desc: 'Open the Mod Terminal (mods only) — all mod commands, menu-style.', usage: 'mod [category|command]' },
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },
     { cmd: 'spawnset', desc: 'Set per-bot card spawn interval (Mod+).', usage: 'spawnset <minutes> | reset' },
     { cmd: 'spawninfo', desc: 'View current spawn configuration.', usage: 'spawninfo' },
