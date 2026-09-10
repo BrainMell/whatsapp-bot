@@ -176,6 +176,35 @@ function getPlayerEffectsString(player) {
     return effectsStr;
 }
 
+// 💡 REDESIGN 2026-09-11 (owner directive): the PvP text UI now mirrors the
+// dungeon/raid battle UI design — ▰▱ HP bars + labelled HP/EN readouts per
+// fighter — except it shows the 2 duelists instead of the party.
+// Previously the duel status was bare backtick numbers with no bars, which
+// read nothing like the rest of the combat UI.
+const DUEL_BAR_LEN = 10;
+function duelHpBar(cur, max, len = DUEL_BAR_LEN) {
+    const safeMax = Math.max(1, max);
+    const filled = Math.max(0, Math.min(len, Math.round((Math.max(0, cur) / safeMax) * len)));
+    return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+}
+
+/**
+ * Render one duelist's status block, raid-UI style.
+ * @param {object} player - duelist state (name, hp, maxHp, energy, maxEnergy)
+ * @param {string} sideIcon - 🔴 (challenger/left) or 🔵 (defender/right)
+ * @returns {string[]} - lines for this fighter (HP line + EN line)
+ */
+function renderDuelistStatus(player, sideIcon) {
+    const hp = Math.max(0, Math.floor(player.hp));
+    const maxHp = Math.max(1, Math.floor(player.maxHp));
+    const en = Math.max(0, Math.floor(player.energy));
+    const maxEn = Math.max(1, Math.floor(player.maxEnergy));
+    return [
+        `${sideIcon} *${player.name}*${getPlayerEffectsString(player)} [${duelHpBar(hp, maxHp)}] \`${hp}/${maxHp}\` HP`,
+        `⚡ [${duelHpBar(en, maxEn)}] \`${en}/${maxEn}\` EN`,
+    ];
+}
+
 // ─── PvP Balance Constants ────────────────────
 const PVP_DAMAGE_MULT   = 0.80;  // Base damage multiplier for basic attacks
 const PVP_ENERGY_REGEN  = 25;    // Energy gained per turn. FIX: bumped from 20 so ultimate-cost skills (capped at 100) are still usable alongside basic actions.
@@ -770,17 +799,16 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
         
         const statusMsg = statusLog.join('\n');
+        // 💡 REDESIGN 2026-09-11: raid-style ASCII UI with both duelists' bars.
         let roundMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
                         `———————————\n` +
                         `${statusMsg}\n\n` +
-                        `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
-                        `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
+                        renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
+                        renderDuelistStatus(opponent, '🔵').join('\n') + '\n\n' +
                         `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* — It's your turn!\n` +
                         `———————————\n` +
-                        `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
-                        `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-                        `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
-                        `🏃 \`${botConfig.getPrefix()} combat flee\``;
+                        `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+                        `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\``;
 
         return {
             success: true,
@@ -1505,17 +1533,16 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         imageResult = null;
     }
     
+    // 💡 REDESIGN 2026-09-11: raid-style ASCII UI with both duelists' bars.
     let statusMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
                     `———————————\n` +
                     `${actionResult}\n\n` +
-                    `🔴 *${currentPlayer.name}*${getPlayerEffectsString(currentPlayer)}: \`${Math.max(0, currentPlayer.hp)}/${currentPlayer.maxHp}\` HP · \`${Math.floor(currentPlayer.energy)}\` EN\n` +
-                    `🔵 *${opponent.name}*${getPlayerEffectsString(opponent)}: \`${Math.max(0, opponent.hp)}/${opponent.maxHp}\` HP · \`${Math.floor(opponent.energy)}\` EN\n\n` +
+                    renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
+                    renderDuelistStatus(opponent, '🔵').join('\n') + '\n\n' +
                     `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* — It's your turn!\n` +
                     `———————————\n` +
-                    `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
-                    `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-                    `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
-                    `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
+                    `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
+                    `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
     return {
         success: true,
