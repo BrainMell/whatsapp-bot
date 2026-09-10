@@ -43,7 +43,7 @@ What to do:
 3. Keep it direct.`,
             },
           ],
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
         });
 
         let summaryText = res.choices[0].message.content;

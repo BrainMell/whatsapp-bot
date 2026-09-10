@@ -1582,7 +1582,7 @@ async function startBot(configInstance) {
         // 3. AI Calculation
         const aiPrompt = `Analyze "${a.title}" market data: "${marketInfo}". OUTPUT ONLY JSON: {"status": "...", "score": 0, "market": "...", "market_val": 0.0}`;
         const aiRes = await groq.chat.completions.create({
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           messages: [{ role: "user", content: aiPrompt }],
           response_format: { type: "json_object" },
         });
@@ -2803,7 +2803,7 @@ What to do:
 3. Keep it direct.`,
             },
           ],
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
         });
 
         let summaryText = res.choices[0].message.content;
@@ -3404,8 +3404,8 @@ What to do:
     const groq = getNextGroqClient();
 
     const MODELS = {
-      FAST: "llama-3.1-8b-instant",
-      SMART: "llama-3.3-70b-versatile",
+      FAST: "openai/gpt-oss-20b",
+      SMART: "openai/gpt-oss-120b",
     };
 
     function selectModel(messageLength, isComplex = false) {
@@ -4760,7 +4760,7 @@ What to do:
       // Use AI for nuanced cases
       try {
         const res = await smartGroqCall({
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           messages: [
             {
               role: "system",
@@ -20213,7 +20213,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             { role: "system", content: systemPrompt },
                             { role: "user", content: userPrompt },
                           ],
-                          model: "llama-3.1-8b-instant",
+                          model: "openai/gpt-oss-20b",
                         });
 
                         const roastText = res.choices[0].message.content;
@@ -20497,7 +20497,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         try {
                           const res = await groq.chat.completions.create({
                             messages: [{ role: "user", content: prompt }],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             response_format: { type: "json_object" },
                           });
 
@@ -20612,7 +20612,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Tell me a short funny, actually culturally funny joke. Be creative.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           jokeText = res.choices[0].message.content;
@@ -20658,7 +20658,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Ask one spicy/embarrassing truth question.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           truthText = res.choices[0].message.content;
@@ -20710,7 +20710,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Give one funny dare that can be done in a WhatsApp group.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           dareText = res.choices[0].message.content;
@@ -20762,7 +20762,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Give me an aggressive 1-sentence motivation.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           mot = res.choices[0].message.content;
@@ -20992,7 +20992,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               },
                               { role: "user", content: ratingContext },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                           });
 
                           const rating = completion.choices[0].message.content;
@@ -21086,7 +21086,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Generate a funny internet-style text meme (e.g. Me: ... / Also Me: ... or similar formats). Keep it short and funny."
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           fallbackMeme = res.choices[0].message.content;
@@ -21142,7 +21142,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Generate one creative, funny, and engaging 'Would you rather' question. Format it as: 'Would you rather [Option A] OR [Option B]?'"
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           if (res.choices[0].message.content) {
@@ -21199,7 +21199,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Provide one inspiring, philosophical, or funny quote. Output in JSON format only: {\"quote\": \"...\", \"author\": \"...\"}"
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             response_format: { type: "json_object" },
                             timeout: 5000
                           });
@@ -21374,7 +21374,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             },
                             { role: "user", content: textToTranslate }
                           ],
-                          model: "llama-3.1-8b-instant",
+                          model: "openai/gpt-oss-20b",
                           timeout: 8000
                         });
 
@@ -21779,7 +21779,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                   content: "Provide one famous, iconic anime quote. Return in JSON format only: {\"quote\": \"...\", \"character\": \"...\", \"anime\": \"...\"}"
                                 }
                               ],
-                              model: "llama-3.1-8b-instant",
+                              model: "openai/gpt-oss-20b",
                               response_format: { type: "json_object" },
                               timeout: 5000
                             });

@@ -12,13 +12,13 @@ class GroqClient {
             .map((key) => key.trim())
             .filter((key) => key !== "");
         this.currentKeyIndex = 0;
-        // 💡 AUDIT FIX 2026-08-01 (Round 4): default model is now llama-3.3-70b-versatile
-        // (was llama-3.1-8b-instant). The onboarding doc specifies GROQ_MODEL=llama-3.3-70b-versatile
-        // in .env, but .env is gitignored — so Box 1's .env doesn't have GROQ_MODEL and the
-        // bot was falling back to the weaker 8b model. The 70b model is significantly better
-        // at structured extraction (the context engine's main use case). If GROQ_MODEL is set
-        // in .env, it overrides this default.
-        this.model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+        // 💡 MIGRATION 2026-09-10: Groq decommissioned the llama-3.x chat models
+        // (llama-3.3-70b-versatile / llama-3.1-8b-instant -> 404 model_not_found on
+        // every call). Switched to openai/gpt-oss-120b (SMART, JSON mode verified 200)
+        // and openai/gpt-oss-20b (FAST). Note gpt-oss models return reasoning in a
+        // separate field; message.content stays clean JSON. If GROQ_MODEL is set in
+        // .env, it overrides this default — keep it in sync with the Groq catalog.
+        this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         
         console.log(`🔌 Groq Client initialized (Model: ${this.model}, hasKeys: ${this.keys.length > 0})`);

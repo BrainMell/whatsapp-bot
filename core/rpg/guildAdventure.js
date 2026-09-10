@@ -7887,13 +7887,13 @@ async function endAdventure(sock, sessionKey, victory = true) {
     if (state.smartGroqCall) {
       const completion = await state.smartGroqCall({
         messages: [{ role: "system", content: prompt }],
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
       });
       narration = completion.choices[0].message.content;
     } else if (state.groq) {
       const completion = await state.groq.chat.completions.create({
         messages: [{ role: "system", content: prompt }],
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
       });
       narration = completion.choices[0].message.content;
     }

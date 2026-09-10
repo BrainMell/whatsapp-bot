@@ -60,7 +60,7 @@ if (primaryCmd === "summary" || primaryCmd === "recap") {
       { role: "system", content: "You are a helpful assistant. Summarize the following WhatsApp chat conversation concisely, listing key topics and active speakers." },
       { role: "user", content: transcript }
     ],
-    model: "llama-3.1-8b-instant"
+    model: "openai/gpt-oss-20b"
   });
   await reply(response.choices[0].message.content);
 }
@@ -88,7 +88,7 @@ await sock.sendMessage(chatId, { text, mentions: sorted.map(u => u.userId) });
 ---
 
 ## 4. How to Modify
-* **Change the Summary LLM Model**: Update the model name argument (`llama-3.1-8b-instant`) in `engine.js` around line 1166 (or search for `summary` model parameter).
+* **Change the Summary LLM Model**: Update the model name argument (`openai/gpt-oss-20b`) in `engine.js` around line 1166 (or search for `summary` model parameter).
 * **Adjust Message Buffer Capacity**: Modify the maximum size limit of message transcripts kept in the memory buffer inside `BufferManager.js`.
 * **Alter Active Leaderboard Limit**: Customize the `slice(0, 15)` count to display more or fewer active members in `engine.js` at line 10327.
 
@@ -232,7 +232,7 @@ const response = await groq.chat.completions.create({
     { role: "system", content: "You are a helpful assistant. Summarize the following WhatsApp chat conversation concisely, listing key topics and active speakers." },
     { role: "user", content: transcript }
   ],
-  model: "llama-3.1-8b-instant"
+  model: "openai/gpt-oss-20b"
 });
 ```
 **How it works here**: The code uses promises to handle the asynchronous operation of creating a completion.
@@ -262,7 +262,7 @@ const response = await groq.chat.completions.create({
     { role: "system", content: "You are a helpful assistant. Summarize the following WhatsApp chat conversation concisely, listing key topics and active speakers." },
     { role: "user", content: transcript }
   ],
-  model: "llama-3.1-8b-instant"
+  model: "openai/gpt-oss-20b"
 });
 ```
 **How it works here**: The code uses async/await to write asynchronous code that is easier to read and understand.

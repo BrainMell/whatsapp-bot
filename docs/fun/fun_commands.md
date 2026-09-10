@@ -65,7 +65,7 @@ if (primaryCmd === "roast") {
       { role: "system", content: "You are a witty, sarcastic comedian. Write a funny, lighthearted roast about this person based on their profile facts. Keep it safe and fun." },
       { role: "user", content: roastContext }
     ],
-    model: "llama-3.1-8b-instant"
+    model: "openai/gpt-oss-20b"
   });
   await reply(res.choices[0].message.content);
 }
