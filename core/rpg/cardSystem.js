@@ -1145,7 +1145,11 @@ async function searchEventCards(nameQuery, animeQuery) {
 // a permanent buffer to the Map. On a 954MB box with 3000+ users, this is
 // a slow memory leak. Now entries expire after 60s (matches onboarding doc's
 // "Hybrid grid 60s cache" note) and a sweeper runs every 2 min.
-const GIF_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+// 💡 FIX 2026-09-10: 60s → 600s. The deck hash already invalidates on ANY
+// collection/deck change, so TTL only bounds staleness — and hybrid renders
+// now take 15-60s on heavy decks, so re-rendering every call (old behavior)
+// was brutal. 10 minutes makes repeat views instant.
+const GIF_CACHE_TTL_MS = 10 * 60 * 1000;
 const gifCache = {
     decks: new Map(), // key: userId_deckName, value: { hash: string, buffer: Buffer, ts: number }
     collections: new Map() // key: userId, value: { hash: string, buffer: Buffer, ts: number }
@@ -1337,7 +1341,11 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card),
+      // 💡 FIX 2026-09-10: also trust the URL itself, not just the tier.
+      // Tier 6/S/E remains the primary signal, but any card whose imageUrl
+      // is literally a .gif/.webp/.webm is animated regardless of tier.
+      animated: String(card.tier) === '6' || String(card.tier) === 'S' || isEventCard(card) ||
+        /\.(gif|webp|webm)(\?|$)/i.test(String(card.imageUrl || '')),
       // 💡 Pass card name + tier so the Go grid renderer can overlay them
       name: card.cardName || '',
       tier: String(card.tier || ''),
@@ -1615,13 +1623,17 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
     const cached = gifCache.collections.get(senderJid);
+    const modeKey = useHybridAnim ? 'hybrid' : 'static';
 
     let gifBuffer;
     let hybridContentType = null;
-    if (cached && cached.hash === currentHash && !useHybridAnim && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
-        // Only use cache for static grid (hybrid is animated, don't cache — re-render each time)
-        console.log(`🃏 [cmdColl] using cached grid buffer`);
+    if (cached && cached.hash === currentHash && cached.mode === modeKey && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
+        // 💡 FIX 2026-09-10: cache BOTH modes — hybrid renders take 15-60s on
+        // heavy decks. Deck hash invalidates on change; mode key prevents
+        // anim/static cross-contamination (an MP4 sent as image would break).
+        console.log(`🃏 [cmdColl] using cached ${modeKey} grid buffer`);
         gifBuffer = cached.buffer;
+        hybridContentType = cached.contentType || null;
     } else if (useHybridAnim) {
         // 💡 Hybrid animated grid — styled static grid + animated overlays.
         // Returns video/mp4 (if ≥1 animated card) or image/png (if none animated).
@@ -1631,6 +1643,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
           console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer.length} bytes (${hybridContentType})`);
+          gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, mode: modeKey, contentType: hybridContentType, ts: Date.now() });
         } else {
           console.log(`🃏 [cmdColl] generateHybridGrid returned null`);
         }
@@ -1638,7 +1651,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
         console.log(`🃏 [cmdColl] calling goService.generateCardGrid | urls=${imageUrls.length}`);
         gifBuffer = await goService.generateCardGrid(imageUrls, "COLLECTION (TOP 12)");
         console.log(`🃏 [cmdColl] generateCardGrid returned: ${gifBuffer ? gifBuffer.length + ' bytes' : 'null'}`);
-        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
+        if (gifBuffer) gifCache.collections.set(senderJid, { hash: currentHash, buffer: gifBuffer, mode: modeKey, ts: Date.now() });
     }
 
     if (gifBuffer) {
@@ -1735,21 +1748,25 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
     const cached = gifCache.decks.get(`${senderJid}_main`);
+    const modeKey = useHybridAnim ? 'hybrid' : 'static';
 
     let gifBuffer;
     let hybridContentType = null;
-    if (cached && cached.hash === currentHash && !useHybridAnim && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
+    if (cached && cached.hash === currentHash && cached.mode === modeKey && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
+        // 💡 FIX 2026-09-10: cache both modes (see cmdColl note — hybrid
+        // renders are expensive now that big GIFs actually render).
         gifBuffer = cached.buffer;
+        hybridContentType = cached.contentType || null;
     } else if (useHybridAnim) {
         const hybridResult = await goService.generateHybridGrid(imageUrls, "MAIN DECK (TOP 12)");
         if (hybridResult) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
+          gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer, mode: modeKey, contentType: hybridContentType, ts: Date.now() });
         }
-        // Don't cache hybrid (see cmdColl comment)
     } else {
         gifBuffer = await goService.generateCardGrid(imageUrls, "MAIN DECK (TOP 12)");
-        if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
+        if (gifBuffer) gifCache.decks.set(`${senderJid}_main`, { hash: currentHash, buffer: gifBuffer, mode: modeKey, ts: Date.now() });
     }
 
     if (gifBuffer) {

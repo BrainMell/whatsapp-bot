@@ -863,8 +863,13 @@ class GoImageService {
         { images, title, duration, fps },
         {
           responseType: "arraybuffer",
-          // 45s timeout — real-world renders with slow downloads take ~25-30s.
-          timeout: 45000,
+          // 💡 FIX 2026-09-10: was 45s. With the 5MB GIF cap raised (real
+          // shoob GIFs run up to ~40MB), heavy decks legitimately take
+          // 60-90s to download + composite. Timing out here meant the bot
+          // fell back to a STATIC grid — i.e. the exact "animated cards
+          // render as stills" bug. 150s covers the observed worst case
+          // (12 heavy GIFs ≈ 200MB CDN-side ≈ 70s + render).
+          timeout: 150000,
         },
       );
       const buf = Buffer.from(response.data);
