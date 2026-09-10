@@ -200,7 +200,7 @@ const DUNGEON_ENVIRONMENTS = {
   FIRE_CAVE: {
     id: "FIRE_CAVE",
     name: "Fire Cave",
-    asset: "spark_2.png",
+    asset: "env1.png",  // 💡 ART-FIX 2026-09-11: was spark_2.png (crimson mountains) — env1 IS the lava cave interior
     mobs: ["FLAME", "ELDER_FLAME", "MAGMA_BRUTE", "HELLFIRE_DEMON"],
     bosses: ["INFERNAL_OVERLORD", "PRIMORDIAL_FLAME"],
     modifier: {
@@ -213,7 +213,7 @@ const DUNGEON_ENVIRONMENTS = {
   ICE_CAVE: {
     id: "ICE_CAVE",
     name: "Ice Cave",
-    asset: "spark_5.png",  // 💡 AUDIT FIX 2026-08-01: was env2.png — ice.png is more thematic
+    asset: "env2.png",  // 💡 ART-FIX 2026-09-11: was spark_5.png (a SUNNY BEACH!) — env2 IS the ice cave interior
     mobs: ["FROST_GHOUL", "GLACIAL_BEAST", "BLIZZARD_WRAITH"],
     bosses: ["PERMAFROST_TITAN"],
     modifier: {
@@ -226,7 +226,7 @@ const DUNGEON_ENVIRONMENTS = {
   TOXIC_CAVE: {
     id: "TOXIC_CAVE",
     name: "Toxic Cave",
-    asset: "spark_6.png",
+    asset: "env3.png",  // 💡 ART-FIX 2026-09-11: was spark_6.png (dark ocean) — env3 IS the toxic cave interior
     mobs: ["DROWNED_ONE", "TIDE_LURKER", "MIST_WALKER"],
     bosses: ["LEVIATHAN_SPAWN"],
     modifier: {
@@ -239,7 +239,7 @@ const DUNGEON_ENVIRONMENTS = {
   VOID_DIMENSION: {
     id: "VOID_DIMENSION",
     name: "Void Dimension",
-    asset: "spark_7.png",  // 💡 AUDIT FIX 2026-08-01: was env4.png (doesn't exist)
+    asset: "spark_2-night.png",  // 💡 ART-FIX 2026-09-11: was spark_7.png (SUNNY SNOW PEAKS!) — night crimson mist reads void
     mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
     bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
     modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
@@ -248,8 +248,8 @@ const DUNGEON_ENVIRONMENTS = {
   SCI_FI_CITY: {
     id: "SCI_FI_CITY",
     name: "Sci-Fi City",
-    asset: "spark_10.png",  // 💡 AUDIT FIX 2026-08-01: was env5.png (doesn't exist)
-    mobs: ["TSUNAMI_WALKER", "ABYSSAL_HORROR"],
+    asset: "spark_10.png",  // 💡 ART-FIX 2026-09-11: kept (dark stone backdrop — only urban-dark bg available)
+    mobs: ["VOID_SEEKER", "ABYSSAL_HORROR"],  // 💡 was TSUNAMI_WALKER (water mob in a city)
     bosses: ["KRAKEN_SPAWN"],
     modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
     enemyBonus: { type: "RANGED", rangeBonus: 1 },
@@ -257,7 +257,7 @@ const DUNGEON_ENVIRONMENTS = {
   DEMON_CASTLE: {
     id: "DEMON_CASTLE",
     name: "Demon Castle",
-    asset: "spark_3.png",  // 💡 AUDIT FIX 2026-08-01: was env6.png (doesn't exist)
+    asset: "spark_2.png",  // 💡 ART-FIX 2026-09-11: was spark_3.png (sunny desert dunes!) — crimson demon mountains
     mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
     bosses: [
       "MUTATION_PRIME",
@@ -275,7 +275,7 @@ const DUNGEON_ENVIRONMENTS = {
   DESERT: {
     id: "DESERT",
     name: "Desert",
-    asset: "spark_4.png",  // 💡 AUDIT FIX 2026-08-01: was env7.png (doesn't exist) — sand.png is thematic
+    asset: "spark_3.png",  // 💡 ART-FIX 2026-09-11: was spark_4.png (murky swamp field!) — spark_3 IS golden dunes
     mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
     bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
     modifier: {
@@ -288,7 +288,7 @@ const DUNGEON_ENVIRONMENTS = {
   INFECTED_AFTERLIFE: {
     id: "INFECTED_AFTERLIFE",
     name: "Infected Afterlife",
-    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env8.png (doesn't exist)
+    asset: "spark_1-night.png",  // 💡 ART-FIX 2026-09-11: was spark_1.png (daytime meadow) — corrupted night plains
     mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
     bosses: ["PERFECT_MUTATION"],
     modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
@@ -297,7 +297,7 @@ const DUNGEON_ENVIRONMENTS = {
   PRE_INFECTED_AFTERLIFE: {
     id: "PRE_INFECTED_AFTERLIFE",
     name: "Pre-Infected Afterlife",
-    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env9.png (doesn't exist)
+    asset: "spark_7.png",  // 💡 ART-FIX 2026-09-11: was spark_1.png (meadow) — pure snowy peaks = PURITY_AURA holy ground
     mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
     bosses: ["ELEMENTAL_SOVEREIGN"],
     modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
@@ -1539,11 +1539,11 @@ function generateCombatEncounter(chatId) {
   };
   const rankIdx = rankIndexMap[state.dungeonRank] || 1;
 
-  let mixRate = 0.1; // F-E Rank
-  if (rankIdx >= 3 && rankIdx <= 4)
-    mixRate = 0.3; // D-C Rank
-  else if (rankIdx >= 5 && rankIdx <= 6)
-    mixRate = 0.5; // B-A Rank
+  // 💡 ENVIRONMENT COHERENCE (2026-09-11 owner directive): mixing mobs from
+  // OTHER environments (ice mobs in a fire cave) is only allowed PAST C rank.
+  // F/E/D/C dungeons stay 100% native to their environment's mob pool.
+  let mixRate = 0; // F-E-D-C: native mobs only
+  if (rankIdx >= 5 && rankIdx <= 6) mixRate = 0.5; // B-A Rank
   else if (rankIdx >= 7) mixRate = 0.7; // S+ Rank
 
   const encounter = classEncounters.generateEncounter(
@@ -1626,7 +1626,9 @@ function generateEliteCombatEncounter(chatId) {
     SSS: 9,
   };
   const rankIdx = rankIndexMap[state.dungeonRank] || 1;
-  let mixRate = 0.15;
+  // 💡 ENVIRONMENT COHERENCE (2026-09-11): same rule as normal encounters —
+  // no foreign-environment mobs until PAST C rank (B and above).
+  let mixRate = 0;
   if (rankIdx >= 5) mixRate = 0.4;
 
   const encounter = classEncounters.generateEncounter(
@@ -3664,6 +3666,11 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // 💡 Summoner System (Phase 2): deploy each player's active summon.
   // Build combat entities from user.activeSummonId, push to state.summons.
   // Summons are added to turnOrder below (alongside players + enemies).
+  // 💡 RAID SUMMON CAP (2026-09-11 owner directive): only the 3 STRONGEST
+  // summons deploy alongside the 6 players. Candidates are collected first,
+  // ranked by total effective stats, and the top 3 join the battle.
+  const RAID_SUMMON_CAP = 3;
+  const summonCandidates = [];
   state.summons = [];
   // 💡 FIX #6: Reset threat for all players at combat start
   if (state.players) threatSystem.resetThreat(state.players);
@@ -3696,11 +3703,29 @@ async function startCombat(sock, groq, encounter, sessionKey) {
         // positioning of summons on the battlefield.
         summonEntity.ownerIndex = pi;
         summonEntity.summonerIndex = pi;
-        state.summons.push(summonEntity);
+        summonCandidates.push(summonEntity);
       }
     } catch (e) {
       console.error('[Summon] Failed to deploy summon for', player.jid, ':', e?.message || e);
     }
+  }
+
+  // 💡 Rank by strength (total effective stats incl. tier/loyalty/class bonuses)
+  // and keep only the top 3 for the raid.
+  const summonStrength = (s) => {
+    const st = s.stats || {};
+    return (st.maxHp || st.maxHP || st.hp || 0) + (st.atk || 0) + (st.def || 0) + (st.mag || 0) + (st.spd || 0);
+  };
+  const deployedSummons = summonCandidates
+    .sort((a, b) => summonStrength(b) - summonStrength(a))
+    .slice(0, RAID_SUMMON_CAP);
+  if (summonCandidates.length > RAID_SUMMON_CAP) {
+    console.log(`[SummonDeploy] Raid cap: ${summonCandidates.length} candidates -> top ${RAID_SUMMON_CAP} deployed`);
+  }
+  for (const s of deployedSummons) {
+    // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
+    // positioning of summons on the battlefield.
+    state.summons.push(s);
   }
 
   // 💡 INITIALIZE ACTION GAUGE
