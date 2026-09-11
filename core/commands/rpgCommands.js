@@ -381,17 +381,9 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
     }
   });
 
-  msg += `\n━━━━━━━━━━━━━━━━━━\n`;
-  if (totalPages > 1) {
-    let hints = [];
-    if (clampedPage > 1) hints.push(`Prev: \`${botConfig.getPrefix()} bag ${clampedPage - 1}\``);
-    if (clampedPage < totalPages) hints.push(`Next: \`${botConfig.getPrefix()} bag ${clampedPage + 1}\``);
-    msg += `📄 ${hints.join(' | ')}\n`;
-  }
-  msg += `⚔️ \`${botConfig.getPrefix()} equip <#>\`  💰 \`${botConfig.getPrefix()} sell <#>\`  🧪 \`${botConfig.getPrefix()} use <#>\n\n`;
-  msg += `💡 *Quick Tips:*\n`;
-  msg += `• Sell: \`${botConfig.getPrefix()} sell <#> <number of items to sell>\` (e.g., \`${botConfig.getPrefix()} sell 1 5\`)\n`;
-  msg += `• Fish: \`${botConfig.getPrefix()} fish\` to gather more loot!`;
+  msg += `\n━━━━━━━━━━━━━━━\n`;
+  msg += `💡 Page: \`${botConfig.getPrefix()} bag <p>\`  •  Equip: \`${botConfig.getPrefix()} equip <#>\`\n`;
+  msg += `💰 Sell: \`${botConfig.getPrefix()} sell <#> [qty]\`  •  Use: \`${botConfig.getPrefix()} use <#>\``;
 
   await sock.sendMessage(chatId, { text: msg });
 }
@@ -550,7 +542,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     if (!equipment) return;
 
     if (!itemId) { 
-        let msg = `━━━━━━━━━━━━━\n🛡️ EQUIPMENT \n┗━━━━━━━━━━━━━\n\n`;
+        let msg = `🛡️ *EQUIPMENT*\n━━━━━━━━━━━━━━━\n\n`;
         const slots = Object.values(inventorySystem.EQUIPMENT_SLOTS);
         const durabilitySystem = require('../rpg/durabilitySystem');
         
@@ -566,13 +558,13 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
                 const brokenStr = durabilitySystem.isBroken(item) ? " 💔 *[BROKEN]*" : "";
                 // 💡 BUG-05 fix: use instance name (preserves enhancement prefix)
                 const displayName = item.name || itemInfo.name;
-                msg += `${icon} *${title}*: ${displayName}${brokenStr}\n   Condition: ${durStr}\n   🆔 ID: \`${item.id}\`\n\n`;
+                msg += `${icon} *${title}*: ${displayName}${brokenStr} · ${durStr} · \`${item.id}\`\n`;
             } else { 
-                msg += `${icon} *${title}*: _Empty_\n\n`;
+                msg += `${icon} *${title}*: _Empty_\n`;
             }
         });
         
-        msg += `━━━━━━━━━━━━━\n📖 *HOW TO EQUIP:*\nType: \`${getPrefix()} equip <# or id> [slot]\`\n📌 Example: \`${getPrefix()} equip 1\``;
+        msg += `━━━━━━━━━━━━━━━\n💡 Equip: \`${getPrefix()} equip <# or id> [slot]\` (e.g. \`${getPrefix()} equip 1\`)`;
         await sock.sendMessage(chatId, { text: msg });
         return;
     }
@@ -706,8 +698,8 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
     const baseTitle = titleMap[categoryFilter] || categoryFilter;
     
-    let msg = `⚒️ *${baseTitle.toUpperCase()}* (Page ${currentPage}/${totalPages})\n`;
-    msg += `────────────────────\n`;
+    let msg = `⚒️ *${baseTitle.toUpperCase()}* • Page ${currentPage}/${totalPages}\n`;
+    msg += `━━━━━━━━━━━━━━━\n`;
     
     if (searchQuery) msg += `🔍 *Search:* _"${searchQuery}"_\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
@@ -721,34 +713,29 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         'COMMON': '⚪'
     };
 
-    pageItems.forEach(r => { 
+    pageItems.forEach((r, i) => {
         const info = lootSystem.getItemInfo(r.id) || {};
         const slotIcon = getSlotIcon(info.slot);
         const rarityEmoji = rarityEmojis[info.rarity] || '⚪';
-        const lvlStr = info.reqLevel !== undefined ? ` [Lvl: ${info.reqLevel}]` : "";
-        
-        msg += `\n${slotIcon} *${r.name}* (\`${r.id}\`) ${rarityEmoji}${lvlStr}\n`;
-        msg += `📝 _${r.desc || info.description || ''}_\n`;
-        
-        const ingredients = Object.entries(r.ingredients).map(([id, qty]) => { 
+        const lvlStr = info.reqLevel !== undefined ? ` · Lvl ${info.reqLevel}` : '';
+
+        const ingredients = Object.entries(r.ingredients).map(([id, qty]) => {
             const ingInfo = lootSystem.getItemInfo(id);
-            const ingSlotIcon = ingInfo.slot ? getSlotIcon(ingInfo.slot) + ' ' : '';
-            return `${qty}x ${ingSlotIcon}${ingInfo.name}`;
+            return `${qty}x ${ingInfo.name || id}`;
         }).join(', ');
-        
-        msg += `🛠️ *Req:* ${ingredients}\n`;
+
+        // Unified 2-line entry — no flavor text (owner: lists must not over-explain)
+        msg += `*${startIdx + i + 1}.* ${slotIcon} ${rarityEmoji} *${r.name}* \`${r.id}\`${lvlStr}\n`;
+        msg += `   🛠️ ${ingredients}\n`;
     });
 
     const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
     
-    msg += `────────────────────\n`;
-    if (searchQuery) {
-        msg += `💡 *Page:* \`${getPrefix()} ${cmdName} search ${searchQuery} <page>\`\n`;
-    } else {
-        msg += `💡 *Page:* \`${getPrefix()} ${cmdName} <page>\`\n`;
-    }
-    msg += `🔨 *Craft:* \`${getPrefix()} ${cmdName} <id>\`\n`;
-    msg += `📌 *Example:* \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\``;
+    msg += `━━━━━━━━━━━━━━━\n`;
+    const pageHint = searchQuery
+        ? `${getPrefix()} ${cmdName} search ${searchQuery} <page>`
+        : `${getPrefix()} ${cmdName} <page>`;
+    msg += `💡 Page: \`${pageHint}\` • Craft: \`${getPrefix()} ${cmdName} <id>\` (e.g. \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)`;
     await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -851,7 +838,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const miningLevel = economy.getProfessionLevel(senderJid, 'mining');
     
     if (!locationId) { 
-        let msg = `⛏️ MINING\n(Mining Lv.${miningLevel})\n\n`;
+        let msg = `⛏️ *MINING* • Mining Lv.${miningLevel}\n━━━━━━━━━━━━━━━\n\n`;
         const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
         const userRankIdx = rankOrder.indexOf(sheet.adventurerRank);
 
@@ -859,11 +846,12 @@ async function mineOre(sock, chatId, senderJid, locationId) {
             const reqRankIdx = rankOrder.indexOf(loc.req.rank);
             const levelReq = loc.req.miningLevel || 1;
             const isLocked = sheet.level < loc.req.level || userRankIdx < reqRankIdx || miningLevel < levelReq;
-            if (isLocked) msg += `🔒 *${loc.name}* (Locked)\n   ⚠️ Req: Lv.${loc.req.level} + ${loc.req.rank}-Rank\n\n`;
-            else msg += `✅ *${loc.name}* (ID: \`${loc.id}\`)\n   📝 ${loc.desc}\n   ⚡ Cost: ${Math.max(5, loc.energyCost - Math.floor(miningLevel/2))} Energy\n\n`;
+            const cost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
+            if (isLocked) msg += `🔒 *${loc.name}* · Req Lv.${loc.req.level} + ${loc.req.rank}-Rank\n`;
+            else msg += `✅ *${loc.name}* \`${loc.id}\` · ⚡ ${cost} Energy\n`;
         });
 
-        msg += `━━━━━━━━━━━━━\n💡 *HOW TO MINE:*\nType: \`${getPrefix()} mine <location_id>\`\n📌 Example: \`${getPrefix()} mine shimmering_caves\``;
+        msg += `━━━━━━━━━━━━━━━\n💡 Mine: \`${getPrefix()} mine <location_id>\` (e.g. \`${getPrefix()} mine shimmering_caves\`)`;
         await sock.sendMessage(chatId, { text: msg });
         return;
     }
@@ -1232,42 +1220,36 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
             return true;
         });
         
-        let msg = `━━━━━━━━━━━━━━━━\n`;
-        msg += `⚒️ *CRAFTABLE ITEMS* \n`;
-        msg += `┗━━━━━━━━━━━━━━━━\n\n`;
-        msg += `👤 *Player Level:* _${playerLevel}_\n\n`;
+        let msg = `⚒️ *CRAFTABLE ITEMS* • Your Lv ${playerLevel}\n━━━━━━━━━━━━━━━\n\n`;
 
         if (craftableRecipes.length === 0) {
             msg += `_You cannot craft or use any items right now._\n`;
         } else {
-            craftableRecipes.forEach(recipe => {
-                const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
-                const rarityEmojis = {
-                    'MYTHIC': '🌌',
-                    'LEGENDARY': '👑',
-                    'EPIC': '🔮',
-                    'RARE': '🔷',
-                    'UNCOMMON': '🟢',
-                    'COMMON': '⚪'
-                };
-                const rarityEmoji = rarityEmojis[outputInfo.rarity] || '⚪';
+            craftableRecipes.forEach((recipe, i) => {
+            const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
+            const rarityEmojis = {
+                'MYTHIC': '🌌',
+                'LEGENDARY': '👑',
+                'EPIC': '🔮',
+                'RARE': '🔷',
+                'UNCOMMON': '🟢',
+                'COMMON': '⚪'
+            };
+            const rarityEmoji = rarityEmojis[outputInfo.rarity] || '⚪';
+            const yieldStr = recipe.output.qty > 1 ? ` ×${recipe.output.qty}` : '';
 
-                msg += `✨ *${recipe.name}* (\`${recipe.id}\`) ${rarityEmoji}\n`;
-                msg += `📝 _${recipe.description || outputInfo.description || ''}_\n`;
-                msg += `⭐ *Req Level:* ${recipe.levelReq}\n`;
-                
-                const ingredientsStr = recipe.ingredients.map(ing => {
-                    const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
-                    return `${ing.qty}x ${ingInfo.name || ing.itemId}`;
-                }).join(', ');
+            const ingredientsStr = recipe.ingredients.map(ing => {
+                const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+                return `${ing.qty}x ${ingInfo.name || ing.itemId}`;
+            }).join(', ');
 
-                msg += `🛠️ *Ingredients:* ${ingredientsStr}\n`;
-                msg += `🎁 *Yield:* ${recipe.output.qty}x ${outputInfo.name || recipe.output.itemId}\n\n`;
-            });
-            
-            msg += `💡 *To craft an item:* \`${prefix} craft <id>\` (e.g., \`${prefix} craft iron_sword\`)`;
-        }
-        msg += `\n━━━━━━━━━━━━━━━━`;
+            // Unified 2-line entry — no flavor text (consistent with station recipe lists)
+            msg += `*${i + 1}.* ✨ ${rarityEmoji} *${recipe.name}* \`${recipe.id}\` · Lvl ${recipe.levelReq}${yieldStr}\n`;
+            msg += `   🛠️ ${ingredientsStr}\n`;
+        });
+        
+        msg += `\n💡 Craft: \`${prefix} craft <id>\` (e.g. \`${prefix} craft iron_sword\`)`;
+    }
         
         await sock.sendMessage(chatId, { text: msg });
         return;

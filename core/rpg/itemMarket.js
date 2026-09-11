@@ -35,7 +35,10 @@ const { getInventory, removeItem, addItem, saveUserRef } = (() => {
 function ZENI() { return economy.getZENI ? economy.getZENI() : '💰'; }
 
 // Build an ordered list of inventory items for slot-numbered access.
-// Matches the display order used by inventorySystem's bag command.
+// Sort EXACTLY like inventorySystem.formatInventory (rarity → type → name)
+// so `.j listitem <#>` / `.j buyitem <#>` numbers match the bag display.
+const SLOT_RARITY_ORDER = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
+const SLOT_TYPE_ORDER = ['EQUIPMENT', 'POTION', 'CONSUMABLE', 'MATERIAL', 'ITEM'];
 function getInventorySlotList(userId) {
   const inventory = getInventory(userId);
   const entries = Object.entries(inventory)
@@ -44,9 +47,19 @@ function getInventorySlotList(userId) {
       const qty = typeof v === 'number' ? v : (v && v.quantity) || 0;
       const name = (v && v.name) || k;
       const rarity = (v && v.rarity) || 'COMMON';
-      return { itemId: k, name, rarity, quantity: qty };
+      const type = (v && v.type) || 'ITEM';
+      return { itemId: k, name, rarity, type, quantity: qty };
     })
     .filter(e => e.quantity > 0);
+  entries.sort((a, b) => {
+    const rA = SLOT_RARITY_ORDER.indexOf(a.rarity || 'COMMON');
+    const rB = SLOT_RARITY_ORDER.indexOf(b.rarity || 'COMMON');
+    if (rA !== rB) return rA - rB;
+    const tA = SLOT_TYPE_ORDER.indexOf(a.type || 'ITEM');
+    const tB = SLOT_TYPE_ORDER.indexOf(b.type || 'ITEM');
+    if (tA !== tB) return tA - tB;
+    return (a.name || '').localeCompare(b.name || '');
+  });
   return entries;
 }
 
@@ -227,18 +240,19 @@ async function cmdItemMarket(senderJid, reply, args = []) {
     return reply('📭 No items currently listed for sale on the market.'), true;
   }
 
-  let msg = `🛒 *ITEM MARKET* | Page ${page}/${Math.max(1, Math.ceil(total / pageSize))}\n\n`;
+  let msg = `🛒 *ITEM MARKET* • Page ${page}/${Math.max(1, Math.ceil(total / pageSize))}\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
   active.forEach((l, i) => {
     const num = skip + i + 1;
     const perUnit = l.quantity > 0 ? Math.floor(l.price / l.quantity) : l.price;
     msg += `*${num}.* ${l.itemName} ×${l.quantity} (${l.itemRarity})\n`;
-    msg += `   💰 Total: ${ZENI()}${l.price.toLocaleString()} (${ZENI()}${perUnit.toLocaleString()}/ea)\n`;
-    msg += `   👤 Seller: @${economy.getDisplayName(l.sellerId)}\n\n`;
+    msg += `   💰 ${ZENI()}${l.price.toLocaleString()} (${ZENI()}${perUnit.toLocaleString()}/ea) · 👤 @${economy.getDisplayName(l.sellerId)}\n`;
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  msg += `💡 Use \`buyitem <number>\` to purchase.\n`;
-  if (totalPages > 1) msg += `📄 Use \`itemmarket ${page + 1}\` for the next page (page ${page}/${totalPages}).`;
+  let foot = `💡 Buy: \`buyitem <#>\``;
+  if (totalPages > 1) foot += ` • Page: \`itemmarket ${page + 1}\``;
+  msg += `━━━━━━━━━━━━━━━\n${foot}`;
   return reply(msg, { mentions: active.map(l => l.sellerId) }), true;
 }
 

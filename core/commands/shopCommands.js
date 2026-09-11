@@ -115,35 +115,31 @@ async function displayShop(sock, chatId, category = 'all') {
         }
         const p = getPrefix();
         const Z = getZENI();
-        let msg = '🥚 *SUMMON SHOP* 🥚\n';
+        let msg = '🥚 *SUMMON SHOP*\n';
         msg += '━━━━━━━━━━━━━━━\n\n';
-        msg += '*EGGS:*\n';
+        let n = 0;
+        msg += '*EGGS*\n';
         summonItems.filter(([,i]) => i.id === 'basic_summon_egg').forEach(([id, item]) => {
-            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
-            msg += '   ' + item.desc + '\n';
-            msg += '   🆔 `' + item.id + '`\n\n';
+            n++;
+            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
         });
-        msg += '_Higher-tier eggs (Rare→Mythic) are crafted from fragments.\nUse `.summon eggcraft <tier>` after collecting fragments from the Abyss._\n\n';
-        msg += '*SUMMON GEAR:*\n';
+        msg += '\n*SUMMON GEAR*\n';
         summonItems.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([id, item]) => {
+            n++;
             let statStr = '';
             if (item.stats) {
-                statStr = Object.entries(item.stats).filter(([,v]) => v !== 0).map(([k,v]) => k.toUpperCase() + ' ' + (v > 0 ? '+' : '') + v).join(', ');
+                statStr = Object.entries(item.stats).filter(([,v]) => v !== 0).map(([k,v]) => k.toUpperCase() + (v > 0 ? '+' : '') + v).join(' ');
             }
-            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
-            msg += '   ' + item.desc + '\n';
+            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
             if (statStr) msg += '   ⚙️ ' + statStr + '\n';
-            msg += '   🆔 `' + item.id + '`\n\n';
         });
-        msg += '*MATERIALS:*\n';
+        msg += '\n*MATERIALS*\n';
         summonItems.filter(([,i]) => i.id.includes('_fragment') || i.id.includes('summon_essence') || i.id.includes('skill_respec')).forEach(([id, item]) => {
-            msg += item.icon + ' *' + item.name + '* — ' + Z + item.cost.toLocaleString() + '\n';
-            msg += '   ' + item.desc + '\n';
-            msg += '   🆔 `' + item.id + '`\n\n';
+            n++;
+            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
         });
-        msg += '━━━━━━━━━━━━━━━\n';
-        msg += '💡 *How to buy:* `' + p + ' buy <id>`\n';
-        msg += '📌 *Summon progression:* Abyss → fragments → craft eggs → hatch → evolve → equip';
+        msg += '\n━━━━━━━━━━━━━━━\n';
+        msg += `💡 Buy: \`${p} buy <id>\` • Higher-tier eggs: craft from Abyss fragments (\`${p} summon eggcraft <tier>\`)`;
         await sock.sendMessage(chatId, { text: msg });
         return;
     }
@@ -160,16 +156,9 @@ async function displayShop(sock, chatId, category = 'all') {
     
     const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;
     
-    let msg = ``;
-    msg += `${activeCat.icon} SHOP\n`;
-    msg += `\n`;
-    
-    msg += `📂 *Categories:* \n`;
-    Object.entries(categoryInfo).forEach(([key, info]) => {
-        msg += `${info.icon} \`${getPrefix()} shop ${key}\`\n`;
-    });
-    
-    msg += `\n━━━━━━━━━━━━━━━\n\n`;
+    let msg = `${activeCat.icon} *SHOP*${category.toLowerCase() !== 'all' ? ` • ${activeCat.name}` : ''}\n`;
+    msg += `━━━━━━━━━━━━━━━\n`;
+    msg += `📂 \`${getPrefix()} shop all · equipment · class · quest · permanent\`\n\n`;
     
     // Filter items by category
     const filteredItems = Object.entries(items).filter(([key, item]) => {
@@ -180,35 +169,30 @@ async function displayShop(sock, chatId, category = 'all') {
     if (filteredItems.length === 0) {
         msg += `❌ No items found in this category.\n`;
     } else {
-        // 💡 AUDIT FIX 2026-08-01: show rarity icon, reqLevel, slot, and stats
-        // for equipment items. Previously the shop only showed name/price/desc/ID,
-        // so players couldn't tell how strong an item was without buying it.
-        // Also added a `?filter=<rarity|slot|level>` syntax for finer filtering.
+        // 💡 RESTYLE 2026-09-11: unified compact entries (numbered, no flavor text).
         const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
         filteredItems.forEach(([key, item], index) => {
             const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
-            msg += `${item.icon} ${rarIcon} *${item.name}*\n`;
-            msg += `   💰 Price: ${getZENI()}${item.cost.toLocaleString()}\n`;
-            if (item.rarity && item.rarity !== 'COMMON') msg += `   ${rarIcon} Rarity: *${item.rarity}*\n`;
-            if (item.reqLevel && item.reqLevel > 1) msg += `   📊 Requires Level *${item.reqLevel}*\n`;
-            if (item.slot) msg += `   📍 Slot: ${item.slot.replace('_', ' ')}\n`;
+            msg += `*${index + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${getZENI()}${item.cost.toLocaleString()}\n`;
+            const meta = [];
+            if (item.reqLevel && item.reqLevel > 1) meta.push(`Lv ${item.reqLevel}`);
+            if (item.slot) meta.push(item.slot.replace('_', ' '));
             if (item.stats && Object.keys(item.stats).length > 0) {
-              const statStr = Object.entries(item.stats)
-                .filter(([,v]) => v !== 0)
-                .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`)
-                .join(' ');
-              if (statStr) msg += `   ⚔️ Stats: ${statStr}\n`;
+                const statStr = Object.entries(item.stats)
+                    .filter(([,v]) => v !== 0)
+                    .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`)
+                    .join(' ');
+                if (statStr) meta.push(statStr);
             }
-            msg += `   📝 ${item.desc}\n`;
-            if (item.requirement) msg += `   ⚠️ ${item.requirement}\n`;
-            msg += `   🆔 ID: \`${item.id}\`\n\n`;
+            if (item.rarity && item.rarity !== 'COMMON') meta.push(item.rarity);
+            if (item.requirement) meta.push(`⚠️ ${item.requirement}`);
+            if (meta.length) msg += `   ${meta.join(' · ')}\n`;
+            msg += `   🆔 \`${item.id}\`\n`;
         });
     }
     
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `💡 *How to buy:* \n`;
-    msg += `Type: \`${getPrefix()} buy <id>\` or \`${getPrefix()} buy <#>\`\n`;
-    msg += `📌 Example: \`${getPrefix()} buy health_potion_shop\``;
+    msg += `💡 Buy: \`${getPrefix()} buy <id>\` or \`${getPrefix()} buy <#>\` (e.g. \`${getPrefix()} buy health_potion_shop\`)`;
     
     await sock.sendMessage(chatId, { text: msg });
 }

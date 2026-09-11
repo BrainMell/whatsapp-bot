@@ -8651,7 +8651,7 @@ const handleCombatAction = async (
           ...lootSystem.getItemInfo(item.id),
           ...(CONSUMABLES[item.id] || {})
         };
-        msg += `*${i + 1}.* ${info.name} x${item.quantity}\n_${info.description || ''}_\n\n`;
+        msg += `*${i + 1}.* ${info.name} ×${item.quantity}\n`;
       });
       msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
       return msg;

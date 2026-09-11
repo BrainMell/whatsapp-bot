@@ -1303,7 +1303,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             let msg = `🎒 *${currentPlayer.name}'s COMBAT BAG* 🎒\n━━━━━━━━━━━━━━━━\n`;
             usableItems.forEach((item, i) => {
                 const info = lootSystem.getItemInfo(item.id);
-                msg += `*${i + 1}.* ${info.name} x${item.quantity}\n_${info.description || ''}_\n\n`;
+                msg += `*${i + 1}.* ${info.name} ×${item.quantity}\n`;
             });
             msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
             return { success: true, message: msg };
