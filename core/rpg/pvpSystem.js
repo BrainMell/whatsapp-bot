@@ -513,13 +513,25 @@ async function acceptChallenge(sock, chatId, targetJid) {
         ? `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Summon loses 10 loyalty!)*`
         : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 10% Wallet (max 5K), and 1 random item!)*`;
 
+    // 💡 REDESIGN 2026-09-11 (owner directive #2): the duel START message now
+    // mirrors the RAID battle text UI exactly — same divider, same ▰▱ HP/EN
+    // bars per fighter (renderDuelistStatus), same ⚔️ Order line — except it
+    // lists the 2 duelists instead of the party. The previous session only
+    // restyled the per-ROUND message and missed this START block entirely,
+    // which is why duels still opened with the plain `HP: 90/90` layout.
+    const duelClass = (p) => p.class?.name || (isSummonDuel ? p.archetype : 'Fighter');
+    const p1Faster = (p1.stats?.spd || 0) >= (p2.stats?.spd || 0);
+    const orderFirst = p1Faster ? p1 : p2;
+    const orderSecond = p1Faster ? p2 : p1;
+    const orderIcon = (p) => (p === p1 ? '🔴' : '🔵');
+
     let startMsg =
         `${header}${modeTag}\n` +
         `———————————\n` +
-        `🔴 *${p1.name}* \`Lv.${p1.level}\` (${p1.class?.name || (isSummonDuel ? p1.archetype : 'Fighter')})\n` +
-        `   ↳ ❤️ HP: \`${Math.floor(p1.hp)}/${Math.floor(p1.maxHp)}\` · ⚡ EN: \`${Math.floor(p1.energy)}/${Math.floor(p1.maxEnergy)}\`\n` +
-        `🔵 *${p2.name}* \`Lv.${p2.level}\` (${p2.class?.name || (isSummonDuel ? p2.archetype : 'Fighter')})\n` +
-        `   ↳ ❤️ HP: \`${Math.floor(p2.hp)}/${Math.floor(p2.maxHp)}\` · ⚡ EN: \`${Math.floor(p2.energy)}/${Math.floor(p2.maxEnergy)}\`\n`;
+        `${orderIcon(orderFirst)} *${orderFirst.name}* \`Lv.${orderFirst.level}\` (${duelClass(orderFirst)})\n` +
+        `   ❤️ [${duelHpBar(orderFirst.hp, orderFirst.maxHp)}] \`${Math.max(0, Math.floor(orderFirst.hp))}/${Math.floor(orderFirst.maxHp)}\` HP · ⚡ [${duelHpBar(orderFirst.energy, orderFirst.maxEnergy)}] \`${Math.floor(orderFirst.energy)}/${Math.floor(orderFirst.maxEnergy)}\` EN\n` +
+        `${orderIcon(orderSecond)} *${orderSecond.name}* \`Lv.${orderSecond.level}\` (${duelClass(orderSecond)})\n` +
+        `   ❤️ [${duelHpBar(orderSecond.hp, orderSecond.maxHp)}] \`${Math.max(0, Math.floor(orderSecond.hp))}/${Math.floor(orderSecond.maxHp)}\` HP · ⚡ [${duelHpBar(orderSecond.energy, orderSecond.maxEnergy)}] \`${Math.floor(orderSecond.energy)}/${Math.floor(orderSecond.maxEnergy)}\` EN\n`;
 
     // Show deployed summons (player mode only — summon mode IS the summons)
     if (!isSummonDuel && duelState.summons && duelState.summons.length > 0) {
@@ -530,8 +542,10 @@ async function acceptChallenge(sock, chatId, targetJid) {
         }
     }
 
-    startMsg += `\n🎯 *${duelState.players[duelState.turn].name}* claims the initiative!\n` + // 💡 FIX 2026-08-18: was hardcoded to p1.name even when turn=1 (P2 has higher SPD)
+    startMsg += `\n⚔️ *Order:* ${orderIcon(orderFirst)} ${orderFirst.name} → ${orderIcon(orderSecond)} ${orderSecond.name} _by SPD_` +
+        `\n\n🎯 *${duelState.players[duelState.turn].name}* claims the initiative!\n` + // 💡 FIX 2026-08-18: was hardcoded to p1.name even when turn=1 (P2 has higher SPD)
         `———————————\n` +
+        `⏳ _Awaiting first action..._\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
         (isSummonDuel

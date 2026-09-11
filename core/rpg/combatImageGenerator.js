@@ -57,14 +57,13 @@ function buildPayload(players, enemies, options = {}) {
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),
         floor: Math.floor(Number(options.floor) || 0),
-        // 💡 FIX 2026-09-11 (owner directive): the red-sky colosseum arena
-        // (spark_15.png) is THE default background for PvP duels. This used to
-        // hardcode spark_1.png (grassland) for everything, so every production
-        // PvP render happened on the PvE grassland. The Go service now also
-        // guards this for direct API callers.
+        // 💡 FIX 2026-09-11 R2 (owner directive: "PvP background = montage_E_4
+        // style"): the colosseum (spark_15) was rejected by the owner — the
+        // duel arena is now spark_5.png (the bright open beach arena from the
+        // approved E-series audit renders). The Go service mirrors this guard.
         background: String(options.backgroundPath
             ? options.backgroundPath.split(/[\/\\]/).pop()
-            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_15.png' : 'spark_1.png'))
+            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_5.png' : 'spark_1.png'))
     };
 }
 
