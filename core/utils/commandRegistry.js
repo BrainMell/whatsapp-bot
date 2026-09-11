@@ -118,6 +118,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'war history', desc: 'All-time top guilds by war points.', usage: 'war history' }
   ],
   RPG: [
+    { cmd: 'cardstyle', desc: 'Choose your character card design (10 styles).', usage: 'cardstyle <1-10>' },
     { cmd: 'character', desc: 'View your RPG character sheet, class, and stats.', usage: 'character' },
     { cmd: 'char', desc: 'Alias for character.', usage: 'char' },
     { cmd: 'stats', desc: 'View your detailed RPG stats.', usage: 'stats' },

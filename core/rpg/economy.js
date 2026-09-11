@@ -430,6 +430,7 @@ function getUser(userId) {
   if (user && user.registered !== true) {
     return null;
   }
+  healAdventurerNickname(user);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.stats) {
@@ -513,6 +514,22 @@ function getUser(userId) {
   return user;
 }
 
+// 💡 OWNER FIX 2026-09-11: never show the placeholder name "Adventurer" when
+// we know the player's real WhatsApp name (pushName is stored on every
+// message). Self-heals legacy users on load, so unregistered players' cards
+// and captions show THEIR username instead of "Adventurer".
+function healAdventurerNickname(user) {
+  try {
+    if (!user) return;
+    const wa = user.profile && user.profile.whatsappName;
+    if (wa && (!user.nickname || user.nickname === "Adventurer")) {
+      user.nickname = wa;
+      if (user.profile) user.profile.nickname = wa;
+      scheduleSave(user.userId);
+    }
+  } catch (e) {}
+}
+
 function getOrCreateUser(userId, defaultNickname = "Adventurer") {
   const resolvedId = resolveJidHelper(userId);
   if (!economyData.has(resolvedId)) {
@@ -545,6 +562,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
     scheduleSave(resolvedId);
   }
   const user = economyData.get(resolvedId);
+  healAdventurerNickname(user);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.profile) {

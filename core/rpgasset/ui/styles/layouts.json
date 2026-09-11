@@ -1,0 +1,1891 @@
+{
+ "1": {
+  "name": "Stonekeep",
+  "bg": "bg_1.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 86,
+    "s": "{NAME}",
+    "font": "cinzel_dec_b",
+    "size": 58,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 460,
+    "shadow": {
+     "color": "#000000c8",
+     "off": 3
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 148,
+    "s": "{CLS}  \u2022  LEVEL {LV}",
+    "font": "medsharp",
+    "size": 30,
+    "color": "#eee6d2",
+    "anchor": "mm",
+    "maxW": 600
+   },
+   {
+    "op": "text",
+    "x": 659,
+    "y": 74,
+    "s": "{RANKX}",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 160
+   },
+   {
+    "op": "facts1"
+   },
+   {
+    "op": "barfill",
+    "key": "hp",
+    "x": 185,
+    "y": 760,
+    "w": 430,
+    "h": 20,
+    "c1": "#be283c",
+    "c2": "#f05a50"
+   },
+   {
+    "op": "barfill",
+    "key": "atk",
+    "x": 185,
+    "y": 812,
+    "w": 430,
+    "h": 20,
+    "c1": "#d2781e",
+    "c2": "#fabe46"
+   },
+   {
+    "op": "barfill",
+    "key": "def",
+    "x": 185,
+    "y": 864,
+    "w": 430,
+    "h": 20,
+    "c1": "#3c64c8",
+    "c2": "#6eaaf0"
+   },
+   {
+    "op": "barfill",
+    "key": "mag",
+    "x": 185,
+    "y": 916,
+    "w": 430,
+    "h": 20,
+    "c1": "#823cc8",
+    "c2": "#be78fa"
+   },
+   {
+    "op": "barfill",
+    "key": "spd",
+    "x": 185,
+    "y": 968,
+    "w": 430,
+    "h": 20,
+    "c1": "#1e9696",
+    "c2": "#46dcc8"
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 724,
+      "y": 770,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 100,
+      "key": "hp"
+     },
+     {
+      "x": 724,
+      "y": 822,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 100,
+      "key": "atk"
+     },
+     {
+      "x": 724,
+      "y": 874,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 100,
+      "key": "def"
+     },
+     {
+      "x": 724,
+      "y": 926,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 100,
+      "key": "mag"
+     },
+     {
+      "x": 724,
+      "y": 978,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 100,
+      "key": "spd"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "rect",
+   "x": 60,
+   "y": 226,
+   "w": 300,
+   "h": 430,
+   "spriteH": 380,
+   "pad": 12
+  }
+ },
+ "2": {
+  "name": "Golden Arcanum",
+  "bg": "bg_2.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 72,
+    "s": "{NAME}",
+    "font": "imfell",
+    "size": 58,
+    "color": "#ffe8b4",
+    "anchor": "mm",
+    "maxW": 250,
+    "shadow": {
+     "color": "#1e1006dc",
+     "off": 3
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 832,
+    "s": "{CLS} \u2022 LEVEL {LV}",
+    "font": "ps2p",
+    "size": 14,
+    "color": "#ffe8b4",
+    "anchor": "mm",
+    "maxW": 340
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 1042,
+    "anchor": "mm",
+    "font": "medsharp",
+    "size": 26,
+    "color": "#f0d6a0",
+    "sep": "  \u00b7  ",
+    "maxW": 680,
+    "parts": [
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     },
+     {
+      "t": "{ZENI} ZENI"
+     },
+     {
+      "t": "{RANKX}"
+     }
+    ]
+   },
+   {
+    "op": "pillfill",
+    "key": "hp",
+    "x": 95,
+    "y": 902,
+    "w": 285,
+    "h": 44,
+    "color": "#c82846"
+   },
+   {
+    "op": "text",
+    "x": 115,
+    "y": 924,
+    "s": "HP {V_hp}",
+    "font": "dogica_b",
+    "size": 20,
+    "color": "#fff0d2",
+    "anchor": "lm",
+    "maxW": 235,
+    "stroke": {
+     "color": "#1e1208cc",
+     "w": 3
+    }
+   },
+   {
+    "op": "pillfill",
+    "key": "atk",
+    "x": 420,
+    "y": 902,
+    "w": 285,
+    "h": 44,
+    "color": "#e68c1e"
+   },
+   {
+    "op": "text",
+    "x": 440,
+    "y": 924,
+    "s": "ATK {V_atk}",
+    "font": "dogica_b",
+    "size": 20,
+    "color": "#fff0d2",
+    "anchor": "lm",
+    "maxW": 235,
+    "stroke": {
+     "color": "#1e1208cc",
+     "w": 3
+    }
+   },
+   {
+    "op": "pillfill",
+    "key": "def",
+    "x": 95,
+    "y": 958,
+    "w": 285,
+    "h": 44,
+    "color": "#3c6ec8"
+   },
+   {
+    "op": "text",
+    "x": 115,
+    "y": 980,
+    "s": "DEF {V_def}",
+    "font": "dogica_b",
+    "size": 20,
+    "color": "#fff0d2",
+    "anchor": "lm",
+    "maxW": 235,
+    "stroke": {
+     "color": "#1e1208cc",
+     "w": 3
+    }
+   },
+   {
+    "op": "pillfill",
+    "key": "spd",
+    "x": 420,
+    "y": 958,
+    "w": 285,
+    "h": 44,
+    "color": "#28aa5a"
+   },
+   {
+    "op": "text",
+    "x": 440,
+    "y": 980,
+    "s": "SPD {V_spd}",
+    "font": "dogica_b",
+    "size": 20,
+    "color": "#fff0d2",
+    "anchor": "lm",
+    "maxW": 235,
+    "stroke": {
+     "color": "#1e1208cc",
+     "w": 3
+    }
+   }
+  ],
+  "portrait": {
+   "shape": "window",
+   "x": 247,
+   "y": 254,
+   "w": 306,
+   "h": 550,
+   "spriteFree": {
+    "h": 500,
+    "bottom": 798,
+    "cx": 400
+   }
+  }
+ },
+ "3": {
+  "name": "Retro Court",
+  "bg": "bg_3.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 90,
+    "s": "{NAME} the {CLST}",
+    "font": "medsharp",
+    "size": 54,
+    "color": "#fadc6e",
+    "anchor": "mm",
+    "maxW": 640,
+    "shadow": {
+     "color": "#281808ff",
+     "off": 3
+    }
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 150,
+    "anchor": "mm",
+    "font": "ps2p",
+    "size": 16,
+    "color": "#d2d6e6",
+    "sep": "  \u00b7  ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "LEVEL {LV}"
+     },
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     }
+    ]
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 874,
+    "s": "{RANKX}",
+    "font": "cinzel_dec_b",
+    "size": 40,
+    "color": "#fadc6e",
+    "anchor": "mm",
+    "maxW": 600
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 926,
+    "anchor": "mm",
+    "font": "pixeloid",
+    "size": 24,
+    "color": "#dce0ee",
+    "sep": "   \u00b7   ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "{ZENI} ZENI"
+     },
+     {
+      "t": "PVP {PVPA}"
+     }
+    ]
+   },
+   {
+    "op": "rpgfills",
+    "items": [
+     {
+      "key": "hp",
+      "y": 245,
+      "img": "progress_red.png"
+     },
+     {
+      "key": "atk",
+      "y": 315,
+      "img": "progress_red.png"
+     },
+     {
+      "key": "def",
+      "y": 385,
+      "img": "progress_blue.png"
+     },
+     {
+      "key": "mag",
+      "y": 455,
+      "img": "progress_blue.png"
+     },
+     {
+      "key": "spd",
+      "y": 525,
+      "img": "progress_green.png"
+     },
+     {
+      "key": "luck",
+      "y": 595,
+      "img": "progress_green.png"
+     }
+    ]
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 748,
+      "y": 250,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "hp"
+     },
+     {
+      "x": 748,
+      "y": 320,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "atk"
+     },
+     {
+      "x": 748,
+      "y": 390,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "def"
+     },
+     {
+      "x": 748,
+      "y": 460,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "mag"
+     },
+     {
+      "x": 748,
+      "y": 530,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "spd"
+     },
+     {
+      "x": 748,
+      "y": 600,
+      "anchor": "rm",
+      "font": "ps2p",
+      "size": 16,
+      "color": "#fadc6e",
+      "maxW": 120,
+      "key": "luck"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "rect",
+   "x": 66,
+   "y": 216,
+   "w": 250,
+   "h": 424,
+   "spriteH": 376,
+   "pad": 14
+  }
+ },
+ "4": {
+  "name": "Woodmere",
+  "bg": "bg_4.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 128,
+    "s": "{NAME}",
+    "font": "cinzel_dec_black",
+    "size": 60,
+    "color": "#3a2616",
+    "anchor": "mm",
+    "maxW": 480
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 190,
+    "s": "{CLST} of the {GUILD}",
+    "fallback": "{CLST} of the realm",
+    "font": "imfell_i",
+    "size": 28,
+    "color": "#604228",
+    "anchor": "mm",
+    "maxW": 520
+   },
+   {
+    "op": "seal",
+    "x": 156,
+    "y": 292,
+    "rot": 0,
+    "font": "cinzel",
+    "size": 28,
+    "color": "#f0c8be"
+   },
+   {
+    "op": "text",
+    "x": 320,
+    "y": 280,
+    "s": "HP",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#ffeec8",
+    "anchor": "lm",
+    "maxW": 110,
+    "shadow": {
+     "color": "#281808dc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 660,
+    "y": 280,
+    "s": "{V_hp}",
+    "font": "dogica_b",
+    "size": 26,
+    "color": "#faeed2",
+    "anchor": "rm",
+    "maxW": 210,
+    "shadow": {
+     "color": "#1e1208cc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 320,
+    "y": 376,
+    "s": "ATK",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#ffeec8",
+    "anchor": "lm",
+    "maxW": 110,
+    "shadow": {
+     "color": "#281808dc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 660,
+    "y": 376,
+    "s": "{V_atk}",
+    "font": "dogica_b",
+    "size": 26,
+    "color": "#faeed2",
+    "anchor": "rm",
+    "maxW": 210,
+    "shadow": {
+     "color": "#1e1208cc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 320,
+    "y": 472,
+    "s": "DEF",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#ffeec8",
+    "anchor": "lm",
+    "maxW": 110,
+    "shadow": {
+     "color": "#281808dc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 660,
+    "y": 472,
+    "s": "{V_def}",
+    "font": "dogica_b",
+    "size": 26,
+    "color": "#faeed2",
+    "anchor": "rm",
+    "maxW": 210,
+    "shadow": {
+     "color": "#1e1208cc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 320,
+    "y": 568,
+    "s": "SPD",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#ffeec8",
+    "anchor": "lm",
+    "maxW": 110,
+    "shadow": {
+     "color": "#281808dc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 660,
+    "y": 568,
+    "s": "{V_spd}",
+    "font": "dogica_b",
+    "size": 26,
+    "color": "#faeed2",
+    "anchor": "rm",
+    "maxW": 210,
+    "shadow": {
+     "color": "#1e1208cc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 320,
+    "y": 664,
+    "s": "ZENI",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#ffeec8",
+    "anchor": "lm",
+    "maxW": 110,
+    "shadow": {
+     "color": "#281808dc",
+     "off": 2
+    }
+   },
+   {
+    "op": "text",
+    "x": 660,
+    "y": 664,
+    "s": "{ZENI}",
+    "font": "dogica_b",
+    "size": 26,
+    "color": "#faeed2",
+    "anchor": "rm",
+    "maxW": 210,
+    "shadow": {
+     "color": "#1e1208cc",
+     "off": 2
+    }
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 960,
+    "anchor": "mm",
+    "font": "dogica_b",
+    "size": 22,
+    "color": "#faeccd",
+    "sep": "  \u00b7  ",
+    "maxW": 500,
+    "parts": [
+     {
+      "t": "LV {LV}"
+     },
+     {
+      "t": "{RANKX}"
+     },
+     {
+      "t": "{ZENI} ZENI"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "free",
+   "spriteH": 360,
+   "cx": 150,
+   "top": 556,
+   "pfpClip": {
+    "x": 80,
+    "y": 560,
+    "w": 140,
+    "h": 350,
+    "r": 12
+   }
+  }
+ },
+ "5": {
+  "name": "Emblem Noir",
+  "bg": "bg_5.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 88,
+    "s": "{GUILD}",
+    "needs": "guild",
+    "font": "cinzel",
+    "size": 22,
+    "color": "#a89460",
+    "anchor": "mm",
+    "maxW": 560
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 172,
+    "s": "{NAME}",
+    "font": "cinzel_dec_black",
+    "size": 78,
+    "color": "#eee6d2",
+    "anchor": "mm",
+    "maxW": 620,
+    "shadow": {
+     "color": "#000000dc",
+     "off": 4
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 248,
+    "s": "{CLS}  \u00b7  LEVEL {LV}  \u00b7  {RANKX}",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 660
+   },
+   {
+    "op": "crystal",
+    "cx": 400,
+    "cy": 352,
+    "h": 92
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 408,
+      "y": 825,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "hp"
+     },
+     {
+      "x": 692,
+      "y": 825,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "spd"
+     },
+     {
+      "x": 408,
+      "y": 875,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "atk"
+     },
+     {
+      "x": 692,
+      "y": 875,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "luck"
+     },
+     {
+      "x": 408,
+      "y": 925,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "def"
+     },
+     {
+      "x": 692,
+      "y": 925,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "crit"
+     },
+     {
+      "x": 408,
+      "y": 975,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "mag"
+     },
+     {
+      "x": 692,
+      "y": 975,
+      "anchor": "rm",
+      "font": "dogica_b",
+      "size": 24,
+      "color": "#eee6d2",
+      "maxW": 130,
+      "key": "eva"
+     }
+    ]
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 1036,
+    "s": "{ZENI} ZENI",
+    "font": "cinzel",
+    "size": 26,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 360
+   }
+  ],
+  "portrait": {
+   "shape": "circle",
+   "cx": 400,
+   "cy": 556,
+   "r": 172,
+   "spriteH": 310,
+   "mode": "center",
+   "dy": 12,
+   "silhouette": true
+  }
+ },
+ "6": {
+  "name": "Holo Gacha",
+  "bg": "bg_6.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 126,
+    "y": 703,
+    "s": "HP",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 486,
+    "y": 703,
+    "s": "ATK",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 126,
+    "y": 779,
+    "s": "DEF",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 486,
+    "y": 779,
+    "s": "MAG",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 126,
+    "y": 855,
+    "s": "SPD",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 486,
+    "y": 855,
+    "s": "LUCK",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 126,
+    "y": 931,
+    "s": "CRIT",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 486,
+    "y": 931,
+    "s": "EVA",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "anchor": "lm"
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 122,
+    "s": "{NAME}",
+    "font": "cinzel_dec_b",
+    "size": 58,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 560,
+    "shadow": {
+     "color": "#3c0a3cdc",
+     "off": 3
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 174,
+    "s": "{CLS}  \u2022  LEVEL {LV}",
+    "font": "cinzel",
+    "size": 26,
+    "color": "#eee6d2",
+    "anchor": "mm",
+    "maxW": 600
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 616,
+    "s": "{RANKX}",
+    "font": "cinzel_dec_b",
+    "size": 26,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 220
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 126,
+      "y": 729,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "hp"
+     },
+     {
+      "x": 486,
+      "y": 729,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "atk"
+     },
+     {
+      "x": 126,
+      "y": 805,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "def"
+     },
+     {
+      "x": 486,
+      "y": 805,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "mag"
+     },
+     {
+      "x": 126,
+      "y": 881,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "spd"
+     },
+     {
+      "x": 486,
+      "y": 881,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "luck"
+     },
+     {
+      "x": 126,
+      "y": 957,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "crit"
+     },
+     {
+      "x": 486,
+      "y": 957,
+      "anchor": "lm",
+      "font": "dogica_b",
+      "size": 26,
+      "color": "#ffffff",
+      "maxW": 230,
+      "key": "eva"
+     }
+    ]
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 996,
+    "anchor": "mm",
+    "font": "cinzel",
+    "size": 20,
+    "color": "#c4bae0",
+    "sep": "  \u2022  ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "PVP {PVPD}"
+     },
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     }
+    ]
+   },
+   {
+    "op": "zenipill6"
+   }
+  ],
+  "portrait": {
+   "shape": "circle",
+   "cx": 400,
+   "cy": 400,
+   "r": 166,
+   "spriteH": 280,
+   "mode": "bottom",
+   "pad": 18
+  }
+ },
+ "7": {
+  "name": "Royal Decree",
+  "bg": "bg_7.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 138,
+    "s": "{NAME}",
+    "font": "imfell",
+    "size": 88,
+    "color": "#281c12",
+    "anchor": "mm",
+    "maxW": 520
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 232,
+    "s": "{CLST} of the {GUILD}  \u2022  Level {LV}",
+    "fallback": "{CLST}  \u2022  Level {LV}",
+    "font": "imfell_i",
+    "size": 30,
+    "color": "#46341e",
+    "anchor": "mm",
+    "maxW": 620
+   },
+   {
+    "op": "seal",
+    "x": 304,
+    "y": 712,
+    "rot": 10,
+    "font": "cinzel_dec_b",
+    "size": 30,
+    "color": "#eed2be"
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 724,
+      "y": 352,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "hp",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 401,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "atk",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 450,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "def",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 499,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "mag",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 548,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "spd",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 597,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "luck",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 646,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "crit",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     },
+     {
+      "x": 724,
+      "y": 695,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 28,
+      "color": "#781e24",
+      "maxW": 200,
+      "key": "eva",
+      "dots": {
+       "from": "label",
+       "color": "#6e583a",
+       "r": 1.2
+      }
+     }
+    ]
+   },
+   {
+    "op": "text",
+    "x": 724,
+    "y": 762,
+    "s": "{PVPD}",
+    "font": "cinzel",
+    "size": 28,
+    "color": "#781e24",
+    "anchor": "rm",
+    "maxW": 240,
+    "dots": {
+     "fromLabel": "PvP",
+     "fromLabelFont": "cinzel",
+     "fromLabelSize": 26,
+     "fromX": 384,
+     "color": "#6e583a",
+     "r": 1.2
+    }
+   },
+   {
+    "op": "coinzeni",
+    "iconSize": 52,
+    "coinDx": -62,
+    "coinY": 836,
+    "textDx": 16,
+    "textY": 862,
+    "s": "{ZENI} Zeni",
+    "font": "imfell",
+    "size": 48,
+    "color": "#281c12",
+    "icon": "coin"
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 930,
+    "anchor": "mm",
+    "font": "imfell_i",
+    "size": 30,
+    "color": "#6e1e24",
+    "sep": "  \u2022  ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "{RANKX}"
+     },
+     {
+      "t": "PvP {PVPD}"
+     },
+     {
+      "t": "XP {XP}%"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "rect",
+   "x": 76,
+   "y": 286,
+   "w": 260,
+   "h": 456,
+   "spriteH": 380,
+   "pad": 14
+  }
+ },
+ "8": {
+  "name": "Neon Arcade",
+  "bg": "bg_8.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 112,
+    "s": "{NAME}",
+    "font": "ps2p",
+    "size": 44,
+    "color": "#ffffff",
+    "anchor": "mm",
+    "maxW": 700,
+    "glow": {
+     "color": "#ff3cb9",
+     "r": 14
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 160,
+    "s": "{CLS}  \u2022  LV {LV}",
+    "font": "ps2p",
+    "size": 15,
+    "color": "#ff78cd",
+    "anchor": "mm",
+    "maxW": 640
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 646,
+    "s": "{RANKX}",
+    "font": "ps2p",
+    "size": 16,
+    "color": "#ff78cd",
+    "anchor": "mm",
+    "maxW": 230
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 120,
+      "y": 768,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "hp",
+      "prefix": "> "
+     },
+     {
+      "x": 120,
+      "y": 830,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "atk",
+      "prefix": "> "
+     },
+     {
+      "x": 120,
+      "y": 892,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "def",
+      "prefix": "> "
+     },
+     {
+      "x": 120,
+      "y": 954,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "mag",
+      "prefix": "> "
+     },
+     {
+      "x": 440,
+      "y": 768,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "spd",
+      "prefix": "> "
+     },
+     {
+      "x": 440,
+      "y": 830,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "luck",
+      "prefix": "> "
+     },
+     {
+      "x": 440,
+      "y": 892,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "crit",
+      "prefix": "> "
+     },
+     {
+      "x": 440,
+      "y": 954,
+      "anchor": "lm",
+      "font": "ps2p",
+      "size": 17,
+      "color": "#ffffff",
+      "maxW": 260,
+      "key": "eva",
+      "prefix": "> "
+     }
+    ]
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 1018,
+    "s": "ZENI {ZENI}",
+    "font": "ps2p",
+    "size": 16,
+    "color": "#ffffff",
+    "anchor": "mm",
+    "maxW": 640
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 1054,
+    "anchor": "mm",
+    "font": "ps2p",
+    "size": 11,
+    "color": "#3cf0ff",
+    "sep": "  \u2022  ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "PVP {PVPH}"
+     },
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "diamond",
+   "cx": 400,
+   "cy": 400,
+   "r": 190,
+   "spriteH": 300,
+   "pad": 24
+  }
+ },
+ "9": {
+  "name": "Rune Monolith",
+  "bg": "bg_9.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 138,
+    "s": "{NAME}",
+    "font": "cinzel",
+    "size": 56,
+    "color": "#d4d8de",
+    "anchor": "mm",
+    "maxW": 600,
+    "shadow": {
+     "color": "#060608ff",
+     "off": 3
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 186,
+    "s": "{CLS}  \u2022  LEVEL {LV}",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#969aa2",
+    "anchor": "mm",
+    "maxW": 600
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 653,
+    "s": "{RANKX}",
+    "font": "cinzel",
+    "size": 26,
+    "color": "#d2fffa",
+    "anchor": "mm",
+    "maxW": 210,
+    "glow": {
+     "color": "#60ecdc",
+     "r": 10
+    }
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 396,
+      "y": 726,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "hp",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 396,
+      "y": 798,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "atk",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 396,
+      "y": 870,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "def",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 396,
+      "y": 942,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "mag",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 752,
+      "y": 726,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "spd",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 752,
+      "y": 798,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "luck",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 752,
+      "y": 870,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "crit",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     },
+     {
+      "x": 752,
+      "y": 942,
+      "anchor": "rm",
+      "font": "cinzel_dec_b",
+      "size": 40,
+      "color": "#d2fffa",
+      "maxW": 200,
+      "key": "eva",
+      "glow": {
+       "color": "#60ecdc",
+       "r": 9
+      }
+     }
+    ]
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 1036,
+    "anchor": "mm",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#969aa2",
+    "sep": "  \u2022  ",
+    "maxW": 660,
+    "parts": [
+     {
+      "t": "{ZENI} ZENI"
+     },
+     {
+      "t": "PVP {PVPD}"
+     },
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "rect",
+   "x": 250,
+   "y": 226,
+   "w": 300,
+   "h": 370,
+   "spriteH": 320,
+   "pad": 8
+  }
+ },
+ "10": {
+  "name": "Crimson Court",
+  "bg": "bg_10.png",
+  "ops": [
+   {
+    "op": "text",
+    "x": 400,
+    "y": 134,
+    "s": "{NAME}",
+    "font": "cinzel_dec_b",
+    "size": 56,
+    "color": "#f6d670",
+    "anchor": "mm",
+    "maxW": 520,
+    "shadow": {
+     "color": "#140408e6",
+     "off": 3
+    }
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 196,
+    "s": "{CLS}  \u2022  LEVEL {LV}",
+    "font": "cinzel",
+    "size": 22,
+    "color": "#eee6d2",
+    "anchor": "mm",
+    "maxW": 330
+   },
+   {
+    "op": "text",
+    "x": 400,
+    "y": 570,
+    "s": "{RANKX}",
+    "font": "cinzel",
+    "size": 24,
+    "color": "#3a0a10",
+    "anchor": "mm",
+    "maxW": 186
+   },
+   {
+    "op": "statvals",
+    "vals": [
+     {
+      "x": 230,
+      "y": 682,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "hp"
+     },
+     {
+      "x": 592,
+      "y": 682,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "atk"
+     },
+     {
+      "x": 230,
+      "y": 764,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "def"
+     },
+     {
+      "x": 592,
+      "y": 764,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "mag"
+     },
+     {
+      "x": 230,
+      "y": 846,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "spd"
+     },
+     {
+      "x": 592,
+      "y": 846,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "luck"
+     },
+     {
+      "x": 230,
+      "y": 928,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "crit"
+     },
+     {
+      "x": 592,
+      "y": 928,
+      "anchor": "mm",
+      "font": "cinzel_dec_b",
+      "size": 32,
+      "color": "#eee6d2",
+      "maxW": 296,
+      "key": "eva"
+     }
+    ]
+   },
+   {
+    "op": "coinzeni",
+    "iconSize": 40,
+    "coinDx": -56,
+    "coinY": 994,
+    "textDx": 10,
+    "textY": 1014,
+    "s": "{ZENI} ZENI",
+    "font": "cinzel_dec_b",
+    "size": 32,
+    "color": "#f6d670",
+    "icon": "coin"
+   },
+   {
+    "op": "join",
+    "x": 400,
+    "y": 1052,
+    "anchor": "mm",
+    "font": "cinzel",
+    "size": 22,
+    "color": "#dec4a0",
+    "sep": "  \u2022  ",
+    "maxW": 640,
+    "parts": [
+     {
+      "t": "PVP {PVPD}"
+     },
+     {
+      "t": "{GUILD}",
+      "needs": "guild"
+     }
+    ]
+   }
+  ],
+  "portrait": {
+   "shape": "arch",
+   "x0": 280,
+   "y0": 250,
+   "x1": 520,
+   "y1": 570,
+   "spriteH": 270,
+   "pad": 10
+  }
+ }
+}

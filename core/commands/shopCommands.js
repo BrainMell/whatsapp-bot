@@ -558,6 +558,46 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         pfpUrl = null;
     }
 
+    // 💡 2026-09-11: styled profile card FIRST (10 owner-approved designs,
+    // player-picked via <prefix> cardstyle). Go service stays as fallback.
+    try {
+        const profileCardRenderer = require('../rpg/profileCardRenderer');
+        let pfpBuffer = null;
+        if (pfpUrl) {
+            try {
+                const resp = await require('axios').get(pfpUrl, { responseType: 'arraybuffer', timeout: 5000 });
+                pfpBuffer = Buffer.from(resp.data);
+            } catch (e) {}
+        }
+        let guildName = '';
+        try { guildName = require('../rpg/guilds').getUserGuild(finalJid) || ''; } catch (e) {}
+        const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
+        const styledBuffer = await profileCardRenderer.renderProfileCard({
+            user,
+            classData,
+            stats,
+            equipStats: styledEquipStats,
+            level: charSheet?.level || 1,
+            rank: rank,
+            xpPercent: charSheet?.progressPercent || 0,
+            pfpBuffer,
+            prefix: getPrefix(),
+            style: user.cardStyle,
+            guildName
+        });
+        if (styledBuffer && styledBuffer.length > 0) {
+            const styledCaption = `👤 *${user.nickname || finalName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || 5}* — change with \`${getPrefix()} cardstyle\``;
+            await sock.sendMessage(chatId, {
+                image: styledBuffer,
+                caption: styledCaption,
+                mentions: [finalJid]
+            });
+            return;
+        }
+    } catch (err) {
+        console.error("[displayCharacter] styled profile card failed:", err.message);
+    }
+
     // Try Go Image Service first
     try {
         const cardData = await profileHelper.buildCardData(finalJid, finalName, pfpUrl);

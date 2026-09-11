@@ -17,6 +17,11 @@ const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF 
 const profileCardRenderer = require('../rpg/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
+
+// 💡 OWNER RULE 2026-09-11: guild line on cards only when the player has one
+function safeGuildName(jid) {
+  try { return require('../rpg/guilds').getUserGuild(jid) || ''; } catch (e) { return ''; }
+}
 const getCurrency = () => botConfig.getCurrency();
 
 // ========================================== 
@@ -101,7 +106,10 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           xpPercent: sheet?.progressPercent || 0,
           activeSummon,
           pfpBuffer,
-          prefix: getPrefix()
+          prefix: getPrefix(),
+          // 💡 card styles: player-chosen design + guild line (only if in a guild)
+          style: economyUser.cardStyle,
+          guildName: safeGuildName(senderJid)
         });
 
         if (cardBuffer && cardBuffer.length > 0) {
@@ -1381,4 +1389,40 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     }
 }
 
-module.exports = { displayCharacterSheet, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
+
+// ==========================================
+// 🎨 CARD STYLE — pick one of the 10 approved character-card designs
+//    .j cardstyle         -> style sheet + current pick
+//    .j cardstyle <1-10>  -> set + live preview of your card
+// ==========================================
+const CARD_STYLE_NAMES = { 1: "Stonekeep", 2: "Golden Arcanum", 3: "Retro Court", 4: "Woodmere", 5: "Emblem Noir", 6: "Holo Gacha", 7: "Royal Decree", 8: "Neon Arcade", 9: "Rune Monolith", 10: "Crimson Court" };
+const CARD_STYLE_ALIASES = { stonekeep: 1, arcanum: 2, golden: 2, retro: 3, court: 3, woodmere: 4, noir: 5, emblem: 5, gacha: 6, holo: 6, decree: 7, royal: 7, arcade: 8, neon: 8, rune: 9, monolith: 9, crimson: 10 };
+async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
+    const user = economy.getUser(senderJid) || economy.getOrCreateUser(senderJid);
+    const current = user.cardStyle || profileCardRenderer.DEFAULT_STYLE;
+    const input = ((args && args[0]) ? String(args[0]) : "").trim().toLowerCase();
+    let pick = null;
+    if (/^\d+$/.test(input)) pick = parseInt(input, 10);
+    else if (input && CARD_STYLE_ALIASES[input]) pick = CARD_STYLE_ALIASES[input];
+    if (!pick) {
+        const sheet = await profileCardRenderer.renderStyleSheet(current);
+        await sock.sendMessage(chatId, {
+            image: sheet,
+            caption: `🎨 *CHARACTER CARD STYLES*\n\nYour card: *#${current} — ${CARD_STYLE_NAMES[current] || "?"}*${current === profileCardRenderer.DEFAULT_STYLE ? " (default)" : ""}\n\nSwitch with \`${getPrefix()} cardstyle <1-10>\` — you'll get a live preview of your own card.`,
+            mentions: [senderJid]
+        });
+        return;
+    }
+    if (pick < 1 || pick > 10) {
+        await sock.sendMessage(chatId, { text: `❌ Pick a number *1-10* (see \`${getPrefix()} cardstyle\`).` });
+        return;
+    }
+    user.cardStyle = pick;
+    economy.saveUser(senderJid);
+    await sock.sendMessage(chatId, { text: `✅ Card style set to *#${pick} — ${CARD_STYLE_NAMES[pick]}*. Here's your card:` });
+    try { await displayCharacterSheet(sock, chatId, senderJid, senderName); } catch (e) {
+        console.error("[handleCardStyle] preview failed:", e.message);
+    }
+}
+
+module.exports = { displayCharacterSheet, handleCardStyle, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
