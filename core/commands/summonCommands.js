@@ -141,12 +141,16 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
     case 'moves':
       return await cmdAbilities(sock, chatId, senderJid, rest);
 
-    case 'equip':
+    // 💡 FIX 2026-09-12: `equip`/`unequip` here were UNREACHABLE — duplicate
+    // cases above ('equip'→deploy, 'unequip'→dismiss) shadowed them, so the
+    // summon-gear commands only worked as `.summon gear ...` and gear-UNEQUIP
+    // had no route at all. Now: gear equip = `.summon gear <id> <gearId>`,
+    // gear unequip = `.summon gear unequip <id> <slot>`.
     case 'gear':
+      if ((rest[0] || '').toLowerCase() === 'unequip') {
+        return await cmdSummonUnequip(sock, chatId, senderJid, rest.slice(1));
+      }
       return await cmdSummonEquip(sock, chatId, senderJid, rest);
-
-    case 'unequip':
-      return await cmdSummonUnequip(sock, chatId, senderJid, rest);
 
     case 'forge':
     case 'fuse':
@@ -1802,14 +1806,15 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   const gearIdQuery = (args[1] || '').trim();
 
   if (!summonIdQuery || !gearIdQuery) {
-    let msg = `⚙️ *SUMMON EQUIPMENT*\n\n5 equipment slots: Claw, Core, Armor, Crest, Relic.\n\n_Usage: \`${getPrefix()} summon equip <summonId> <gearId>\`_`;
+    let msg = `⚙️ *SUMMON EQUIPMENT*\n\n5 equipment slots: Claw, Core, Armor, Crest, Relic.\n\n_Usage: \`${getPrefix()} summon gear <summonId> <gearId>\`_\n_Remove gear: \`${getPrefix()} summon gear unequip <summonId> <slot>\`_`;
     await sock.sendMessage(chatId, { text: msg });
     return;
   }
 
-  // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  // 💡 FIX 2026-09-12: was `resolveSummon(summons, summonNum)` — summonNum is
+  // a variable of a DIFFERENT function → ReferenceError on every use.
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   // Resolve gear item — look up in ITEM_DATABASE for type SUMMON_GEAR
@@ -1882,7 +1887,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
 
   if (!summonIdQuery || !slot) {
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${getPrefix()} summon unequip <summonId> <claw|core|armor|crest|relic>\``
+      text: `❌ Usage: \`${getPrefix()} summon gear unequip <summonId> <claw|core|armor|crest|relic>\``
     });
     return;
   }

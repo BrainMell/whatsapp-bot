@@ -441,8 +441,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // 1. Try summon species
         let summonSystem, registry;
         try {
-            summonSystem = require('../../rpg/summonSystem');
-            registry = require('../../rpg/summonRegistry');
+            summonSystem = require('../rpg/summonSystem');
+            registry = require('../rpg/summonRegistry');
         } catch (e) {}
         if (registry && summonSystem) {
             const speciesData = registry.getSpecies(query.toLowerCase());
@@ -466,7 +466,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // 2. Try rune type
         let runeSystem;
-        try { runeSystem = require('../../rpg/runeSystem'); } catch (e) {}
+        try { runeSystem = require('../rpg/runeSystem'); } catch (e) {}
         if (runeSystem && runeSystem.RUNE_TYPES[query.toUpperCase()]) {
             let tier = 'NORMAL';
             if (extra1 && runeSystem.RUNE_TIERS[extra1.toUpperCase()]) tier = extra1.toUpperCase();
@@ -564,8 +564,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const lvl = parseInt(remaining[1]);
             if (!isNaN(lvl) && lvl > 0) level = lvl;
         }
-        const summonSystem = require('../../rpg/summonSystem');
-        const registry = require('../../rpg/summonRegistry');
+        const summonSystem = require('../rpg/summonSystem');
+        const registry = require('../rpg/summonRegistry');
         const speciesData = registry.getSpecies(species.toLowerCase());
         if (!speciesData) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown summon species: \`${species}\`\nUse \`${prefix} summon codex\` to see all species.` });
@@ -592,7 +592,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         let type = remaining[0].toUpperCase();
         let tier = 'NORMAL';
         if (remaining.length >= 2) tier = remaining[1].toUpperCase();
-        const runeSystem = require('../../rpg/runeSystem');
+        const runeSystem = require('../rpg/runeSystem');
         if (!runeSystem.RUNE_TYPES[type]) {
             const valid = Object.keys(runeSystem.RUNE_TYPES).join(', ');
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune type: \`${type}\`\nValid types: ${valid}` });

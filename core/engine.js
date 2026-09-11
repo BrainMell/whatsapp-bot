@@ -3861,7 +3861,29 @@ What to do:
       // usage message instead of challenging the replied-to user.
       // Now: if resolution fails, fall back to the raw JID AND try the
       // @lid ↔ @s.whatsapp.net swap in the economy cache.
+      //
+      // 💡 FIX 2026-09-12 (owner: ".j rob tagging/reply doesn't work"):
+      // 1) The function only read `m.message.extendedTextMessage.contextInfo`.
+      //    In chats with disappearing-messages ON, EVERY incoming message is
+      //    wrapped in `ephemeralMessage` (and media can be wrapped in
+      //    viewOnce*/documentWithCaption), so contextInfo was invisible and
+      //    reply-targeting silently failed → "tag someone" error.
+      //    Now: deep-unwrap ALL wrapper layers, then scan contextInfo on
+      //    EVERY message type (text, image, sticker, video, ...).
+      // 2) JID resolution now also matches by user part across the economy
+      //    cache (@lid ↔ @s.whatsapp.net), so LID-privacy groups can't
+      //    break targeting either.
       const economy = require('./rpg/economy');
+      const findByUserPart = (jid) => {
+        if (typeof jid !== 'string' || !jid.includes('@')) return null;
+        const userPart = jid.split('@')[0].split(':')[0];
+        if (!userPart) return null;
+        for (const key of economy.economyData.keys()) {
+          if (typeof key !== 'string') continue;
+          if (key.split('@')[0].split(':')[0] === userPart) return key;
+        }
+        return null;
+      };
       const resolveWithFallback = (rawJid) => {
         if (!rawJid) return null;
         const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
@@ -3879,35 +3901,66 @@ What to do:
             if (economy.economyData.has(lidJid)) return lidJid;
           }
         }
+        // Exact key misses — match on the numeric user part regardless of
+        // @lid / @s.whatsapp.net domain (handles LID-privacy groups where
+        // the mapping table has no entry for this user yet).
+        for (const c of candidates) {
+          const hit = findByUserPart(c);
+          if (hit) return hit;
+        }
         // Last resort: return whichever we have (resolved or rawJid).
         // Better to return a JID than null — the caller can still check
         // registration and proceed.
         return resolved || rawJid;
       };
 
-      // 1. Check explicit @-mentions
-      const mentioned =
-        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) {
-        return resolveWithFallback(jidNormalizedUser(mentioned[0]));
-      }
-
-      // 2. Check direct reply participant (when user swipes/replies to a message)
-      const replyParticipant =
-        m.message?.extendedTextMessage?.contextInfo?.participant;
-      if (replyParticipant) {
-        return resolveWithFallback(jidNormalizedUser(replyParticipant));
-      }
-
-      // 3. Baileys sometimes wraps the quoted message differently
-      const quotedMessage =
-        m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (quotedMessage) {
-        const participant =
-          m.message?.extendedTextMessage?.contextInfo?.participant;
-        if (participant) {
-          return resolveWithFallback(jidNormalizedUser(participant));
+      // Deep-unwrap ephemeral / view-once / doc-with-caption wrappers.
+      const unwrapMessage = (node) => {
+        let cur = node;
+        for (let i = 0; cur && i < 5; i++) {
+          const inner =
+            cur.ephemeralMessage?.message ||
+            cur.viewOnceMessage?.message ||
+            cur.viewOnceMessageV2?.message ||
+            cur.viewOnceMessageV2Extension?.message ||
+            cur.documentWithCaptionMessage?.message;
+          if (!inner) break;
+          cur = inner;
         }
+        return cur;
+      };
+
+      // Collect mention/participant candidates from EVERY message type that
+      // carries a contextInfo (extendedText, image, video, sticker, ...).
+      const collectContext = (msg) => {
+        const mentions = [];
+        let participant = null;
+        if (!msg || typeof msg !== 'object') return { mentions, participant };
+        for (const type of Object.keys(msg)) {
+          const node = msg[type];
+          if (!node || typeof node !== 'object' || !node.contextInfo) continue;
+          const ci = node.contextInfo;
+          if (Array.isArray(ci.mentionedJid)) mentions.push(...ci.mentionedJid);
+          if (!participant && ci.participant) participant = ci.participant;
+        }
+        return { mentions, participant };
+      };
+
+      const core = unwrapMessage(m?.message);
+      const { mentions, participant } = collectContext(core);
+
+      // 1. Check explicit @-mentions
+      if (mentions.length > 0) {
+        for (const raw of mentions) {
+          const r = resolveWithFallback(jidNormalizedUser(raw));
+          if (r) return r;
+        }
+      }
+
+      // 2. Check reply/quote participant (swipe-reply targets the author)
+      if (participant) {
+        const r = resolveWithFallback(jidNormalizedUser(participant));
+        if (r) return r;
       }
 
       return null;
@@ -11524,7 +11577,7 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // 💡 ECONOMY SINK (Item #4): .g/.e/.j respec — reset allocated
-                  // stat points for a Zeni fee (100K × level). Previously stat
+                  // stat points for a Zeni fee (1K × level). Previously stat
                   // allocation was permanent; this gives players a way to undo
                   // mistakes while draining Zeni from the economy.
                   if (
@@ -15791,7 +15844,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       if (topic === "combat") {
                         msg = `⚔️ *COMBAT MECHANICS*\n\n`;
                         msg += `• *Initiative (SPD):* Determines turn frequency. Faster players act more often.\n`;
-                        msg += `• *Energy:* Required for skills. Restore +15 per turn by using \`rest\`.\n`;
+                        msg += `• *Energy:* Required for skills. Regenerates +15 per turn automatically.\n`;
                         msg += `• *Damage Types:* \n`;
                         msg += `  - Physical: Blocked by DEF.\n`;
                         msg += `  - Magical: Partially ignores DEF, scales with MAG.\n`;
@@ -15966,7 +16019,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg = `📜 *COMMAND LIST*\n\n`;
                         msg += `• *Basic:* \`register\`, \`profile\`, \`stats\`, \`bal\`\n`;
                         msg += `• *Action:* \`quest\`, \`solo\`, \`raid\`, \`mine\`, \`craft\`\n`;
-                        msg += `• *Social:* \`guild\`, \`gift\`, \`marry\`, \`pvp\`\n`;
+                        msg += `• *Social:* \`guild\`, \`pvp\`, \`duel\`\n`;
                         msg += `• *Growth:* \`evolve\`, \`skills\`, \`skill up\`, \`equip\`\n`;
                         msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`\n`;
                       } else {
@@ -16249,8 +16302,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
 ━━━━━━━━━━━━━━
 Type:
-  • ${botConfig.getPrefix().toLowerCase()} guild accept
-  • ${botConfig.getPrefix().toLowerCase()} guild decline`;
+  • ${botConfig.getPrefix().toLowerCase()} accept
+  • ${botConfig.getPrefix().toLowerCase()} decline`;
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + inviteText,
@@ -17525,92 +17578,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` guild challenges - List available challenge types
-                    if (
-                      lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} guild challenges`
-                    ) {
-                      try {
-                        const types = guilds.getChallengeTypes();
-                        let text = `⚔️ *AVAILABLE CHALLENGE TYPES* ⚔️\n\n`;
-
-                        Object.entries(types).forEach(([id, data]) => {
-                          text += `🔹 *${data.name}* (\`${id}\`)\n`;
-                          text += `   💰 Entry: ${economy.getZENI()}${data.entryFee.toLocaleString()}\n`;
-                          text += `   🏆 Prize: ${economy.getZENI()}${data.prize.toLocaleString()}\n\n`;
-                        });
-
-                        text += `💡 Issue a challenge: \`${botConfig.getPrefix().toLowerCase()} guild challenge <guild_name> <type_id>\``;
-
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + text,
-                        });
-                      } catch (err) {
-                        console.error("Guild challenges error:", err);
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER + "❌❌ Failed to load challenge types!",
-                        });
-                      }
-                      await awardProgression(senderJid, chatId);
-                      return;
-                    }
-
-                    // `${botConfig.getPrefix().toLowerCase()}` guild challenge <guild> <type> - Issue a challenge
-                    if (
-                      lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild challenge `,
-                      )
-                    ) {
-                      const args = txt
-                        .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild challenge `
-                            .length,
-                        )
-                        .trim()
-                        .split(/\s+/);
-
-                      if (args.length < 2) {
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()} guild challenge <guild_name> <type>\`\n\nExample: \`${botConfig.getPrefix().toLowerCase()} guild challenge "Dragon Warriors" ttt\``,
-                        });
-                        return;
-                      }
-
-                      // Handle guild names with spaces if they are in quotes, or just take the first part if not
-                      let targetGuildName, type;
-                      if (txt.includes('"')) {
-                        const match = txt.match(/"([^"]+)"\s+(\S+)/);
-                        if (match) {
-                          targetGuildName = match[1];
-                          type = match[2];
-                        }
-                      }
-
-                      if (!targetGuildName) {
-                        type = args[args.length - 1];
-                        targetGuildName = args.slice(0, -1).join(" ");
-                      }
-
-                      try {
-                        const result = guilds.createChallenge(
-                          senderJid,
-                          targetGuildName,
-                          type,
-                        );
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + result.message,
-                        });
-                      } catch (err) {
-                        console.error("Guild challenge issue error:", err);
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to issue challenge!",
-                        });
-                      }
-                      return;
-                    }
+                    // 💡 REMOVED 2026-09-12 (audit): `guild challenge` / `guild challenges`.
+                    // The feature was a half-built stub — CHALLENGE_TYPES was an empty
+                    // placeholder, so EVERY challenge attempt failed with "Invalid
+                    // challenge type!", and no accept/resolve mechanic ever existed
+                    // (challenges could never complete). Guild-vs-guild competition is
+                    // fully served by the real `.guild war` system (guildWars.js).
+                    // Internal guilds.js stub functions left in place (zero callers).
 
                     // ============================================
                     // 💡 PHASE 3: RUNE COMMANDS (`.g rune ...`)
@@ -18015,7 +17989,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         let msg = `💰 *BOUNTY SYSTEM* 💰\n\n`;
                         msg += `Place Zeni bounties on other players. Bounty hunters track via PvP. Adds risk to hoarding wealth.\n\n`;
                         msg += `*Rules:*\n`;
-                        msg += `• Min bounty: 100K Zeni | Max: 50M Zeni\n`;
+                        msg += `• Min bounty: 5K Zeni | Max: 5M Zeni\n`;
                         msg += `• Target must be level 20+\n`;
                         msg += `• Max 3 active bounties per target\n`;
                         msg += `• 24h cooldown between placements by same user\n`;

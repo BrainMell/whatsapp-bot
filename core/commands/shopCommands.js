@@ -535,8 +535,12 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     }
     
     const classData = economy.getUserClass(finalJid);
-    const stats = economy.getUserStats(finalJid);
     const charSheet = progression.getCharacterSheet(finalJid);
+    // 💡 FIX 2026-09-12 (owner): whois/profile/me must show the player's
+    // CURRENT stats — progression.getBaseStats includes level growth,
+    // allocated points, admin bonuses, equipment and summon passives.
+    // economy.getUserStats was only class base + statBonuses (base stats).
+    const stats = charSheet?.stats || economy.getUserStats(finalJid);
     const level = charSheet?.level || 1;
     const gp = charSheet?.gp || 0;
     
@@ -680,11 +684,11 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     // Evolution info
     if (classData && classData.tier === 'STARTER') {
         msg += `\n━━━━━━━━━━━━━━━\n`;
-        msg += `💡 *Can evolve at Level 10 with 3 quests!*\n`;
+        msg += `💡 *Can evolve at Level 15 with 15 quests + a trial boss kill!*\n`;
         msg += `Use \`${getPrefix()} evolve\` to see paths.`;
     } else if (classData && classData.tier === 'EVOLVED') {
         msg += `\n━━━━━━━━━━━━━━━\n`;
-        msg += `💡 *Can ascend at Level 30 with 15 quests!*\n`;
+        msg += `💡 *Can ascend at Level 50 with 100 quests + 100K Zeni + a trial boss kill!*\n`;
         msg += `Use \`${getPrefix()} evolve\` to see paths.`;
     }
 

@@ -88,8 +88,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild join', desc: 'Join an existing public guild.', usage: 'guild join <name>' },
     { cmd: 'guild leave', desc: 'Leave your current guild.', usage: 'guild leave' },
     { cmd: 'guild invite', desc: 'Invite a user to join your guild.', usage: 'guild invite @user' },
-    { cmd: 'guild accept', desc: 'Accept a private guild invitation.', usage: 'guild accept' },
-    { cmd: 'guild decline', desc: 'Decline a private guild invitation.', usage: 'guild decline' },
+    // 💡 REMOVED 2026-09-12 (audit): 'guild accept'/'guild decline' — never dispatched; use `.accept`/`.decline`
     { cmd: 'guild list', desc: 'List all active guilds.', usage: 'guild list' },
     { cmd: 'guild members', desc: 'View all members in your guild.', usage: 'guild members' },
     { cmd: 'guild tag', desc: 'Mention all members of your guild.', usage: 'guild tag <msg>' },
@@ -250,8 +249,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'transfer', desc: 'Send currency to another user.', usage: 'transfer @user <amt>' },
     { cmd: 'send', desc: 'Alias for transfer.', usage: 'send @user <amt>' },
     { cmd: 'loan', desc: 'Request a loan from another user.', usage: 'loan @user <amt> <%> <time>' },
-    { cmd: 'loan accept', desc: 'Accept a pending loan request.', usage: 'loan accept' },
-    { cmd: 'loan decline', desc: 'Decline a pending loan request.', usage: 'loan decline' },
+    // 💡 REMOVED 2026-09-12 (audit): 'loan accept'/'loan decline' — never dispatched; use `.accept`/`.decline`
     { cmd: 'rob', desc: 'Attempt to rob another user\'s wallet.', usage: 'rob @user' },
     { cmd: 'steal', desc: 'Alias for rob. Rob another user.', usage: 'steal @user' },
     { cmd: 'rich', desc: 'Wealth Leaderboard - See the richest players.', usage: 'rich' },
@@ -348,7 +346,7 @@ const COMMAND_REGISTRY = {
   GAMES: [
     { cmd: 'chess', desc: 'Challenge @user to a chess match with optional bet.', usage: 'chess @user [bet]' },
     { cmd: 'move', desc: 'Make a move in Chess or TTT.', usage: 'move <notation/cell>' },
-    { cmd: 'resign', desc: 'Resign from an active chess match.', usage: 'resign' },
+    { cmd: 'resign', desc: 'Resign from an active chess match.', usage: 'chess resign' },
     { cmd: 'ttt', desc: 'Play Tic-Tac-Toe (3x3 grid).', usage: 'ttt @user' },
     { cmd: 'tttt', desc: 'Play Tic-Tac-Toe (8x8 grid).', usage: 'tttt @user' },
     { cmd: 'ttttt', desc: 'Play Tic-Tac-Toe (16x16 grid).', usage: 'ttttt @user' },
@@ -360,7 +358,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'ludo board', desc: 'Show the current Ludo board.', usage: 'ludo board' },
     { cmd: 'ludo end', desc: 'Quit an active Ludo game.', usage: 'ludo end' },
     { cmd: 'wordle', desc: 'Start a Wordle game (Easy/Med/Hard).', usage: 'wordle [difficulty]' },
-    { cmd: 'wordle board', desc: 'Show your current Wordle board.', usage: 'wordle board' },
+    { cmd: 'wordle board', desc: 'Show your current Wordle board.', usage: 'wordle b' },
     { cmd: 'wordle end', desc: 'Quit an active Wordle game.', usage: 'wordle end' },
     { cmd: 'wordle s', desc: 'Check your Wordle stats.', usage: 'wordle s' },
     { cmd: 'wordle top', desc: 'View the Wordle leaderboard.', usage: 'wordle top' }

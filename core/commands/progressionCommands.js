@@ -416,7 +416,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
  * 💡 ECONOMY SINK (Item #4): Previously stat allocation was permanent
  * (no way to undo). Now players can pay Zeni to respec. Cost scales
  * with level so it's a meaningful sink at high levels:
- *   level 10 = 100K, level 50 = 5M, level 100 = 20M Zeni.
+ *   level 10 = 10K, level 50 = 50K, level 100 = 100K Zeni.
  */
 async function handleRespecCommand(sock, chatId, senderJid, m) {
   try {
@@ -439,13 +439,13 @@ async function handleRespecCommand(sock, chatId, senderJid, m) {
       }, { quoted: m });
     }
 
-    // Cost: 100K × level. Level 10 = 1M, level 50 = 5M, level 100 = 10M.
+    // Cost: 1K × level. Level 10 = 10K, level 50 = 50K, level 100 = 100K.
     const RESPEC_COST = 1000 * Math.max(1, level); // 💡 Rebalanced 2026-08-17: 100K×L at L50 = 5M (impossible). 1K×L at L50 = 50K (~2 days).
     const balance = economy.getBalance(senderJid);
 
     if (balance < RESPEC_COST) {
       return await sock.sendMessage(chatId, {
-        text: getBotMarker() + `❌ Not enough Zeni!\n\nRespec Cost: ${RESPEC_COST.toLocaleString()}\nYour Balance: ${balance.toLocaleString()}\n\n_Respec cost scales with level: 100K × level._`
+        text: getBotMarker() + `❌ Not enough Zeni!\n\nRespec Cost: ${RESPEC_COST.toLocaleString()}\nYour Balance: ${balance.toLocaleString()}\n\n_Respec cost scales with level: 1K × level._`
       }, { quoted: m });
     }
 
