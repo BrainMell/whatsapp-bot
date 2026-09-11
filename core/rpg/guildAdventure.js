@@ -6683,7 +6683,7 @@ const initAdventure = async (
   }
 
   // Rank Restriction Logic (Skip for Special Dungeons or apply specific ones)
-  // 💡 P4 Item 5 (2026-08-16): Daily quest cap — 5 quests/raids per day.
+  // 💡 P4 Item 5 (2026-08-16): Daily quest cap — raised to 8 quests/raids per day (owner request 2026-09-12).
   // Check BEFORE rank restriction so players get a clear "cap reached" message.
   if (senderJid && !rankData.isSpecial) {
     const capCheck = economy.checkDailyQuestCap(senderJid);

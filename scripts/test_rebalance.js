@@ -200,8 +200,8 @@ async function runTests() {
   // by direct file grep at the end of this test. Only exported constants
   // are checked here.
   const checks = [
-    ['economy.MAX_WALLET', economy.MAX_WALLET, 5000000],
-    ['economy.MAX_BANK', economy.MAX_BANK, 100000000],
+    ['economy.MAX_WALLET', economy.MAX_WALLET, Infinity], // 💡 2026-09-12: caps removed by owner
+    ['economy.MAX_BANK', economy.MAX_BANK, Infinity],     // 💡 2026-09-12: caps removed by owner
     ['inventorySystem.INVENTORY_CONFIG.UPGRADE_COST_BASE', inventorySystem.INVENTORY_CONFIG.UPGRADE_COST_BASE, 2000],
     ['bountySystem.MIN_BOUNTY', bountySystem.MIN_BOUNTY, 5000],
     ['bountySystem.MAX_BOUNTY', bountySystem.MAX_BOUNTY, 5000000],

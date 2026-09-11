@@ -34,9 +34,9 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 💡 P4 Item 5 (2026-08-16): Daily quest cap — 5 raids/quests per day.
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap — was 5, raised to 8 per owner request (2026-09-12).
 // Enforced server-side at quest entry. Resets at UTC midnight.
-const DAILY_QUEST_CAP = 5;
+const DAILY_QUEST_CAP = 8;
 function checkDailyQuestCap(userId) {
   const user = getUser(userId);
   if (!user) return { allowed: true }; // fail open if user not loaded yet
@@ -656,11 +656,12 @@ function getBalance(userId) {
 }
 
 // 💡 ANTI-INFLATION CAPS: hard ceilings on wallet, bank, and stat values.
-// Prevents the runaway currency/stat inflation documented in the QA audit.
-// Players can still earn and spend normally — the caps are high enough that
-// only genuinely broken values (exploits, bugs) get clamped.
-const MAX_WALLET = 5_000_000; // 💡 Rebalanced 2026-08-17: was 2B — single player could absorb entire 500M community cap. Now ~5 weeks of D-rank earnings.  // 2 billion Zeni
-const MAX_BANK = 100_000_000; // 💡 Rebalanced 2026-08-17: was 10B — now 10× MAX_WALLET, holds weeks of hoarding without breaking market cap.   // 10 billion Zeni
+// 💡 OWNER REQUEST 2026-09-12: wallet & bank caps REMOVED — both set to
+// Infinity so every `> MAX_WALLET` / `> MAX_BANK` comparison (clampWallet,
+// addMoney clamp, transfer clamp, deposit cap, withdraw cap) is naturally
+// false and the balances grow unbounded. MAX_STAT_VALUE stays in force.
+const MAX_WALLET = Infinity; // 💡 2026-09-12: cap removed by owner (was 5M)
+const MAX_BANK = Infinity;   // 💡 2026-09-12: cap removed by owner (was 100M)
 const MAX_STAT_VALUE = 1_000_000;  // 1 million per individual stat
 
 function clampWallet(user) {
@@ -2264,7 +2265,7 @@ function getMentionJid(jid) {
 // 💡 P4 Items 10-11 (2026-08-16): Economy monitoring + market cap circuit breaker.
 // Default cap: 500 million total zeni across all players.
 // Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
-// reward table (F=1K, SSS=50K) means a player doing 5 quests/day at SSS
+// reward table (F=1K, SSS=50K) means a player doing 8 quests/day at SSS
 // earns ~250K/day. With 3700 active players, that's ~925M/day if everyone
 // maxes out — the cap prevents runaway inflation. Admin can adjust live.
 const DEFAULT_MARKET_CAP = 500_000_000;
