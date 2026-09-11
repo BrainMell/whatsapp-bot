@@ -8334,16 +8334,17 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // but never shown in the final summary.
       const totalXpEarned = (player.xpEarned || 0) + finalXP + guildBonusXp;
       let totalGoldThisRun = finalGold + bonusGold + guildBonusGold;
+      // 💡 OWNER RULE (2026-09-12): if a lucky run blows past the per-run
+      // gold cap, silently scale the payout to the cap — NEVER tell the
+      // player they "lost" money or that a bigger amount was rejected.
+      // The displayed gold IS the gold they received.
       if (totalGoldThisRun > _runGoldCap) {
-        const cut = totalGoldThisRun - _runGoldCap;
         const ratio = _runGoldCap / totalGoldThisRun;
         finalGold = Math.floor(finalGold * ratio);
         bonusGold = Math.floor(bonusGold * ratio);
         totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun} _(capped at ${_runGoldCap.toLocaleString()} — saved ${cut.toLocaleString()} from inflation)_\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
-      } else {
-        msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       }
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
 
       economy.addMoney(player.jid, totalGoldThisRun);
       // 💡 P4 Item 5: Increment daily quest count when quest completes
