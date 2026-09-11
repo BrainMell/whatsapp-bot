@@ -531,6 +531,81 @@ async function saveCardsMods() {
   await system.set("_shared_cards_mods", Array.from(cardsMods));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-09-11 (stale mod lists — "mods aren't recognised across bots"):
+// The mod Sets above were only populated at instance boot from system.js's
+// boot-time cache. A mod added on one instance never reached the others (and
+// even ".j reloadmods" re-read the stale cache), so those instances denied
+// mods on EVERY mod-gated command — admin/sandbox setrank+setlevel, the full
+// .j health view, etc. This refresher reads the shared keys STRAIGHT from
+// MongoDB (system.getFresh) and atomically SWAPS the underlying per-bot Set
+// (map.set of a brand-new Set) so permission checks never see an empty set
+// and DB hiccups keep the previous lists. Called by a 45s per-instance timer
+// and by .j reloadmods.
+// ═══════════════════════════════════════════════════════════════════════════
+const modRefreshTimersByBot = new Map();
+let _modRefreshInFlight = null;
+async function refreshSharedModSets(botId) {
+  botId = botId || botConfig.getBotId();
+  if (_modRefreshInFlight) return _modRefreshInFlight;
+  _modRefreshInFlight = (async () => {
+    const system = require('./utils/system');
+    let jidNormalizedUser = (u) => u;
+    try { ({ jidNormalizedUser } = require('@whiskeysockets/baileys')); } catch (_) {}
+    const toSet = (arr) => {
+      const s = new Set();
+      (Array.isArray(arr) ? arr : []).forEach((u) => {
+        if (!u) return;
+        try { s.add(jidNormalizedUser(u)); } catch (_) { s.add(u); }
+      });
+      return s;
+    };
+    try {
+      const [g, r, c, t] = await Promise.all([
+        system.getFresh('_shared_global_mods'),
+        system.getFresh('_shared_rpg_mods'),
+        system.getFresh('_shared_cards_mods'),
+        system.getFresh('_shared_game_testers'),
+      ]);
+      const changed = [];
+      if (g !== null) {
+        const next = toSet(g);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(globalModsByBot.get(botId) || [])].sort())) {
+          globalModsByBot.set(botId, next);
+          changed.push(`global=${next.size}`);
+        }
+      }
+      if (r !== null) {
+        const next = toSet(r);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(rpgModsByBot.get(botId) || [])].sort())) {
+          rpgModsByBot.set(botId, next);
+          changed.push(`rpg=${next.size}`);
+        }
+      }
+      if (c !== null) {
+        const next = toSet(c);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(cardsModsByBot.get(botId) || [])].sort())) {
+          cardsModsByBot.set(botId, next);
+          changed.push(`cards=${next.size}`);
+        }
+      }
+      if (t !== null) {
+        const next = toSet(t);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(gameTestersByBot.get(botId) || [])].sort())) {
+          gameTestersByBot.set(botId, next);
+          changed.push(`testers=${next.size}`);
+        }
+      }
+      if (changed.length) {
+        console.log(`🔄 [${botId}] Shared mod lists refreshed from DB: ${changed.join(' ')}`);
+      }
+    } catch (err) {
+      console.error(`⚠️ [${botId}] mod refresh failed (keeping current lists):`, err.message);
+    }
+  })().finally(() => { _modRefreshInFlight = null; });
+  return _modRefreshInFlight;
+}
+
 async function addRpgMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
@@ -5542,6 +5617,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await loadHardBannedUsers();
           await loadHardMutedUsers();
 
+          // 💡 FIX 2026-09-11: keep shared mod lists in sync across instances.
+          // The Sets above are a boot snapshot; without this timer a mod added
+          // on any other bot was invisible here until restart. Capture the
+          // botId NOW (we're inside this instance's AsyncLocalStorage context;
+          // a raw setInterval callback would lose it and resolve to "global").
+          if (!modRefreshTimersByBot.has(botConfig.getBotId())) {
+            const modRefreshBotId = botConfig.getBotId();
+            const modRefreshTimer = setInterval(() => {
+              refreshSharedModSets(modRefreshBotId).catch(() => {});
+            }, 45 * 1000);
+            if (typeof modRefreshTimer.unref === 'function') modRefreshTimer.unref();
+            modRefreshTimersByBot.set(modRefreshBotId, modRefreshTimer);
+            console.log(`🔄 [${modRefreshBotId}] shared mod-list auto-refresh every 45s`);
+          }
+
           // Chess must be loaded after system data is ready
           chess.loadActiveGames();
 
@@ -8084,6 +8174,24 @@ _💡 Reply with another number from your search list!_`.trim();
                             key: { $in: configIds.map(id => 'heartbeat_' + id) }
                           }).lean();
                         }
+
+                        // 💡 FIX 2026-09-11: prune long-dead heartbeats (retired or
+                        // disabled instances whose last beat is >30 days old) so they
+                        // stop rendering as permanent ⚫ rows with stale errors in the
+                        // mod view ("health shows the older broken version"). Disabled
+                        // but configured instances still appear via the config merge
+                        // below as ⚫ offline — just without month-old error details.
+                        const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+                        const nowPrune = Date.now();
+                        const freshHeartbeatDocs = [];
+                        for (const doc of heartbeatDocs) {
+                          if ((doc.value?.lastSeen || 0) < nowPrune - PRUNE_AGE_MS) {
+                            System.deleteOne({ key: doc.key }).catch(() => {});
+                            continue;
+                          }
+                          freshHeartbeatDocs.push(doc);
+                        }
+                        heartbeatDocs = freshHeartbeatDocs;
 
                         const heartbeatMap = {};
                         const discoveredIds = [];
@@ -12429,15 +12537,12 @@ Usage: ${newUsage}/5${warningText}`;
                       });
                     }
                     try {
-                      // Clear all in-memory Sets and reload from DB
-                      globalMods.clear();
-                      rpgMods.clear();
-                      cardsMods.clear();
-                      gameTesters.clear();
-                      await loadGlobalMods();
-                      await loadRpgMods();
-                      await loadCardsMods();
-                      await loadGameTesters();
+                      // 💡 FIX 2026-09-11: was clear() + loaders — but the loaders
+                      // read system.js's BOOT-TIME cache, so this never picked up
+                      // mods added after this instance booted (the very bug it was
+                      // meant to fix). refreshSharedModSets() hits MongoDB directly
+                      // and atomically swaps the Sets.
+                      await refreshSharedModSets();
 
                       // Also reload card system roles
                       let cardModCount = 0;
