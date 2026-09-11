@@ -12294,7 +12294,7 @@ Usage: ${newUsage}/5${warningText}`;
                       listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
-                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)`;
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` — refresh mod lists from DB (after external DB changes)\n\`${botConfig.getPrefix()} reloadservers\` — manually reload bot caches + BOTH Go image servers`;
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + listMsg,
                       mentions: Array.from(allModJids).filter(j => j && j.includes('@')),
@@ -12567,6 +12567,76 @@ Usage: ${newUsage}/5${warningText}`;
                       await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                     } catch (e) {
                       await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reload failed: ${e.message}` });
+                    }
+                    return;
+                  }
+                  // <prefix> reloadservers — manually reload BOTH servers (owner/mod only):
+                  //   1) this bot instance: shared mod Sets re-synced from DB +
+                  //      profile-card asset caches dropped (layouts/bg re-read from disk)
+                  //   2) BOTH Go image services: POST /admin/reload → each one self-execs
+                  //      a fresh process (same PID, pm2 keeps tracking; assets re-read).
+                  //      Targets = GO_IMAGE_SERVICE_URL (the remote instance the bot renders
+                  //      with) + the co-located 127.0.0.1:7860 instance — deduped when equal.
+                  // Added 2026-09-12: manual counterpart to the 45s mod auto-refresh, and
+                  // the way to push new card assets live without a full bot restart.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloadservers` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reload servers` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reload`
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload the servers.",
+                      });
+                    }
+                    try {
+                      // 1) bot-side: shared mod Sets, fresh from MongoDB
+                      await refreshSharedModSets();
+                      let cardModCount = 0;
+                      try {
+                        const cardSystem = require('./rpg/cardSystem');
+                        const inst = cardSystem.getInst();
+                        if (inst && inst.modJids) {
+                          inst.modJids.clear();
+                          if (typeof cardSystem.loadRoles === 'function') {
+                            await cardSystem.loadRoles();
+                          }
+                          cardModCount = inst.modJids.size;
+                        }
+                      } catch (e) {}
+                      // 2) bot-side: drop profile-card asset + health caches
+                      let assetCacheCleared = false;
+                      try {
+                        const pcr = require('./rpg/profileCardRenderer');
+                        if (typeof pcr.clearCaches === 'function') { pcr.clearCaches(); assetCacheCleared = true; }
+                      } catch (e) {}
+                      try { require('./utils/goImageService').resetHealthCache?.(); } catch (e) {}
+
+                      // 3) Go image services (both instances)
+                      const goUrls = [];
+                      const pushUrl = (u) => { if (u && !goUrls.includes(String(u).replace(/\/+$/, ''))) goUrls.push(String(u).replace(/\/+$/, '')); };
+                      pushUrl(process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860');
+                      pushUrl('http://127.0.0.1:7860');
+                      const goLines = [];
+                      for (const u of goUrls) {
+                        try {
+                          const resp = await axios.post(`${u}/admin/reload`, {}, { timeout: 8000 });
+                          goLines.push(`✅ ${u} → reloading (fresh process, assets re-read)`);
+                        } catch (e) {
+                          goLines.push(`❌ ${u} → ${e.message}`);
+                        }
+                      }
+
+                      let msg = `🔄 *MANUAL SERVER RELOAD*\n\n`;
+                      msg += `🤖 *Bot instance:*\n`;
+                      msg += `• Mod lists re-synced from DB — General: ${globalMods.size} | RPG: ${rpgMods.size} | Cards: ${cardsMods.size} | CardSys: ${cardModCount}\n`;
+                      msg += `• Profile-card asset cache: ${assetCacheCleared ? 'cleared (layouts/bg re-read on next render)' : 'clear unavailable'}\n\n`;
+                      msg += `🖼️ *Go image services:*\n`;
+                      msg += goLines.join('\n') + `\n\n`;
+                      msg += `_Both image servers are re-exec'ing fresh processes — new sprites/cards are picked up without a full restart._`;
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Server reload failed: ${e.message}` });
                     }
                     return;
                   }
@@ -26592,6 +26662,7 @@ _(Or reply to their message)_
                       "delcardsmod",
                       "listmods",
                       "reloadmods",
+                      "reloadservers",
                       "spawn",
                       "cardmod",
                       "eshop",

@@ -86,6 +86,16 @@ function getLayouts() {
   return _layouts;
 }
 
+// 💡 Manual reload support (`<prefix> reloadservers`): drop every module-level
+// cache so layouts.json / bg art / extra icons / class sprites are re-read
+// from disk on the next render. Fonts stay registered (registerFont is
+// process-global and idempotent). Called by the engine's reload command.
+function clearCaches() {
+  _layouts = null;
+  _imgCache.clear();
+  _sheetCache.clear();
+}
+
 const _imgCache = new Map();
 async function loadImg(dir, name) {
   const key = `${dir}/${name}`;
@@ -659,4 +669,4 @@ const EQUIPMENT_SLOTS = [
   { key: 'cloak', label: 'Cloak', short: 'CLK', icon: 'cloak.png' }
 ];
 
-module.exports = { renderProfileCard, renderStyleSheet, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };
+module.exports = { renderProfileCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };

@@ -913,3 +913,12 @@ const _sharedInstance = new GoImageService();
 module.exports = _sharedInstance;
 module.exports.GoImageService = GoImageService;
 module.exports.getShared = () => _sharedInstance;
+
+// 💡 Manual reload support (`<prefix> reloadservers`): drop the 60s isHealthy()
+// memo so the next image command re-probes the Go service immediately after a
+// reload/restart instead of trusting a pre-reload cached verdict.
+function resetHealthCache() {
+  _healthCache.value = null;
+  _healthCache.expiresAt = 0;
+}
+module.exports.resetHealthCache = resetHealthCache;
