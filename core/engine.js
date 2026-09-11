@@ -7266,7 +7266,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'cardstyle', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -8245,6 +8245,24 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderJid,
                         cmdArgs.slice(1),
                         senderName,
+                      );
+                      return;
+                    }
+
+                    // .j setdefaultcard — RPG MOD: pick the server-wide default card
+                    // (what players who never picked a style see)
+                    if (primaryCmd === "setdefaultcard") {
+                      if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ That's an RPG mod command.",
+                        });
+                        return;
+                      }
+                      await rpgCommands.handleSetDefaultCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        cmdArgs.slice(1),
                       );
                       return;
                     }
@@ -26286,6 +26304,7 @@ _(Or reply to their message)_
                       "support",
                       "refresh",
                       "cardstyle",
+                      "setdefaultcard",
                       "register",
                       "balance",
                       "bal",

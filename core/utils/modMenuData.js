@@ -42,6 +42,7 @@ const MOD_MENU = {
       { cmd: "godmode", desc: "Sandbox godmode toggle — testing only, never live.", usage: "mod godmode" },
       { cmd: "sandbox", desc: "Enter the sandbox test environment.", usage: "mod sandbox" },
       { cmd: "modclass", desc: "Switch YOUR class freely (no args = class list).", usage: "modclass <name or ID>" },
+      { cmd: "setdefaultcard", desc: "Pick the server-wide DEFAULT character card (10 styles).", usage: "setdefaultcard <1-10|name>" },
 
       // ── Content Forge (merged into RPG — 2026-09-10, one-word groups) ──
       { cmd: "createskill", desc: "Interactive skill creator (bot DMs you).", usage: "mod createskill" },

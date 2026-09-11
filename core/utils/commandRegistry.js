@@ -119,6 +119,7 @@ const COMMAND_REGISTRY = {
   ],
   RPG: [
     { cmd: 'cardstyle', desc: 'Choose your character card design (10 styles).', usage: 'cardstyle <1-10>' },
+    { cmd: 'setdefaultcard', desc: 'RPG Mods: pick the server-wide default character card.', usage: 'setdefaultcard <1-10>' },
     { cmd: 'character', desc: 'View your RPG character sheet, class, and stats.', usage: 'character' },
     { cmd: 'char', desc: 'Alias for character.', usage: 'char' },
     { cmd: 'stats', desc: 'View your detailed RPG stats.', usage: 'stats' },

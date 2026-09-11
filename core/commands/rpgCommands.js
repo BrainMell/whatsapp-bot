@@ -18,9 +18,11 @@ const profileCardRenderer = require('../rpg/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
-// 💡 OWNER RULE 2026-09-11: guild line on cards only when the player has one
-function safeGuildName(jid) {
-  try { return require('../rpg/guilds').getUserGuild(jid) || ''; } catch (e) { return ''; }
+// 💡 OWNER RULE 2026-09-11: cards show "[guild title] of [guild name]" —
+// custom guild title, else the member's guild role; empty when no guild.
+function safeGuildInfo(jid) {
+  try { return require('../rpg/guilds').getCardGuildInfo(jid) || { name: '', title: '' }; }
+  catch (e) { return { name: '', title: '' }; }
 }
 const getCurrency = () => botConfig.getCurrency();
 
@@ -95,6 +97,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           } catch (e) {}
         }
 
+        const _guildCard = safeGuildInfo(senderJid);
         const cardBuffer = await profileCardRenderer.renderProfileCard({
           user: economyUser,
           classData,
@@ -107,9 +110,10 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           activeSummon,
           pfpBuffer,
           prefix: getPrefix(),
-          // 💡 card styles: player-chosen design + guild line (only if in a guild)
+          // 💡 card styles: player-chosen design + guild title/name line (only if in a guild)
           style: economyUser.cardStyle,
-          guildName: safeGuildName(senderJid)
+          guildName: _guildCard.name,
+          guildTitle: _guildCard.title
         });
 
         if (cardBuffer && cardBuffer.length > 0) {
@@ -1399,7 +1403,8 @@ const CARD_STYLE_NAMES = { 1: "Stonekeep", 2: "Golden Arcanum", 3: "Retro Court"
 const CARD_STYLE_ALIASES = { stonekeep: 1, arcanum: 2, golden: 2, retro: 3, court: 3, woodmere: 4, noir: 5, emblem: 5, gacha: 6, holo: 6, decree: 7, royal: 7, arcade: 8, neon: 8, rune: 9, monolith: 9, crimson: 10 };
 async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
     const user = economy.getUser(senderJid) || economy.getOrCreateUser(senderJid);
-    const current = user.cardStyle || profileCardRenderer.DEFAULT_STYLE;
+    const current = user.cardStyle || profileCardRenderer.getDefaultStyle();
+    const defStyle = profileCardRenderer.getDefaultStyle();
     const input = ((args && args[0]) ? String(args[0]) : "").trim().toLowerCase();
     let pick = null;
     if (/^\d+$/.test(input)) pick = parseInt(input, 10);
@@ -1408,7 +1413,7 @@ async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
         const sheet = await profileCardRenderer.renderStyleSheet(current);
         await sock.sendMessage(chatId, {
             image: sheet,
-            caption: `🎨 *CHARACTER CARD STYLES*\n\nYour card: *#${current} — ${CARD_STYLE_NAMES[current] || "?"}*${current === profileCardRenderer.DEFAULT_STYLE ? " (default)" : ""}\n\nSwitch with \`${getPrefix()} cardstyle <1-10>\` — you'll get a live preview of your own card.`,
+            caption: `🎨 *CHARACTER CARD STYLES*\n\nYour card: *#${current} — ${CARD_STYLE_NAMES[current] || "?"}*${current === defStyle ? " (default)" : ""}\n\nSwitch with \`${getPrefix()} cardstyle <1-10>\` — you'll get a live preview of your own card.`,
             mentions: [senderJid]
         });
         return;
@@ -1425,4 +1430,40 @@ async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
     }
 }
 
-module.exports = { displayCharacterSheet, handleCardStyle, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
+// ==========================================
+// 🛡️ SET DEFAULT CARD — RPG MOD COMMAND
+//    .j setdefaultcard        -> current default + style list
+//    .j setdefaultcard <1-10> -> set the SERVER-WIDE default card
+// Players who never picked a style (and every fresh registration) get the
+// default design. Stored under a shared system key so it survives restarts.
+// ==========================================
+async function handleSetDefaultCard(sock, chatId, senderJid, args) {
+    const input = ((args && args[0]) ? String(args[0]) : "").trim().toLowerCase();
+    if (!input) {
+        const defStyle = profileCardRenderer.getDefaultStyle();
+        let msg = `🛡️ *DEFAULT CHARACTER CARD*\n\n`;
+        msg += `Current default: *#${defStyle} — ${CARD_STYLE_NAMES[defStyle] || "?"}*\n\n`;
+        for (let i = 1; i <= 10; i++) msg += `${i === defStyle ? "▶️" : "▫️"} #${i} — ${CARD_STYLE_NAMES[i]}\n`;
+        msg += `\nSet it with \`${getPrefix()} setdefaultcard <1-10 or name>\`.\n_Player picks via \`${getPrefix()} cardstyle\` always override this._`;
+        await sock.sendMessage(chatId, { text: msg });
+        return;
+    }
+    let pick = null;
+    if (/^\d+$/.test(input)) pick = parseInt(input, 10);
+    else if (CARD_STYLE_ALIASES[input]) pick = CARD_STYLE_ALIASES[input];
+    if (!pick || pick < 1 || pick > 10) {
+        await sock.sendMessage(chatId, { text: `❌ Pick a number *1-10* or a style name (e.g. \`decree\`). See \`${getPrefix()} setdefaultcard\`.` });
+        return;
+    }
+    await require('../utils/system').set('_shared_default_card_style', pick);
+    const defStyle = profileCardRenderer.getDefaultStyle();
+    await sock.sendMessage(chatId, { text: `✅ Default card is now *#${pick} — ${CARD_STYLE_NAMES[pick]}*.\nEveryone who hasn't picked their own style will see it. Here's the style sheet:` });
+    try {
+        const sheet = await profileCardRenderer.renderStyleSheet(defStyle);
+        await sock.sendMessage(chatId, { image: sheet });
+    } catch (e) {
+        console.error("[handleSetDefaultCard] sheet render failed:", e.message);
+    }
+}
+
+module.exports = { displayCharacterSheet, handleCardStyle, handleSetDefaultCard, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };

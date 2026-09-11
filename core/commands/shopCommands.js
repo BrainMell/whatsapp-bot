@@ -569,8 +569,9 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
                 pfpBuffer = Buffer.from(resp.data);
             } catch (e) {}
         }
-        let guildName = '';
-        try { guildName = require('../rpg/guilds').getUserGuild(finalJid) || ''; } catch (e) {}
+        // 💡 OWNER RULE: "[guild title] of [guild name]" — title falls back to role; empty when no guild
+        let _guildCard = { name: '', title: '' };
+        try { _guildCard = require('../rpg/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
         const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
         const styledBuffer = await profileCardRenderer.renderProfileCard({
             user,
@@ -583,10 +584,11 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             pfpBuffer,
             prefix: getPrefix(),
             style: user.cardStyle,
-            guildName
+            guildName: _guildCard.name,
+            guildTitle: _guildCard.title
         });
         if (styledBuffer && styledBuffer.length > 0) {
-            const styledCaption = `👤 *${user.nickname || finalName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || 5}* — change with \`${getPrefix()} cardstyle\``;
+            const styledCaption = `👤 *${user.nickname || finalName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* — change with \`${getPrefix()} cardstyle\``;
             await sock.sendMessage(chatId, {
                 image: styledBuffer,
                 caption: styledCaption,

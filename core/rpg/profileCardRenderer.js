@@ -6,11 +6,12 @@
 // scripts/bake_profile_bgs.py, together with layouts.json — the single
 // source of truth for every dynamic field (positions/fonts/colors).
 // This renderer composites: bg → dynamic ops → portrait → done.
-// Owners pick a style with `<prefix> cardstyle <1-10>`; default = 5 (Emblem Noir).
+// Owners pick a style with `<prefix> cardstyle <1-10>`; RPG Mods pick the
+// server-wide default with `<prefix> setdefaultcard <1-10>`.
 //
 // Style catalogue:
 //   1 Stonekeep      2 Golden Arcanum   3 Retro Court    4 Woodmere
-//   5 Emblem Noir (DEFAULT)            6 Holo Gacha     7 Royal Decree
+//   5 Emblem Noir    6 Holo Gacha       7 Royal Decree (DEFAULT)
 //   8 Neon Arcade    9 Rune Monolith   10 Crimson Court
 
 const path = require('path');
@@ -61,7 +62,21 @@ const FONT_FNS = {
   pixeloid: s => `${s}px "${FONT_REG}"`,
 };
 
-const DEFAULT_STYLE = 5; // Emblem Noir — owner picked
+// 💡 OWNER PICK 2026-09-11: Royal Decree is the main card.
+const DEFAULT_STYLE = 7; // Royal Decree — baked-in fallback
+
+// Runtime default — RPG Mods can switch it with `<prefix> setdefaultcard <1-10>`.
+// Stored under a `_shared_` system key (same pattern as _shared_rpg_mods) so it
+// survives restarts and is shared by every bot instance. Falls back to the
+// baked-in DEFAULT_STYLE when the key is unset or out of range.
+const RUNTIME_DEFAULT_KEY = '_shared_default_card_style';
+function getDefaultStyle() {
+  try {
+    const n = parseInt(require('../utils/system').get(RUNTIME_DEFAULT_KEY, null), 10);
+    if (Number.isFinite(n) && n >= 1 && n <= 10) return n;
+  } catch (e) {}
+  return DEFAULT_STYLE;
+}
 
 let _layouts = null;
 function getLayouts() {
@@ -234,6 +249,10 @@ function buildCardData(params) {
     PVPH: `${pw}W-${pl}L`,
     XP: String(Math.round(params.xpPercent || 0)),
     GUILD: params.guildName || '',
+    // 💡 OWNER RULE: cards show "[guild title] of [guild name]". The caller
+    // resolves the title (custom title, else guild role). Defensive default
+    // keeps the sentence grammatical if a caller passes a name but no title.
+    GTITLE: params.guildTitle || (params.guildName ? 'Member' : ''),
   };
 }
 
@@ -517,12 +536,13 @@ function drawDots(ctx, item, valueStr, D) {
 
 // ------------------------------------------------------------------ main
 async function renderProfileCard(params) {
+  const runtimeDefault = getDefaultStyle();
   let styleId = parseInt(params.style, 10);
-  if (!Number.isFinite(styleId) || styleId < 1 || styleId > 10) styleId = DEFAULT_STYLE;
+  if (!Number.isFinite(styleId) || styleId < 1 || styleId > 10) styleId = runtimeDefault;
   const layouts = getLayouts();
-  if (!layouts[String(styleId)]) styleId = DEFAULT_STYLE;
+  if (!layouts[String(styleId)]) styleId = runtimeDefault;
   let bg = await loadBg(styleId);
-  if (!bg && styleId !== DEFAULT_STYLE) { styleId = DEFAULT_STYLE; bg = await loadBg(styleId); }
+  if (!bg && styleId !== runtimeDefault) { styleId = runtimeDefault; bg = await loadBg(styleId); }
   const layout = layouts[String(styleId)];
   if (!layout || !bg) throw new Error(`profile styles missing (style ${styleId})`);
 
@@ -555,9 +575,14 @@ async function renderProfileCard(params) {
 }
 
 // ------------------------------------------------- style pickers sheet (.j cardstyle)
-let _sheetCache = null;
+// 💡 cache is keyed by the highlighted style — the sheet marks BOTH the
+// viewer's current pick AND the server default, so a single-slot cache
+// would render stale highlights for everyone after the first viewer.
+const _sheetCache = new Map();
 async function renderStyleSheet(currentStyle) {
-  if (_sheetCache) return _sheetCache;
+  const defStyle = getDefaultStyle();
+  const cacheKey = `${currentStyle}|${defStyle}`;
+  if (_sheetCache.has(cacheKey)) return _sheetCache.get(cacheKey);
   ensureFonts();
   const layouts = getLayouts();
   const { createCanvas } = getCanvas();
@@ -597,14 +622,17 @@ async function renderStyleSheet(currentStyle) {
     let nm = name;
     while (ctx.measureText(nm).width > tw && nm.length > 4) nm = nm.slice(0, -1);
     ctx.fillText(nm, x + tw / 2, y + th + 26);
-    if (i === DEFAULT_STYLE) {
+    if (i === defStyle) {
       ctx.fillStyle = 'rgba(246,214,112,0.75)';
       ctx.font = `11px "${FONT_REG}"`;
       ctx.fillText('DEFAULT', x + tw / 2, y + th + 45);
     }
   }
-  _sheetCache = canvas.toBuffer('image/png');
-  return _sheetCache;
+  const buf = canvas.toBuffer('image/png');
+  // keep the map bounded: drop stale keys once it grows past a few renders
+  if (_sheetCache.size > 12) _sheetCache.clear();
+  _sheetCache.set(cacheKey, buf);
+  return buf;
 }
 
 // Legacy exports kept for backward compatibility
@@ -631,4 +659,4 @@ const EQUIPMENT_SLOTS = [
   { key: 'cloak', label: 'Cloak', short: 'CLK', icon: 'cloak.png' }
 ];
 
-module.exports = { renderProfileCard, renderStyleSheet, DEFAULT_STYLE, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };
+module.exports = { renderProfileCard, renderStyleSheet, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };

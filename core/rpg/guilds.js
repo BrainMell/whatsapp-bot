@@ -1082,6 +1082,28 @@ function getUserGuild(userJid) {
   return globalGuildData.memberGuilds[userJid];
 }
 
+// 💡 OWNER RULE 2026-09-11: character cards show "[guild title] of [guild name]".
+// Resolves the player's guild name + display title in one call — custom title
+// wins; when the player has no custom title, their guild ROLE is used
+// (Leader / Officer / Recruit / Member). Returns { name:'', title:'' } when
+// the player has no guild, so the card simply omits the line (never shows a
+// placeholder name like "Void Walkers").
+function getCardGuildInfo(userJid) {
+  try {
+    const guildName = globalGuildData.memberGuilds[userJid];
+    if (!guildName) return { name: '', title: '' };
+    const info = getGuildMember(guildName, userJid);
+    if (!info) return { name: guildName, title: 'Member' };
+    const ROLE_LABELS = { leader: 'Leader', officer: 'Officer', recruit: 'Recruit', member: 'Member' };
+    const title = (info.title && info.title !== 'Member')
+      ? info.title
+      : (ROLE_LABELS[info.role] || 'Member');
+    return { name: guildName, title };
+  } catch (e) {
+    return { name: '', title: '' };
+  }
+}
+
 function addGuildBalance(guildName, amount) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild) return;
@@ -1518,6 +1540,7 @@ module.exports = {
   setMemberTitle,
   getMemberTitle,
   getUserGuild,
+  getCardGuildInfo,
   getGuild,
   getGuildMember,
   isGuildOwner,
