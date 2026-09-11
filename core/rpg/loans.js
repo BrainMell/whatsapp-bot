@@ -102,6 +102,13 @@ function getTotalDebt() {
   }, 0);
 }
 
+// 💡 FIX 2026-09-12 (full command audit): MIN_LOAN/MAX_LOAN were accidentally
+// declared INSIDE requestLoan() AFTER the line that reads them — a guaranteed
+// TDZ ReferenceError on EVERY loan request since the 2026-08-17 rebalance
+// ("Cannot access 'MIN_LOAN' before initialization"). Moved to module scope.
+const MIN_LOAN = 1000; // 💡 Rebalanced 2026-08-17: prevent spammy micro-loans.
+const MAX_LOAN = 5000000; // 💡 Rebalanced 2026-08-17: a single loan can't exceed MAX_WALLET or absorb a chunk of the community cap.
+
 // Request a loan
 function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinutes) {
   // Basic validation
@@ -128,8 +135,6 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
 
   // Also cap duration to prevent absurd timeframes
   const MAX_DURATION_MINUTES = 30 * 24 * 60;
-const MIN_LOAN = 1000; // 💡 Rebalanced 2026-08-17: prevent spammy micro-loans.
-const MAX_LOAN = 5000000; // 💡 Rebalanced 2026-08-17: a single loan can't exceed MAX_WALLET or absorb a chunk of the community cap.
   if (duration > MAX_DURATION_MINUTES) {
     return { success: false, msg: `❌ Duration cannot exceed 30 days (43,200 minutes).` };
   }
