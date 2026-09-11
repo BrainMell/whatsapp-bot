@@ -6525,7 +6525,9 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
 
   msg += `Pick your rank:\n\n`;
 
-  const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+  // 💡 FIX 2026-09-11: include GOD so GOD-rank players don't get indexOf() = -1
+  // (which locked every C+ dungeon in the menu display for them)
+  const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "GOD"];
   let userRankIndex = 0;
 
   if (senderJid) {
@@ -6693,7 +6695,9 @@ const initAdventure = async (
   if (solo && senderJid && !rankData.isSpecial) {
     const user = economy.getUser(senderJid);
     const adventurerRank = user?.adventurerRank || "F";
-    const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+    // 💡 FIX 2026-09-11: GOD was missing here → indexOf('GOD') = -1 →
+    // maxSoloRankIndex = 0 → GOD players were capped at F-rank solo dungeons.
+    const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "GOD"];
 
     const userRankIndex = ranks.indexOf(adventurerRank);
     const dungeonRankIndex = ranks.indexOf(upperRank);

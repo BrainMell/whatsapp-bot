@@ -8327,6 +8327,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         "ss",
                         "sss",
                         "dragon",
+                        "god",
                       ];
                       const rank =
                         cmdArgs.find((a) => ranks.includes(a.toLowerCase())) ||
