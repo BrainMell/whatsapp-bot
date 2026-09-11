@@ -5656,7 +5656,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await system.loadSystemData();
           await economy.loadEconomy();
           await guilds.loadGuilds();
-          await guilds.loadChallenges();
           await loans.loadLoans();
           await lidResolver.loadLidMappings();
 
@@ -6044,7 +6043,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 await system.loadSystemData();
                 await economy.loadEconomy();
                 await guilds.loadGuilds();
-                await guilds.loadChallenges();
                 await loans.loadLoans();
                 await lidResolver.loadLidMappings();
 
@@ -26747,8 +26745,6 @@ _(Or reply to their message)_
                       "guild points",
                       "guild pointsboard",
                       "guild upgrade",
-                      "guild challenge",
-                      "guild challenges",
                       "news",
                       "anime news",
                       "register",

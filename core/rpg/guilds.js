@@ -48,13 +48,6 @@ const GUILD_ARCHETYPES = {
   }
 };
 
-const activeChallenges = new Map();
-
-// types of challenges guilds can throw at each other
-const CHALLENGE_TYPES = {
-// ... existing challenge types ...
-};
-
 const GUILD_UPGRADES = {
   hall: {
     name: 'Guild Hall',
@@ -263,32 +256,11 @@ function saveGuilds() {
   // No-op: We now use syncGuildSystem and syncGuild
 }
 
-async function loadChallenges() {
-  try {
-    const sys = await System.findOne({ key: 'guild_challenges' }).lean();
-    if (sys && sys.value) {
-      for (const [id, chall] of Object.entries(sys.value)) {
-        activeChallenges.set(id, chall);
-      }
-      console.log("✅ Loaded guild challenges from MongoDB");
-    }
-  } catch (err) {
-    console.error("Error loading challenges:", err.message);
-  }
-}
-
-async function saveChallenges() {
-  try {
-    const data = Object.fromEntries(activeChallenges);
-    await System.updateOne(
-        { key: 'guild_challenges' },
-        { $set: { value: data } },
-        { upsert: true }
-    );
-  } catch (err) {
-    console.error("Error saving challenges:", err.message);
-  }
-}
+// 💡 REMOVED 2026-09-12 (audit): loadChallenges/saveChallenges + the dead
+// guild-vs-guild challenge system (CHALLENGE_TYPES was an empty placeholder,
+// createChallenge had zero callers, and the "accept challenge" command it
+// advertised never existed). Guild-vs-guild competition is served by the
+// real `.guild war` system (guildWars.js). Startup callers in engine.js removed.
 //========================================
 
 //==================this part handles core guild operations like creating and joining==================
@@ -1337,63 +1309,11 @@ function upgradeGuildBuilding(userJid, buildingId) {
 }
 //========================================
 
-//==================this part handles guild vs guild challenges==================
-function getChallengeTypes() {
-  return CHALLENGE_TYPES;
-}
-
-function createChallenge(challengerJid, targetGuildName, type) {
-  const info = globalGuildData;
-  const challengerGuild = info.memberGuilds[challengerJid];
-
-  if (!challengerGuild) {
-    return { success: false, message: "❌ You must be in a guild to issue a challenge!" };
-  }
-
-  if (!CHALLENGE_TYPES[type]) {
-    return { success: false, message: "❌ Invalid challenge type!" };
-  }
-
-  const targetGuild = Object.keys(info.guilds).find(
-    g => g.toLowerCase() === targetGuildName.toLowerCase()
-  );
-
-  if (!targetGuild) {
-    return { success: false, message: "❌ Target guild doesn't exist!" };
-  }
-
-  if (targetGuild === challengerGuild) {
-    return { success: false, message: "❌ You can't challenge your own guild!" };
-  }
-
-  const challengeId = `${challengerGuild}_vs_${targetGuild}_${Date.now()}`;
-  const challenge = {
-    id: challengeId,
-    challenger: challengerGuild,
-    target: targetGuild,
-    type: type,
-    status: 'pending',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + (24 * 60 * 60 * 1000)
-  };
-
-  activeChallenges.set(challengeId, challenge);
-  saveChallenges();
-
-  return {
-    success: true,
-    message: `┏━━━━━━━━━━━━━━━┓\n┃   ⚔️ CHALLENGE  ┃\n┗━━━━━━━━━━━━━━━┛\n\n🏰 *${challengerGuild}* has challenged *${targetGuild}* to a *${CHALLENGE_TYPES[type].name}*!\n\nTarget guild members must accept with: \n${botConfig.getPrefix()} guild accept challenge ${challengeId}`
-  };
-}
-
-function getChallenges() {
-  return Array.from(activeChallenges.values());
-}
-//========================================
+// 💡 REMOVED 2026-09-12 (audit): getChallengeTypes / createChallenge / getChallenges —
+// half-built stub (empty CHALLENGE_TYPES, no accept/resolve mechanic). See note above.
 
 // setup - now explicitly called during boot in engine.js
 // loadGuilds();
-// loadChallenges();
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  GUILD PURGE + GUILD GUIDE (QA — fix legacy conflicts)
@@ -1514,8 +1434,6 @@ function getGuildGuide(prefix) {
 module.exports = {
   loadGuilds,
   saveGuilds,
-  loadChallenges,
-  saveChallenges,
   syncGuild,
   syncGuildSystem,
 
@@ -1557,14 +1475,10 @@ module.exports = {
   getGuildPointsLeaderboard,
   awardPointsForActivity,
 
-  getChallengeTypes,
-  createChallenge,
-  getChallenges,
   upgradeGuildBuilding,
   GUILD_UPGRADES,
 
-  globalGuildData,
-  activeChallenges
+  globalGuildData
 };
 
 // Periodic sweeper for memory optimization
