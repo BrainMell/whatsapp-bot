@@ -754,6 +754,7 @@ const chess = require('./games/chess');
 const debate = require('./games/debate');
 const ludo = require('./games/ludo');
 const wordle = require('./games/wordle');
+const murderMystery = require('./games/murdermystery'); // 🔪 Blackvale Manor — isolated social deduction module
 const news = require('./utils/news'); // ✅ Added news module
 const stockMarket = require('./rpg/stockMarket'); // ✅ Added stock market module
 const P = require("pino");
@@ -5706,6 +5707,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // empty → system.get returns null → no mods loaded → they appear
           // "reset" on every bot restart.
           await system.loadSystemData();
+          try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
           await economy.loadEconomy();
           await guilds.loadGuilds();
           await loans.loadLoans();
@@ -6093,6 +6095,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
                 // 💡 FIX: system.loadSystemData MUST run BEFORE mod loading.
                 await system.loadSystemData();
+                try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
                 await economy.loadEconomy();
                 await guilds.loadGuilds();
                 await loans.loadLoans();
@@ -7515,6 +7518,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // Now we check permissions first and block card access for
                   // muted/banned/hard-muted users.
                   if (isMuted(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
+                  // 🔪 Murder Mystery: the dead do not speak in the manor (spec §12)
+                  if (murderMystery.isSilenced(senderJid, chatId)) {
                     try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
                     return;
                   }
@@ -10074,6 +10082,11 @@ _💡 Reply with another number from your search list!_`.trim();
 
                   // FIXED: Auto-delete muted user messages FIRST before anything else
                   if (isMuted(senderJid, chatId)) {
+                    // 🔪 Murder Mystery: the dead do not speak in the manor (spec §12)
+                    if (murderMystery.isSilenced(senderJid, chatId)) {
+                      try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                      return;
+                    }
                     try {
                       await sock.sendMessage(chatId, { delete: m.key });
                       console.log(
@@ -26492,6 +26505,43 @@ _(Or reply to their message)_
                   }
 
                   // ============================================
+                  // 🔪 MURDER MYSTERY — Blackvale Manor (`${prefix} murder` / `${prefix} mm`)
+                  // Lobby: create/join/leave/players/start · Play: vote/status/end
+                  // Night (DM only): kill/investigate — see core/games/murdermystery/
+                  // ============================================
+                  if (
+                    lowerTxt.startsWith(`${prefix} murder`) ||
+                    lowerTxt.startsWith(`${prefix} mm`)
+                  ) {
+                    const mmBody = lowerTxt.startsWith(`${prefix} murder`)
+                      ? lowerTxt.substring(`${prefix} murder`.length).trim()
+                      : lowerTxt.substring(`${prefix} mm`.length).trim();
+                    const mmParts = mmBody.split(/\s+/);
+                    const mmSub = mmParts[0] || '';
+                    const mmTarget = mmParts.slice(1).join(' ');
+                    let mmSenderName = 'Guest';
+                    try { mmSenderName = economy.getDisplayName(senderJid) || mmSenderName; } catch (e) {}
+                    try {
+                      await murderMystery.handleCommand({
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName: mmSenderName,
+                        sub: mmSub,
+                        rest: mmTarget,
+                        m,
+                        botMarker: BOT_MARKER,
+                        isGroup: !!(chatId && chatId.endsWith('@g.us')),
+                        botId: botConfig.getBotId(),
+                        prefix: botConfig.getPrefix(),
+                      });
+                    } catch (mmErr) {
+                      console.error('🔪 [MurderMystery] command error:', mmErr.message);
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // Don't forget to update the allCommands array for the unknown command handler:
                   // Add these to the allCommands array (around line 6023):
                   //
@@ -26963,6 +27013,19 @@ _(Or reply to their message)_
                       "wordle end",
                       "wordle stats",
                       "wordle top",
+                      "murder",
+                      "mm",
+                      "murder create",
+                      "murder join",
+                      "murder leave",
+                      "murder players",
+                      "murder start",
+                      "murder status",
+                      "murder vote",
+                      "murder kill",
+                      "murder investigate",
+                      "murder end",
+                      "murder help",
                       "shop",
                       "buy",
                       "evolve",

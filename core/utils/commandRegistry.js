@@ -361,7 +361,18 @@ const COMMAND_REGISTRY = {
     { cmd: 'wordle board', desc: 'Show your current Wordle board.', usage: 'wordle b' },
     { cmd: 'wordle end', desc: 'Quit an active Wordle game.', usage: 'wordle end' },
     { cmd: 'wordle s', desc: 'Check your Wordle stats.', usage: 'wordle s' },
-    { cmd: 'wordle top', desc: 'View the Wordle leaderboard.', usage: 'wordle top' }
+    { cmd: 'wordle top', desc: 'View the Wordle leaderboard.', usage: 'wordle top' },
+    { cmd: 'murder create', desc: 'Open a Murder Mystery lobby at Blackvale Manor (4-11 guests).', usage: 'murder create' },
+    { cmd: 'murder join', desc: 'Accept the invitation and join the lobby.', usage: 'murder join' },
+    { cmd: 'murder leave', desc: 'Decline the invitation and leave the lobby.', usage: 'murder leave' },
+    { cmd: 'murder players', desc: 'Show the guest list.', usage: 'murder players' },
+    { cmd: 'murder start', desc: 'Host begins the mystery: roles are sealed and dealt by DM.', usage: 'murder start' },
+    { cmd: 'murder vote', desc: 'Cast your ballot during the vote (number, name, or skip).', usage: 'murder vote <n|name|skip>' },
+    { cmd: 'murder status', desc: 'State of the case (in DM: your secret role + the living).', usage: 'murder status' },
+    { cmd: 'murder kill', desc: 'KILLER only, in DM at night: choose tonight\'s victim.', usage: 'murder kill <n|name>' },
+    { cmd: 'murder investigate', desc: 'INVESTIGATOR only, in DM at night: study one guest.', usage: 'murder investigate <n|name>' },
+    { cmd: 'murder end', desc: 'Host/moderator closes the case early.', usage: 'murder end' },
+    { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' }
   ],
   PowerScaling: [
     { cmd: 'powerscale', desc: 'Get character power stats.', usage: 'powerscale <char>' },

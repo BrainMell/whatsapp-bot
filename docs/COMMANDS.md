@@ -295,6 +295,29 @@ Card mods 🛡️: `cardmod add\|del\|list` (👑/🛡️ for add/del) · `cards
 
 ---
 
+## Phase 13.5 — Murder Mystery (Blackvale Manor) — NEW 2026-09-13
+
+Turn-based social deduction. 1 secret **Killer** + 1 **Investigator** + Civilians, 4–11 players.
+Characters (11 manor sprites) are story roles only — anyone can be the Killer. Every player gets a **private image role card by DM**. Group cards: intro, nightfall, murder announcement, vote result, finale. Module: `core/games/murdermystery/` (isolated; renders locally via node-canvas — no RPG assets).
+
+| Command | Aliases | Where | Notes |
+|---------|---------|-------|-------|
+| `murder create` | `mm create` | group | Opens the lobby. **Host auto-joins.** Lobby expires after 30 min. |
+| `murder join` | `mm join` | group | Accept the invitation (max 11 guests). |
+| `murder leave` | `mm leave` | group | Decline; host withdrawal transfers the keys. |
+| `murder players` | `mm players`, `roster` | group | Guest list / seating. |
+| `murder start` | `mm start` | group | **Host only.** Min 4. Locks lobby → deals secret roles by DM → Night 1. |
+| `murder kill <n\|name>` | `mm kill` | **DM, night** | 🔪 Killer only. Numbers = the roster in your night DM (self excluded). |
+| `murder investigate <n\|name>` | `mm investigate` | **DM, night** | 🕵️ Investigator only. Private result card arrives in your DM immediately. |
+| `murder vote <n\|name\|skip>` | `mm vote` | group (DM works if in one game) | Numbers = the **public** roster in the vote prompt (same for everyone). Revote allowed until the count. |
+| `murder status` | `mm status` | both | Group: case state. DM: your **secret** role + the living. |
+| `murder end` | `mm end` | group | Host/mod closes the case early; releases all game mutes. |
+| `murder help` | `mm help` | both | Rules. |
+
+Notes: night = 100 s, discussion = 5 min, vote = 90 s; phases resolve early when everyone has acted. The killer needs only a **tie-or-better** headcount (parity) to win; dead guests can no longer send messages the bot relays (soft group-mute, auto-released at case close, 6 h failsafe). Restart-safe: live games rehydrate from MongoDB with their timers.
+
+---
+
 ## Audit Changelog (2026-09-12)
 
 **Fixed:**
