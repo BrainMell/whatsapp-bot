@@ -5,7 +5,8 @@
 //
 // Card language:
 //   candlelit ivory on ink, blood crimson for
-//   death, brass amber for the law, wax seals,
+//   death, brass amber for the law, spectral
+//   pale jade for the ghost, wax seals,
 //   film grain, hairline frames, Playfair
 //   Display display type, EB Garamond body,
 //   Special Elite for stamps and secrets.
@@ -34,6 +35,8 @@ const C = {
   amber: '#c9a13b',
   amberHi: '#e0bd5c',
   fog: '#8b8590',
+  ghost: '#9fd8c8',   // spectral jade for ghost/angel accents
+  ghostHi: '#c9efe2',
 };
 
 const ASSETS = path.join(__dirname, 'assets');
@@ -248,11 +251,12 @@ function ornament(ctx, cx, y, width, color = C.amber) {
   ctx.restore();
 }
 
-function footer(ctx, W, H, caseNo, manorName) {
+// footer — manor name only (games are standalone; no public counters)
+function footer(ctx, W, H, manorName) {
   ctx.save();
   ctx.font = '22px EB-Semi';
   ctx.fillStyle = 'rgba(236,226,200,0.55)';
-  const text = `CASE N\u00BA ${fmtNo(caseNo)}  \u00B7  ${manorName}`;
+  const text = `${manorName}`;
   spaced(ctx, text, W / 2, H - 52, 3);
   ctx.restore();
 }
@@ -340,6 +344,29 @@ const Icons = {
     ctx.beginPath();
     ctx.arc(-s * 0.12, -s * 0.15, s * 0.28, Math.PI * 1.1, Math.PI * 1.45);
     ctx.stroke();
+    ctx.restore();
+  },
+  halo(ctx, cx, cy, s) {
+    // angelic ring with rays
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = 'rgba(236,226,200,0.95)';
+    ctx.lineWidth = s * 0.14;
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.15, s * 0.72, s * 0.3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // rays
+    ctx.lineWidth = s * 0.09;
+    for (const ang of [-2.35, -1.9, -1.25, -0.8]) {
+      const x1 = Math.cos(ang) * s * 0.85;
+      const y1 = -s * 0.15 + Math.sin(ang) * s * 0.42;
+      const x2 = Math.cos(ang) * s * 1.08;
+      const y2 = -s * 0.15 + Math.sin(ang) * s * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
     ctx.restore();
   },
   eye(ctx, cx, cy, s) {
@@ -555,6 +582,24 @@ function splatter(ctx, cx, cy, spread, n = 12) {
   ctx.restore();
 }
 
+// spectral fog field (ghost / guardian cards)
+function fogField(ctx, W, H, color = '201,239,226', alpha = 0.16) {
+  ctx.save();
+  for (let i = 0; i < 14; i++) {
+    const x = Math.random() * W;
+    const y = H * 0.25 + Math.random() * H * 0.75;
+    const r = 120 + Math.random() * 320;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${color},${alpha})`);
+    g.addColorStop(1, `rgba(${color},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 // final common wrapper — every card render returns a PNG buffer or null
 async function renderCard(W, H, drawFn) {
   try {
@@ -580,17 +625,31 @@ const PORT_W = 900, PORT_H = 1400;
 const ROLE_STYLE = {
   KILLER: { color: C.crimsonHi, word: 'THE KILLER', icon: 'dagger', sealColor: C.crimsonDeep },
   INVESTIGATOR: { color: C.amberHi, word: 'THE INVESTIGATOR', icon: 'magnifier', sealColor: '#8a6d24' },
+  GUARDIAN: { color: C.ghostHi, word: 'THE GUARDIAN', icon: 'halo', sealColor: '#3c5a52' },
   CIVILIAN: { color: C.ivory, word: 'A CIVILIAN', icon: 'eye', sealColor: '#3f3b47' },
 };
 
 const ROLE_INSTRUCTIONS = {
-  KILLER: 'Each night, choose a guest to eliminate. Survive the discussions. Dodge the vote. Be the last shadow standing.',
+  KILLER: 'Each night, choose a guest to eliminate — and choose the room where their body will lie. Survive the discussions. Dodge the vote.',
   INVESTIGATOR: 'Each night you may study one guest, and the manor will tell you if their hands are clean. Use it. Carefully.',
-  CIVILIAN: 'You have no gift except your wits. Watch. Question. Vote. Find the killer before the manor runs out of guests.',
+  GUARDIAN: 'Each night you may watch over one guest — or yourself. If the knife comes for them, you will turn it away. No one will ever know.',
+  CIVILIAN: 'You have no gift except your wits. Watch. Question. Search. Vote. Find the killer before the manor runs out of guests.',
 };
 
+// concealment dots for room rows (difficulty, shown publicly)
+function concealDots(ctx, x, y, n, color, spacing = 22, r = 7) {
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.arc(x + i * spacing, y, i < n ? r : 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 // Game introduction — group card, manor exterior
-async function renderIntro({ caseNo, playerCount, manorName, openingLine, nightLine }) {
+async function renderIntro({ playerCount, manorName, openingLine, nightLine }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('manor');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -625,12 +684,12 @@ async function renderIntro({ caseNo, playerCount, manorName, openingLine, nightL
     ctx.fillStyle = C.amber;
     ctx.fillText(nightLine, LAND_W / 2, 648);
 
-    footer(ctx, LAND_W, LAND_H, caseNo, manorName);
+    footer(ctx, LAND_W, LAND_H, manorName);
   });
 }
 
 // Private role assignment — DM portrait (MANDATORY card)
-async function renderRoleCard({ character, playerName, role, caseNo, manorName }) {
+async function renderRoleCard({ character, playerName, role, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('gallery');
     drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
@@ -699,7 +758,7 @@ async function renderRoleCard({ character, playerName, role, caseNo, manorName }
     // instructions
     ctx.font = '31px EB-Reg';
     ctx.fillStyle = C.ivory;
-    wrap(ctx, ROLE_INSTRUCTIONS[role] || ROLE_INSTRUCTIONS.CIVILIAN, 70, 716, 480, 46, 5);
+    wrap(ctx, ROLE_INSTRUCTIONS[role] || ROLE_INSTRUCTIONS.CIVILIAN, 70, 716, 480, 46, 6);
 
     // seal
     seal(ctx, 150, 1180, 78, style.sealColor, Icons[style.icon]);
@@ -708,14 +767,14 @@ async function renderRoleCard({ character, playerName, role, caseNo, manorName }
     ctx.font = '26px Type';
     ctx.fillStyle = role === 'KILLER' ? C.crimsonHi : 'rgba(236,226,200,0.75)';
     ctx.textAlign = 'center';
-    ctx.fillText('Your identity is secret. Tell no one.', PORT_W / 2 + 80, 1330);
+    ctx.fillText('Your identity is secret. Tell no one.', PORT_W / 2 + 80, 1312);
 
-    footer(ctx, PORT_W, PORT_H, caseNo, manorName);
+    footer(ctx, PORT_W, PORT_H, manorName);
   });
 }
 
 // Nightfall — group card
-async function renderNightCard({ night, line, caseNo, manorName }) {
+async function renderNightCard({ night, line, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('hallway_b');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -761,27 +820,98 @@ async function renderNightCard({ night, line, caseNo, manorName }) {
     ctx.fillStyle = C.ivory;
     ctx.fillText(line, LAND_W / 2, 710);
 
-    footer(ctx, LAND_W, LAND_H, caseNo, manorName);
+    footer(ctx, LAND_W, LAND_H, manorName);
   });
 }
 
-// Murder / death announcement — group card
-async function renderDeathCard({ victimChar, victimName, scene, night, caseNo, manorName, revealRole }) {
+// Morning — group card. outcome: 'murder' | 'saved' | 'quiet'
+// Includes the search-phase room list (the day's board).
+async function renderMorningCard({ night, outcome, line, rooms, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
-    const bg = await loadBg(scene.room.id);
+    const bg = await loadBg('teatime');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.7 });
+
+    const styles = {
+      murder: { kicker: 'DAWN \u00B7 AFTER NIGHT ' + roman(night), head: 'A MURDER', color: C.crimsonHi, accent: C.crimson },
+      saved: { kicker: 'DAWN \u00B7 AFTER NIGHT ' + roman(night), head: 'DEATH WAS CHEATED', color: C.ghostHi, accent: C.ghost },
+      quiet: { kicker: 'DAWN \u00B7 AFTER NIGHT ' + roman(night), head: 'ALL ARE BREATHING', color: C.ivory, accent: C.amber },
+    };
+    const st = styles[outcome] || styles.quiet;
+
+    ctx.textAlign = 'left';
+    ctx.font = '28px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, st.kicker, 110, 190, 6, 'left');
+
+    fitFont(ctx, st.head, 'PF-Black', 110, 1000, 52);
+    ctx.fillStyle = st.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 18;
+    ctx.fillText(st.head, 110, 310);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = 'italic 33px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    wrap(ctx, line, 110, 386, 800, 44, 2);
+
+    if (outcome === 'murder') {
+      ctx.font = '29px EB-Semi';
+      ctx.fillStyle = C.amber;
+      ctx.fillText('The body has not been found. The manor searches.', 110, 492);
+    } else if (outcome === 'saved') {
+      ctx.font = '29px EB-Semi';
+      ctx.fillStyle = C.ghostHi;
+      ctx.fillText('No one died last night. The manor searches all the same.', 110, 492);
+    }
+
+    // room board (right column)
+    if (rooms && rooms.length) {
+      ctx.font = '26px EB-Semi';
+      ctx.fillStyle = C.ivoryDim;
+      spaced(ctx, 'THE ROOMS OF THE MANOR', 1305, 186, 5);
+      ctx.font = '22px Type';
+      ctx.fillStyle = C.ivoryFaint;
+      ctx.textAlign = 'right';
+      ctx.fillText('one search each \u00B7 dots = difficulty', 1530, 224);
+      ctx.textAlign = 'left';
+
+      const rowH = Math.min(88, 560 / rooms.length);
+      let y = 296;
+      rooms.forEach((r, i) => {
+        ctx.font = '34px PF-Bold';
+        ctx.fillStyle = C.ivory;
+        ctx.fillText(`${i + 1}.`, 1080, y);
+        fitFont(ctx, r.name.replace(/^the /i, ''), 'PF-Bold', 34, 280, 22);
+        ctx.fillText(r.name.replace(/^the /i, ''), 1130, y);
+        concealDots(ctx, 1496, y - 10, r.conceal, C.amber, 16, 6);
+        ctx.font = '22px EB-Reg';
+        ctx.fillStyle = C.ivoryFaint;
+        fitFont(ctx, r.hint, 'EB-Reg', 22, 340, 16);
+        ctx.fillText(r.hint, 1130, y + 36);
+        y += rowH;
+      });
+    }
+
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// Body discovered — group card (victim + room + finder)
+async function renderBodyFoundCard({ victimChar, victimName, room, finderName, method, hour, night, manorName }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg(room.id);
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     atmosphere(ctx, LAND_W, LAND_H, { dark: 0.66 });
 
     splatter(ctx, 420, 620, 300, 16);
-
     await drawSpriteGray(ctx, victimChar.id, 420, 830, 600);
-
     stamp(ctx, 'DECEASED', 420, 190, 320, 86, 'rgba(200,50,74,0.95)', -0.1, 46);
 
     ctx.textAlign = 'left';
     ctx.font = '30px EB-Semi';
     ctx.fillStyle = C.amber;
-    spaced(ctx, `MORNING \u00B7 AFTER NIGHT ${roman(night)}`, 800, 230, 5, 'left');
+    spaced(ctx, `A BODY IS FOUND \u00B7 ${room.name.toUpperCase()}`, 800, 230, 4, 'left');
 
     fitFont(ctx, victimName.toUpperCase(), 'PF-Black', 92, 720, 40);
     ctx.fillStyle = C.ivory;
@@ -803,27 +933,239 @@ async function renderDeathCard({ victimChar, victimName, scene, night, caseNo, m
 
     ctx.font = 'italic 36px PF-MedIt';
     ctx.fillStyle = C.ivory;
-    ctx.fillText(`Found in ${scene.room.name} \u2014 ${scene.method.title}.`, 800, 590);
+    ctx.fillText(`${method.title}.`, 800, 590);
 
     ctx.font = '29px EB-Reg';
     ctx.fillStyle = C.ivoryDim;
-    wrap(ctx, `${scene.method.flavor}  The clock struck ${scene.hour} o\u2019clock. No one heard a thing.`, 800, 648, 700, 42, 3);
+    wrap(ctx, `${method.flavor}  The clock struck ${hour} o\u2019clock.`, 800, 648, 700, 42, 3);
 
     ctx.font = '30px EB-Semi';
-    if (revealRole === 'KILLER') {
-      ctx.fillStyle = C.crimsonHi;
-      ctx.fillText('They were THE KILLER. The manor breathes again.', 800, 790);
-    } else {
-      ctx.fillStyle = C.amber;
-      ctx.fillText('They can no longer speak. Learn why.', 800, 790);
-    }
+    ctx.fillStyle = C.amber;
+    ctx.fillText(`Found by ${finderName}. The ghost whispers to them alone.`, 800, 760);
 
-    footer(ctx, LAND_W, LAND_H, caseNo, manorName);
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// Ghost clue — DM portrait to the body finder
+async function renderGhostClueCard({ clue, tier, victimName, room, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg(room.id);
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.86 });
+    fogField(ctx, PORT_W, PORT_H, '159,216,200', 0.2);
+
+    // spectral aura ring
+    const g = ctx.createRadialGradient(PORT_W / 2, 560, 40, PORT_W / 2, 560, 330);
+    g.addColorStop(0, 'rgba(159,216,200,0.22)');
+    g.addColorStop(1, 'rgba(159,216,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 200, PORT_W, 760);
+
+    ctx.textAlign = 'center';
+    ctx.font = '40px Type';
+    ctx.fillStyle = C.ghostHi;
+    spaced(ctx, 'THE GHOST WHISPERS', PORT_W / 2, 170, 9);
+
+    ctx.font = '46px PF-Bold';
+    ctx.fillStyle = C.ivory;
+    ctx.fillText(`CLUE ${roman(tier + 1)}`, PORT_W / 2, 250);
+
+    // ghost eye motif
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    Icons.eye(ctx, PORT_W / 2, 380, 60);
+    ctx.restore();
+
+    ctx.font = 'italic 37px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    const after = wrap(ctx, `\u201C${clue}\u201D`, 140, 520, 620, 54, 4);
+
+    ctx.textAlign = 'center';
+    ctx.font = '27px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`the ghost of ${victimName} \u00B7 found in ${room.name}`, PORT_W / 2, Math.max(after + 60, 780));
+
+    ctx.font = '25px Type';
+    ctx.fillStyle = C.ghostHi;
+    ctx.fillText('Speak it. Twist it. Or keep it to yourself.', PORT_W / 2, 1310);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Empty-room search result — DM portrait to the searcher
+async function renderSearchNothingCard({ room, playerName, flavor, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg(room.id);
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.82 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '34px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.8)';
+    spaced(ctx, 'THE SEARCH TURNS UP', PORT_W / 2, 200, 7);
+
+    ctx.font = '110px PF-Black';
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 18;
+    spaced(ctx, 'NOTHING', PORT_W / 2, 350, 14);
+    ctx.shadowColor = 'transparent';
+
+    ornament(ctx, PORT_W / 2, 420, 420, C.ivoryFaint);
+
+    ctx.font = 'italic 33px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    wrap(ctx, `${flavor}`, 150, 520, 600, 48, 3);
+
+    ctx.textAlign = 'center';
+    ctx.font = '28px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`${playerName} searched ${room.name}.`, PORT_W / 2, 740);
+
+    ctx.font = '25px Type';
+    ctx.fillStyle = C.ivoryFaint;
+    ctx.fillText('Only you know the room you chose. Choose what to share.', PORT_W / 2, 1310);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Private card to the murder victim at dawn — "you are dead"
+async function renderVictimDMCard({ victimChar, victimName, room, method, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg(room.id);
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.8 });
+
+    await drawSpriteGray(ctx, victimChar.id, PORT_W / 2, 1050, 700);
+    splatter(ctx, PORT_W / 2, 1000, 240, 10);
+    stamp(ctx, 'YOU ARE DEAD', PORT_W / 2, 220, 430, 96, 'rgba(200,50,74,0.95)', -0.07, 52);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'italic 34px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    wrap(ctx, `The house does not know yet. Only you and your killer do.`, 150, 1150, 600, 46, 2);
+
+    ctx.textAlign = 'center';
+    ctx.font = '27px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`${method.title} \u00B7 ${room.name} \u00B7 night ${roman(night)}`, PORT_W / 2, 1258);
+
+    ctx.font = '25px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.65)';
+    ctx.fillText('Your voice is lost to the living. You watch now.', PORT_W / 2, 1310);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// DM to the saved player after a guardian save
+async function renderGuardianSavedCard({ savedName, dreamLine, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('bedroom_a');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.76 });
+    fogField(ctx, PORT_W, PORT_H, '201,239,226', 0.14);
+
+    ctx.textAlign = 'center';
+
+    // halo above the bed
+    ctx.save();
+    ctx.strokeStyle = C.ghostHi;
+    ctx.lineWidth = 5;
+    ctx.shadowColor = 'rgba(201,239,226,0.9)';
+    ctx.shadowBlur = 30;
+    ctx.beginPath();
+    ctx.ellipse(PORT_W / 2, 250, 130, 44, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.font = '34px Type';
+    ctx.fillStyle = C.ghostHi;
+    spaced(ctx, 'YOU SHOULD BE DEAD', PORT_W / 2, 400, 7);
+
+    ctx.font = '56px PF-Black';
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(savedName.toUpperCase(), PORT_W / 2, 490);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = 'italic 33px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    wrap(ctx, dreamLine, 150, 590, 600, 48, 4);
+
+    ctx.textAlign = 'center';
+    ctx.font = '25px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.6)';
+    ctx.fillText('Someone watched over you last night. They will not say who.', PORT_W / 2, 1310);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Killer's private room-choice card (after choosing a victim)
+async function renderRoomChoiceCard({ rooms, victimName, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('hallway_a');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.84 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '36px Type';
+    ctx.fillStyle = C.crimsonHi;
+    spaced(ctx, 'THE KNIFE IS RAISED', PORT_W / 2, 190, 8);
+
+    ctx.font = '52px PF-Black';
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 14;
+    ctx.fillText(`${victimName.toUpperCase()} SLEEPS`, PORT_W / 2, 270);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = '30px EB-Semi';
+    ctx.fillStyle = C.amber;
+    ctx.fillText('Where does the body lie until morning?', PORT_W / 2, 330);
+
+    // room rows
+    const rowH = Math.min(120, 700 / Math.max(1, rooms.length));
+    let y = 430;
+    ctx.textAlign = 'left';
+    rooms.forEach((r, i) => {
+      ctx.font = '36px PF-Bold';
+      ctx.fillStyle = C.amber;
+      ctx.fillText(`${i + 1}.`, 110, y);
+      fitFont(ctx, r.name.replace(/^the /i, ''), 'PF-Bold', 36, 400, 24);
+      ctx.fillStyle = C.ivory;
+      ctx.fillText(r.name.replace(/^the /i, ''), 170, y);
+      ctx.font = '24px EB-Reg';
+      ctx.fillStyle = C.ivoryFaint;
+      fitFont(ctx, r.hint, 'EB-Reg', 24, 430, 17);
+      ctx.fillText(r.hint, 170, y + 32);
+      ctx.font = '22px EB-Semi';
+      ctx.fillStyle = r.conceal >= 3 ? C.crimsonHi : C.ivoryDim;
+      ctx.fillText(r.concealLabel, 170, y + 60);
+      concealDots(ctx, 640, y + 54, r.conceal, C.amber);
+      y += rowH;
+    });
+
+    ctx.textAlign = 'center';
+    ctx.font = '25px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.7)';
+    ctx.fillText('Hard rooms hide a body longer — but anger the ghost.', PORT_W / 2, 1310);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
   });
 }
 
 // Private investigation result — DM portrait dossier
-async function renderInvestigationCard({ subjectChar, subjectName, isKiller, flavor, night, caseNo, manorName }) {
+async function renderInvestigationCard({ subjectChar, subjectName, isKiller, flavor, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('library');
     drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
@@ -860,7 +1202,7 @@ async function renderInvestigationCard({ subjectChar, subjectName, isKiller, fla
     ctx.fillText('INVESTIGATION REPORT', PORT_W / 2, 280);
     ctx.font = '28px EB-Reg';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`Night ${roman(night)}  \u00B7  Case N\u00BA ${fmtNo(caseNo)}`, PORT_W / 2, 330);
+    ctx.fillText(`Night ${roman(night)}`, PORT_W / 2, 330);
 
     await drawAvatar(ctx, subjectChar.id, PORT_W / 2, 540, 165, isKiller ? C.crimsonHi : C.amber);
 
@@ -877,18 +1219,20 @@ async function renderInvestigationCard({ subjectChar, subjectName, isKiller, fla
 
     ctx.font = 'italic 32px PF-MedIt';
     ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
     wrap(ctx, flavor, 170, 1130, 560, 44, 2);
 
+    ctx.textAlign = 'center';
     ctx.font = '26px Type';
     ctx.fillStyle = 'rgba(236,226,200,0.6)';
     ctx.fillText('Say nothing. Watch everything.', PORT_W / 2, 1285);
 
-    footer(ctx, PORT_W, PORT_H, caseNo, manorName);
+    footer(ctx, PORT_W, PORT_H, manorName);
   });
 }
 
 // Vote result — group card
-async function renderVoteCard({ tally, skipVotes, eliminated, caseNo, manorName }) {
+async function renderVoteCard({ tally, skipVotes, eliminated, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('greatroom');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -957,12 +1301,12 @@ async function renderVoteCard({ tally, skipVotes, eliminated, caseNo, manorName 
       ctx.fillText('The manor watches. The knife waits.', 1180, 635);
     }
 
-    footer(ctx, LAND_W, LAND_H, caseNo, manorName);
+    footer(ctx, LAND_W, LAND_H, manorName);
   });
 }
 
 // Final result — group card
-async function renderFinalCard({ winner, killerChar, killerName, caseNo, manorName, nightsSurvived, victims, survivors, closingLine }) {
+async function renderFinalCard({ winner, killerChar, killerName, manorName, nightsSurvived, victims, survivors, closingLine }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg(winner === 'killer' ? 'drawing' : 'manor');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -981,7 +1325,7 @@ async function renderFinalCard({ winner, killerChar, killerName, caseNo, manorNa
     ctx.textAlign = 'left';
     ctx.font = '30px EB-Semi';
     ctx.fillStyle = C.amber;
-    spaced(ctx, `CASE N\u00BA ${fmtNo(caseNo)} \u00B7 CLOSED`, LAND_W / 2, 190, 6);
+    spaced(ctx, 'THE CASE IS CLOSED', LAND_W / 2, 190, 6);
 
     ctx.textAlign = 'center';
     ctx.font = civWin ? '104px PF-Black' : '100px PF-Black';
@@ -1024,7 +1368,7 @@ async function renderFinalCard({ winner, killerChar, killerName, caseNo, manorNa
     ctx.fillStyle = civWin ? C.ivory : C.crimsonHi;
     wrap(ctx, closingLine, 800, 760, 700, 46, 2);
 
-    footer(ctx, LAND_W, LAND_H, caseNo, manorName);
+    footer(ctx, LAND_W, LAND_H, manorName);
   });
 }
 
@@ -1050,11 +1394,19 @@ module.exports = {
   drawSpriteGray,
   drawAvatar,
   splatter,
+  fogField,
+  concealDots,
   renderCard,
   renderIntro,
   renderRoleCard,
   renderNightCard,
-  renderDeathCard,
+  renderMorningCard,
+  renderBodyFoundCard,
+  renderGhostClueCard,
+  renderSearchNothingCard,
+  renderVictimDMCard,
+  renderGuardianSavedCard,
+  renderRoomChoiceCard,
   renderInvestigationCard,
   renderVoteCard,
   renderFinalCard,

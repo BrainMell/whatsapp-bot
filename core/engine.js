@@ -6998,6 +6998,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     return; // Stop all further processing for hard-muted users
                   }
 
+                  // 🔪 MURDER MYSTERY DEAD-GATE (independent, loophole-free):
+                  // Runs for EVERY message type (text, media, view-once, stickers,
+                  // documents, commands) BEFORE MongoDB persist, before cardSystem,
+                  // before any normal-mute logic — so `.j claim` and every other
+                  // normal-mute workaround is useless to the dead. The gate is bound
+                  // to the game lifecycle inside murderMystery.isSilenced and is
+                  // released the moment the case closes.
+                  if (isGroupChat && !m.key.fromMe && !m.message?.protocolMessage && murderMystery.isSilenced(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    try { console.log(`🔪 [MurderMystery] deleted message from the dead: ${senderJid} in ${chatId}`); } catch (e) {}
+                    return; // the dead do not speak in the manor
+                  }
+
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
                     m.message.conversation ||
