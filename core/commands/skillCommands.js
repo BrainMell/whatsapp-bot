@@ -914,6 +914,41 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     
     successMsg += `🌳 \`${getPrefix()} skill tree\` to continue your path!`;
 
+    // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL) — same lamoot assets,
+    // portrait orientation ("same assets but a different orientation").
+    // Non-fatal — text fallback below.
+    try {
+        const goService = require('../utils/goImageService');
+        if (await goService.isHealthy()) {
+            const evolveBuf = await goService.generatePortraitCard({
+                kind: 'TRIAL',
+                nickname: economy.getDisplayName(senderJid),
+                caption: 'proven in the crucible of trial',
+                sealText: String(nextTier || 'E').slice(0, 3),
+                ledger: [
+                    { label: 'Was', value: oldClassName },
+                    { label: 'Now', value: chosen.name },
+                    { label: 'Tier', value: nextTier || 'EVOLVED' },
+                ],
+                players: [
+                    { name: 'Skill Points', xp: `+${bonusPoints}`, zeni: '' },
+                    ...(user?.adventurerRank
+                        ? [{ name: 'Guild Rank', xp: user.adventurerRank, zeni: '' }]
+                        : []),
+                ],
+            });
+            if (evolveBuf) {
+                return sock.sendMessage(chatId, {
+                    image: evolveBuf,
+                    caption: successMsg,
+                    mimetype: 'image/png',
+                });
+            }
+        }
+    } catch (cardErr) {
+        console.error('[Evolve] Portrait trial card failed (non-fatal):', cardErr.message);
+    }
+
     return sock.sendMessage(chatId, { text: successMsg });
 }
 

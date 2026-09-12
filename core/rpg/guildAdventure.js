@@ -8303,7 +8303,45 @@ async function endAdventure(sock, sessionKey, victory = true) {
       trialSuccessMsg += `🎁 *Tier Bonus:* +${bonusPoints} Skill Points\n\n`;
       trialSuccessMsg += `🌳 \`${botConfig.getPrefix()} skill tree\` to continue your path!`;
 
-      await sock.sendMessage(chatId, { text: trialSuccessMsg });
+      // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL, bg_TRIAL bake — same
+      // lamoot assets, portrait orientation, owner directive). Non-fatal —
+      // the plain text message below is the fallback.
+      let trialCardSent = false;
+      try {
+        const goServiceTrial = require('../utils/goImageService');
+        if (await goServiceTrial.isHealthy()) {
+          const trialBuf = await goServiceTrial.generatePortraitCard({
+            kind: 'TRIAL',
+            nickname: player.name || economy.getDisplayName(player.jid),
+            caption: 'proven in the crucible of trial',
+            sealText: String(nextClass.tier || 'E').slice(0, 3),
+            ledger: [
+              { label: 'Was', value: oldClassName },
+              { label: 'Now', value: nextClass.name },
+              { label: 'Tier', value: nextClass.tier || 'EVOLVED' },
+            ],
+            players: [
+              { name: 'Skill Points', xp: `+${bonusPoints}`, zeni: '' },
+              ...(user?.adventurerRank
+                ? [{ name: 'Guild Rank', xp: user.adventurerRank, zeni: '' }]
+                : []),
+            ],
+          });
+          if (trialBuf) {
+            await sock.sendMessage(chatId, {
+              image: trialBuf,
+              caption: trialSuccessMsg,
+              mimetype: 'image/png',
+            });
+            trialCardSent = true;
+          }
+        }
+      } catch (trialCardErr) {
+        console.error('[Trial] Portrait trial card failed (non-fatal):', trialCardErr.message);
+      }
+      if (!trialCardSent) {
+        await sock.sendMessage(chatId, { text: trialSuccessMsg });
+      }
 
       // ─────────────────────────────────────────────────────────────────
       //  💡 GLOBAL ANNOUNCEMENT — first Dragon God ascension.

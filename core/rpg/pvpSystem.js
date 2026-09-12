@@ -1259,11 +1259,42 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                       `   ↳ ⭐ +${xpGain} XP` +
                       (duel._bountyClaimMsg || '');
 
-        return { 
-            success: true, 
-            finished: true, 
+        // 🎴 2026-09-12 (owner: "no card on forfeit"): forfeit endings render
+        // the same portrait DUEL card as KO endings, stamped BY FORFEIT
+        // (Go-side forfeit pill). Non-fatal — text-only on any failure.
+        let fleeImage = null;
+        try {
+            const goService = require('../utils/goImageService');
+            if (await goService.isHealthy()) {
+                const pot = duel.stake > 0 ? duel.stake * 2 : Math.floor(150 + (currentPlayer.level * 40));
+                const buf = await goService.generatePortraitCard({
+                    kind: 'DUEL',
+                    nickname: opponent.name,
+                    caption: 'won as the opponent fled the field',
+                    sealText: String(opponent.level || 1),
+                    forfeit: true,
+                    winnerClass: String(opponent.class?.id || opponent.class || '').toUpperCase(),
+                    winnerIndex: Number(opponent.spriteIndex) || 0,
+                    loserClass: String(currentPlayer.class?.id || currentPlayer.class || '').toUpperCase(),
+                    loserIndex: Number(currentPlayer.spriteIndex) || 0,
+                    ledger: [
+                        { label: 'Result', value: 'BY FORFEIT' },
+                        { label: 'Prize', value: `+${pot.toLocaleString()} ${ZENI}` },
+                        { label: 'Glory', value: `+${xpGain} XP` },
+                    ],
+                });
+                if (buf) fleeImage = { success: true, buffer: buf };
+            }
+        } catch (fleeCardErr) {
+            console.error('[PvP] Forfeit portrait card failed (non-fatal):', fleeCardErr.message);
+        }
+
+        return {
+            success: true,
+            finished: true,
             fled: true,
-            message: fleeMsg 
+            message: fleeMsg,
+            image: fleeImage,
         };
     } else if (action === 'item') {
         // 💡 NEW 2026-08-05: In summon duel mode, items are disabled (summons
