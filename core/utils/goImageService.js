@@ -796,6 +796,30 @@ class GoImageService {
   }
 
   /*
+   * Generate PORTRAIT event card (600x1000) — NEW 2026-09-12
+   * Same lamoot parchment family as craft/hunt/fish/decree, but portrait
+   * orientation. kind: "DUEL" (pvp result) | "QUEST" (dungeon tally).
+   * Payload: {kind, nickname, caption, sealText, ledger[{label,value}],
+   *           players[{name,xp,zeni}], winnerClass, winnerIndex,
+   *           loserClass, loserIndex}
+   * Returns PNG buffer or null (callers fall back to text).
+   */
+  async generatePortraitCard(data) {
+    try {
+      const response = await this.client.post("/api/cards/portrait", data, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Portrait Card Error:", error.message);
+      return null;
+    }
+  }
+
+  /*
    * Generate Profile Card Image
    */
   async generateProfileCard(data) {

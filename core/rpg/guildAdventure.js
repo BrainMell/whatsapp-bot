@@ -4154,14 +4154,19 @@ async function processCombatTurn(sock, sessionKey) {
             (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
             `⚠️ *${activeActor.name}* grows more violent!`;
         }
-        // 💡 NERF (2026-09-12): telegraph the cast 3 turns ahead so healers
-        // can top the party up. Previously the one-shot landed with zero warning.
-        if (state.turnCount === 28) {
+        // 💡 RAID-ONLY (2026-09-12, owner directive): Total Annihilation was
+        // designed as a RAID-boss mechanic — a party survival puzzle (healers
+        // top up, CC the boss, spread the 70% hit). It should NEVER have been
+        // reachable by SOLO bosses: a lone player has no healer, no meat
+        // shields and no revive buffer. Gate the whole package (telegraph +
+        // cast) on group dungeons (state.solo === false). Solo quests and
+        // Abyss (both state.solo === true) keep only the +5% ATK enrage.
+        if (!state.solo && state.turnCount === 28) {
           state.pendingStatusMsg =
             (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
             `☠️ *${activeActor.name}* is channeling TOTAL ANNIHILATION — brace yourselves!`;
         }
-        if (state.turnCount > 30) {
+        if (!state.solo && state.turnCount > 30) {
           // 💡 NERF (2026-09-12): TOTAL ANNIHILATION reworked — see the
           // applyTotalAnnihilation helper. Casts re-arm 10 turns apart.
           const castDue =
@@ -8381,6 +8386,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
   };
   const _baseGp = rankGpMap[state.dungeonRank] || 1;
 
+  // 💡 NEW 2026-09-12: per-player rows for the PORTRAIT quest-complete card
+  // (bg_QUEST family). Collected in the reward loop below; empty → text-only.
+  const portraitPlayers = [];
   for (const player of state.players) {
    try {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
@@ -8426,6 +8434,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
         totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
       }
       msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
 
       economy.addMoney(player.jid, totalGoldThisRun);
       // 💡 P4 Item 5: Increment daily quest count when quest completes
@@ -8466,6 +8475,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
     } else {
       // Dead player — no gold, no guild bonus
       msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: 0\n  🏅 GP: +0\n  💀 Fallen\n\n`;
+      portraitPlayers.push({ name: `${player.name} (fallen)`, xp: `+${Number(finalXP || 0).toLocaleString()} XP`, zeni: `+0 ${economy.getZENI ? economy.getZENI() : 'Z'}` });
       // 💡 FIX #1 (PRIMARY BUG): Dead-but-carried player was ALWAYS getting
       // questsFailed++ here — even when the party WON. A player who died
       // in encounter 2 but was carried to victory by their party would
@@ -8540,10 +8550,44 @@ async function endAdventure(sock, sessionKey, victory = true) {
     msg += `\n🏅 *PERMADEATH MODE CONQUERED!*\n`;
   }
 
-  try {
-    await sock.sendMessage(state.chatId, { text: msg });
-  } catch (err) {
-    console.error("Failed to send adventure end message:", err.message);
+  // 💡 NEW 2026-09-12: PORTRAIT quest-complete card (lamoot parchment family,
+  // 600x1000 — bg_QUEST + /api/cards/portrait). Victory runs only; Abyss and
+  // reward-loop failures fall back to the classic text summary below.
+  let questCardSent = false;
+  if (victory && !state.isAbyss && portraitPlayers.length > 0) {
+    try {
+      const goService = require('../utils/goImageService');
+      const fmt = (n) => Number(n || 0).toLocaleString();
+      const ZS = economy.getZENI ? economy.getZENI() : 'Z';
+      const buf = await goService.generatePortraitCard({
+        kind: 'QUEST',
+        nickname: state.players[0]?.name || 'The Party',
+        caption: narration || '',
+        sealText: String(state.dungeonRank || 'F'),
+        ledger: [
+          { label: 'Monsters Slain', value: fmt(state.stats?.monstersKilled) },
+          { label: 'Bosses Defeated', value: fmt(state.stats?.bossesDefeated) },
+          { label: 'Treasures Found', value: fmt(state.stats?.treasuresFound) },
+          { label: 'Damage Dealt', value: fmt(totalDamage) },
+          { label: 'Healing Done', value: fmt(totalHealed) },
+        ],
+        players: portraitPlayers.slice(0, 4),
+      });
+      if (buf) {
+        await sock.sendMessage(state.chatId, { image: buf, caption: msg });
+        questCardSent = true;
+      }
+    } catch (cardErr) {
+      console.error('[Quest] Portrait quest card failed (non-fatal):', cardErr.message);
+    }
+  }
+
+  if (!questCardSent) {
+    try {
+      await sock.sendMessage(state.chatId, { text: msg });
+    } catch (err) {
+      console.error("Failed to send adventure end message:", err.message);
+    }
   }
 
   state.active = false;

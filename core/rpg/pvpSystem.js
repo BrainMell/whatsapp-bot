@@ -781,7 +781,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         const result = await finishDuel(chatId, duel, opponent, currentPlayer);
         activeDuels.delete(chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
-        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg };
+        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg, image: result?.image || undefined };
     }
 
     if (skipTurn) {
@@ -1515,7 +1515,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         const result = await finishDuel(chatId, duel, winner, loser);
         activeDuels.delete(chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
-        return { success: true, finished: true, message: actionResult + '\n\n' + resultMsg };
+        return { success: true, finished: true, message: actionResult + '\n\n' + resultMsg, image: result?.image || undefined };
     }
 
     // ── Advance turn ──────────────────────────────
@@ -1745,12 +1745,15 @@ async function finishDuel(chatId, duel, winner, loser) {
     const xpGain = Math.floor(80 + (loser.level * 15));
 
     let rewardMsg = '';
+    let prizeValue = 0; // 💡 2026-09-12: for the portrait DUEL result card ledger
     if (duel.stake > 0) {
         const pot = duel.stake * 2;
+        prizeValue = pot;
         economy.addMoney(winner.jid, pot);
         rewardMsg = `💰 Won ${ZENI}${pot.toLocaleString()} (staked pot)`;
     } else {
         const goldBonus = Math.floor(150 + (loser.level * 40));
+        prizeValue = goldBonus;
         economy.addMoney(winner.jid, goldBonus);
         rewardMsg = `💰 ${ZENI}${goldBonus.toLocaleString()} prize`;
     }
@@ -1857,8 +1860,46 @@ async function finishDuel(chatId, duel, winner, loser) {
     msg += `🎁 *Rewards:*\n`;
     msg += `   ↳ ${rewardMsg}\n`;
     msg += `   ↳ ⭐ +${xpGain} XP\n` + bountyClaimMsg;
-    
-    return msg;
+
+    // 💡 NEW 2026-09-12: PORTRAIT duel result card (lamoot family, 600x1000).
+    // Non-fatal: any render failure falls back to the text-only result above.
+    let image = null;
+    try {
+        const goService = require('../utils/goImageService'); // singleton
+        const bountyLine = bountyClaimMsg
+            ? bountyClaimMsg.replace(/\*/g, '').split('\n').map(s => s.trim()).filter(Boolean)[0] || ''
+            : '';
+        // word-boundary-aware slice (no mid-word cuts on the card ledger)
+        let bountyShort = '';
+        if (bountyLine) {
+            bountyShort = bountyLine.slice(0, 26);
+            if (bountyLine.length > 26) {
+                const cut = bountyShort.lastIndexOf(' ');
+                bountyShort = (cut > 8 ? bountyShort.slice(0, cut) : bountyShort).trim() + '...';
+            }
+        }
+        const buf = await goService.generatePortraitCard({
+            kind: 'DUEL',
+            nickname: winner.name,
+            caption: ['the arena remembers', 'another crown claimed', 'the guild applauds'][Math.floor(Math.random() * 3)],
+            sealText: String(winner.level || 1),
+            winnerClass: String(winner.class?.id || winner.class || '').toUpperCase(),
+            winnerIndex: Number(winner.spriteIndex) || 0,
+            loserClass: String(loser.class?.id || loser.class || '').toUpperCase(),
+            loserIndex: Number(loser.spriteIndex) || 0,
+            ledger: [
+                { label: 'Defeated', value: String(loser.name || 'Foe') },
+                { label: 'Prize', value: `+${prizeValue.toLocaleString()} ${ZENI}` },
+                { label: 'Glory', value: `+${xpGain} XP` },
+                ...(bountyShort ? [{ label: 'Bounty', value: bountyShort }] : []),
+            ].slice(0, 4),
+        });
+        if (buf) image = { success: true, buffer: buf };
+    } catch (cardErr) {
+        console.error('[PvP] Duel portrait card failed (non-fatal):', cardErr.message);
+    }
+
+    return { message: msg, image };
 }
 
 // ==========================================
