@@ -2745,6 +2745,59 @@ function applyEffectTicks(entity) {
   return messages;
 }
 
+// 💡 NERF (2026-09-12): TOTAL ANNIHILATION rework — pure helper (unit-testable,
+// exported below). Mutates state; returns { fizzled, wiped, msg }.
+// OLD behavior: every living player was instantly set to HP 0 the first boss
+// turn after turnCount 30 — a guaranteed, undodgeable party wipe.
+// NEW behavior:
+//   • damage = 70% of maxHp per cast (survivable from full HP — healing and
+//     shields now matter; players already below 70% HP can still die)
+//   • crowd control on the boss (freeze/stun/sleep/charm) FIZZLES the cast —
+//     CC is now real counterplay against the doom clock
+//   • the caller re-arms casts 10 turns apart (lastAnnihilationTurn) and a
+//     telegraph warning fires at turnCount 28 (see the turn loop)
+// Anti-stall pressure is kept: the party still cannot turtle forever.
+function applyTotalAnnihilation(state) {
+  const boss = state.activeCombatant || { name: "The Boss", statusEffects: [] };
+  const res = { fizzled: false, wiped: false, msg: "" };
+  const cc = (boss.statusEffects || []).find((e) =>
+    ["freeze", "stun", "sleep", "charm"].includes(e.type),
+  );
+  // The attempt is consumed whether it casts or fizzles (re-arm window).
+  state.lastAnnihilationTurn = state.turnCount;
+  if (cc) {
+    res.fizzled = true;
+    res.msg =
+      `🛡️ *${boss.name}* staggers mid-cast — TOTAL ANNIHILATION FIZZLES! ` +
+      `(${String(cc.name || cc.type || "crowd control").toUpperCase()} interrupted it)`;
+    return res;
+  }
+  let msg = `💀 *${boss.name}* UNLEASHING TOTAL ANNIHILATION!\n\n`;
+  let survivors = 0;
+  (state.players || []).forEach((p) => {
+    if (!p.stats || p.stats.hp <= 0) return; // already dead
+    // 💡 was: damage = hp + 50% maxHp overkill, hp forced to 0 (instant death).
+    // Now: 70% of maxHp — full-HP parties survive at 30%.
+    const damage = Math.max(1, Math.floor((p.stats.maxHp || 1) * 0.7));
+    p.stats.hp -= damage;
+    if (p.stats.hp <= 0) {
+      p.stats.hp = 0;
+      p.isDead = true;
+      msg += `💥 ${p.name} takes *${damage}* damage — SLAIN! (HP: 0)\n`;
+    } else {
+      survivors++;
+      msg += `💥 ${p.name} takes *${damage}* damage! (HP: ${p.stats.hp}/${p.stats.maxHp})\n`;
+    }
+  });
+  if (survivors > 0) {
+    msg +=
+      `\n🩸 ${survivors} ${survivors === 1 ? "adventurer survives" : "adventurers survive"} the blast — barely.`;
+  }
+  res.msg = msg;
+  res.wiped = !(state.players || []).some((p) => p.stats && p.stats.hp > 0);
+  return res;
+}
+
 function tickDurations(entity) {
   let messages = [];
 
@@ -4101,22 +4154,50 @@ async function processCombatTurn(sock, sessionKey) {
             (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
             `⚠️ *${activeActor.name}* grows more violent!`;
         }
+        // 💡 NERF (2026-09-12): telegraph the cast 3 turns ahead so healers
+        // can top the party up. Previously the one-shot landed with zero warning.
+        if (state.turnCount === 28) {
+          state.pendingStatusMsg =
+            (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
+            `☠️ *${activeActor.name}* is channeling TOTAL ANNIHILATION — brace yourselves!`;
+        }
         if (state.turnCount > 30) {
-          // 💡 FIX: Show damage values instead of silently setting HP to 0.
-          // Calculate overkill damage so players can see what happened.
-          let annihilationMsg = `💀 *${activeActor.name}* UNLEASHING TOTAL ANNIHILATION!\n\n`;
-          state.players.forEach((p) => {
-            if (p.stats.hp <= 0) return; // already dead
-            const damage = p.stats.hp + Math.floor(p.stats.maxHp * 0.5); // overkill
-            p.stats.hp = 0;
-            p.isDead = true;
-            annihilationMsg += `💥 ${p.name} takes *${damage}* damage! (HP: 0)\n`;
-          });
-          try {
-            await sock.sendMessage(state.chatId, { text: annihilationMsg });
-          } catch (e) {}
-          await endCombat(sock, false, sessionKey);
-          return;
+          // 💡 NERF (2026-09-12): TOTAL ANNIHILATION reworked — see the
+          // applyTotalAnnihilation helper. Casts re-arm 10 turns apart.
+          const castDue =
+            !state.lastAnnihilationTurn ||
+            state.turnCount - state.lastAnnihilationTurn >= 10;
+          if (castDue) {
+            const ann = applyTotalAnnihilation(state);
+            try {
+              await sock.sendMessage(state.chatId, { text: ann.msg });
+            } catch (e) {}
+            if (ann.wiped) {
+              await endCombat(sock, false, sessionKey);
+              return;
+            }
+            // The cast (or fizzle) consumes the boss's turn — mirror the
+            // normal turn housekeeping: effect ticks, death check, duration
+            // ticks, then advance without a normal boss action.
+            const annStatusMsgs = applyEffectTicks(activeActor);
+            if (annStatusMsgs.length > 0) {
+              state.pendingStatusMsg = state.pendingStatusMsg
+                ? state.pendingStatusMsg + "\n" + annStatusMsgs.join("\n")
+                : annStatusMsgs.join("\n");
+            }
+            if (activeActor.stats.hp <= 0) {
+              await handleDeath(sock, activeActor, sessionKey);
+              if (await checkCombatEnd(sock, state, sessionKey)) return;
+              continue;
+            }
+            const annExpireMsgs = tickDurations(activeActor);
+            if (annExpireMsgs.length > 0) {
+              state.pendingStatusMsg = annExpireMsgs.join("\n");
+            }
+            await nextTurn(sock, null, sessionKey);
+            await new Promise((r) => setTimeout(r, state.solo ? 1000 : 2500));
+            continue;
+          }
         }
       }
 
@@ -10426,6 +10507,7 @@ module.exports = {
   gameStates,
   calculateDamage,
   handleDeath,
+  applyTotalAnnihilation,
   // 💡 NEW 2026-08-07: Export for summonAI to generate combat images + full skill effects
   nextTurn,
   applyAbilityEffect,
