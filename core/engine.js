@@ -4954,6 +4954,58 @@ What to do:
             { quoted: m },
           );
         }
+
+        // 4. 💡 2026-09-12: adventurer RANK-UP → ROYAL DECREE parchment card
+        // (same family as the Royal Decree profile card). updateAdventurerRank is
+        // promote-if-higher, so whichever system checks first (dungeon summary,
+        // mission claim, or this hook) is the ONLY announcer — no duplicates.
+        try {
+          const rankUp = await economy.updateAdventurerRank(userId);
+          if (rankUp && rankUp.ranked_up) {
+            const rd = rankUp.rank_data || {};
+            const cap =
+              `👑 *ROYAL DECREE*\n` +
+              `———————————\n` +
+              `${rd.icon || '⚜️'} By decree of the Adventurers' Guild,\n` +
+              `you are elevated to *${rankUp.new_rank}-Rank*!\n` +
+              `▫️ Promotion: ${rankUp.old_rank} → ${rankUp.new_rank}` +
+              (rankUp.guild_bonus_gp ? `\n🎁 Guild perk: +1 GP` : ``);
+            let decreeSent = false;
+            try {
+              const decreeCard = await goService.generateTransactionCard({
+                nickname: economy.getDisplayName(userId),
+                type: "DECREE",
+                amount: 1,
+                newWallet: 0,
+                newBank: 0,
+                zeniSymbol: economy.getZENI(),
+                itemName: rd.name || `${rankUp.new_rank}-Rank`,
+                sealText: rankUp.new_rank,
+                details: `${rankUp.old_rank} -> ${rankUp.new_rank}`,
+                item: "keep rising - the guild watches"
+              });
+              if (decreeCard) {
+                await sock.sendMessage(
+                  chatId,
+                  { image: decreeCard, caption: BOT_MARKER + cap },
+                  { quoted: m },
+                );
+                decreeSent = true;
+              }
+            } catch (decreeErr) {
+              console.error('[DecreeCard] Render failed (non-fatal):', decreeErr.message);
+            }
+            if (!decreeSent) {
+              await sock.sendMessage(
+                chatId,
+                { text: BOT_MARKER + cap },
+                { quoted: m },
+              );
+            }
+          }
+        } catch (rankErr) {
+          console.error('❌ awardProgression rank check:', rankErr.message);
+        }
       } catch (err) {
         console.error("❌ awardProgression error:", err.message);
       }
@@ -9705,11 +9757,38 @@ _💡 Reply with another number from your search list!_`.trim();
                           msg += `▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}\n\n`;
                           msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
 
-                          await sock.sendMessage(
-                            chatId,
-                            { text: msg },
-                            { quoted: m },
-                          );
+                          // 💡 2026-09-12: FISH parchment card (same lamoot/decree family as brew/craft cards).
+                          // Falls back to the text banner if the Go render fails.
+                          let fishCardSent = false;
+                          try {
+                            const fishCard = await goService.generateTransactionCard({
+                              nickname: freshUser.nickname || economy.getDisplayName(senderJid),
+                              type: "FISH",
+                              amount: 1,
+                              newWallet: freshUser.wallet || 0,
+                              newBank: freshUser.bank || 0,
+                              zeniSymbol: economy.getZENI(),
+                              itemName: item.name || "Fish",
+                              details: "fresh catch - sell at HQ or craft with it"
+                            });
+                            if (fishCard) {
+                              await sock.sendMessage(
+                                chatId,
+                                { image: fishCard, caption: BOT_MARKER + msg },
+                                { quoted: m },
+                              );
+                              fishCardSent = true;
+                            }
+                          } catch (fishCardErr) {
+                            console.error('[FishCard] Render failed (non-fatal):', fishCardErr.message);
+                          }
+                          if (!fishCardSent) {
+                            await sock.sendMessage(
+                              chatId,
+                              { text: BOT_MARKER + msg },
+                              { quoted: m },
+                            );
+                          }
                           await awardProgression(senderJid, chatId);
                         } finally {
                           busyUsers.delete(senderJid);
