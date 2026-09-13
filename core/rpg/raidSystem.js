@@ -536,7 +536,13 @@ async function distributeRewards(raid) {
 
     if (i < 3) {
       // Top 3
-      xpReward = 500000;
+      // 💡 REBALANCED 2026-09-14 (owner order: level requirements ×5): these
+      // payouts were tuned for the pre-2026-08-16 exponential curve where
+      // 500K XP was 0.0015% of the road to L100. Under the polynomial curve
+      // they were HALF THE ENTIRE GAME in one raid (a player hit L81 at
+      // E-rank in days). Trimmed to fit the 400×L² curve:
+      // top placement ≈ 30% of a late level, participant ≈ 4%.
+      xpReward = 20000;
       goldReward = 50000; // 💡 Rebalanced 2026-08-17: was 200K = ~7 days SSS earnings for one placement.
       // 💡 Runes are now Abyss-exclusive drops. Raid rewards were the only
       // non-Abyss rune source, so the previously-guaranteed greater rune
@@ -546,18 +552,18 @@ async function distributeRewards(raid) {
       label = `🥇🥈🥉 Top ${i + 1}`;
     } else if (i < 10) {
       // Top 10
-      xpReward = 200000;
+      xpReward = 12000;
       goldReward = 25000; // 💡 Rebalanced 2026-08-17: trimmed proportionally.
       // (Runes removed — Abyss-exclusive now, see comment above.)
       label = `🏆 Top 10`;
     } else if (i < 50) {
       // Top 50
-      xpReward = 100000;
+      xpReward = 8000;
       goldReward = 10000; // 💡 Rebalanced 2026-08-17: trimmed proportionally.
       label = `🎖️ Top 50`;
     } else {
       // Everyone else
-      xpReward = 10000;
+      xpReward = 2500;
       goldReward = 5000;
       label = `⚔️ Participant`;
     }
@@ -588,7 +594,7 @@ async function distributeRewards(raid) {
       summary += `${label}: ${a.jid.split('@')[0]}\n  ⭐ ${xpReward.toLocaleString()} XP | 💰 ${goldReward.toLocaleString()} Zeni${runeDrop ? ' | 💎 Rune' : ''}\n`;
     }
   }
-  summary += `\n_${sorted.length - 10} other participants received 10K XP + 5K Zeni._`;
+  summary += `\n_${sorted.length - 10} other participants received 2.5K XP + 5K Zeni._`;
   return { summary };
 }
 
@@ -600,7 +606,10 @@ async function distributeConsolationRewards(raid) {
 
   for (const a of raid.attackers) {
     try {
-      progression.awardXP(a.jid, 10000);
+      // 💡 REBALANCED 2026-09-14 (owner order: level requirements ×5):
+      // was 10000 tuned for the old exponential curve — a single raid grant
+      // under the polynomial curve. Matches the participant payout below.
+      progression.awardXP(a.jid, 2500);
       // 💡 FIX 2026-08-31: check the return — silent failure paid nothing
       // while the message said everyone got consolation rewards.
       const consoPaid = economy.addMoney(a.jid, 5000, 'Raid consolation');

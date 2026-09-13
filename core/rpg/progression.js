@@ -198,21 +198,22 @@ function getUser(userId) {
 function getXPForLevel(level) {
     if (level <= 1) return 0;
 
-    // 💡 FIX P1 #1 (2026-08-16): Polynomial XP curve — replaces exponential.
-    // Old: floor(250 × 1.18^(L-1)) × milestoneMult — L100 = 32.6B XP (40M quests)
-    // New: floor(80 × L²) — L100 = 26.3M XP (33K quests)
-    // The polynomial shape removes the L75 cliff where progression became
-    // 100× slower per level. Early levels are slightly steeper (L10: 8K vs 4.2K
-    // old) but dramatically flatter at high levels (L75: 450K vs 433M old).
-    //
-    // Validation checkpoints from the audit:
-    //   L10:  80×100  = 8,000   (was 4,200)
-    //   L25:  80×625  = 50,000  (was 85,300)
-    //   L50:  80×2500 = 200,000 (was 6,000,000)
-    //   L75:  80×5625 = 450,000 (was 433,600,000)
-    //   L90:  80×8100 = 648,000 (was 6,160,000,000)
-    //   L100: 80×10000= 800,000 (was 32,590,000,000)
-    return Math.floor(80 * level * level);
+    // 💡 REBALANCE (2026-09-14, owner order): requirements ×5.
+    // Owner report: a player hit level 81 at E-rank within days of playing.
+    // Investigation: the 2026-08-16 polynomial curve (80×L²) left XP INFLOWS
+    // untouched — raid participation alone pays 10K–100K XP per event, so
+    // ~58 raids = max level. The curve is now floor(400 × L²), i.e. every
+    // level requires 5× the cumulative XP it did before:
+    //   L10:  400×100  = 40,000   (was 8,000)
+    //   L25:  400×625  = 250,000  (was 50,000)
+    //   L50:  400×2500 = 1,000,000 (was 200,000)
+    //   L75:  400×5625 = 2,250,000 (was 450,000)
+    //   L90:  400×8100 = 3,240,000 (was 648,000)
+    //   L100: 400×10000= 4,000,000 (was 800,000)
+    // Per-level cost rises progressively: 400×(2L+1) = 800L + 400 XP
+    // (L1→2: 1,200 XP … L99→100: 79,600 XP). Raid payouts were trimmed to
+    // match — see raidSystem.distributeRaidRewards.
+    return Math.floor(400 * level * level);
 }
 
 function getXPForNextLevel(userId) {

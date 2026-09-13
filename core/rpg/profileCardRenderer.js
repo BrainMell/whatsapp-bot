@@ -246,6 +246,13 @@ function buildCardData(params) {
   const pw = Math.max(0, Number(user?.pvpWins) || 0);
   const pl = Math.max(0, Number(user?.pvpLosses) || 0);
   const cls = (classData?.name || 'Adventurer');
+  // 💡 Owner rule 2026-09-14: XP is never shown as a bare percentage — the
+  // card must also show the actual XP requirement (progress / needed).
+  const pct = Math.round(params.xpPercent || 0);
+  const cur = Number(params.xpCurrent), need = Number(params.xpNeeded);
+  const XPX = Number.isFinite(cur) && Number.isFinite(need)
+    ? `${pct}% · ${fmtCompact(cur)}/${fmtCompact(need)}`
+    : `${pct}%`;
   return {
     NAME: displayName,
     CLS: cls.toUpperCase(),
@@ -257,13 +264,22 @@ function buildCardData(params) {
     PVPD: `${pw}W — ${pl}L`,
     PVPA: `${pw}W - ${pl}L`,
     PVPH: `${pw}W-${pl}L`,
-    XP: String(Math.round(params.xpPercent || 0)),
+    XP: String(pct),
+    XPX,
     GUILD: params.guildName || '',
     // 💡 OWNER RULE: cards show "[guild title] of [guild name]". The caller
     // resolves the title (custom title, else guild role). Defensive default
     // keeps the sentence grammatical if a caller passes a name but no title.
     GTITLE: params.guildTitle || (params.guildName ? 'Member' : ''),
   };
+}
+
+// compact XP numbers for card rows: 12,400 -> 12.4K, 3,240,000 -> 3.2M
+function fmtCompact(n) {
+  if (!Number.isFinite(n)) return '0';
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(Math.round(n));
 }
 
 function resolveTokens(tpl, D) {
@@ -464,7 +480,7 @@ async function runOps(ctx, ops, D, styleId) {
             ['icon_bow.png', 'PVP', D.PVPA],
           ];
           if (D.GUILD) rows.push(['icon_armor.png', 'GUILD', D.GUILD]);
-          rows.push(['icon_gemred.png', 'XP', `${D.XP}%`]);
+          rows.push(['icon_gemred.png', 'XP', D.XPX]);
           let fy = 250;
           for (const [icon, label, val] of rows) {
             const ic = await loadExtra(icon);

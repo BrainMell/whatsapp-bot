@@ -585,6 +585,10 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             level: charSheet?.level || 1,
             rank: rank,
             xpPercent: charSheet?.progressPercent || 0,
+            // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
+            // not just a percentage ("42% · 12.4K/29.6K")
+            xpCurrent: charSheet?.xpProgress || 0,
+            xpNeeded: charSheet?.xpForThisLevel || 0,
             pfpBuffer,
             prefix: getPrefix(),
             style: user.cardStyle,

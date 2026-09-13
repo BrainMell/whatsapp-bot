@@ -107,6 +107,10 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           level: sheet?.level || 1,
           rank: sheet?.adventurerRank || 'F',
           xpPercent: sheet?.progressPercent || 0,
+          // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
+          // not just a percentage ("42% · 12.4K/29.6K")
+          xpCurrent: sheet?.xpProgress || 0,
+          xpNeeded: sheet?.xpForThisLevel || 0,
           activeSummon,
           pfpBuffer,
           prefix: getPrefix(),
