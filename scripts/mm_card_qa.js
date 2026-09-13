@@ -2,8 +2,8 @@
 // Visual QA renders: leaderboard card (full 10 / overflow 9+more / empty) + lobby card with fee
 const path = require('path');
 const fs = require('fs');
-const cards = require(path.join('/home/z/my-project/wa-bot', 'core', 'games', 'murdermystery', 'cards.js'));
-const OUT = '/home/z/my-project/download/mm_qa';
+const cards = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'cards.js'));
+const OUT = process.env.MM_QA_OUT || path.join(__dirname, '..', '..', 'mm_card_qa_out');
 fs.mkdirSync(OUT, { recursive: true });
 
 function rows(n, startScore = 60) {
