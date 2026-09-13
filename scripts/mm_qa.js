@@ -19,6 +19,41 @@ require.cache[enginePath] = {
   },
 };
 
+// ---- economy stub: the manor now charges a Zeni entry fee at cast time ----
+// (the real economy module needs Mongo; QA pays with an in-memory purse)
+const economyPath = require.resolve(path.join(__dirname, '..', 'core', 'rpg', 'economy.js'));
+const QA_BALANCES = new Map();
+require.cache[economyPath] = {
+  id: economyPath, filename: economyPath, loaded: true,
+  exports: {
+    getBalance: (jid) => QA_BALANCES.get(String(jid)) || 0,
+    removeMoney: (jid, amt) => {
+      const k = String(jid);
+      const cur = QA_BALANCES.get(k) || 0;
+      if (cur < amt) return false;
+      QA_BALANCES.set(k, cur - amt);
+      return true;
+    },
+    addMoney: (jid, amt) => {
+      const k = String(jid);
+      QA_BALANCES.set(k, (QA_BALANCES.get(k) || 0) + amt);
+      return true;
+    },
+    getDisplayName: () => 'QA Guest',
+  },
+};
+QA_BALANCES.set('100000000000001@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000002@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000003@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000004@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000005@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000006@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000007@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000008@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000009@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000010@s.whatsapp.net', 1000000);
+QA_BALANCES.set('100000000000011@s.whatsapp.net', 1000000);
+
 const mm = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'));
 const system = require(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
 const characters = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'characters.js'));

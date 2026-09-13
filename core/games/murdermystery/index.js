@@ -29,6 +29,12 @@ const characters = require('./characters');
 const cases = require('./cases');
 const cards = require('./cards');
 
+// RPG economy (Zeni) — used for the manor's entry fee + refunds.
+// Optional by design: if the economy module is unavailable the manor
+// waives its price rather than refusing to open.
+let economy = null;
+try { economy = require('../../rpg/economy'); } catch (e) { economy = null; }
+
 // ---------- tunables ----------
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 11;        // character pool size
@@ -51,6 +57,26 @@ const WILL_MAX_LEN = 200;
 const SILENCE_TTL_MS = 12 * 3600000; // failsafe only — silence is released at case close
 const DM_SEND_DELAY_MS = 1100;       // pacing for role-card DM bursts
 const REVEAL_ROLE_ON_DEATH = false;  // configurable
+
+// ---------- the manor's price (cast fee) ----------
+const ENTRY_FEE_MIN = 10000;
+const ENTRY_FEE_MAX = 25000;
+const ENTRY_FEE_STEP = 500; // rolled in 500-Zeni steps at lobby open
+
+// ---------- all-time ledger (leaderboard) ----------
+// Global key: one shared process serves every bot instance, and entries are
+// user-keyed — a player's shadow follows them across every manor.
+const STATS_KEY = 'murder_mm_stats_v1';
+const LB_MAX_ROWS = 10;
+
+function rollEntryFee() {
+  const steps = Math.floor((ENTRY_FEE_MAX - ENTRY_FEE_MIN) / ENTRY_FEE_STEP);
+  return ENTRY_FEE_MIN + ENTRY_FEE_STEP * Math.floor(Math.random() * (steps + 1));
+}
+
+function fmtZeni(n) {
+  try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+}
 
 // per-bot persistence: instances must never clobber each other's games
 function botIdSafe() {
@@ -568,6 +594,7 @@ async function createLobby(ctx) {
     players: [{ jid: senderJid, name: ctx.senderName, char: null, role: 'CIVILIAN', alive: true }], // host auto-joins
     night: 0,
     rooms: cases.drawRooms(6),
+    entryFee: rollEntryFee(), // the manor's price tonight — host pays at cast
     bodies: [],
     searches: { night: 0, used: {} },
     killerTargetJid: null,
@@ -587,6 +614,9 @@ async function createLobby(ctx) {
   ensureWatchdog();
 
   const opener = cases.pick(cases.OPENING_LINES);
+  const feeLine = game.entryFee
+    ? `💰 Entry tonight: *${fmtZeni(game.entryFee)} Zeni* — the host pays when the doors lock\n`
+    : '';
   // the start message gets a card (user ask) — text fallback kept
   let lobbyCardOk = false;
   try {
@@ -597,6 +627,7 @@ async function createLobby(ctx) {
       maxPlayers: MAX_PLAYERS,
       openingLine: opener,
       prefix: ctx.prefix,
+      entryFee: game.entryFee,
     });
     if (buf) {
       lobbyCardOk = true;
@@ -605,6 +636,7 @@ async function createLobby(ctx) {
         `_“${opener}”_\n\n` +
         `• Join: \`${ctx.prefix} mm join\` · Leave: \`${ctx.prefix} mm leave\`\n` +
         `• Host begins with: \`${ctx.prefix} mm start\`\n` +
+        feeLine +
         `*${MIN_PLAYERS}–${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
         `⏱️ The lobby holds for 30 minutes.`);
     }
@@ -617,6 +649,7 @@ async function createLobby(ctx) {
       `• Leave: \`${ctx.prefix} mm leave\`\n` +
       `• Roster: \`${ctx.prefix} mm players\`\n` +
       `• Begin (host only): \`${ctx.prefix} mm start\`\n\n` +
+      feeLine +
       `*${MIN_PLAYERS}–${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
       `⏱️ The lobby holds for 30 minutes.`);
   }
@@ -670,6 +703,7 @@ async function showPlayers(ctx) {
     return sendGroup(sock, chatId,
       `${botMarker}📜 *GUEST LIST — ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
       `Host: @${g.host} · ${g.players.length}/${MIN_PLAYERS} minimum\n` +
+      `💰 Entry fee: *${fmtZeni(g.entryFee || 0)} Zeni* — the host pays when the doors lock\n` +
       `Begin: \`${g.prefix} mm start\``,
       { contextInfo: { mentionedJid: g.players.map((p) => p.jid) } });
   }
@@ -689,6 +723,26 @@ async function startGame(ctx) {
   if (g.players.length < MIN_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too few guests. The manor requires at least *${MIN_PLAYERS}*.`);
   if (g.players.length > MAX_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too many guests. The manor sleeps at most *${MAX_PLAYERS}*.`);
 
+  // ---- the manor's price: the host pays to cast the case (10k–25k Zeni) ----
+  const fee = g.entryFee || 0;
+  if (fee > 0 && economy) {
+    let purse = 0;
+    try { purse = economy.getBalance(senderJid) || 0; } catch (e) { purse = 0; }
+    if (purse < fee) {
+      return sendGroup(sock, chatId,
+        `${botMarker}💰 The manor's price to cast this case is *${fmtZeni(fee)} Zeni* — and your purse holds *${fmtZeni(purse)}*.\n` +
+        `The doors stay locked until someone can pay. Hand the keys to a wealthier guest (\`${g.prefix} mm leave\`, then rejoin), or earn your coin and return.`);
+    }
+    let paid = false;
+    try { paid = !!economy.removeMoney(senderJid, fee, 'Murder Mystery — manor entry fee'); } catch (e) { paid = false; }
+    if (!paid) {
+      return sendGroup(sock, chatId, `${botMarker}💰 The manor could not collect its fee — the doors stay locked. (If your purse is real, try again.)`);
+    }
+    g.feePaid = fee;         // charged once, at cast
+    g.feePaidBy = senderJid; // refund target if the case closes before the first dawn
+    g.firstDawnDone = false;
+  }
+
   // lock lobby, assign characters + secret roles
   const cast = characters.drawCast(g.players.length);
   const order = characters.shuffle(g.players.map((_, i) => i));
@@ -704,7 +758,7 @@ async function startGame(ctx) {
   persistGames();
   console.log(`🔪 [MurderMystery] game started in ${chatId} — ${g.players.length} players (roles dealt)`);
 
-  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked. Character envelopes are being sealed and delivered to every guest's DM…`);
+  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${fee > 0 ? ` — the manor collects its price: *${fmtZeni(fee)} Zeni*` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
 
   // mandatory private role cards — paced to respect the flood gods
   for (const p of g.players) {
@@ -1024,6 +1078,8 @@ async function resolveNight(sock, chatId, _reason) {
     outcome = 'saved';
     morningLine = cases.pick(cases.MORNING_SAVED_LINES);
     g.log.push({ night: g.night, saved: nameOf(victim) });
+    g.saves = g.saves || []; // ledger: the guardian earns credit for this save
+    g.saves.push({ guardianJid: guardian.jid, savedJid: victim.jid, night: g.night });
     console.log(`🔪 [MurderMystery] NIGHT ${g.night}: kill on ${normJid(victim.jid)} BLOCKED by guardian`);
     persistGames();
 
@@ -1140,6 +1196,7 @@ async function beginDiscussion(sock, chatId) {
   g.phase = PHASE.DISCUSSION;
   g.deadline = Date.now() + DISCUSS_MS;
   g.searches = { night: g.night, used: {} };
+  g.firstDawnDone = true; // the case is truly underway — entry fee no longer refundable
   g._resolving = false;
   g._resolving2 = false;
   persistGames();
@@ -1485,8 +1542,15 @@ async function resolveVote(sock, chatId, _reason) {
     eliminated.alive = false;
     eliminated.deathNight = g.night;
     eliminated.deathMethod = 'the vote of the house';
-    g.log.push({ night: g.night, condemned: nameOf(eliminated) });
+    g.log.push({ night: g.night, condemned: nameOf(eliminated), condemnedJid: eliminated.jid });
     silence(chatId, eliminated.jid);
+    // ledger: voters who named the killer correctly earn their sharp-vote credit
+    if (eliminated.role === 'KILLER') {
+      g.correctVoters = g.correctVoters || [];
+      for (const [voterJid, choice] of Object.entries(g.votes || {})) {
+        if (choice === eliminated.jid) g.correctVoters.push(normJid(voterJid));
+      }
+    }
     persistGames();
     console.log(`🔪 [MurderMystery] vote: ${normJid(eliminated.jid)} eliminated (${eliminated.role})`);
   }
@@ -1601,6 +1665,10 @@ async function declareWinner(sock, chatId, winner) {
     });
     system.set(`${ARCHIVE_KEY_BASE}_${botIdSafe()}`, archive.slice(0, 25));
   } catch (e) {}
+
+  // the all-time ledger remembers everyone (closed cases only)
+  recordMatchStats(g, winner);
+
   games.delete(chatId);
   persistGames();
   console.log(`🔪 [MurderMystery] game ended in ${chatId} — winner=${winner}`);
@@ -1618,6 +1686,132 @@ function finalCaption(g, winner, killer, survivors) {
     `Nobody was able to stop them.`;
 }
 
+// ============================================
+// ALL-TIME LEDGER — Hall of Shadows
+// Closed cases only. Wins, kills, saves,
+// finds and sharp votes are remembered per
+// player, forever, across every manor.
+// ============================================
+function tagFor(r) {
+  const bits = [];
+  if (r.kills) bits.push(`${r.kills} kill${r.kills === 1 ? '' : 's'}`);
+  if (r.saves) bits.push(`${r.saves} save${r.saves === 1 ? '' : 's'}`);
+  if (r.bodiesFound) bits.push(`${r.bodiesFound} find${r.bodiesFound === 1 ? '' : 's'}`);
+  if (r.correctVotes) bits.push(`${r.correctVotes} sharp vote${r.correctVotes === 1 ? '' : 's'}`);
+  return bits.slice(0, 2).join(' · ');
+}
+
+// write one finished case into the global ledger (idempotent per case:
+// declareWinner's ENDED guard means this fires exactly once per game)
+function recordMatchStats(g, winner) {
+  try {
+    const murderCount = (g.bodies || []).length; // every body is one kill by the killer
+    const findsBy = {};
+    for (const b of (g.bodies || [])) {
+      if (b.found && b.finderJid) findsBy[normJid(b.finderJid)] = (findsBy[normJid(b.finderJid)] || 0) + 1;
+    }
+    const savesBy = {};
+    for (const s of (g.saves || [])) savesBy[normJid(s.guardianJid)] = (savesBy[normJid(s.guardianJid)] || 0) + 1;
+    const sharpBy = {};
+    for (const v of (g.correctVoters || [])) sharpBy[v] = (sharpBy[v] || 0) + 1;
+
+    const stats = system.get(STATS_KEY, {}) || {};
+    for (const p of g.players) {
+      const n = normJid(p.jid);
+      if (!n) continue;
+      const row = stats[n] || { games: 0, wins: 0, losses: 0, survived: 0, murdered: 0, condemned: 0, kills: 0, saves: 0, bodiesFound: 0, correctVotes: 0, killerGames: 0, score: 0 };
+      const isKiller = p.role === 'KILLER';
+      const won = (winner === 'civ' && !isKiller) || (winner === 'killer' && isKiller);
+      row.games += 1;
+      if (won) row.wins += 1; else row.losses += 1;
+      if (p.alive) row.survived += 1;
+      else if (p.deathMethod === 'the vote of the house') row.condemned += 1;
+      else row.murdered += 1;
+      if (isKiller) { row.killerGames += 1; row.kills += murderCount; }
+      row.saves += savesBy[n] || 0;
+      row.bodiesFound += findsBy[n] || 0;
+      row.correctVotes += sharpBy[n] || 0;
+      if (p.name) row.name = String(p.name).slice(0, 32);
+      row.lastPlayed = Date.now();
+      row.score = row.wins * 5 + row.survived * 2 + row.kills * 3 + row.saves * 4 + row.bodiesFound + row.correctVotes * 3;
+      stats[n] = row;
+    }
+    system.set(STATS_KEY, stats);
+    console.log(`🔪 [MurderMystery] ledger updated — ${g.players.length} entries (${winner} win, ${murderCount} kill(s))`);
+  } catch (e) {
+    console.error('🔪 [MurderMystery] ledger update failed:', e.message);
+  }
+}
+
+function leaderboardCaption(meRank) {
+  let cap = `🕯️ *HALL OF SHADOWS* — the all-time ledger of ${cases.MANOR_NAME}.`;
+  if (meRank) {
+    cap += `\nYou stand *#${meRank.rank}* with *${fmtZeni(meRank.score)} pts* — ${meRank.wins} win${meRank.wins === 1 ? '' : 's'} in ${meRank.games} case${meRank.games === 1 ? '' : 's'}.`;
+  }
+  cap += `\n_Closed cases only. Every win, kill, save and sharp vote is remembered._`;
+  return cap;
+}
+
+function leaderboardText(rows, meRank, prefix) {
+  const lines = ['🕯️ *HALL OF SHADOWS — ' + cases.MANOR_NAME + '*', ''];
+  if (!rows.length) {
+    lines.push('The ledger is blank. No case has been closed yet.');
+    lines.push(`Open one: \`${prefix} mm create\` — and let the body count begin.`);
+  }
+  for (const r of rows) {
+    lines.push(`  *${r.rank}.* ${r.name}${r.you ? ' (you)' : ''} — *${fmtZeni(r.score)} pts*`);
+    lines.push(`      ${r.wins}W / ${r.games}G · ${r.winRate}%${r.tag ? ` · ${r.tag}` : ''}`);
+  }
+  if (meRank && meRank.rank > rows.length) {
+    lines.push('');
+    lines.push(`  You: *#${meRank.rank}* — ${fmtZeni(meRank.score)} pts (${meRank.wins}W / ${meRank.games}G)`);
+  }
+  lines.push('');
+  lines.push('_Wins +5 · survival +2 · kill +3 · save +4 · body found +1 · sharp vote +3_');
+  return lines.join('\n');
+}
+
+async function showLeaderboard(ctx) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const prefix = ctx.prefix || '.j';
+  let rows = [];
+  try {
+    const stats = system.get(STATS_KEY, {}) || {};
+    rows = Object.entries(stats).map(([jid, r]) => ({
+      jid,
+      name: r.name || `Guest ${jid.slice(-4)}`,
+      games: r.games || 0,
+      wins: r.wins || 0,
+      score: r.score || 0,
+      kills: r.kills || 0,
+      saves: r.saves || 0,
+      bodiesFound: r.bodiesFound || 0,
+      correctVotes: r.correctVotes || 0,
+      winRate: r.games ? Math.round((100 * (r.wins || 0)) / r.games) : 0,
+    }));
+    rows.sort((a, b) => b.score - a.score || b.wins - a.wins || b.winRate - a.winRate || String(a.name).localeCompare(String(b.name)));
+    rows.forEach((r, i) => { r.rank = i + 1; });
+  } catch (e) { /* empty ledger below */ }
+  const me = rows.find((r) => r.jid === normJid(senderJid)) || null;
+  const meRank = me ? { rank: me.rank, score: me.score, wins: me.wins, games: me.games } : null;
+  // leave the last row slot free when overflow exists, so the "…and N more"
+  // line never crowds the footer
+  const cardCap = rows.length > LB_MAX_ROWS ? LB_MAX_ROWS - 1 : LB_MAX_ROWS;
+  const top = rows.slice(0, cardCap).map((r) => ({ ...r, you: r.jid === normJid(senderJid), tag: tagFor(r) }));
+
+  let cardOk = false;
+  try {
+    const buf = await cards.renderLeaderboardCard({ manorName: cases.MANOR_NAME, rows: top, totalTracked: rows.length });
+    if (buf) {
+      cardOk = true;
+      await sendGroupImage(sock, chatId, buf, leaderboardCaption(meRank));
+    }
+  } catch (e) { /* text fallback */ }
+  if (!cardOk) {
+    await sendGroup(sock, chatId, `${botMarker}${leaderboardText(top, meRank, prefix)}`);
+  }
+}
+
 // ---------- force end ----------
 async function forceEnd(ctx) {
   const { sock, chatId, senderJid, botMarker } = ctx;
@@ -1627,7 +1821,16 @@ async function forceEnd(ctx) {
   if (normJid(senderJid) !== g.host && !ctx.isMod) {
     return sendGroup(sock, chatId, `${botMarker}🕯️ Only the host (@${g.host}) or a moderator may close the case early.`);
   }
-  await sendGroup(sock, chatId, `${botMarker}🕯️ The host has closed the case. The manor goes dark.`);
+  // the manor refunds its price if the case never reached the first dawn
+  let refundNote = '';
+  if (g.feePaid && !g.firstDawnDone && economy) {
+    try {
+      if (economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (case closed before dawn)')) {
+        refundNote = `\n💰 The unspent entry fee — *${fmtZeni(g.feePaid)} Zeni* — returns to the host's purse.`;
+      }
+    } catch (e) {}
+  }
+  await sendGroup(sock, chatId, `${botMarker}🕯️ The host has closed the case. The manor goes dark.${refundNote}`);
   unsilenceChat(chatId);
   clearTimers(chatId);
   games.delete(chatId);
@@ -1698,14 +1901,15 @@ function helpText(prefix) {
     `• \`${prefix} mm join\` — accept the invitation\n` +
     `• \`${prefix} mm leave\` — decline it\n` +
     `• \`${prefix} mm players\` — guest list\n` +
-    `• \`${prefix} mm start\` — host begins the mystery\n\n` +
+    `• \`${prefix} mm start\` — host begins the mystery (the host pays the manor's price: 10,000–25,000 Zeni)\n\n` +
     `*At dawn (group or DM):*\n` +
     `• \`${prefix} mm search <room n|name>\` — one search per guest, per day. Searches are public; the ghost's clue is not.\n` +
     `• \`${prefix} mm will <text>\` (DM) — seal your last words; the house reads them aloud if you die.\n\n` +
     `*In play (group):*\n` +
     `• \`${prefix} mm vote <n|name|skip>\` — cast your ballot (ballots are public)\n` +
     `• \`${prefix} mm status\` — the state of the case\n` +
-    `• \`${prefix} mm end\` — host/mod closes the case\n\n` +
+    `• \`${prefix} mm lb\` — the Hall of Shadows: every win, kill, save and sharp vote, remembered\n` +
+    `• \`${prefix} mm end\` — host/mod closes the case (refunded if the first dawn never came)\n\n` +
     `*At night (in your DM with the bot — 3 minutes):*\n` +
     `• \`${prefix} mm kill <n|name>\` — killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
     `• \`${prefix} mm investigate <n|name>\` — investigator only\n` +
@@ -1713,6 +1917,7 @@ function helpText(prefix) {
     `*If you dare (DM):*\n` +
     `• \`${prefix} mm taunt <message>\` — whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
     `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body; by day the house searches — the finder of the body inherits the ghost's clue about the killer's character. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
+    `*The wager:* the manor charges the host a price (10k–25k Zeni, rolled when the lobby opens) to cast a case — refunded only if the case closes before the first dawn. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
     `Roles: 1 Killer · 1 Investigator · 1 Guardian (5+ players) · the rest Civilians.\n` +
     `You receive a sealed role card in your DMs. Tell no one.`
   );
@@ -1752,6 +1957,9 @@ const SUB_FIXES = {
   protekt: 'protect', porotect: 'protect',
   vtoe: 'vote', vot: 'vote',
   strart: 'start', strat: 'start',
+  leaderbored: 'leaderboard', ladderboard: 'leaderboard', leadboard: 'leaderboard',
+  laderboard: 'leaderboard', learderboard: 'leaderboard', lederboard: 'leaderboard',
+  leadreboard: 'leaderboard', leaderboardd: 'leaderboard',
 };
 
 async function handleCommand(ctx) {
@@ -1832,6 +2040,13 @@ async function handleCommand(ctx) {
     case 'will':
     case 'lastwords':
       return submitWill(ctx, ctx.rest);
+    case 'lb':
+    case 'leaderboard':
+    case 'top':
+    case 'scoreboard':
+    case 'ranking':
+    case 'rankings':
+      return showLeaderboard(ctx);
     case 'help':
     case 'rules':
     case 'howto':
@@ -1868,6 +2083,11 @@ module.exports = {
     clearTimers,
     resolveRoom,
     roomListOf,
+    rollEntryFee,
+    fmtZeni,
+    STATS_KEY,
+    recordMatchStats,
+    showLeaderboard,
     PHASE,
     normJid,
   },

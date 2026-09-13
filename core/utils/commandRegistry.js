@@ -365,13 +365,14 @@ const COMMAND_REGISTRY = {
     { cmd: 'murder create', desc: 'Open a Murder Mystery lobby at Blackvale Manor (4-11 guests).', usage: 'murder create' },
     { cmd: 'murder join', desc: 'Accept the invitation and join the lobby.', usage: 'murder join' },
     { cmd: 'murder leave', desc: 'Decline the invitation and leave the lobby.', usage: 'murder leave' },
-    { cmd: 'murder players', desc: 'Show the guest list.', usage: 'murder players' },
-    { cmd: 'murder start', desc: 'Host begins the mystery: roles are sealed and dealt by DM.', usage: 'murder start' },
+    { cmd: 'murder players', desc: 'Show the guest list and tonight\'s entry fee.', usage: 'murder players' },
+    { cmd: 'murder start', desc: 'Host begins the mystery — the manor charges the host 10k-25k Zeni to cast.', usage: 'murder start' },
     { cmd: 'murder vote', desc: 'Cast your ballot during the vote (number, name, or skip).', usage: 'murder vote <n|name|skip>' },
     { cmd: 'murder status', desc: 'State of the case (in DM: your secret role + the living).', usage: 'murder status' },
     { cmd: 'murder kill', desc: 'KILLER only, in DM at night: choose tonight\'s victim.', usage: 'murder kill <n|name>' },
     { cmd: 'murder investigate', desc: 'INVESTIGATOR only, in DM at night: study one guest.', usage: 'murder investigate <n|name>' },
-    { cmd: 'murder end', desc: 'Host/moderator closes the case early.', usage: 'murder end' },
+    { cmd: 'murder end', desc: 'Host/moderator closes the case early (refunded before the first dawn).', usage: 'murder end' },
+    { cmd: 'murder lb', desc: 'Hall of Shadows — the all-time Blackvale ledger: wins, kills, saves, sharp votes.', usage: 'murder lb' },
     { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' }
   ],
   PowerScaling: [

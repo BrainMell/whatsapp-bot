@@ -1401,7 +1401,7 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
 }
 
 // Lobby opener — group card. The "start message" the house sees first.
-async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix }) {
+async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix, entryFee }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('manor');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -1432,14 +1432,107 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
     // invitation block
     ctx.font = '27px Type';
     ctx.fillStyle = C.amberHi;
-    ctx.fillText(`${prefix} mm join  —  accept the invitation`, LAND_W / 2, 680);
+    ctx.fillText(`${prefix} mm join  —  accept the invitation`, LAND_W / 2, 672);
     ctx.font = '27px Type';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`${prefix} mm start  —  begin once everyone is here`, LAND_W / 2, 730);
+    ctx.fillText(`${prefix} mm start  —  begin once everyone is here`, LAND_W / 2, 722);
+
+    // the manor's price — the host pays to cast the case (10k–25k Zeni)
+    if (entryFee != null) {
+      ctx.font = '27px Type';
+      ctx.fillStyle = C.amber;
+      ctx.fillText(`entry fee  ${fmtNo(entryFee)} Zeni  —  the host pays when the doors lock`, LAND_W / 2, 778);
+    }
 
     ctx.font = '26px Type';
     ctx.fillStyle = C.crimsonHi;
-    ctx.fillText('One of the guests is hiding a knife.', LAND_W / 2, 800);
+    ctx.fillText('One of the guests is hiding a knife.', LAND_W / 2, 828);
+
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// Hall of Shadows — the all-time ledger. Rows come pre-sorted and ranked:
+// { rank, name, score, wins, games, winRate, tag, you }
+async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg('gallery');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.7 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '27px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'THE LEDGER OF', LAND_W / 2, 118, 8);
+
+    ctx.font = '80px PF-Black';
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 18;
+    spaced(ctx, 'HALL OF SHADOWS', LAND_W / 2, 206, 6);
+    ctx.shadowColor = 'transparent';
+
+    ornament(ctx, LAND_W / 2, 258, 620);
+
+    ctx.font = 'italic 27px PF-MedIt';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`The worthy, the lucky and the dead — ${manorName}`, LAND_W / 2, 306);
+
+    if (!rows || !rows.length) {
+      ctx.font = 'italic 40px PF-MedIt';
+      ctx.fillStyle = C.ivory;
+      ctx.fillText('No case has been closed yet. The ledger waits.', LAND_W / 2, 520);
+      ctx.font = '26px EB-Reg';
+      ctx.fillStyle = C.ivoryDim;
+      ctx.fillText('Close one — and your name is written here in candlelight.', LAND_W / 2, 580);
+      footer(ctx, LAND_W, LAND_H, manorName);
+      return;
+    }
+
+    const rowTop = 356;
+    const rowH = 47;
+    ctx.textAlign = 'left';
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const y = rowTop + i * rowH;
+      const medal = r.rank <= 3;
+
+      ctx.font = '30px PF-Bold';
+      ctx.fillStyle = medal ? C.amberHi : C.ivoryFaint;
+      ctx.fillText(roman(r.rank), 132, y);
+
+      ctx.font = '26px EB-Semi';
+      ctx.fillStyle = r.you ? C.amberHi : C.ivory;
+      let nm = String(r.name || 'Guest');
+      if (nm.length > 20) nm = `${nm.slice(0, 19)}…`;
+      ctx.fillText(`${nm.toUpperCase()}${r.you ? ' — YOU' : ''}`, 225, y);
+
+      ctx.font = '19px EB-Reg';
+      ctx.fillStyle = C.ivoryFaint;
+      ctx.fillText(`${r.wins}W · ${r.games}G · ${r.winRate == null ? '—' : r.winRate + '%'}${r.tag ? ` · ${r.tag}` : ''}`, 225, y + 26);
+
+      ctx.textAlign = 'right';
+      ctx.font = '32px PF-Bold';
+      ctx.fillStyle = medal ? C.amberHi : C.ivory;
+      ctx.fillText(String(r.score), LAND_W - 132, y);
+      ctx.textAlign = 'left';
+
+      if (i < rows.length - 1) {
+        ctx.strokeStyle = 'rgba(236,226,200,0.14)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(132, y + 37);
+        ctx.lineTo(LAND_W - 132, y + 37);
+        ctx.stroke();
+      }
+    }
+
+    if (totalTracked > rows.length) {
+      ctx.textAlign = 'center';
+      ctx.font = '22px EB-Reg';
+      ctx.fillStyle = C.ivoryFaint;
+      ctx.fillText(`…and ${totalTracked - rows.length} more name${totalTracked - rows.length === 1 ? '' : 's'} in the ledger.`, LAND_W / 2, rowTop + rows.length * rowH + 26);
+    }
 
     footer(ctx, LAND_W, LAND_H, manorName);
   });
@@ -1560,6 +1653,7 @@ module.exports = {
   renderGhostClueCard,
   renderSearchCard,
   renderLobbyCard,
+  renderLeaderboardCard,
   renderTauntCard,
   renderWillCard,
   renderVictimDMCard,
