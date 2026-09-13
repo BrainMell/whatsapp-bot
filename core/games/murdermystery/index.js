@@ -1707,7 +1707,7 @@ async function payPrize(sock, chatId, g, winner, killer) {
   const headline = winner === 'killer'
     ? `💰 *THE MANOR PAYS* — the killer walks away with the purse:`
     : `💰 *THE MANOR PAYS* — *${fmtZeni(purse)} Zeni* split among the innocent guests:`;
-  await sendGroup(sock, chatId, `${botMarker}${headline}\n${lines.join('\n')}`, {
+  await sendGroup(sock, chatId, `${headline}\n${lines.join('\n')}`, {
     contextInfo: { mentionedJid: winners.map((w) => w.jid) },
   });
 }

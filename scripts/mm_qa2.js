@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // ============================================
 // MURDER MYSTERY — QA SUITE 2
-// The manor's price (Zeni entry fee) + the Hall of Shadows (all-time ledger)
+// The manor's PRIZE purse (owner 2026-09-14: money prize, no entry fee)
+// + the Hall of Shadows (all-time ledger)
 // + multiple randomized full game loops. Offline, mock sock, stub economy.
 // Run: node scripts/mm_qa2.js
 // Exits non-zero on any failed assertion.
@@ -207,66 +208,46 @@ async function main() {
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
 
-  // =========== 1. FEE: roll, display, broke host, charge ===========
-  console.log("\n===== 1. THE MANOR'S PRICE =====");
+  // =========== 1. PRIZE: roll, display, free entry ===========
+  console.log("\n===== 1. THE MANOR'S PURSE =====");
   {
     const sock = makeSock(); QA_SOCK = sock;
     const roster = players(5, 1);
     await openAndFill(sock, CHATS[0], roster);
     const g = mm._internal.getGame(CHATS[0]);
-    ok(g.entryFee >= 10000 && g.entryFee <= 25000, `1.1 fee rolled in range (${g.entryFee})`);
-    ok(g.entryFee % 500 === 0, '1.2 fee rolls in 500-Zeni steps');
-    ok(groupText(sock, /Entry tonight: \*[\d,]+ Zeni\*/), '1.3 lobby card caption announces the fee');
+    ok(g.prize >= 10000 && g.prize <= 25000, `1.1 purse rolled in range (${g.prize})`);
+    ok(g.prize % 500 === 0, '1.2 purse rolls in 500-Zeni steps');
+    ok(groupText(sock, /Tonight's purse: \*[\d,]+ Zeni\*/), '1.3 lobby card caption announces the purse');
     ok(sock.out.some((m) => m.isGroup && m.image && /OPENS ITS DOORS/.test(m.text)), '1.4 lobby still carries its card');
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'players' }));
-    ok(groupText(sock, /Entry fee: \*[\d,]+ Zeni\*/), '1.5 guest list shows the fee');
+    ok(groupText(sock, /Tonight's purse: \*[\d,]+ Zeni\*/), '1.5 guest list shows the purse');
 
-    // broke host cannot cast
+    // anyone can play — a BROKE host casts freely, nothing is ever charged
     const host = roster[0];
-    const brokeBalance = QA_BALANCES.get(host.jid);
     QA_BALANCES.set(host.jid, 0);
     const beforePlayers = g.players.length;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'start', sender: host.jid, name: host.name }));
-    ok(groupText(sock, /your purse holds \*0\*/), '1.6 broke host refused with purse shown');
-    ok(mm._internal.getGame(CHATS[0]) && mm._internal.getGame(CHATS[0]).phase === 'LOBBY', '1.7 lobby intact after refused cast');
-    ok(mm._internal.getGame(CHATS[0]).players.length === beforePlayers, '1.8 no roles dealt on refused cast');
-    ok(QA_BALANCES.get(host.jid) === 0, '1.9 no coins taken from a broke host');
-
-    // funded host casts — charged exactly the rolled fee
-    QA_BALANCES.set(host.jid, brokeBalance);
-    await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'start', sender: host.jid, name: host.name }));
     const g2 = mm._internal.getGame(CHATS[0]);
-    ok(g2 && (g2.phase === 'NIGHT' || g2.phase === 'STARTING'), '1.10 funded host casts — night begins');
-    ok(QA_BALANCES.get(host.jid) === brokeBalance - g2.entryFee, `1.11 host charged exactly ${g2.entryFee}`);
-    ok(groupText(sock, /collects its price: \*[\d,]+ Zeni\*/), '1.12 doors-locked message names the price');
-    ok(QA_TX.some((t) => t.jid === host.jid && t.amt === -g2.entryFee && /entry fee/i.test(t.desc)), '1.13 ledger transaction recorded');
+    ok(g2 && (g2.phase === 'NIGHT' || g2.phase === 'STARTING'), '1.6 broke host casts freely — night begins');
+    ok(mm._internal.getGame(CHATS[0]).players.length === beforePlayers, '1.7 all guests dealt in');
+    ok(QA_BALANCES.get(host.jid) === 0, '1.8 no coins taken from anyone');
+    ok(!QA_TX.some((t) => t.amt < 0 && /entry fee|manor/i.test(t.desc)), '1.9 no charge transaction at cast');
+    ok(groupText(sock, /posts a purse of \*[\d,]+ Zeni\*/), '1.10 doors-locked message names the purse');
 
-    // refund path: close before the first dawn
-    const afterCharge = QA_BALANCES.get(host.jid);
+    // close before any resolution: game torn down, still nobody paid anything
+    const notesBefore = sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'end', sender: host.jid, name: host.name }));
-    ok(groupText(sock, /returns to the host's purse/), '1.14 refund announced on pre-dawn close');
-    ok(QA_BALANCES.get(host.jid) === afterCharge + g2.entryFee, '1.15 fee fully refunded before first dawn');
-    ok(!mm._internal.getGame(CHATS[0]), '1.16 game torn down');
-    ok(stats(host.jid) === null || stats(host.jid).games === 0, '1.17 aborted cast records NO ledger stats');
+    ok(!mm._internal.getGame(CHATS[0]), '1.11 game torn down');
+    ok(QA_BALANCES.get(host.jid) === 0, '1.12 force-end pays nobody and charges nobody');
+    ok(sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length === notesBefore, '1.13 no legacy refund note on a new game');
+    ok(stats(host.jid) === null || stats(host.jid).games === 0, '1.14 aborted cast records NO ledger stats');
 
-    // no refund once the first dawn happened
+    // a second lobby rolls its own purse
     const roster2 = players(5, 2);
     await openAndFill(sock, CHATS[1], roster2);
     const g3 = mm._internal.getGame(CHATS[1]);
-    const host2 = roster2[0];
-    await mm.handleCommand(ctxOf(sock, CHATS[1], { sub: 'start', sender: host2.jid, name: host2.name }));
-    const gg = mm._internal.getGame(CHATS[1]);
-    gg.extendedTonight = true;
-    await nightActions(sock, gg, {}); // reaches discussion = first dawn done
-    const balBefore = QA_BALANCES.get(host2.jid);
-    const fee3 = g3.entryFee;
-    const notesBefore = sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length;
-    await mm.handleCommand(ctxOf(sock, CHATS[1], { sub: 'end', sender: host2.jid, name: host2.name }));
-    const notesAfter = sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length;
-    ok(QA_BALANCES.get(host2.jid) === balBefore, '1.18 NO refund after the first dawn');
-    ok(notesAfter === notesBefore, '1.19 no new refund note after dawn');
-    ok(QA_TX.filter((t) => t.jid === host2.jid && /refund/i.test(t.desc)).length === 0, '1.20 no refund transaction after dawn');
-    ok(fee3 >= 10000 && fee3 <= 25000, '1.21 second fee also in range');
+    ok(g3.prize >= 10000 && g3.prize <= 25000, `1.15 second purse also in range (${g3.prize})`);
+    await mm.handleCommand(ctxOf(sock, CHATS[1], { sub: 'end', sender: roster2[0].jid, name: roster2[0].name }));
   }
 
   // =========== 2. FULL LOOPS — smart civs (civ win) ===========
@@ -276,13 +257,23 @@ async function main() {
     const roster = players(5, 3);
     await openAndFill(sock, CHATS[2], roster);
     const host = roster[0];
-    const purseBefore = QA_BALANCES.get(host.jid);
     await mm.handleCommand(ctxOf(sock, CHATS[2], { sub: 'start', sender: host.jid, name: host.name }));
     let g = mm._internal.getGame(CHATS[2]);
-    const fee = g.entryFee;
+    const purse = g.prize;
+    const balBefore = {};
+    for (const p of roster) balBefore[p.jid] = QA_BALANCES.get(p.jid);
     g = await playToEnd(sock, g, 'smart');
     ok(!g || g.phase === 'ENDED', '2.1 game reaches ENDED');
     ok(groupText(sock, /MYSTERY SOLVED/), '2.2 civ win declared');
+    ok(groupText(sock, /THE MANOR PAYS/), '2.10 prize announcement sent');
+    // every non-killer was paid an equal share; the killer got nothing
+    const killerP2 = roster.find((p) => { const row = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === p.name); return row && row.killerGames === 1; });
+    const civs2 = roster.filter((p) => p.jid !== killerP2.jid);
+    const shares2 = civs2.map((p) => QA_BALANCES.get(p.jid) - balBefore[p.jid]);
+    const share2 = Math.floor(purse / civs2.length);
+    ok(shares2.every((s) => s === share2 || s === share2 + 1), `2.11 every innocent paid ~${share2} (got ${shares2.join(',')})`);
+    ok(shares2.reduce((a, b) => a + b, 0) === purse, `2.12 total paid equals the purse (${purse})`);
+    ok(QA_BALANCES.get(killerP2.jid) === balBefore[killerP2.jid], '2.13 caught killer paid nothing');
     const killer = (system.get('murder_mm_games_v2_global', {})[CHATS[2]] || null);
     // ledger checks
     const arch = system.get('murder_mm_archive_v2_global', [])[0];
@@ -296,7 +287,6 @@ async function main() {
     ok(civRows.every((r) => r.wins === 1), '2.7 innocent team all credited the win (dead or alive)');
     ok(civRows.some((r) => r.correctVotes === 1), '2.8 sharp votes recorded for voters who named the killer');
     ok(ledgerTotal() === 5, `2.9 ledger counts 5 games-played entries (${ledgerTotal()})`);
-    ok(QA_BALANCES.get(host.jid) === purseBefore - fee, '2.10 fee consumed by a completed case (no refund)');
     // survivor credit: exactly the alive non-killers got survived=1
     const survivorsInLedger = civRows.filter((r) => r.survived === 1).length;
     ok(survivorsInLedger === arch.survivors.length, `2.11 survivor credit matches (${survivorsInLedger}/${arch.survivors.length})`);
@@ -310,6 +300,9 @@ async function main() {
     await openAndFill(sock, CHATS[3], roster);
     await mm.handleCommand(ctxOf(sock, CHATS[3], { sub: 'start', sender: roster[0].jid, name: roster[0].name }));
     let g = mm._internal.getGame(CHATS[3]);
+    const purse3 = g.prize;
+    const balBefore3 = {};
+    for (const p of roster) balBefore3[p.jid] = QA_BALANCES.get(p.jid);
     g = await playToEnd(sock, g, 'dumb');
     ok(!g || g.phase === 'ENDED', '3.1 game reaches ENDED');
     ok(groupText(sock, /THE KILLER WINS/), '3.2 killer win declared');
@@ -317,6 +310,10 @@ async function main() {
     ok(arch && arch.winner === 'killer', '3.3 archive records the killer win');
     const killerRow = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === arch.killer);
     ok(killerRow && killerRow.wins === 1, '3.4 killer credited the win');
+    // killer takes the whole purse
+    const killerP3 = roster.find((p) => p.name === arch.killer);
+    ok(QA_BALANCES.get(killerP3.jid) === balBefore3[killerP3.jid] + purse3, `3.7 killer took the whole purse (${purse3})`);
+    ok(roster.filter((p) => p.jid !== killerP3.jid).every((p) => QA_BALANCES.get(p.jid) === balBefore3[p.jid]), '3.8 losers paid nothing');
     const expectedKills = arch.log.filter((l) => l.victim).length; // murders only — condemned are the house's doing
     ok(killerRow && killerRow.kills === expectedKills, `3.5 killer kills match the case log (${killerRow && killerRow.kills}/${expectedKills})`);
     const expectedScore = killerRow.wins * 5 + killerRow.survived * 2 + killerRow.kills * 3 + killerRow.saves * 4 + killerRow.bodiesFound + killerRow.correctVotes * 3;
@@ -434,8 +431,8 @@ async function main() {
     const sock = makeSock(); QA_SOCK = sock;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'help' }));
     ok(groupText(sock, /mm lb/), '7.1 help mentions mm lb');
-    ok(groupText(sock, /10,000–25,000 Zeni/), '7.2 help names the fee range');
-    ok(groupText(sock, /refunded only if the case closes before the first dawn/), '7.3 help explains the refund rule');
+    ok(groupText(sock, /10,000–25,000 Zeni/), '7.2 help names the purse range');
+    ok(groupText(sock, /no entry fee, ever/), '7.3 help states the free-entry rule');
   }
 
   console.log(`\n----- QA2: ${pass} ok, ${fail} failed -----`);
