@@ -29,9 +29,11 @@ const characters = require('./characters');
 const cases = require('./cases');
 const cards = require('./cards');
 
-// RPG economy (Zeni) — used for the manor's entry fee + refunds.
+// RPG economy (Zeni) — used for the manor's PRIZE (owner rule 2026-09-14:
+// "it should have a money prize, not need money to play" — the cast fee is
+// gone; the manor PAYS the winning side instead).
 // Optional by design: if the economy module is unavailable the manor
-// waives its price rather than refusing to open.
+// simply doesn't post a purse rather than refusing to open.
 let economy = null;
 try { economy = require('../../rpg/economy'); } catch (e) { economy = null; }
 
@@ -58,10 +60,10 @@ const SILENCE_TTL_MS = 12 * 3600000; // failsafe only — silence is released at
 const DM_SEND_DELAY_MS = 1100;       // pacing for role-card DM bursts
 const REVEAL_ROLE_ON_DEATH = false;  // configurable
 
-// ---------- the manor's price (cast fee) ----------
-const ENTRY_FEE_MIN = 10000;
-const ENTRY_FEE_MAX = 25000;
-const ENTRY_FEE_STEP = 500; // rolled in 500-Zeni steps at lobby open
+// ---------- the manor's purse (prize pool) ----------
+const PRIZE_MIN = 10000;
+const PRIZE_MAX = 25000;
+const PRIZE_STEP = 500; // rolled in 500-Zeni steps at lobby open
 
 // ---------- all-time ledger (leaderboard) ----------
 // Global key: one shared process serves every bot instance, and entries are
@@ -69,9 +71,9 @@ const ENTRY_FEE_STEP = 500; // rolled in 500-Zeni steps at lobby open
 const STATS_KEY = 'murder_mm_stats_v1';
 const LB_MAX_ROWS = 10;
 
-function rollEntryFee() {
-  const steps = Math.floor((ENTRY_FEE_MAX - ENTRY_FEE_MIN) / ENTRY_FEE_STEP);
-  return ENTRY_FEE_MIN + ENTRY_FEE_STEP * Math.floor(Math.random() * (steps + 1));
+function rollPrize() {
+  const steps = Math.floor((PRIZE_MAX - PRIZE_MIN) / PRIZE_STEP);
+  return PRIZE_MIN + PRIZE_STEP * Math.floor(Math.random() * (steps + 1));
 }
 
 function fmtZeni(n) {
@@ -594,7 +596,7 @@ async function createLobby(ctx) {
     players: [{ jid: senderJid, name: ctx.senderName, char: null, role: 'CIVILIAN', alive: true }], // host auto-joins
     night: 0,
     rooms: cases.drawRooms(6),
-    entryFee: rollEntryFee(), // the manor's price tonight — host pays at cast
+    prize: rollPrize(), // the manor's purse tonight — paid to the winning side
     bodies: [],
     searches: { night: 0, used: {} },
     killerTargetJid: null,
@@ -614,8 +616,8 @@ async function createLobby(ctx) {
   ensureWatchdog();
 
   const opener = cases.pick(cases.OPENING_LINES);
-  const feeLine = game.entryFee
-    ? `💰 Entry tonight: *${fmtZeni(game.entryFee)} Zeni* — the host pays when the doors lock\n`
+  const feeLine = game.prize
+    ? `💰 Tonight's purse: *${fmtZeni(game.prize)} Zeni* — paid to the winning side\n`
     : '';
   // the start message gets a card (user ask) — text fallback kept
   let lobbyCardOk = false;
@@ -627,7 +629,7 @@ async function createLobby(ctx) {
       maxPlayers: MAX_PLAYERS,
       openingLine: opener,
       prefix: ctx.prefix,
-      entryFee: game.entryFee,
+      prize: game.prize,
     });
     if (buf) {
       lobbyCardOk = true;
@@ -703,7 +705,7 @@ async function showPlayers(ctx) {
     return sendGroup(sock, chatId,
       `${botMarker}📜 *GUEST LIST — ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
       `Host: @${g.host} · ${g.players.length}/${MIN_PLAYERS} minimum\n` +
-      `💰 Entry fee: *${fmtZeni(g.entryFee || 0)} Zeni* — the host pays when the doors lock\n` +
+      `💰 Tonight's purse: *${fmtZeni(g.prize || 0)} Zeni* — paid to the winning side\n` +
       `Begin: \`${g.prefix} mm start\``,
       { contextInfo: { mentionedJid: g.players.map((p) => p.jid) } });
   }
@@ -723,25 +725,10 @@ async function startGame(ctx) {
   if (g.players.length < MIN_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too few guests. The manor requires at least *${MIN_PLAYERS}*.`);
   if (g.players.length > MAX_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too many guests. The manor sleeps at most *${MAX_PLAYERS}*.`);
 
-  // ---- the manor's price: the host pays to cast the case (10k–25k Zeni) ----
-  const fee = g.entryFee || 0;
-  if (fee > 0 && economy) {
-    let purse = 0;
-    try { purse = economy.getBalance(senderJid) || 0; } catch (e) { purse = 0; }
-    if (purse < fee) {
-      return sendGroup(sock, chatId,
-        `${botMarker}💰 The manor's price to cast this case is *${fmtZeni(fee)} Zeni* — and your purse holds *${fmtZeni(purse)}*.\n` +
-        `The doors stay locked until someone can pay. Hand the keys to a wealthier guest (\`${g.prefix} mm leave\`, then rejoin), or earn your coin and return.`);
-    }
-    let paid = false;
-    try { paid = !!economy.removeMoney(senderJid, fee, 'Murder Mystery — manor entry fee'); } catch (e) { paid = false; }
-    if (!paid) {
-      return sendGroup(sock, chatId, `${botMarker}💰 The manor could not collect its fee — the doors stay locked. (If your purse is real, try again.)`);
-    }
-    g.feePaid = fee;         // charged once, at cast
-    g.feePaidBy = senderJid; // refund target if the case closes before the first dawn
-    g.firstDawnDone = false;
-  }
+  // ---- the manor's purse ----
+  // Owner rule 2026-09-14: no entry fee — the manor PAYS a prize to the
+  // winning side when the case closes. Anyone can play for free.
+  const purse = g.prize || 0;
 
   // lock lobby, assign characters + secret roles
   const cast = characters.drawCast(g.players.length);
@@ -758,7 +745,7 @@ async function startGame(ctx) {
   persistGames();
   console.log(`🔪 [MurderMystery] game started in ${chatId} — ${g.players.length} players (roles dealt)`);
 
-  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${fee > 0 ? ` — the manor collects its price: *${fmtZeni(fee)} Zeni*` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
+  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${purse > 0 ? ` — the manor posts a purse of *${fmtZeni(purse)} Zeni* for the winning side` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
 
   // mandatory private role cards — paced to respect the flood gods
   for (const p of g.players) {
@@ -1196,7 +1183,6 @@ async function beginDiscussion(sock, chatId) {
   g.phase = PHASE.DISCUSSION;
   g.deadline = Date.now() + DISCUSS_MS;
   g.searches = { night: g.night, used: {} };
-  g.firstDawnDone = true; // the case is truly underway — entry fee no longer refundable
   g._resolving = false;
   g._resolving2 = false;
   persistGames();
@@ -1669,9 +1655,61 @@ async function declareWinner(sock, chatId, winner) {
   // the all-time ledger remembers everyone (closed cases only)
   recordMatchStats(g, winner);
 
+  // the manor pays the purse to the winning side (owner rule: a money PRIZE,
+  // never an entry fee). Civ win: every non-killer shares the purse. Killer
+  // win: the killer takes the whole purse. Legacy feePaid games (cast under
+  // the old paid-entry rules) get their fee refunded here instead.
+  try { await payPrize(sock, chatId, g, winner, killer); } catch (e) {
+    console.error('🔪 [MurderMystery] prize payout failed:', e.message);
+  }
+
   games.delete(chatId);
   persistGames();
   console.log(`🔪 [MurderMystery] game ended in ${chatId} — winner=${winner}`);
+}
+
+// split the manor's purse among the winners and announce every payout.
+// addMoney failures (unresolvable JID / market cap) are reported in-line so
+// the house never claims a payment it didn't make.
+async function payPrize(sock, chatId, g, winner, killer) {
+  const purse = g.prize || 0;
+  if (!economy || purse <= 0) return;
+
+  // legacy safety: a game started while the cast-fee rules were live may
+  // still carry feePaid — return it to the host before anything else.
+  if (g.feePaid) {
+    try {
+      economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (cast fee retired)');
+    } catch (e) {}
+  }
+
+  const winners = winner === 'killer'
+    ? [killer].filter(Boolean)
+    : g.players.filter((p) => p.role !== 'KILLER');
+  if (!winners.length) return;
+
+  const share = Math.floor(purse / winners.length);
+  let remainder = purse - share * winners.length; // the manor rounds in the winners' favour
+  const reason = winner === 'killer'
+    ? 'Murder Mystery — manor prize (killer won)'
+    : 'Murder Mystery — manor prize (innocents won)';
+
+  const lines = [];
+  for (const w of winners) {
+    const amount = share + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+    if (amount <= 0) continue;
+    let ok = false;
+    try { ok = !!economy.addMoney(w.jid, amount, reason); } catch (e) { ok = false; }
+    lines.push(`  @${normJid(w.jid)} — *${fmtZeni(amount)} Zeni*${ok ? '' : ' ⚠️ (failed — ping a mod)'}`);
+  }
+
+  const headline = winner === 'killer'
+    ? `💰 *THE MANOR PAYS* — the killer walks away with the purse:`
+    : `💰 *THE MANOR PAYS* — *${fmtZeni(purse)} Zeni* split among the innocent guests:`;
+  await sendGroup(sock, chatId, `${botMarker}${headline}\n${lines.join('\n')}`, {
+    contextInfo: { mentionedJid: winners.map((w) => w.jid) },
+  });
 }
 
 function finalCaption(g, winner, killer, survivors) {
@@ -1821,12 +1859,13 @@ async function forceEnd(ctx) {
   if (normJid(senderJid) !== g.host && !ctx.isMod) {
     return sendGroup(sock, chatId, `${botMarker}🕯️ Only the host (@${g.host}) or a moderator may close the case early.`);
   }
-  // the manor refunds its price if the case never reached the first dawn
+  // legacy safety: a game cast under the retired entry-fee rules may still
+  // carry feePaid — always return it (new games never set this field)
   let refundNote = '';
-  if (g.feePaid && !g.firstDawnDone && economy) {
+  if (g.feePaid && economy) {
     try {
-      if (economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (case closed before dawn)')) {
-        refundNote = `\n💰 The unspent entry fee — *${fmtZeni(g.feePaid)} Zeni* — returns to the host's purse.`;
+      if (economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (cast fee retired)')) {
+        refundNote = `\n💰 The retired cast fee — *${fmtZeni(g.feePaid)} Zeni* — returns to the host's purse.`;
       }
     } catch (e) {}
   }
@@ -1901,7 +1940,7 @@ function helpText(prefix) {
     `• \`${prefix} mm join\` — accept the invitation\n` +
     `• \`${prefix} mm leave\` — decline it\n` +
     `• \`${prefix} mm players\` — guest list\n` +
-    `• \`${prefix} mm start\` — host begins the mystery (the host pays the manor's price: 10,000–25,000 Zeni)\n\n` +
+    `• \`${prefix} mm start\` — host begins the mystery (the winning side splits the manor's purse: 10,000–25,000 Zeni)\n\n` +
     `*At dawn (group or DM):*\n` +
     `• \`${prefix} mm search <room n|name>\` — one search per guest, per day. Searches are public; the ghost's clue is not.\n` +
     `• \`${prefix} mm will <text>\` (DM) — seal your last words; the house reads them aloud if you die.\n\n` +
@@ -1909,7 +1948,7 @@ function helpText(prefix) {
     `• \`${prefix} mm vote <n|name|skip>\` — cast your ballot (ballots are public)\n` +
     `• \`${prefix} mm status\` — the state of the case\n` +
     `• \`${prefix} mm lb\` — the Hall of Shadows: every win, kill, save and sharp vote, remembered\n` +
-    `• \`${prefix} mm end\` — host/mod closes the case (refunded if the first dawn never came)\n\n` +
+    `• \`${prefix} mm end\` — host/mod closes the case (no prize is paid if the case never closes)\n\n` +
     `*At night (in your DM with the bot — 3 minutes):*\n` +
     `• \`${prefix} mm kill <n|name>\` — killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
     `• \`${prefix} mm investigate <n|name>\` — investigator only\n` +
@@ -1917,7 +1956,7 @@ function helpText(prefix) {
     `*If you dare (DM):*\n` +
     `• \`${prefix} mm taunt <message>\` — whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
     `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body; by day the house searches — the finder of the body inherits the ghost's clue about the killer's character. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
-    `*The wager:* the manor charges the host a price (10k–25k Zeni, rolled when the lobby opens) to cast a case — refunded only if the case closes before the first dawn. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
+    `*The prize:* the manor posts a purse (10k–25k Zeni, rolled when the lobby opens) — no entry fee, ever. If the innocents solve the case they split the purse; if the killer outlives the manor, the killer takes all of it. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
     `Roles: 1 Killer · 1 Investigator · 1 Guardian (5+ players) · the rest Civilians.\n` +
     `You receive a sealed role card in your DMs. Tell no one.`
   );
@@ -2083,7 +2122,7 @@ module.exports = {
     clearTimers,
     resolveRoom,
     roomListOf,
-    rollEntryFee,
+    rollPrize,
     fmtZeni,
     STATS_KEY,
     recordMatchStats,

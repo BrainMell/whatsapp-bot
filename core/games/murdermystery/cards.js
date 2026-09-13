@@ -1401,7 +1401,7 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
 }
 
 // Lobby opener — group card. The "start message" the house sees first.
-async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix, entryFee }) {
+async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix, prize }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('manor');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
@@ -1437,11 +1437,11 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
     ctx.fillStyle = C.ivoryDim;
     ctx.fillText(`${prefix} mm start  —  begin once everyone is here`, LAND_W / 2, 722);
 
-    // the manor's price — the host pays to cast the case (10k–25k Zeni)
-    if (entryFee != null) {
+    // the manor's purse — the winning side claims it (no entry fee)
+    if (prize != null) {
       ctx.font = '27px Type';
       ctx.fillStyle = C.amber;
-      ctx.fillText(`entry fee  ${fmtNo(entryFee)} Zeni  —  the host pays when the doors lock`, LAND_W / 2, 778);
+      ctx.fillText(`prize  ${fmtNo(prize)} Zeni  —  claimed by the winning side`, LAND_W / 2, 778);
     }
 
     ctx.font = '26px Type';
