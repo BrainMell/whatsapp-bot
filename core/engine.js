@@ -1115,27 +1115,121 @@ setInterval(() => {
 //     in the PM2 log instead of being silently swallowed.
 // ════════════════════════════════════════════════════════════════════════
 
-// Minimal valid 1×1 white JPEG — used as thumbnail fallback when sharp
-// and jimp both fail. WhatsApp just needs *any* non-empty jpegThumbnail
-// to render the blurred preview before the full image downloads.
-const FALLBACK_THUMB = Buffer.from(
-  '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=',
-  'base64'
-);
+// ════════════ WHATSAPP THUMBNAIL SYSTEM (rebuilt 2026-09-14) ════════════
+// WhatsApp renders the sender-supplied `jpegThumbnail` as the blurred
+// media preview before the full image downloads. The old system injected
+// a 1×1 JPEG as the thumbnail for EVERY image — and that hardcoded base64
+// actually decoded to a BLACK pixel, so every image in chat showed a
+// black box instead of a preview (owner: "the thumbnail is always black
+// instead of the blurry version").
+//
+// The fix: generate REAL thumbnails from the actual image bytes with
+// jimp (pure JS — sharp stays BANNED on Oracle: it segfaults natively
+// with GLib-GObject-CRITICAL and kills the whole process).
+//   • buildThumbnail(bytes)        — real JPEG preview (≤120px, aspect
+//     preserved, quality 60). Never throws.
+//   • buildThumbnailSmart(image)   — resolves Buffer / local path /
+//     http(s) URL (6s-bounded download + LRU cache) → buildThumbnail.
+//     Never throws — falls back to a LIGHT-GRAY placeholder (WhatsApp's
+//     standard "no preview yet" look, never black).
+//   • The sock.sendMessage monkey-patch (connection setup, ~line 6000)
+//     injects buildThumbnailSmart() into every image send that has no
+//     explicit jpegThumbnail, and the gray placeholder into videos.
+// ═════════════════════════════════════════════════════════════════════
+
+const jpegJs = require("jpeg-js");
+
+// Light-gray 24×24 JPEG placeholder (~470 bytes). Used ONLY when a real
+// thumbnail cannot be generated (download failed, undecodable bytes,
+// video). Replaces the old 1×1 BLACK fallback that rendered previews black.
+const FALLBACK_THUMB = (() => {
+  try {
+    const W = 24, H = 24, data = Buffer.alloc(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const v = 234 - Math.round((x / W + y / H) * 10); // soft gray
+        data[i] = data[i + 1] = data[i + 2] = v;
+        data[i + 3] = 255;
+      }
+    }
+    return jpegJs.encode({ data, width: W, height: H }, 70).data;
+  } catch (_) {
+    return Buffer.alloc(0);
+  }
+})();
+
+// LRU-ish cache: URL → thumbnail, so repeated sends (menus, news feeds)
+// don't re-download the same image just to build a preview.
+const _thumbCache = new Map();
+const _thumbCacheMax = 250;
+
+let _thumbWarnCount = 0;
+function _thumbWarnOnce(msg) {
+  if (_thumbWarnCount < 5) {
+    _thumbWarnCount++;
+    console.warn("[thumbnail]", msg);
+  }
+}
 
 /**
- * Generate a 32px JPEG thumbnail from an image buffer.
- * Tries sharp (fastest, native) → jimp v1.x → hardcoded 1×1 fallback.
- * Never throws — always returns a Buffer.
+ * Generate a REAL JPEG thumbnail (≤120px, quality 60) from image bytes.
+ * Uses jimp v1.x (pure JS) — NEVER sharp (native segfault on Oracle).
+ * Never throws — always returns a Buffer (gray placeholder on failure).
  */
 async function buildThumbnail(imgBuffer) {
-  // 💡 CRITICAL FIX 2026-07-26: NEVER call sharp. On Oracle, sharp crashes
-  // with a native GLib-GObject-CRITICAL error that kills the entire Node.js
-  // process. This is not a catchable error — it's a native segfault.
-  // The monkey-patch on sock.sendMessage already adds jpegThumbnail:
-  // FALLBACK_THUMB to all image sends, so buildThumbnail is no longer
-  // needed for Baileys. Just return FALLBACK_THUMB directly.
-  return FALLBACK_THUMB;
+  try {
+    if (!imgBuffer || !imgBuffer.length) return FALLBACK_THUMB;
+    const { Jimp } = require("jimp");
+    const img = await Jimp.read(imgBuffer);
+    img.scaleToFit({ w: 120, h: 120 });
+    if (!img.bitmap?.width) return FALLBACK_THUMB;
+    return await img.getBuffer("image/jpeg", { quality: 60 });
+  } catch (err) {
+    _thumbWarnOnce(
+      "buildThumbnail failed (" + (err?.message || err) + ") — using gray placeholder",
+    );
+    return FALLBACK_THUMB;
+  }
+}
+
+/**
+ * Resolve whatever a send call passed as `image` into thumbnail bytes.
+ * Accepts Buffer | { url: localPath } | { url: http(s) URL } | string.
+ * URL downloads are bounded (6s / 8MB) and LRU-cached. NEVER throws.
+ */
+async function buildThumbnailSmart(image) {
+  try {
+    if (!image) return FALLBACK_THUMB;
+    if (Buffer.isBuffer(image)) return await buildThumbnail(image);
+    const url = typeof image === "string" ? image : image?.url;
+    if (!url) return FALLBACK_THUMB;
+    if (/^https?:\/\//i.test(url)) {
+      if (_thumbCache.has(url)) return _thumbCache.get(url);
+      const resp = await axios.get(url, {
+        responseType: "arraybuffer",
+        headers: { "User-Agent": "Mozilla/5.0" },
+        timeout: 6000,
+        maxContentLength: 8 * 1024 * 1024,
+      });
+      const thumb = await buildThumbnail(Buffer.from(resp.data));
+      if (_thumbCache.size >= _thumbCacheMax) {
+        _thumbCache.delete(_thumbCache.keys().next().value); // drop oldest
+      }
+      _thumbCache.set(url, thumb);
+      return thumb;
+    }
+    // local file path
+    if (fs.existsSync(url)) {
+      return await buildThumbnail(fs.readFileSync(url));
+    }
+    return FALLBACK_THUMB;
+  } catch (err) {
+    _thumbWarnOnce(
+      "buildThumbnailSmart failed (" + (err?.message || err) + ") — using gray placeholder",
+    );
+    return FALLBACK_THUMB;
+  }
 }
 
 /**
@@ -1143,13 +1237,15 @@ async function buildThumbnail(imgBuffer) {
  *
  * Flow:
  *   1. Try sending by URL (fastest — WhatsApp fetches it directly).
- *      Baileys will auto-generate a thumbnail using sharp/jimp.
+ *      The sock.sendMessage monkey-patch injects a REAL thumbnail via
+ *      buildThumbnailSmart (jimp, LRU-cached) — WhatsApp shows the
+ *      blurred preview of the actual image, never a black box.
  *   2. If URL send fails, download the image ourselves, generate a
- *      32px JPEG thumbnail, and send as a buffer with jpegThumbnail
+ *      real JPEG thumbnail, and send as a buffer with jpegThumbnail
  *      attached (so WhatsApp shows the blurred preview).
- *   3. If the download also fails, retry the URL send without any
- *      thumbnail (last resort — may render without a preview, but
- *      the message will at least arrive).
+ *   3. If the download also fails, retry the URL send (the patch
+ *      still attaches whatever thumbnail it could build — worst case
+ *      the light-gray placeholder).
  *
  * Never throws — always attempts at least one send. If ALL sends
  * fail, the last error propagates so the caller's catch block can
@@ -1169,13 +1265,13 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
       ),
     ]);
 
-  // Path 1 — URL send (fastest). Pass FALLBACK_THUMB as jpegThumbnail to
-  // skip Baileys' internal thumbnail generation.
+  // Path 1 — URL send (fastest). NO explicit thumbnail here: the
+  // sock.sendMessage patch injects a REAL preview (jimp, cached).
   try {
     return await withTimeout(
       sock.sendMessage(
         chatId,
-        { image: { url: imageUrl }, caption, jpegThumbnail: FALLBACK_THUMB },
+        { image: { url: imageUrl }, caption },
         { quoted: quotedMsg },
       ),
       15000,
@@ -5108,16 +5204,11 @@ What to do:
       if (fs.existsSync(imagePath)) {
         try {
           console.log(`[sendMenuWithBanner] sending IMAGE...`);
-          // 💡 CRITICAL FIX: use FALLBACK_THUMB directly — do NOT call
-          // buildThumbnail. buildThumbnail calls sharp, which HANGS on
-          // the 698KB banner JPEG (works on 1×1 test images but hangs
-          // on real images). The hang happens BEFORE the 15s send
-          // timeout starts, so the timeout never fires.
-          // FALLBACK_THUMB is a valid 1×1 white JPEG — WhatsApp uses
-          // it as the blur-preview placeholder. The actual image still
-          // sends and displays — just without a proper thumbnail.
-          const thumb = FALLBACK_THUMB;
-          console.log(`[sendMenuWithBanner] using FALLBACK_THUMB: ${thumb.length} bytes`);
+          // 💡 2026-09-14: buildThumbnail is now REAL (jimp, pure JS — no
+          // sharp, no hang). Menus get a proper blurred banner preview
+          // instead of the old black 1×1 placeholder.
+          const thumb = await buildThumbnail(fs.readFileSync(imagePath));
+          console.log(`[sendMenuWithBanner] real thumbnail built: ${thumb.length} bytes`);
           const msg = {
             image: { url: imagePath },
             caption: text,
@@ -5545,7 +5636,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await sock.sendMessage(chatId, {
                 image: { url: a.img },
                 caption: BOT_MARKER + message,
-                jpegThumbnail: FALLBACK_THUMB,
               });
               sent = true;
               console.log(`✅ Sent news IMAGE (via URL) to ${chatId}`);
@@ -6021,34 +6111,35 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // DB loads still happen later via cardSystem.init() below.
               try { cardSystem.bindSocket(sock); } catch (e) { /* best-effort */ }
 
-              // 💡 CRITICAL FIX 2026-07-26 (ROOT CAUSE OF ALL IMAGE FAILURES):
-              // Baileys calls sharp() to generate a JPEG thumbnail for every
-              // image send that doesn't include a `jpegThumbnail` property.
-              // On Oracle, sharp crashes with a native GLib-GObject-CRITICAL
-              // error ("cannot retrieve class for invalid (unclassed) type")
-              // which kills the ENTIRE Node.js process. pm2 restarts, and the
-              // user sees "nothing" — the image was never sent.
-              //
-              // This is why .jk menu worked (sendMenuWithBanner passes
-              // jpegThumbnail: FALLBACK_THUMB, bypassing sharp) but .jk coll,
-              // .jk char, .jk deck, .jk bal all crashed (they send images
-              // without jpegThumbnail, so Baileys called sharp, which crashed).
-              //
-              // FIX: monkey-patch sock.sendMessage to auto-inject
-              // jpegThumbnail: FALLBACK_THUMB for ALL image messages. This
-              // makes Baileys skip the sharp thumbnail generation entirely.
+              // 💡 REBUILT 2026-09-14 (owner: "the thumbnail is always black
+              // instead of the blurry version — fix it"):
+              // The old patch injected a 1×1 JPEG whose base64 decoded to a
+              // BLACK pixel — every image previewed as a black box. sharp
+              // must STILL never be called (native segfault on Oracle kills
+              // the whole process), so the patch now injects a REAL preview
+              // generated with jimp (pure JS) via buildThumbnailSmart:
+              //   • content.image Buffer   → thumbnail from the bytes
+              //   • content.image {url}    → local file read or bounded
+              //     http(s) download (6s, 8MB, LRU-cached)
+              //   • failure at any step    → light-gray placeholder
+              //   • video                  → gray placeholder (no ffmpeg
+              //     dependency — same as before, just no longer black)
               if (!sock._sendMessagePatched) {
                 const _origSendMessage = sock.sendMessage.bind(sock);
                 sock.sendMessage = async (chatId, content, options = {}) => {
-                  // Auto-inject jpegThumbnail for BOTH image and video messages
-                  // to prevent sharp from being called (it crashes on Oracle)
-                  if (content && !content.jpegThumbnail && (content.image || content.video)) {
-                    content.jpegThumbnail = FALLBACK_THUMB;
+                  try {
+                    if (content && !content.jpegThumbnail && content.image) {
+                      content.jpegThumbnail = await buildThumbnailSmart(content.image);
+                    } else if (content && !content.jpegThumbnail && content.video) {
+                      content.jpegThumbnail = FALLBACK_THUMB;
+                    }
+                  } catch (_) {
+                    // NEVER block or crash a send over a thumbnail problem.
                   }
                   return _origSendMessage(chatId, content, options);
                 };
                 sock._sendMessagePatched = true;
-                console.log(`🛡️ [${BOT_ID}] sock.sendMessage patched: auto-injecting jpegThumbnail to prevent sharp crash`);
+                console.log(`🛡️ [${BOT_ID}] sock.sendMessage patched: injecting REAL image previews (jimp) — sharp stays banned`);
               }
 
               // Give the WS a moment to settle, then flush any queued outbound messages.
@@ -7986,12 +8077,12 @@ _💡 Reply with another number from your search list!_`.trim();
                       } catch (e) {
                         results.push(`   buildThumbnail: ❌ ${e.message}`);
                       }
-                      results.push(`   FALLBACK_THUMB: ${FALLBACK_THUMB.length} bytes`);
+                      results.push(`   FALLBACK_THUMB (gray placeholder): ${FALLBACK_THUMB.length} bytes`);
 
                       // Test 3: Sharp
                       results.push(`*3. Sharp:*`);
-                      results.push(`   ⚠️ Sharp is DISABLED — it crashes with GLib-GObject-CRITICAL on Oracle, killing the process. All image sends now use FALLBACK_THUMB instead.`);
-                      results.push(`   buildThumbnail() returns FALLBACK_THUMB (${FALLBACK_THUMB.length} bytes) without calling sharp.`);
+                      results.push(`   ⚠️ Sharp is DISABLED — it crashes with GLib-GObject-CRITICAL on Oracle, killing the process. Thumbnails are generated with jimp (pure JS).`);
+                      results.push(`   buildThumbnail() renders a REAL preview (≤120px JPEG) via jimp; gray placeholder only as last resort (${FALLBACK_THUMB.length} bytes).`);
 
                       // Test 4: Jimp
                       results.push(`*4. Jimp:*`);
@@ -19701,7 +19792,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           try {
                             await sock.sendMessage(
                               chatId,
-                              { image: { url: img }, jpegThumbnail: FALLBACK_THUMB },
+                              { image: { url: img } },
                               { quoted: m },
                             );
                             await new Promise((res) => setTimeout(res, 150));
@@ -19953,7 +20044,6 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                               chatId,
                               {
                                 image: { url: images[i] },
-                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -20226,7 +20316,6 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: { url: imageUrl },
                                 caption: BOT_MARKER + caption,
-                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -20241,7 +20330,6 @@ _Latest anime updates • Anime Corner_
                               {
                                 image: Buffer.from(imgRes.data),
                                 caption: BOT_MARKER + caption,
-                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );
@@ -20302,7 +20390,6 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                               {
                                 image: { url: img },
                                 caption: BOT_MARKER + caption,
-                                jpegThumbnail: FALLBACK_THUMB,
                               },
                               { quoted: m },
                             );

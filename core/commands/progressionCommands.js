@@ -6,6 +6,16 @@ const botConfig = require('../../botConfig');
 const getPrefix = () => botConfig.getPrefix();
 const getBotMarker = () => `🃏 *${botConfig.getBotName()}*\n\n`;
 
+// Compact number formatter for the .rank card (12,340 -> "12.3K").
+function fmtCompact(n) {
+  n = Math.floor(Number(n) || 0);
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (abs >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (abs >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+}
+
 // ============================================
 // PROGRESSION COMMAND HANDLERS
 // ============================================
@@ -302,50 +312,103 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
 
 /*
  * Handle ${getPrefix()} rank command - show detailed rank info
+ * 2026-09-14 (owner: "make the .rank an image card and include your level
+ * and xp left to progress"): renders the ADVENTURER portrait card (Go
+ * service, bg_RANK — big LEVEL line, rank pill, XP bar with the exact XP
+ * left to progress, standings). Falls back to the legacy text layout if
+ * the Go render fails for any reason.
  */
 async function handleRankCommand(sock, chatId, senderJid, m) {
   try {
     const stats = progression.getUserStats(senderJid);
     const rank = progression.getUserRank(senderJid);
+    const sheet = progression.getCharacterSheet(senderJid);
     const xpLeaderboard = progression.getXPLeaderboard(100);
     const gpLeaderboard = progression.getGPLeaderboard(100);
-    
+
     // Find positions
     const xpPosition = xpLeaderboard.findIndex(u => u.userId === senderJid) + 1;
     const gpPosition = gpLeaderboard.findIndex(u => u.userId === senderJid) + 1;
-    
+
+    // ── portrait card (primary) ──
+    const rankLetter = String(sheet?.adventurerRank || 'F').toUpperCase();
+    const xp = stats.xp || {};
+    const nickname = economy.getDisplayName(senderJid);
+    const atMax = !xp.nextLevel || xp.nextLevel <= 0;
+
+    let buffer = null;
+    try {
+      const goService = require('../utils/goImageService');
+      buffer = await goService.generatePortraitCard({
+        kind: 'RANK',
+        nickname,
+        caption: atMax
+          ? 'the peak — no level left to climb'
+          : `${fmtCompact(xp.nextLevel)} xp to level ${(stats.level || 1) + 1}`,
+        sealText: rankLetter,
+        level: stats.level || 1,
+        rankLetter,
+        xpNow: `${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP`,
+        xpLeft: atMax ? 'MAX LEVEL' : `${fmtCompact(xp.nextLevel)} XP TO LEVEL ${(stats.level || 1) + 1}`,
+        xpPercent: Math.max(0, Math.min(100, Math.floor(xp.progress || 0))),
+        standing: [
+          { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${rank.totalUsers}` : `— / ${rank.totalUsers}` },
+          { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}` : 'UNRANKED' },
+          { label: 'COMMANDS', value: String(stats.commands || 0) },
+          { label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) },
+        ],
+      });
+    } catch (cardErr) {
+      console.error('[rank] card render failed:', cardErr.message);
+    }
+
+    if (buffer && buffer.length > 100) {
+      const caption = getBotMarker() +
+        `👑 *Level ${stats.level || 1}* · ${rankLetter}-Rank\n` +
+        (atMax
+          ? `⚡ ${fmtCompact(xp.current || 0)} total XP — maximum level reached`
+          : `⚡ ${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP — *${fmtCompact(xp.nextLevel)} left to progress*`);
+      await sock.sendMessage(chatId, {
+        image: buffer,
+        caption,
+        mimetype: 'image/png',
+      }, { quoted: m });
+      return;
+    }
+
+    // ── fallback: legacy text version ──
     let message = `╔═══════════════════╗\n`;
     message += `║  👑 *YOUR RANK* 👑  ║\n`;
     message += `╚═══════════════════╝\n\n`;
-    
+
     message += `${progression.getLevelDisplay(stats.level)}\n\n`;
-    
+
     message += `━━━━━━━━━━━━━━━\n`;
     message += `📊 *RANKINGS*\n\n`;
-    
+
     message += `⚡ *XP Rank:* #${xpPosition || 'Unranked'}\n`;
     message += `   Top ${100 - rank.percentile}% of ${rank.totalUsers} users\n\n`;
-    
+
     if (gpPosition > 0) {
       message += `🎖️ *GP Rank:* #${gpPosition}\n\n`;
     } else {
       message += `🎖️ *GP Rank:* Unranked\n`;
       message += `   _Join a guild to earn GP!_\n\n`;
     }
-    
+
     message += `━━━━━━━━━━━━━━━\n\n`;
-    
+
     message += `💎 *Total XP:* ${stats.xp.total.toLocaleString()}\n`;
     message += `🎖️ *Total GP:* ${stats.gp.total.toLocaleString()}\n`;
     message += `📱 *Commands:* ${stats.commands.toLocaleString()}\n`;
     message += `🏅 *Achievements:* ${stats.achievements.length}\n\n`;
-    
+
     message += `💡 _Use ${getPrefix()} level for detailed progress_`;
-    
+
     await sock.sendMessage(chatId, {
       text: getBotMarker() + message
     }, { quoted: m });
-    
+
   } catch (err) {
     console.error("Error in handleRankCommand:", err.message);
     await sock.sendMessage(chatId, {

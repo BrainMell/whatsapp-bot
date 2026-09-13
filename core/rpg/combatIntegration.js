@@ -159,16 +159,34 @@ function buildAnimationAction(turnInfo, options = {}) {
 
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        // 💡 UPDATED 2026-07-29: Pass full rewards to the Go service so it can
-        // render a richer victory/defeat scene with rewards panel.
+        // 💡 2026-09-14: extended payload for the redesigned lamoot-style
+        // victory/defeat portrait card (bg_VICTORY/bg_DEFEAT). All the new
+        // fields are optional — the Go side degrades gracefully when absent.
         const items = rewards?.items?.map(i => i.name).join(', ') || '';
+        const p0 = (players || []).find(p => p && !p._isSummon) || (players || [])[0] || {};
+        // primary enemy = the beefiest one on the field (boss battles have one)
+        const e0 = (enemies || []).slice().sort((a, b) =>
+            (Number(b?.stats?.maxHp || b?.maxHp) || 0) - (Number(a?.stats?.maxHp || a?.maxHp) || 0))[0] || {};
         return await combatImageGen.generateEndScreenImage(
             victory ? 'VICTORY' : 'DEFEATED',
             {
                 victory,
                 gold: rewards?.gold || 0,
                 xp: rewards?.xp || 0,
-                items
+                items,
+                playerName: p0.name || '',
+                playerClass: String(p0.class?.id || p0.class || '').toUpperCase(),
+                playerIndex: Math.floor(Number(p0.spriteIndex) || 0),
+                playerLevel: Math.floor(Number(p0.level) || 0),
+                enemyName: e0.name || e0.id || '',
+                enemyLevel: Math.floor(Number(e0.level || e0.stats?.level) || 0),
+                enemyIndex: Math.floor(Number(e0.spriteIndex) || 0),
+                enemyIsBoss: Boolean(e0.isBoss),
+                rank: String(options.rank || ''),
+                floor: Math.floor(Number(options.floor) || 0),
+                background: String(options.backgroundPath
+                    ? options.backgroundPath.split(/[\\/]/).pop()
+                    : 'spark_1.png'),
             }
         );
     } catch (error) {

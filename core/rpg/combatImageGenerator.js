@@ -168,13 +168,28 @@ async function updateCombatImage(players, enemies, turnInfo, options = {}) {
 
 async function generateEndScreenImage(text, options = {}) {
     try {
-        // 💡 UPDATED 2026-07-29: Pass full payload for new gradient + rewards end screen.
+        // 💡 2026-09-14: full payload for the redesigned victory/defeat
+        // portrait card (WriteEndCard in the Go service). Legacy fields
+        // (text/victory/gold/xp/items) unchanged; the player/enemy/rank/
+        // floor/background/caption fields are optional enrichment.
         const payload = {
             text: String(text || ''),
             victory: Boolean(options.victory),
             gold: Math.floor(Number(options.gold) || 0),
             xp: Math.floor(Number(options.xp) || 0),
-            items: String(options.items || '')
+            items: String(options.items || ''),
+            playerName: String(options.playerName || ''),
+            playerClass: String(options.playerClass || ''),
+            playerIndex: Math.floor(Number(options.playerIndex) || 0),
+            playerLevel: Math.floor(Number(options.playerLevel) || 0),
+            enemyName: String(options.enemyName || ''),
+            enemyLevel: Math.floor(Number(options.enemyLevel) || 0),
+            enemyIndex: Math.floor(Number(options.enemyIndex) || 0),
+            enemyIsBoss: Boolean(options.enemyIsBoss),
+            rank: String(options.rank || ''),
+            floor: Math.floor(Number(options.floor) || 0),
+            background: String(options.background || ''),
+            caption: String(options.caption || '')
         };
         const imageBuffer = await goService.generateCombatEndScreen(payload);
         return { success: true, buffer: imageBuffer };
