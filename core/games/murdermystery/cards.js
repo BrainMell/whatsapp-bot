@@ -995,42 +995,70 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
   });
 }
 
-// Empty-room search result — DM portrait to the searcher
-async function renderSearchNothingCard({ room, playerName, flavor, night, manorName }) {
-  return renderCard(PORT_W, PORT_H, async (ctx) => {
+// Public search card — posted to the GROUP. Everyone sees who searched
+// which room, and what they found (the user asked for open searches).
+async function renderSearchCard({ playerChar, playerName, room, found, flavor, night, manorName }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg(room.id);
-    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
-    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.82 });
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.72 });
 
-    ctx.textAlign = 'center';
-    ctx.font = '34px Type';
-    ctx.fillStyle = 'rgba(236,226,200,0.8)';
-    spaced(ctx, 'THE SEARCH TURNS UP', PORT_W / 2, 200, 7);
+    // searcher sprite, left, alive (colour) — same character across all cards
+    await drawSprite(ctx, playerChar.id, 380, 830, 600);
+    stamp(ctx, 'THE SEARCH', 380, 175, 300, 78, 'rgba(201,161,59,0.92)', -0.08, 40);
 
-    ctx.font = '110px PF-Black';
+    ctx.textAlign = 'left';
+    fitFont(ctx, playerName.toUpperCase(), 'PF-Black', 74, 700, 34);
     ctx.fillStyle = C.ivory;
     ctx.shadowColor = 'rgba(0,0,0,0.85)';
-    ctx.shadowBlur = 18;
-    spaced(ctx, 'NOTHING', PORT_W / 2, 350, 14);
+    ctx.shadowBlur = 16;
+    ctx.fillText(playerName.toUpperCase(), 760, 300);
     ctx.shadowColor = 'transparent';
 
-    ornament(ctx, PORT_W / 2, 420, 420, C.ivoryFaint);
+    ctx.font = '86px PF-Black';
+    ctx.fillStyle = C.amber;
+    ctx.fillText('SEARCHES', 760, 400);
 
-    ctx.font = 'italic 33px PF-MedIt';
-    ctx.fillStyle = C.ivory;
-    ctx.textAlign = 'left';
-    wrap(ctx, `${flavor}`, 150, 520, 600, 48, 3);
-
-    ctx.textAlign = 'center';
-    ctx.font = '28px EB-Reg';
+    fitFont(ctx, room.name.toUpperCase(), 'PF-Black', 52, 720, 26);
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`${playerName} searched ${room.name}.`, PORT_W / 2, 740);
+    ctx.fillText(room.name.toUpperCase(), 760, 470);
 
-    ctx.font = '25px Type';
+    ctx.font = '25px EB-Reg';
     ctx.fillStyle = C.ivoryFaint;
-    ctx.fillText('Only you know the room you chose. Choose what to share.', PORT_W / 2, 1310);
+    wrap(ctx, room.hint, 760, 515, 700, 34, 2);
+    concealDots(ctx, 766, 578, room.conceal, C.amber, 20, 7);
 
-    footer(ctx, PORT_W, PORT_H, manorName);
+    // outcome strip
+    ctx.strokeStyle = found ? 'rgba(200,50,74,0.65)' : 'rgba(236,226,200,0.28)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(760, 636);
+    ctx.lineTo(1500, 636);
+    ctx.stroke();
+
+    if (found) {
+      ctx.font = '64px PF-Black';
+      ctx.fillStyle = C.crimsonHi;
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 14;
+      ctx.fillText('…AND FINDS A BODY', 760, 722);
+      ctx.shadowColor = 'transparent';
+      ctx.font = '28px EB-Reg';
+      ctx.fillStyle = C.ivoryDim;
+      ctx.fillText('The ghost whispers — but to the finder alone.', 760, 780);
+    } else {
+      ctx.font = '56px PF-Black';
+      ctx.fillStyle = C.ivory;
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 14;
+      ctx.fillText('…AND FINDS NOTHING', 760, 716);
+      ctx.shadowColor = 'transparent';
+      ctx.font = 'italic 30px PF-MedIt';
+      ctx.fillStyle = C.ivoryDim;
+      wrap(ctx, flavor || '', 760, 768, 700, 40, 2);
+    }
+
+    footer(ctx, LAND_W, LAND_H, manorName);
   });
 }
 
@@ -1372,6 +1400,133 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
   });
 }
 
+// Lobby opener — group card. The "start message" the house sees first.
+async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg('manor');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.6 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '30px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'THE DOORS ARE OPEN', LAND_W / 2, 210, 8);
+
+    fitFont(ctx, manorName, 'PF-Black', 118, 1300, 56);
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 20;
+    spaced(ctx, manorName, LAND_W / 2, 356, 8);
+    ctx.shadowColor = 'transparent';
+
+    ornament(ctx, LAND_W / 2, 424, 560);
+
+    ctx.font = 'italic 40px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.fillText(openingLine, LAND_W / 2, 505);
+
+    ctx.font = '30px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`${playerCount} guest${playerCount === 1 ? '' : 's'} waiting · ${minPlayers}–${maxPlayers} seats at the table`, LAND_W / 2, 578);
+
+    // invitation block
+    ctx.font = '27px Type';
+    ctx.fillStyle = C.amberHi;
+    ctx.fillText(`${prefix} mm join  —  accept the invitation`, LAND_W / 2, 680);
+    ctx.font = '27px Type';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`${prefix} mm start  —  begin once everyone is here`, LAND_W / 2, 730);
+
+    ctx.font = '26px Type';
+    ctx.fillStyle = C.crimsonHi;
+    ctx.fillText('One of the guests is hiding a knife.', LAND_W / 2, 800);
+
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// The killer's ONE unsigned taunt per game — posted to the group, anonymous.
+async function renderTauntCard({ text, night, manorName }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg('drawing');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.82 });
+    // blood-wash
+    const g = ctx.createLinearGradient(0, 0, 0, LAND_H);
+    g.addColorStop(0, 'rgba(60,8,16,0.3)');
+    g.addColorStop(1, 'rgba(20,4,8,0.62)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, LAND_W, LAND_H);
+
+    ctx.textAlign = 'center';
+    ctx.font = '30px Type';
+    ctx.fillStyle = C.crimsonHi;
+    spaced(ctx, 'AN UNSIGNED NOTE CIRCULATES', LAND_W / 2, 220, 7);
+
+    // torn-note plate
+    ctx.save();
+    ctx.translate(LAND_W / 2, 470);
+    ctx.rotate(-0.012);
+    ctx.fillStyle = 'rgba(16,9,13,0.72)';
+    ctx.fillRect(-620, -190, 1240, 380);
+    ctx.strokeStyle = 'rgba(200,50,74,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-620, -190, 1240, 380);
+    ctx.restore();
+
+    ctx.font = '44px Type';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    wrap(ctx, `\u201C${text}\u201D`, 240, 380, 1120, 62, 4);
+
+    ornament(ctx, LAND_W / 2, 700, 420, C.crimson);
+
+    ctx.textAlign = 'center';
+    ctx.font = '28px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText('It is signed by no one. Read it twice.', LAND_W / 2, 770);
+
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// Last words — posted to the group when a player dies (vote or body found).
+async function renderWillCard({ playerChar, playerName, will, cause, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('library');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.8 });
+
+    await drawSpriteGray(ctx, playerChar.id, PORT_W / 2, 1010, 620);
+
+    ctx.textAlign = 'center';
+    ctx.font = '40px Type';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'LAST WORDS', PORT_W / 2, 190, 10);
+
+    fitFont(ctx, playerName.toUpperCase(), 'PF-Black', 56, 640);
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 14;
+    ctx.fillText(playerName.toUpperCase(), PORT_W / 2, 262);
+    ctx.shadowColor = 'transparent';
+
+    ornament(ctx, PORT_W / 2, 306, 380, C.amber);
+
+    ctx.font = 'italic 36px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'left';
+    const after = wrap(ctx, `\u201C${will}\u201D`, 140, 1080, 620, 52, 3);
+
+    ctx.textAlign = 'center';
+    ctx.font = '25px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(cause === 'vote' ? 'read aloud as the house cast them out' : 'found folded inside their coat', PORT_W / 2, Math.max(after + 40, 1268));
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
 module.exports = {
   C,
   cv,
@@ -1403,7 +1558,10 @@ module.exports = {
   renderMorningCard,
   renderBodyFoundCard,
   renderGhostClueCard,
-  renderSearchNothingCard,
+  renderSearchCard,
+  renderLobbyCard,
+  renderTauntCard,
+  renderWillCard,
   renderVictimDMCard,
   renderGuardianSavedCard,
   renderRoomChoiceCard,

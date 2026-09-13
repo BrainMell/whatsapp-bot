@@ -154,6 +154,7 @@ async function runPass(n) {
 
   await mm.handleCommand(ctxOf(sock, { sub: 'create', sender: P.alice.jid, name: P.alice.name }));
   ok(groupText(sock, /OPENS ITS DOORS/), 'A2 lobby opens');
+  ok(sock.out.some((m) => m.isGroup && m.image && /OPENS ITS DOORS/.test(m.text)), 'A2b start message carried a card (user ask)');
   ok(!groupText(sock, /Nº|Case N/), 'A3 no case number in opener (bug 3)');
 
   await mm.handleCommand(ctxOf(sock, { sub: 'create' }));
@@ -264,6 +265,20 @@ async function runPass(n) {
   ok(!mm.isSilenced(invest.jid, CHAT), 'C16 living not silenced');
   ok(g.phase === 'DISCUSSION', 'C17 discussion began');
 
+  // ---------- C-extra. KILLER TAUNT (anonymous, once per game) ----------
+  // NOTE: civs[0] is the murder victim by now — use the living investigator for the non-killer case
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'taunt', rest: 'definitely not me' }));
+  ok(dmTexts(sock, invest.jid, /not yours to give/) === 1, 'T1 non-killer taunt rejected privately (no role leak)');
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'taunt', rest: 'You will never find me in time.' }));
+  ok(groupText(sock, /unsigned note circulates/i) >= 1, 'T2 anonymous taunt posted to the group');
+  ok(!sock.out.some((m) => m.isGroup && /unsigned/.test(m.text) && new RegExp(killer.name, 'i').test(m.text)), 'T3 taunt names no one');
+  ok(sock.out.some((m) => m.isGroup && m.image && /unsigned note/i.test(m.text)), 'T4 taunt carried a card');
+  ok(dmTexts(sock, killer.jid, /note is loose in the house/) === 1, 'T4b killer got private confirmation');
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'taunt', rest: 'again' }));
+  ok(dmTexts(sock, killer.jid, /One note per game/) === 1, 'T5 second taunt rejected');
+  await mm.handleCommand(ctxOf(sock, { sender: P.bob.jid, name: P.bob.name, sub: 'taunt', rest: 'group taunt' }));
+  ok(groupText(sock, /belongs in a DM with the bot/) >= 1, 'T6 group taunt redirected to DM (public reply)');
+
   // dead player cannot search
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: victimPlan.jid, sender: victimPlan.jid, name: victimPlan.name, sub: 'search', rest: '1' }));
   ok(dmTexts(sock, victimPlan.jid, /dead search nothing/) === 1, 'C18 dead cannot search');
@@ -273,8 +288,11 @@ async function runPass(n) {
   const bodyIdx = g.bodies[0].roomIdx;
   const wrongIdx = (bodyIdx + 1) % rooms.length;
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: guardian.jid, sender: guardian.jid, name: guardian.name, sub: 'search', rest: String(wrongIdx + 1) }));
-  ok(dmTexts(sock, guardian.jid, /NOTHING|You searched/i) >= 1, 'C19 empty-room search → private nothing');
-  ok(groupText(sock, /makes their search/) === 0, 'C20 DM search leaks nothing to group');
+  await sleep(400);
+  ok(groupText(sock, new RegExp(`${guardian.name} searches`, 'i')) >= 1, 'C19 search is announced to the group (public)');
+  ok(sock.out.filter((m) => m.isGroup && /finds nothing/.test(m.text)).length >= 1, 'C19b empty-room result is public');
+  ok(sock.out.filter((m) => m.isGroup && new RegExp(`${guardian.name} searches`, 'i').test(m.text) && m.image).length >= 1, 'C19c public search carried an image card');
+  ok(groupText(sock, /makes their search/) === 0, 'C20 legacy private-search leak line is gone');
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: guardian.jid, sender: guardian.jid, name: guardian.name, sub: 'search', rest: '1' }));
   ok(dmTexts(sock, guardian.jid, /already made your one search/) === 1, 'C21 second search same day rejected');
 
@@ -301,6 +319,9 @@ async function runPass(n) {
   ok(dmTexts(sock, killer.jid, /PRIVATE STATUS/) >= 1 && dmTexts(sock, killer.jid, /KILLER/i) >= 1, 'D3 DM status keeps the role private-but-present');
 
   // ---------- E. VOTING — bad vote continues the game ----------
+  // seal the investigator's last words — they are read aloud when they fall
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'will', rest: 'The killer poured the claret. Watch the quiet ones.' }));
+  ok(dmTexts(sock, invest.jid, /last words are sealed/) === 1, 'E0 will sealed in DM');
   g.deadline = Date.now() - 10;
   await mm._internal.onPhaseTimeout(CHAT, sock); // discussion → voting
   ok(g.phase === 'VOTING', 'E1 voting begins after discussion');
@@ -314,6 +335,9 @@ async function runPass(n) {
   ok(await waitFor(() => !g.players.find((p) => p.role === 'INVESTIGATOR').alive), 'E2 innocent eliminated by vote');
   ok(mm.isSilenced(invest.jid, CHAT), 'E3 eliminated player silenced');
   ok(await waitFor(() => g.phase === 'NIGHT'), 'E4 game continues into night 2 (bad vote matters)');
+  ok(groupText(sock, /Watch the quiet ones/) >= 1, 'E4b condemned player’s will was read aloud');
+  ok(sock.out.some((m) => m.isGroup && m.image && /Last words of/i.test(m.text)), 'E4c will carried a card');
+  ok(groupText(sock, /Ballots:/) >= 1, 'E4d ballots are public — who voted for whom');
 
   // ---------- F. GUARDIAN SAVE on night 2 ----------
   const alive2 = g.players.filter((p) => p.alive);
@@ -407,6 +431,52 @@ async function runPass(n) {
   mm._internal.games.delete(CHAT); // simulate game vanishing (crash/cleanup)
   ok(!mm.isSilenced(P.bob.jid, CHAT), 'J3 silence dies with the game (lifecycle-bound)');
   mm._internal.persistGames();
+
+  // ---------- K. WATCHDOG — the phase machine self-heals ----------
+  // (reproduces the live failure: deadline long past + wedged resolution flags)
+  await mm.handleCommand(ctxOf(sock, { sub: 'create', sender: P.alice.jid, name: 'Alice' }));
+  for (let i = 1; i < GROUP_SENDERS.length; i++) {
+    await mm.handleCommand(ctxOf(sock, { sub: 'join', sender: GROUP_SENDERS[i].jid, name: GROUP_SENDERS[i].name }));
+  }
+  await mm.handleCommand(ctxOf(sock, { sub: 'start' }));
+  const g4 = mm._internal.getGame(CHAT);
+  ok(g4 && g4.phase === 'NIGHT', 'K1 game running for watchdog test');
+  ok(g4._sock === sock, 'K1b game captured the live sock from commands');
+  ok(mm._internal.sockForGame(g4) === sock, 'K1c sockForGame prefers the game sock');
+  const savedSock = g4._sock; g4._sock = null;
+  ok(mm._internal.sockForGame(g4) === QA_SOCK, 'K1d falls back to the module sock');
+  g4._sock = savedSock;
+
+  g4._resolving = true;
+  g4._resolvingAt = Date.now() - 120000; // wedged 2 min ago
+  g4.deadline = Date.now() - 60000;      // deadline blew past a minute ago
+  g4.extendedTonight = true;             // (skip the one-time dawn extension so the force resolves)
+  await mm._internal.watchdogTick();
+  ok(await waitFor(() => ['DISCUSSION', 'VOTING'].includes(g4.phase), 15000), 'K2 watchdog forced the stalled night forward');
+
+  // now wedge a DISCUSSION and let the watchdog bring the vote
+  if (g4.phase === 'DISCUSSION') {
+    g4.deadline = Date.now() - 60000;
+    await mm._internal.watchdogTick();
+    ok(await waitFor(() => g4.phase === 'VOTING', 15000), 'K3 watchdog forced discussion into voting');
+  }
+
+  // all ballots in but the raw resolve timer is lost → watchdog resolves
+  const aliveK = g4.players.filter((p) => p.alive);
+  for (const p of aliveK) {
+    await mm.handleCommand(ctxOf(sock, { sender: p.jid, name: p.name, sub: 'vote', rest: 'skip' }));
+  }
+  ok(await waitFor(() => g4.phase === 'NIGHT', 15000), 'K4 all-skip vote resolved into the next night');
+
+  // ---------- L. PERSISTENCE HYGIENE — no internal keys ever saved ----------
+  mm._internal.persistGames();
+  const savedRaw = await system.get(`murder_mm_games_v2_${BOT_ID === 'qa-bot' ? 'global' : BOT_ID}`, {});
+  const savedGame = savedRaw[CHAT];
+  ok(savedGame && Object.keys(savedGame).every((k) => k[0] !== '_'), 'L1 no underscore/internal keys persisted (sock, flags, stamps)');
+  ok(savedGame && typeof savedGame.votes === 'object' && Array.isArray(savedGame.players), 'L2 core state still persists');
+
+  await mm.handleCommand(ctxOf(sock, { sub: 'end', sender: P.alice.jid, name: 'Alice' }));
+  ok(!mm._internal.getGame(CHAT), 'L3 watchdog-test game force-ended cleanly');
 
   console.log(`\n----- PASS ${n}: ${pass} ok, ${fail} failed -----`);
   return fail;
