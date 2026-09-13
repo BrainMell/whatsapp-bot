@@ -54,8 +54,8 @@ const cards = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery
 const PREFIX = '.j';
 const MARKER = '🤖';
 const STATS_KEY = mm._internal.STATS_KEY;
-const OUT_DIR = path.join('/home/z/my-project', 'download', 'mm_qa');
-fs.mkdirSync(OUT_DIR, { recursive: true });
+const OUT_DIR = process.env.MM_QA_OUT || path.join(__dirname, '..', '..', 'mm_card_qa_out');
+try { fs.mkdirSync(OUT_DIR, { recursive: true }); } catch (e) { /* visual dump is optional */ }
 
 let pass = 0, fail = 0;
 const failures = [];
