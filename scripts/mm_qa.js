@@ -358,7 +358,9 @@ async function runPass(n) {
   }
   g.extendedTonight = true;
   await mm._internal.onPhaseTimeout(CHAT, sock);
-  await sleep(2500);
+  // NOTE: resolveNight renders 3+ image cards — on a loaded box this takes
+  // several seconds. Wait for the transition instead of a fixed sleep.
+  ok(await waitFor(() => g.phase === 'DISCUSSION', 30000), 'F1b night 2 resolution completes (guardian save → dawn)');
   ok(victim2.alive === true, 'F2 protected player survived the kill');
   ok(g.bodies.length === 1, 'F3 no new body from a blocked kill');
   ok(groupText(sock, /DEATH WAS CHEATED|almost died/i) >= 1, 'F4 public almost-died announcement');
@@ -371,6 +373,9 @@ async function runPass(n) {
   ok(g.searches.night === g.night && Object.keys(g.searches.used).length === 0, 'F11 fresh search round each day');
 
   // ---------- G. PERSISTENCE ROUND-TRIP ----------
+  // wait out any in-flight resolution before simulating the restart, or the
+  // old resolution completes against the rehydrated object (race)
+  await waitFor(() => g.phase === 'DISCUSSION' && !g._resolving2, 30000);
   mm._internal.persistGames();
   const snapshot = JSON.stringify({ bodies: g.bodies, phase: g.phase, clues: g.cluesGiven, rooms: g.rooms.map((r) => r.id) });
   mm._internal.games.clear();

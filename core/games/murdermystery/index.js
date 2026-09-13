@@ -1096,6 +1096,16 @@ async function resolveNight(sock, chatId, _reason) {
     await sendDM(sock, guardian.jid, `👼 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYour watch held${ward ? ` over ${nameOf(ward)}` : ''}, and the knife never came. Stand again tomorrow, if you dare.`);
   }
 
+  // restart-mid-resolution heal: a murder was persisted earlier tonight (bot
+  // restarted during the slow card/DM section) but this pass saw no kill —
+  // the morning must still tell the house someone died
+  const unfoundTonight = (g.bodies || []).find((b) => b.night === g.night);
+  if (outcome === 'quiet' && unfoundTonight) {
+    outcome = 'murder';
+    morningLine = cases.pick(cases.MORNING_MURDER_LINES);
+    console.log(`🔪 [MurderMystery] NIGHT ${g.night}: morning healed after mid-resolution restart (unfound body present)`);
+  }
+
   // ---- public morning card (never names the victim — the body must be found) ----
   await sleep(1200);
   try {
