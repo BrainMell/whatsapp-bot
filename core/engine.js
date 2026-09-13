@@ -8669,6 +8669,9 @@ _💡 Reply with another number from your search list!_`.trim();
                         lowerTxt.includes("permadeath") ||
                         lowerTxt.includes("-f") ||
                         lowerTxt.includes("--f");
+                      // 💡 2026-09-14 owner: ".solo f -s" — skip flag for the
+                      // 90-second pre-raid shop timer (solo quests only).
+                      const skipShop = isSolo && cmdArgs.slice(1).includes("-s");
                       const ranks = [
                         "f",
                         "e",
@@ -8695,12 +8698,79 @@ _💡 Reply with another number from your search list!_`.trim();
                         rank ? rank.toUpperCase() : null,
                         senderJid,
                         smartGroqCall,
+                        null,
+                        { skipShop },
                       );
                       if (result.success && !result.isMenu) {
-                        const state = guildAdventure.getGameState(chatId);
+                        const state = guildAdventure.getGameState(
+                          chatId,
+                          isSolo ? senderJid : undefined,
+                        );
                         if (state) state.onHardcoreDeath = addToGraveyard;
 
-                        if (isSolo) {
+                        // 💡 2026-09-14 owner: "add a starting image card to
+                        // quest starting" — solo casts QUESTSTART, group casts
+                        // RAID (different banners + arrangements). Falls back
+                        // to the plain text announcement on any failure.
+                        const cardData = result.card || {};
+                        let cardBuf = null;
+                        try {
+                          const goService = require("./utils/goImageService");
+                          const ecoUser = economy.getUser(senderJid);
+                          const userClass = economy.getUserClass(senderJid);
+                          const dungeonLabel = String(
+                            cardData.dungeonName || `${rank || "F"}-Rank`,
+                          ).toUpperCase();
+                          const rows = isSolo
+                            ? [
+                                { label: "DUNGEON", value: dungeonLabel },
+                                { label: "MODE", value: isHardcore ? "HARDCORE" : "NORMAL" },
+                                { label: "ENCOUNTERS", value: String(cardData.encounters || "?") },
+                                { label: "ENVIRONMENT", value: String(cardData.environment || "UNKNOWN").toUpperCase() },
+                                { label: "THE SHOP", value: skipShop ? "SKIPPED" : "OPEN 90S" },
+                              ]
+                            : [
+                                { label: "DUNGEON", value: dungeonLabel },
+                                { label: "MODE", value: isHardcore ? "HARDCORE" : "NORMAL" },
+                                { label: "JOIN WINDOW", value: `${Math.round((cardData.joinMs || 120000) / 1000)}S` },
+                                { label: "COMMAND", value: `${botConfig.getPrefix()} join`.toUpperCase() },
+                                { label: "PARTY", value: `MIN ${cardData.minPlayers || 2} HEROES` },
+                              ];
+                          cardBuf = await goService.generatePortraitCard({
+                            kind: isSolo ? "QUESTSTART" : "RAID",
+                            nickname: senderName,
+                            caption: isHardcore
+                              ? "permadeath — one life, no return"
+                              : isSolo
+                                ? "the gate groans open"
+                                : "the horns sound — assemble",
+                            sealText: (rank || "f").toUpperCase(),
+                            playerClass: userClass?.id || "",
+                            playerIndex: ecoUser?.spriteIndex || 0,
+                            background: cardData.envAsset || "",
+                            partyText: isSolo ? "" : "AWAITING PARTY",
+                            rows,
+                          });
+                        } catch (e) {
+                          console.error("[quest] start card failed:", e?.message || e);
+                        }
+
+                        if (cardBuf && cardBuf.length > 100) {
+                          const cap = isSolo
+                            ? BOT_MARKER +
+                              `🗡️ *QUEST STARTING*\n` +
+                              `👤 Hero: *${senderName}* | ⭐ Rank: *${(rank || "F").toUpperCase()}* | 🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*` +
+                              (skipShop ? `\n⏩ Pre-raid shop skipped` : ``)
+                            : BOT_MARKER +
+                              `🏰 *GROUP RAID INITIATED*\n` +
+                              `⏱️ You have ${Math.round((cardData.joinMs || 120000) / 1000)} seconds to join!\n` +
+                              `👉 Type \`${botConfig.getPrefix()} join\` to enter.`;
+                          await sock.sendMessage(
+                            chatId,
+                            { image: cardBuf, caption, mimetype: "image/jpeg" },
+                            { quoted: m },
+                          );
+                        } else if (isSolo) {
                           let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || "F"}*\n🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*\n\n⚔️ Preparing the battlefield...`;
                           await reply(startMsg);
                         } else {
@@ -9119,6 +9189,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
                               mentions: result.mentions || [],
+                              mimetype: 'image/jpeg',
                             });
                           } else {
                             await sock.sendMessage(chatId, {
@@ -9991,7 +10062,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           image: huntCard.buffer,
                           caption: huntCaption,
-                          mimetype: 'image/png'
+                          mimetype: 'image/jpeg'
                         }, { quoted: m });
                         huntCardSent = true;
                       }
@@ -11610,68 +11681,44 @@ Usage: ${newUsage}/5${warningText}`;
                       return;
                     }
 
-                    const level = progression.getLevel(senderJid);
-                    const gp = progression.getGP(senderJid);
+                    // 💡 FIX 2026-09-14 (owner: ".j rank didn't give an image
+                    // card"): this block rendered the OLD inline text layout —
+                    // the RANK portrait card shipped in progressionCommands.
+                    // handleRankCommand but was never dispatched. The card is
+                    // now the primary response (with the rank-gate rows folded
+                    // in), and the gate info also survives in its text
+                    // fallback. Mission objective detail remains at `.rank
+                    // mission`.
                     const rank = user.adventurerRank || "F";
-                    const rankData = classSystem.ADVENTURER_RANKS[rank];
 
-                    let msg = `🏆 *ADVENTURER RANK* 🏆\n\n`;
-                    msg += `${rankData.icon} *Current Rank:* ${rankData.name}\n`;
-                    msg += `Tier: ${rank}\n\n`;
-                    msg += `📊 *Your Stats:*\n`;
-                    msg += `📊 Level: ${level}\n`;
-                    msg += `⭐ GP: ${(gp || 0).toLocaleString()}\n`;
-                    msg += `🗡️ Quests Completed: ${user.questsCompleted || 0}\n`;
-                    msg += `✅ Quests Won: ${user.questsWon || 0}\n`;
-                    msg += `❌ Quests Failed: ${user.questsFailed || 0}\n\n`;
-                    msg += `💰 *Benefits:*\n`;
-                    msg += `+${rankData.benefits.questRewardBonus}% Quest Rewards\n\n`;
-
+                    const gateRows = [];
                     const nextRank = classSystem.getNextRankRequirements(rank);
                     if (nextRank) {
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `🎯 *Next Rank:* ${nextRank.rank}\n`;
                       const req = nextRank.requirements;
-                      msg += `Requirements:\n`;
-                      const levelMet = level >= req.level;
-                      const questsMet = (user.questsCompleted || 0) >= req.questsCompleted;
-                      msg += `  ${levelMet ? '✅' : '❌'} Level: ${req.level} (You: ${level})\n`;
-                      msg += `  ${questsMet ? '✅' : '❌'} Quests: ${req.questsCompleted} (You: ${user.questsCompleted || 0})\n`;
-
-                      // 💡 POLISH 2026-07-17: show rank mission gate status.
-                      // Previously the rank command only showed numeric requirements
-                      // (Level + Quests) but didn't mention the mission gate.
-                      // Players would meet the numeric requirements but still not
-                      // get promoted because they hadn't completed the rank mission.
-                      // This caused confusion — the display looked like the rank
-                      // system was bugged when it was actually a UI communication
-                      // issue. Now we show the mission status inline.
+                      gateRows.push({ label: 'NEXT RANK', value: String(nextRank.rank).toUpperCase() });
+                      gateRows.push({ label: 'REQUIRES', value: `LV ${req.level} · ${req.questsCompleted} QUESTS` });
                       const gateMission = classSystem.getGateMissionForRank(rank);
                       if (gateMission) {
                         const completedMissions = user.completedRankMissions || [];
-                        const missionCompleted = completedMissions.includes(gateMission.id);
-                        if (missionCompleted) {
-                          msg += `  ✅ Rank Mission: ${gateMission.name} (Completed)\n`;
+                        if (completedMissions.includes(gateMission.id)) {
+                          gateRows.push({ label: 'MISSION', value: 'COMPLETE' });
                         } else {
-                          // Show mission progress
-                          const playerStats = user.stats || {};
-                          const progressResult = classSystem.checkMissionProgress(gateMission.id, playerStats);
-                          const completedObjs = progressResult.progress.filter(p => p.done).length;
-                          const totalObjs = progressResult.progress.length;
-                          msg += `  ⚠️ Rank Mission: ${gateMission.name} (${completedObjs}/${totalObjs} objectives)\n`;
-                          // Show each objective with progress
-                          for (const p of progressResult.progress) {
-                            msg += `      ${p.done ? '✅' : '⬜'} ${p.label} (${p.current}/${p.target})\n`;
-                          }
-                          msg += `\n  _Use \`${botConfig.getPrefix()} rank mission\` for details._\n`;
+                          const progressResult = classSystem.checkMissionProgress(gateMission.id, user.stats || {});
+                          const done = progressResult.progress.filter(p => p.done).length;
+                          gateRows.push({ label: 'MISSION', value: `${gateMission.name} (${done}/${progressResult.progress.length})` });
                         }
                       }
                     } else {
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;
+                      gateRows.push({ label: 'PROMOTION', value: 'MAX RANK ACHIEVED' });
                     }
 
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    await progressionCommands.handleRankCommand(
+                      sock,
+                      chatId,
+                      senderJid,
+                      m,
+                      gateRows,
+                    );
                     return;
                   }
 
@@ -17540,6 +17587,10 @@ _Sorted by guild level + XP_
                     }
 
                     // `.g guild info` — comprehensive guild info (level, members, perks, buildings)
+                    // 💡 2026-09-14 owner: "add an image card to the guild info
+                    // command" — GUILDINFO charter card (800x800) is now the
+                    // primary response; the text layout below stays as the
+                    // fallback when the Go render fails.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild info` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status`) {
                       try {
@@ -17555,9 +17606,56 @@ _Sorted by guild level + XP_
                         const memberCap = guildPerks.getMemberCap(guild);
                         const interestRate = guildPerks.getBankInterestRate(guild);
 
+                        // ── charter card (primary) ──
+                        const guildLevel = guild.level || 1;
+                        const guildPoints = guild.points || 0;
+                        const guildXpNeed = guildLevel * 1000;
+                        let cardBuf = null;
+                        try {
+                          const goService = require('./utils/goImageService');
+                          cardBuf = await goService.generatePortraitCard({
+                            kind: 'GUILDINFO',
+                            nickname: userGuild,
+                            sealText: `L${guildLevel}`,
+                            level: guildLevel,
+                            xpPercent: Math.max(0, Math.min(100, Math.floor((guildPoints / guildXpNeed) * 100))),
+                            hexColor: guild.emblem?.color || '',
+                            motto: guild.motto || '',
+                            caption: '',
+                            rows: [
+                              { label: 'ARCHETYPE', value: String(guild.type || 'ADVENTURER').toUpperCase() },
+                              { label: 'LEADER', value: guild.owner ? '@' + guild.owner.split('@')[0] : 'UNKNOWN' },
+                              { label: 'MEMBERS', value: `${(guild.members || []).length}/${memberCap}` },
+                              { label: 'BANK', value: `${(guild.balance || 0).toLocaleString()} ZENI` },
+                            ],
+                            buildings: [
+                              { name: 'HALL', level: (guild.buildings?.hall?.level) || 0 },
+                              { name: 'TRAINING', level: (guild.buildings?.training?.level) || 0 },
+                              { name: 'TREASURY', level: (guild.buildings?.treasury?.level) || 0 },
+                            ],
+                          });
+                        } catch (e) {
+                          console.error('[guild] info card failed:', e?.message || e);
+                        }
+
+                        if (cardBuf && cardBuf.length > 100) {
+                          const infoMentions0 = [];
+                          if (guild.owner && guild.owner.includes('@')) infoMentions0.push(guild.owner);
+                          await sock.sendMessage(chatId, {
+                            image: cardBuf,
+                            caption: BOT_MARKER +
+                              `🏰 *${userGuild}* — Lv ${guildLevel} · XP ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n` +
+                              `💡 Use \`${botConfig.getPrefix()} guild perks\` for full perk breakdown.`,
+                            mimetype: 'image/jpeg',
+                            mentions: infoMentions0,
+                          }, { quoted: m });
+                          return;
+                        }
+
+                        // ── fallback: legacy text layout ──
                         let msg = `🏰 *${userGuild}* — Guild Info\n\n`;
                         msg += `🏷️ Archetype: ${guild.type || 'ADVENTURER'}\n`;
-                        msg += `📊 Level: ${guild.level || 1} | XP: ${(guild.points || 0).toLocaleString()}/${((guild.level || 1) * 1000).toLocaleString()}\n`;
+                        msg += `📊 Level: ${guildLevel} | XP: ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n`;
                         // 💡 QA FIX: show leader phone number (readable) instead of raw JID
                         const leaderDisplay = guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown';
                         msg += `👤 Leader: ${leaderDisplay}\n`;
@@ -22534,6 +22632,7 @@ ${senderName} said y'all should know:
                             await sock.sendMessage(chatId, {
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
+                              mimetype: 'image/jpeg',
                             });
                           } else {
                             await sock.sendMessage(chatId, {
@@ -25486,6 +25585,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           await sock.sendMessage(chatId, {
                             image: profileCardBuffer,
                             caption: response,
+                            mimetype: 'image/jpeg',
                             // 💡 PING RULE: only ping if explicitly @-mentioned.
                             contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });

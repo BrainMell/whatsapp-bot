@@ -292,7 +292,8 @@ class GoImageService {
   async generateHuntCard(data) {
     return this._enqueue(async () => {
       try {
-        const response = await this.client.post("/api/hunt/card", data, {
+        // 💡 2026-09-14 PERF: fmt=jpeg (see generatePortraitCard)
+        const response = await this.client.post("/api/hunt/card?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 10000,
         });
@@ -372,10 +373,13 @@ class GoImageService {
   async generateCombatEndScreen(payload) {
     // Backward-compat: accept a plain string
     if (typeof payload === 'string') payload = { text: payload };
+    // 💡 2026-09-14 PERF: fmt=jpeg — the end cards render ~800KB-1MB as PNG;
+    // JPEG q90 is 4-6x smaller so WhatsApp upload (the dominant latency)
+    // drops accordingly. Callers must send mimetype image/jpeg.
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
-          "/api/combat/endscreen",
+          "/api/combat/endscreen?fmt=jpeg",
           payload,
           {
             responseType: "arraybuffer",
@@ -806,7 +810,10 @@ class GoImageService {
    */
   async generatePortraitCard(data) {
     try {
-      const response = await this.client.post("/api/cards/portrait", data, {
+      // 💡 2026-09-14 PERF: fmt=jpeg (q90) — 4-6x smaller than PNG for the
+      // parchment family, cutting WhatsApp upload time. Callers send it
+      // with mimetype image/jpeg.
+      const response = await this.client.post("/api/cards/portrait?fmt=jpeg", data, {
         responseType: "arraybuffer",
         timeout: 10000,
       });
@@ -824,7 +831,8 @@ class GoImageService {
    */
   async generateProfileCard(data) {
     try {
-      const response = await this.client.post("/api/cards/profile", data, {
+      // 💡 2026-09-14 PERF: fmt=jpeg (see generatePortraitCard)
+      const response = await this.client.post("/api/cards/profile?fmt=jpeg", data, {
         responseType: "arraybuffer",
         timeout: 10000,
       });

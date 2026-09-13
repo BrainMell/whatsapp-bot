@@ -318,7 +318,7 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
  * left to progress, standings). Falls back to the legacy text layout if
  * the Go render fails for any reason.
  */
-async function handleRankCommand(sock, chatId, senderJid, m) {
+async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
   try {
     const stats = progression.getUserStats(senderJid);
     const rank = progression.getUserRank(senderJid);
@@ -336,6 +336,25 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
     const nickname = economy.getDisplayName(senderJid);
     const atMax = !xp.nextLevel || xp.nextLevel <= 0;
 
+    // 2026-09-14: engine passes the adventurer-rank GATE rows (next rank,
+    // requirements, mission progress) so the card shows not just the level
+    // but what stands between the player and the next promotion. Card rows
+    // cap at 5 on the Go side.
+    const standing = [
+      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${rank.totalUsers}` : `— / ${rank.totalUsers}` },
+      { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}` : 'UNRANKED' },
+    ];
+    const gates = Array.isArray(gateRows) ? gateRows : [];
+    if (gates.length) {
+      standing.push(...gates.slice(0, 3));
+      if (gates.length < 3) {
+        standing.push({ label: 'COMMANDS', value: String(stats.commands || 0) });
+      }
+    } else {
+      standing.push({ label: 'COMMANDS', value: String(stats.commands || 0) });
+      standing.push({ label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) });
+    }
+
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
@@ -351,12 +370,7 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
         xpNow: `${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP`,
         xpLeft: atMax ? 'MAX LEVEL' : `${fmtCompact(xp.nextLevel)} XP TO LEVEL ${(stats.level || 1) + 1}`,
         xpPercent: Math.max(0, Math.min(100, Math.floor(xp.progress || 0))),
-        standing: [
-          { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${rank.totalUsers}` : `— / ${rank.totalUsers}` },
-          { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}` : 'UNRANKED' },
-          { label: 'COMMANDS', value: String(stats.commands || 0) },
-          { label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) },
-        ],
+        standing,
       });
     } catch (cardErr) {
       console.error('[rank] card render failed:', cardErr.message);
@@ -371,7 +385,7 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
       await sock.sendMessage(chatId, {
         image: buffer,
         caption,
-        mimetype: 'image/png',
+        mimetype: 'image/jpeg',
       }, { quoted: m });
       return;
     }
@@ -402,6 +416,15 @@ async function handleRankCommand(sock, chatId, senderJid, m) {
     message += `🎖️ *Total GP:* ${stats.gp.total.toLocaleString()}\n`;
     message += `📱 *Commands:* ${stats.commands.toLocaleString()}\n`;
     message += `🏅 *Achievements:* ${stats.achievements.length}\n\n`;
+
+    // 2026-09-14: keep the adventurer-rank gate info in the text fallback too
+    if (gates.length) {
+      message += `━━━━━━━━━━━━━━━\n\n`;
+      for (const g of gates) {
+        message += `🎯 *${g.label}:* ${g.value}\n`;
+      }
+      message += `\n`;
+    }
 
     message += `💡 _Use ${getPrefix()} level for detailed progress_`;
 

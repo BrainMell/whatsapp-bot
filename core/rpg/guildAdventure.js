@@ -6459,7 +6459,7 @@ async function endCombat(sock, victory, sessionKey) {
         await sock.sendMessage(state.chatId, {
           image: endResult.buffer,
           caption: caption,
-          mimetype: 'image/png'
+          mimetype: 'image/jpeg'
         });
         endScreenSent = true;
       }
@@ -6662,6 +6662,10 @@ const getDungeonMenu = (isSolo, senderJid = null) => {
   msg += `👉 \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} <Rank>\`\n`;
   msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} D\`\n`;
   msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} GOD\` (GOD rank only)`;
+  if (isSolo) {
+    // 💡 2026-09-14 owner: ".solo f -s" — documented in the menu
+    msg += `\n⚡ Add \`-s\` to skip the 90s pre-raid shop (solo only). Ex: \`${botConfig.getPrefix()} solo f -s\``;
+  }
 
   return msg;
 };
@@ -6676,6 +6680,7 @@ const initAdventure = async (
   senderJid = null,
   smartGroqCall = null,
   trialData = null,
+  opts = {},
 ) => {
   // Check limits
   const limitCheck = checkChatLimits(chatId, solo, senderJid);
@@ -6845,6 +6850,9 @@ const initAdventure = async (
     timers: {},
     trialData, // ⚔️ Special trial payload
     trialTarget: trialData ? trialData.trialBoss : null,
+    // 💡 2026-09-14 owner: ".solo f -s" — skip the 90s pre-raid shop
+    // (honored in startJourney for solo quests only).
+    skipShop: !!(opts && opts.skipShop),
   });
   gameStates.set(sessionKey, state);
 
@@ -6906,7 +6914,20 @@ const initAdventure = async (
 
 ${solo ? `👤 *Solo Quest:* Starting now...` : `👉 Type \`${botConfig.getPrefix()} join\` to enter!`}
 `;
-  return { success: true, msg };
+  return {
+    success: true,
+    msg,
+    // 2026-09-14: card data for the QUESTSTART/RAID start card (engine.js)
+    card: {
+      dungeonName: rankData.name,
+      dungeonRank: upperRank,
+      encounters: rankData.encounters,
+      environment: environment.name,
+      envAsset: environment.asset,
+      joinMs: GAME_CONFIG.REGISTRATION_TIME,
+      minPlayers: GAME_CONFIG.MIN_PLAYERS,
+    },
+  };
 };
 
 const joinAdventure = (chatId, senderJid, senderName) => {
@@ -7136,6 +7157,20 @@ async function startJourney(sock, sessionKey) {
         console.error("[Quest] Trial nextStage error:", e?.message || e),
       );
     }, 0);
+  } else if (state.solo && state.skipShop) {
+    // 💡 2026-09-14 owner: ".solo f -s" — solo heroes who pass -s go
+    // straight into the dungeon instead of waiting out the 90s shop.
+    state.phase = "PLAYING";
+    try {
+      await sock.sendMessage(chatId, {
+        text: `⏩ *Pre-raid shop skipped* — straight into the dungeon!`,
+      });
+    } catch (e) {}
+    setTimeout(() => {
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage error:", e?.message || e),
+      );
+    }, 1200);
   } else {
     const shopDelay = state.solo ? 0 : 1000;
     setTimeout(() => {
@@ -8331,7 +8366,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
             await sock.sendMessage(chatId, {
               image: trialBuf,
               caption: trialSuccessMsg,
-              mimetype: 'image/png',
+              mimetype: 'image/jpeg',
             });
             trialCardSent = true;
           }
@@ -8612,7 +8647,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
         players: portraitPlayers.slice(0, 4),
       });
       if (buf) {
-        await sock.sendMessage(state.chatId, { image: buf, caption: msg });
+        await sock.sendMessage(state.chatId, { image: buf, caption: msg, mimetype: 'image/jpeg' });
         questCardSent = true;
       }
     } catch (cardErr) {

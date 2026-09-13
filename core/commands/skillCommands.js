@@ -8,6 +8,7 @@ const skillTree = require('../rpg/skillTree');
 const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
+const getBotMarker = () => `🃏 *${botConfig.getBotName()}*\n\n`;
 
 // ==========================================
 // 📊 DISPLAY SKILL TREE
@@ -19,21 +20,78 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
     const classSystem = require('../rpg/classSystem');
-    
+
     if (!userClass) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ No class assigned! Register first with \`${getPrefix()} register\`` 
+        await sock.sendMessage(chatId, {
+            text: `❌ No class assigned! Register first with \`${getPrefix()} register\``
         });
         return;
     }
-    
+
     if (!user.skills) {
         user.skills = {};
     }
     if (skillTree.ensureSkillPointsInitialized(user, userClass.id, level)) {
         economy.saveUser(senderJid);
     }
-    
+
+    // ── SKILLTREE card (primary, 2026-09-14 owner: "make the skill tree an
+    // image card … take inspiration from other RPG skill trees") — a real
+    // tree layout: 3 branch columns, tier fan-out, medallion states
+    // (maxed/learned/open/locked), cur/max pips, class root. Falls back to
+    // the legacy text layout below on any Go failure.
+    let treeBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        const currentTree0 = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
+        const branches = [];
+        if (currentTree0) {
+            for (const [, treeData] of Object.entries(currentTree0.trees)) {
+                const skills = [];
+                for (const [skillId, skill] of Object.entries(treeData.skills)) {
+                    const cur = user.skills[skillId] || 0;
+                    const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                    const maxed = cur >= skill.maxLevel;
+                    skills.push({
+                        name: String(skill.name || skillId),
+                        cur,
+                        max: skill.maxLevel || 1,
+                        tier: skill.tier || 1,
+                        state: maxed ? 'maxed' : cur > 0 ? 'learned' : canLearn ? 'open' : 'locked',
+                    });
+                }
+                branches.push({ name: String(treeData.name || 'Path'), skills });
+            }
+        }
+        if (branches.length) {
+            treeBuf = await goService.generatePortraitCard({
+                kind: 'SKILLTREE',
+                nickname: senderName,
+                className: userClass.name,
+                level,
+                skillPoints: user.skillPoints || 0,
+                branches,
+                sealText: String(user.adventurerRank || 'F').toUpperCase(),
+                caption: `${user.skillPoints || 0} points — spend with .skill up <name>`,
+            });
+        }
+    } catch (e) {
+        console.error('[skilltree] card render failed:', e?.message || e);
+    }
+
+    if (treeBuf && treeBuf.length > 100) {
+        await sock.sendMessage(chatId, {
+            image: treeBuf,
+            caption: getBotMarker() +
+                `🌳 *SKILL TREE — ${userClass.name.toUpperCase()}*\n` +
+                `${userClass.icon || '⚔️'} *${senderName}* — Lv.${level}\n` +
+                `📊 Skill Points Available: *${user.skillPoints || 0}*\n` +
+                `✨ \`${getPrefix()} skill up <name>\` to invest a point`,
+            mimetype: 'image/jpeg',
+        });
+        return;
+    }
+
     const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
     let msg = `╔═════════════════════════╗\n`;
@@ -282,9 +340,60 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     const newLevel = currentLevel + 1;
     const effect = skillTree.getSkillEffect(targetSkill, newLevel);
-    
+
     const heritageNote = (foundInClassName !== userClass?.name) ? `_(${foundInClassName} Heritage)_\n` : '';
-    
+
+    // ── SKILLUP card (primary, 2026-09-14 owner: "make the skill upgrade an
+    // image card as well") — giant tier-accented skill medallion, level pips,
+    // THE PATH effect rows. Falls back to the plain text below.
+    let upBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        const rows = [];
+        if (effect?.type === 'damage' && effect.multiplier) {
+            rows.push({ label: 'DAMAGE', value: `${Math.floor(effect.multiplier * 100)}% ${String(effect.damageType || 'atk').toUpperCase()}` });
+        } else if (effect?.type === 'heal') {
+            rows.push({ label: 'HEALING', value: `${effect.value} HP` });
+        } else if (effect?.type === 'buff_self' || effect?.type === 'buff_team') {
+            rows.push({ label: 'BUFF', value: `+${effect.value || '?'}% ${String(effect.buffType || '').toUpperCase()}`.trim() });
+            if (effect.duration) rows.push({ label: 'DURATION', value: `${effect.duration} TURNS` });
+        }
+        rows.push({ label: 'POINTS LEFT', value: String(user.skillPoints) });
+        if (foundInClassName !== userClass?.name) {
+            rows.push({ label: 'HERITAGE', value: String(foundInClassName).toUpperCase() });
+        } else if (newLevel === targetSkill.maxLevel) {
+            rows.push({ label: 'MASTERY', value: 'COMPLETE' });
+        }
+        upBuf = await goService.generatePortraitCard({
+            kind: 'SKILLUP',
+            nickname: economy.getDisplayName(senderJid),
+            skillName: targetSkill.name,
+            tier: targetSkill.tier || 1,
+            ascended: targetSkill.isAscended === true,
+            cur: newLevel,
+            skillMax: targetSkill.maxLevel || 1,
+            sealText: `T${targetSkill.tier || 1}`,
+            caption: newLevel === targetSkill.maxLevel ? 'fully mastered' : 'the path sharpens',
+            rows: rows.slice(0, 3),
+        });
+    } catch (e) {
+        console.error('[skillup] card render failed:', e?.message || e);
+    }
+
+    if (upBuf && upBuf.length > 100) {
+        await sock.sendMessage(chatId, {
+            image: upBuf,
+            caption: getBotMarker() +
+                `✨ *SKILL UPGRADED!*\n` +
+                (heritageNote.replace(/_/g, '')) +
+                `🌟 *${targetSkill.name}* → Lv.${newLevel}/${targetSkill.maxLevel}\n` +
+                `📊 Points Remaining: *${user.skillPoints}*` +
+                (newLevel === targetSkill.maxLevel ? `\n⭐ *FULLY MASTERED!*` : ``),
+            mimetype: 'image/jpeg',
+        });
+        return;
+    }
+
     let msg = `✨ *SKILL UPGRADED!*\n\n`;
     msg += heritageNote;
     msg += `🌟 *${targetSkill.name}* → Lv.${newLevel}/${targetSkill.maxLevel}\n\n`;
@@ -941,7 +1050,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                 return sock.sendMessage(chatId, {
                     image: evolveBuf,
                     caption: successMsg,
-                    mimetype: 'image/png',
+                    mimetype: 'image/jpeg',
                 });
             }
         }

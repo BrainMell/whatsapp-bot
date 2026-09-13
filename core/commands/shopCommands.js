@@ -618,6 +618,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
                 await sock.sendMessage(chatId, { 
                     image: cardBuffer,
                     caption: captionMsg,
+                    mimetype: 'image/jpeg',
                     mentions: [finalJid]
                 });
                 return;

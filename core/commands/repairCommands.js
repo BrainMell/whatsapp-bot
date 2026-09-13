@@ -288,7 +288,7 @@ async function inspectItem(sock, chatId, userId, target) {
             }
             caption += `\n📝 _${cardData.guildName}_\n━━━━━━━━━━━━━━━━━━━━`;
             
-            await sock.sendMessage(chatId, { image: buffer, caption });
+            await sock.sendMessage(chatId, { image: buffer, caption, mimetype: 'image/jpeg' });
             return;
         }
     } catch (err) {
