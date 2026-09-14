@@ -225,8 +225,12 @@ class GoImageService {
    */
   async generateCombatImage(data) {
     return this._enqueue(async () => {
+      const startTime = Date.now();
       try {
-        const response = await this.client.post("/api/combat", data, {
+        // 💡 2026-09-15 PERF: fmt=jpeg — combat scenes were the largest PNGs
+        // in the bot (1-3MB); JPEG q90 cuts WhatsApp upload time accordingly.
+        // Canvas is opaque (baked background), so no alpha is lost.
+        const response = await this.client.post("/api/combat?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 10000, // 💡 FIX: was 5000ms — too aggressive, caused recurring
                           // "GoService Combat Error: timeout of 5000ms exceeded".
@@ -235,7 +239,9 @@ class GoImageService {
                           // gives enough headroom while still falling back to
                           // text-only if the service is truly unresponsive.
         });
-        return Buffer.from(response.data);
+        const buf = Buffer.from(response.data);
+        console.log(`[GoService] Combat image: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+        return buf;
       } catch (error) {
         console.error("GoService Combat Error:", error.message);
         throw error;
@@ -264,7 +270,7 @@ class GoImageService {
     try {
       const axios = require('axios');
       const baseURL = this.client.defaults.baseURL;
-      const response = await axios.post(baseURL + '/api/combat', data, {
+      const response = await axios.post(baseURL + '/api/combat?fmt=jpeg', data, {
         responseType: 'arraybuffer',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
@@ -320,6 +326,32 @@ class GoImageService {
         return null; // non-fatal — caller falls back to text
       }
     });
+  }
+
+  /*
+   * 💡 2026-09-15 PERF: thumbFromBuffer — WhatsApp preview thumbnail via the
+   * Go service's POST /api/thumb. The old jimp path (pure-JS full-image
+   * decode) measured 400-900ms per image on Box 1's CPU, paid inline on EVERY
+   * image send; the Go endpoint does the same work in ~10-20ms on localhost.
+   * Returns a ≤120px JPEG Buffer, or null on ANY failure (caller falls back
+   * to jimp — this must never throw).
+   */
+  async thumbFromBuffer(imageBuffer) {
+    try {
+      if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length < 64) return null;
+      const response = await this.client.post("/api/thumb", imageBuffer, {
+        responseType: "arraybuffer",
+        timeout: 2000, // localhost render is ~10-20ms; 2s covers a cold CPU
+        headers: { "Content-Type": "application/octet-stream" },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 50) return null; // jpegThumb is ~2-3KB when healthy
+      return buf;
+    } catch (error) {
+      return null; // silent — jimp fallback handles it
+    }
   }
 
   /*
@@ -421,8 +453,9 @@ class GoImageService {
   async generateBossSplash(data) {
     return this._enqueue(async () => {
       try {
+        // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
         const response = await this.client.post(
-          "/api/combat/splash",
+          "/api/combat/splash?fmt=jpeg",
           data,
           {
             responseType: "arraybuffer",
@@ -443,7 +476,7 @@ class GoImageService {
   async generateChessBoard(data) {
     return this._enqueue(async () => {
       try {
-        const response = await this.client.post("/api/chess", data, {
+        const response = await this.client.post("/api/chess?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 10000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
         });
@@ -467,7 +500,7 @@ class GoImageService {
             pfpUrl: p.pfpUrl || pfpUrls[p.jid] || "",
           }));
         }
-        const response = await this.client.post("/api/ludo", data, {
+        const response = await this.client.post("/api/ludo?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 15000,
         });
@@ -485,7 +518,7 @@ class GoImageService {
   async renderTicTacToeBoard(data) {
     return this._enqueue(async () => {
       try {
-        const response = await this.client.post("/api/ttt", data, {
+        const response = await this.client.post("/api/ttt?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 10000, // 💡 FIX 2026-08-05: was missing — inherited 120s default
         });
@@ -504,7 +537,7 @@ class GoImageService {
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
-          "/api/ttt/leaderboard",
+          "/api/ttt/leaderboard?fmt=jpeg",
           { scores },
           {
             responseType: "arraybuffer",
@@ -783,12 +816,15 @@ class GoImageService {
    * Returns a beautiful PNG buffer of the user's balance card
    */
   async generateEconomyCard(data) {
+    const startTime = Date.now();
     try {
-      const response = await this.client.post("/api/cards/economy", data, {
+      // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
+      const response = await this.client.post("/api/cards/economy?fmt=jpeg", data, {
         responseType: "arraybuffer",
         timeout: 10000,
       });
       const buf = Buffer.from(response.data);
+      console.log(`[GoService] Economy card: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
       // Validate buffer (PNG header check + minimum size)
       if (buf.length < 100) return null;
       return buf;
@@ -802,12 +838,15 @@ class GoImageService {
    * Generate Transaction Card Image
    */
   async generateTransactionCard(data) {
+    const startTime = Date.now();
     try {
-      const response = await this.client.post("/api/cards/transaction", data, {
+      // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
+      const response = await this.client.post("/api/cards/transaction?fmt=jpeg", data, {
         responseType: "arraybuffer",
         timeout: 10000,
       });
       const buf = Buffer.from(response.data);
+      console.log(`[GoService] Transaction card: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
       if (buf.length < 100) return null;
       return buf;
     } catch (error) {

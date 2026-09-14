@@ -1174,12 +1174,24 @@ function _thumbWarnOnce(msg) {
 
 /**
  * Generate a REAL JPEG thumbnail (≤120px, quality 60) from image bytes.
- * Uses jimp v1.x (pure JS) — NEVER sharp (native segfault on Oracle).
- * Never throws — always returns a Buffer (gray placeholder on failure).
+ * 💡 2026-09-15 PERF (owner: "make images get sent faster"): try the Go
+ * service's /api/thumb FIRST — the jimp path (pure-JS full-image decode)
+ * measured 400-900ms per image on Box 1's CPU, paid inline on EVERY image
+ * send before upload even starts; the Go endpoint does the same work in
+ * ~10-20ms of localhost time. Falls back to jimp automatically whenever the
+ * Go service is down/slow (thumbFromBuffer returns null and never throws).
+ * sharp stays BANNED on Oracle (native segfault). Never throws.
  */
 async function buildThumbnail(imgBuffer) {
   try {
     if (!imgBuffer || !imgBuffer.length) return FALLBACK_THUMB;
+    try {
+      const goService = require("./goImageService");
+      const fast = await goService.thumbFromBuffer(imgBuffer);
+      if (fast && fast.length > 50) return fast;
+    } catch (_) {
+      // Go thumb unavailable (service down / timeout) — jimp fallback below.
+    }
     const { Jimp } = require("jimp");
     const img = await Jimp.read(imgBuffer);
     img.scaleToFit({ w: 120, h: 120 });
@@ -3139,6 +3151,7 @@ What to do:
             // is already broken, no point waiting longer. Also fixed the error
             // message (was "20000s", should be "15s").
             const SEND_TIMEOUT_MS = 15000;
+            const tSend0 = Date.now();
             const sendPromise = rawSend(item.jid, item.content, item.options);
             const timeoutPromise = new Promise((_, reject) =>
               setTimeout(() => reject(new Error(`rawSend timed out after 15s (media upload hung — queue was blocked)`)), SEND_TIMEOUT_MS)
@@ -3146,6 +3159,14 @@ What to do:
             const res = await Promise.race([sendPromise, timeoutPromise]);
             queue.shift();
             item.resolve(res);
+            // 💡 2026-09-15 PERF: per-send timing — makes WhatsApp media-upload
+            // latency visible in the pm2 log so "images are slow" reports can
+            // be split into render vs thumbnail vs upload vs relay.
+            const sendMs = Date.now() - tSend0;
+            const mediaKind = item.content?.image ? "image" : item.content?.video ? "video" : item.content?.audio ? "audio" : item.content?.document ? "document" : "text";
+            if (mediaKind !== "text" || sendMs > 1000) {
+              console.log(`📨 [${BOT_ID}] send ${mediaKind} ok in ${sendMs}ms → ${item.jid?.split("@")[0]}`);
+            }
             await sleep(SEND_GAP_MS);
           } catch (err) {
             item.retries += 1;

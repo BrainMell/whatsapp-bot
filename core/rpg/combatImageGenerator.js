@@ -100,6 +100,22 @@ function buildActionPayload(action = {}) {
  *   to the Go service. Used by PvP duel images (static PNGs that must not stall
  *   behind slow GIF renders in the queue). Default false (PvE keeps queued behavior).
  */
+/**
+ * 💡 2026-09-15 PERF: sniff the buffer's magic bytes instead of hardcoding.
+ * The Go static renderer now serves fmt=jpeg (much smaller uploads), and the
+ * animated endpoint can still return MP4 or its static fallback — so the
+ * mimeType must follow the actual bytes, not an assumption.
+ */
+function sniffMediaMime(buf) {
+    if (!buf || buf.length < 12) return 'image/png';
+    if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';           // JPEG SOI
+    if (buf[0] === 0x89 && buf[1] === 0x50) return 'image/png';            // PNG magic
+    const brand = buf.slice(4, 12).toString('latin1');
+    if (brand.endsWith('ftyp')) return 'video/mp4';                        // MP4 ftyp box
+    if (buf[0] === 0x00 && buf[1] === 0x00 && buf[2] === 0x00 && buf[3] === 0x1c) return 'video/mp4';
+    return 'image/png';
+}
+
 async function generateCombatImage(players, enemies, options = {}) {
     try {
         const payload = buildPayload(players, enemies, options);
@@ -114,7 +130,7 @@ async function generateCombatImage(players, enemies, options = {}) {
         const imageBuffer = options.bypassQueue
             ? await goService.generateCombatImageDirect(payload)
             : await goService.generateCombatImage(payload);
-        return { success: true, buffer: imageBuffer, mimeType: 'image/png' };
+        return { success: true, buffer: imageBuffer, mimeType: sniffMediaMime(imageBuffer) };
     } catch (error) {
         console.error('❌ Combat image generation failed:', error.message);
         return { success: false, error: error.message };
@@ -135,13 +151,9 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
         const payload = buildPayload(players, enemies, options);
         payload.action = buildActionPayload(options.action);
         const videoBuffer = await goService.generateAnimatedCombat(payload);
-        // The Go service returns MP4 on success, or PNG if it fell back to static.
-        // Sniff the buffer magic bytes to determine which.
-        const mimeType = (videoBuffer && videoBuffer.length > 4 &&
-                         videoBuffer[0] === 0x00 && videoBuffer[1] === 0x00 &&
-                         videoBuffer[2] === 0x00 && videoBuffer[3] === 0x1C)
-                       ? 'video/mp4'  // MP4 magic bytes (ftyp box)
-                       : 'image/png'; // PNG magic bytes
+        // The Go service returns MP4 on success, or a static image if it fell
+        // back. Sniff the buffer magic bytes to determine which.
+        const mimeType = sniffMediaMime(videoBuffer);
         return { success: true, buffer: videoBuffer, mimeType };
     } catch (error) {
         console.error('❌ Animated combat generation failed, falling back to static:', error.message);

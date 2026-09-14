@@ -7642,7 +7642,9 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
               await sock.sendMessage(state.chatId, {
                 image: splashBuf,
                 caption: `⚔️ *${bossEnemy.name}* — ${tierLabel === "TRIAL" ? "TRIAL" : tierLabel + "-RANK"} BOSS\n_${flavor}_`,
-                mimetype: "image/png",
+                // 2026-09-15 PERF: splash renders via ?fmt=jpeg now — keep the
+                // mimetype in sync with the actual bytes.
+                mimetype: "image/jpeg",
               });
               // Brief pause so players see the splash before combat starts
               await new Promise((r) => setTimeout(r, 2500));

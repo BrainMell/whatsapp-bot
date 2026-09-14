@@ -35,7 +35,12 @@
 
 const TTL_POSITIVE_MS = 5 * 60 * 1000;   // 5 min — PFPs rarely change
 const TTL_NEGATIVE_MS = 60 * 1000;        // 60s — backoff before retrying a failed lookup
-const TIMEOUT_MS = 8000;                  // 8s — same as the prior rpgCommands/shopCommands timeout
+// 💡 2026-09-15 PERF (owner: "make images get sent faster"): 8s was far too
+// generous — the PFP is purely decorative (cards fall back to a medallion),
+// yet a slow lookup stalled the WHOLE command for up to 8s once per cache
+// window (pm2 log showed repeated 8s timeouts). 3s is plenty for a normal
+// round-trip; misses now cost 3s instead of 8s.
+const TIMEOUT_MS = 3000;                  // 3s hard bound on profilePictureUrl
 
 // Map<jid, { value: string|null, expiresAt: number }>
 const _cache = new Map();
@@ -67,7 +72,7 @@ async function fetchPfp(sock, jid) {
 
   const p = (async () => {
     const timeoutP = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('profilePictureUrl timed out after 8s')), TIMEOUT_MS)
+      setTimeout(() => reject(new Error('profilePictureUrl timed out after 3s')), TIMEOUT_MS)
     );
     try {
       const url = await Promise.race([
