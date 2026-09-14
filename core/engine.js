@@ -25,6 +25,8 @@ const {
   downloadContentFromMessage,
   makeCacheableSignalKeyStore,
   jidNormalizedUser,
+  generateWAMessageContent,
+  generateWAMessageFromContent,
 } = require("@whiskeysockets/baileys");
 const {
   getPowerScale,
@@ -1863,7 +1865,8 @@ async function startBot(configInstance) {
         // thumbnail, title, and channel name. Much simpler and more reliable.
         console.log(`[Audio] Sending song info + YouTube link (auto-preview)...`);
         const previewTag = isPreview ? ' (30s preview)' : '';
-        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${previewTag}${metadata.url ? `\n\n▶️ Listen on YouTube:\n${metadata.url}` : ''}`;
+        const streamLabel = /youtube/i.test(audioSource || '') ? '▶️ Listen on YouTube:' : '▶️ Stream:';
+        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${previewTag}${metadata.url ? `\n\n${streamLabel}\n${metadata.url}` : ''}`;
 
         try {
           await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
@@ -2301,6 +2304,11 @@ async function startBot(configInstance) {
         groupSettings.set(chatId, {
           antilink: false,
           antilinkAction: "delete",
+          antibot: false,           // 🤖 anti-bot detection (other bots) — off by default
+          antibotAction: "warn",    // warn | kick | delete
+          antibotMode: "smart",     // smart (scored, FP-safe) | strict (any fingerprint)
+          gstatusAnnounce: false,   // 📌 announce incoming group statuses
+          announceAdmins: false,    // 📣 announce promote/demote events
           welcomeEnabled: false,   // welcome off by default
           welcomeMessage: null,   // null = use built-in default message
           byeEnabled: false,      // goodbye off by default (opt-in)
@@ -2321,6 +2329,11 @@ async function startBot(configInstance) {
       const settings = groupSettings.get(chatId);
       if (settings.welcomeEnabled === undefined) settings.welcomeEnabled = false;
       if (settings.byeEnabled === undefined) settings.byeEnabled = false;
+      if (settings.antibot === undefined) settings.antibot = false;
+      if (settings.antibotAction === undefined) settings.antibotAction = "warn";
+      if (settings.antibotMode === undefined) settings.antibotMode = "smart";
+      if (settings.gstatusAnnounce === undefined) settings.gstatusAnnounce = false;
+      if (settings.announceAdmins === undefined) settings.announceAdmins = false;
       if (settings.ranksEnabled === undefined) settings.ranksEnabled = false;
       return settings;
     }
@@ -6781,6 +6794,35 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             const groupName = groupMetadata.subject;
 
+            // 📣 ADMIN PROMOTE/DEMOTE ANNOUNCEMENTS (opt-in via `.announce on`)
+            try {
+              if ((action === "promote" || action === "demote")) {
+                const _s = getGroupSettings(id);
+                if (_s.announceAdmins === true) {
+                  const targets = (Array.isArray(participants) ? participants : [participants])
+                    .map((p) => normalizeParticipantJid(p))
+                    .filter(Boolean);
+                  if (targets.length) {
+                    const authorJid =
+                      author && typeof author === "string" ? jidNormalizedUser(author) : null;
+                    const authorTag = authorJid ? `@${authorJid.split("@")[0]}` : null;
+                    const targetTags = targets.map((t) => `@${t.split("@")[0]}`);
+                    const heading = action === "promote" ? "👑 *Admin Promotion*" : "📉 *Admin Demotion*";
+                    const line =
+                      (authorTag ? `${authorTag} ${action === "promote" ? "promoted" : "demoted"}` : action === "promote" ? "Promoted" : "Demoted") +
+                      `:\n${targetTags.join("\n")}`;
+                    const mentions = [...targets, ...(authorJid ? [authorJid] : [])];
+                    await sock.sendMessage(id, {
+                      text: BOT_MARKER + `${heading}\n\n${line}`,
+                      mentions,
+                    });
+                  }
+                }
+              }
+            } catch (_annErr) {
+              console.log("[announce] failed:", _annErr?.message || _annErr);
+            }
+
             // Loop through participants (usually just one)
             for (let participant of participants) {
               // ✅ IMPROVED FIX: Handle both string and object formats from Baileys
@@ -6790,13 +6832,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
               // 🟢 WELCOME MESSAGE
               if (action === "add") {
+                try { require('./utils/antibot').noteJoin(id, participantJid); } catch (e) {}
                 queueWelcome(id, groupName, participantJid);
               }
 
               // 🔴 GOODBYE MESSAGE (Optional)
               else if (action === "remove") {
                 const settings = getGroupSettings(id);
-                if (settings.byeEnabled === false) return; // Silent if disabled
+                if (settings.byeEnabled === false) continue; // Silent if disabled (was: return — skipped the rest of the batch)
 
                 const phoneNumber = participantJid.split("@")[0];
 
@@ -7314,6 +7357,91 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         muteUser(senderJid, chatId, 60000);
                         return;
                       }
+                    }
+                  }
+
+                  // 3. 🤖 ANTI-BOT — detect other bots posting in this group.
+                  // Scored heuristics (message-id fingerprints, linked-device
+                  // relays, interactive payloads, instant-on-join, bot marks).
+                  // Admins/owner/global mods are always exempt.
+                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe) {
+                    try {
+                      const antiBot = require('./utils/antibot');
+                      const abSettings = getGroupSettings(chatId);
+                      const verdict = antiBot.inspect(m, {
+                        joinedAt: antiBot.getJoinedAt(chatId, senderJid),
+                        mode: abSettings.antibotMode,
+                      });
+                      const abExempt =
+                        senderIsAdmin ||
+                        isOwner ||
+                        isGlobalMod(senderJid) ||
+                        senderJid === jidNormalizedUser(sock?.user?.id);
+                      if (verdict.isBot && !abExempt) {
+                        console.log(
+                          `🤖 AntiBot: score=${verdict.score} [${verdict.signals.join(", ")}] sender=${senderJid} in ${chatId}`,
+                        );
+                        await antiBot.act(sock, chatId, m, senderJid, verdict, {
+                          settings: abSettings,
+                          addWarning,
+                          getWarningCount,
+                          resetWarnings,
+                        });
+                        return; // handled — do not process as a command
+                      }
+                    } catch (abErr) {
+                      console.log("[AntiBot] failed:", abErr?.message || abErr);
+                    }
+                  }
+
+                  // 4. 📌 GROUP STATUS ANNOUNCEMENTS (opt-in via `.gstatus on`).
+                  // WhatsApp group statuses arrive wrapped in
+                  // groupStatusMentionMessage/groupStatusMessage(V2) — or with
+                  // contextInfo.isGroupStatus after Baileys unwrapping.
+                  if (isGroupChat && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
+                    try {
+                      const gsWrap =
+                        m.message.groupStatusMentionMessage ||
+                        m.message.groupStatusMessage ||
+                        m.message.groupStatusMessageV2;
+                      const gsCtx =
+                        m.message.extendedTextMessage?.contextInfo ||
+                        m.message.imageMessage?.contextInfo ||
+                        m.message.videoMessage?.contextInfo;
+                      const isGs =
+                        !!gsWrap ||
+                        gsCtx?.isGroupStatus === true ||
+                        gsCtx?.isGroupStatus === 1;
+                      if (isGs) {
+                        const inner = gsWrap?.message || m.message;
+                        const gsText =
+                          inner.conversation ||
+                          inner.extendedTextMessage?.text ||
+                          inner.imageMessage?.caption ||
+                          inner.videoMessage?.caption ||
+                          "";
+                        const kind = inner.imageMessage
+                          ? "📷 photo"
+                          : inner.videoMessage
+                            ? "🎥 video"
+                            : inner.audioMessage
+                              ? "🎵 audio"
+                              : "📝 text";
+                        const gsAuthor =
+                          (gsCtx && gsCtx.participant) ||
+                          m.key.participant ||
+                          m.key.remoteJid;
+                        const gsWho = `@${String(gsAuthor).split("@")[0].split(":")[0]}`;
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `📌 ${kind} group status from ${gsWho}` +
+                            (gsText ? `\n\n"${String(gsText).slice(0, 300)}"` : ""),
+                          mentions: [jidNormalizedUser(gsAuthor)],
+                        }, { quoted: m });
+                      }
+                    } catch (gsErr) {
+                      console.log("[GStatus] announce failed:", gsErr?.message || gsErr);
                     }
                   }
 
@@ -14022,6 +14150,228 @@ Commands:
                       });
                     }
                     return;
+                  }
+
+                  // 🤖 antibot - toggle bot detection
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} antibot` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} antibot `,
+                    )
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+                    const argsAB = lowerTxt.split(" ");
+                    const settingsAB = getGroupSettings(chatId);
+
+                    if (argsAB[2] === "on") {
+                      settingsAB.antibot = true;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 *Anti-Bot Enabled*
+
+Suspicious automated accounts get warnings — 3 strikes = removal.
+• Mode: *${settingsAB.antibotMode}* (scored, false-positive safe)
+• Action: *${settingsAB.antibotAction}*
+
+Configure:
+• ${botConfig.getPrefix().toLowerCase()} antibot action <warn/kick/delete>
+• ${botConfig.getPrefix().toLowerCase()} antibot mode <smart/strict>
+
+⚡ Admins and mods are always exempt.`,
+                      });
+                    } else if (argsAB[2] === "off") {
+                      settingsAB.antibot = false;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 Anti-bot disabled.`,
+                      });
+                    } else if (argsAB[2] === "action" && ["warn", "kick", "delete"].includes(argsAB[3])) {
+                      settingsAB.antibotAction = argsAB[3];
+                      saveGroupSettings();
+                      const descAB =
+                        argsAB[3] === "warn"
+                          ? "⚠️ Warn mode — 3 strikes = removal"
+                          : argsAB[3] === "kick"
+                            ? "🔴 Kick mode — instant removal"
+                            : "🔇 Delete mode — messages deleted, no kick";
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚙️ Anti-bot action: *${argsAB[3].toUpperCase()}*\n\n${descAB}`,
+                      });
+                    } else if (argsAB[2] === "mode" && ["smart", "strict"].includes(argsAB[3])) {
+                      settingsAB.antibotMode = argsAB[3];
+                      saveGroupSettings();
+                      const descM =
+                        argsAB[3] === "smart"
+                          ? "🧠 Smart — a verdict needs corroborating signals (recommended)"
+                          : "🎯 Strict — any bot-like message fingerprint acts immediately";
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚙️ Anti-bot mode: *${argsAB[3].toUpperCase()}*\n\n${descM}`,
+                      });
+                    } else {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 *Anti-Bot Status*
+
+Enabled: ${settingsAB.antibot ? "✅ Yes" : "❌ No"}
+Action: ${settingsAB.antibotAction || "warn"}
+Mode: ${settingsAB.antibotMode || "smart"}
+
+Commands:
+• ${botConfig.getPrefix().toLowerCase()} antibot on/off
+• ${botConfig.getPrefix().toLowerCase()} antibot action <warn/kick/delete>
+• ${botConfig.getPrefix().toLowerCase()} antibot mode <smart/strict>`,
+                      });
+                    }
+                    return;
+                  }
+
+                  // 📌 gstatus - post to the group's status / toggle announcements
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} gstatus` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} gstatus `,
+                    )
+                  ) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    }
+                    const argsGS = lowerTxt.split(" ");
+                    const settingsGS = getGroupSettings(chatId);
+
+                    // .gstatus on/off — announce incoming group statuses
+                    if (argsGS[2] === "on" || argsGS[2] === "off") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      settingsGS.gstatusAnnounce = argsGS[2] === "on";
+                      saveGroupSettings();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📌 Group-status announcements ${settingsGS.gstatusAnnounce ? "ON" : "OFF"}.`,
+                      });
+                    }
+
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    }
+
+                    // Build the status payload from args or a quoted message.
+                    const crypto = require("crypto");
+                    const qm =
+                      m.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
+                    const idxGS = txt.toLowerCase().indexOf("gstatus");
+                    const typedText = idxGS >= 0 ? txt.slice(idxGS + 7).trim() : "";
+                    let payload = null;
+                    try {
+                      if (qm) {
+                        if (qm.imageMessage) {
+                          const buf = await downloadContentFromMessage(qm.imageMessage, "image");
+                          let chunks = [];
+                          for await (const ch of buf) chunks.push(ch);
+                          payload = { image: Buffer.concat(chunks) };
+                        } else if (qm.videoMessage) {
+                          const buf = await downloadContentFromMessage(qm.videoMessage, "video");
+                          let chunks = [];
+                          for await (const ch of buf) chunks.push(ch);
+                          payload = { video: Buffer.concat(chunks) };
+                        } else if (qm.audioMessage) {
+                          const buf = await downloadContentFromMessage(qm.audioMessage, "audio");
+                          let chunks = [];
+                          for await (const ch of buf) chunks.push(ch);
+                          payload = { audio: Buffer.concat(chunks), ptt: false };
+                        } else if (qm.stickerMessage) {
+                          const buf = await downloadContentFromMessage(qm.stickerMessage, "sticker");
+                          let chunks = [];
+                          for await (const ch of buf) chunks.push(ch);
+                          payload = { sticker: Buffer.concat(chunks) };
+                        } else if (qm.conversation) {
+                          payload = { text: qm.conversation };
+                        } else if (qm.extendedTextMessage?.text) {
+                          payload = { text: qm.extendedTextMessage.text };
+                        }
+                        if (payload && (payload.image || payload.video) && typedText) {
+                          payload.caption = typedText;
+                        }
+                      } else if (typedText) {
+                        payload = { text: typedText };
+                      }
+                    } catch (dlErr) {
+                      console.log("[GStatus] quoted media download failed:", dlErr?.message);
+                    }
+
+                    if (!payload) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📌 *Group Status*
+
+Post a status visible only to this group's members:
+• \`${botConfig.getPrefix().toLowerCase()} gstatus <text>\`
+• Reply to an image/video/audio with \`${botConfig.getPrefix().toLowerCase()} gstatus [caption]\`
+
+Toggle incoming-status announcements:
+• \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\``,
+                      });
+                    }
+
+                    try {
+                      await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
+                      const inner = await generateWAMessageContent(payload, {
+                        upload: sock.waUploadToServer,
+                      });
+                      const messageSecret = crypto.randomBytes(32);
+                      const wrapped = generateWAMessageFromContent(
+                        chatId,
+                        {
+                          messageContextInfo: { messageSecret },
+                          groupStatusMessageV2: {
+                            message: {
+                              ...inner,
+                              messageContextInfo: { messageSecret },
+                            },
+                          },
+                        },
+                        {},
+                      );
+                      await sock.relayMessage(chatId, wrapped.message, {
+                        messageId: wrapped.key.id,
+                      });
+                      await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                      });
+                    } catch (gsErr) {
+                      console.log("[GStatus] post failed:", gsErr?.message);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Could not post the group status: ${String(gsErr?.message || gsErr).slice(0, 120)}`,
+                      });
+                    }
+                    return;
+                  }
+
+                  // 📣 announce - toggle promote/demote announcements
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} announce on` ||
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} announce off`
+                  ) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    }
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    }
+                    const settingsAN = getGroupSettings(chatId);
+                    const enableAN = lowerTxt.endsWith("on");
+                    settingsAN.announceAdmins = enableAN;
+                    saveGroupSettings();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📣 Admin promote/demote announcements ${enableAN ? "ON" : "OFF"}.`,
+                    });
                   }
 
                   // news on/off - Toggle automated anime news

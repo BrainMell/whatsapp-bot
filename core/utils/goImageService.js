@@ -758,8 +758,14 @@ class GoImageService {
    */
   async getAudioInfo(query) {
     try {
-      const response = await this.client.get("/api/scrape/audio", {
+      // 2026-09-14 audio v3: GO_AUDIO_SERVICE_URL lets this box route audio
+      // through the WARP-capable Go service while image rendering stays
+      // local. 180s budget: the Deezer -> JioSaavn -> YouTube-via-WARP
+      // chain needs headroom on a cold challenge-solver cache.
+      const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+      const response = await axios.get(base + "/api/scrape/audio", {
         params: { query },
+        timeout: 180000,
       });
       return response.data;
     } catch (error) {
