@@ -7473,6 +7473,234 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     }
                   }
 
+                  // ── Group-status media helpers (defined once per process) ──
+                  const __gsEnsureHelpers = () => {
+                    if (globalThis.__gsHelpers) return globalThis.__gsHelpers;
+                    const crypto = require("crypto");
+                    const gfs = require("fs");
+                    const gos = require("os");
+                    const gpath = require("path");
+                    const { execFile } = require("child_process");
+
+                    const gsDownloadBuf = async (msg, kind) => {
+                      const stream = await downloadContentFromMessage(msg, kind);
+                      const chunks = [];
+                      for await (const ch of stream) chunks.push(ch);
+                      return Buffer.concat(chunks);
+                    };
+
+                    // placeholder jpeg — guarantees jpegThumbnail is never
+                    // undefined so Baileys can NEVER fall into its sharp path
+                    const gsPlaceholderB64 = async () => {
+                      try {
+                        const { Jimp } = require("jimp");
+                        const img = new Jimp({ width: 96, height: 54, color: 0x14101fff });
+                        const jpg = await img.getBuffer("image/jpeg", { quality: 55 });
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        // 1x1 gray JPEG, base64 — last-resort constant
+                        return "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwcJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPDs0NDT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
+                      }
+                    };
+
+                    const gsImageThumbB64 = async (buf) => {
+                      try {
+                        const { Jimp } = require("jimp");
+                        const img = await Jimp.read(buf);
+                        img.scaleToFit({ w: 96, h: 96 });
+                        const jpg = await img.getBuffer("image/jpeg", { quality: 70 });
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        console.log("[GStatus] image thumb failed, placeholder:", e?.message);
+                        return await gsPlaceholderB64();
+                      }
+                    };
+
+                    const gsVideoThumbB64 = async (buf) => {
+                      const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
+                      try {
+                        const inP = gpath.join(dir, "in.mp4");
+                        const outP = gpath.join(dir, "frame.jpg");
+                        await gfs.promises.writeFile(inP, buf);
+                        await new Promise((resolve, reject) => {
+                          const t = setTimeout(() => reject(new Error("ffmpeg frame timeout (10s)")), 10000);
+                          execFile("ffmpeg", ["-ss", "00:00:00", "-i", inP, "-y", "-vframes", "1", "-vf", "scale=96:-2", outP], (err) => { clearTimeout(t); err ? reject(err) : resolve(); });
+                        });
+                        const jpg = await gfs.promises.readFile(outP);
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        console.log("[GStatus] video frame failed, placeholder:", e?.message);
+                        return await gsPlaceholderB64();
+                      } finally {
+                        gfs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+                      }
+                    };
+
+                    const gsAudioSeconds = async (buf) => {
+                      const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
+                      try {
+                        const inP = gpath.join(dir, "in.bin");
+                        await gfs.promises.writeFile(inP, buf);
+                        return await new Promise((resolve) => {
+                          const t = setTimeout(() => resolve(undefined), 10000);
+                          execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inP], (err, stdout) => {
+                            clearTimeout(t);
+                            const d = parseFloat(String(stdout || "").trim());
+                            resolve(Number.isFinite(d) && d > 0 ? Math.round(d) : undefined);
+                          });
+                        });
+                      } catch (e) {
+                        return undefined;
+                      } finally {
+                        gfs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+                      }
+                    };
+
+                    // synthetic 64-bar voice-note waveform (audio-decode is not
+                    // installed; a visual-only wave beats blocking on it)
+                    const gsWaveform = () => {
+                      const out = new Uint8Array(64);
+                      let v = 42;
+                      for (let i = 0; i < 64; i++) {
+                        v = Math.max(10, Math.min(100, v + (Math.random() * 38 - 19)));
+                        out[i] = Math.round(v);
+                      }
+                      return out;
+                    };
+
+                    const gsBuildPayload = async (kind, msg, buf, caption) => {
+                      const mediaBuf = buf || (await gsDownloadBuf(msg, kind));
+                      if (kind === "image") {
+                        const payload = { image: mediaBuf };
+                        payload.jpegThumbnail = await gsImageThumbB64(mediaBuf);
+                        if (caption) payload.caption = caption;
+                        return payload;
+                      }
+                      if (kind === "video") {
+                        const payload = { video: mediaBuf };
+                        payload.jpegThumbnail = await gsVideoThumbB64(mediaBuf);
+                        if (caption) payload.caption = caption;
+                        return payload;
+                      }
+                      if (kind === "audio") {
+                        const payload = { audio: mediaBuf, ptt: !!(msg && msg.ptt), mimetype: (msg && msg.mimetype) || undefined };
+                        const sec = await gsAudioSeconds(mediaBuf);
+                        if (sec) payload.seconds = sec;
+                        if (payload.ptt) payload.waveform = gsWaveform();
+                        return payload;
+                      }
+                      return { sticker: mediaBuf };
+                    };
+
+                    const gsPost = async (sock2, chatId2, key2, payload) => {
+                      if (key2) await sock2.sendMessage(chatId2, { react: { text: "⏳", key: key2 } }).catch(() => {});
+                      const isMedia = !!(payload.image || payload.video || payload.audio || payload.sticker);
+                      const t0 = Date.now();
+                      if (isMedia) {
+                        const b = payload.image || payload.video || payload.audio || payload.sticker;
+                        console.log(`[GStatus] uploading ${payload.image ? "image" : payload.video ? "video" : payload.audio ? "audio" : "sticker"} (${Math.round((b.length || 0) / 1024)}KB)…`);
+                      }
+                      const genPromise = generateWAMessageContent(payload, { upload: sock2.waUploadToServer });
+                      const inner = isMedia
+                        ? await Promise.race([
+                            genPromise,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("media upload timed out after 90s — try a smaller file")), 90000)),
+                          ])
+                        : await genPromise;
+                      const messageSecret = crypto.randomBytes(32);
+                      const wrapped = generateWAMessageFromContent(
+                        chatId2,
+                        {
+                          messageContextInfo: { messageSecret },
+                          groupStatusMessageV2: {
+                            message: {
+                              ...inner,
+                              messageContextInfo: { messageSecret },
+                            },
+                          },
+                        },
+                        {},
+                      );
+                      await sock2.relayMessage(chatId2, wrapped.message, { messageId: wrapped.key.id });
+                      if (isMedia) console.log(`[GStatus] posted media ok in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+                      if (key2) await sock2.sendMessage(chatId2, { react: { text: "✅", key: key2 } }).catch(() => {});
+                    };
+
+                    globalThis.__gsHelpers = { gsBuildPayload, gsPost };
+                    return globalThis.__gsHelpers;
+                  };
+                  const { gsBuildPayload: __gsBuildPayload, gsPost: __gsPost } = __gsEnsureHelpers();
+                  const __gsPendingTake = (botId, chatId2, sender2) => {
+                    const map = (globalThis.__gsPending = globalThis.__gsPending || new Map());
+                    const key = `${botId}:${chatId2}:${sender2}`;
+                    const entry = map.get(key);
+                    if (!entry) return null;
+                    map.delete(key);
+                    if (Date.now() - entry.ts > 60000) return null; // expired
+                    return entry;
+                  };
+
+                  // 3.75 📌 GROUP STATUS MEDIA PIPELINE (2026-09-15 fix).
+                  // Baileys computes image/video thumbnails with SHARP when it is
+                  // installed — sharp is BANNED on this box (native libvips crash
+                  // killed the process mid-post). prepareWAMessageMedia SKIPS that
+                  // path when the payload already carries jpegThumbnail /
+                  // waveform / seconds, so the helpers below always provide them
+                  // (jimp + ffmpeg — both proven safe here). Also: a bare
+                  // `.gstatus` arms a 60s media window; the sender's next
+                  // photo/video/audio/sticker becomes the group status (the only
+                  // way to post audio, since WhatsApp never captions voice notes).
+                  if (isGroupChat && !m.key.fromMe) {
+                    const _gsKind =
+                      m.message.imageMessage ? "image"
+                        : m.message.videoMessage ? "video"
+                          : m.message.audioMessage ? "audio"
+                            : m.message.stickerMessage ? "sticker" : null;
+                    let _gsExempt = false;
+                    if (_gsKind) {
+                      try {
+                        const gsPm = groupMetadata || await getGroupMetadata(chatId).catch(() => null);
+                        const gsPadm = gsPm ? (cachedAdminSet || buildAdminCache(chatId, gsPm.participants)) : null;
+                        const gsPphone = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+                        _gsExempt = !gsPadm || gsPadm.has(gsPphone) || gsPadm.has(senderJid) ||
+                          _isBotOwner(senderJid) ||
+                          (typeof isGlobalMod === "function" && isGlobalMod(senderJid));
+                      } catch (gsPExErr) {
+                        console.log("[GStatus] pending exemption check failed:", gsPExErr?.message);
+                      }
+                    }
+                    if (_gsKind && _gsExempt) {
+                      const _gsCap = (
+                        m.message.imageMessage?.caption ||
+                        m.message.videoMessage?.caption ||
+                        m.message.conversation ||
+                        m.message.extendedTextMessage?.text || ""
+                      ).trim();
+                      if (!_gsCap.startsWith(PREFIX) && __gsPendingTake(BOT_ID, chatId, senderJid)) {
+                        try {
+                          const _gsPayload = await __gsBuildPayload(
+                            _gsKind,
+                            _gsKind === "sticker" ? m.message.stickerMessage
+                              : _gsKind === "audio" ? m.message.audioMessage
+                                : m.message[_gsKind + "Message"],
+                            null,
+                            _gsCap || undefined,
+                          );
+                          await __gsPost(sock, chatId, m.key, _gsPayload);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                          });
+                        } catch (gsPendErr) {
+                          console.log("[GStatus] pending post failed:", gsPendErr?.message || gsPendErr);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `❌ Could not post the group status: ${String(gsPendErr?.message || gsPendErr).slice(0, 120)}`,
+                          });
+                        }
+                        return; // handled — do not run the rest of the pipeline
+                      }
+                    }
+                  }
+
                   // 4. 📌 GROUP STATUS ANNOUNCEMENTS (opt-in via `.gstatus on`).
                   // WhatsApp group statuses arrive wrapped in
                   // groupStatusMentionMessage/groupStatusMessage(V2) — or with
@@ -14360,7 +14588,9 @@ Commands:
                     }
 
                     // Build the status payload from args or a quoted message.
-                    const crypto = require("crypto");
+                    // (2026-09-15: all media now flows through __gsBuildPayload so
+                    // thumbnails/waveform/seconds are pre-computed with safe libs
+                    // and Baileys' sharp-based thumbnail path can never run.)
                     const qm =
                       m.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
                     const idxGS = txt.toLowerCase().indexOf("gstatus");
@@ -14368,67 +14598,35 @@ Commands:
                     // 💡 DIRECT MEDIA (2026-09-15): the caption/media can arrive ATTACHED to
                     // the command message itself — `.gstatus <caption>` sent with a
                     // photo/video/audio/sticker — not only as a reply to another message.
-                    const dmMedia =
-                      m.message.imageMessage
-                        ? { kind: "image", msg: m.message.imageMessage }
-                        : m.message.videoMessage
-                          ? { kind: "video", msg: m.message.videoMessage }
-                          : m.message.audioMessage
-                            ? { kind: "audio", msg: m.message.audioMessage }
-                            : m.message.stickerMessage
-                              ? { kind: "sticker", msg: m.message.stickerMessage }
-                              : null;
+                    const dmKind =
+                      m.message.imageMessage ? "image"
+                        : m.message.videoMessage ? "video"
+                          : m.message.audioMessage ? "audio"
+                            : m.message.stickerMessage ? "sticker" : null;
                     let payload = null;
                     try {
-                      if (qm) {
-                        if (qm.imageMessage) {
-                          const buf = await downloadContentFromMessage(qm.imageMessage, "image");
-                          let chunks = [];
-                          for await (const ch of buf) chunks.push(ch);
-                          payload = { image: Buffer.concat(chunks) };
-                        } else if (qm.videoMessage) {
-                          const buf = await downloadContentFromMessage(qm.videoMessage, "video");
-                          let chunks = [];
-                          for await (const ch of buf) chunks.push(ch);
-                          payload = { video: Buffer.concat(chunks) };
-                        } else if (qm.audioMessage) {
-                          const buf = await downloadContentFromMessage(qm.audioMessage, "audio");
-                          let chunks = [];
-                          for await (const ch of buf) chunks.push(ch);
-                          // preserve voice-note character (ptt) + codec hint so the
-                          // status plays exactly like the original
-                          payload = {
-                            audio: Buffer.concat(chunks),
-                            ptt: !!qm.audioMessage.ptt,
-                            mimetype: qm.audioMessage.mimetype || undefined,
-                          };
-                        } else if (qm.stickerMessage) {
-                          const buf = await downloadContentFromMessage(qm.stickerMessage, "sticker");
-                          let chunks = [];
-                          for await (const ch of buf) chunks.push(ch);
-                          payload = { sticker: Buffer.concat(chunks) };
-                        } else if (qm.conversation) {
-                          payload = { text: qm.conversation };
-                        } else if (qm.extendedTextMessage?.text) {
-                          payload = { text: qm.extendedTextMessage.text };
-                        }
-                        if (payload && (payload.image || payload.video) && typedText) {
-                          payload.caption = typedText;
-                        }
-                      } else if (dmMedia) {
-                        const bufDm = await downloadContentFromMessage(dmMedia.msg, dmMedia.kind);
-                        let chunksDm = [];
-                        for await (const ch of bufDm) chunksDm.push(ch);
-                        const mediaBuf = Buffer.concat(chunksDm);
-                        if (dmMedia.kind === "image") payload = { image: mediaBuf, caption: typedText || undefined };
-                        else if (dmMedia.kind === "video") payload = { video: mediaBuf, caption: typedText || undefined };
-                        else if (dmMedia.kind === "audio")
-                          payload = {
-                            audio: mediaBuf,
-                            ptt: !!dmMedia.msg.ptt,
-                            mimetype: dmMedia.msg.mimetype || undefined,
-                          };
-                        else payload = { sticker: mediaBuf };
+                      const qKind =
+                        qm?.imageMessage ? "image"
+                          : qm?.videoMessage ? "video"
+                            : qm?.audioMessage ? "audio"
+                              : qm?.stickerMessage ? "sticker" : null;
+                      if (qm && qKind) {
+                        const qMsg = qm.imageMessage || qm.videoMessage || qm.audioMessage || qm.stickerMessage;
+                        payload = await __gsBuildPayload(
+                          qKind,
+                          qMsg,
+                          null,
+                          (qKind === "image" || qKind === "video") && typedText ? typedText : undefined,
+                        );
+                      } else if (dmKind) {
+                        payload = await __gsBuildPayload(
+                          dmKind,
+                          m.message[dmKind + "Message"],
+                          null,
+                          (dmKind === "image" || dmKind === "video") && typedText ? typedText : undefined,
+                        );
+                      } else if (qm && (qm.conversation || qm.extendedTextMessage?.text)) {
+                        payload = { text: qm.conversation || qm.extendedTextMessage.text };
                       } else if (typedText) {
                         payload = { text: typedText };
                       }
@@ -14437,13 +14635,15 @@ Commands:
                     }
 
                     if (!payload) {
+                      // 📎 Arm a 60s media window: the next photo/video/audio/
+                      // sticker this user sends in this chat becomes the status.
+                      globalThis.__gsPending = globalThis.__gsPending || new Map();
+                      globalThis.__gsPending.set(`${BOT_ID}:${chatId}:${senderJid}`, { ts: Date.now() });
                       return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `📌 *Group Status*
+                        text: BOT_MARKER + `📎 *Waiting for your media…* (60s)
 
-Post a status visible only to this group's members:
-• \`${botConfig.getPrefix().toLowerCase()} gstatus <text>\`
-• Attach a photo/video/audio/sticker and send \`${botConfig.getPrefix().toLowerCase()} gstatus [caption]\`
-• Reply to an image/video/audio with \`${botConfig.getPrefix().toLowerCase()} gstatus [caption]\`
+Send or attach a photo / video / audio / sticker in this chat now and I'll post it to this group's status.
+You can also reply \`gstatus\` to any media — or attach one to \`${botConfig.getPrefix().toLowerCase()} gstatus <caption>\` to caption it.
 ${canUseAdminCommands ? `
 Moderation:
 • \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\` — announce incoming statuses
@@ -14452,28 +14652,7 @@ Moderation:
                     }
 
                     try {
-                      await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
-                      const inner = await generateWAMessageContent(payload, {
-                        upload: sock.waUploadToServer,
-                      });
-                      const messageSecret = crypto.randomBytes(32);
-                      const wrapped = generateWAMessageFromContent(
-                        chatId,
-                        {
-                          messageContextInfo: { messageSecret },
-                          groupStatusMessageV2: {
-                            message: {
-                              ...inner,
-                              messageContextInfo: { messageSecret },
-                            },
-                          },
-                        },
-                        {},
-                      );
-                      await sock.relayMessage(chatId, wrapped.message, {
-                        messageId: wrapped.key.id,
-                      });
-                      await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      await __gsPost(sock, chatId, m.key, payload);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
                       });

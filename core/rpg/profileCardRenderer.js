@@ -686,27 +686,22 @@ const EQUIPMENT_SLOTS = [
 ];
 
 
-// 💡 REDESIGN 2026-09-15 (owner feedback: style must match the rest of the deck).
-// The v1 card drew its own rounded panel with pixel fonts (Dogica / Press Start 2P),
-// colored chips and striped rows — a different visual language from the approved
-// cards. This version is a TRUE Royal Decree sibling:
-//   • always baked on bg_7 (the owner-picked main style) so the ornamental frame,
-//     "— BY ORDER OF THE GUILD —" header, divider star, bottom rule, realm tagline
-//     and wax seal are pixel-identical to the profile card;
-//   • the profile-specific middle (portrait frame surroundings, KNOWN ATTRIBUTES
-//     column, PvP label) is masked with clean parchment patches LIFTED FROM THE
-//     SAME background texture, so there is no visible panel seam;
-//   • every drawn element reuses the profile card's exact primitives: IM Fell for
-//     labels, Cinzel for small caps, Cinzel Decorative bold crimson values, the
-//     tan dot leaders (#6e583a) and the ink/crimson palette (#281c12 / #781e24).
-// The hero available-points number lives INSIDE the existing portrait frame —
-// same composition as the profile card: frame left, attribute ledger right.
-// Geometry below mirrors layouts.json style 7 ops (rows y=352+49i, values x=724,
-// dots from x=470, PvP row y=762, underline y=327).
-const ALLOC_INK = '#281c12';
-const ALLOC_SUB = '#46341e';
-const ALLOC_CRIMSON = '#781e24';
-const ALLOC_TAN = '#6e583a';
+// 💡 REDESIGN 2026-09-15 v2 (owner feedback: "completely redesign a unique
+// card … dont reuse"). The allocate card no longer borrows anything from the
+// profile deck — no bg_7 bake, no Royal Decree fonts/palette. It is drawn
+// entirely in code as its own identity: THE SOUL FORGE (obsidian + gold +
+// arcane teal), MedievalSharp-led type, rune-circle watermark, starfield.
+const SOUL = {
+  bgTop: '#0b0d16',
+  bgMid: '#191233',
+  bgBot: '#0b0d16',
+  gold: '#c9a227',
+  goldBright: '#e8c766',
+  goldDim: '#a8945f',
+  teal: '#7fe8dc',
+  tealSoft: '#9fe8df',
+  ink: '#efe6d0',
+};
 
 function allocFmtGain(v) {
   const n = Number(v);
@@ -715,13 +710,51 @@ function allocFmtGain(v) {
   return `+${String(r)}`;
 }
 
-function allocDrawDots(ctx, startX, endX, y, color) {
-  const cy = y + 9.2, r = 1.2; // identical to the profile card's drawDots geometry
+// gold dot leaders (dark-card geometry — not the parchment card's)
+function soulDots(ctx, startX, endX, y, a) {
+  if (endX - startX < 12) return;
+  ctx.save();
+  ctx.fillStyle = `rgba(201,162,39,${a})`;
+  for (let xx = startX; xx < endX; xx += 9) {
+    ctx.beginPath(); ctx.arc(xx, y, 1.3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// four-point sparkle
+function soulSparkle(ctx, x, y, s, a) {
+  ctx.save();
+  ctx.fillStyle = `rgba(232,199,102,${a})`;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.22, y - s * 0.22);
+  ctx.lineTo(x + s, y); ctx.lineTo(x + s * 0.22, y + s * 0.22);
+  ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.22, y + s * 0.22);
+  ctx.lineTo(x - s, y); ctx.lineTo(x - s * 0.22, y - s * 0.22);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// small filled diamond
+function soulDiamond(ctx, x, y, s, color) {
   ctx.save();
   ctx.fillStyle = color;
-  for (let xx = startX; xx < endX; xx += 8) {
-    ctx.beginPath(); ctx.arc(xx + r, cy, r, 0, Math.PI * 2); ctx.fill();
-  }
+  ctx.beginPath();
+  ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// L-shaped corner bracket (bright gold)
+function soulBracket(ctx, x, y, dx, dy, len, w) {
+  ctx.save();
+  ctx.strokeStyle = SOUL.goldBright;
+  ctx.lineWidth = w;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + dx * len, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + dy * len);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -731,163 +764,233 @@ async function renderAllocateCard(params) {
     tier = 'STARTER', className = 'Adventurer', prefix = '.'
   } = params;
 
-  // Royal Decree only — the allocate card speaks the language of the owner's
-  // chosen main card (style 7), independent of the server-wide default.
-  let bg = await loadBg(7);
   ensureFonts();
   const { createCanvas } = getCanvas();
-
-  const W = bg ? bg.width : 800;
-  const H = bg ? bg.height : 1100;
+  const W = 800, H = 1100;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
   const cx = Math.round(W / 2);
 
-  if (!bg) {
-    // Defensive fallback (bg art missing): flat gradient + IM Fell text, so the
-    // command still answers. Same palette family, minimal chrome.
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#f3e6cb'); g.addColorStop(1, '#e6d3ac');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = ALLOC_CRIMSON; ctx.lineWidth = 3;
-    roundRectPath(ctx, 14, 14, W - 28, H - 28, 10); ctx.stroke();
-    drawText(ctx, { x: cx, y: H * 0.09, s: 'STAT ALLOCATION', font: 'imfell', size: 58, color: ALLOC_INK, maxW: W * 0.8 });
-    drawText(ctx, { x: cx, y: H * 0.135, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i', size: 28, color: ALLOC_SUB, maxW: W * 0.8 });
-    drawText(ctx, { x: cx, y: H * 0.21, s: 'AVAILABLE POINTS', font: 'cinzel', size: 26, color: ALLOC_SUB });
-    drawText(ctx, { x: cx, y: H * 0.29, s: String(availablePoints), font: 'cinzel_dec_b', size: 120, color: ALLOC_CRIMSON });
-    const rowY0 = H * 0.4;
-    ['HP', 'ATK', 'DEF', 'MAG', 'SPD', 'LUCK', 'CRIT'].forEach((st, i) => {
-      const y = rowY0 + i * H * 0.052;
-      drawText(ctx, { x: W * 0.18, y, s: st, font: 'imfell', size: 28, color: ALLOC_INK, anchor: 'lm' });
-      drawText(ctx, { x: W * 0.82, y, s: allocFmtGain(perPoint[st] || 1), font: 'cinzel_dec_b', size: 26, color: ALLOC_CRIMSON, anchor: 'rm' });
-    });
-    drawText(ctx, { x: cx, y: H * 0.86, s: `${prefix} allocate <stat> [amount]`, font: 'imfell', size: 32, color: ALLOC_INK });
-    drawText(ctx, { x: cx, y: H * 0.905, s: `example:  ${prefix} allocate atk 5`, font: 'imfell_i', size: 22, color: ALLOC_SUB });
-    return canvas.toBuffer('image/png');
+  // ── 1. Background: obsidian-indigo gradient + arcane glow + starfield ──
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, SOUL.bgTop);
+  g.addColorStop(0.42, SOUL.bgMid);
+  g.addColorStop(1, SOUL.bgBot);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  const glow = ctx.createRadialGradient(cx, 300, 40, cx, 300, 330);
+  glow.addColorStop(0, 'rgba(111,224,210,0.10)');
+  glow.addColorStop(1, 'rgba(111,224,210,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // deterministic starfield (seeded LCG — identical card every render)
+  let seed = 20260915;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let i = 0; i < 110; i++) {
+    const sx = rnd() * W, sy = rnd() * (H * 0.97), sr = 0.6 + rnd() * 1.6;
+    const teal = rnd() < 0.3;
+    ctx.fillStyle = teal ? `rgba(127,232,220,${(0.08 + rnd() * 0.30).toFixed(3)})`
+      : `rgba(232,199,102,${(0.07 + rnd() * 0.28).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
   }
+  [[140, 244, 7], [662, 204, 6], [118, 566, 6], [692, 526, 7], [176, 902, 6], [636, 880, 6], [400, 62, 7], [540, 130, 5], [252, 120, 5]]
+    .forEach(([x, y, s]) => soulSparkle(ctx, x, y, s, 0.38));
 
-  ctx.drawImage(bg, 0, 0, W, H);
-
-  // ---- Mask the profile-specific baked art with parchment from THIS SAME bg ----
-  // Clean source: rows 812..972 sit between the bottom rule (y≈800) and the
-  // realm tagline (y≈985) — pure texture, 160 tall. One column block is tiled
-  // from it (inner tile joins are same-tone so they don't show) and the block's
-  // OUTER edges get an 8px alpha feather so it melts into the surrounding
-  // parchment instead of showing a hard rectangular boundary.
-  const COL_X = 336, COL_W = 410, COL_TOP = 286, COL_BOT = 796;
-  const SRC_Y = 812, SRC_H = 160, FEATHER = 8;
-  const col = createCanvas(COL_W, COL_BOT - COL_TOP);
-  const cctx = col.getContext('2d');
-  for (let y = 0; y < COL_BOT - COL_TOP; y += SRC_H) {
-    const hh = Math.min(SRC_H, COL_BOT - COL_TOP - y);
-    cctx.drawImage(canvas, 60, SRC_Y, COL_W, hh, 0, y, COL_W, hh);
+  // ── 2. Rune-circle watermark behind the hero number ──
+  ctx.save();
+  ctx.strokeStyle = 'rgba(201,162,39,0.14)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, 302, 162, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, 302, 148, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 24; i++) { // tick marks between the two rings
+    const ang = (i / 24) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ang) * 148, 302 + Math.sin(ang) * 148);
+    ctx.lineTo(cx + Math.cos(ang) * 162, 302 + Math.sin(ang) * 162);
+    ctx.stroke();
   }
-  cctx.globalCompositeOperation = 'destination-in';
-  const colH = COL_BOT - COL_TOP;
-  const gFadeV = cctx.createLinearGradient(0, 0, 0, colH);
-  gFadeV.addColorStop(0, 'rgba(0,0,0,0)');
-  gFadeV.addColorStop(FEATHER / colH, 'rgba(0,0,0,1)');
-  gFadeV.addColorStop(1 - FEATHER / colH, 'rgba(0,0,0,1)');
-  gFadeV.addColorStop(1, 'rgba(0,0,0,0)');
-  cctx.fillStyle = gFadeV; cctx.fillRect(0, 0, COL_W, colH);
-  const gFadeH = cctx.createLinearGradient(0, 0, COL_W, 0);
-  gFadeH.addColorStop(0, 'rgba(0,0,0,0)');
-  gFadeH.addColorStop(FEATHER / COL_W, 'rgba(0,0,0,1)');
-  gFadeH.addColorStop(1 - FEATHER / COL_W, 'rgba(0,0,0,1)');
-  gFadeH.addColorStop(1, 'rgba(0,0,0,0)');
-  cctx.fillStyle = gFadeH; cctx.fillRect(0, 0, COL_W, colH);
-  ctx.drawImage(col, COL_X, COL_TOP);
-  // (feathered fade zones sit entirely in clear parchment: labels start x=384,
-  // values end x=728, header caps start y≈297, PvP row ends y≈777)
-
-  // ---- Title block (same slots as the profile card: name y≈145, sub y≈232) ----
-  drawText(ctx, {
-    x: cx, y: 145, s: 'STAT ALLOCATION', font: 'imfell',
-    size: 60, color: ALLOC_INK, maxW: 560
-  });
-  drawText(ctx, {
-    x: cx, y: 232, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i',
-    size: 30, color: ALLOC_SUB, maxW: 620
-  });
-  // (the baked divider + star at y=195 separates title from subtitle, as on the profile card)
-
-  // ---- Left: hero available-points number inside the baked portrait frame ----
-  // Frame interior ≈ x 94..316, y 304..726 (frame 80..330 × 290..740, center 205).
-  const fx = 205;
-  drawText(ctx, { x: fx, y: 352, s: 'AVAILABLE', font: 'cinzel', size: 23, color: ALLOC_SUB });
-  drawText(ctx, { x: fx, y: 384, s: 'POINTS', font: 'cinzel', size: 23, color: ALLOC_SUB });
-  drawText(ctx, {
-    x: fx, y: 528, s: String(Math.max(0, Math.round(Number(availablePoints) || 0))),
-    font: 'imfell', size: 150, color: ALLOC_CRIMSON, maxW: 200
-  });
-  ctx.save();
-  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(130, 614.5); ctx.lineTo(280, 614.5); ctx.stroke();
-  ctx.restore();
-  drawText(ctx, { x: fx, y: 660, s: `${prefix} allocate`, font: 'imfell_i', size: 26, color: ALLOC_INK });
-
-  // ---- Right: attribute ledger, cloned from the profile card's stat rows ----
-  // ('la' anchors at glyph TOP; y=296 puts the caps at 296..314 so the underline
-  // at 327.5 gets the same clear gap as the baked "KNOWN ATTRIBUTES" rule)
-  drawText(ctx, { x: 384, y: 296, s: 'GAIN PER POINT', font: 'cinzel', size: 25, color: ALLOC_SUB, anchor: 'la' });
-  ctx.save();
-  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(384, 327.5); ctx.lineTo(728, 327.5); ctx.stroke();
+  ctx.setLineDash([6, 9]);
+  ctx.beginPath(); ctx.arc(cx, 302, 116, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  [[0, -162], [162, 0], [0, 162], [-162, 0]].forEach(([ox, oy]) =>
+    soulDiamond(ctx, cx + ox, 302 + oy, 5, 'rgba(201,162,39,0.35)'));
+  ctx.strokeStyle = 'rgba(127,232,220,0.20)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, 302, 176, -0.7, 0.85); ctx.stroke();
   ctx.restore();
 
-  const STATS = ['HP', 'ATK', 'DEF', 'MAG', 'SPD', 'LUCK', 'CRIT'];
+  // ── 3. Vignette ──
+  const vg = ctx.createRadialGradient(cx, 540, 240, cx, 540, 760);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.40)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── 4. Gold frame: double border + brackets + diamonds ──
+  ctx.save();
+  ctx.strokeStyle = SOUL.gold;
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(16.5, 16.5, W - 33, H - 33);
+  ctx.strokeStyle = 'rgba(201,162,39,0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(27.5, 27.5, W - 55, H - 55);
+  ctx.restore();
+  const BR = 34;
+  soulBracket(ctx, 16, 16, 1, 1, BR, 3);
+  soulBracket(ctx, W - 16, 16, -1, 1, BR, 3);
+  soulBracket(ctx, 16, H - 16, 1, -1, BR, 3);
+  soulBracket(ctx, W - 16, H - 16, -1, -1, BR, 3);
+  soulDiamond(ctx, cx, 16, 9, SOUL.gold);
+  soulDiamond(ctx, cx, H - 16, 9, SOUL.gold);
+  ctx.fillStyle = 'rgba(201,162,39,0.7)';
+  ctx.beginPath(); ctx.arc(cx - 20, 16, 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 20, 16, 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx - 20, H - 16, 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 20, H - 16, 2.4, 0, Math.PI * 2); ctx.fill();
+
+  // ── 5. Title block ──
+  drawText(ctx, {
+    x: cx, y: 100, s: 'SOUL FORGE', font: 'medsharp',
+    size: 64, color: SOUL.goldBright, maxW: 600,
+    glow: { color: 'rgba(232,199,102,0.40)', r: 20 },
+  });
+  drawText(ctx, {
+    x: cx, y: 142, s: 'A T T R I B U T E   A L L O C A T I O N', font: 'cinzel',
+    size: 20, color: SOUL.goldDim, maxW: 640,
+  });
+  ctx.save();
+  ctx.strokeStyle = 'rgba(201,162,39,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(150, 168.5); ctx.lineTo(306, 168.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(494, 168.5); ctx.lineTo(650, 168.5); ctx.stroke();
+  ctx.restore();
+  soulDiamond(ctx, cx, 168, 4, 'rgba(201,162,39,0.8)');
+  drawText(ctx, {
+    x: cx, y: 194, s: `${className}  ·  ${String(tier).toLowerCase()} tier`, font: 'cinzel',
+    size: 17, color: 'rgba(168,148,95,0.9)', maxW: 560,
+  });
+
+  // ── 6. Hero: unspent points ──
+  drawText(ctx, {
+    x: cx, y: 234, s: 'UNSPENT POINTS', font: 'cinzel',
+    size: 19, color: SOUL.goldDim,
+  });
+  const heroNum = String(Math.max(0, Math.round(Number(availablePoints) || 0)));
+  drawText(ctx, {
+    x: cx, y: 322, s: heroNum, font: 'medsharp',
+    size: heroNum.length >= 4 ? 108 : 132, color: SOUL.teal, maxW: 420,
+    glow: { color: 'rgba(111,224,210,0.50)', r: 26 },
+  });
+
+  // ── 7. Ledger panel ──
+  const PX = 70, PW = 660, PY = 424, PH = 512;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.035)';
+  ctx.strokeStyle = 'rgba(201,162,39,0.30)';
+  ctx.lineWidth = 1;
+  roundRectPath(ctx, PX, PY, PW, PH, 16);
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  drawText(ctx, {
+    x: cx, y: PY + 32, s: 'THE SEVEN PATHS', font: 'medsharp',
+    size: 25, color: SOUL.goldBright,
+  });
+  ctx.save();
+  ctx.strokeStyle = 'rgba(201,162,39,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PX + 190, PY + 52.5); ctx.lineTo(PX + PW - 190, PY + 52.5); ctx.stroke();
+  ctx.restore();
+  soulDiamond(ctx, cx, PY + 52, 3.5, SOUL.gold);
+
+  const ROWS = [
+    ['HP', 'HEALTH'], ['ATK', 'ATTACK'], ['DEF', 'DEFENSE'], ['MAG', 'MAGIC'],
+    ['SPD', 'SPEED'], ['LUCK', 'LUCK'], ['CRIT', 'CRIT'],
+  ];
+  const rowY0 = PY + 82, rowH = 52;
   let totalInvested = 0;
-  const labelFont = FONT_FNS.imfell(30);
-  STATS.forEach((st, i) => {
-    const y = 352 + i * 49;
-    // label — IM Fell, exactly like the baked HP/ATK/... labels on the profile card
-    ctx.font = labelFont;
-    const label = st;
-    const lw = ctx.measureText(label).width;
-    drawText(ctx, { x: 384, y, s: label, font: 'imfell', size: 30, color: ALLOC_INK, anchor: 'lm' });
-    // invested tally — small Cinzel in tan, tucked after the label
-    const inv = Math.max(0, Math.round(Number(invested[st.toLowerCase()]) || 0));
+  ROWS.forEach(([code, name], i) => {
+    const y = rowY0 + i * rowH + rowH / 2;
+    // element-style chip
+    ctx.save();
+    ctx.fillStyle = 'rgba(127,232,220,0.07)';
+    ctx.strokeStyle = 'rgba(127,232,220,0.40)';
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, 96, y - 15, 46, 30, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    drawText(ctx, { x: 119, y, s: code, font: 'cinzel', size: 16, color: SOUL.tealSoft });
+    // stat name
+    drawText(ctx, { x: 158, y, s: name, font: 'medsharp', size: 27, color: SOUL.ink, anchor: 'lm', maxW: 190 });
+    // invested tally
+    const inv = Math.max(0, Math.round(Number(invested[code.toLowerCase()]) || 0));
     totalInvested += inv;
-    let dotsFrom = 470;
+    let dotsFrom = 368;
     if (inv > 0) {
       const tally = `${inv} invested`;
-      const tallyX = 384 + lw + 14;
-      drawText(ctx, { x: tallyX, y, s: tally, font: 'cinzel', size: 16, color: ALLOC_TAN, anchor: 'lm' });
-      dotsFrom = Math.max(dotsFrom, tallyX + ctx.measureText(tally).width + 16);
+      drawText(ctx, { x: 356, y, s: tally, font: 'cinzel', size: 15, color: 'rgba(168,148,95,0.95)', anchor: 'lm' });
+      dotsFrom = 356 + ctx.measureText(tally).width + 14;
     }
-    // value — Cinzel Decorative bold crimson, right-aligned at x=724 (profile values slot)
-    const valStr = allocFmtGain(perPoint[st] || 1);
-    ctx.font = FONT_FNS.cinzel_dec_b(28);
+    // gain per point
+    const valStr = allocFmtGain(perPoint[code] || 1);
+    ctx.font = FONT_FNS.medsharp(30);
     const vw = ctx.measureText(valStr).width;
-    allocDrawDots(ctx, dotsFrom, 724 - vw - 14, y, ALLOC_TAN);
-    drawText(ctx, { x: 724, y, s: valStr, font: 'cinzel_dec_b', size: 28, color: ALLOC_CRIMSON, anchor: 'rm' });
+    soulDots(ctx, dotsFrom, 704 - vw - 12, y, 0.45);
+    drawText(ctx, { x: 704, y, s: valStr, font: 'medsharp', size: 30, color: SOUL.teal, anchor: 'rm' });
+    if (i < ROWS.length - 1) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(201,162,39,0.10)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PX + 26, rowY0 + (i + 1) * rowH + 0.5); ctx.lineTo(PX + PW - 26, rowY0 + (i + 1) * rowH + 0.5); ctx.stroke();
+      ctx.restore();
+    }
   });
 
-  // ---- SPENT summary row (PvP row slot on the profile card: rule y=735, row y=762) ----
+  // SPENT summary row
+  const spentSepY = rowY0 + ROWS.length * rowH;
   ctx.save();
-  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(384, 735.5); ctx.lineTo(728, 735.5); ctx.stroke();
+  ctx.strokeStyle = 'rgba(201,162,39,0.30)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PX + 26, spentSepY + 0.5); ctx.lineTo(PX + PW - 26, spentSepY + 0.5); ctx.stroke();
   ctx.restore();
-  ctx.font = labelFont;
+  const spentY = spentSepY + 30;
   const spentVal = `${Math.round(totalInvested).toLocaleString('en-US')} pts`;
-  ctx.font = FONT_FNS.cinzel_dec_b(24);
+  drawText(ctx, { x: 158, y: spentY, s: 'SPENT', font: 'medsharp', size: 24, color: SOUL.goldDim, anchor: 'lm' });
+  ctx.font = FONT_FNS.medsharp(26);
   const spentW = ctx.measureText(spentVal).width;
-  drawText(ctx, { x: 384, y: 762, s: 'SPENT', font: 'imfell', size: 30, color: ALLOC_INK, anchor: 'lm' });
-  allocDrawDots(ctx, 470, 724 - spentW - 14, 762, ALLOC_TAN);
-  drawText(ctx, { x: 724, y: 762, s: spentVal, font: 'cinzel_dec_b', size: 24, color: ALLOC_CRIMSON, anchor: 'rm' });
+  soulDots(ctx, 368, 704 - spentW - 12, spentY, 0.45);
+  drawText(ctx, { x: 704, y: spentY, s: spentVal, font: 'medsharp', size: 26, color: SOUL.goldBright, anchor: 'rm' });
 
-  // ---- Bottom section (below the baked rule at y≈800; tagline & wax seal stay) ----
+  // ── 8. Soft-cap note ──
   drawText(ctx, {
-    x: cx, y: 843, s: 'Half value per point after heavy single-stat investment', font: 'imfell_i',
-    size: 24, color: ALLOC_SUB, maxW: 620
+    x: cx, y: 954, s: 'Half value per point after heavy single-stat investment', font: 'medsharp',
+    size: 21, color: 'rgba(168,148,95,0.95)', maxW: 640,
+  });
+
+  // ── 9. CTA pill ──
+  ctx.save();
+  ctx.fillStyle = 'rgba(201,162,39,0.10)';
+  ctx.strokeStyle = SOUL.gold;
+  ctx.lineWidth = 1.5;
+  roundRectPath(ctx, 150, 976, 500, 66, 33);
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+  drawText(ctx, {
+    x: cx, y: 1002, s: `${prefix} allocate <stat> [amount]`, font: 'medsharp',
+    size: 28, color: SOUL.goldBright, maxW: 460,
   });
   drawText(ctx, {
-    x: cx, y: 899, s: `${prefix} allocate <stat> [amount]`, font: 'imfell',
-    size: 33, color: ALLOC_INK, maxW: 620
+    x: cx, y: 1028, s: `e.g.  ${prefix} allocate atk 5   ·   ${prefix} allocate hp 3`, font: 'cinzel',
+    size: 15, color: SOUL.goldDim, maxW: 460,
   });
+
+  // ── 10. Footer ──
   drawText(ctx, {
-    x: cx, y: 943, s: `example:  ${prefix} allocate atk 5`, font: 'imfell_i',
-    size: 21, color: ALLOC_SUB
+    x: cx, y: 1056, s: 'spent points are permanent — choose wisely', font: 'medsharp',
+    size: 17, color: 'rgba(168,148,95,0.75)',
   });
 
   return canvas.toBuffer('image/png');
