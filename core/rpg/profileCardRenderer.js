@@ -685,4 +685,176 @@ const EQUIPMENT_SLOTS = [
   { key: 'cloak', label: 'Cloak', short: 'CLK', icon: 'cloak.png' }
 ];
 
-module.exports = { renderProfileCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };
+
+// ============================================
+// 📊 ALLOCATE CARD (2026-09-15) — `.allocate` overview card
+// Reuses the approved card language: Royal Decree background, IM Fell /
+// Dogica type, parchment panel + crimson accents from the style-7 palette.
+// Data-driven inputs keep the renderer dumb: available points, per-point
+// gains for the player's class tier, invested points per stat.
+// ============================================
+const ALLOC_INK = '#281c12';
+const ALLOC_SUB = '#46341e';
+const ALLOC_CRIMSON = '#781e24';
+const ALLOC_PARCH = '#f7ead2';
+const ALLOC_ROW_COLORS = {
+  HP: '#7c2f32', ATK: '#8a5a20', DEF: '#41576b', MAG: '#5b3f8f',
+  SPD: '#2f6f5e', LUCK: '#8f6f2f', CRIT: '#6e1e24'
+};
+
+async function renderAllocateCard(params) {
+  const {
+    availablePoints = 0, invested = {}, perPoint = {},
+    tier = 'STARTER', className = 'Adventurer', prefix = '.'
+  } = params;
+
+  const styleId = getDefaultStyle();
+  let bg = await loadBg(styleId);
+  if (!bg) bg = await loadBg(DEFAULT_STYLE);
+  ensureFonts();
+  const { createCanvas } = getCanvas();
+
+  const W = bg ? bg.width : 1000;
+  const H = bg ? bg.height : 1400;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  if (bg) {
+    ctx.drawImage(bg, 0, 0, W, H);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#2b2016');
+    g.addColorStop(1, '#161009');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Parchment panel with double border (Royal Decree motif)
+  const pX = Math.round(W * 0.09);
+  const pW = W - pX * 2;
+  const pY = Math.round(H * 0.075);
+  const pH = Math.round(H * 0.85);
+  ctx.save();
+  ctx.fillStyle = ALLOC_PARCH;
+  ctx.globalAlpha = 0.96;
+  roundRectPath(ctx, pX, pY, pW, pH, Math.round(W * 0.03));
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = Math.max(3, W * 0.006);
+  ctx.strokeStyle = ALLOC_CRIMSON;
+  roundRectPath(ctx, pX + W * 0.012, pY + W * 0.012, pW - W * 0.024, pH - W * 0.024, Math.round(W * 0.022));
+  ctx.stroke();
+  ctx.restore();
+
+  const cx = pX + pW / 2;
+
+  // Title + class line
+  drawText(ctx, {
+    x: cx, y: pY + H * 0.062, s: 'STAT ALLOCATION', font: 'imfell',
+    size: Math.round(H * 0.050), color: ALLOC_INK, maxW: pW * 0.9
+  });
+  drawText(ctx, {
+    x: cx, y: pY + H * 0.100, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i',
+    size: Math.round(H * 0.026), color: ALLOC_SUB, maxW: pW * 0.9
+  });
+
+  // Divider
+  ctx.save();
+  ctx.strokeStyle = ALLOC_CRIMSON;
+  ctx.lineWidth = Math.max(2, W * 0.003);
+  ctx.beginPath();
+  ctx.moveTo(pX + pW * 0.08, pY + H * 0.125);
+  ctx.lineTo(pX + pW * 0.92, pY + H * 0.125);
+  ctx.stroke();
+  ctx.restore();
+
+  // Available points block
+  drawText(ctx, {
+    x: cx, y: pY + H * 0.165, s: 'AVAILABLE POINTS', font: 'dogica_b',
+    size: Math.round(H * 0.021), color: ALLOC_SUB
+  });
+  drawText(ctx, {
+    x: cx, y: pY + H * 0.235, s: String(availablePoints), font: 'ps2p',
+    size: Math.round(H * 0.075), color: ALLOC_CRIMSON
+  });
+
+  // Stat rows
+  const STATS = ['HP', 'ATK', 'DEF', 'MAG', 'SPD', 'LUCK', 'CRIT'];
+  const rowTop = pY + H * 0.305;
+  const rowStep = H * 0.052;
+  const rowX = pX + pW * 0.07;
+  const rowW = pW * 0.86;
+  // Column captions
+  drawText(ctx, {
+    x: rowX + W * 0.045, y: rowTop - rowStep * 0.62, s: 'STAT', font: 'pixeloid',
+    size: Math.round(H * 0.016), color: ALLOC_SUB, anchor: 'la'
+  });
+  drawText(ctx, {
+    x: rowX + rowW - W * 0.015, y: rowTop - rowStep * 0.62, s: 'GAIN PER POINT', font: 'pixeloid',
+    size: Math.round(H * 0.016), color: ALLOC_SUB, anchor: 'ra'
+  });
+  STATS.forEach((st, i) => {
+    const y = rowTop + i * rowStep;
+    // row stripe
+    if (i % 2 === 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(40, 28, 18, 0.06)';
+      roundRectPath(ctx, rowX - W * 0.015, y - rowStep * 0.42, rowW + W * 0.03, rowStep * 0.86, 8);
+      ctx.fill();
+      ctx.restore();
+    }
+    // color chip
+    ctx.save();
+    ctx.fillStyle = ALLOC_ROW_COLORS[st] || ALLOC_INK;
+    roundRectPath(ctx, rowX, y - H * 0.014, W * 0.016, H * 0.028, 4);
+    ctx.fill();
+    ctx.restore();
+    // stat name (left-aligned past the chip)
+    drawText(ctx, {
+      x: rowX + W * 0.045, y, s: st, font: 'dogica_b',
+      size: Math.round(H * 0.024), color: ALLOC_INK, anchor: 'lm'
+    });
+    // invested tally (further right, clear of the name)
+    const inv = Number(invested[st.toLowerCase()] || 0);
+    drawText(ctx, {
+      x: rowX + W * 0.185, y, s: inv > 0 ? `${inv} invested` : 'not invested', font: 'pixeloid',
+      size: Math.round(H * 0.018), color: ALLOC_SUB, anchor: 'lm'
+    });
+    // per-point gain (right-aligned inside the panel)
+    drawText(ctx, {
+      x: rowX + rowW - W * 0.015, y, s: `+${perPoint[st] || 1}`, font: 'dogica_b',
+      size: Math.round(H * 0.024), color: ALLOC_CRIMSON, anchor: 'rm'
+    });
+  });
+
+  // Soft-cap note
+  drawText(ctx, {
+    x: cx, y: rowTop + 7 * rowStep + H * 0.012,
+    s: 'Half value per point after heavy single-stat investment', font: 'pixeloid',
+    size: Math.round(H * 0.017), color: ALLOC_SUB
+  });
+
+  // CTA box
+  const ctaY = pY + pH - H * 0.085;
+  ctx.save();
+  ctx.fillStyle = 'rgba(40, 28, 18, 0.08)';
+  roundRectPath(ctx, rowX, ctaY - H * 0.036, rowW, H * 0.062, 10);
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, W * 0.0025);
+  ctx.strokeStyle = ALLOC_CRIMSON;
+  roundRectPath(ctx, rowX, ctaY - H * 0.036, rowW, H * 0.062, 10);
+  ctx.stroke();
+  ctx.restore();
+  drawText(ctx, {
+    x: cx, y: ctaY - H * 0.010, s: `${prefix} allocate <stat> [amount]`, font: 'dogica_b',
+    size: Math.round(H * 0.023), color: ALLOC_INK
+  });
+  drawText(ctx, {
+    x: cx, y: ctaY + H * 0.016, s: `example:  ${prefix} allocate atk 5`, font: 'pixeloid',
+    size: Math.round(H * 0.018), color: ALLOC_SUB
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
+module.exports = { renderProfileCard, renderAllocateCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };

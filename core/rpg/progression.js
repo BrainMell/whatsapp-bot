@@ -362,6 +362,28 @@ function getBaseStats(userId, classId) {
     return baseStats;
 }
 
+// 💡 HP allocation synergy (2026-09-15): growing Max HP by allocating HP
+// also restores the same amount of persistent current HP, so investing in
+// HP never widens your injury gap. Skipped for full-HP players (their
+// currentHP is the migrated/-unset sentinel) and clamped to the new max.
+function bumpPersistentHPWithStatGain(userId, gainedValue) {
+    try {
+        const eUser = economy.getUser(userId);
+        if (!eUser || !eUser.stats) return;
+        const cur = Number(eUser.stats.currentHP);
+        if (!Number.isFinite(cur) || cur < 0) return;
+        const rawClass = eUser.class;
+        const classId = typeof rawClass === 'object'
+            ? (rawClass?.id || rawClass?.name || 'FIGHTER')
+            : (rawClass || 'FIGHTER');
+        const newMax = getBaseStats(userId, classId).hp;
+        if (cur < newMax) {
+            eUser.stats.currentHP = Math.min(newMax, cur + gainedValue);
+            economy.saveUser(userId);
+        }
+    } catch (e) {}
+}
+
 function allocateStatPoint(userId, stat, amount = 1) {
     const user = getUser(userId);
     if (!user) return { success: false, message: "User not found" };
@@ -418,6 +440,7 @@ function allocateStatPoint(userId, stat, amount = 1) {
         user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
         user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
         user.statPoints -= amount;
+        if (s === 'hp') bumpPersistentHPWithStatGain(userId, gainedValue);
         saveProgression(userId);
         return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
     }
@@ -429,6 +452,7 @@ function allocateStatPoint(userId, stat, amount = 1) {
     
     user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
     user.statPoints -= amount;
+    if (s === 'hp') bumpPersistentHPWithStatGain(userId, gainedValue);
     saveProgression(userId);
     return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
 }

@@ -1243,6 +1243,18 @@ function useItem(userId, rawItemId, targetSlot = null) {
         };
     }
 
+    if (itemInfo.usable === false) {
+        // Items flagged usable:false are consumed by their own dedicated
+        // systems (e.g. summon_healing_pill is swallowed mid-summon-duel
+        // via `combat item`), never through the generic bag-use flow.
+        // ⚠️ Must run BEFORE the CONSUMABLE/POTION type check — those items
+        // are exactly the ones the effect chain has no branch for.
+        return {
+            success: false,
+            message: `⚔️ *${itemInfo.name}* is used by its own dedicated system, not from the bag.${itemInfo.summonItem ? `\n\nIn a summon duel, use \`${botConfig.getPrefix()} combat item\` to have your summon swallow it mid-battle.` : ''}`
+        };
+    }
+
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
         // 💡 SUMMON EGGS: hatchable items — use triggers the egg spin
         if (itemId.endsWith('_summon_egg')) {
@@ -1279,14 +1291,66 @@ function useItem(userId, rawItemId, targetSlot = null) {
     let effectMsg = "";
     let consumed = true;
 
-    if (itemId === 'hp_potion' || itemId === 'minor_hp_potion' || itemId === 'mega_potion') {
-        // HP potions only meaningfully heal during combat — outside of combat,
-        // characters don't have a persistent HP field (HP is computed from
-        // class+level+stats when a fight starts). Block out-of-combat use
-        // and direct the player to combat usage.
+    // ── OUT-OF-BATTLE CONSUMABLE EFFECTS (2026-09-15) ─────────────────
+    // Wires heal-type consumables into the persistent HP system
+    // (economy.getPersistentHP / setPersistentHP — the same store quest
+    // combat already writes back to and the profile displays). Effect
+    // values come from the lootSystem item defs (effect/effectValue) and
+    // mirror the in-battle switch in pvpSystem's combat-item handler.
+    const COMBAT_ONLY_ITEM_EFFECTS = new Set([
+        'revive', 'flee', 'damage_aoe', 'aoe_damage', 'aoe_debuff_damage',
+        'aoe_slow_damage', 'percent_hp_damage', 'apply_poison', 'freeze_enemy'
+    ]);
+    if (itemInfo.effect === 'heal' || itemInfo.effect === 'regen') {
+        const user = economy.getUser(userId);
+        const rawClass = user?.class;
+        const classId = typeof rawClass === 'object'
+            ? (rawClass?.id || rawClass?.name || 'FIGHTER')
+            : (rawClass || 'FIGHTER');
+        const derivedStats = progression.getBaseStats(userId, classId);
+        const maxHP = derivedStats.maxHp || derivedStats.hp || 100;
+        const currentHP = economy.getPersistentHP(userId, maxHP);
+
+        // Instant potions use effectValue directly. Regen salves collapse
+        // their per-turn ticks (effectValue x duration) into one
+        // application — turns only exist inside battle, so out of combat
+        // the full effect lands immediately.
+        let frac = Number(itemInfo.effectValue);
+        if (!Number.isFinite(frac) || frac <= 0) frac = 0.35;
+        if (itemInfo.effect === 'regen') {
+            const dur = Math.max(1, Number(itemInfo.duration) || 3);
+            frac = frac * dur;
+        }
+
+        if (currentHP >= maxHP) {
+            // Nothing to heal — never waste the player's item.
+            return {
+                success: false,
+                message: `❤️ *${itemInfo.name}* — you're already at full HP (${currentHP}/${maxHP})! Item not consumed.\n\nPotions shine *during* battle: when hurt in a fight, use \`${botConfig.getPrefix()} combat item <#>\`.`
+            };
+        }
+
+        const healAmt = Math.max(1, Math.floor(maxHP * frac));
+        const actualHeal = Math.min(healAmt, maxHP - currentHP);
+        economy.setPersistentHP(userId, currentHP + actualHeal, maxHP);
+
+        let healMsg = `🧪 *${itemInfo.name}* used!`;
+        healMsg += `\n❤️ Restored *${actualHeal} HP* (${Math.round(frac * 100)}% of Max HP).`;
+        healMsg += `\n❤️ HP: *${currentHP + actualHeal}/${maxHP}*`;
+        if (itemInfo.effect === 'regen') {
+            healMsg += `\nℹ️ Out of battle the salve takes effect immediately (its ${Math.max(1, Number(itemInfo.duration) || 3)} turn ticks collapse into one application).`;
+        }
+        if (itemInfo.cureStatus) {
+            healMsg += `\n✨ Negative status effects clear automatically outside battle.`;
+        }
+        effectMsg = healMsg;
+    }
+    else if (itemInfo.effect === 'cure_status') {
+        // Status effects are battle-scoped; outside combat there is nothing
+        // to cure, so the item is NOT consumed.
         return {
             success: false,
-            message: `💚 *${itemInfo.name}* can only be used during combat — your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
+            message: `🧪 *${itemInfo.name}* cures battle status effects (poison, burn, freeze...).\n\nYou have no active status effects outside battle — nothing to cure, item not consumed.`
         };
     }
     else if (itemId === 'energy_drink') {
@@ -1298,8 +1362,16 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const maxEn = derivedStats.maxEnergy || 100;
         // Default current energy to maxEn on first use (undefined → full).
         const currentEn = user.energy !== undefined ? user.energy : maxEn;
-        user.energy = Math.min(maxEn, currentEn + 30);
-        effectMsg = `⚡ Restored **30 Energy**! (Now ${user.energy}/${maxEn})`;
+        if (currentEn >= maxEn) {
+            return { success: false, message: `⚡ *${itemInfo.name}* — your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
+        }
+        // 💡 2026-09-15: use the item def's percentage (effectValue) instead
+        // of a hardcoded flat 30 — matches "Restores 30% Energy" and scales
+        // with the derived maxEnergy (same fix the maxEn read already got).
+        const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.30;
+        const enGain = Math.max(1, Math.floor(maxEn * enPct));
+        user.energy = Math.min(maxEn, currentEn + enGain);
+        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${user.energy}/${maxEn})`;
     }
     else if (itemId === 'class_change_ticket' || itemId === 'reroll_ticket') {
         const user = economy.getUser(userId);
@@ -1362,6 +1434,32 @@ function useItem(userId, rawItemId, targetSlot = null) {
         if (!user.statBonuses) user.statBonuses = {};
         user.statBonuses.luck = (user.statBonuses.luck || 0) + 10;
         effectMsg = `🍀 *LUCKY CHARM CONSUMED!* (+10 Luck permanently!)`;
+    }
+    else if (itemInfo.effect === 'restore_energy') {
+        // Generic energy restore driven by item defs (mana_potion 40%, etc.)
+        const user = economy.getUser(userId);
+        const rawClass = user?.class;
+        const classId = typeof rawClass === 'object'
+            ? (rawClass?.id || rawClass?.name || 'FIGHTER')
+            : (rawClass || 'FIGHTER');
+        const derivedStats = progression.getBaseStats(userId, classId);
+        const maxEn = derivedStats.maxEnergy || 100;
+        const currentEn = user.energy !== undefined ? user.energy : maxEn;
+        if (currentEn >= maxEn) {
+            return { success: false, message: `⚡ *${itemInfo.name}* — your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
+        }
+        const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.40;
+        const enGain = Math.max(1, Math.floor(maxEn * enPct));
+        user.energy = Math.min(maxEn, currentEn + enGain);
+        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${user.energy}/${maxEn})`;
+    }
+    else if (COMBAT_ONLY_ITEM_EFFECTS.has(itemInfo.effect)) {
+        // Battle-only consumables (bombs, smokes, revives...): keep them
+        // exclusive to combat — do NOT auto-generalise to out-of-battle use.
+        return {
+            success: false,
+            message: `🎒 *${itemInfo.name}* only works in the heat of battle!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate it.`
+        };
     }
     else if (itemInfo.effect && (itemInfo.effect.startsWith('buff_') || itemInfo.effect === 'random_major_buff' || itemInfo.effect === 'invincibility' || itemInfo.effect === 'shield_max')) {
         return { success: false, message: `🎒 *${itemInfo.name}* is a combat-only consumable and can only be used during battle!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate its effects.` };

@@ -527,7 +527,42 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
     }
 
     if (!stat) {
-      const sheet = progression.getCharacterSheet(senderJid);
+      const sheet = progression.getCharacterSheet(senderJid) || {};
+
+      // 💡 2026-09-15: image-card UI for the allocation overview, rendered
+      // with the same design language as the profile cards (Royal Decree
+      // palette + type). Falls back to the text panel below on any render
+      // failure so the command can never dead-end.
+      try {
+        const profileCardRenderer = require('../rpg/profileCardRenderer');
+        const classSystem = require('../rpg/classSystem');
+        const allocUser = economy.getUser(senderJid);
+        const allocClass = allocUser ? classSystem.getClassById(allocUser.class) : null;
+        const allocTier = allocClass?.tier || 'STARTER';
+        const allocMult = (allocTier === 'EVOLVED' || allocTier === 'ASCENDED') ? 2.0 : 1.0;
+        const allocBase = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+        const allocPerPoint = {};
+        for (const [k, v] of Object.entries(allocBase)) allocPerPoint[k.toUpperCase()] = Math.max(1, Math.floor(v * allocMult));
+        const allocProg = progression.getUser(senderJid) || {};
+        const cardBuffer = await profileCardRenderer.renderAllocateCard({
+          availablePoints: Number(sheet.statPoints) || 0,
+          invested: allocProg.allocatedStatPoints || {},
+          perPoint: allocPerPoint,
+          tier: allocTier,
+          className: allocClass?.name || 'Adventurer',
+          prefix: getPrefix()
+        });
+        if (cardBuffer && cardBuffer.length > 0) {
+          let cap = `✨ *STAT ALLOCATION* ✨\n`;
+          cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
+          cap += `💡 *Higher class tiers get more value per point!*\n`;
+          cap += `Usage: \`${getPrefix()} allocate <stat> [amount]\` — e.g. \`${getPrefix()} allocate atk 5\``;
+          return await sock.sendMessage(chatId, { image: cardBuffer, caption: getBotMarker() + cap }, { quoted: m });
+        }
+      } catch (cardErr) {
+        console.error('[allocate] card render failed, using text fallback:', cardErr.message);
+      }
+
       let msg = `✨ *STAT ALLOCATION* ✨\n\n`;
       msg += `Available Points: *${sheet.statPoints}*\n\n`;
       msg += `Spend points to increase your power:\n`;

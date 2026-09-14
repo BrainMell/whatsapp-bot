@@ -121,9 +121,15 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         });
 
         if (cardBuffer && cardBuffer.length > 0) {
+          // 💡 2026-09-15: surface unallocated stat points on the primary
+          // (image) profile output so players discover `.allocate`.
+          const unallocPts = Number(sheet?.statPoints) || 0;
+          const allocHint = unallocPts > 0
+            ? `\n\n⚡ *You have ${unallocPts} unallocated stat point${unallocPts === 1 ? '' : 's'}!*\n✨ Use \`${getPrefix()} allocate\` to distribute them.`
+            : '';
           await sock.sendMessage(chatId, {
             image: cardBuffer,
-            caption: `👤 *${senderName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}`,
+            caption: `👤 *${senderName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}${allocHint}`,
             mentions: [senderJid]
           });
           return;
@@ -235,8 +241,9 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     // Stat points — always visible so players know the feature exists
     const statPts = sheet?.statPoints || 0;
     if (statPts > 0) {
-        msg += `\n✨ *${statPts} Stat Points available!*\n`;
-        msg += `\`${botConfig.getPrefix()} allocate <stat> <amount>\`\n`;
+        msg += `\n⚡ *You have ${statPts} unallocated stat point${statPts === 1 ? '' : 's'}!*\n`;
+        msg += `✨ Use \`${botConfig.getPrefix()} allocate\` to distribute them.\n`;
+        msg += `_(e.g. \`${botConfig.getPrefix()} allocate atk 5\`)_\n`;
     } else {
         msg += `\n🔹 *Stat Points:* 0 _(earn more by leveling up)_\n`;
     }
