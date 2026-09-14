@@ -2308,6 +2308,7 @@ async function startBot(configInstance) {
           antibotAction: "warn",    // warn | kick | delete
           antibotMode: "smart",     // smart (scored, FP-safe) | strict (any fingerprint)
           gstatusAnnounce: false,   // 📌 announce incoming group statuses
+          gstatusLock: false,       // 🔒 only admins/owner may post group statuses
           announceAdmins: false,    // 📣 announce promote/demote events
           welcomeEnabled: false,   // welcome off by default
           welcomeMessage: null,   // null = use built-in default message
@@ -2333,6 +2334,7 @@ async function startBot(configInstance) {
       if (settings.antibotAction === undefined) settings.antibotAction = "warn";
       if (settings.antibotMode === undefined) settings.antibotMode = "smart";
       if (settings.gstatusAnnounce === undefined) settings.gstatusAnnounce = false;
+      if (settings.gstatusLock === undefined) settings.gstatusLock = false;
       if (settings.announceAdmins === undefined) settings.announceAdmins = false;
       if (settings.ranksEnabled === undefined) settings.ranksEnabled = false;
       return settings;
@@ -7394,11 +7396,88 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     }
                   }
 
+                  // 3.5 🔒 GROUP STATUS LOCK (opt-in via `.gstatus lock on`).
+                  // When enabled, only "us" may post group statuses: the bot itself,
+                  // group admins, the bot owner and global mods. Anyone else's status
+                  // is auto-deleted, warned, and the member is removed at 3 strikes
+                  // (shares the standard addWarning pool, same as antilink).
+                  let gsLockViolated = false;
+                  if (isGroupChat && !m.key.fromMe && getGroupSettings(chatId).gstatusLock === true) {
+                    try {
+                      const gslWrap =
+                        m.message.groupStatusMentionMessage ||
+                        m.message.groupStatusMessage ||
+                        m.message.groupStatusMessageV2;
+                      const gslCtx =
+                        m.message.extendedTextMessage?.contextInfo ||
+                        m.message.imageMessage?.contextInfo ||
+                        m.message.videoMessage?.contextInfo;
+                      const gslIs =
+                        !!gslWrap ||
+                        gslCtx?.isGroupStatus === true ||
+                        gslCtx?.isGroupStatus === 1;
+                      if (gslIs) {
+                        const gslAuthorRaw =
+                          gslCtx?.participant || m.key.participant || m.key.remoteJid;
+                        const gslAuthor = jidNormalizedUser(gslAuthorRaw || senderJid);
+                        const gslPhone = lidResolver.resolveToPhone(gslAuthor, configInstance.getAuthPath());
+                        // Admin check — prefer the O(1) Set cache, fall back to metadata scan
+                        let gslIsAdmin = false;
+                        const gslMeta = groupMetadata || await getGroupMetadata(chatId).catch(() => null);
+                        if (gslMeta) {
+                          const admSet = cachedAdminSet || buildAdminCache(chatId, gslMeta.participants);
+                          gslIsAdmin = admSet.has(gslPhone) || admSet.has(gslAuthor);
+                        }
+                        const gslExempt =
+                          gslIsAdmin ||
+                          _isBotOwner(gslAuthor) ||
+                          (typeof isGlobalMod === "function" && isGlobalMod(gslAuthor)) ||
+                          gslAuthor === jidNormalizedUser(sock?.user?.id || "");
+                        if (!gslExempt) {
+                          gsLockViolated = true;
+                          // best-effort delete — WhatsApp may refuse revoking status
+                          // protocol messages; never let a failed revoke skip the warn
+                          let gslDeleted = false;
+                          try { await sock.sendMessage(chatId, { delete: m.key }); gslDeleted = true; } catch {}
+                          const gslCount = addWarning(gslAuthor, chatId, "Group-status lock violation");
+                          const gslName = `@${String(gslAuthor).split("@")[0].split(":")[0]}`;
+                          if (gslCount >= 3) {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `🔒 *GROUP STATUS VIOLATION*
+
+*User:* ${gslName}
+*Action:* REMOVED
+*Strikes:* ${gslCount}/3
+
+_Only admins can post group statuses here._`,
+                              mentions: [gslAuthor],
+                            });
+                            setTimeout(() => sock.groupParticipantsUpdate(chatId, [gslAuthor], "remove").catch(() => {}), 1500);
+                          } else {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `🔒 *GROUP STATUS NOT ALLOWED*
+
+*User:* ${gslName}
+${gslDeleted ? "*Status:* removed ✅" : "*Status:* removal not permitted by WhatsApp"}
+*Strikes:* ${gslCount}/3
+
+_Only admins can post group statuses here. 3 strikes = removal._`,
+                              mentions: [gslAuthor],
+                            });
+                          }
+                          console.log(`[GStatusLock] ${gslAuthor} strike ${gslCount}/3 in ${chatId} (deleted=${gslDeleted})`);
+                        }
+                      }
+                    } catch (gslErr) {
+                      console.log("[GStatusLock] failed:", gslErr?.message || gslErr);
+                    }
+                  }
+
                   // 4. 📌 GROUP STATUS ANNOUNCEMENTS (opt-in via `.gstatus on`).
                   // WhatsApp group statuses arrive wrapped in
                   // groupStatusMentionMessage/groupStatusMessage(V2) — or with
                   // contextInfo.isGroupStatus after Baileys unwrapping.
-                  if (isGroupChat && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
+                  if (isGroupChat && !gsLockViolated && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
                     try {
                       const gsWrap =
                         m.message.groupStatusMentionMessage ||
@@ -14244,6 +14323,26 @@ Commands:
                     const argsGS = lowerTxt.split(" ");
                     const settingsGS = getGroupSettings(chatId);
 
+                    // .gstatus lock on/off — only admins/owner may post group statuses;
+                    // violators: auto-delete + warn, removed at the 3rd strike.
+                    if (argsGS[2] === "lock") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      if (argsGS[3] !== "on" && argsGS[3] !== "off") {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` — currently ${settingsGS.gstatusLock ? "ON" : "OFF"}.`,
+                        });
+                      }
+                      settingsGS.gstatusLock = argsGS[3] === "on";
+                      saveGroupSettings();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (settingsGS.gstatusLock
+                          ? `🔒 Group-status lock *ON*. Only admins can post group statuses — others are auto-deleted, warned, and removed at 3/3 strikes.`
+                          : `🔓 Group-status lock *OFF*. Everyone can post group statuses again.`),
+                      });
+                    }
+
                     // .gstatus on/off — announce incoming group statuses
                     if (argsGS[2] === "on" || argsGS[2] === "off") {
                       if (!canUseAdminCommands) {
@@ -14266,6 +14365,19 @@ Commands:
                       m.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
                     const idxGS = txt.toLowerCase().indexOf("gstatus");
                     const typedText = idxGS >= 0 ? txt.slice(idxGS + 7).trim() : "";
+                    // 💡 DIRECT MEDIA (2026-09-15): the caption/media can arrive ATTACHED to
+                    // the command message itself — `.gstatus <caption>` sent with a
+                    // photo/video/audio/sticker — not only as a reply to another message.
+                    const dmMedia =
+                      m.message.imageMessage
+                        ? { kind: "image", msg: m.message.imageMessage }
+                        : m.message.videoMessage
+                          ? { kind: "video", msg: m.message.videoMessage }
+                          : m.message.audioMessage
+                            ? { kind: "audio", msg: m.message.audioMessage }
+                            : m.message.stickerMessage
+                              ? { kind: "sticker", msg: m.message.stickerMessage }
+                              : null;
                     let payload = null;
                     try {
                       if (qm) {
@@ -14283,7 +14395,13 @@ Commands:
                           const buf = await downloadContentFromMessage(qm.audioMessage, "audio");
                           let chunks = [];
                           for await (const ch of buf) chunks.push(ch);
-                          payload = { audio: Buffer.concat(chunks), ptt: false };
+                          // preserve voice-note character (ptt) + codec hint so the
+                          // status plays exactly like the original
+                          payload = {
+                            audio: Buffer.concat(chunks),
+                            ptt: !!qm.audioMessage.ptt,
+                            mimetype: qm.audioMessage.mimetype || undefined,
+                          };
                         } else if (qm.stickerMessage) {
                           const buf = await downloadContentFromMessage(qm.stickerMessage, "sticker");
                           let chunks = [];
@@ -14297,11 +14415,25 @@ Commands:
                         if (payload && (payload.image || payload.video) && typedText) {
                           payload.caption = typedText;
                         }
+                      } else if (dmMedia) {
+                        const bufDm = await downloadContentFromMessage(dmMedia.msg, dmMedia.kind);
+                        let chunksDm = [];
+                        for await (const ch of bufDm) chunksDm.push(ch);
+                        const mediaBuf = Buffer.concat(chunksDm);
+                        if (dmMedia.kind === "image") payload = { image: mediaBuf, caption: typedText || undefined };
+                        else if (dmMedia.kind === "video") payload = { video: mediaBuf, caption: typedText || undefined };
+                        else if (dmMedia.kind === "audio")
+                          payload = {
+                            audio: mediaBuf,
+                            ptt: !!dmMedia.msg.ptt,
+                            mimetype: dmMedia.msg.mimetype || undefined,
+                          };
+                        else payload = { sticker: mediaBuf };
                       } else if (typedText) {
                         payload = { text: typedText };
                       }
                     } catch (dlErr) {
-                      console.log("[GStatus] quoted media download failed:", dlErr?.message);
+                      console.log("[GStatus] media download failed:", dlErr?.message);
                     }
 
                     if (!payload) {
@@ -14310,10 +14442,12 @@ Commands:
 
 Post a status visible only to this group's members:
 • \`${botConfig.getPrefix().toLowerCase()} gstatus <text>\`
+• Attach a photo/video/audio/sticker and send \`${botConfig.getPrefix().toLowerCase()} gstatus [caption]\`
 • Reply to an image/video/audio with \`${botConfig.getPrefix().toLowerCase()} gstatus [caption]\`
-
-Toggle incoming-status announcements:
-• \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\``,
+${canUseAdminCommands ? `
+Moderation:
+• \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\` — announce incoming statuses
+• \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` — admins-only statuses (auto-delete + warn, removed at 3/3)` : ""}`,
                       });
                     }
 

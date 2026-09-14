@@ -686,21 +686,44 @@ const EQUIPMENT_SLOTS = [
 ];
 
 
-// ============================================
-// 📊 ALLOCATE CARD (2026-09-15) — `.allocate` overview card
-// Reuses the approved card language: Royal Decree background, IM Fell /
-// Dogica type, parchment panel + crimson accents from the style-7 palette.
-// Data-driven inputs keep the renderer dumb: available points, per-point
-// gains for the player's class tier, invested points per stat.
-// ============================================
+// 💡 REDESIGN 2026-09-15 (owner feedback: style must match the rest of the deck).
+// The v1 card drew its own rounded panel with pixel fonts (Dogica / Press Start 2P),
+// colored chips and striped rows — a different visual language from the approved
+// cards. This version is a TRUE Royal Decree sibling:
+//   • always baked on bg_7 (the owner-picked main style) so the ornamental frame,
+//     "— BY ORDER OF THE GUILD —" header, divider star, bottom rule, realm tagline
+//     and wax seal are pixel-identical to the profile card;
+//   • the profile-specific middle (portrait frame surroundings, KNOWN ATTRIBUTES
+//     column, PvP label) is masked with clean parchment patches LIFTED FROM THE
+//     SAME background texture, so there is no visible panel seam;
+//   • every drawn element reuses the profile card's exact primitives: IM Fell for
+//     labels, Cinzel for small caps, Cinzel Decorative bold crimson values, the
+//     tan dot leaders (#6e583a) and the ink/crimson palette (#281c12 / #781e24).
+// The hero available-points number lives INSIDE the existing portrait frame —
+// same composition as the profile card: frame left, attribute ledger right.
+// Geometry below mirrors layouts.json style 7 ops (rows y=352+49i, values x=724,
+// dots from x=470, PvP row y=762, underline y=327).
 const ALLOC_INK = '#281c12';
 const ALLOC_SUB = '#46341e';
 const ALLOC_CRIMSON = '#781e24';
-const ALLOC_PARCH = '#f7ead2';
-const ALLOC_ROW_COLORS = {
-  HP: '#7c2f32', ATK: '#8a5a20', DEF: '#41576b', MAG: '#5b3f8f',
-  SPD: '#2f6f5e', LUCK: '#8f6f2f', CRIT: '#6e1e24'
-};
+const ALLOC_TAN = '#6e583a';
+
+function allocFmtGain(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '+1';
+  const r = Math.round(n * 10) / 10;
+  return `+${String(r)}`;
+}
+
+function allocDrawDots(ctx, startX, endX, y, color) {
+  const cy = y + 9.2, r = 1.2; // identical to the profile card's drawDots geometry
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let xx = startX; xx < endX; xx += 8) {
+    ctx.beginPath(); ctx.arc(xx + r, cy, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 
 async function renderAllocateCard(params) {
   const {
@@ -708,150 +731,163 @@ async function renderAllocateCard(params) {
     tier = 'STARTER', className = 'Adventurer', prefix = '.'
   } = params;
 
-  const styleId = getDefaultStyle();
-  let bg = await loadBg(styleId);
-  if (!bg) bg = await loadBg(DEFAULT_STYLE);
+  // Royal Decree only — the allocate card speaks the language of the owner's
+  // chosen main card (style 7), independent of the server-wide default.
+  let bg = await loadBg(7);
   ensureFonts();
   const { createCanvas } = getCanvas();
 
-  const W = bg ? bg.width : 1000;
-  const H = bg ? bg.height : 1400;
+  const W = bg ? bg.width : 800;
+  const H = bg ? bg.height : 1100;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
+  const cx = Math.round(W / 2);
 
-  if (bg) {
-    ctx.drawImage(bg, 0, 0, W, H);
-  } else {
+  if (!bg) {
+    // Defensive fallback (bg art missing): flat gradient + IM Fell text, so the
+    // command still answers. Same palette family, minimal chrome.
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#2b2016');
-    g.addColorStop(1, '#161009');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    g.addColorStop(0, '#f3e6cb'); g.addColorStop(1, '#e6d3ac');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = ALLOC_CRIMSON; ctx.lineWidth = 3;
+    roundRectPath(ctx, 14, 14, W - 28, H - 28, 10); ctx.stroke();
+    drawText(ctx, { x: cx, y: H * 0.09, s: 'STAT ALLOCATION', font: 'imfell', size: 58, color: ALLOC_INK, maxW: W * 0.8 });
+    drawText(ctx, { x: cx, y: H * 0.135, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i', size: 28, color: ALLOC_SUB, maxW: W * 0.8 });
+    drawText(ctx, { x: cx, y: H * 0.21, s: 'AVAILABLE POINTS', font: 'cinzel', size: 26, color: ALLOC_SUB });
+    drawText(ctx, { x: cx, y: H * 0.29, s: String(availablePoints), font: 'cinzel_dec_b', size: 120, color: ALLOC_CRIMSON });
+    const rowY0 = H * 0.4;
+    ['HP', 'ATK', 'DEF', 'MAG', 'SPD', 'LUCK', 'CRIT'].forEach((st, i) => {
+      const y = rowY0 + i * H * 0.052;
+      drawText(ctx, { x: W * 0.18, y, s: st, font: 'imfell', size: 28, color: ALLOC_INK, anchor: 'lm' });
+      drawText(ctx, { x: W * 0.82, y, s: allocFmtGain(perPoint[st] || 1), font: 'cinzel_dec_b', size: 26, color: ALLOC_CRIMSON, anchor: 'rm' });
+    });
+    drawText(ctx, { x: cx, y: H * 0.86, s: `${prefix} allocate <stat> [amount]`, font: 'imfell', size: 32, color: ALLOC_INK });
+    drawText(ctx, { x: cx, y: H * 0.905, s: `example:  ${prefix} allocate atk 5`, font: 'imfell_i', size: 22, color: ALLOC_SUB });
+    return canvas.toBuffer('image/png');
   }
 
-  // Parchment panel with double border (Royal Decree motif)
-  const pX = Math.round(W * 0.09);
-  const pW = W - pX * 2;
-  const pY = Math.round(H * 0.075);
-  const pH = Math.round(H * 0.85);
+  ctx.drawImage(bg, 0, 0, W, H);
+
+  // ---- Mask the profile-specific baked art with parchment from THIS SAME bg ----
+  // Clean source: rows 812..972 sit between the bottom rule (y≈800) and the
+  // realm tagline (y≈985) — pure texture, 160 tall. One column block is tiled
+  // from it (inner tile joins are same-tone so they don't show) and the block's
+  // OUTER edges get an 8px alpha feather so it melts into the surrounding
+  // parchment instead of showing a hard rectangular boundary.
+  const COL_X = 336, COL_W = 410, COL_TOP = 286, COL_BOT = 796;
+  const SRC_Y = 812, SRC_H = 160, FEATHER = 8;
+  const col = createCanvas(COL_W, COL_BOT - COL_TOP);
+  const cctx = col.getContext('2d');
+  for (let y = 0; y < COL_BOT - COL_TOP; y += SRC_H) {
+    const hh = Math.min(SRC_H, COL_BOT - COL_TOP - y);
+    cctx.drawImage(canvas, 60, SRC_Y, COL_W, hh, 0, y, COL_W, hh);
+  }
+  cctx.globalCompositeOperation = 'destination-in';
+  const colH = COL_BOT - COL_TOP;
+  const gFadeV = cctx.createLinearGradient(0, 0, 0, colH);
+  gFadeV.addColorStop(0, 'rgba(0,0,0,0)');
+  gFadeV.addColorStop(FEATHER / colH, 'rgba(0,0,0,1)');
+  gFadeV.addColorStop(1 - FEATHER / colH, 'rgba(0,0,0,1)');
+  gFadeV.addColorStop(1, 'rgba(0,0,0,0)');
+  cctx.fillStyle = gFadeV; cctx.fillRect(0, 0, COL_W, colH);
+  const gFadeH = cctx.createLinearGradient(0, 0, COL_W, 0);
+  gFadeH.addColorStop(0, 'rgba(0,0,0,0)');
+  gFadeH.addColorStop(FEATHER / COL_W, 'rgba(0,0,0,1)');
+  gFadeH.addColorStop(1 - FEATHER / COL_W, 'rgba(0,0,0,1)');
+  gFadeH.addColorStop(1, 'rgba(0,0,0,0)');
+  cctx.fillStyle = gFadeH; cctx.fillRect(0, 0, COL_W, colH);
+  ctx.drawImage(col, COL_X, COL_TOP);
+  // (feathered fade zones sit entirely in clear parchment: labels start x=384,
+  // values end x=728, header caps start y≈297, PvP row ends y≈777)
+
+  // ---- Title block (same slots as the profile card: name y≈145, sub y≈232) ----
+  drawText(ctx, {
+    x: cx, y: 145, s: 'STAT ALLOCATION', font: 'imfell',
+    size: 60, color: ALLOC_INK, maxW: 560
+  });
+  drawText(ctx, {
+    x: cx, y: 232, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i',
+    size: 30, color: ALLOC_SUB, maxW: 620
+  });
+  // (the baked divider + star at y=195 separates title from subtitle, as on the profile card)
+
+  // ---- Left: hero available-points number inside the baked portrait frame ----
+  // Frame interior ≈ x 94..316, y 304..726 (frame 80..330 × 290..740, center 205).
+  const fx = 205;
+  drawText(ctx, { x: fx, y: 352, s: 'AVAILABLE', font: 'cinzel', size: 23, color: ALLOC_SUB });
+  drawText(ctx, { x: fx, y: 384, s: 'POINTS', font: 'cinzel', size: 23, color: ALLOC_SUB });
+  drawText(ctx, {
+    x: fx, y: 528, s: String(Math.max(0, Math.round(Number(availablePoints) || 0))),
+    font: 'imfell', size: 150, color: ALLOC_CRIMSON, maxW: 200
+  });
   ctx.save();
-  ctx.fillStyle = ALLOC_PARCH;
-  ctx.globalAlpha = 0.96;
-  roundRectPath(ctx, pX, pY, pW, pH, Math.round(W * 0.03));
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.lineWidth = Math.max(3, W * 0.006);
-  ctx.strokeStyle = ALLOC_CRIMSON;
-  roundRectPath(ctx, pX + W * 0.012, pY + W * 0.012, pW - W * 0.024, pH - W * 0.024, Math.round(W * 0.022));
-  ctx.stroke();
+  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(130, 614.5); ctx.lineTo(280, 614.5); ctx.stroke();
+  ctx.restore();
+  drawText(ctx, { x: fx, y: 660, s: `${prefix} allocate`, font: 'imfell_i', size: 26, color: ALLOC_INK });
+
+  // ---- Right: attribute ledger, cloned from the profile card's stat rows ----
+  // ('la' anchors at glyph TOP; y=296 puts the caps at 296..314 so the underline
+  // at 327.5 gets the same clear gap as the baked "KNOWN ATTRIBUTES" rule)
+  drawText(ctx, { x: 384, y: 296, s: 'GAIN PER POINT', font: 'cinzel', size: 25, color: ALLOC_SUB, anchor: 'la' });
+  ctx.save();
+  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(384, 327.5); ctx.lineTo(728, 327.5); ctx.stroke();
   ctx.restore();
 
-  const cx = pX + pW / 2;
-
-  // Title + class line
-  drawText(ctx, {
-    x: cx, y: pY + H * 0.062, s: 'STAT ALLOCATION', font: 'imfell',
-    size: Math.round(H * 0.050), color: ALLOC_INK, maxW: pW * 0.9
-  });
-  drawText(ctx, {
-    x: cx, y: pY + H * 0.100, s: `${className}  •  ${String(tier).toLowerCase()} tier`, font: 'imfell_i',
-    size: Math.round(H * 0.026), color: ALLOC_SUB, maxW: pW * 0.9
-  });
-
-  // Divider
-  ctx.save();
-  ctx.strokeStyle = ALLOC_CRIMSON;
-  ctx.lineWidth = Math.max(2, W * 0.003);
-  ctx.beginPath();
-  ctx.moveTo(pX + pW * 0.08, pY + H * 0.125);
-  ctx.lineTo(pX + pW * 0.92, pY + H * 0.125);
-  ctx.stroke();
-  ctx.restore();
-
-  // Available points block
-  drawText(ctx, {
-    x: cx, y: pY + H * 0.165, s: 'AVAILABLE POINTS', font: 'dogica_b',
-    size: Math.round(H * 0.021), color: ALLOC_SUB
-  });
-  drawText(ctx, {
-    x: cx, y: pY + H * 0.235, s: String(availablePoints), font: 'ps2p',
-    size: Math.round(H * 0.075), color: ALLOC_CRIMSON
-  });
-
-  // Stat rows
   const STATS = ['HP', 'ATK', 'DEF', 'MAG', 'SPD', 'LUCK', 'CRIT'];
-  const rowTop = pY + H * 0.305;
-  const rowStep = H * 0.052;
-  const rowX = pX + pW * 0.07;
-  const rowW = pW * 0.86;
-  // Column captions
-  drawText(ctx, {
-    x: rowX + W * 0.045, y: rowTop - rowStep * 0.62, s: 'STAT', font: 'pixeloid',
-    size: Math.round(H * 0.016), color: ALLOC_SUB, anchor: 'la'
-  });
-  drawText(ctx, {
-    x: rowX + rowW - W * 0.015, y: rowTop - rowStep * 0.62, s: 'GAIN PER POINT', font: 'pixeloid',
-    size: Math.round(H * 0.016), color: ALLOC_SUB, anchor: 'ra'
-  });
+  let totalInvested = 0;
+  const labelFont = FONT_FNS.imfell(30);
   STATS.forEach((st, i) => {
-    const y = rowTop + i * rowStep;
-    // row stripe
-    if (i % 2 === 0) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(40, 28, 18, 0.06)';
-      roundRectPath(ctx, rowX - W * 0.015, y - rowStep * 0.42, rowW + W * 0.03, rowStep * 0.86, 8);
-      ctx.fill();
-      ctx.restore();
+    const y = 352 + i * 49;
+    // label — IM Fell, exactly like the baked HP/ATK/... labels on the profile card
+    ctx.font = labelFont;
+    const label = st;
+    const lw = ctx.measureText(label).width;
+    drawText(ctx, { x: 384, y, s: label, font: 'imfell', size: 30, color: ALLOC_INK, anchor: 'lm' });
+    // invested tally — small Cinzel in tan, tucked after the label
+    const inv = Math.max(0, Math.round(Number(invested[st.toLowerCase()]) || 0));
+    totalInvested += inv;
+    let dotsFrom = 470;
+    if (inv > 0) {
+      const tally = `${inv} invested`;
+      const tallyX = 384 + lw + 14;
+      drawText(ctx, { x: tallyX, y, s: tally, font: 'cinzel', size: 16, color: ALLOC_TAN, anchor: 'lm' });
+      dotsFrom = Math.max(dotsFrom, tallyX + ctx.measureText(tally).width + 16);
     }
-    // color chip
-    ctx.save();
-    ctx.fillStyle = ALLOC_ROW_COLORS[st] || ALLOC_INK;
-    roundRectPath(ctx, rowX, y - H * 0.014, W * 0.016, H * 0.028, 4);
-    ctx.fill();
-    ctx.restore();
-    // stat name (left-aligned past the chip)
-    drawText(ctx, {
-      x: rowX + W * 0.045, y, s: st, font: 'dogica_b',
-      size: Math.round(H * 0.024), color: ALLOC_INK, anchor: 'lm'
-    });
-    // invested tally (further right, clear of the name)
-    const inv = Number(invested[st.toLowerCase()] || 0);
-    drawText(ctx, {
-      x: rowX + W * 0.185, y, s: inv > 0 ? `${inv} invested` : 'not invested', font: 'pixeloid',
-      size: Math.round(H * 0.018), color: ALLOC_SUB, anchor: 'lm'
-    });
-    // per-point gain (right-aligned inside the panel)
-    drawText(ctx, {
-      x: rowX + rowW - W * 0.015, y, s: `+${perPoint[st] || 1}`, font: 'dogica_b',
-      size: Math.round(H * 0.024), color: ALLOC_CRIMSON, anchor: 'rm'
-    });
+    // value — Cinzel Decorative bold crimson, right-aligned at x=724 (profile values slot)
+    const valStr = allocFmtGain(perPoint[st] || 1);
+    ctx.font = FONT_FNS.cinzel_dec_b(28);
+    const vw = ctx.measureText(valStr).width;
+    allocDrawDots(ctx, dotsFrom, 724 - vw - 14, y, ALLOC_TAN);
+    drawText(ctx, { x: 724, y, s: valStr, font: 'cinzel_dec_b', size: 28, color: ALLOC_CRIMSON, anchor: 'rm' });
   });
 
-  // Soft-cap note
-  drawText(ctx, {
-    x: cx, y: rowTop + 7 * rowStep + H * 0.012,
-    s: 'Half value per point after heavy single-stat investment', font: 'pixeloid',
-    size: Math.round(H * 0.017), color: ALLOC_SUB
-  });
-
-  // CTA box
-  const ctaY = pY + pH - H * 0.085;
+  // ---- SPENT summary row (PvP row slot on the profile card: rule y=735, row y=762) ----
   ctx.save();
-  ctx.fillStyle = 'rgba(40, 28, 18, 0.08)';
-  roundRectPath(ctx, rowX, ctaY - H * 0.036, rowW, H * 0.062, 10);
-  ctx.fill();
-  ctx.lineWidth = Math.max(2, W * 0.0025);
-  ctx.strokeStyle = ALLOC_CRIMSON;
-  roundRectPath(ctx, rowX, ctaY - H * 0.036, rowW, H * 0.062, 10);
-  ctx.stroke();
+  ctx.strokeStyle = ALLOC_TAN; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(384, 735.5); ctx.lineTo(728, 735.5); ctx.stroke();
   ctx.restore();
+  ctx.font = labelFont;
+  const spentVal = `${Math.round(totalInvested).toLocaleString('en-US')} pts`;
+  ctx.font = FONT_FNS.cinzel_dec_b(24);
+  const spentW = ctx.measureText(spentVal).width;
+  drawText(ctx, { x: 384, y: 762, s: 'SPENT', font: 'imfell', size: 30, color: ALLOC_INK, anchor: 'lm' });
+  allocDrawDots(ctx, 470, 724 - spentW - 14, 762, ALLOC_TAN);
+  drawText(ctx, { x: 724, y: 762, s: spentVal, font: 'cinzel_dec_b', size: 24, color: ALLOC_CRIMSON, anchor: 'rm' });
+
+  // ---- Bottom section (below the baked rule at y≈800; tagline & wax seal stay) ----
   drawText(ctx, {
-    x: cx, y: ctaY - H * 0.010, s: `${prefix} allocate <stat> [amount]`, font: 'dogica_b',
-    size: Math.round(H * 0.023), color: ALLOC_INK
+    x: cx, y: 843, s: 'Half value per point after heavy single-stat investment', font: 'imfell_i',
+    size: 24, color: ALLOC_SUB, maxW: 620
   });
   drawText(ctx, {
-    x: cx, y: ctaY + H * 0.016, s: `example:  ${prefix} allocate atk 5`, font: 'pixeloid',
-    size: Math.round(H * 0.018), color: ALLOC_SUB
+    x: cx, y: 899, s: `${prefix} allocate <stat> [amount]`, font: 'imfell',
+    size: 33, color: ALLOC_INK, maxW: 620
+  });
+  drawText(ctx, {
+    x: cx, y: 943, s: `example:  ${prefix} allocate atk 5`, font: 'imfell_i',
+    size: 21, color: ALLOC_SUB
   });
 
   return canvas.toBuffer('image/png');
