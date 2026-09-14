@@ -8627,8 +8627,11 @@ _💡 Reply with another number from your search list!_`.trim();
                     // --- RPG COMMANDS ---
 
                     // .j shop
+                    // 💡 2026-09-14: multi-word args joined so `.j shop health potion`
+                    // searches "health potion". displayShop treats any non-category
+                    // arg as a search query (known categories unchanged).
                     if (primaryCmd === "shop") {
-                      const category = cmdArgs[1] || "all";
+                      const category = cmdArgs.slice(1).join(" ") || "all";
                       await shopCommands.displayShop(sock, chatId, category);
                       return;
                     }

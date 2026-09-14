@@ -943,7 +943,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── CREATE CLASS (template) ────────────────────────────────────────────
     if (sub === 'createclass') {
-        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|etc>\nPassiveValue: <number>\n\`\`\``;
+        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nReqLevel: <level to evolve into this — optional>\nReqQuests: <quests to evolve into this — optional>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|regen|lifesteal|damage_reduction|scaling_damage|crit_when_low|etc>\nPassiveValue: <number>\n\`\`\`\n\n_Created classes are saved to the database — they survive restarts._`;
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
     }
 
@@ -1952,6 +1952,8 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
         };
 
         SK[targetClass.id].trees[treeName].skills[skillId] = newSkill;
+        // 💡 2026-09-14: persist so mod-created skills survive restarts (was memory-only)
+        await skillTree.saveCustomSkill(targetClass.id, treeName, skillId, newSkill);
 
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `✅ *SKILL CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${skillId}\`\n📋 Class: ${targetClass.icon} ${targetClass.name}\n📊 Tier: ${tier} | Lv.${reqLevel}+ | Max Lv.${maxLevel}\n⚡ Cost: ${cost} | CD: ${cooldown}\n💥 ${data.DamageType || 'PHYSICAL'} ×${dmgMult} — ${data.Targeting || 'SINGLE'}\n📝 ${data.Description || ''}\n\n_Immediately usable. Players can learn it via skill tree._`
@@ -1962,6 +1964,23 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
 }
 
 // ─── HANDLE CLASS CREATION REPLY ───────────────────────────────────────────
+// 💡 2026-09-14 REWRITE (owner: "investigate the create class mod command"):
+// The old version did `classSystem.getAllClasses()[id] = newClass` — a write
+// into the THROWAWAY spread object that getAllClasses() returns, so created
+// classes evaporated instantly (modclass/classes/evolve never saw them).
+// Now: validated, registered via classSystem.registerCustomClass (in-memory
+// + MongoDB persistence), wired into the parent's evolves_into chain, and
+// the companion skill-tree entry is persisted via skillTree.saveCustomSkillTree.
+const KNOWN_PASSIVE_EFFECTS = new Set([
+    'all_stats', 'cooldown_reduction', 'crit_when_low', 'damage_per_hit',
+    'damage_reduction', 'damage_when_low_hp', 'dodge_chance', 'dragon_3x',
+    'enemy_debuff', 'energy_cost_reduction', 'energy_regen', 'extra_action',
+    'first_turn_bonus', 'gold_find', 'healing_boost', 'lifesteal',
+    'magic_damage', 'party_all_buff', 'party_physical_buff', 'regen',
+    'revive', 'rotate_elements', 'scaling_damage', 'summon_buff',
+    'team_healing',
+]);
+
 async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_MARKER, prefix) {
     try {
         const lines = replyText.split('\n');
@@ -1978,13 +1997,30 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         }
 
         const classId = data.Name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        if (classSystem.getClassById(classId)) {
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ A class with ID \`${classId}\` already exists. Pick a different name.` });
+        }
+
+        // ── validated fields ──
+        const TIERS = ['STARTER', 'EVOLVED', 'ASCENDED'];
+        const ROLES = ['TANK', 'DPS', 'MAGE', 'SUPPORT', 'HYBRID'];
+        const tier = (data.Tier || 'STARTER').toUpperCase();
+        const role = (data.Role || 'HYBRID').toUpperCase();
+        const warnings = [];
+        if (!TIERS.includes(tier)) {
+            warnings.push(`Tier "${data.Tier}" not recognized — used STARTER`);
+        }
+        if (!ROLES.includes(role)) {
+            warnings.push(`Role "${data.Role}" not recognized — used HYBRID`);
+        }
+
         const newClass = {
             id: classId,
             name: data.Name,
             icon: data.Icon || '✨',
             desc: data.Desc || 'A custom class.',
-            tier: data.Tier || 'STARTER',
-            role: data.Role || 'HYBRID',
+            tier: TIERS.includes(tier) ? tier : 'STARTER',
+            role: ROLES.includes(role) ? role : 'HYBRID',
             stats: {
                 hp: parseInt(data.HP) || 100,
                 atk: parseInt(data.ATK) || 10,
@@ -1997,26 +2033,43 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             evolves_into: [],
         };
 
-        if (data.EvolvesFrom && data.EvolvesFrom !== 'NONE') {
-            newClass.evolvedFrom = data.EvolvesFrom.toUpperCase();
+        if (data.EvolvesFrom && data.EvolvesFrom.toUpperCase() !== 'NONE') {
+            const parent = classSystem.getClassById(data.EvolvesFrom.toUpperCase());
+            if (!parent) {
+                warnings.push(`EvolvesFrom "${data.EvolvesFrom}" is not a known class — evolve chain NOT wired`);
+            } else {
+                newClass.evolvedFrom = parent.id;
+                // optional evolution gate (canEvolve reads requirement.level / .questsCompleted)
+                const reqLevel = parseInt(data.ReqLevel);
+                const reqQuests = parseInt(data.ReqQuests);
+                if (!isNaN(reqLevel) || !isNaN(reqQuests)) {
+                    newClass.requirement = {};
+                    if (!isNaN(reqLevel)) newClass.requirement.level = reqLevel;
+                    if (!isNaN(reqQuests)) newClass.requirement.questsCompleted = reqQuests;
+                }
+            }
         }
 
         if (data.PassiveName && data.PassiveEffect) {
+            const effect = data.PassiveEffect.toLowerCase().replace(/\s+/g, '_');
+            if (!KNOWN_PASSIVE_EFFECTS.has(effect)) {
+                warnings.push(`PassiveEffect "${data.PassiveEffect}" is not a known effect — it will DISPLAY but not trigger`);
+            }
             newClass.passive = {
                 name: data.PassiveName,
-                effect: data.PassiveEffect,
+                effect,
                 value: parseFloat(data.PassiveValue) || 5,
             };
         }
 
-        // Add to class system
-        const allClasses = classSystem.getAllClasses();
-        allClasses[classId] = newClass;
+        // ── register + persist (throws on duplicate — already checked above) ──
+        await classSystem.registerCustomClass(newClass);
 
-        // Add to skill tree
+        // ── companion skill tree (in-memory + persisted) ──
         const SK = skillTree.SKILL_TREES || skillTree;
-        if (!SK[classId]) {
-            SK[classId] = {
+        let treeEntry = SK[classId];
+        if (!treeEntry) {
+            treeEntry = {
                 name: data.Name,
                 icon: data.Icon || '✨',
                 skillPointsPerLevel: 2,
@@ -2024,13 +2077,19 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
                     CUSTOM: { name: 'Custom Path', icon: '✨', skills: {} }
                 }
             };
+            SK[classId] = treeEntry;
+            await skillTree.saveCustomSkillTree(classId, treeEntry);
         }
 
-        return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *CLASS CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${classId}\`\n📊 Tier: ${data.Tier || 'STARTER'} | Role: ${data.Role || 'HYBRID'}\n❤️ HP: ${data.HP || 100} | ⚔️ ATK: ${data.ATK || 10} | 🛡️ DEF: ${data.DEF || 10}\n🔮 MAG: ${data.MAG || 10} | 💨 SPD: ${data.SPD || 10} | 🍀 LUCK: ${data.LUCK || 10}\n📝 ${data.Desc || ''}\n${data.PassiveName ? `✨ Passive: ${data.PassiveName} (${data.PassiveEffect} ${data.PassiveValue || 5})\n` : ''}_Immediately selectable via \`modclass ${data.Name}\` or \`admin forceevolve\`._`
-        });
+        let msg = `✅ *CLASS CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${classId}\`\n📊 Tier: ${newClass.tier} | Role: ${newClass.role}\n❤️ HP: ${newClass.stats.hp} | ⚔️ ATK: ${newClass.stats.atk} | 🛡️ DEF: ${newClass.stats.def}\n🔮 MAG: ${newClass.stats.mag} | 💨 SPD: ${newClass.stats.spd} | 🍀 LUCK: ${newClass.stats.luck}\n📝 ${data.Desc || ''}\n`;
+        if (newClass.evolvedFrom) msg += `🧬 Evolves from: *${newClass.evolvedFrom}*${newClass.requirement ? ` (Lv ${newClass.requirement.level || 0}+ / ${newClass.requirement.questsCompleted || 0} quests)` : ''}\n`;
+        if (newClass.passive) msg += `✨ Passive: ${newClass.passive.name} (${newClass.passive.effect} ${newClass.passive.value})\n`;
+        if (warnings.length) msg += `\n⚠️ ${warnings.join('\n⚠️ ')}\n`;
+        msg += `\n💾 _Saved to database — survives restarts._\n_Selectable now via \`${prefix} modclass ${data.Name}\`; players see it in \`${prefix} classes\`${newClass.evolvedFrom ? ' and it appears in the evolve chain' : ''}._`;
+
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
     } catch (e) {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Parse error: ' + e.message });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Create failed: ' + e.message });
     }
 }
 

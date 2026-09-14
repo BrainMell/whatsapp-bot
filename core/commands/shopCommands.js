@@ -32,41 +32,29 @@ function shopPrice(item) {
     return base;
 }
 
-// ==========================================
-// 🏪 SHOP DISPLAY
-// ==========================================
-
-async function displayShop(sock, chatId, category = 'all') {
-    // 1. Combine specialized class items with the broad item database
+// ─── SHARED SHOP CATALOG (2026-09-14) ──────────────────────────────────────
+// One builder for displayShop AND buyItem so item shaping/IDs can never
+// drift apart again (the two functions previously carried duplicated loops).
+// Split: mainItems → main shop views, summonItems → `.shop summon` view only.
+function buildShopCatalog() {
     const classItems = classSystem.CLASS_SHOP_ITEMS;
-    const allDbItems = lootSystem.ITEM_DATABASE;
+    const mainItems = {};
+    const summonItems = {};
 
-    // 2. Identify buyable items from the database (Equipment, Consumables, and Stones)
-    // 💡 FIX 2026-08-01 (BUG #3): previously `rarity` was NOT copied into
-    // buyableDbItems, so handleEquipment() at line 312 received
-    // `item.rarity === undefined` and defaulted to 'COMMON' for EVERY shop
-    // purchase. A Mythic Abyssal Blade bought from the shop was stored as
-    // Common — wrong sell multiplier, wrong enhancement cap, wrong display.
-    // Now rarity is propagated from the lootSystem ITEM_DATABASE.
-    // 💡 AUDIT FIX 2026-08-01: split items into main shop + summon shop.
-    // Summon items (eggs, fragments, gear, essences) are HIDDEN from the
-    // main shop. They only appear in the dedicated .shop summon view.
-    const buyableDbItems = {};
-    const summonShopItems = {};
-    Object.entries(allDbItems).forEach(([id, item]) => {
+    Object.entries(lootSystem.ITEM_DATABASE).forEach(([id, item]) => {
         if (item.value <= 1) return;
 
-        // Summon-specific items go to the summon shop only
+        // Summon-specific items live in the dedicated summon shop
         // 💡 Only basic_summon_egg is buyable — higher-tier eggs come from crafting fragments
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
-                             id === 'summon_healing_pill' || // 💡 NEW: buyable from summon shop
+                             id === 'summon_healing_pill' ||
                              id.includes('_fragment') ||
                              id.includes('summon_essence') ||
                              id.includes('skill_respec_scroll');
 
         if (isSummonItem) {
-            summonShopItems[id] = {
+            summonItems[id] = {
                 id,
                 name: item.name,
                 icon: id.includes('summon_egg') ? '🥚' :
@@ -87,9 +75,9 @@ async function displayShop(sock, chatId, category = 'all') {
             return;
         }
 
-        // Main shop items (equipment, potions, stones, etc.)
+        // Main shop items (equipment, potions, stones, keys, remedies)
         if (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy')) {
-            buyableDbItems[id] = {
+            mainItems[id] = {
                 id,
                 name: item.name,
                 icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
@@ -104,76 +92,158 @@ async function displayShop(sock, chatId, category = 'all') {
         }
     });
 
-    const items = { ...classItems, ...buyableDbItems };
+    return { classItems, mainItems, summonItems };
+}
+
+// 🔍 SHOP SEARCH (2026-09-14, owner: "add a search feature for the shop"):
+// `.j shop <anything that isn't a category>` now searches name/ID/desc.
+// Every shop view remembers what it displayed per chat (10-min TTL) so the
+// numbers shown can be bought with `.buy <#>` — previously `.buy <#>` always
+// resolved against the FULL catalog regardless of what the user was looking
+// at, so category/search numbers silently pointed at the wrong items.
+const KNOWN_CATEGORIES = new Set(['all', 'class', 'quest', 'equipment', 'summon', 'permanent']);
+const _lastShopList = new Map(); // chatId -> { list: [item...], expiresAt: epochMs }
+const SHOP_LIST_TTL_MS = 10 * 60 * 1000;
+
+function rememberShopList(chatId, list) {
+    _lastShopList.set(chatId, { list, expiresAt: Date.now() + SHOP_LIST_TTL_MS });
+    if (_lastShopList.size > 500) { // hard cap — chats are plenty, never grow unbounded
+        const oldest = _lastShopList.keys().next().value;
+        _lastShopList.delete(oldest);
+    }
+}
+
+function getRememberedShopList(chatId) {
+    const entry = _lastShopList.get(chatId);
+    if (!entry || Date.now() > entry.expiresAt) {
+        _lastShopList.delete(chatId);
+        return null;
+    }
+    return entry.list;
+}
+
+// ==========================================
+// 🏪 SHOP DISPLAY
+// ==========================================
+
+async function displayShop(sock, chatId, category = 'all') {
+    // 1. Shared catalog (single source of truth — see buildShopCatalog above)
+    const { classItems, mainItems, summonItems } = buildShopCatalog();
+    const p = getPrefix();
+    const Z = getZENI();
 
     // 💡 DEDICATED SUMMON SHOP: if category is 'summon', show only summon items
     if (category.toLowerCase() === 'summon') {
-        const summonItems = Object.entries(summonShopItems);
-        if (summonItems.length === 0) {
+        const summonEntries = Object.entries(summonItems);
+        if (summonEntries.length === 0) {
             await sock.sendMessage(chatId, { text: '🥚 No summon items available.' });
             return;
         }
-        const p = getPrefix();
-        const Z = getZENI();
         let msg = '🥚 *SUMMON SHOP*\n';
         msg += '━━━━━━━━━━━━━━━\n\n';
-        let n = 0;
+        const flat = []; // displayed order — powers `.buy <#>`
+        const renderEntry = (item, statStr) => {
+            flat.push(item);
+            msg += `*${flat.length}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
+            if (statStr) msg += '   ⚙️ ' + statStr + '\n';
+        };
         msg += '*EGGS*\n';
-        summonItems.filter(([,i]) => i.id === 'basic_summon_egg').forEach(([id, item]) => {
-            n++;
-            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
-        });
+        summonEntries.filter(([,i]) => i.id === 'basic_summon_egg').forEach(([, item]) => renderEntry(item));
         msg += '\n*SUMMON GEAR*\n';
-        summonItems.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([id, item]) => {
-            n++;
+        summonEntries.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([, item]) => {
             let statStr = '';
             if (item.stats) {
                 statStr = Object.entries(item.stats).filter(([,v]) => v !== 0).map(([k,v]) => k.toUpperCase() + (v > 0 ? '+' : '') + v).join(' ');
             }
-            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
-            if (statStr) msg += '   ⚙️ ' + statStr + '\n';
+            renderEntry(item, statStr);
         });
         msg += '\n*MATERIALS*\n';
-        summonItems.filter(([,i]) => i.id.includes('_fragment') || i.id.includes('summon_essence') || i.id.includes('skill_respec')).forEach(([id, item]) => {
-            n++;
-            msg += `*${n}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
-        });
+        summonEntries.filter(([,i]) => i.id.includes('_fragment') || i.id.includes('summon_essence') || i.id.includes('skill_respec')).forEach(([, item]) => renderEntry(item));
         msg += '\n━━━━━━━━━━━━━━━\n';
-        msg += `💡 Buy: \`${p} buy <id>\` • Higher-tier eggs: craft from Abyss fragments (\`${p} summon eggcraft <tier>\`)`;
+        msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` • Higher-tier eggs: craft from Abyss fragments (\`${p} summon eggcraft <tier>\`)`;
+        rememberShopList(chatId, flat);
         await sock.sendMessage(chatId, { text: msg });
         return;
     }
 
-    // Categories (summon is handled above, not shown in main shop)
+    // 🔍 SHOP SEARCH: any arg that isn't a known category is a query.
+    // Searches item name, ID and description across ALL buyable stock
+    // (class items + main shop + summon shop — summon hits get a 🥚 marker).
+    if (!KNOWN_CATEGORIES.has(category.toLowerCase())) {
+        const q = category.toLowerCase().trim();
+        const qFlat = q.replace(/\s+/g, '_'); // "health potion" also matches id "health_potion"
+        const pool = [...Object.values(classItems), ...Object.values(mainItems), ...Object.values(summonItems)];
+        const scored = [];
+        for (const item of pool) {
+            const name = (item.name || '').toLowerCase();
+            const id = (item.id || '').toLowerCase();
+            const desc = String(item.desc || item.description || '').toLowerCase();
+            let score = -1;
+            if (id === q || id === qFlat || name === q) score = 0;
+            else if (name.startsWith(q) || id.includes(qFlat)) score = 1;
+            else if (name.includes(q)) score = 2;
+            else if (desc.includes(q)) score = 3;
+            if (score >= 0) scored.push({ item, score });
+        }
+        scored.sort((a, b) => a.score - b.score || a.item.name.localeCompare(b.item.name));
+
+        const MAX_RESULTS = 25;
+        const results = scored.slice(0, MAX_RESULTS);
+        let msg = `🔍 *SHOP SEARCH* — "${category}"\n`;
+        msg += `━━━━━━━━━━━━━━━\n\n`;
+        if (results.length === 0) {
+            msg += `❌ Nothing matches "${category}".\n\n`;
+            msg += `📂 Categories: \`${p} shop all · equipment · class · quest · permanent · summon\`\n`;
+        } else {
+            const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
+            rememberShopList(chatId, results.map(r => r.item));
+            results.forEach(({ item }, i) => {
+                const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
+                msg += `*${i + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${Z}${item.cost.toLocaleString()}${item.category === 'SUMMON' ? ' 🥚' : ''}\n`;
+                if (item.desc) msg += `   _${item.desc.slice(0, 70)}${item.desc.length > 70 ? '…' : ''}_\n`;
+                msg += `   🆔 \`${item.id}\`\n`;
+            });
+            if (scored.length > MAX_RESULTS) {
+                msg += `\n…and ${scored.length - MAX_RESULTS} more — narrow the search.\n`;
+            }
+        }
+        msg += `━━━━━━━━━━━━━━━\n`;
+        msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (numbers from this list)`;
+        await sock.sendMessage(chatId, { text: msg });
+        return;
+    }
+
+    // 2. Known-category views (summon handled above, not shown in main shop)
     const categoryInfo = {
         all: { name: 'All Items', icon: '🛍️' },
         class: { name: 'Class Items', icon: '🎭' },
         quest: { name: 'Quest Items', icon: '🧪' },
         equipment: { name: 'Equipment', icon: '⚔️' },
-        summon: { name: 'Summon Shop', icon: '🥚' },
         permanent: { name: 'Special', icon: '📈' }
     };
-    
+
+    const items = { ...classItems, ...mainItems };
     const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;
-    
+
     let msg = `${activeCat.icon} *SHOP*${category.toLowerCase() !== 'all' ? ` • ${activeCat.name}` : ''}\n`;
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `📂 \`${getPrefix()} shop all · equipment · class · quest · permanent\`\n\n`;
-    
+    msg += `📂 \`${p} shop all · equipment · class · quest · permanent\` · 🔍 \`${p} shop <name>\`\n\n`;
+
     // Filter items by category
     const filteredItems = Object.entries(items).filter(([key, item]) => {
         if (category === 'all') return true;
         return item.category.toLowerCase() === category.toLowerCase();
     });
-    
+
     if (filteredItems.length === 0) {
         msg += `❌ No items found in this category.\n`;
     } else {
         // 💡 RESTYLE 2026-09-11: unified compact entries (numbered, no flavor text).
         const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
+        rememberShopList(chatId, filteredItems.map(([, item]) => item));
         filteredItems.forEach(([key, item], index) => {
             const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
-            msg += `*${index + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${getZENI()}${item.cost.toLocaleString()}\n`;
+            msg += `*${index + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${Z}${item.cost.toLocaleString()}\n`;
             const meta = [];
             if (item.reqLevel && item.reqLevel > 1) meta.push(`Lv ${item.reqLevel}`);
             if (item.slot) meta.push(item.slot.replace('_', ' '));
@@ -190,10 +260,10 @@ async function displayShop(sock, chatId, category = 'all') {
             msg += `   🆔 \`${item.id}\`\n`;
         });
     }
-    
+
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `💡 Buy: \`${getPrefix()} buy <id>\` or \`${getPrefix()} buy <#>\` (e.g. \`${getPrefix()} buy health_potion_shop\`)`;
-    
+    msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (e.g. \`${p} buy health_potion_shop\`) • 🔍 \`${p} shop sword\``;
+
     await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -202,71 +272,21 @@ async function displayShop(sock, chatId, category = 'all') {
 // ==========================================
 
 async function buyItem(sock, chatId, senderJid, input) {
-    // Build the full combined item list (same as displayShop 'all')
-    const classItems = classSystem.CLASS_SHOP_ITEMS;
-    const allDbItems = lootSystem.ITEM_DATABASE;
-    // 💡 FIX 2026-08-01: split into main shop + summon shop items (same as displayShop).
-    // Both are buyable — the split only affects what's DISPLAYED, not what can be purchased.
-    const buyableDbItems = {};
-    Object.entries(allDbItems).forEach(([id, item]) => {
-        if (item.value <= 1) return;
-
-        // Summon items (only basic egg is buyable — others come from crafting fragments)
-        const isSummonItem = item.type === 'SUMMON_GEAR' ||
-                             id === 'basic_summon_egg' ||
-                             id === 'summon_healing_pill' || // 💡 NEW: buyable from summon shop
-                             id.includes('_fragment') ||
-                             id.includes('summon_essence') ||
-                             id.includes('skill_respec_scroll');
-
-        if (isSummonItem) {
-            buyableDbItems[id] = {
-                id,
-                name: item.name,
-                icon: id.includes('summon_egg') ? '🥚' :
-                      id.includes('_fragment') ? '💎' :
-                      id.includes('summon_essence') ? '🔮' :
-                      id.includes('skill_respec') ? '📜' :
-                      item.type === 'SUMMON_GEAR' ? '⚙️' : '🧪',
-                desc: item.description,
-                cost: shopPrice(item),
-                rarity: item.rarity || 'COMMON',
-                type: 'ITEM',
-                category: 'SUMMON',
-                slot: item.summonSlot || item.slot,
-                reqLevel: item.reqLevel,
-                stats: item.stats,
-                summonSlot: item.summonSlot,
-            };
-            return;
-        }
-
-        // Main shop items
-        if (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy')) {
-            buyableDbItems[id] = {
-                id,
-                name: item.name,
-                icon: id.includes('stone') ? '💎' : (item.type === 'EQUIPMENT' ? '⚔️' : (id.includes('remedy') ? '🌱' : '🧪')),
-                desc: item.description,
-                cost: shopPrice(item),
-                rarity: item.rarity || 'COMMON',
-                type: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'CONSUMABLE',
-                category: item.type === 'EQUIPMENT' ? 'EQUIPMENT' : 'QUEST',
-                slot: item.slot,
-                reqLevel: item.reqLevel
-            };
-        }
-    });
-    const allItems = { ...classItems, ...buyableDbItems };
+    // 💡 2026-09-14: shared catalog — one builder for display + buy (previously
+    // this function carried a second, drift-prone copy of the item loop).
+    const { classItems, mainItems, summonItems } = buildShopCatalog();
+    // Full buyable universe: main shop + summon shop + class items.
+    // (displayShop hides summon items from the main views but they stay buyable.)
+    const allItems = { ...classItems, ...mainItems, ...summonItems };
     const allItemsList = Object.values(allItems);
 
     const sanitizedInput = input.toLowerCase().trim().replace(/ /g, '_');
     let item = allItems[sanitizedInput];
-    
+
     // Fallback 1: Try stripping all underscores, hyphens, and spaces to match IDs (e.g. minor_hp_potion -> minorhppotion)
     if (!item) {
         const flatInput = sanitizedInput.replace(/_/g, '').replace(/-/g, '');
-        item = Object.values(allItems).find(itm => 
+        item = Object.values(allItems).find(itm =>
             itm.id.replace(/_/g, '').replace(/-/g, '') === flatInput
         );
     }
@@ -274,22 +294,31 @@ async function buyItem(sock, chatId, senderJid, input) {
     // Fallback 2: Try matching against the item's name (case-insensitive, ignoring non-alphanumeric characters)
     if (!item) {
         const flatNameInput = input.toLowerCase().replace(/[^a-z0-9]/g, '');
-        item = Object.values(allItems).find(itm => 
+        item = Object.values(allItems).find(itm =>
             itm.name.toLowerCase().replace(/[^a-z0-9]/g, '') === flatNameInput
         );
     }
-    
-    // Fallback 3: If not found by ID or Name, check if it's a number (index from displayed shop)
+
+    // Fallback 3: If not found by ID or Name, check if it's a number.
+    // 💡 2026-09-14 (shop search round): resolve against the LAST shop view
+    // shown in this chat (search / category / summon — see rememberShopList)
+    // so the numbers the user actually sees are the numbers that buy. The old
+    // code always indexed the FULL catalog, so numbers from `.shop equipment`
+    // or a search result silently pointed at the wrong items. If no fresh
+    // view exists, fall back to the raw catalog as before.
     if (!item && !isNaN(parseInt(input))) {
         const index = parseInt(input) - 1;
-        if (index >= 0 && index < allItemsList.length) {
+        const recentList = getRememberedShopList(chatId);
+        if (recentList && index >= 0 && index < recentList.length) {
+            item = recentList[index];
+        } else if (index >= 0 && index < allItemsList.length) {
             item = allItemsList[index];
         }
     }
-    
+
     if (!item) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ Item not found!\n\nType \`${getPrefix()} shop\` to see available items.\n💡 Use the item ID or its shop number.`
+        await sock.sendMessage(chatId, {
+            text: `❌ Item not found!\n\nType \`${getPrefix()} shop\` to see available items.\n🔍 Tip: \`${getPrefix()} shop <name>\` searches the whole shop (e.g. \`${getPrefix()} shop potion\`).\n💡 Use the item ID or a number from your last shop view.`
         });
         return;
     }

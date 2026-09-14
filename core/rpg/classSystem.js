@@ -1221,8 +1221,78 @@ const CLASS_SHOP_ITEMS = {
     }
 };
 
+// ─── CUSTOM CLASSES (2026-09-14, owner: "investigate the create class mod command") ───
+// 💡 ROOT-CAUSE FIX: the old handleClassCreationReply did
+//    `classSystem.getAllClasses()[id] = newClass` — but getAllClasses() returns a
+//    FRESH {...STARTER, ...EVOLVED} spread object on every call, so the write hit a
+//    throwaway copy and every mod-created class silently vanished (modclass,
+//    classes, evolve — nothing ever saw it). The command has been a silent no-op.
+// This registry is the real store: in-memory for the running process AND persisted
+// to the System collection (key below) so creations survive restarts.
+const CUSTOM_CLASSES = {};
+const CUSTOM_CLASSES_KEY = 'custom_classes_v1';
+
 function getAllClasses() {
-    return { ...STARTER_CLASSES, ...EVOLVED_CLASSES };
+    return { ...STARTER_CLASSES, ...EVOLVED_CLASSES, ...CUSTOM_CLASSES };
+}
+
+// Rehydrate persisted custom classes. Fire-and-forget at module load — mongoose
+// buffers the query until the connection is up; a failure just means this boot
+// runs with code-defined classes only (same policy as the enemy editor).
+(async function _loadCustomClasses() {
+    try {
+        const System = require('../models/System');
+        const doc = await System.findOne({ key: CUSTOM_CLASSES_KEY }).lean();
+        if (doc && doc.value && typeof doc.value === 'object') {
+            const ids = Object.keys(doc.value);
+            Object.assign(CUSTOM_CLASSES, doc.value);
+            if (ids.length) {
+                console.log(`🎭 [classSystem] loaded ${ids.length} custom class(es) from DB: ${ids.join(', ')}`);
+            }
+        }
+    } catch (e) {
+        console.error('[classSystem] custom class load failed (continuing without):', e.message);
+    }
+})();
+
+/**
+ * Register + persist a mod-created class. Throws on invalid input so the
+ * admin console can surface the reason. Also wires the evolve chain: when
+ * classData.evolvedFrom names a known class, that parent's evolves_into
+ * list gains this class so canEvolve() offers it.
+ */
+async function registerCustomClass(classData) {
+    if (!classData || !classData.id || !classData.name) {
+        throw new Error('classData requires id and name');
+    }
+    if (getClassById(classData.id)) {
+        throw new Error(`a class with ID "${classData.id}" already exists`);
+    }
+    CUSTOM_CLASSES[classData.id] = classData;
+
+    if (classData.evolvedFrom) {
+        const parent = getClassById(classData.evolvedFrom);
+        if (parent) {
+            if (!Array.isArray(parent.evolves_into)) parent.evolves_into = [];
+            if (!parent.evolves_into.includes(classData.id)) {
+                parent.evolves_into.push(classData.id);
+            }
+        }
+    }
+
+    // Persist (best-effort — the class stays live in memory even if the DB
+    // write fails; next successful registration re-saves the full registry).
+    try {
+        const System = require('../models/System');
+        await System.updateOne(
+            { key: CUSTOM_CLASSES_KEY },
+            { $set: { value: CUSTOM_CLASSES } },
+            { upsert: true }
+        );
+    } catch (e) {
+        console.error('[classSystem] custom class persist failed:', e.message);
+    }
+    return classData;
 }
 
 function getClassById(classId) {
@@ -1367,10 +1437,12 @@ function getLineage(classId) {
 module.exports = {
     STARTER_CLASSES,
     EVOLVED_CLASSES,
+    CUSTOM_CLASSES,
     ADVENTURER_RANKS,
     CLASS_SHOP_ITEMS,
     getAllClasses,
     getClassById,
+    registerCustomClass,
     getRandomStarterClass,
     isFighterLineage,
     getLineage,

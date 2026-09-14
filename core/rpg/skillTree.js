@@ -6023,6 +6023,79 @@ function ensureSkillPointsInitialized(user, userClassId, level) {
 // 📤 EXPORTS
 // ==========================================
 
+// ─── CUSTOM CLASS SKILL TREES (2026-09-14) ───
+// Persisted companion to classSystem's CUSTOM_CLASSES (the createclass mod
+// command): handleClassCreationReply adds an entry to SKILL_TREES in memory
+// AND saves it under System key custom_skilltrees_v1; this loader re-applies
+// those entries on boot so .j skills / .skill up keep working after restarts.
+// Same durability policy: best-effort persistence, live memory always wins.
+const CUSTOM_TREES_KEY = 'custom_skilltrees_v1';
+const CUSTOM_SKILLS_KEY = 'custom_skills_v1';
+
+(async function _loadCustomSkillData() {
+    try {
+        const System = require('../models/System');
+        const treeDoc = await System.findOne({ key: CUSTOM_TREES_KEY }).lean();
+        if (treeDoc && treeDoc.value && typeof treeDoc.value === 'object') {
+            let added = 0;
+            for (const [classId, tree] of Object.entries(treeDoc.value)) {
+                if (!SKILL_TREES[classId] && tree && typeof tree === 'object') {
+                    SKILL_TREES[classId] = tree;
+                    added++;
+                }
+            }
+            if (added) console.log(`🌳 [skillTree] re-applied ${added} custom class skill tree(s) from DB`);
+        }
+        const skillDoc = await System.findOne({ key: CUSTOM_SKILLS_KEY }).lean();
+        if (skillDoc && skillDoc.value && typeof skillDoc.value === 'object') {
+            let added = 0;
+            for (const [classId, trees] of Object.entries(skillDoc.value)) {
+                if (!SKILL_TREES[classId]) continue;
+                if (!SKILL_TREES[classId].trees) SKILL_TREES[classId].trees = {};
+                for (const [treeName, skills] of Object.entries(trees || {})) {
+                    if (!SKILL_TREES[classId].trees[treeName]) {
+                        SKILL_TREES[classId].trees[treeName] = { name: treeName, icon: '✨', skills: {} };
+                    }
+                    if (!SKILL_TREES[classId].trees[treeName].skills) SKILL_TREES[classId].trees[treeName].skills = {};
+                    Object.assign(SKILL_TREES[classId].trees[treeName].skills, skills || {});
+                    added += Object.keys(skills || {}).length;
+                }
+            }
+            if (added) console.log(`🌳 [skillTree] re-applied ${added} custom skill(s) from DB`);
+        }
+    } catch (e) {
+        console.error('[skillTree] custom skill data load failed (continuing without):', e.message);
+    }
+})();
+
+/** Persist one mod-created class's whole skill-tree entry (createclass). */
+async function saveCustomSkillTree(classId, treeEntry) {
+    try {
+        const System = require('../models/System');
+        const doc = await System.findOne({ key: CUSTOM_TREES_KEY }).lean();
+        const value = (doc && doc.value && typeof doc.value === 'object') ? doc.value : {};
+        value[classId] = treeEntry;
+        await System.updateOne({ key: CUSTOM_TREES_KEY }, { $set: { value } }, { upsert: true });
+    } catch (e) {
+        console.error('[skillTree] custom skill tree persist failed:', e.message);
+    }
+}
+
+/** Persist one mod-created skill (createskill) under its class + tree. */
+async function saveCustomSkill(classId, treeName, skillId, skill) {
+    try {
+        const System = require('../models/System');
+        const doc = await System.findOne({ key: CUSTOM_SKILLS_KEY }).lean();
+        const value = (doc && doc.value && typeof doc.value === 'object') ? doc.value : {};
+        if (!value[classId]) value[classId] = {};
+        if (!value[classId][treeName]) value[classId][treeName] = {};
+        value[classId][treeName][skillId] = skill;
+        await System.updateOne({ key: CUSTOM_SKILLS_KEY }, { $set: { value } }, { upsert: true });
+    } catch (e) {
+        console.error('[skillTree] custom skill persist failed:', e.message);
+    }
+}
+
 module.exports = {
     SKILL_TREES,
     EVOLUTION_SYSTEM,
@@ -6037,5 +6110,7 @@ module.exports = {
     checkComboAvailable,
     getAllAbilitiesForClass,
     calculateSpentPoints,
-    ensureSkillPointsInitialized
+    ensureSkillPointsInitialized,
+    saveCustomSkillTree,
+    saveCustomSkill
 };
