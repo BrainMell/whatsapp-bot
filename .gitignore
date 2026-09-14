@@ -44,3 +44,13 @@ scripts/monitor_loop.sh
 .env.*
 !.env.example
 *.env.backup
+
+# ── Cleanup 2026-09-15: local backup artifacts & scratch ─────────────
+*.bak
+*.bak-*
+*.bak_*
+*.pre_*_bak*
+*.backup
+*.backup-*
+backups/
+.perf-patch-backup/
