@@ -339,31 +339,42 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     // 2026-09-14: engine passes the adventurer-rank GATE rows (next rank,
     // requirements, mission progress) so the card shows not just the level
     // but what stands between the player and the next promotion. Card rows
-    // cap at 5 on the Go side.
+    // cap at 8 on the Go side (2026-09-14 owner: "restore ALL the info the
+    // old text version had") — so the full old-text record now fits:
+    // standings, totals, commands, achievements AND the rank gates.
+    const totalUsers = rank.totalUsers || 0;
+    const topPct = Math.max(1, Math.min(99, 100 - (rank.percentile || 0)));
     const standing = [
-      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${rank.totalUsers}` : `— / ${rank.totalUsers}` },
-      { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}` : 'UNRANKED' },
+      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${totalUsers} · TOP ${topPct}%` : `— / ${totalUsers}` },
+      { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition} / ${totalUsers}` : 'UNRANKED' },
+      { label: 'TOTAL XP', value: fmtCompact(stats.xp?.total || 0) },
+      { label: 'TOTAL GP', value: fmtCompact(stats.gp?.total || 0) },
+      { label: 'COMMANDS', value: String(stats.commands || 0) },
+      { label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) },
     ];
     const gates = Array.isArray(gateRows) ? gateRows : [];
-    if (gates.length) {
-      standing.push(...gates.slice(0, 3));
-      if (gates.length < 3) {
-        standing.push({ label: 'COMMANDS', value: String(stats.commands || 0) });
-      }
-    } else {
-      standing.push({ label: 'COMMANDS', value: String(stats.commands || 0) });
-      standing.push({ label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) });
+    for (const g of gates) {
+      if (standing.length >= 8) break;
+      standing.push(g);
     }
 
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
+      // Any gate rows that did not fit into the 8-row standing panel ride
+      // along in the card caption so no rank-gate info is ever dropped.
+      // (standing = 6 base record rows + however many gates were accepted)
+      const acceptedGates = Math.max(0, standing.length - 6);
+      const overflowGates = gates.slice(acceptedGates);
+      const gateCaption = overflowGates
+        .map((g) => `${g.label}: ${g.value}`)
+        .join(' | ');
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
         nickname,
         caption: atMax
-          ? 'the peak — no level left to climb'
-          : `${fmtCompact(xp.nextLevel)} xp to level ${(stats.level || 1) + 1}`,
+          ? ('the peak — no level left to climb' + (gateCaption ? ` · ${gateCaption}` : ''))
+          : (`${fmtCompact(xp.nextLevel)} xp to level ${(stats.level || 1) + 1}` + (gateCaption ? ` · ${gateCaption}` : '')),
         sealText: rankLetter,
         level: stats.level || 1,
         rankLetter,

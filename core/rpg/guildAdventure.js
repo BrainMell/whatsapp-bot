@@ -7258,14 +7258,56 @@ async function openShop(sock, sessionKey) {
 
   msg += `Shop closes in 90s!\n\n`;
 
+  const shopPayload = [];
   SHOP_LIST.forEach((key, i) => {
     const item = CONSUMABLES[key];
     msg += `${i + 1}. ${item.icon} *${item.name}*\n`;
     msg += `   💰 ${botConfig.getCurrency().symbol}${item.cost} | ${item.effect}\n\n`;
+    shopPayload.push({
+      title: String(item.name || key),
+      icon: String(item.icon || '🧪'),
+      sub: String(item.effect || ''),
+      value: String(item.cost || 0),
+    });
   });
 
   msg += `━━━━━━━━━━━━\n`;
   msg += `💬 \`${botConfig.getPrefix()} buy <#>\` to purchase`;
+
+  // 💡 2026-09-14 owner: "the pre-raid shop image card must be sent BEFORE
+  // the shop text". The SUPPLY card now leads the shop message; the classic
+  // text menu follows right after (unchanged, still the numbered source of
+  // truth for buying). Any render/send failure falls back to text-only and
+  // never blocks or delays the shop phase. The -s skip path never reaches
+  // openShop, so it is unaffected.
+  try {
+    const goService = require('../utils/goImageService');
+    let shopBuf = null;
+    try {
+      shopBuf = await goService.generatePortraitCard({
+        kind: 'SHOP',
+        nickname: state.solo
+          ? (state.players?.[0]?.name || 'Adventurer')
+          : 'The Party',
+        sealText: String(state.dungeonRank || 'F').toUpperCase(),
+        caption: `buy with ${botConfig.getPrefix()}buy <#> — closes in 90s`,
+        entries: shopPayload,
+      });
+    } catch (cardErr) {
+      console.error('[Quest] shop card render failed:', cardErr?.message || cardErr);
+    }
+    if (shopBuf && shopBuf.length > 100) {
+      await sock.sendMessage(state.chatId, {
+        image: shopBuf,
+        caption:
+          `🏪 *PRE-RAID SUPPLY* — Rank ${String(state.dungeonRank || 'F').toUpperCase()}\n` +
+          `⏱️ Closes in 90s · 💬 \`${botConfig.getPrefix()} buy <#>\``,
+        mimetype: 'image/jpeg',
+      });
+    }
+  } catch (e) {
+    console.error('[Quest] shop card send failed:', e?.message || e);
+  }
 
   try {
     await sock.sendMessage(state.chatId, { text: msg });

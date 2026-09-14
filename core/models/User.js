@@ -26,6 +26,12 @@ const UserSchema = new mongoose.Schema({
   class: { type: String, default: null },
   adventurerRank: { type: String, default: 'F' },
   spriteIndex: { type: Number, default: 0 },
+  // 💡 FIX 2026-09-14: cardStyle was NEVER in the schema — Mongoose strict
+  // mode silently stripped it from every saveUser() $set, so every
+  // `.cardstyle <n>` pick reset to the server default on the next read.
+  // (Same bug class as allocatedStatPoints / gamblingProfile — see notes
+  // below in this file.) 0 = "no personal pick → use server default".
+  cardStyle: { type: Number, default: 0 },
   
   questGold: { type: Number, default: 0 },
   questsCompleted: { type: Number, default: 0 },

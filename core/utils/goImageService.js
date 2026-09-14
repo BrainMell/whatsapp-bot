@@ -41,11 +41,28 @@ class GoImageService {
     // making it look like the Go service was unreachable when it was
     // actually fine. This was the root cause of ALL the "Health: null"
     // logs. The Go service was never down; the healthCheck code was broken.
+    // 💡 PERF 2026-09-14 (owner: "image cards should feel instant"):
+    // keep-alive HTTP agents. Every card used to open a fresh TCP connection
+    // to the Go service (and tear it down after) — on the Box1→Box2 VCN hop
+    // that added tens of ms per card plus TIME_WAIT socket churn under load.
+    // A shared keepAlive agent reuses warm connections; combined with the
+    // Go-side asset/font caches and fmt=jpeg this is the cheap half of the
+    // latency win (no behavioral change otherwise).
+    const http = require('http');
+    const keepAliveAgent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: 8,
+      maxFreeSockets: 4,
+    });
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 120000, // 120s timeout for browser ops (scrapes, GIFs)
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
+      httpAgent: keepAliveAgent,
+      httpsAgent: keepAliveAgent, // harmless for http:// URLs, useful if the URL is ever https
     });
 
     // 💡 PERF PATCH 2026-07-27:

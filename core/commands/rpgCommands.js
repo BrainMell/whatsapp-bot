@@ -1400,6 +1400,109 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
 
 
 // ==========================================
+// 🛡️ EQUIPMENT — .j equipment (.j gear)
+//    Image card of everything currently worn: slot, item name,
+//    tier (derived from rarity) + remaining durability. Own layout
+//    (Go kind EQUIP, 800x1100 armory board — distinct orientation).
+//    Falls back to the classic text list on any render failure.
+// ==========================================
+const EQUIP_TIER_ORDER = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+const EQUIP_SLOT_META = {
+    main_hand: { label: 'MAIN HAND', icon: '⚔️' },
+    off_hand:  { label: 'OFF HAND',  icon: '🛡️' },
+    armor:     { label: 'ARMOR',     icon: '🥋' },
+    helmet:    { label: 'HELMET',    icon: '🪖' },
+    boots:     { label: 'BOOTS',     icon: '🥾' },
+    ring:      { label: 'RING',      icon: '💍' },
+    amulet:    { label: 'AMULET',    icon: '📿' },
+    cloak:     { label: 'CLOAK',     icon: '🧥' },
+    gloves:    { label: 'GLOVES',    icon: '🧤' },
+};
+
+async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
+    inventorySystem.repairUserEquipmentStats(senderJid);
+    const equipment = inventorySystem.getEquipment(senderJid);
+    if (!equipment) {
+        await sock.sendMessage(chatId, { text: `❌ You need to register first.` });
+        return;
+    }
+
+    const econUser = economy.getUser(senderJid);
+    const nickname = economy.getDisplayName ? economy.getDisplayName(senderJid) : senderName;
+    const rankLetter = String(econUser?.adventurerRank || 'F').toUpperCase();
+
+    // Build slot payloads (order: EQUIP_SLOT_META)
+    const slots = [];
+    const worn = [];
+    for (const [slotKey, meta] of Object.entries(EQUIP_SLOT_META)) {
+        const item = equipment[slotKey];
+        if (!item) {
+            slots.push({ slot: meta.label, icon: meta.icon, empty: true, name: '', tier: 0, tierLabel: '', dur: 0, durMax: 0 });
+            continue;
+        }
+        const info = lootSystem.getItemInfo(item.id) || {};
+        const rarity = String(item.rarity || info.rarity || 'COMMON').toUpperCase();
+        const tier = Math.max(1, EQUIP_TIER_ORDER.indexOf(rarity) + 1);
+        const dur = typeof item.durability === 'number' ? item.durability : null;
+        const durMax = typeof item.maxDurability === 'number' ? item.maxDurability : null;
+        slots.push({
+            slot: meta.label,
+            icon: meta.icon,
+            empty: false,
+            name: String(item.name || info.name || item.id || 'Unknown'),
+            tier,
+            tierLabel: rarity,
+            dur,
+            durMax,
+        });
+        worn.push({ meta, item, info, rarity, tier, dur, durMax });
+    }
+
+    let buf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        buf = await goService.generatePortraitCard({
+            kind: 'EQUIP',
+            nickname,
+            sealText: rankLetter,
+            caption: `${worn.length}/9 slots filled — repair at .j blacksmith`,
+            slots,
+        });
+    } catch (e) {
+        console.error('[equipment] card render failed:', e?.message || e);
+    }
+
+    if (buf && buf.length > 100) {
+        const marker = `🃏 *${botConfig.getBotName()}*\n\n`;
+        const cap =
+            marker +
+            `🛡️ *EQUIPPED GEAR — ${nickname}*\n` +
+            worn.map(({ meta, item, rarity, tier, dur, durMax }) => {
+                const durTxt = typeof dur === 'number' && durMax
+                    ? ` · 🛠️ ${Math.round(dur * 10) / 10}/${durMax} (${Math.max(0, Math.min(100, Math.round((dur / durMax) * 100)))}%)`
+                    : '';
+                return `${meta.icon} ${meta.label}: *${item.name || item.id}* (T${tier} ${rarity})${durTxt}`;
+            }).join('\n');
+        await sock.sendMessage(chatId, {
+            image: buf,
+            caption: cap.length > 1000 ? cap.slice(0, 997) + '…' : cap,
+            mimetype: 'image/jpeg',
+        });
+        return;
+    }
+
+    // ── fallback: classic text list ──
+    let msg = `🛡️ *EQUIPPED GEAR — ${nickname}*\n\n`;
+    for (const { meta, item, rarity, tier, dur, durMax } of worn) {
+        const durTxt = typeof dur === 'number' && durMax ? ` · 🛠️ ${Math.round(dur * 10) / 10}/${durMax}` : '';
+        msg += `${meta.icon} *${meta.label}:* ${item.name || item.id} (T${tier} ${rarity})${durTxt}\n`;
+    }
+    if (!worn.length) msg += `_Nothing equipped yet — use \`${getPrefix()} equip <#bag_index>\`._\n`;
+    msg += `\n💡 \`${getPrefix()} equipment\` shows this card anytime.`;
+    await sock.sendMessage(chatId, { text: `🃏 *${botConfig.getBotName()}*\n\n` + msg });
+}
+
+// ==========================================
 // 🎨 CARD STYLE — pick one of the 10 approved character-card designs
 //    .j cardstyle         -> style sheet + current pick
 //    .j cardstyle <1-10>  -> set + live preview of your card
@@ -1471,4 +1574,4 @@ async function handleSetDefaultCard(sock, chatId, senderJid, args) {
     }
 }
 
-module.exports = { displayCharacterSheet, handleCardStyle, handleSetDefaultCard, displayInventory, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
+module.exports = { displayCharacterSheet, handleCardStyle, handleSetDefaultCard, displayInventory, displayEquipmentCard, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };

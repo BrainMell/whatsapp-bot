@@ -8572,6 +8572,19 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // .j equipment / .j gear — 2026-09-14 owner: image card
+                    // of everything currently worn, with each item's tier
+                    // (rarity) and remaining durability. Own armory layout.
+                    if (primaryCmd === "equipment" || primaryCmd === "gear") {
+                      await rpgCommands.displayEquipmentCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                      );
+                      return;
+                    }
+
                     // .j setdefaultcard — RPG MOD: pick the server-wide default card
                     // (what players who never picked a style see)
                     if (primaryCmd === "setdefaultcard") {
@@ -8765,9 +8778,17 @@ _💡 Reply with another number from your search list!_`.trim();
                               `🏰 *GROUP RAID INITIATED*\n` +
                               `⏱️ You have ${Math.round((cardData.joinMs || 120000) / 1000)} seconds to join!\n` +
                               `👉 Type \`${botConfig.getPrefix()} join\` to enter.`;
+                          // 💡 FIX 2026-09-14 (ROOT CAUSE of "txt is not
+                          // defined" on .j solo): the payload below
+                          // referenced `caption`, but the variable built
+                          // above is named `cap`. The ReferenceError aborted
+                          // BOTH solo paths (normal + -s) right after the
+                          // shop/skip message, and the engine's outer catch
+                          // then crashed on its own out-of-scope `txt` log
+                          // line, masking the real error. Use `cap`.
                           await sock.sendMessage(
                             chatId,
-                            { image: cardBuf, caption, mimetype: "image/jpeg" },
+                            { image: cardBuf, caption: cap, mimetype: "image/jpeg" },
                             { quoted: m },
                           );
                         } else if (isSolo) {
@@ -26780,6 +26801,8 @@ _(Or reply to their message)_
                       "support",
                       "refresh",
                       "cardstyle",
+                      "equipment",
+                      "gear",
                       "setdefaultcard",
                       "register",
                       "balance",
@@ -27631,12 +27654,28 @@ _(Or reply to their message)_
                     return;
                   console.error("🔴🔴🔴 SKIPPING MESSAGE (FATAL):", err.message);
                   console.error("🔴🔴🔴 FULL STACK:", err.stack);
-                  console.error("🔴🔴🔴 Message that caused this:", JSON.stringify(txt?.slice(0, 100)));
-                  console.error("🔴🔴🔴 Sender:", senderJid, "Chat:", chatId);
+                  // 💡 FIX 2026-09-14: this catch block lives in a scope where
+                  // `txt` (declared ~line 7306 in a nested block) is NOT
+                  // visible. Logging `txt?` here threw its own
+                  // "ReferenceError: txt is not defined", which REPLACED the
+                  // real error — users saw "Command failed: txt is not
+                  // defined" for completely unrelated bugs (e.g. the solo
+                  // `caption` crash). Read everything through _cmdContext
+                  // (declared ~line 6943 OUTSIDE storage.run, populated at
+                  // ~line 7848 INSIDE it), which is the only identifier set
+                  // guaranteed in scope across both worlds.
+                  const _fatalCtx = (typeof _cmdContext !== "undefined" && _cmdContext) ? _cmdContext : {};
+                  const _fatalChat = (_fatalCtx.chatId && typeof _fatalCtx.chatId === "string") ? _fatalCtx.chatId : null;
+                  console.error("🔴🔴🔴 Message that caused this:", JSON.stringify(
+                    _fatalCtx.txt ? String(_fatalCtx.txt).slice(0, 100) : "(unavailable)",
+                  ));
+                  console.error("🔴🔴🔴 Sender:", _fatalCtx.senderJid || "(unknown)", "Chat:", _fatalChat || "(unknown)");
                   // 💡 Also send the error to the user so they can see it
-                  try {
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
-                  } catch (_) {}
+                  if (_fatalChat) {
+                    try {
+                      await sock.sendMessage(_fatalChat, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
+                    } catch (_) {}
+                  }
                 }
                   }), // END storage.run callback
                   _cmdTimeoutPromise,

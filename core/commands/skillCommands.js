@@ -79,97 +79,97 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         console.error('[skilltree] card render failed:', e?.message || e);
     }
 
-    if (treeBuf && treeBuf.length > 100) {
-        await sock.sendMessage(chatId, {
-            image: treeBuf,
-            caption: getBotMarker() +
-                `🌳 *SKILL TREE — ${userClass.name.toUpperCase()}*\n` +
-                `${userClass.icon || '⚔️'} *${senderName}* — Lv.${level}\n` +
-                `📊 Skill Points Available: *${user.skillPoints || 0}*\n` +
-                `✨ \`${getPrefix()} skill up <name>\` to invest a point`,
-            mimetype: 'image/jpeg',
-        });
-        return;
-    }
-
+    // 💡 2026-09-14 owner: "attach the old skill tree text as the caption —
+    // no info may be lost". The legacy text layout is now ALWAYS built and
+    // rides along as the image caption (capped to WhatsApp's 1024-char
+    // caption limit); when the card fails it is still sent standalone.
     const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
-    let msg = `╔═════════════════════════╗\n`;
-    msg += `  🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
-    msg += `╚═════════════════════════╝\n\n`;
-    msg += `${userClass.icon} *${senderName}* — Lv.${level}\n`;
-    msg += `📊 *Skill Points Available:* ${user.skillPoints || 0}\n\n`;
+    const buildTreeText = () => {
+        let t = `🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
+        t += `${userClass.icon} *${senderName}* — Lv.${level} | 📊 Points: *${user.skillPoints || 0}*\n\n`;
 
-    // --- Current class tree (SPECIALIZATION) ---
-    const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
-    if (currentTree) {
-        msg += `┏━━━✨ *SPECIALIZATION* ━━━┓\n`;
-        for (const [, treeData] of Object.entries(currentTree.trees)) {
-            msg += `┃  ${treeData.icon} *${treeData.name}*\n`;
-            for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                const curLevel = user.skills[skillId] || 0;
-                const canLearn = skillTree.canLearnSkill(user.skills, skill);
-                const maxed = curLevel >= skill.maxLevel;
-
-                let icon = '🔒';
-                if (maxed) icon = '✅'; // Changed to ✅ for David's style
-                else if (curLevel > 0) icon = '✅';
-                else if (canLearn) icon = '⭕';
-
-                msg += `┃  ${icon} *${skill.name}*`;
-                if (curLevel > 0) msg += ` [${curLevel}/${skill.maxLevel}]`;
-                msg += `\n`;
-                msg += `┃     ╰─ ${skill.desc || skill.description}\n`;
-                if (!maxed && canLearn && (user.skillPoints || 0) > 0) {
-                    msg += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
-                }
-            }
-        }
-        msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
-    }
-
-    // --- Lineage / heritage trees ---
-    if (lineage.length > 1) {
-        const parents = lineage.slice(1); // skip current class
-        for (const parentId of parents) {
-            const parentClass = classSystem.getClassById(parentId);
-            const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
-            if (!parentTree || !parentClass) continue;
-
-            let inheritedSection = '';
-            for (const [, treeData] of Object.entries(parentTree.trees)) {
+        // --- Current class tree (SPECIALIZATION) ---
+        const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
+        if (currentTree) {
+            t += `✨ *SPECIALIZATION*\n`;
+            for (const [, treeData] of Object.entries(currentTree.trees)) {
+                t += `${treeData.icon || '▪️'} *${treeData.name}*\n`;
                 for (const [skillId, skill] of Object.entries(treeData.skills)) {
                     const curLevel = user.skills[skillId] || 0;
                     const canLearn = skillTree.canLearnSkill(user.skills, skill);
                     const maxed = curLevel >= skill.maxLevel;
 
-                    if (curLevel > 0) {
-                        const icon = maxed ? '✅' : '✅';
-                        inheritedSection += `┃  ${icon} *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
-                    } else if (canLearn && (user.skillPoints || 0) > 0) {
-                        inheritedSection += `┃  ⭕ *${skill.name}* _(Inherited)_\n`;
-                        inheritedSection += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
-                    } else {
-                        inheritedSection += `┃  🔒 *${skill.name}*\n`;
+                    let icon = '🔒';
+                    if (maxed) icon = '✅';
+                    else if (curLevel > 0) icon = '✅';
+                    else if (canLearn) icon = '⭕';
+
+                    t += `${icon} *${skill.name}*`;
+                    if (curLevel > 0) t += ` [${curLevel}/${skill.maxLevel}]`;
+                    t += `\n`;
+                    t += `  ╰─ ${skill.desc || skill.description}\n`;
+                    if (!maxed && canLearn && (user.skillPoints || 0) > 0) {
+                        t += `  ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
                     }
                 }
             }
+            t += `\n`;
+        }
 
-            if (inheritedSection) {
-                msg += `┏━━━ 🔰 *${parentClass.name.toUpperCase()} PATH* ━━┓\n`;
-                msg += inheritedSection;
-                msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
+        // --- Lineage / heritage trees ---
+        if (lineage.length > 1) {
+            const parents = lineage.slice(1); // skip current class
+            for (const parentId of parents) {
+                const parentClass = classSystem.getClassById(parentId);
+                const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
+                if (!parentTree || !parentClass) continue;
+
+                let inheritedSection = '';
+                for (const [, treeData] of Object.entries(parentTree.trees)) {
+                    for (const [skillId, skill] of Object.entries(parentTree.skills || treeData.skills)) {
+                        const curLevel = user.skills[skillId] || 0;
+                        const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                        const maxed = curLevel >= skill.maxLevel;
+
+                        if (curLevel > 0) {
+                            inheritedSection += `✅ *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
+                        } else if (canLearn && (user.skillPoints || 0) > 0) {
+                            inheritedSection += `⭕ *${skill.name}* _(Inherited)_ — \`${getPrefix()} skill up ${skillId}\`\n`;
+                        } else {
+                            inheritedSection += `🔒 *${skill.name}*\n`;
+                        }
+                    }
+                }
+
+                if (inheritedSection) {
+                    t += `🔰 *${parentClass.name.toUpperCase()} PATH*\n`;
+                    t += inheritedSection;
+                    t += `\n`;
+                }
             }
         }
+
+        t += `💡 \`${getPrefix()} skill up <name>\` invest • \`${getPrefix()} skill reset\` refund • \`${getPrefix()} abilities\` list`;
+        return t;
+    };
+    const treeText = buildTreeText();
+
+    if (treeBuf && treeBuf.length > 100) {
+        // WhatsApp hard-caps image captions at 1024 chars — keep the most
+        // valuable head of the legacy text and mark the cut.
+        const head = treeText.length > 980 ? treeText.slice(0, 977) + '…' : treeText;
+        await sock.sendMessage(chatId, {
+            image: treeBuf,
+            caption: getBotMarker() + head,
+            mimetype: 'image/jpeg',
+        });
+        return;
     }
 
-    msg += `💡 *Commands:*\n`;
-    msg += `• \`${getPrefix()} skill up <name>\` — Invest a point\n`;
-    msg += `• \`${getPrefix()} skill reset\` — Refund all points (cost scales with level²)\n`;
-    msg += `• \`${getPrefix()} abilities\` — View combat ability list`;
-    
-    await sock.sendMessage(chatId, { text: msg });
+    await sock.sendMessage(chatId, { text: getBotMarker() + treeText });
 }
+
 
 // ==========================================
 // ⬆️ UPGRADE SKILL
@@ -545,66 +545,119 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         return;
     }
     
-    let msg = `╔═══════════════════════════╗\n`;
-    msg += `    ⚡ *ABILITIES: ${senderName}*\n`;
-    msg += `╚═══════════════════════════╝\n\n`;
-    msg += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities\n\n`;
+    // ── ABILITIES card (primary, 2026-09-14 owner: ".j abilities must also
+    // be an image card") — parchment ability sheet, grouped by class origin,
+    // one row per ability with cost/CD pills + effect line. The legacy text
+    // layout below rides along as the caption (capped to WhatsApp's 1024).
+    const abilityEffectText = (e) => {
+        if (!e) return '';
+        if (e.type === 'damage' && e.multiplier) return `💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage`;
+        if (e.type === 'aoe' && e.multiplier) return `💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : e.damageType === 'true' ? 'TRUE' : 'ATK'} — ALL ENEMIES`;
+        if (e.type === 'heal' || e.type === 'heal_team') return `💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}`;
+        if (e.type === 'buff_self' && e.value) return `✨ +${e.value} ${e.buffType || 'stats'} for ${e.duration}t`;
+        if (e.type === 'buff_team' && e.value) return `✨ Party +${e.value} ${e.buffType || 'stats'} for ${e.duration}t`;
+        if (e.type === 'damage_cc') return `💥 ${Math.floor((e.multiplier || 1) * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} + ${e.ccChance}% ${e.cc || 'CC'}`;
+        if (e.type === 'execute') return `⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)`;
+        if (e.type === 'passive') return `🔹 Passive: ${e.trigger || ''}`;
+        return '';
+    };
 
-    let count = 1;
-
-    for (const group of abilityGroups) {
-        const label = group.isCurrentClass
-            ? `${group.classIcon} *${group.className}*`
-            : `${group.classIcon} _${group.className} Heritage_`;
-        msg += `━━━ ${label} ━━━\n`;
-        for (const ability of group.skills) {
-            const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? `✨ Passive` : `⚡ 0`); // 💡 FIX 2026-08-18: 0-cost ACTIVE abilities (e.g. Perfect Strike) were mislabeled "Passive"
-            const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
-            const animation = ability.animation || ability.effect?.animation || '🔮';
-            
-            msg += `*${count}.* ${animation} *${ability.name}* [Lv.${ability.level}/${ability.maxLevel}]\n`;
-            msg += `   ${costDisplay}${cdDisplay}\n`;
-            
-            const e = ability.effect;
-            if (e) {
-                if (e.type === 'damage' && e.multiplier) {
-                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage\n`;
-                } else if (e.type === 'aoe' && e.multiplier) {
-                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : e.damageType === 'true' ? 'TRUE' : 'ATK'} — ALL ENEMIES\n`;
-                } else if (e.type === 'heal' || e.type === 'heal_team') {
-                    msg += `   💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}\n`;
-                } else if (e.type === 'buff_self' && e.value) {
-                    msg += `   ✨ +${e.value} ${e.buffType || 'stats'} for ${e.duration}t\n`; // 💡 FIX 2026-08-18: removed misleading % — value is FLAT bonus. (PvP halves it, see pvpSystem.js applyBuff.)
-                } else if (e.type === 'buff_team' && e.value) {
-                    msg += `   ✨ Party +${e.value} ${e.buffType || 'stats'} for ${e.duration}t\n`; // 💡 FIX 2026-08-18: removed misleading % — value is FLAT bonus.
-                } else if (e.type === 'damage_cc') {
-                    msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} + ${e.ccChance}% ${e.cc || 'CC'}\n`;
-                } else if (e.type === 'execute') {
-                    msg += `   ⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)\n`;
-                } else if (e.type === 'passive') {
-                    msg += `   🔹 Passive: ${e.trigger || ''}\n`;
-                }
+    const buildAbilitiesText = () => {
+        let t = `⚡ *ABILITIES: ${senderName}*\n`;
+        t += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities\n\n`;
+        let count = 1;
+        for (const group of abilityGroups) {
+            t += group.isCurrentClass
+                ? `━━ ${group.classIcon} *${group.className}* ━━\n`
+                : `━━ ${group.classIcon} _${group.className} Heritage_ ━━\n`;
+            for (const ability of group.skills) {
+                const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? `✨ Passive` : `⚡ 0`);
+                const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
+                const animation = ability.animation || ability.effect?.animation || '🔮';
+                t += `*${count}.* ${animation} *${ability.name}* [Lv.${ability.level}/${ability.maxLevel}]\n`;
+                t += `   ${costDisplay}${cdDisplay}\n`;
+                const effectLine = abilityEffectText(ability.effect);
+                if (effectLine) t += `   ${effectLine}\n`;
+                t += `\n`;
+                count++;
             }
-            msg += `\n`;
-            count++;
         }
+        if (mirroredAbilities.length > 0) {
+            t += `━━ 🪞 *Mirrored Skills* ━━\n`;
+            for (const ability of mirroredAbilities) {
+                const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
+                t += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
+                t += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
+                count++;
+            }
+        }
+        t += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
+        t += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
+        return t;
+    };
+    const abilitiesText = buildAbilitiesText();
+
+    let abBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        const groups = [];
+        for (const group of abilityGroups) {
+            groups.push({
+                name: String(group.className || '').toUpperCase(),
+                sub: group.isCurrentClass ? 'CURRENT' : 'HERITAGE',
+                items: group.skills.map((ability) => {
+                    const costPart = ability.cost > 0 ? `⚡${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? '✨PASSIVE' : '⚡0');
+                    const cdPart = ability.cooldown > 0 ? ` · CD${ability.cooldown}` : '';
+                    return {
+                        title: String(ability.name || ''),
+                        sub: `Lv.${ability.level}/${ability.maxLevel} · ${costPart}${cdPart}`,
+                        value: abilityEffectText(ability.effect),
+                    };
+                }),
+            });
+        }
+        if (mirroredAbilities.length > 0) {
+            groups.push({
+                name: 'MIRRORED',
+                sub: 'BORROWED',
+                items: mirroredAbilities.map((ability) => {
+                    const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
+                    return {
+                        title: `🪞 ${String(ability.name || '')}`,
+                        sub: `from ${ability.sourceClass || '?'}`,
+                        value: `⚡${Math.floor(energyCost * 1.5)} mirrored cost`,
+                    };
+                }),
+            });
+        }
+        if (groups.length) {
+            abBuf = await goService.generatePortraitCard({
+                kind: 'ABILITIES',
+                nickname: senderName,
+                className: userClass.name,
+                level,
+                groups,
+                sealText: String(user.adventurerRank || 'F').toUpperCase(),
+                caption: `${totalCount} abilities — cast with .combat ability <num>`,
+            });
+        }
+    } catch (e) {
+        console.error('[abilities] card render failed:', e?.message || e);
     }
 
-    if (mirroredAbilities.length > 0) {
-        msg += `━━━ 🪞 *Mirrored Skills* ━━━\n`;
-        for (const ability of mirroredAbilities) {
-            const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
-            msg += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
-            msg += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
-            count++;
-        }
+    if (abBuf && abBuf.length > 100) {
+        // WhatsApp hard-caps image captions at 1024 chars — same rule as the
+        // skill tree: the full legacy list rides along, cut only if huge.
+        const head = abilitiesText.length > 980 ? abilitiesText.slice(0, 977) + '…' : abilitiesText;
+        await sock.sendMessage(chatId, {
+            image: abBuf,
+            caption: getBotMarker() + head,
+            mimetype: 'image/jpeg',
+        });
+        return;
     }
 
-    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
-    msg += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
-    
-    await sock.sendMessage(chatId, { text: msg });
+    await sock.sendMessage(chatId, { text: getBotMarker() + abilitiesText });
 }
 
 // ==========================================
