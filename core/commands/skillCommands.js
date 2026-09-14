@@ -481,6 +481,10 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const classSystem = require('../rpg/classSystem');
+    // r6 fix: the card payload used `level` but this function never defined
+    // it — every .j abilities card render threw "level is not defined" and
+    // silently fell back to the text list.
+    const level = progression.getLevel(senderJid);
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
