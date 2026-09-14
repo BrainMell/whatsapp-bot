@@ -7172,12 +7172,31 @@ async function startJourney(sock, sessionKey) {
       );
     }, 1200);
   } else {
-    const shopDelay = state.solo ? 0 : 1000;
-    setTimeout(() => {
+    // 💡 2026-09-14 owner: "the shop text comes before the image" — the
+    // QUESTSTART card is rendered by the Go service (2-8s) upstream in
+    // engine.js while this shop timer fired immediately for solo quests,
+    // so the shop menu kept landing BEFORE the quest start card. Solo now
+    // holds the shop until the card has actually been sent
+    // (state.startCardSent is flipped by engine.js after the send) with a
+    // 12s safety cap so a failed render can never stall the shop. Group
+    // raids keep the original 1s delay — their card goes out minutes
+    // before startJourney even runs.
+    const openShopNow = () => {
       openShop(sock, sessionKey).catch((e) =>
         console.error("[Quest] openShop timer error:", e?.message || e),
       );
-    }, shopDelay);
+    };
+    if (state.solo && !state.startCardSent) {
+      const cardWaitStart = Date.now();
+      const cardWait = setInterval(() => {
+        if (state.startCardSent || Date.now() - cardWaitStart > 12000) {
+          clearInterval(cardWait);
+          openShopNow();
+        }
+      }, 250);
+    } else {
+      setTimeout(openShopNow, 1000);
+    }
   }
 
   // 💡 HIVE MIND WHISPERS (5% chance)

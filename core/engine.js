@@ -8821,6 +8821,11 @@ _💡 Reply with another number from your search list!_`.trim();
                         } else {
                           await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`${botConfig.getPrefix()} join\` to enter.`);
                         }
+                        // 💡 2026-09-14 (ordering fix): signal guildAdventure that the
+                        // start card (or its text fallback) has been sent
+                        // so the solo pre-raid shop menu no longer races
+                        // ahead of the QUESTSTART image.
+                        if (state) state.startCardSent = true;
                       } else {
                         await reply(result.msg);
                       }
