@@ -336,38 +336,89 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     const nickname = economy.getDisplayName(senderJid);
     const atMax = !xp.nextLevel || xp.nextLevel <= 0;
 
-    // 2026-09-14: engine passes the adventurer-rank GATE rows (next rank,
-    // requirements, mission progress) so the card shows not just the level
-    // but what stands between the player and the next promotion. Card rows
-    // cap at 8 on the Go side (2026-09-14 owner: "restore ALL the info the
-    // old text version had") — so the full old-text record now fits:
-    // standings, totals, commands, achievements AND the rank gates.
+    // 2026-09-14 r6 (owner: "the rank card still doesn't show the
+    // requirements needed to progress … make the requirements into a
+    // progress bar / progress section"): the rank gates are no longer plain
+    // text rows — they are computed here as structured PROGRESSION bars
+    // (level, quests, gate-mission objectives) so the card can render each
+    // requirement as a fill bar: done vs still-needed at a glance.
     const totalUsers = rank.totalUsers || 0;
     const topPct = Math.max(1, Math.min(99, 100 - (rank.percentile || 0)));
     const standing = [
-      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition} / ${totalUsers} · TOP ${topPct}%` : `— / ${totalUsers}` },
-      { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition} / ${totalUsers}` : 'UNRANKED' },
+      // r6: values kept compact so the 3×2 standing grid never kisses the
+      // label — "#4/4234 · TOP 9%" fits the half-column width.
+      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition}/${totalUsers} · TOP ${topPct}%` : `—/${totalUsers}` },
+      { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}/${totalUsers}` : 'UNRANKED' },
       { label: 'TOTAL XP', value: fmtCompact(stats.xp?.total || 0) },
       { label: 'TOTAL GP', value: fmtCompact(stats.gp?.total || 0) },
       { label: 'COMMANDS', value: String(stats.commands || 0) },
       { label: 'ACHIEVEMENTS', value: String((stats.achievements || []).length) },
     ];
     const gates = Array.isArray(gateRows) ? gateRows : [];
-    for (const g of gates) {
-      if (standing.length >= 8) break;
-      standing.push(g);
+
+    // ── structured progression bars (Go RANK card) ──
+    const classSystem = require('../rpg/classSystem');
+    const userDoc = economy.getUser(senderJid);
+    const curRank = String(userDoc?.adventurerRank || rankLetter || 'F').toUpperCase();
+    const nextRankInfo = (() => {
+      try { return classSystem.getNextRankRequirements(curRank); } catch { return null; }
+    })();
+    const progress = [];
+    if (nextRankInfo) {
+      const req = nextRankInfo.requirements || {};
+      const lvl = stats.level || 1;
+      if (req.level > 0) {
+        progress.push({
+          label: 'LEVEL',
+          cur: Math.min(lvl, req.level),
+          max: req.level,
+          done: lvl >= req.level,
+          valueText: `${lvl}/${req.level}`,
+        });
+      }
+      const qc = userDoc?.questsCompleted || 0;
+      if (req.questsCompleted > 0) {
+        progress.push({
+          label: 'QUESTS',
+          cur: Math.min(qc, req.questsCompleted),
+          max: req.questsCompleted,
+          done: qc >= req.questsCompleted,
+          valueText: `${qc}/${req.questsCompleted}`,
+        });
+      }
+      // gate-mission objectives — each becomes its own bar
+      const gateMission = (() => {
+        try { return classSystem.getGateMissionForRank(curRank); } catch { return null; }
+      })();
+      if (gateMission) {
+        const doneMissions = userDoc?.completedRankMissions || [];
+        if (doneMissions.includes(gateMission.id)) {
+          progress.push({ label: 'RANK MISSION', cur: 1, max: 1, done: true, valueText: 'DONE' });
+        } else {
+          let mp = { progress: [] };
+          try { mp = classSystem.checkMissionProgress(gateMission.id, userDoc?.stats || {}); } catch {}
+          for (const o of mp.progress) {
+            progress.push({
+              label: String(o.label || o.id || 'OBJECTIVE').toUpperCase(),
+              cur: Math.min(o.current || 0, o.target || 0),
+              max: o.target || 0,
+              done: !!o.done,
+              valueText: `${o.current || 0}/${o.target || 0}`,
+            });
+          }
+        }
+      }
     }
 
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
-      // Any gate rows that did not fit into the 8-row standing panel ride
-      // along in the card caption so no rank-gate info is ever dropped.
-      // (standing = 6 base record rows + however many gates were accepted)
-      const acceptedGates = Math.max(0, standing.length - 6);
-      const overflowGates = gates.slice(acceptedGates);
-      const gateCaption = overflowGates
-        .map((g) => `${g.label}: ${g.value}`)
+      // The Go card shows the first 5 bars; anything beyond rides in the
+      // caption so no requirement info is ever dropped.
+      const shownProgress = progress.slice(0, 5);
+      const overflow = progress.slice(5);
+      const gateCaption = overflow
+        .map((p) => `${p.label} ${p.valueText}`)
         .join(' | ');
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
@@ -382,6 +433,10 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         xpLeft: atMax ? 'MAX LEVEL' : `${fmtCompact(xp.nextLevel)} XP TO LEVEL ${(stats.level || 1) + 1}`,
         xpPercent: Math.max(0, Math.min(100, Math.floor(xp.progress || 0))),
         standing,
+        progressTitle: nextRankInfo
+          ? `PROGRESSION — NEXT RANK ${String(nextRankInfo.rank).toUpperCase()}`
+          : 'MAX RANK ACHIEVED',
+        progress: shownProgress,
       });
     } catch (cardErr) {
       console.error('[rank] card render failed:', cardErr.message);

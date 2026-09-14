@@ -1461,12 +1461,18 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
     let buf = null;
     try {
         const goService = require('../utils/goImageService');
+        // r6 landscape armory: the card's hero panel draws the player's class
+        // sprite (same asset family as the quest-start card), so the payload
+        // now carries the class registry key + sprite index.
+        const classInfo = economy.getUserClass ? economy.getUserClass(senderJid) : null;
         buf = await goService.generatePortraitCard({
             kind: 'EQUIP',
             nickname,
             sealText: rankLetter,
             caption: `${worn.length}/9 slots filled — repair at .j blacksmith`,
             slots,
+            playerClass: String(classInfo?.id || '').toUpperCase(),
+            playerIndex: econUser?.spriteIndex || 0,
         });
     } catch (e) {
         console.error('[equipment] card render failed:', e?.message || e);
