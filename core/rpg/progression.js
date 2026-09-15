@@ -198,22 +198,15 @@ function getUser(userId) {
 function getXPForLevel(level) {
     if (level <= 1) return 0;
 
-    // 💡 REBALANCE (2026-09-14, owner order): requirements ×5.
-    // Owner report: a player hit level 81 at E-rank within days of playing.
-    // Investigation: the 2026-08-16 polynomial curve (80×L²) left XP INFLOWS
-    // untouched — raid participation alone pays 10K–100K XP per event, so
-    // ~58 raids = max level. The curve is now floor(400 × L²), i.e. every
-    // level requires 5× the cumulative XP it did before:
-    //   L10:  400×100  = 40,000   (was 8,000)
-    //   L25:  400×625  = 250,000  (was 50,000)
-    //   L50:  400×2500 = 1,000,000 (was 200,000)
-    //   L75:  400×5625 = 2,250,000 (was 450,000)
-    //   L90:  400×8100 = 3,240,000 (was 648,000)
-    //   L100: 400×10000= 4,000,000 (was 800,000)
-    // Per-level cost rises progressively: 400×(2L+1) = 800L + 400 XP
-    // (L1→2: 1,200 XP … L99→100: 79,600 XP). Raid payouts were trimmed to
-    // match — see raidSystem.distributeRaidRewards.
-    return Math.floor(400 * level * level);
+    // 💡 REBALANCE (2026-09-15, owner order: "make it 50% easier to level
+    // up"): cumulative requirement halved again — floor(200 × L²). History:
+    // 2026-08-16 80×L² → 2026-09-14 400×L² (owner: level 81 in days via
+    // raids) → now 200×L² (owner: ×5 felt too heavy). Per-level cost is
+    // 200×(2L+1) = 400L + 200 XP:
+    //   L10:  20,000   L25: 125,000   L50: 500,000
+    //   L75:  1,125,000   L90: 1,620,000   L100: 2,000,000
+    // (L1→2: 600 XP … L99→100: 39,800 XP).
+    return Math.floor(200 * level * level);
 }
 
 function getXPForNextLevel(userId) {

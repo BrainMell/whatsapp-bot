@@ -719,6 +719,7 @@ async function processDeath(userId, run, deathMsg) {
   const keptXp = Math.floor(run.lootAccumulator.xp * 0.10);
   const keptGold = Math.floor(run.lootAccumulator.gold * 0.10);
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
+  const runesCount = (run.lootAccumulator.runes || []).length;
 
   deathMsg += `\n💀 *YOU DIED IN THE ABYSS*\n\n`;
   deathMsg += `🕳️ Reached Floor: ${run.currentFloor}\n`;
@@ -758,7 +759,23 @@ async function processDeath(userId, run, deathMsg) {
     guildPerks.awardWarPoints(userId, Math.floor(score / 50), 'abyss');
   } catch (e) { console.error('[Abyss] Guild perks failed:', e.message); }
 
-  return { success: true, message: deathMsg, run, died: true };
+  return {
+    success: true,
+    message: deathMsg,
+    run,
+    died: true,
+    // 2026-09-15: payload for the ABYSS_RESULT (FALLEN) card
+    card: {
+      outcome: 'FALLEN',
+      floor: run.currentFloor,
+      monstersKilled: run.monstersKilled,
+      bossesKilled: run.bossesKilled,
+      score,
+      keptXp,
+      keptGold,
+      runes: runesCount,
+    },
+  };
 }
 
 // ─── RETREAT ──────────────────────────────────────────────────────────────
@@ -774,6 +791,7 @@ async function retreat(userId) {
   const keptGold = run.lootAccumulator.gold;
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
 
+  const runesCount = (run.lootAccumulator.runes || []).length;
   let msg = `🏃 *ABYSS RETREAT*\n\n`;
   msg += `You extract safely from the Abyss.\n\n`;
   msg += `🕳️ Reached Floor: ${run.currentFloor}\n`;
@@ -817,7 +835,22 @@ async function retreat(userId) {
     guildPerks.awardWarPoints(userId, Math.floor(score / 25), 'abyss');
   } catch (e) {}
 
-  return { success: true, message: msg, run };
+  return {
+    success: true,
+    message: msg,
+    run,
+    // 2026-09-15: payload for the ABYSS_RESULT (EXTRACTED) card
+    card: {
+      outcome: 'EXTRACTED',
+      floor: run.currentFloor,
+      monstersKilled: run.monstersKilled,
+      bossesKilled: run.bossesKilled,
+      score,
+      keptXp,
+      keptGold,
+      runes: runesCount,
+    },
+  };
 }
 
 // ─── ADD TO LEADERBOARD ───────────────────────────────────────────────────

@@ -4688,6 +4688,14 @@ async function performAction(sock, player, action, sessionKey) {
     turnInfo.action = { name: "Rest" };
     turnInfo.effects.push("REGEN");
   } else if (action.type === "flee") {
+    // 2026-09-15 (owner: "remove .j combat flee from the Abyss commands"):
+    // the Abyss offers no escape — attempting flee wastes the turn and the
+    // party still eats the enemy's attacks. Extraction happens BETWEEN
+    // floors via the abyss retreat command, never mid-battle.
+    if (state.isAbyss) {
+      resultMsg += `🚫 *NO ESCAPE!* The Abyss devours deserters — there is no fleeing here. Fight, fall, or extract between floors.`;
+      turnInfo.action = { name: "Flee (blocked)" };
+    } else {
     const avgPlayerSpd =
       state.players.reduce((s, p) => s + (p.stats.spd || 10), 0) /
       state.players.length;
@@ -4703,7 +4711,8 @@ async function performAction(sock, player, action, sessionKey) {
     } else {
       resultMsg += `❌ *FLEE FAILED!* The party stumbled and lost their turns.`;
     }
-    turnInfo.action = { name: "Flee" };
+    turnInfo.action = { name: state.isAbyss ? "Flee (blocked)" : "Flee" };
+    }
   } else if (action.type === "defend") {
     applyStatusEffect(player, "shield", 1, Math.floor(player.stats.def * 1.5));
     resultMsg += `🛡️ Takes a defensive stance!`;
@@ -6569,7 +6578,47 @@ async function endCombat(sock, victory, sessionKey) {
         const abyssSystem = require('./abyssSystem');
         // Build a death message from the combat state
         const deathMsg = `💀 Defeated on Abyss floor ${state.abyssFloor || 1}!`;
-        await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
+        const __dr = await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
+        // 2026-09-15: ABYSS_RESULT (FALLEN) card — text fallback keeps the flow
+        try {
+          if (__dr && __dr.card && state.players[0] && state.players[0].jid) {
+            const __c = __dr.card;
+            const __eco = require('./economy');
+            const __go = require('../utils/goImageService');
+            const __fallBuf = await __go.generatePortraitCard({
+              kind: 'ABYSS_RESULT',
+              nickname: __eco.getDisplayName(state.players[0].jid),
+              partyText: 'FALLEN',
+              cur: __c.floor,
+              pointsBig: `FLOOR ${__c.floor}`,
+              pill: `FALLEN · SCORE ${Number(__c.score || 0).toLocaleString()}`,
+              spentNow: 'PENALTY -90% LOOT',
+              spentLeft: `KEPT ${Number(__c.keptXp || 0).toLocaleString()} XP`,
+              sealText: String(Math.min(__c.score || 0, 999)),
+              caption: 'the abyss claims another',
+              rows: [
+                { label: 'XP KEPT', value: `+${Number(__c.keptXp || 0).toLocaleString()}` },
+                { label: 'ZENI KEPT', value: `+${Number(__c.keptGold || 0).toLocaleString()}` },
+                { label: 'RUNES', value: String(__c.runes || 0) },
+                { label: 'MONSTERS', value: String(__c.monstersKilled || 0) },
+                { label: 'BOSSES', value: String(__c.bossesKilled || 0) },
+                { label: 'DEPTH', value: `FLOOR ${__c.floor} / 200` },
+              ],
+            });
+            if (__fallBuf && __fallBuf.length > 100) {
+              await sock.sendMessage(state.chatId, { image: __fallBuf, caption: __dr.message });
+            } else {
+              await sock.sendMessage(state.chatId, { text: __dr.message });
+            }
+          } else if (__dr && __dr.message) {
+            await sock.sendMessage(state.chatId, { text: __dr.message });
+          }
+        } catch (__cardErr) {
+          console.error('[Abyss] death card failed:', __cardErr.message);
+          try {
+            if (__dr && __dr.message) await sock.sendMessage(state.chatId, { text: __dr.message });
+          } catch {}
+        }
       } catch (e) {
         console.error('[Abyss] processDeath after combat failed:', e.message);
       }
@@ -7560,6 +7609,12 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
           // 💡 FIX (Item #9): expanded to mirror the Go-side BossNameSprites
           // map so splash + combat render the same distinct sprite per boss.
           const BOSS_SPLASH_SPRITES = {
+            // 💡 2026-09-15 (owner: "boss card was different from the actual
+            // boss"): this map DIVERGED from the Go BossNameSprites map when
+            // the Go side moved mid/high bosses to the new boss_N sprites —
+            // splash showed the old midlevel art while the fight rendered
+            // boss_N. Values below mirror sprites.go BossNameSprites 1:1
+            // (combat scene is the source of truth).
             // S/SS/SSS-rank dungeon bosses
             "PRIMORDIAL CHAOS": "boss_0_N.png",
             "ELDER CHAOS": "boss_1_N.png",
@@ -7570,56 +7625,57 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
             // Mid-level bosses
             "THE INFECTED COLOSSUS": "boss_6_N.png",
             "INFECTED COLOSSUS": "boss_6_N.png",
-            "CORRUPTED GUARDIAN": "midlevelbosses (2).png",
-            "STONE HULK": "midlevelbosses (3).png",
-            "CRYSTAL CORRUPTED": "midlevelbosses (4).png",
-            "EARTH WARDEN": "midlevelbosses (5).png",
-            "FROST GHOUL": "midlevelbosses (6).png",
-            "GLACIAL BEAST": "midlevelbosses (7).png",
+            "MUTATED OVERSEER": "midlevelbosses (4).png",
+            "CORRUPTED GUARDIAN": "boss_7_N.png",
+            "STONE HULK": "boss_9_N.png",
+            "CRYSTAL CORRUPTED": "boss_10_N.png",
+            "EARTH WARDEN": "boss_11_N.png",
+            "FROST GHOUL": "boss_12_N.png",
+            "GLACIAL BEAST": "boss_13_N.png",
             // High-level bosses
-            "MAGMA BRUTE": "highlevelbosses (7).png",
-            "HELLFIRE DEMON": "highlevelbosses (8).png",
-            "ABYSSAL HORROR": "highlevelbosses (9).png",
-            "TSUNAMI WALKER": "highlevelbosses (10).png",
-            "BLIZZARD WRAITH": "highlevelbosses (11).png",
-            "GRAVEYARD LORD": "highlevelbosses (12).png",
-            "SHADOW LORD": "highlevelbosses (13).png",
+            "MAGMA BRUTE": "boss_0_S.png",
+            "HELLFIRE DEMON": "boss_1_S.png",
+            "ABYSSAL HORROR": "boss_2_S.png",
+            "TSUNAMI WALKER": "boss_3_S.png",
+            "BLIZZARD WRAITH": "boss_4_S.png",
+            "GRAVEYARD LORD": "boss_5_S.png",
+            "SHADOW LORD": "boss_6_S.png",
             // Dragon bosses
-            "IGNEEL THE FIRE KING": "boss_6_N.png",
-            "ANCIENT DRAGON": "boss_6_N.png",
-            "ETERNAL DRAGON": "boss_6_S.png",
-            "ELDER FLAME": "boss_6_N.png",
+            "IGNEEL THE FIRE KING": "boss_7_S.png",
+            "ANCIENT DRAGON": "boss_7_S.png",
+            "ETERNAL DRAGON": "boss_9_S.png",
+            "ELDER FLAME": "boss_10_S.png",
             // Trial bosses
-            "ARCANE SENTINEL": "midlevelbosses (4).png",
-            "LICH KING": "highlevelbosses (12).png",
-            "SHADOW STALKER": "highlevelbosses (13).png",
+            "ARCANE SENTINEL": "boss_11_S.png",
+            "LICH KING": "boss_12_S.png",
+            "SHADOW STALKER": "boss_13_S.png",
             "VOID ASSASSIN": "highlevelbosses (9).png",
             "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
-            "ANCIENT WURM": "boss_6_N.png",
+            "ANCIENT WURM": "boss_7_S.png",
             "SOUL EATER": "mutated (3).png",
-            "ABYSSAL WHISPER": "boss_3_N.png",
+            "ABYSSAL WHISPER": "boss_3_S.png",
             "ELEMENTAL PRIMORDIAL": "boss_5_N.png",
             "PRIME ELEMENT": "boss_5_N.png",
             "VOID NECROMANCER": "mutated (5).png",
-            "CHRONOS WARDEN": "highlevelbosses (11).png",
+            "CHRONOS WARDEN": "boss_4_S.png",
             "TIME EATER": "mutated (7).png",
-            "HEAVENLY GUARDIAN": "highlevelbosses (10).png",
-            "SERAPHIM PRIME": "boss_3_S.png",
+            "HEAVENLY GUARDIAN": "boss_3_N.png",
+            "SERAPHIM PRIME": "boss_0_S.png",
             "FOREST ANCESTOR": "midlevelbosses (5).png",
             "GAIA SENTINEL": "midlevelbosses (5).png",
             "GOLDEN GOLEM": "midlevelbosses (3).png",
-            "TREASURE HOARDER": "boss_5_S.png",
+            "TREASURE HOARDER": "boss_7_S.png",
             "SOUND REAPER": "mutated (4).png",
             "MAESTRO OF VOID": "boss_2_N.png",
-            "CLOCKWORK TITAN": "highlevelbosses (7).png",
-            "MECH GOD": "boss_4_S.png",
-            "DEMON LORD": "boss_4_N.png",
-            "PRIMORDIAL EVIL": "boss_0_S.png",
+            "CLOCKWORK TITAN": "boss_0_S.png",
+            "MECH GOD": "boss_3_S.png",
+            "DEMON LORD": "boss_4_S.png",
+            "PRIMORDIAL EVIL": "boss_0_N.png",
             "LEVIATHAN": "boss_3_N.png",
             "LEVIATHAN SPAWN ALPHA": "boss_3_N.png",
-            "INFERNAL OVERLORD": "highlevelbosses (8).png",
-            "PRIMORDIAL FLAME": "boss_6_N.png",
-            "PERMAFROST TITAN": "highlevelbosses (11).png",
+            "INFERNAL OVERLORD": "boss_1_S.png",
+            "PRIMORDIAL FLAME": "boss_7_S.png",
+            "PERMAFROST TITAN": "boss_4_S.png",
           };
           const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
 

@@ -7450,26 +7450,40 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           // protocol messages; never let a failed revoke skip the warn
                           let gslDeleted = false;
                           try { await sock.sendMessage(chatId, { delete: m.key }); gslDeleted = true; } catch {}
-                          const gslCount = addWarning(gslAuthor, chatId, "Group-status lock violation");
+                          // 2026-09-15 (owner: "doesn't actually remove them"):
+                          // 1) key strikes by the RESOLVED PHONE so one person
+                          // can't split counts across LIDs/devices;
+                          // 2) await the removal and REPORT failure (bot not
+                          // admin) instead of swallowing it in setTimeout.
+                          const gslStableId = (gslPhone && String(gslPhone).includes("@")) ? gslPhone : gslAuthor;
+                          const gslCount = addWarning(gslStableId, chatId, "Group-status lock violation");
                           const gslName = `@${String(gslAuthor).split("@")[0].split(":")[0]}`;
                           if (gslCount >= 3) {
+                            let gslRemoved = false;
+                            let gslRemoveErr = "";
+                            try {
+                              await sock.groupParticipantsUpdate(chatId, [gslAuthor], "remove");
+                              gslRemoved = true;
+                            } catch (gslRE) {
+                              gslRemoveErr = (gslRE && gslRE.message) || String(gslRE || "unknown");
+                            }
                             await sock.sendMessage(chatId, {
                               text: BOT_MARKER + `🔒 *GROUP STATUS VIOLATION*
 
 *User:* ${gslName}
-*Action:* REMOVED
+*Action:* ${gslRemoved ? "REMOVED ✅" : "REMOVAL FAILED ❌ — _I need to be an admin to remove members_"}
 *Strikes:* ${gslCount}/3
 
 _Only admins can post group statuses here._`,
                               mentions: [gslAuthor],
                             });
-                            setTimeout(() => sock.groupParticipantsUpdate(chatId, [gslAuthor], "remove").catch(() => {}), 1500);
+                            console.log(`[GStatusLock] ${gslStableId} strike ${gslCount}/3 in ${chatId} removed=${gslRemoved}${gslRemoved ? "" : " err=" + gslRemoveErr}`);
                           } else {
                             await sock.sendMessage(chatId, {
                               text: BOT_MARKER + `🔒 *GROUP STATUS NOT ALLOWED*
 
 *User:* ${gslName}
-${gslDeleted ? "*Status:* removed ✅" : "*Status:* removal not permitted by WhatsApp"}
+${gslDeleted ? "*Status:* revoke sent (WhatsApp may keep it visible)" : "*Status:* removal not permitted by WhatsApp"}
 *Strikes:* ${gslCount}/3
 
 _Only admins can post group statuses here. 3 strikes = removal._`,
@@ -19317,23 +19331,53 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
                           const run = result.run;
+                          // 2026-09-15: ABYSS_ENTRY card — descent brief with the
+                          // run announcement as caption (text fallback on failure)
+                          try {
+                            const abyssTier = abyssSystem.getFloorTier(run.currentFloor || 1);
+                            const abyssMult = Number(abyssSystem.getFloorMultiplier(run.currentFloor || 1).toFixed(1));
+                            const __entryBuf = await (require('./utils/goImageService')).generatePortraitCard({
+                              kind: 'ABYSS_ENTRY',
+                              nickname: economy.getDisplayName(senderJid),
+                              cur: run.currentFloor || 1,
+                              pointsBig: `FLOOR ${run.currentFloor || 1}`,
+                              pill: `TIER ${abyssTier} · DANGER x${abyssMult}`,
+                              spentNow: 'BOSS EVERY 5TH FLOOR',
+                              spentLeft: '12H COOLDOWN',
+                              sealText: String(run.currentFloor || 1),
+                              caption: 'the abyss hungers',
+                              rows: [
+                                { label: 'BOSS FLOORS', value: 'EVERY 5TH' },
+                                { label: 'FIGHT', value: '.combat attack' },
+                                { label: 'TREASURE', value: '.abyss collect' },
+                                { label: 'EVENTS', value: '.abyss choose 1|2' },
+                                { label: 'EXTRACT', value: '.abyss retreat' },
+                              ],
+                            });
+                            if (__entryBuf && __entryBuf.length > 100) {
+                              await sock.sendMessage(chatId, { image: __entryBuf, caption: BOT_MARKER + result.message });
+                            } else {
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                            }
+                          } catch (__cardErr) {
+                            console.error('[Abyss] entry card failed:', __cardErr.message);
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
                           // 💡 FIX 2026-08-31: wild_summon floors (10% of floors)
                           // were never combat-started from `enter` — the run
                           // soft-locked with "Not in combat!" on attack.
                           if ((run.currentEncounterType === 'combat' || run.currentEncounterType === 'wild_summon') && run.currentEnemy) {
                             try {
-                              await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                               await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
                             } catch (combatErr) {
                               console.error('[Abyss] Failed to start combat:', combatErr.message);
                               return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize. Use `' + botConfig.getPrefix() + ' abyss resume` to retry.' });
                             }
-                          } else {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
                           // 💡 FIX 2026-08-15: MUST return here. Without this return,
                           // the code fell through to "Unknown Abyss command: enter" even
-                          // though the run started successfully.
+                          // though the run started successfully. (The announcement is
+                          // delivered via the ABYSS_ENTRY card above.)
                           return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -19439,6 +19483,38 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                       if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee' || abyssSub === 'leave' || abyssSub === 'exit') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
+                          // 2026-09-15: ABYSS_RESULT (EXTRACTED) card, text fallback
+                          try {
+                            if (result.card) {
+                              const __c = result.card;
+                              const __eco = require('./rpg/economy');
+                              const __exBuf = await (require('./utils/goImageService')).generatePortraitCard({
+                                kind: 'ABYSS_RESULT',
+                                nickname: __eco.getDisplayName(senderJid),
+                                partyText: 'EXTRACTED',
+                                cur: __c.floor,
+                                pointsBig: `FLOOR ${__c.floor}`,
+                                pill: `EXTRACTED · SCORE ${Number(__c.score || 0).toLocaleString()}`,
+                                spentNow: __c.runes > 0 ? `${__c.runes} RUNES RECOVERED` : 'FULL LOOT RECOVERED',
+                                spentLeft: '100% KEPT',
+                                sealText: String(Math.min(__c.score || 0, 999)),
+                                caption: 'a wise extraction',
+                                rows: [
+                                  { label: 'XP', value: `+${Number(__c.keptXp || 0).toLocaleString()}` },
+                                  { label: 'ZENI', value: `+${Number(__c.keptGold || 0).toLocaleString()}` },
+                                  { label: 'RUNES', value: String(__c.runes || 0) },
+                                  { label: 'MONSTERS', value: String(__c.monstersKilled || 0) },
+                                  { label: 'BOSSES', value: String(__c.bossesKilled || 0) },
+                                  { label: 'DEPTH', value: `FLOOR ${__c.floor} / 200` },
+                                ],
+                              });
+                              if (__exBuf && __exBuf.length > 100) {
+                                return sock.sendMessage(chatId, { image: __exBuf, caption: BOT_MARKER + result.message });
+                              }
+                            }
+                          } catch (__cardErr) {
+                            console.error('[Abyss] retreat card failed:', __cardErr.message);
+                          }
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });

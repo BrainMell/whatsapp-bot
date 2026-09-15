@@ -575,8 +575,12 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         if (cardBuffer && cardBuffer.length > 0) {
           let cap = `✨ *STAT ALLOCATION* ✨\n`;
           cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
-          cap += `💡 *Higher class tiers get more value per point!*\n`;
-          cap += `Usage: \`${getPrefix()} allocate <stat> [amount]\` — e.g. \`${getPrefix()} allocate atk 5\``;
+          cap += `🎯 *How to allocate — one command per stat (5 pts each):*\n`;
+          for (const allocS of ["hp", "atk", "def", "mag", "spd", "luck", "crit"]) {
+            const allocPer = allocPerPoint[allocS.toUpperCase()] || 1;
+            cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPer * 5} ${allocS.toUpperCase()}\n`;
+          }
+          cap += `\n💡 *Higher class tiers get more value per point!*`;
           return await sock.sendMessage(chatId, { image: cardBuffer, caption: getBotMarker() + cap }, { quoted: m });
         }
       } catch (cardErr) {
