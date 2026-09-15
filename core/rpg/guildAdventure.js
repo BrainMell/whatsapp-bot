@@ -2372,6 +2372,14 @@ function calculateDamage(
     const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
     if (shields.length > 0) {
       let remaining = Math.floor(damage);
+      // 2026-09-15 (owner: "combat def should let some damage hit, very very small"):
+      // defend-stance shields are no longer full blocks — ~2% (min 1) of the hit
+      // always leaks through to HP. Ability shields (Mana Shield, Golden Barrier,
+      // Force Field, ...) keep their full absorb.
+      const _defendLeak = shields.some(s => s.source === 'defend')
+        ? Math.max(1, Math.floor(remaining * 0.02))
+        : 0;
+      remaining -= _defendLeak;
       for (const shield of shields) {
         if (remaining <= 0) break;
         const absorbed = Math.min(shield.value, remaining);
@@ -2382,7 +2390,7 @@ function calculateDamage(
           shield.duration = 0;
         }
       }
-      damage = remaining;
+      damage = remaining + _defendLeak;
     }
   }
 
@@ -4693,7 +4701,7 @@ async function performAction(sock, player, action, sessionKey) {
     // party still eats the enemy's attacks. Extraction happens BETWEEN
     // floors via the abyss retreat command, never mid-battle.
     if (state.isAbyss) {
-      resultMsg += `🚫 *NO ESCAPE!* The Abyss devours deserters — there is no fleeing here. Fight, fall, or extract between floors.`;
+      resultMsg += `🚫 *NO ESCAPE!* The Abyss devours deserters — use \`${botConfig.getPrefix()} abyss retreat\` to extract (you keep 100% loot).`;
       turnInfo.action = { name: "Flee (blocked)" };
     } else {
     const avgPlayerSpd =
@@ -4714,7 +4722,10 @@ async function performAction(sock, player, action, sessionKey) {
     turnInfo.action = { name: state.isAbyss ? "Flee (blocked)" : "Flee" };
     }
   } else if (action.type === "defend") {
-    applyStatusEffect(player, "shield", 1, Math.floor(player.stats.def * 1.5));
+    // 2026-09-15 (owner: "combat def should let some damage hit, very very small"):
+    // the defend shield is tagged source:'defend' so calculateDamage lets a tiny
+    // ~2% of every hit leak through to HP (a full block was too strong).
+    applyStatusEffect(player, "shield", 1, Math.floor(player.stats.def * 1.5), "defend");
     resultMsg += `🛡️ Takes a defensive stance!`;
     turnInfo.action = { name: "Defend" };
     turnInfo.effects.push("SHIELD");

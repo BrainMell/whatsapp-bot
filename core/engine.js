@@ -19262,8 +19262,33 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                       const _abyssCombatState = guildAdventure.getGameState(`${chatId}_${senderJid}`);
                       const _abyssInCombat = _abyssCombatState?.inCombat === true;
                       const _abyssReadOnly = ['status', 'info', 'leaderboard', 'lb', 'best', 'help', 'admin', 'mod'];
-                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub)) {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ You are in active combat! Finish the round first with `${botConfig.getPrefix()} combat attack` or `${botConfig.getPrefix()} combat flee`.' });
+                      // 2026-09-15 (owner: "abyss retreat/leave doesnt work ... wait for encounter to end"):
+                      // retreat/extract/leave/exit/flee ARE the extraction path — they must work
+                      // mid-battle too (combat flee is blocked in the Abyss, so gating them here
+                      // left the player with NO way out of a fight). Only state-mutating subs
+                      // (enter/resume/collect/choose/skip) stay gated during active combat.
+                      const _abyssExtractors = ['retreat', 'extract', 'leave', 'exit', 'flee'];
+                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub) && !_abyssExtractors.includes(abyssSub)) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ You are in active combat! Finish the round with \`${botConfig.getPrefix()} combat attack\`, or extract now with \`${botConfig.getPrefix()} abyss retreat\` (keeps 100% loot).` });
+                      }
+                      // Mid-combat extraction: defuse the live encounter BEFORE the retreat runs,
+                      // so loot is paid out with no zombie fight left behind (pending turn
+                      // timers cleared; processors guard on inCombat and will no-op).
+                      if (_abyssInCombat && _abyssExtractors.includes(abyssSub)) {
+                        try {
+                          const __xs = _abyssCombatState;
+                          __xs.inCombat = false;
+                          __xs.active = false;
+                          __xs.combatProcessing = false;
+                          if (__xs.timers) {
+                            for (const __tk of Object.keys(__xs.timers)) {
+                              if (__xs.timers[__tk]) { try { clearTimeout(__xs.timers[__tk]); } catch (e) {} __xs.timers[__tk] = null; }
+                            }
+                          }
+                          console.log(`[Abyss] mid-combat extraction: encounter defused for ${senderJid}`);
+                        } catch (__defuseErr) {
+                          console.error('[Abyss] mid-combat defuse error:', __defuseErr.message);
+                        }
                       }
 
                       // .g abyss — show status or help
