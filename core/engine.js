@@ -7417,6 +7417,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         gslCtx?.isGroupStatus === true ||
                         gslCtx?.isGroupStatus === 1;
                       if (gslIs) {
+                        // 2026-09-15: ground-truth logger — every incoming group
+                        // status dumps its shape so we can compare the OFFICIAL
+                        // client's structure against what we relay ourselves.
+                        try {
+                          const __wK = m.message.groupStatusMessageV2 ? "V2" : m.message.groupStatusMessage ? "V1" : m.message.groupStatusMentionMessage ? "MENTION" : "CTX";
+                          const __inr = (m.message.groupStatusMessageV2 || m.message.groupStatusMessage || m.message.groupStatusMentionMessage || {}).message || m.message;
+                          const __iK = Object.keys(__inr).filter((k) => !/ContextInfo$/.test(k)).slice(0, 6).join("+");
+                          const __mM = __inr.imageMessage || __inr.videoMessage || __inr.audioMessage || null;
+                          const __cT = __inr.imageMessage?.contextInfo || __inr.videoMessage?.contextInfo || __inr.extendedTextMessage?.contextInfo || null;
+                          console.log(`[GStatusIn] wrap=${__wK} inner=[${__iK}] media=${__mM ? "y" : "n"} isGS=${__cT?.isGroupStatus ?? "-"} secret=${__inr.messageContextInfo?.messageSecret ? "y" : "n"} from=${String(m.key.participant || "").slice(0, 16)}`);
+                        } catch { }
                         const gslAuthorRaw =
                           gslCtx?.participant || m.key.participant || m.key.remoteJid;
                         const gslAuthor = jidNormalizedUser(gslAuthorRaw || senderJid);
@@ -7607,26 +7618,38 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                             new Promise((_, reject) => setTimeout(() => reject(new Error("media upload timed out after 90s — try a smaller file")), 90000)),
                           ])
                         : await genPromise;
-                      const messageSecret = crypto.randomBytes(32);
-                      const wrapped = generateWAMessageFromContent(
+                      // 2026-09-15 v3: mirror gifted-baileys GiftedStatus.sendGroupStatus
+                      // EXACTLY — the content wrapped once in groupStatusMessageV2 and
+                      // relayed with a bare messageId. Our old double messageSecret +
+                      // generateWAMessageFromContent layers made WhatsApp ACCEPT the
+                      // relay (no error) while never RENDERING media statuses; text
+                      // survived only because clients are lenient for plain text.
+                      const __gsId = gsMsgId();
+                      await sock2.relayMessage(
                         chatId2,
-                        {
-                          messageContextInfo: { messageSecret },
-                          groupStatusMessageV2: {
-                            message: {
-                              ...inner,
-                              messageContextInfo: { messageSecret },
-                            },
-                          },
-                        },
-                        {},
+                        { groupStatusMessageV2: { message: inner.message || inner } },
+                        { messageId: __gsId },
                       );
-                      await sock2.relayMessage(chatId2, wrapped.message, { messageId: wrapped.key.id });
-                      if (isMedia) console.log(`[GStatus] posted media ok in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+                      // remember our last posts per (instance, chat) for `.gstatus delete`
+                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      const __gsMineK = `${jidNormalizedUser(sock2?.user?.id || "")}:${chatId2}`;
+                      const __gsMineArr = globalThis.__gsMine.get(__gsMineK) || [];
+                      __gsMineArr.push({ id: __gsId, ts: Date.now() });
+                      while (__gsMineArr.length > 5) __gsMineArr.shift();
+                      globalThis.__gsMine.set(__gsMineK, __gsMineArr);
+                      if (isMedia) console.log(`[GStatus] posted media ok (id=…${__gsId.slice(-8)}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
                       if (key2) await sock2.sendMessage(chatId2, { react: { text: "✅", key: key2 } }).catch(() => {});
                     };
 
-                    globalThis.__gsHelpers = { gsBuildPayload, gsPost };
+                    // message ids for status relays (Baileys helper, safe fallback)
+                    const gsMsgId = () => {
+                      try {
+                        return require("@whiskeysockets/baileys").generateMessageID();
+                      } catch {
+                        return "GSTATUS" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(8).toString("hex").toUpperCase();
+                      }
+                    };
+                    globalThis.__gsHelpers = { gsBuildPayload, gsPost, gsMsgId };
                     return globalThis.__gsHelpers;
                   };
                   const { gsBuildPayload: __gsBuildPayload, gsPost: __gsPost } = __gsEnsureHelpers();
@@ -14571,6 +14594,58 @@ Commands:
                       });
                     }
 
+                    // .gstatus delete — revoke a group status. Bare = my last
+                    // post here; replying to a group-status message = that one.
+                    // Admins only. Revokes are best-effort (WhatsApp may refuse
+                    // protocol deletes for statuses; we report honestly).
+                    if (argsGS[2] === "delete") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      const rqCtx = m.message?.extendedTextMessage?.contextInfo || null;
+                      const rqQuoted = rqCtx?.quotedMessage || null;
+                      const rqIsStatus = !!(
+                        rqQuoted &&
+                        (rqQuoted.groupStatusMessageV2 ||
+                          rqQuoted.groupStatusMessage ||
+                          rqQuoted.groupStatusMentionMessage ||
+                          rqQuoted.imageMessage?.contextInfo?.isGroupStatus ||
+                          rqQuoted.videoMessage?.contextInfo?.isGroupStatus ||
+                          rqQuoted.extendedTextMessage?.contextInfo?.isGroupStatus)
+                      );
+                      if (rqIsStatus && (rqCtx.stanzaId || rqCtx.participant)) {
+                        const rqKey = { remoteJid: chatId, fromMe: false, id: rqCtx.stanzaId || undefined, participant: rqCtx.participant };
+                        let rqOk = false;
+                        try { await sock.sendMessage(chatId, { delete: rqKey }); rqOk = true; } catch (eD) {
+                          console.log("[GStatus] delete(replied) failed:", eD?.message);
+                        }
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (rqOk
+                            ? `🗑️ Revoke sent for the replied group status — check the Status tab (WhatsApp may take a moment or refuse status revokes).`
+                            : `❌ WhatsApp refused that revoke — status revokes are best-effort.`),
+                        });
+                      }
+                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      const dMineK = `${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`;
+                      const dArr = globalThis.__gsMine.get(dMineK) || [];
+                      const dLast = dArr[dArr.length - 1];
+                      if (!dLast) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `I haven't posted a group status in this group since my last restart — nothing to delete.`,
+                        });
+                      }
+                      let dOk = false;
+                      try { await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true, id: dLast.id } }); dOk = true; } catch (eD2) {
+                        console.log("[GStatus] delete(mine) failed:", eD2?.message);
+                      }
+                      dArr.pop();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (dOk
+                          ? `🗑️ Revoke sent for my last group status here (id …${dLast.id.slice(-8)}) — check the Status tab.`
+                          : `❌ WhatsApp refused the revoke — status revokes are best-effort.`),
+                      });
+                    }
+
                     // .gstatus on/off — announce incoming group statuses
                     if (argsGS[2] === "on" || argsGS[2] === "off") {
                       if (!canUseAdminCommands) {
@@ -14647,7 +14722,7 @@ You can also reply \`gstatus\` to any media — or attach one to \`${botConfig.g
 ${canUseAdminCommands ? `
 Moderation:
 • \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\` — announce incoming statuses
-• \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` — admins-only statuses (auto-delete + warn, removed at 3/3)` : ""}`,
+• \`${botConfig.getPrefix().toLowerCase()} gstatus delete\` — remove my last group status\n• \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` — admins-only statuses (auto-delete + warn, removed at 3/3)` : ""}`,
                       });
                     }
 

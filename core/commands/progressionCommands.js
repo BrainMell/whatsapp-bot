@@ -534,7 +534,12 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
       // palette + type). Falls back to the text panel below on any render
       // failure so the command can never dead-end.
       try {
-        const profileCardRenderer = require('../rpg/profileCardRenderer');
+        // 💡 2026-09-15 (owner: "use the style/assets with different
+        // orientation used across the entire rpg"): the card is now a member
+        // of the Go PORTRAIT FAMILY — bg_ALLOCATE.png, 600x1000, the exact
+        // bake geometry of DUEL/QUEST/TRIAL/RANK (banner ribbon, name plate,
+        // THE POINTS/THE ALLOCATION parchment panels, wax seal). Rendered by
+        // the Go service; text panel below stays as the fallback.
         const classSystem = require('../rpg/classSystem');
         const allocUser = economy.getUser(senderJid);
         const allocClass = allocUser ? classSystem.getClassById(allocUser.class) : null;
@@ -544,13 +549,28 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         const allocPerPoint = {};
         for (const [k, v] of Object.entries(allocBase)) allocPerPoint[k.toUpperCase()] = Math.max(1, Math.floor(v * allocMult));
         const allocProg = progression.getUser(senderJid) || {};
-        const cardBuffer = await profileCardRenderer.renderAllocateCard({
-          availablePoints: Number(sheet.statPoints) || 0,
-          invested: allocProg.allocatedStatPoints || {},
-          perPoint: allocPerPoint,
-          tier: allocTier,
-          className: allocClass?.name || 'Adventurer',
-          prefix: getPrefix()
+        const allocInvRaw = allocProg.allocatedStatPoints || {};
+        const allocInv = {};
+        for (const [k, v] of Object.entries(allocInvRaw)) allocInv[String(k).toLowerCase()] = Number(v) || 0;
+        const allocAvail = Number(sheet.statPoints) || 0;
+        const allocSpent = Object.values(allocInv).reduce((a, b) => a + b, 0);
+        const allocRows = Object.keys(allocBase).map((s) => ({
+          label: s.toUpperCase(),
+          value: String(allocInv[s] || 0),
+          sub: `+${allocPerPoint[s.toUpperCase()] || 1}/pt`,
+        }));
+        const goService = require('../utils/goImageService');
+        const cardBuffer = await goService.generatePortraitCard({
+          kind: 'ALLOCATE',
+          nickname: economy.getDisplayName(senderJid),
+          pointsBig: `${allocAvail} POINTS`,
+          pill: `${allocClass?.name || 'Adventurer'} · ${allocTier}`,
+          spentPercent: (allocSpent + allocAvail) > 0 ? Math.round((allocSpent / (allocSpent + allocAvail)) * 100) : 0,
+          spentNow: `SPENT ${allocSpent}`,
+          spentLeft: allocAvail > 0 ? `${allocAvail} LEFT TO SPEND` : 'FULLY ALLOCATED',
+          sealText: String(Math.min(allocAvail, 999)),
+          caption: `forge your build · ${getPrefix()}allocate <stat> <n>`,
+          rows: allocRows,
         });
         if (cardBuffer && cardBuffer.length > 0) {
           let cap = `✨ *STAT ALLOCATION* ✨\n`;
