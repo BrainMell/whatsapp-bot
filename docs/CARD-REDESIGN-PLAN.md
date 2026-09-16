@@ -442,3 +442,92 @@ Monolith stele count money in four different structural ways.
   pass-throughs for DECREE/FISH/TRANSFER/DEPOSIT/WITHDRAW/BALANCE),
   core/commands/rpgCommands.js (single error prefix).
 - QA: qa/styleqa/main.go extended to 18 kinds x 9 styles (+BALANCE) = 162 renders.
+## 11. V5 PASS - COMPLETE INVENTORY AUDIT + LIVE ALLOCATE VERIFICATION (2026-09-17)
+
+### 11.1 The full inventory (owner asked: "those are the only cards??")
+
+Cross-audit of BOTH sides: every render entry point in the Go service
+(pkg/combat + pkg/economy + pkg/profile, from `func` grep) x every call
+site in the Node bot (generatePortraitCard / generateEconomyCard /
+generateTransactionCard / generateProfileCard / renderBoard / grids, from
+`core/**` grep). Result: YES - this is the complete set of card surfaces.
+
+THEMED NON-BATTLE SURFACES (17, all 10 styles):
+| # | Card kind | Command(s) | Renderer |
+|---|-----------|------------|----------|
+| 1 | RANK | .rank, .j stats | Go portrait (drawPortraitShell / styleNN) |
+| 2 | ALLOCATE | .allocate (bare) | Go portrait (drawPortraitShell / styleNN) |
+| 3 | SKILLUP | .skill up | Go renderSkillUpCard + styleNN |
+| 4 | ABILITIES | .abilities | Go renderAbilitiesCard + styleNN |
+| 5 | SKILLTREE | .skill tree | Go renderSkillTreeCard + styleNN |
+| 6 | EQUIP | .equip bare, .equipment | Go renderEquipCard + styleNN |
+| 7 | GUILDINFO | .guild info | Go renderGuildInfoCard + styleNN |
+| 8 | SHOP | (renderer ready; .shop is text-only today - no live caller) | Go renderShopCard + styleNN |
+| 9 | BALANCE | .balance | Go generateEconomyCard + econ_style_money |
+| 10 | CRAFT/BREW/COOK/FORGE | .craft family | Go generateTransactionCard + econ_style_craft |
+| 11 | FISH | .fish | Go generateTransactionCard + econ_style_craft |
+| 12 | DECREE | daily decree | Go generateTransactionCard + econ_style_craft |
+| 13 | TRANSFER | .transfer | Go generateTransactionCard + econ_style_money |
+| 14 | DEPOSIT | .deposit | Go generateTransactionCard + econ_style_money |
+| 15 | WITHDRAW | .withdraw | Go generateTransactionCard + econ_style_money |
+| 16 | PROFILE | .profile (+ item inspect fallback) | Node profileCardRenderer, per-style baked bgs |
+| 17 | STYLE SHEET | .cardstyle | Node renderStyleSheet, per-style baked bgs |
+
+BATTLE-ACTIVE (EXEMPT per owner rule - stays canonical):
+DUEL, QUEST, TRIAL, ABYSS_ENTRY, ABYSS_RESULT, QUESTSTART, RAID (portrait
+kinds), HUNT, combat images (static + animated), boss splash, end screens
+(victory/defeat), burn/card gifs. Call sites verified:
+pvpSystem.js (DUEL), guildAdventure.js (QUEST/TRIAL/ABYSS_RESULT),
+engine.js (QUESTSTART/RAID/ABYSS_ENTRY), combatIntegration.js (end screen).
+
+SEPARATE SURFACES (own design identity, outside the 10-style system):
+- Summon roster GIF + summon detail GIF + summon codex (node-canvas,
+  sprite-based own language) - .summons family
+- TCG collection grids (generateCardGrid / HybridGrid / EShopDeck /
+  CollectionGrid / CloudinarySlideshow) - card game's own art
+- Game boards: chess, ludo, tictactoe (+ leaderboard), murder mystery
+  cards (Victorian-noir language) - game surfaces
+- NODE PROFILE DRIFT NOTE: pkg/profile/renderer.go on Box2 had an
+  UNCOMMITTED half-edit (Go-side profSkin experiment) that broke
+  `go build ./...`; stashed (recoverable) - the primary profile card is
+  the Node bake, and the Go profile path stays canonical-decree.
+
+### 11.2 ALLOCATE live verification (owner: "first couple of cardstyles
+their allocate commands dont even look like the same theme")
+
+METHOD: e2e harness on Box1 calling the REAL handleAllocateCommand with a
+real leaderboard user (Lapis, VIRTUOSO/ASCENDED, fraktur Unicode
+nickname), forced cardStyle 1..10, saving the exact bytes the bot sends.
+Findings:
+
+1. FALSE ALARM CLEARED: the live handler DOES honor cardStyle - all 9
+   non-decree styles produce distinct, on-theme ALLOCATE compositions
+   (verified byte-distinct + visually). Earlier "off-theme" impressions
+   came from QA renders with thin synthetic payloads (empty SEVEN
+   PATHS/LEDGER sections) - production payloads always carry the 7 stat
+   rows, points, class pill and ledger data.
+2. REAL BUG (fixed): fancy Unicode nicknames (fraktur U+1D5D7 etc.)
+   rendered as TOFU BOXES in theme faces - S1 Stonekeep band, S4
+   Woodmere plate, S5 Noir register. FIX: cardstyle.Sanitize +
+   huntSanitize now NFKD-transliterate (golang.org/x/text/unicode/norm)
+   so every card in every family renders "LAPIS" as clean ASCII.
+   Applies to ALL cards (portrait, economy, transaction, decree family).
+3. REAL BUG (fixed): S1 footer caption ("spent points are permanent...")
+   was dark-ink-on-dark-masonry, near invisible. Now light steel
+   (p.SealTx) at 200-215 alpha in s01Footer + the S1 rank caption site.
+4. REAL BUG (fixed): S09 skilltree node labels used maxW=colW-10 while
+   tier-mates sit 74px apart - names collided into garble ("WAR
+   MARCHSERENADE OF"). Fixed with 140px label pitch + odd-node stagger
+   below the medallion (verified on the live VIRTUOSO tree).
+
+### 11.3 Post-fix live verification matrix (Box1, real handlers, real
+user data, images fetched and LOOKED at)
+- .allocate styles 1,2,3,4,5,6,8,9,10: 9 distinct themed renders, no
+  tofu, captions readable. PASS
+- .abilities: Practitioner's Codex card (decree for style-0 user). PASS
+- .equip bare: THE ARMORY card, LAPIS transliterated. PASS
+- .skill tree (style 9 forced): PILLARS OF MASTERY, labels clean. PASS
+- .rank: decree card for style-0 user (correct default). PASS
+- pm2: go/scraper/whatsapp-bot online both boxes; binary md5 identical
+  on Box1+Box2 (c4d547dda07c0beca82fe989b40225d9).
+- Commits: bot_generation c824a1d pushed origin/main.
