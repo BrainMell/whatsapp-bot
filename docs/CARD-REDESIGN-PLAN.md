@@ -232,3 +232,71 @@ Shipped and live:
   generatePortraitCard + renderProfileCard(style 6) from Box1.
 - Deploy: rebuilt bot-generation binary deployed to BOTH boxes; all pm2
   services online.
+
+## 8. V3 - FULL VISUAL INSPECTION PASS (2026-09-16, owner-triggered)
+
+The owner rejected v2 ("still looks the same with other themes") and demanded
+a real per-set, per-style VISUAL inspection. All 126 QA renders (9 styles x
+14 kinds) were pulled from the build box and inspected image-by-image. The
+inspection found real problems that code review alone missed:
+
+### 8.1 Findings (v2 -> v3)
+
+STRUCTURAL SAMENESS (the owner's exact complaint):
+- EQUIP: 6 of 9 styles were the same "left portrait + 3x3 slot grid"
+  skeleton (Stonekeep, Woodmere, Soul Forge, Neon, Monolith, Crimson).
+- SKILLTREE: Soul Forge duplicated the Arcanum radial-ring constellation
+  (the owner had explicitly banned one shared ring layout).
+- SHOP: every style had a fixed 1100px canvas with rows crammed at the top
+  and a giant dead void below.
+
+RENDER DEFECTS:
+- Monolith RANK: engraved name overlapped the glyph band (ticks struck
+  through the letters).
+- Stonekeep: empty riveted keystone plate top-right on 7 of 8 kinds.
+- Crimson ALLOCATE: right column overflow ("HALF VALUE..." clipped at the
+  card edge; CTA pennant truncated).
+- Monolith ALLOCATE: "[" "]" rendered as vertical bars (font substitution).
+- Stonekeep GUILDINFO: guild name engraved dark-on-dark, nearly invisible.
+- Stonekeep economy cards: torch/ember glows rendered as dirty smudges.
+- Monolith ABILITIES: last row sub-text clipped by the slab bottom.
+- Noir RANK: rank line truncated to "B-RANK ADVENT...".
+
+### 8.2 v3 structural redesigns (not recolours)
+
+- EQUIP is now 9 distinct compositions:
+  Stonekeep = riveted armory wall grid (kept); Arcanum = hero center +
+  flanking columns (kept); Retro = playbill dotted list (kept); Woodmere =
+  pegboard with two wooden rails, ropes and alternating drop lengths;
+  Noir = dossier manifest (kept); Soul Forge = RELIC VAULT with three gold
+  hairline shelves, relics as glowing gems standing ON the shelf lines;
+  Neon = LOADOUT hotbar terminal (two full-width equip rails + operative /
+  integrity / notes panels); Monolith = THE RELIC ASCENT, nine carved steps
+  rising left-to-right with relic braziers on each tread and the hero statue
+  on the summit plateau; Crimson = THE REGALIA DISPLAY, nine pendant shields
+  hanging from two gold rails on drop-rods.
+- SKILLTREE: Soul Forge rebuilt as SOUL THREADS (three ritual bead-threads
+  hanging from summoning rings, roman tier marks, names beside every bead).
+  Arcanum constellation nodes now carry skill names + progress (flipped
+  inward near the branch chips to avoid collisions).
+- SHOP: canvas height is now computed from the entry count in all 9 styles
+  (no dead voids); Monolith exchange re-spaced.
+- Defect fixes as listed above (Monolith band spacing, bracket-safe CTA
+  strings, Stonekeep keystone "EST. J" chisel stamp + guild name slab +
+  clean economy plaque, Crimson three-line note + "[N]" pennant, Noir
+  auto-shrink rank line).
+
+### 8.3 v3 verification
+
+- Three QA rounds (render -> LOOK at every PNG -> fix -> re-render). Round 3
+  verified all fixes: no collisions, no clipping, no voids; EQUIP 9/9 and
+  SKILLTREE 9/9 structurally distinct.
+- Deployed: rebuilt binary swapped on Box2 (md5 1e750387...) AND Box1;
+  pm2 go/scraper/whatsapp-bot all online on both boxes.
+- Live: :7860 /api/cards/portrait returns distinct styled bytes per style
+  (8/8 distinct hashes for RANK+ALLOCATE x 4 styles); real Box1
+  generatePortraitCard path verified for styles 3/6/10; live EQUIP
+  re-verified after the Box2 binary swap (Relic Ascent + Regalia Display
+  confirmed from the live API).
+- Repos: bot_generation 92569bc pushed to origin/main; Box1 mirror commit
+  f369ac5; whatsapp-bot docs updated (this section).

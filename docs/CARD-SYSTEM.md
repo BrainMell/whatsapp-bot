@@ -1,4 +1,4 @@
-# CARD SYSTEM
+# CARD SYSTEM - v3 (structure-first, visually verified per set and per style)
 
 > 2026-09-16 v2: the card-style system was REBUILT as nine genuine design
 > systems (the previous palette-swap pass was rejected by the owner).
