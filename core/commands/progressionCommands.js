@@ -566,12 +566,14 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
           style: (allocUser && allocUser.cardStyle) || 0,
           nickname: economy.getDisplayName(senderJid),
           pointsBig: `${allocAvail} POINTS`,
-          pill: `${allocClass?.name || 'Adventurer'} · ${allocTier}`,
+          pill: `${allocClass?.name || 'Adventurer'} · ${allocTier === 'STARTER' ? 'STARTER TIER' : allocTier}`,
           spentPercent: (allocSpent + allocAvail) > 0 ? Math.round((allocSpent / (allocSpent + allocAvail)) * 100) : 0,
           spentNow: `SPENT ${allocSpent}`,
           spentLeft: allocAvail > 0 ? `${allocAvail} LEFT TO SPEND` : 'FULLY ALLOCATED',
+          ctaLabel: `${getPrefix()}allocate <stat> [amount]`,
+          ctaSub: `e.g. ${getPrefix()}allocate ATK 5  |  ${getPrefix()}allocate HP 3`,
           sealText: String(Math.min(allocAvail, 999)),
-          caption: `forge your build · ${getPrefix()}allocate <stat> <n>`,
+          caption: 'spent points are permanent - choose wisely',
           rows: allocRows,
         });
         if (cardBuffer && cardBuffer.length > 0) {

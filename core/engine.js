@@ -18434,6 +18434,7 @@ _Sorted by guild level + XP_
                           const goService = require('./utils/goImageService');
                           cardBuf = await goService.generatePortraitCard({
                             kind: 'GUILDINFO',
+                            style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                             nickname: userGuild,
                             sealText: `L${guildLevel}`,
                             level: guildLevel,

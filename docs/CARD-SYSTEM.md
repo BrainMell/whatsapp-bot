@@ -1,3 +1,13 @@
+# CARD SYSTEM
+
+> 2026-09-16 v2: the card-style system was REBUILT as nine genuine design
+> systems (the previous palette-swap pass was rejected by the owner).
+> Canonical spec + card inventory: docs/CARD-REDESIGN-PLAN.md
+> Style 6 is now SOUL FORGE (owner-provided Allocate card defines it).
+> Battle-active cards keep the combat art family by owner rule. Royal
+> Decree (style 7) stays the baked default. Go: pkg/cardstyle + style
+> renderers in pkg/combat & pkg/economy. QA: bot_generation qa/styleqa.
+
 # RPG CARD SYSTEM - Design Specification & Developer Guide
 
 **Status:** canonical reference for all RPG image cards

@@ -807,6 +807,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             const imgBuf = await goService.generateTransactionCard({
                 nickname: nickname,
                 type: cardType,
+                style: economyUser.cardStyle || 0,
                 amount: 1,
                 newWallet: economyUser.wallet || 0,
                 newBank: economyUser.bank || 0,
@@ -1353,6 +1354,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         const imgBuf = await goService.generateTransactionCard({
             nickname: nickname,
             type: 'CRAFT',
+            style: economyUser.cardStyle || 0,
             amount: recipe.output.qty,
             newWallet: economyUser.wallet || 0,
             newBank: economyUser.bank || 0,
@@ -1480,6 +1482,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
             slots,
             playerClass: String(classInfo?.id || '').toUpperCase(),
             playerIndex: econUser?.spriteIndex || 0,
+            style: (econUser && econUser.cardStyle) || 0,
         });
     } catch (e) {
         console.error('[equipment] card render failed:', e?.message || e);
@@ -1520,7 +1523,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
 //    .j cardstyle         -> style sheet + current pick
 //    .j cardstyle <1-10>  -> set + live preview of your card
 // ==========================================
-const CARD_STYLE_NAMES = { 1: "Stonekeep", 2: "Golden Arcanum", 3: "Retro Court", 4: "Woodmere", 5: "Emblem Noir", 6: "Holo Gacha", 7: "Royal Decree", 8: "Neon Arcade", 9: "Rune Monolith", 10: "Crimson Court" };
+const CARD_STYLE_NAMES = { 1: "Stonekeep", 2: "Golden Arcanum", 3: "Retro Court", 4: "Woodmere", 5: "Emblem Noir", 6: "Soul Forge", 7: "Royal Decree", 8: "Neon Arcade", 9: "Rune Monolith", 10: "Crimson Court" };
 const CARD_STYLE_ALIASES = { stonekeep: 1, arcanum: 2, golden: 2, retro: 3, court: 3, woodmere: 4, noir: 5, emblem: 5, gacha: 6, holo: 6, decree: 7, royal: 7, arcade: 8, neon: 8, rune: 9, monolith: 9, crimson: 10 };
 async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
     const user = economy.getUser(senderJid) || economy.getOrCreateUser(senderJid);
