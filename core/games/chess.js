@@ -602,7 +602,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
         const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
-        // 💡 FIX: 'reset'/'force-reset' should also require admin — previously
+        // 💡 FIX: 'reset'/'force-reset' should also require admin - previously
         // any user could grief ongoing games (including bet matches) by typing
         // '.chess reset'. Now only players in the game or admins can clear it.
         const isForce = (cmd === 'reset' || cmd === 'force-reset') && isAdmin;

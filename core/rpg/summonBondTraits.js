@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON BOND + TRAITS + AI MODES — Phase 4 of the Summon Progression System
+//  SUMMON BOND + TRAITS + AI MODES - Phase 4 of the Summon Progression System
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // BOND SYSTEM:
@@ -158,7 +158,7 @@ function getTraitsDisplay(summon) {
   if (!summon.traits || summon.traits.length === 0) return 'None';
   return summon.traits.map(t => {
     const trait = getTrait(t);
-    return trait ? `${trait.icon} ${trait.name} — ${trait.desc}` : t;
+    return trait ? `${trait.icon} ${trait.name} - ${trait.desc}` : t;
   }).join('\n   ');
 }
 
@@ -234,7 +234,7 @@ function getAIMode(mode) {
  */
 function getAIModesDisplay() {
   return Object.entries(AI_MODES).map(([key, mode]) =>
-    `${mode.icon} ${key} — ${mode.desc}`
+    `${mode.icon} ${key} - ${mode.desc}`
   ).join('\n');
 }
 

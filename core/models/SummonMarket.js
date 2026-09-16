@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // ============================================
-// 🏪 SUMMON MARKET — tradeable summon listings
+// 🏪 SUMMON MARKET - tradeable summon listings
 // ============================================
 // Mirrors CardMarket schema (core/models/CardMarket.js).
 // Supports fixed-price sales + auctions.

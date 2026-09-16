@@ -5,7 +5,7 @@ The Database Subsystem manages persistent storage for the bot. It uses Mongoose 
 
 ## How it works
 
-**MongoDB Mongoose Connection** — [db.js L6-21](https://github.com/BrainMell/whatsapp-bot/blob/main/db.js#L6-21)
+**MongoDB Mongoose Connection** - [db.js L6-21](https://github.com/BrainMell/whatsapp-bot/blob/main/db.js#L6-21)
 ```javascript
 const connectDB = async () => {
   if (isConnected) return;
@@ -28,7 +28,7 @@ This module establishes a connection to MongoDB using the URI specified in the e
 
 ---
 
-**User Schema Definition (Partial)** — [User.js L3-47](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L3-47)
+**User Schema Definition (Partial)** - [User.js L3-47](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L3-47)
 ```javascript
 const UserSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
@@ -80,7 +80,7 @@ This portion of the User Mongoose Schema specifies standard keys for player stat
 
 ---
 
-**System Key-Value Schema** — [System.js L3-8](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/System.js#L3-L8)
+**System Key-Value Schema** - [System.js L3-8](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/System.js#L3-L8)
 ```javascript
 const SystemSchema = new mongoose.Schema({
     key: { type: String, required: true, unique: true }, // e.g., 'blocked_users', 'muted_users', 'group_settings'
@@ -113,10 +113,10 @@ To change database properties or adjust default schema settings, developers can 
 ```
 
 ## Common tasks
-- **Change starting wallet balance** — Modify the default value of the wallet key in the user model in [User.js L7](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L7).
-- **Adjust the database connection retry delay** — Configure how long the bot waits before attempting to reconnect to MongoDB in [db.js L18](https://github.com/BrainMell/whatsapp-bot/blob/main/db.js#L18).
-- **Define system parameters schema** — Customize system storage fields and keys for flexible dynamic settings in [System.js L3-6](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/System.js#L3-L6).
-- **Change default user nickname** — Modify the fallback nickname string for unregistered users in [User.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L10).
+- **Change starting wallet balance** - Modify the default value of the wallet key in the user model in [User.js L7](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L7).
+- **Adjust the database connection retry delay** - Configure how long the bot waits before attempting to reconnect to MongoDB in [db.js L18](https://github.com/BrainMell/whatsapp-bot/blob/main/db.js#L18).
+- **Define system parameters schema** - Customize system storage fields and keys for flexible dynamic settings in [System.js L3-6](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/System.js#L3-L6).
+- **Change default user nickname** - Modify the fallback nickname string for unregistered users in [User.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/models/User.js#L10).
 
 
 

@@ -1,5 +1,5 @@
 // ============================================
-// 🧠 SUMMON AI — combat behavior for summons
+// 🧠 SUMMON AI - combat behavior for summons
 // ============================================
 // Mirrors performEnemyAction but with personality modifiers,
 // behavior tracking (for personality shifts), loyalty decay,
@@ -21,7 +21,7 @@ const registry = require('./summonRegistry');
 const PERSONALITY_SHIFT_THRESHOLD = 20;  // score at which personality shifts
 
 // ─────────────────────────────────────────────────────────────
-// BEHAVIOR TRACKING — increments behaviorScore based on action taken
+// BEHAVIOR TRACKING - increments behaviorScore based on action taken
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -37,7 +37,7 @@ function trackBehavior(summonEntity, decision) {
   if (decision.action === 'attack') {
     summonEntity.behaviorScore.aggressive = (summonEntity.behaviorScore.aggressive || 0) + 1;
   }
-  // Skill actions — depends on skill type
+  // Skill actions - depends on skill type
   else if (decision.action === 'skill' && decision.skill) {
     const skillType = decision.skill.type || '';
     if (['attack', 'aoe', 'execute'].includes(skillType)) {
@@ -93,7 +93,7 @@ function checkPersonalityShift(summonEntity) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// PERSONALITY MODIFIERS — override base AI decisions
+// PERSONALITY MODIFIERS - override base AI decisions
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -141,7 +141,7 @@ function applyPersonalityModifier(decision, summonEntity, enemies, players) {
         return {
           action: 'attack',
           target: lowestHp,
-          msg: `${summonEntity.name}'s aggression flares — attacking the weakest enemy!`
+          msg: `${summonEntity.name}'s aggression flares - attacking the weakest enemy!`
         };
       }
     }
@@ -160,7 +160,7 @@ function applyPersonalityModifier(decision, summonEntity, enemies, players) {
   }
 
   // CURIOUS: 60% chance to prefer utility skills over damage
-  // (This is a pre-decision modifier — would need to hook into evaluateAction.
+  // (This is a pre-decision modifier - would need to hook into evaluateAction.
   // For simplicity, we just don't override here. The base AI already picks
   // skills based on archetype, and curious summons often have utility skills.)
   // Future enhancement: pass a "preferUtility" flag to evaluateAction.
@@ -191,7 +191,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   }
   const chatId = state.chatId;
 
-  // 1. Check loyalty — if 0, summon refuses to fight (or betrays)
+  // 1. Check loyalty - if 0, summon refuses to fight (or betrays)
   if (summonEntity.loyalty <= 0) {
     // 5% betrayal chance per combat when loyalty is 0
     if (Math.random() < 0.05) {
@@ -215,7 +215,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   const allies = [...players, ...(state.summons || []).filter(s => s !== summonEntity && s.stats.hp > 0)];
 
   if (enemies.length === 0) {
-    // No enemies to fight — summon skips
+    // No enemies to fight - summon skips
     return;
   }
 
@@ -240,7 +240,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   if (decision.msg) actionMsg += decision.msg + '\n';
 
   // 💡 FIX #2 (2026-08-15): Clear any previous guard this summon had set.
-  // The guard lasts only until the summon's next turn — if the summon chooses
+  // The guard lasts only until the summon's next turn - if the summon chooses
   // a different action, the old guard is removed. This prevents stale guards
   // from persisting across multiple turns.
   if (state && state.players) {
@@ -256,9 +256,9 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
     // Guard mode: summon intercepts damage for the target
     decision.target.guardedBy = summonEntity.id;
     decision.target.guardInterceptPct = decision.interceptPct || 30;
-    actionMsg += `🛡️ ${summonEntity.icon} ${summonEntity.name} is guarding ${decision.target.name} — intercepting ${decision.interceptPct || 30}% of incoming damage!`;
+    actionMsg += `🛡️ ${summonEntity.icon} ${summonEntity.name} is guarding ${decision.target.name} - intercepting ${decision.interceptPct || 30}% of incoming damage!`;
   } else if (decision.action === 'attack' && decision.target) {
-    // Basic attack — use calculateDamage from guildAdventure
+    // Basic attack - use calculateDamage from guildAdventure
     try {
       const damage = guildAdventure.calculateDamage(
         summonEntity, decision.target, 1.0, 'physical', null, chatId, false
@@ -267,7 +267,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
         decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage.damage);
         decision.target.currentHP = decision.target.stats.hp;
         actionMsg += `⚔️ ${summonEntity.icon} ${summonEntity.name} attacks ${decision.target.name} for ${damage.damage} damage!`;
-        // 💡 FIX #6: Generate threat for the summon (0.7× multiplier — lower
+        // 💡 FIX #6: Generate threat for the summon (0.7× multiplier - lower
         // than tanks so tanks hold aggro better, but summons still pull some)
         try { require('./threatSystem').generateThreat(summonEntity, damage.damage); } catch(e) {}
         if (decision.target.stats.hp <= 0) {
@@ -281,7 +281,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
     }
   } else if (decision.action === 'skill' && decision.skill && decision.target) {
     // 💡 FIX 2026-08-07: Full skill execution via applyAbilityEffect (was a stub).
-    // Previously only read effect.multiplier — buffs/debuffs/CC/heals didn't work.
+    // Previously only read effect.multiplier - buffs/debuffs/CC/heals didn't work.
     // Now delegates to the same applyAbilityEffect used by players and enemies.
     try {
       const skill = decision.skill;
@@ -333,7 +333,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   }
 
   // 💡 NEW 2026-08-07: Generate combat image for the summon's turn.
-  // Previously summon turns were text-only — no visual feedback. Now we
+  // Previously summon turns were text-only - no visual feedback. Now we
   // build a turnInfo and call nextTurn to render the combat scene with
   // the summon as the active actor (turn indicator under the summon).
   try {
@@ -349,7 +349,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
     await guildAdventure.nextTurn(sock, turnInfo, sessionKey);
   } catch (e) {
     console.error('[SummonAI] nextTurn (image) failed:', e?.message || e);
-    // Non-fatal — combat continues without the image
+    // Non-fatal - combat continues without the image
   }
 
   // 8. Track behavior for personality development
@@ -367,11 +367,11 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// BETRAYAL — when loyalty hits 0, summon may attack the player
+// BETRAYAL - when loyalty hits 0, summon may attack the player
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Perform a betrayal action — summon attacks its summoner.
+ * Perform a betrayal action - summon attacks its summoner.
  * Rare (5% chance per combat when loyalty = 0).
  * @param {object} sock
  * @param {object} summonEntity
@@ -383,7 +383,7 @@ async function performBetrayal(sock, summonEntity, sessionKey, state) {
   const summoner = (state.players || []).find(p => p.jid === summonEntity.summonerJid && !p.isDead);
 
   if (!summoner) {
-    // No summoner to betray — summon just leaves
+    // No summoner to betray - summon just leaves
     summonEntity.isDead = true;
     summonEntity.stats.hp = 0;
     try {
@@ -419,7 +419,7 @@ async function performBetrayal(sock, summonEntity, sessionKey, state) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SOUL ECHO — apply buff to summoner on summon death
+// SOUL ECHO - apply buff to summoner on summon death
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -445,23 +445,23 @@ function applySoulEcho(summoner, summonEntity) {
   const buffType = echo.buff.type;
 
   if (buffType === 'enemy_damage') {
-    // Shrapnel Echo — deal instant damage to all enemies (no buff, just damage)
+    // Shrapnel Echo - deal instant damage to all enemies (no buff, just damage)
     // The actual damage application happens in guildAdventure's handleDeath
     // where applySoulEcho is called. We store the damage on the summoner
     // so the caller can apply it.
     summoner.pendingEchoDamage = echo.buff.value;
-    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+    return `💫 ${summonEntity.name} falls - ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
   }
 
   if (buffType === 'enemy_debuff_def') {
-    // Dragon Fear — debuff all enemies' DEF
+    // Dragon Fear - debuff all enemies' DEF
     // Store the debuff for the caller to apply to enemies
     summoner.pendingEchoEnemyDebuff = { stat: 'def', value: echo.buff.value, duration: echo.buff.duration };
-    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+    return `💫 ${summonEntity.name} falls - ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
   }
 
   if (buffType === 'shield') {
-    // Void Shield — add a shield status effect to the summoner
+    // Void Shield - add a shield status effect to the summoner
     if (!summoner.statusEffects) summoner.statusEffects = [];
     summoner.statusEffects.push({
       type: 'shield',
@@ -469,7 +469,7 @@ function applySoulEcho(summoner, summonEntity) {
       duration: echo.buff.duration,
       icon: echo.icon,
     });
-    return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+    return `💫 ${summonEntity.name} falls - ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
   }
 
   // Standard buff types (atk, defense, magic_damage, spd, all)
@@ -484,11 +484,11 @@ function applySoulEcho(summoner, summonEntity) {
   };
   summoner.buffs.push(buff);
 
-  return `💫 ${summonEntity.name} falls — ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
+  return `💫 ${summonEntity.name} falls - ${summoner.name} absorbs the **${echo.name}**! ${echo.icon} ${echo.desc}`;
 }
 
 // ─────────────────────────────────────────────────────────────
-// POST-COMBAT PERSISTENCE — save loyalty/personality changes
+// POST-COMBAT PERSISTENCE - save loyalty/personality changes
 // ─────────────────────────────────────────────────────────────
 
 /**

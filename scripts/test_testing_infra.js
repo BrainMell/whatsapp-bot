@@ -127,12 +127,12 @@ async function runTests() {
   console.log(`[i] Original test mode: ${originalMode}`);
   await testerSystem.setTestMode(true);
   if (!await testerSystem.getTestMode()) {
-    throw new Error(`setTestMode(true) failed — getTestMode returned false`);
+    throw new Error(`setTestMode(true) failed - getTestMode returned false`);
   }
   console.log(`[+] setTestMode(true) → getTestMode=true ✅`);
   await testerSystem.setTestMode(false);
   if (await testerSystem.getTestMode()) {
-    throw new Error(`setTestMode(false) failed — getTestMode returned true`);
+    throw new Error(`setTestMode(false) failed - getTestMode returned true`);
   }
   console.log(`[+] setTestMode(false) → getTestMode=false ✅`);
   // Restore original
@@ -183,7 +183,7 @@ async function runTests() {
     reporterName: 'TestTester',
     chatId: TEST_GC,
     chatName: 'Test GC',
-    body: 'Balance: SLOW doesn\'t affect turn order — maybe should.',
+    body: 'Balance: SLOW doesn\'t affect turn order - maybe should.',
     category: 'balance', severity: 'normal'
   });
   console.log(`[+] Issue 2 submitted: ${issue2._id.toString().slice(-6)} ✅`);
@@ -304,7 +304,7 @@ async function runTests() {
     console.log(`[+] All test issues marked as 'organized' ✅`);
   } else {
     console.log(`[i] Groq call failed (expected if no API key): ${orgResult.message}`);
-    console.log(`[i] This is graceful failure — the function returned structured response, just no API access in test env`);
+    console.log(`[i] This is graceful failure - the function returned structured response, just no API access in test env`);
   }
 
   console.log('\n========== ALL TESTS PASSED ==========');

@@ -9,7 +9,7 @@ const CardStatSchema = new mongoose.Schema({
   // How many copies have ever been spawned into the world
   totalSpawned: { type: Number, default: 0 },
 
-  // The hard cap — no more spawn after this unless admin bypasses
+  // The hard cap - no more spawn after this unless admin bypasses
   maxCopies: { type: Number, default: 200 },
 
   // How many unique users own at least one copy

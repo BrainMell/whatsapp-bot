@@ -5,7 +5,7 @@ The Media Subsystem facilitates conversion between static/animated images, video
 
 ## How it works
 
-**FFmpeg Image to Sticker Conversion** — [engine.js L1932-L1943](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1932-L1943)
+**FFmpeg Image to Sticker Conversion** - [engine.js L1932-L1943](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1932-L1943)
 ```javascript
     async function imageToSticker(inputPath, outputPath) {
       try {
@@ -24,7 +24,7 @@ This utility function executes an FFmpeg process to resize and crop a static or 
 
 ---
 
-**Reaction GIF Fetching and Conversion** — [handler.js L153-L176](https://github.com/BrainMell/whatsapp-bot/blob/main/reactions/handler.js#L153-L176)
+**Reaction GIF Fetching and Conversion** - [handler.js L153-L176](https://github.com/BrainMell/whatsapp-bot/blob/main/reactions/handler.js#L153-L176)
 ```javascript
     // Convert GIF to MP4 using FFmpeg (H.264 video encoding suitable for WhatsApp)
     const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -55,7 +55,7 @@ This snippet is located inside the reactions command handler. After downloading 
 
 ---
 
-**Sticker Search (Klipy)** — [engine.js L2074-L2083](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2074-L2083)
+**Sticker Search (Klipy)** - [engine.js L2074-L2083](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2074-L2083)
 ```javascript
     async function searchStickers(query, count = 10) {
       try {
@@ -92,10 +92,10 @@ const toMp4 = `"${ffmpegPath}" -i "${tempGif}" -movflags faststart -pix_fmt yuv4
 ```
 
 ## Common tasks
-- **Modify FFmpeg WebP encoding quality** — Adjust the visual quality of the output sticker by changing the `-q:v` parameter in [engine.js L1934](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1934).
-- **Adjust GIF to MP4 scaling filters** — Change the scaling and resolution parameters in the FFmpeg command within [handler.js L155](https://github.com/BrainMell/whatsapp-bot/blob/main/reactions/handler.js#L155).
-- **Configure the Sticker search limit** — Adjust the default count of sticker results returned from Klipy in [engine.js L2074](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2074).
-- **Modify sticker conversion aspect ratio handling** — Edit the scale filter logic in [engine.js L1934](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1934).
+- **Modify FFmpeg WebP encoding quality** - Adjust the visual quality of the output sticker by changing the `-q:v` parameter in [engine.js L1934](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1934).
+- **Adjust GIF to MP4 scaling filters** - Change the scaling and resolution parameters in the FFmpeg command within [handler.js L155](https://github.com/BrainMell/whatsapp-bot/blob/main/reactions/handler.js#L155).
+- **Configure the Sticker search limit** - Adjust the default count of sticker results returned from Klipy in [engine.js L2074](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2074).
+- **Modify sticker conversion aspect ratio handling** - Edit the scale filter logic in [engine.js L1934](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1934).
 
 
 

@@ -18,7 +18,7 @@ const XP_CONFIG = {
     QUEST_BASE_XP: 100,     // Base XP per quest encounter
     QUEST_COMPLETION: 300,  // Bonus for completing a full quest
 
-    // Level Milestones — these are TIERED REPLACEMENTS, not stacks.
+    // Level Milestones - these are TIERED REPLACEMENTS, not stacks.
     // At level 75, only the 1.8x multiplier applies (not 1.2*1.3*1.5*1.8=4.21x).
     // Previously the multipliers stacked, making late-game XP requirements
     // astronomical (220M XP for L75->L76) and effectively unobtainable.
@@ -152,14 +152,14 @@ function getUser(userId) {
     // getUser() runs and the level is corrected. Awards the same stat +
     // skill points the regular addXP path would have.
     //
-    // Coerce to numbers first — defense against type-coercion bugs where
+    // Coerce to numbers first - defense against type-coercion bugs where
     // level/xp was written as a string (e.g. via .lean() skipping Mongoose
-    // type casting on cache load — audit Task 3 Q3 root cause #3).
+    // type casting on cache load - audit Task 3 Q3 root cause #3).
     p.level = Number(p.level) || 1;
     p.xp = Number(p.xp) || 0;
     if (p.level < 1) p.level = 1;
     if (p.level >= XP_CONFIG.MAX_LEVEL) {
-        // At cap — clamp XP to the cap's threshold so the "416% progress"
+        // At cap - clamp XP to the cap's threshold so the "416% progress"
         // display stops showing for max-level players.
         const capXP = getXPForLevel(XP_CONFIG.MAX_LEVEL);
         if (p.xp > capXP) p.xp = capXP;
@@ -199,7 +199,7 @@ function getXPForLevel(level) {
     if (level <= 1) return 0;
 
     // 💡 REBALANCE (2026-09-15, owner order: "make it 50% easier to level
-    // up"): cumulative requirement halved again — floor(200 × L²). History:
+    // up"): cumulative requirement halved again - floor(200 × L²). History:
     // 2026-08-16 80×L² → 2026-09-14 400×L² (owner: level 81 in days via
     // raids) → now 200×L² (owner: ×5 felt too heavy). Per-level cost is
     // 200×(2L+1) = 400L + 200 XP:
@@ -328,7 +328,7 @@ function getBaseStats(userId, classId) {
     // 💡 FIX 2026-08-01: Apply summon trial passives.
     // computePassiveBonuses() returns {hp, atk, def, mag, spd, luck, crit, ...}
     // based on which trial passives the user has unlocked and which element
-    // summons they own. Previously this was NEVER called — all 14 trial
+    // summons they own. Previously this was NEVER called - all 14 trial
     // passives were dead data.
     try {
         const summonTrials = require('./summonTrials');
@@ -343,7 +343,7 @@ function getBaseStats(userId, classId) {
             }
         }
     } catch (e) {
-        // Non-fatal — trial passives are optional
+        // Non-fatal - trial passives are optional
     }
 
     baseStats.maxHp = baseStats.hp;
@@ -387,7 +387,7 @@ function allocateStatPoint(userId, stat, amount = 1) {
     // then `user.statPoints -= amount` would ADD stat points (0 - -5 = 5)
     // while `user.allocatedStats[s] += gainedValue` would SUBTRACT stats
     // (gainedValue = 3 * 1 * -5 = -15). The user could then reallocate
-    // those free stat points elsewhere — a stat-point duplication exploit.
+    // those free stat points elsewhere - a stat-point duplication exploit.
     const amt = Math.floor(Number(amount));
     if (!Number.isFinite(amt) || amt <= 0) {
         return { success: false, message: "Amount must be a positive whole number!" };
@@ -407,13 +407,13 @@ function allocateStatPoint(userId, stat, amount = 1) {
     
     let tierMultiplier = 1.0;
     if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
-    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0; // Balanced — was 4.0, halved to prevent stat explosion
+    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0; // Balanced - was 4.0, halved to prevent stat explosion
     
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
     
     // Soft cap: after N points invested in a single stat, each additional point
     // is worth only half. This discourages pure min-maxing without blocking it.
-    // 💡 FIX P2 (2026-08-16): Soft cap scales with level — was fixed at 20,
+    // 💡 FIX P2 (2026-08-16): Soft cap scales with level - was fixed at 20,
     // meaning 86% of L100 stat points were at half-value. Now:
     // SOFT_CAP = 20 + floor(level / 5). At L100 → 40, allowing meaningful
     // investment in 2-3 stats without making min-maxing trivial.

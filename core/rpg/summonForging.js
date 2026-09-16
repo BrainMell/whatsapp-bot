@@ -1,5 +1,5 @@
 // ============================================
-// ⚔️ SOUL FORGING — fuse 2 summons into 1
+// ⚔️ SOUL FORGING - fuse 2 summons into 1
 // ============================================
 // One of the 6 original Summoner System mechanics.
 // Two summons are fused into a new summon that inherits traits
@@ -36,7 +36,7 @@ const FORGE_CONFIG = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// MUTATION TABLE — random trait changes applied to fused summons
+// MUTATION TABLE - random trait changes applied to fused summons
 // ─────────────────────────────────────────────────────────────
 
 const MUTATIONS = [
@@ -53,7 +53,7 @@ const MUTATIONS = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// FORGE — fuse two summons
+// FORGE - fuse two summons
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -216,7 +216,7 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   try {
     await fused.save();
   } catch (e) {
-    // This is bad — parents are gone but fused didn't save.
+    // This is bad - parents are gone but fused didn't save.
     // Log heavily. The gold is already spent. We can't recover the parents.
     console.error('[Forge] CRITICAL: parents deleted but fused summon failed to save:', e?.message || e);
     return { success: false, message: '❌ CRITICAL ERROR: Parents were consumed but the fused summon failed to save. Contact an admin.' };
@@ -227,7 +227,7 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   if (user.summonStats) {
     user.summonStats.forged = (user.summonStats.forged || 0) + 1;
   }
-  economy.saveUser(user);  // 💡 FIX: was missing — cooldown + stats didn't persist
+  economy.saveUser(user);  // 💡 FIX: was missing - cooldown + stats didn't persist
 
   // 19. Refresh resonances
   try {
@@ -243,15 +243,15 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   msg += `🆔 \`${fusedSummonId.slice(-8)}\`\n\n`;
 
   if (isPurebred) {
-    msg += `✨ *PUREBRED* — 3+ generations of ${species.name} lineage (+10% stats)\n`;
+    msg += `✨ *PUREBRED* - 3+ generations of ${species.name} lineage (+10% stats)\n`;
   }
   if (isCrossbred) {
-    msg += `🌟 *HYBRID VIGOR* — diverse lineage (+5% stats, enhanced mutations)\n`;
+    msg += `🌟 *HYBRID VIGOR* - diverse lineage (+5% stats, enhanced mutations)\n`;
   }
   if (appliedMutations.length > 0) {
     msg += `\n*MUTATIONS:*\n`;
     for (const mut of appliedMutations) {
-      msg += `• ${mut.name} — ${mut.desc}\n`;
+      msg += `• ${mut.name} - ${mut.desc}\n`;
     }
   }
   msg += `\n🔒 Soulbound for ${FORGE_CONFIG.SOULBOUND_DURATION_DAYS} days (cannot be traded).`;
@@ -317,12 +317,12 @@ function determineFusedSpecies(summon1, summon2) {
     return r1 >= r2 ? summon1.species : summon2.species;
   }
 
-  // Different elements — use the higher-level parent's species
+  // Different elements - use the higher-level parent's species
   return summon1.level >= summon2.level ? summon1.species : summon2.species;
 }
 
 // ─────────────────────────────────────────────────────────────
-// FUSED STATS — average of both parents × 1.10
+// FUSED STATS - average of both parents × 1.10
 // ─────────────────────────────────────────────────────────────
 
 function computeFusedStats(summon1, summon2) {
@@ -335,7 +335,7 @@ function computeFusedStats(summon1, summon2) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LINEAGE — build ancestry tree from both parents
+// LINEAGE - build ancestry tree from both parents
 // ─────────────────────────────────────────────────────────────
 
 function buildLineage(summon1, summon2) {
@@ -375,7 +375,7 @@ function buildLineage(summon1, summon2) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LINEAGE ANALYSIS — purebred vs crossbred
+// LINEAGE ANALYSIS - purebred vs crossbred
 // ─────────────────────────────────────────────────────────────
 
 function analyzeLineage(lineage, fusedSpecies) {
@@ -392,7 +392,7 @@ function analyzeLineage(lineage, fusedSpecies) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// MUTATIONS — random trait changes
+// MUTATIONS - random trait changes
 // ─────────────────────────────────────────────────────────────
 
 function rollMutations(maxCount) {

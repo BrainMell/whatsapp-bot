@@ -1,5 +1,5 @@
 // ============================================
-// MURDER MYSTERY — VISUAL CARD SYSTEM
+// MURDER MYSTERY - VISUAL CARD SYSTEM
 // Victorian-noir image cards rendered locally
 // with node-canvas. No external services.
 //
@@ -15,7 +15,7 @@
 const path = require('path');
 const fs = require('fs');
 
-// Lazy canvas — the bot may never render a card; don't pay startup cost.
+// Lazy canvas - the bot may never render a card; don't pay startup cost.
 let _canvas = null;
 function cv() {
   if (!_canvas) _canvas = require('canvas');
@@ -190,7 +190,7 @@ function atmosphere(ctx, W, H, opts = {}) {
   frame(ctx, W, H, opts.frameColor || 'rgba(236,226,200,0.32)');
 }
 
-// film grain — prerendered noise tile
+// film grain - prerendered noise tile
 let _grainTile = null;
 function grain(ctx, W, H, alpha) {
   const { createCanvas } = cv();
@@ -251,7 +251,7 @@ function ornament(ctx, cx, y, width, color = C.amber) {
   ctx.restore();
 }
 
-// footer — manor name only (games are standalone; no public counters)
+// footer - manor name only (games are standalone; no public counters)
 function footer(ctx, W, H, manorName) {
   ctx.save();
   ctx.font = '22px EB-Semi';
@@ -427,7 +427,7 @@ const Icons = {
   },
 };
 
-// rotated stamp (rubber-stamp look) — optional dark plate for legibility
+// rotated stamp (rubber-stamp look) - optional dark plate for legibility
 function stamp(ctx, text, cx, cy, w, h, color, angle = -0.12, fontSize = null, plate = true) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -600,7 +600,7 @@ function fogField(ctx, W, H, color = '201,239,226', alpha = 0.16) {
   ctx.restore();
 }
 
-// final common wrapper — every card render returns a PNG buffer or null
+// final common wrapper - every card render returns a PNG buffer or null
 async function renderCard(W, H, drawFn) {
   try {
     registerFonts();
@@ -630,9 +630,9 @@ const ROLE_STYLE = {
 };
 
 const ROLE_INSTRUCTIONS = {
-  KILLER: 'Each night, choose a guest to eliminate — and choose the room where their body will lie. Survive the discussions. Dodge the vote.',
+  KILLER: 'Each night, choose a guest to eliminate - and choose the room where their body will lie. Survive the discussions. Dodge the vote.',
   INVESTIGATOR: 'Each night you may study one guest, and the manor will tell you if their hands are clean. Use it. Carefully.',
-  GUARDIAN: 'Each night you may watch over one guest — or yourself. If the knife comes for them, you will turn it away. No one will ever know.',
+  GUARDIAN: 'Each night you may watch over one guest - or yourself. If the knife comes for them, you will turn it away. No one will ever know.',
   CIVILIAN: 'You have no gift except your wits. Watch. Question. Search. Vote. Find the killer before the manor runs out of guests.',
 };
 
@@ -648,7 +648,7 @@ function concealDots(ctx, x, y, n, color, spacing = 22, r = 7) {
   ctx.restore();
 }
 
-// Game introduction — group card, manor exterior
+// Game introduction - group card, manor exterior
 async function renderIntro({ playerCount, manorName, openingLine, nightLine }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('manor');
@@ -688,7 +688,7 @@ async function renderIntro({ playerCount, manorName, openingLine, nightLine }) {
   });
 }
 
-// Private role assignment — DM portrait (MANDATORY card)
+// Private role assignment - DM portrait (MANDATORY card)
 async function renderRoleCard({ character, playerName, role, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('gallery');
@@ -773,7 +773,7 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
   });
 }
 
-// Nightfall — group card
+// Nightfall - group card
 async function renderNightCard({ night, line, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('hallway_b');
@@ -824,7 +824,7 @@ async function renderNightCard({ night, line, manorName }) {
   });
 }
 
-// Morning — group card. outcome: 'murder' | 'saved' | 'quiet'
+// Morning - group card. outcome: 'murder' | 'saved' | 'quiet'
 // Includes the search-phase room list (the day's board).
 async function renderMorningCard({ night, outcome, line, rooms, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
@@ -897,7 +897,7 @@ async function renderMorningCard({ night, outcome, line, rooms, manorName }) {
   });
 }
 
-// Body discovered — group card (victim + room + finder)
+// Body discovered - group card (victim + room + finder)
 async function renderBodyFoundCard({ victimChar, victimName, room, finderName, method, hour, night, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg(room.id);
@@ -947,7 +947,7 @@ async function renderBodyFoundCard({ victimChar, victimName, room, finderName, m
   });
 }
 
-// Ghost clue — DM portrait to the body finder
+// Ghost clue - DM portrait to the body finder
 async function renderGhostClueCard({ clue, tier, victimName, room, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg(room.id);
@@ -995,7 +995,7 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
   });
 }
 
-// Public search card — posted to the GROUP. Everyone sees who searched
+// Public search card - posted to the GROUP. Everyone sees who searched
 // which room, and what they found (the user asked for open searches).
 async function renderSearchCard({ playerChar, playerName, room, found, flavor, night, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
@@ -1003,7 +1003,7 @@ async function renderSearchCard({ playerChar, playerName, room, found, flavor, n
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     atmosphere(ctx, LAND_W, LAND_H, { dark: 0.72 });
 
-    // searcher sprite, left, alive (colour) — same character across all cards
+    // searcher sprite, left, alive (colour) - same character across all cards
     await drawSprite(ctx, playerChar.id, 380, 830, 600);
     stamp(ctx, 'THE SEARCH', 380, 175, 300, 78, 'rgba(201,161,59,0.92)', -0.08, 40);
 
@@ -1045,7 +1045,7 @@ async function renderSearchCard({ playerChar, playerName, room, found, flavor, n
       ctx.shadowColor = 'transparent';
       ctx.font = '28px EB-Reg';
       ctx.fillStyle = C.ivoryDim;
-      ctx.fillText('The ghost whispers — but to the finder alone.', 760, 780);
+      ctx.fillText('The ghost whispers - but to the finder alone.', 760, 780);
     } else {
       ctx.font = '56px PF-Black';
       ctx.fillStyle = C.ivory;
@@ -1062,7 +1062,7 @@ async function renderSearchCard({ playerChar, playerName, room, found, flavor, n
   });
 }
 
-// Private card to the murder victim at dawn — "you are dead"
+// Private card to the murder victim at dawn - "you are dead"
 async function renderVictimDMCard({ victimChar, victimName, room, method, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg(room.id);
@@ -1186,13 +1186,13 @@ async function renderRoomChoiceCard({ rooms, victimName, night, manorName }) {
     ctx.textAlign = 'center';
     ctx.font = '25px Type';
     ctx.fillStyle = 'rgba(236,226,200,0.7)';
-    ctx.fillText('Hard rooms hide a body longer — but anger the ghost.', PORT_W / 2, 1310);
+    ctx.fillText('Hard rooms hide a body longer - but anger the ghost.', PORT_W / 2, 1310);
 
     footer(ctx, PORT_W, PORT_H, manorName);
   });
 }
 
-// Private investigation result — DM portrait dossier
+// Private investigation result - DM portrait dossier
 async function renderInvestigationCard({ subjectChar, subjectName, isKiller, flavor, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('library');
@@ -1259,7 +1259,7 @@ async function renderInvestigationCard({ subjectChar, subjectName, isKiller, fla
   });
 }
 
-// Vote result — group card
+// Vote result - group card
 async function renderVoteCard({ tally, skipVotes, eliminated, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('greatroom');
@@ -1333,7 +1333,7 @@ async function renderVoteCard({ tally, skipVotes, eliminated, manorName }) {
   });
 }
 
-// Final result — group card
+// Final result - group card
 async function renderFinalCard({ winner, killerChar, killerName, manorName, nightsSurvived, victims, survivors, closingLine }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg(winner === 'killer' ? 'drawing' : 'manor');
@@ -1400,7 +1400,7 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
   });
 }
 
-// Lobby opener — group card. The "start message" the house sees first.
+// Lobby opener - group card. The "start message" the house sees first.
 async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers, openingLine, prefix, prize }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('manor');
@@ -1427,21 +1427,21 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
 
     ctx.font = '30px EB-Reg';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`${playerCount} guest${playerCount === 1 ? '' : 's'} waiting · ${minPlayers}–${maxPlayers} seats at the table`, LAND_W / 2, 578);
+    ctx.fillText(`${playerCount} guest${playerCount === 1 ? '' : 's'} waiting · ${minPlayers}-${maxPlayers} seats at the table`, LAND_W / 2, 578);
 
     // invitation block
     ctx.font = '27px Type';
     ctx.fillStyle = C.amberHi;
-    ctx.fillText(`${prefix} mm join  —  accept the invitation`, LAND_W / 2, 672);
+    ctx.fillText(`${prefix} mm join  -  accept the invitation`, LAND_W / 2, 672);
     ctx.font = '27px Type';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`${prefix} mm start  —  begin once everyone is here`, LAND_W / 2, 722);
+    ctx.fillText(`${prefix} mm start  -  begin once everyone is here`, LAND_W / 2, 722);
 
-    // the manor's purse — the winning side claims it (no entry fee)
+    // the manor's purse - the winning side claims it (no entry fee)
     if (prize != null) {
       ctx.font = '27px Type';
       ctx.fillStyle = C.amber;
-      ctx.fillText(`prize  ${fmtNo(prize)} Zeni  —  claimed by the winning side`, LAND_W / 2, 778);
+      ctx.fillText(`prize  ${fmtNo(prize)} Zeni  -  claimed by the winning side`, LAND_W / 2, 778);
     }
 
     ctx.font = '26px Type';
@@ -1452,7 +1452,7 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
   });
 }
 
-// Hall of Shadows — the all-time ledger. Rows come pre-sorted and ranked:
+// Hall of Shadows - the all-time ledger. Rows come pre-sorted and ranked:
 // { rank, name, score, wins, games, winRate, tag, you }
 async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
@@ -1476,7 +1476,7 @@ async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
 
     ctx.font = 'italic 27px PF-MedIt';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`The worthy, the lucky and the dead — ${manorName}`, LAND_W / 2, 306);
+    ctx.fillText(`The worthy, the lucky and the dead - ${manorName}`, LAND_W / 2, 306);
 
     if (!rows || !rows.length) {
       ctx.font = 'italic 40px PF-MedIt';
@@ -1484,7 +1484,7 @@ async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
       ctx.fillText('No case has been closed yet. The ledger waits.', LAND_W / 2, 520);
       ctx.font = '26px EB-Reg';
       ctx.fillStyle = C.ivoryDim;
-      ctx.fillText('Close one — and your name is written here in candlelight.', LAND_W / 2, 580);
+      ctx.fillText('Close one - and your name is written here in candlelight.', LAND_W / 2, 580);
       footer(ctx, LAND_W, LAND_H, manorName);
       return;
     }
@@ -1505,11 +1505,11 @@ async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
       ctx.fillStyle = r.you ? C.amberHi : C.ivory;
       let nm = String(r.name || 'Guest');
       if (nm.length > 20) nm = `${nm.slice(0, 19)}…`;
-      ctx.fillText(`${nm.toUpperCase()}${r.you ? ' — YOU' : ''}`, 225, y);
+      ctx.fillText(`${nm.toUpperCase()}${r.you ? ' - YOU' : ''}`, 225, y);
 
       ctx.font = '19px EB-Reg';
       ctx.fillStyle = C.ivoryFaint;
-      ctx.fillText(`${r.wins}W · ${r.games}G · ${r.winRate == null ? '—' : r.winRate + '%'}${r.tag ? ` · ${r.tag}` : ''}`, 225, y + 26);
+      ctx.fillText(`${r.wins}W · ${r.games}G · ${r.winRate == null ? '-' : r.winRate + '%'}${r.tag ? ` · ${r.tag}` : ''}`, 225, y + 26);
 
       ctx.textAlign = 'right';
       ctx.font = '32px PF-Bold';
@@ -1538,7 +1538,7 @@ async function renderLeaderboardCard({ manorName, rows, totalTracked }) {
   });
 }
 
-// The killer's ONE unsigned taunt per game — posted to the group, anonymous.
+// The killer's ONE unsigned taunt per game - posted to the group, anonymous.
 async function renderTauntCard({ text, night, manorName }) {
   return renderCard(LAND_W, LAND_H, async (ctx) => {
     const bg = await loadBg('drawing');
@@ -1583,7 +1583,7 @@ async function renderTauntCard({ text, night, manorName }) {
   });
 }
 
-// Last words — posted to the group when a player dies (vote or body found).
+// Last words - posted to the group when a player dies (vote or body found).
 async function renderWillCard({ playerChar, playerName, will, cause, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('library');

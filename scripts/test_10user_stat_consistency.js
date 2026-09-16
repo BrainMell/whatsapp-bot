@@ -29,12 +29,12 @@ const failures = [];
 
 function ok(name, detail) {
   passCount++;
-  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function fail(name, detail) {
   failCount++;
   failures.push({ name, detail });
-  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function section(name) {
   console.log(`\n${CYAN}${BOLD}═══ ${name} ═══${RESET}`);
@@ -133,7 +133,7 @@ async function main() {
     console.log(`  ${CYAN}[Test 4] HP Scales with Level${RESET}`);
     const level = user.progression?.level || 1;
     if (baseStats.hp === 100 && level > 1) {
-      fail(`hp-scales:${userNum}`, `HP is exactly 100 at level ${level} — flat default bug`);
+      fail(`hp-scales:${userNum}`, `HP is exactly 100 at level ${level} - flat default bug`);
     } else if (baseStats.hp > 100 && level > 5) {
       ok(`hp-scales:${userNum}`, `HP=${baseStats.hp} at level ${level} (scales correctly)`);
     } else if (level <= 5) {
@@ -225,7 +225,7 @@ async function main() {
   }
 
   // === ABBYSS DAMAGE SIMULATION ===
-  section('ABYSS DAMAGE SIMULATION — 3 Users with Real Stats');
+  section('ABYSS DAMAGE SIMULATION - 3 Users with Real Stats');
 
   // Pick 3 users at different levels
   const testUsers = [users[0], users[Math.floor(users.length / 2)], users[users.length - 1]].filter(Boolean);
@@ -276,7 +276,7 @@ async function main() {
     // Verify player can actually kill the enemy (not stuck)
     const hitsToKill = Math.ceil(enemyHp / playerDamageAfterDef);
     if (hitsToKill > 100) {
-      fail(`abyss-killable:${jid}`, `needs ${hitsToKill} hits to kill enemy (too many — damage too low)`);
+      fail(`abyss-killable:${jid}`, `needs ${hitsToKill} hits to kill enemy (too many - damage too low)`);
     } else {
       ok(`abyss-killable:${jid}`, `needs ${hitsToKill} hits to kill enemy (reasonable)`);
     }

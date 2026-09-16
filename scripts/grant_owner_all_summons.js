@@ -51,7 +51,7 @@ async function main() {
         { summonId: summon.summonId },
         { $set: { inMainDeck: false } }
       );
-      console.log(`  ✅ ${species} (${speciesDef.name}) — Lv.10 ${speciesDef.rarity} → backlog`);
+      console.log(`  ✅ ${species} (${speciesDef.name}) - Lv.10 ${speciesDef.rarity} → backlog`);
       added++;
     } catch (e) {
       console.log(`  ❌ ${species}: ${e.message}`);

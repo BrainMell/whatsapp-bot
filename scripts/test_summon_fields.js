@@ -26,12 +26,12 @@ const failures = [];
 
 function ok(name, detail) {
   passCount++;
-  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function fail(name, detail) {
   failCount++;
   failures.push({ name, detail });
-  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 async function main() {
@@ -118,13 +118,13 @@ async function main() {
       if (ok) {
         ok_(`field:${field}`, detail);
       } else {
-        fail(`field:${field}`, `missing or empty — Go service will skip this summon`);
+        fail(`field:${field}`, `missing or empty - Go service will skip this summon`);
       }
     }
   }
   function ok_(name, detail) {
     passCount++;
-    console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+    console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
   }
 
   // 2. Verify the species field is NOT just an alias for type

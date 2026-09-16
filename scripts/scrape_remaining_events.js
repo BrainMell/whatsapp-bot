@@ -47,7 +47,7 @@ async function main() {
         try { ids = JSON.parse(str); } catch(e) { break; }
         if (ids.length === 0) break;
         for (const id of ids) {
-          // 💡 FIX: Don't assign IDs here — the organizer script
+          // 💡 FIX: Don't assign IDs here - the organizer script
           // (organize-events.js) handles E-XXXXX assignment after
           // dedup + sort. Store the raw shoob hex ID in cardId field
           // so the organizer can match and dedupe by detailUrl/imageUrl.
@@ -82,10 +82,10 @@ async function main() {
     console.log('\n⚠️  NOTE: Event cards have no E-XXXXX IDs yet.');
     console.log('   Run organize-events.js (from the event_scraper project) to assign proper IDs.');
 
-    // Create CardStat entries in MongoDB — but only after IDs are assigned
+    // Create CardStat entries in MongoDB - but only after IDs are assigned
     // by the organizer. Skip CardStat creation here; the merge_event_cards.js
     // script handles it when the organized data is merged in.
-    console.log('\n⏭️  Skipping CardStat creation — run merge_event_cards.js after organizing.');
+    console.log('\n⏭️  Skipping CardStat creation - run merge_event_cards.js after organizing.');
   }
 
   process.exit(0);

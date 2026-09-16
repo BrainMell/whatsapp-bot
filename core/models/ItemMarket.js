@@ -1,6 +1,6 @@
 // models/ItemMarket.js
 // Player-to-player item/gear market listings.
-// Companion to CardMarket — handles stackable inventory items (potions, materials, gear).
+// Companion to CardMarket - handles stackable inventory items (potions, materials, gear).
 // 10% tax applied on every sale (genuine sink, same as card sales + P2P transfers).
 
 const mongoose = require('mongoose');

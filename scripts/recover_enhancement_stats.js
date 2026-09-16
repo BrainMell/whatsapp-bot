@@ -7,7 +7,7 @@
 //   players' enhanced equipment stats under a flat 5-level cap and 100%
 //   bonus cap. With the new rarity-based cap (Common 5, Uncommon 10,
 //   Rare 15, Epic 20, Legendary 25, Mythic 30), many of those items
-//   should be allowed higher enhancement — but they're currently sitting
+//   should be allowed higher enhancement - but they're currently sitting
 //   at the old flat ceiling because the repair already ran on bag open.
 //
 //   This script scans all users in MongoDB, finds items where the new
@@ -17,11 +17,11 @@
 //
 // FORMULA:
 //   enhancementBonus (after recovery) = min(enhancementLevel × 0.35, 1.0)
-//   — assumes legendary stones were used (most generous assumption).
-//   — capped at MAX_ENHANCEMENT_BONUS = 1.0 (so max stats = 2× base).
+//   - assumes legendary stones were used (most generous assumption).
+//   - capped at MAX_ENHANCEMENT_BONUS = 1.0 (so max stats = 2× base).
 //
 //   If enhancementLevel was previously capped to 5 by the old repair,
-//   we can't recover the original level — players who had level 10+
+//   we can't recover the original level - players who had level 10+
 //   gear stay at level 5. BUT we still re-evaluate the bonus using the
 //   new rarity-aware cap, so a Mythic item at level 5 still gets the
 //   full 1.75 (5 × 0.35) bonus applied (vs. the old 1.0 cap = 1.0
@@ -29,7 +29,7 @@
 //
 //   Net effect: most items will go from 2× base to 2.75× base at level
 //   5 (legendary stones assumed). That's a 37.5% stat bump for affected
-//   items — meaningful but not OP, and capped at the same global 1.0
+//   items - meaningful but not OP, and capped at the same global 1.0
 //   bonus ceiling so no runaway.
 //
 // SAFETY:
@@ -37,7 +37,7 @@
 //   - DRY-RUN mode by default: prints what would change, writes nothing
 //   - LIVE mode requires explicit --live flag
 //   - Per-user bulk writes in chunks of 100, with progress logging
-//   - Never deletes items, never reduces stats — only rewrites stats
+//   - Never deletes items, never reduces stats - only rewrites stats
 //     using the rarity-aware formula when the result would be higher
 //
 // USAGE:
@@ -62,15 +62,15 @@ if (!MONGO_URI) {
 }
 
 console.log(`\n══════════════════════════════════════════════════`);
-console.log(`  ENHANCEMENT RECOVERY — ${LIVE ? '🔴 LIVE (writes)' : '🟡 DRY RUN (no writes)'}`);
+console.log(`  ENHANCEMENT RECOVERY - ${LIVE ? '🔴 LIVE (writes)' : '🟡 DRY RUN (no writes)'}`);
 console.log(`══════════════════════════════════════════════════\n`);
 
-// Rarity caps — must match inventorySystem.js exactly
+// Rarity caps - must match inventorySystem.js exactly
 const MAX_ENHANCEMENT_LEVEL_BY_RARITY = {
   COMMON: 5, UNCOMMON: 10, RARE: 15, EPIC: 20, LEGENDARY: 25, MYTHIC: 30,
 };
 const DEFAULT_MAX_ENHANCEMENT_LEVEL = 5;
-// 💡 POLISH 2026-07-17: rarity-aware BONUS cap (was flat 1.0 before —
+// 💡 POLISH 2026-07-17: rarity-aware BONUS cap (was flat 1.0 before -
 // items were stuck at 2x base max regardless of rarity). Now matches
 // inventorySystem.js's MAX_ENHANCEMENT_BONUS_BY_RARITY so the recovery
 // actually grants the higher caps players have been waiting for.
@@ -85,13 +85,13 @@ function getMaxLevel(rarity) {
 }
 // 💡 FIX 2026-08-01 (BUG #6): was `item.enhancementLevel × 0.35` which
 // assumes Legendary stones were used at every prior level. But Mythic
-// stones give 0.60 per level — so a legitimately Mythic-enhanced item
+// stones give 0.60 per level - so a legitimately Mythic-enhanced item
 // (e.g. level 5 with 3.0 bonus from 5 Mythic stones) was being "repaired"
 // down to 1.75 (5 × 0.35). Now assumes Mythic stones (most generous
 // assumption), capped at the rarity-aware maxBonus. This matches the
-// stated intent in the comment below — "most generous assumption" —
+// stated intent in the comment below - "most generous assumption" -
 // which was previously wrong (Legendary is NOT most generous, Mythic is).
-const ASSUMED_STONE_BONUS = 0.60;  // per level — was 0.35 (Legendary), now 0.60 (Mythic)
+const ASSUMED_STONE_BONUS = 0.60;  // per level - was 0.35 (Legendary), now 0.60 (Mythic)
 
 function getMaxBonus(rarity) {
   if (!rarity) return DEFAULT_MAX_ENHANCEMENT_BONUS;
@@ -108,7 +108,7 @@ function recalcStats(item, baseStatsRef) {
   if (!(item.enhancementLevel > 0)) return null;
 
   // Look up rarity: prefer item.rarity, fall back to baseItem.rarity via the
-  // caller (we receive baseStatsRef but not the full baseItem here — assume
+  // caller (we receive baseStatsRef but not the full baseItem here - assume
   // caller has already stamped item.rarity if it was missing).
   const maxBonus = getMaxBonus(item.rarity);
   const bonus = Math.min(item.enhancementLevel * ASSUMED_STONE_BONUS, maxBonus);
@@ -166,7 +166,7 @@ async function main() {
   }
 
   if (!LIVE) {
-    console.log(`(Dry run — skipping backup file write. Re-run with --live to apply.)`);
+    console.log(`(Dry run - skipping backup file write. Re-run with --live to apply.)`);
   } else {
     if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const backupPath = path.join(BACKUP_DIR, `users_${BACKUP_TAG}.json`);
@@ -268,7 +268,7 @@ async function main() {
   console.log('══════════════════════════════════════════════════\n');
 
   if (totalItemsRecoverable === 0) {
-    console.log('Nothing to recover — all items already at or above the rarity-aware ceiling.');
+    console.log('Nothing to recover - all items already at or above the rarity-aware ceiling.');
     await mongoose.disconnect();
     return;
   }

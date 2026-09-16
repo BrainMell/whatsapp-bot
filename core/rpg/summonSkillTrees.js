@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON SKILL TREES — Phase 2 of the Summon Progression System
+//  SUMMON SKILL TREES - Phase 2 of the Summon Progression System
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Each summon archetype gets a 3-path skill tree. Players pick ONE path
@@ -26,7 +26,7 @@
 
 const SUMMON_SKILL_TREES = {
   // ═══════════════════════════════════════════════════════════
-  // TANK — StoneGuard and other tanks
+  // TANK - StoneGuard and other tanks
   // ═══════════════════════════════════════════════════════════
   TANK: {
     A: {
@@ -68,7 +68,7 @@ const SUMMON_SKILL_TREES = {
   },
 
   // ═══════════════════════════════════════════════════════════
-  // BRUTE — EmberDrake and other physical DPS
+  // BRUTE - EmberDrake and other physical DPS
   // ═══════════════════════════════════════════════════════════
   BRUTE: {
     A: {
@@ -110,7 +110,7 @@ const SUMMON_SKILL_TREES = {
   },
 
   // ═══════════════════════════════════════════════════════════
-  // MAGE — MistWisp and other magic users
+  // MAGE - MistWisp and other magic users
   // ═══════════════════════════════════════════════════════════
   MAGE: {
     A: {
@@ -152,7 +152,7 @@ const SUMMON_SKILL_TREES = {
   },
 
   // ═══════════════════════════════════════════════════════════
-  // STALKER — fast attackers
+  // STALKER - fast attackers
   // ═══════════════════════════════════════════════════════════
   STALKER: {
     A: {
@@ -194,7 +194,7 @@ const SUMMON_SKILL_TREES = {
   },
 
   // ═══════════════════════════════════════════════════════════
-  // SUPPORT — BloomPixie and other healers/buffers
+  // SUPPORT - BloomPixie and other healers/buffers
   // ═══════════════════════════════════════════════════════════
   SUPPORT: {
     A: {
@@ -279,7 +279,7 @@ function canUnlockNode(summon, nodeKey) {
     return { canUnlock: false, reason: `Requires level ${node.levelReq} (you are L${summon.level}).` };
   }
 
-  // Check path — must have chosen a path, and node must be on that path
+  // Check path - must have chosen a path, and node must be on that path
   if (!summon.chosenSkillPath) {
     return { canUnlock: false, reason: 'Choose a skill path first. Use `.summon skill choose <A|B|C>`.' };
   }
@@ -287,7 +287,7 @@ function canUnlockNode(summon, nodeKey) {
     return { canUnlock: false, reason: `You chose path ${summon.chosenSkillPath}. Can only unlock ${summon.chosenSkillPath}-branch skills.` };
   }
 
-  // Check sequential unlock — must unlock node N before N+1
+  // Check sequential unlock - must unlock node N before N+1
   const tier = parseInt(nodeKey.slice(1));
   if (tier > 1) {
     const prevNode = `${summon.chosenSkillPath}${tier - 1}`;

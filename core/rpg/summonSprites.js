@@ -1,5 +1,5 @@
 // ============================================
-// 🎨 UNIFIED SPRITE SYSTEM — single source of truth
+// 🎨 UNIFIED SPRITE SYSTEM - single source of truth
 // ============================================
 // This is the ONE sprite pipeline for the entire RPG.
 // Every creature (summon, enemy, boss, companion, collectible)
@@ -10,13 +10,13 @@
 //
 // Lookup priority:
 //   1. Local Digimon cache (rpgasset/summons/digimon/)
-//   2. Local Retromon (rpgasset/summons/retromon/) — case-insensitive
-//   3. Local SD summons (rpgasset/summons/) — case-insensitive
+//   2. Local Retromon (rpgasset/summons/retromon/) - case-insensitive
+//   3. Local SD summons (rpgasset/summons/) - case-insensitive
 //   4. Numeric species → retromon rotation
 //   5. On-demand fetch from digi-api.com (getOrFetchSprite only)
 //
 // Case-insensitive matching means "Agumon.png", "agumon.png", "AGUMON.png"
-// all resolve correctly — fixes the retromon case-mismatch bug.
+// all resolve correctly - fixes the retromon case-mismatch bug.
 
 const https = require('https');
 const fs = require('fs');
@@ -121,7 +121,7 @@ const DIGIMON_API_NAME_OVERRIDES = {
   shinegreymon: 'Shine_Greymon',
   miragegaogamon: 'Mirage_Gaogamon',
   marinedevimon: 'Marine_Devimon',
-  megakabuterimon: 'Mega_Kabuterimon',  // may not exist — will fall through
+  megakabuterimon: 'Mega_Kabuterimon',  // may not exist - will fall through
 
   // Registry typo corrections (species id has typo, API name is correct)
   cerberusmon: 'Cerberumon',           // registry: cerberusmon → API: Cerberumon
@@ -140,9 +140,9 @@ const DIGIMON_API_NAME_OVERRIDES = {
   pumpmon: 'Pumpmon',
   seraphimon: 'Seraphimon',
   cyberdramon: 'Cyberdramon',
-  daemon: 'Daemon',                    // may not exist — will fall through
-  imperialdramon: 'Imperialdramon',    // may not exist — will fall through
-  magnaangemon: 'Magna_Angemon',       // may not exist — will fall through
+  daemon: 'Daemon',                    // may not exist - will fall through
+  imperialdramon: 'Imperialdramon',    // may not exist - will fall through
+  magnaangemon: 'Magna_Angemon',       // may not exist - will fall through
   cherubimon: 'Cherubimon',
   lucemon: 'Lucemon',
   rosemon: 'Rosemon',
@@ -201,7 +201,7 @@ function getSpritePath(species) {
 
 /**
  * Fetch a Digimon sprite from the API and cache it locally.
- * Only called on cache miss — subsequent calls use the cached file.
+ * Only called on cache miss - subsequent calls use the cached file.
  *
  * @param {string} digimonName - Digimon name (e.g. 'Agumon', 'Tyrannomon')
  * @returns {Promise<string|null>} - Path to the cached file, or null on failure
@@ -215,7 +215,7 @@ async function fetchAndCache(digimonName) {
   const existing = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
   if (existing) return existing;
 
-  // Try several name variants — the Digimon API image URLs follow these rules:
+  // Try several name variants - the Digimon API image URLs follow these rules:
   //   1. Spaces in names become UNDERSCORES: "Metal Greymon" → "Metal_Greymon.png"
   //   2. Some Digimon use Japanese names: Gallantmon → Dukemon, Omnimon → Omegamon
   //   3. Some names are concatenated (no separator): "Agumon" → "Agumon.png"
@@ -357,13 +357,13 @@ async function batchFetch(list, opts = {}) {
 // profile card, so the first render is instant.
 //
 // Runs with a 30s delay after boot (don't compete with MongoDB/card loads).
-// Logs progress but never throws — failures are silently skipped (the
+// Logs progress but never throws - failures are silently skipped (the
 // emoji fallback handles missing sprites gracefully).
 let _warmupStarted = false;
 
 // 💡 KNOWN_MISSING: species that do NOT exist on the Digimon API (digi-api.com)
 // under any name variant, AND have no local sprite. Fetching them is guaranteed
-// to fail every restart — pure log spam and wasted HTTP requests.
+// to fail every restart - pure log spam and wasted HTTP requests.
 //
 // These species use the emoji fallback at render time (summonSprites returns
 // null → renderer draws the species emoji icon from the registry).
@@ -384,7 +384,7 @@ let _warmupStarted = false;
 // exports to core/rpgasset/summons/sparklinlabs/ and remove from this set.
 const KNOWN_MISSING = new Set([
   // Digimon that don't exist on digi-api.com under any name variant
-  // Custom RPG species — no Digimon API equivalent, no local sprite
+  // Custom RPG species - no Digimon API equivalent, no local sprite
   'stoneguard',
   'emberdrake',
   'mistwisp',
@@ -397,7 +397,7 @@ const KNOWN_MISSING = new Set([
   'abyssal_phantom',
   'blossom_sylph',
   'world_tree_spirit',
-  // Sparklinlabs custom species — sprites exist as _idle.gif on the Go service
+  // Sparklinlabs custom species - sprites exist as _idle.gif on the Go service
   // (Box 2) but not as PNG in this repo. JS renderers use emoji fallback.
   'boglurk',
   'emberwick',

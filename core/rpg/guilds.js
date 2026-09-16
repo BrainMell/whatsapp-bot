@@ -31,7 +31,7 @@ const GUILD_ARCHETYPES = {
     name: 'Merchants Guild',
     icon: '💰',
     description: 'Focuses on commerce and wealth.',
-    // 💡 AUDIT FIX: was "Increases item sell value by 10%" — only mentioned
+    // 💡 AUDIT FIX: was "Increases item sell value by 10%" - only mentioned
     // half the perk. ARCHETYPE_PERKS.MERCHANT in guildPerks.js gives BOTH
     // +10% dungeon gold AND +10% sell value. Flavor text now matches the
     // actual implementation so `.g guild info` doesn't contradict the
@@ -101,7 +101,7 @@ async function loadGuilds() {
 
         // 💡 QA FIX: load ALL new fields from the schema. Previously only
         // a subset was loaded, causing loans/warPoints/emblem/recruits to
-        // be missing from the in-memory cache — which broke guild loans,
+        // be missing from the in-memory cache - which broke guild loans,
         // war points, emblems, and the 4-tier role system after restart.
         // Also handle legacy buildings stored as `upgrades` (Map<Number>).
         let buildings = { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } };
@@ -138,7 +138,7 @@ async function loadGuilds() {
             emblem: g.emblem || { icon: null, color: '#FFD700' },
         };
 
-        // Clean up memberGuilds — make sure every member is mapped
+        // Clean up memberGuilds - make sure every member is mapped
         for (const m of members) {
           if (!globalGuildData.memberGuilds[m]) {
             globalGuildData.memberGuilds[m] = g.guildId;
@@ -159,7 +159,7 @@ async function loadGuilds() {
       }
     }
 
-    // 💡 QA FIX: normalize guild XP on load — process any pending level-ups
+    // 💡 QA FIX: normalize guild XP on load - process any pending level-ups
     // that weren't consumed (e.g. from the old single-if level-up bug or
     // from large donations that the old code couldn't handle).
     for (const [guildName, guild] of Object.entries(globalGuildData.guilds)) {
@@ -230,7 +230,7 @@ async function syncGuild(guildName) {
                 motto: g.motto || "Adapt or be Infected.",
                 // 💡 QA FIX: write to BOTH `buildings` (new schema field) AND
                 // `upgrades` (legacy field). Previously only wrote to `upgrades`,
-                // but loadGuilds reads `buildings` first — which has schema
+                // but loadGuilds reads `buildings` first - which has schema
                 // defaults (L1/L0/L0), so building levels reset every restart.
                 buildings: g.buildings || { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } },
                 upgrades: g.buildings || {},
@@ -1055,7 +1055,7 @@ function getUserGuild(userJid) {
 }
 
 // 💡 OWNER RULE 2026-09-11: character cards show "[guild title] of [guild name]".
-// Resolves the player's guild name + display title in one call — custom title
+// Resolves the player's guild name + display title in one call - custom title
 // wins; when the player has no custom title, their guild ROLE is used
 // (Leader / Officer / Recruit / Member). Returns { name:'', title:'' } when
 // the player has no guild, so the card simply omits the line (never shows a
@@ -1193,8 +1193,8 @@ function addGuildPoints(guildName, points, reason) {
   // type. Functional but fragile.
   guild.points += val;
 
-  // 💡 LEVEL UP LOGIC — must loop in case a large XP grant covers multiple levels.
-  // Previously was a single `if` — depositing 500M Zeni (500K XP) at L1 would
+  // 💡 LEVEL UP LOGIC - must loop in case a large XP grant covers multiple levels.
+  // Previously was a single `if` - depositing 500M Zeni (500K XP) at L1 would
   // only trigger ONE level-up (L1→L2, spending 1000 XP), leaving 499K XP stuck
   // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
   // broken. Now loops until all level-ups are consumed.
@@ -1256,7 +1256,7 @@ function getGuildPointsLeaderboard(limit = 10) {
 }
 
 function awardPointsForActivity(userJid, activity) {
-  // 💡 QA FIX: was an empty stub — daily claims never awarded guild XP
+  // 💡 QA FIX: was an empty stub - daily claims never awarded guild XP
   const info = globalGuildData;
   const guildName = info.memberGuilds[userJid];
   if (!guildName) return;
@@ -1309,17 +1309,17 @@ function upgradeGuildBuilding(userJid, buildingId) {
 }
 //========================================
 
-// 💡 REMOVED 2026-09-12 (audit): getChallengeTypes / createChallenge / getChallenges —
+// 💡 REMOVED 2026-09-12 (audit): getChallengeTypes / createChallenge / getChallenges -
 // half-built stub (empty CHALLENGE_TYPES, no accept/resolve mechanic). See note above.
 
 // setup - now explicitly called during boot in engine.js
 // loadGuilds();
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  GUILD PURGE + GUILD GUIDE (QA — fix legacy conflicts)
+//  GUILD PURGE + GUILD GUIDE (QA - fix legacy conflicts)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 💡 Purges ALL guild data — both MongoDB GuildModel documents AND the
+// 💡 Purges ALL guild data - both MongoDB GuildModel documents AND the
 // System collection mappings (memberGuilds, guildOwners, guildInvites).
 // Also clears the in-memory cache. Used to fix legacy guild conflicts.
 async function purgeAllGuilds() {
@@ -1350,16 +1350,16 @@ function getGuildGuide(prefix) {
   msg += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
 
   msg += `*GETTING STARTED*\n`;
-  msg += `• \`${prefix} guild create <name>\` — Create a new guild\n`;
-  msg += `• \`${prefix} guild join <name>\` — Join an existing guild\n`;
-  msg += `• \`${prefix} guild leave\` — Leave your current guild\n`;
-  msg += `• \`${prefix} guild list\` — See all guilds\n\n`;
+  msg += `• \`${prefix} guild create <name>\` - Create a new guild\n`;
+  msg += `• \`${prefix} guild join <name>\` - Join an existing guild\n`;
+  msg += `• \`${prefix} guild leave\` - Leave your current guild\n`;
+  msg += `• \`${prefix} guild list\` - See all guilds\n\n`;
 
   msg += `*GUILD ARCHETYPES*\n`;
   msg += `Choose an archetype when creating (default: ADVENTURER):\n`;
-  msg += `• ⚔️ ADVENTURER — +15% XP from dungeons\n`;
-  msg += `• 💰 MERCHANT — +10% gold + 10% sell value\n`;
-  msg += `• 🧪 RESEARCH — -10% crafting material cost\n\n`;
+  msg += `• ⚔️ ADVENTURER - +15% XP from dungeons\n`;
+  msg += `• 💰 MERCHANT - +10% gold + 10% sell value\n`;
+  msg += `• 🧪 RESEARCH - -10% crafting material cost\n\n`;
 
   msg += `*GUILD LEVELS & XP*\n`;
   msg += `Guilds level up by earning XP from member activities:\n`;
@@ -1382,51 +1382,51 @@ function getGuildGuide(prefix) {
   msg += `• Treasury: +10% gold per level (max +50%) + bank interest\n\n`;
 
   msg += `*GUILD ROLES (4-tier system)*\n`;
-  msg += `• 👑 Leader — full control (can disband, set roles, emblem)\n`;
-  msg += `• ⚔️ Officer — can kick/invite/manage\n`;
-  msg += `• 🌿 Member — full guild access (loans, board, etc.)\n`;
-  msg += `• 💤 Recruit — limited (cannot borrow from bank)\n`;
+  msg += `• 👑 Leader - full control (can disband, set roles, emblem)\n`;
+  msg += `• ⚔️ Officer - can kick/invite/manage\n`;
+  msg += `• 🌿 Member - full guild access (loans, board, etc.)\n`;
+  msg += `• 💤 Recruit - limited (cannot borrow from bank)\n`;
   msg += `Set roles: \`${prefix} guild role @user <recruit|member|officer>\`\n\n`;
 
   msg += `*GUILD BANK & LOANS*\n`;
-  msg += `• \`${prefix} guild donate <amount>\` — Donate Zeni to guild bank\n`;
-  msg += `• \`${prefix} guild loan <amount>\` — Borrow (max 10% of bank, 7-day repayment)\n`;
-  msg += `• \`${prefix} guild loan list\` — View your active loans\n`;
-  msg += `• \`${prefix} guild loan repay <amount>\` — Repay early\n`;
+  msg += `• \`${prefix} guild donate <amount>\` - Donate Zeni to guild bank\n`;
+  msg += `• \`${prefix} guild loan <amount>\` - Borrow (max 10% of bank, 7-day repayment)\n`;
+  msg += `• \`${prefix} guild loan list\` - View your active loans\n`;
+  msg += `• \`${prefix} guild loan repay <amount>\` - Repay early\n`;
   msg += `Overdue loans: 10% auto-deducted daily from wallet, or 5% penalty compounds.\n`;
   msg += `Bank interest (L5+): 0.5%/treasury level daily, capped at 1M/day.\n\n`;
 
   msg += `*GUILD PERKS*\n`;
-  msg += `• \`${prefix} guild perks\` — View your active multipliers\n`;
-  msg += `• \`${prefix} guild info\` — Full guild status dashboard\n\n`;
+  msg += `• \`${prefix} guild perks\` - View your active multipliers\n`;
+  msg += `• \`${prefix} guild info\` - Full guild status dashboard\n\n`;
 
   msg += `*GUILD MANAGEMENT*\n`;
-  msg += `• \`${prefix} guild invite @user\` — Send invite (1 hour to accept)\n`;
-  msg += `• \`${prefix} accept\` — Accept a pending invite\n`;
-  msg += `• \`${prefix} decline\` — Decline a pending invite\n`;
-  msg += `• \`${prefix} guild promote @user\` — Promote to officer\n`;
-  msg += `• \`${prefix} guild demote @user\` — Demote officer\n`;
-  msg += `• \`${prefix} guild kick @user\` — Remove member\n`;
-  msg += `• \`${prefix} guild title @user <title>\` — Set custom title\n`;
-  msg += `• \`${prefix} guild motto <text>\` — Set guild motto\n`;
-  msg += `• \`${prefix} guild emblem <emoji> [hexColor]\` — Set guild emblem\n`;
-  msg += `• \`${prefix} guild delete\` — Disband guild (Leader only)\n\n`;
+  msg += `• \`${prefix} guild invite @user\` - Send invite (1 hour to accept)\n`;
+  msg += `• \`${prefix} accept\` - Accept a pending invite\n`;
+  msg += `• \`${prefix} decline\` - Decline a pending invite\n`;
+  msg += `• \`${prefix} guild promote @user\` - Promote to officer\n`;
+  msg += `• \`${prefix} guild demote @user\` - Demote officer\n`;
+  msg += `• \`${prefix} guild kick @user\` - Remove member\n`;
+  msg += `• \`${prefix} guild title @user <title>\` - Set custom title\n`;
+  msg += `• \`${prefix} guild motto <text>\` - Set guild motto\n`;
+  msg += `• \`${prefix} guild emblem <emoji> [hexColor]\` - Set guild emblem\n`;
+  msg += `• \`${prefix} guild delete\` - Disband guild (Leader only)\n\n`;
 
   msg += `*GUILD WAR (weekly)*\n`;
-  msg += `• \`${prefix} war\` — View this week's event\n`;
+  msg += `• \`${prefix} war\` - View this week's event\n`;
   msg += `• Earn points from dungeons, bosses, PvP, raids, Abyss\n`;
   msg += `• 4 rotating events: Tournament, Clash, Hunt, Siege\n`;
   msg += `• Rewards: 1st=5M Zeni + buff, 2nd-3rd=2M, 4th-8th=500K\n\n`;
 
   msg += `*OTHER COMMANDS*\n`;
-  msg += `• \`${prefix} guild members\` — View roster\n`;
-  msg += `• \`${prefix} guild ranks\` — Members by adventurer rank\n`;
-  msg += `• \`${prefix} guild titles\` — Roster with titles\n`;
-  msg += `• \`${prefix} guild board\` — Daily monster hunting board\n`;
-  msg += `• \`${prefix} guild tag <msg>\` — Mention all guild members\n`;
-  msg += `• \`${prefix} guild leaderboard\` — Top guilds by level/XP\n`;
-  msg += `• \`${prefix} guild points\` — Your guild's XP\n`;
-  msg += `• \`${prefix} guild upgrade\` — Upgrade buildings menu\n`;
+  msg += `• \`${prefix} guild members\` - View roster\n`;
+  msg += `• \`${prefix} guild ranks\` - Members by adventurer rank\n`;
+  msg += `• \`${prefix} guild titles\` - Roster with titles\n`;
+  msg += `• \`${prefix} guild board\` - Daily monster hunting board\n`;
+  msg += `• \`${prefix} guild tag <msg>\` - Mention all guild members\n`;
+  msg += `• \`${prefix} guild leaderboard\` - Top guilds by level/XP\n`;
+  msg += `• \`${prefix} guild points\` - Your guild's XP\n`;
+  msg += `• \`${prefix} guild upgrade\` - Upgrade buildings menu\n`;
 
   return msg;
 }

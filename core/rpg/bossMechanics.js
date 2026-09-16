@@ -126,7 +126,7 @@ const HIVE_COMMANDER_BOSS = {
                     message: '🦟 More Infected Drones surge into the fray!'
                 }
             ],
-            message: '🦟👑 "The Hive commands — you will be consumed!"'
+            message: '🦟👑 "The Hive commands - you will be consumed!"'
         },
         
         // PHASE 2: 66% - 33% HP
@@ -535,7 +535,7 @@ const CORRUPTED_OVERLORD_BOSS = {
                     trigger: 'below_15_hp',
                     ability: 'final_mutation_burst',
                     damage: 200,
-                    message: '🦠 "IF THE OVERLORD FALLS — THE INFECTION CONSUMES ALL!"'
+                    message: '🦠 "IF THE OVERLORD FALLS - THE INFECTION CONSUMES ALL!"'
                 },
                 {
                     name: 'Viral Rebirth',
@@ -647,7 +647,7 @@ const VOID_CORRUPTED_BOSS = {
                     trigger: 'on_phase_start',
                     portals: 4,
                     effect: 'random_effects',
-                    message: '🌑 Corruption rifts tear open — infectious energy pours through!'
+                    message: '🌑 Corruption rifts tear open - infectious energy pours through!'
                 },
                 {
                     name: 'Consume Sanity',
@@ -692,7 +692,7 @@ const VOID_CORRUPTED_BOSS = {
                     type: 'arena_shrink',
                     trigger: 'every_5_turns',
                     damage: 50,
-                    message: '⚫ The corrupted void closes in — nowhere left to run!'
+                    message: '⚫ The corrupted void closes in - nowhere left to run!'
                 },
                 {
                     name: 'Fully Corrupted Form',
@@ -772,7 +772,7 @@ const ANCIENT_DRAGON_BOSS = {
 
     // 💡 FIX: add top-level xpReward/goldReward so endCombat reads them.
     // Previously only `loot.xp`/`loot.gold` were defined, which endCombat
-    // ignores — the dragon boss fell back to the default 1000 XP / [100,200]
+    // ignores - the dragon boss fell back to the default 1000 XP / [100,200]
     // gold, less than a D-rank common mob. Now S-rank-appropriate.
     // 💡 ECONOMY REBALANCE: cut gold by 50% (was [20000, 40000]).
     xpReward: 50000,
@@ -1065,7 +1065,7 @@ const BOSS_ABILITIES = {
         damageType: 'magical',
         targeting: 'single',
         isTelegraphed: true,
-        telegraphMessage: ' Malachar raises his plague staff — a deadly spore cloud condenses! ⚠️ *DEFEND NOW!*',
+        telegraphMessage: ' Malachar raises his plague staff - a deadly spore cloud condenses! ⚠️ *DEFEND NOW!*',
         effects: [{ type: 'drain', value: 50 }]
     },
     outbreak: {
@@ -1254,7 +1254,7 @@ class BossFightManager {
         // entry). Ability entries can be either a string (uniform weight) or
         // an object `{ id, priority }`. Higher priority = more frequent.
         // Previously the comment claimed "weighted by priority" but the code
-        // did uniform random — that's now fixed.
+        // did uniform random - that's now fixed.
         const expanded = [];
         for (const ability of abilities) {
             if (typeof ability === 'string') {
@@ -1290,7 +1290,7 @@ class BossFightManager {
 // 📤 EXPORTS
 // ==========================================
 
-// Boss registry — maps boss ID strings used in DUNGEON_RANKS to the boss data objects
+// Boss registry - maps boss ID strings used in DUNGEON_RANKS to the boss data objects
 const BOSS_REGISTRY = {
     HIVE_COMMANDER:      HIVE_COMMANDER_BOSS,
     PLAGUE_PRIEST:       PLAGUE_PRIEST_BOSS,
@@ -1315,7 +1315,7 @@ module.exports = {
     BossPhaseManager,
     BossFightManager,
     
-    // Helper — look up by registry key or fall back to Hive Commander
+    // Helper - look up by registry key or fall back to Hive Commander
     getBossById: (id) => BOSS_REGISTRY[id] || HIVE_COMMANDER_BOSS,
 
     // Helper function to get boss by act (updated to new IDs)

@@ -48,7 +48,7 @@ async function main() {
   const skills = monsterSkills.getSkillsForMonster(summonEntity.archetype, summonEntity.level);
   console.log('\nAvailable skills (' + skills.length + '):');
   for (const s of skills) {
-    console.log('  • ' + s.name + ' (Lv.' + s.levelReq + '+, ' + s.cost + ' EN) — ' + (s.currentEffect?.type || 'unknown'));
+    console.log('  • ' + s.name + ' (Lv.' + s.levelReq + '+, ' + s.cost + ' EN) - ' + (s.currentEffect?.type || 'unknown'));
   }
 
   // Simulate enemies
@@ -70,7 +70,7 @@ async function main() {
       name: 'Test Orc',
       isEnemy: true,
       isDead: false,
-      currentHP: 80, // lower HP — should be prioritized by AI
+      currentHP: 80, // lower HP - should be prioritized by AI
       maxHP: 200,
       stats: { hp: 80, maxHp: 200, def: 15, spd: 6 },
       archetype: 'BRUTE',

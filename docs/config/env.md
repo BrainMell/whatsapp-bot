@@ -5,7 +5,7 @@ The Configuration Subsystem initializes runtime settings and handles global secr
 
 ## How it works
 
-**Thread-Local Instance Configuration** — [botConfig.js L3-L33](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L3-L33)
+**Thread-Local Instance Configuration** - [botConfig.js L3-L33](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L3-L33)
 ```javascript
 const { AsyncLocalStorage } = require('async_hooks');
 
@@ -44,7 +44,7 @@ This class manages the lifecycle of a bot instance config. It specifies fallback
 
 ---
 
-**Environment Variables Catalog** — [.env L1-L15](https://github.com/BrainMell/whatsapp-bot/blob/main/.env#L1-L15)
+**Environment Variables Catalog** - [.env L1-L15](https://github.com/BrainMell/whatsapp-bot/blob/main/.env#L1-L15)
 ```ini
 # Database Connection
 MONGO_URI="mongodb+srv://..."
@@ -64,7 +64,7 @@ This is the schema mapping for the system environment settings file. It exposes 
 
 ---
 
-**Configuration Proxy Resolvers** — [botConfig.js L61-L80](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L61-L80)
+**Configuration Proxy Resolvers** - [botConfig.js L61-L80](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L61-L80)
 ```javascript
 module.exports = {
   BotConfig,
@@ -123,10 +123,10 @@ To change system defaults or credentials parameters, developers can alter initia
 ```
 
 ## Common tasks
-- **Change the default bot prefix** — Modify the command prefix default property value in [botConfig.js L13](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L13).
-- **Change default currency settings** — Adjust the currency symbol and name defaults in [botConfig.js L16-L19](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L16-L19).
-- **Configure bot nickname default** — Change the name property of the bot configuration defaults in [botConfig.js L12](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L12).
-- **Update system version string** — Customize the fallback version identifier in [botConfig.js L14](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L14).
+- **Change the default bot prefix** - Modify the command prefix default property value in [botConfig.js L13](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L13).
+- **Change default currency settings** - Adjust the currency symbol and name defaults in [botConfig.js L16-L19](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L16-L19).
+- **Configure bot nickname default** - Change the name property of the bot configuration defaults in [botConfig.js L12](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L12).
+- **Update system version string** - Customize the fallback version identifier in [botConfig.js L14](https://github.com/BrainMell/whatsapp-bot/blob/main/botConfig.js#L14).
 
 
 

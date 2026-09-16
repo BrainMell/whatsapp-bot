@@ -1,5 +1,5 @@
 // ============================================
-// 🎨 SUMMON CODEX RENDERER — image cards with sprites
+// 🎨 SUMMON CODEX RENDERER - image cards with sprites
 // ============================================
 // Renders all summon species as an image card grid with sprite previews.
 // Supports pagination (12 species per page).
@@ -136,7 +136,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
     if (_fetchAttempted.has(speciesId)) return null;
     _fetchAttempted.add(speciesId);
     // Auto-fetch from API (best-effort, don't block the whole page if it fails)
-    // Note: don't pass explicit digimonName — let getOrFetchSprite use the
+    // Note: don't pass explicit digimonName - let getOrFetchSprite use the
     // DIGIMON_API_NAME_OVERRIDES map (handles Japanese names + underscore variants).
     try {
       return await summonSprites.getOrFetchSprite(speciesId);
@@ -234,7 +234,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
   ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.textAlign = 'center';
   const navText = totalPages > 1
-    ? `Page ${page}/${totalPages} — use .summon codex <page> to navigate | filter: .summon codex <element>`
+    ? `Page ${page}/${totalPages} - use .summon codex <page> to navigate | filter: .summon codex <element>`
     : `${allSpecies.length} species available`;
   ctx.fillText(navText, W / 2, H - 20);
 

@@ -75,7 +75,7 @@ async function main() {
     const sock = fakeSock();
     const r = await wordle.startGame(sock, CHAT, P1, MARK, { key: { id: 'x' } }, 'Tester', 'easy');
     check('wordle start', sock.sent.some((s) => /WORDLE STARTED/.test(s.text)));
-    // guess the right word via makeGuess — iterate 6 tries with a probe word
+    // guess the right word via makeGuess - iterate 6 tries with a probe word
     // then read the board; win path tested by guessing with dictionary words.
     let guessed = false;
     for (let i = 0; i < 6 && !guessed; i++) {

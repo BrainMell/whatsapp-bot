@@ -20,7 +20,7 @@ const UserCardSchema = new mongoose.Schema({
   // ── Deck System ──────────────────────────────────────────
   // Is this card currently loaded into the user's main 12-slot deck?
   inMainDeck: { type: Boolean, default: false },
-  mainDeckSlot: { type: Number, default: null }, // 1–12
+  mainDeckSlot: { type: Number, default: null }, // 1-12
 
   // Is this card in a custom deck?
   inCustomDeck: { type: Boolean, default: false },

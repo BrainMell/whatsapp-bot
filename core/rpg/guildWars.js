@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  GUILD WARS SYSTEM (Phase 7 — Multi-Event Guild Competition)
+//  GUILD WARS SYSTEM (Phase 7 - Multi-Event Guild Competition)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // 4 event types rotate weekly (Monday 00:00 → Sunday 23:00 UTC):
-//   Week 1: Champion Tournament — admin-curated 1v1 PvP bracket between
+//   Week 1: Champion Tournament - admin-curated 1v1 PvP bracket between
 //           guild champions, similar-stats matchups, simulated results
-//   Week 2: Guardian Clash — each guild's top 3 members fight another
+//   Week 2: Guardian Clash - each guild's top 3 members fight another
 //           guild's top 3 in a 3v3 team PvP (simulated based on stats)
-//   Week 3: Monster Hunt — multi-day PvE race, guilds earn points from
+//   Week 3: Monster Hunt - multi-day PvE race, guilds earn points from
 //           boss kills (F→SSS) + Abyss floor completions
-//   Week 4: Stronghold Siege — guilds attack/defend virtual strongholds,
+//   Week 4: Stronghold Siege - guilds attack/defend virtual strongholds,
 //           scored on aggregate activity + RNG
 //
 // Points earned from (reuses guildPerks.awardWarPoints):
@@ -95,7 +95,7 @@ async function spawnWeeklyWar() {
   const daysUntilSunday = (7 - endsAt.getUTCDay()) % 7;
   endsAt.setUTCDate(endsAt.getUTCDate() + daysUntilSunday);
 
-  // Initialize participants — all existing guilds
+  // Initialize participants - all existing guilds
   const guildInfo = guilds.getGuildInfo();
   const participants = [];
   if (guildInfo && guildInfo.guilds) {
@@ -200,7 +200,7 @@ async function resolveWeeklyWar() {
 
   // Sync latest points
   await syncWarPointsToActiveWar();
-  // 💡 QA FIX: removed war.populate('participants').execPopulate() —
+  // 💡 QA FIX: removed war.populate('participants').execPopulate() -
   // participants is an embedded subdoc array, not a ref. populate is
   // meaningless AND execPopulate() was removed in Mongoose 7+.
   // This was crashing the entire weekly war resolution pipeline.
@@ -245,14 +245,14 @@ async function resolveWeeklyWar() {
 // Simulated 1v1 bracket between guild champions. Champions are auto-selected
 // as the highest-level member of each guild (admin can override before resolve).
 async function resolveChampionTournament(war, sorted) {
-  let msg = `⚔️ *CHAMPION TOURNAMENT — FINAL RESULTS* ⚔️\n\n`;
+  let msg = `⚔️ *CHAMPION TOURNAMENT - FINAL RESULTS* ⚔️\n\n`;
 
   // Auto-select champions if not set (highest-level member)
   for (const participant of sorted) {
     if (!participant.championJid) {
       const guild = guilds.getGuild(participant.guildName);
       if (guild && guild.members && guild.members.length > 0) {
-        // Pick highest-level member (simplified — just pick first member for now)
+        // Pick highest-level member (simplified - just pick first member for now)
         participant.championJid = guild.members[0];
       }
     }
@@ -265,7 +265,7 @@ async function resolveChampionTournament(war, sorted) {
     const nextRound = [];
     for (let i = 0; i < currentRound.length; i += 2) {
       if (i + 1 >= currentRound.length) {
-        // Odd one out — auto-advance
+        // Odd one out - auto-advance
         nextRound.push(currentRound[i]);
         continue;
       }
@@ -302,9 +302,9 @@ async function resolveChampionTournament(war, sorted) {
 // ─── EVENT 2: GUARDIAN CLASH ──────────────────────────────────────────────
 // Simulated 3v3 team PvP. Top 3 members of each guild fight.
 async function resolveGuardianClash(war, sorted) {
-  let msg = `🛡️ *GUARDIAN CLASH — FINAL RESULTS* 🛡️\n\n`;
+  let msg = `🛡️ *GUARDIAN CLASH - FINAL RESULTS* 🛡️\n\n`;
 
-  // Auto-select guardians (top 3 by level — simplified to first 3 members)
+  // Auto-select guardians (top 3 by level - simplified to first 3 members)
   for (const participant of sorted) {
     if (!participant.guardians || participant.guardians.length === 0) {
       const guild = guilds.getGuild(participant.guildName);
@@ -320,7 +320,7 @@ async function resolveGuardianClash(war, sorted) {
     for (let j = i + 1; j < topGuilds.length; j++) {
       const a = topGuilds[i];
       const b = topGuilds[j];
-      // Simulate 3v3 — aggregate points × guardian count × RNG
+      // Simulate 3v3 - aggregate points × guardian count × RNG
       const aScore = (a.points / 3) * (0.8 + Math.random() * 0.4);
       const bScore = (b.points / 3) * (0.8 + Math.random() * 0.4);
       const winner = aScore >= bScore ? a : b;
@@ -340,7 +340,7 @@ async function resolveGuardianClash(war, sorted) {
   const finalRanking = [...topGuilds].sort((a, b) => (b.guardianWins || 0) - (a.guardianWins || 0));
   msg += `Round-robin results (top 8 guilds):\n`;
   for (let i = 0; i < Math.min(5, finalRanking.length); i++) {
-    msg += `${i + 1}. ${finalRanking[i].guildName} — ${finalRanking[i].guardianWins || 0} wins\n`;
+    msg += `${i + 1}. ${finalRanking[i].guildName} - ${finalRanking[i].guardianWins || 0} wins\n`;
   }
   if (finalRanking.length > 0) {
     msg += `\n🛡️ *CHAMPION: ${finalRanking[0].guildName}*\n`;
@@ -349,13 +349,13 @@ async function resolveGuardianClash(war, sorted) {
 }
 
 // ─── EVENT 3: MONSTER HUNT ────────────────────────────────────────────────
-// PvE race — points already tracked via warPoints. Just format results.
+// PvE race - points already tracked via warPoints. Just format results.
 async function resolveMonsterHunt(war, sorted) {
-  let msg = `🐉 *MONSTER HUNT — FINAL RESULTS* 🐉\n\n`;
+  let msg = `🐉 *MONSTER HUNT - FINAL RESULTS* 🐉\n\n`;
   msg += `Multi-day PvE race complete. Points earned from boss kills, dungeon clears, and Abyss runs.\n\n`;
   msg += `*Top 5 Guilds:*\n`;
   for (let i = 0; i < Math.min(5, sorted.length); i++) {
-    msg += `${i + 1}. ${sorted[i].guildName} — ${sorted[i].points.toLocaleString()} points\n`;
+    msg += `${i + 1}. ${sorted[i].guildName} - ${sorted[i].points.toLocaleString()} points\n`;
   }
   if (sorted.length > 0) {
     msg += `\n🐉 *HUNT CHAMPION: ${sorted[0].guildName}*\n`;
@@ -415,7 +415,7 @@ async function distributeWarRewards(war, sorted) {
     }
 
     if (i < 10) {
-      summary += `${i + 1}. ${participant.guildName} — ${participant.points.toLocaleString()} pts | 💰 ${rewardZeni.toLocaleString()} Zeni${perkMsg ? ' | ' + perkMsg : ''}\n`;
+      summary += `${i + 1}. ${participant.guildName} - ${participant.points.toLocaleString()} pts | 💰 ${rewardZeni.toLocaleString()} Zeni${perkMsg ? ' | ' + perkMsg : ''}\n`;
     }
   }
   return { summary };

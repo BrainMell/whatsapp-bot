@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Audio clip unit tests — timestamp parser + end-to-end ffmpeg clip of a
+ * Audio clip unit tests - timestamp parser + end-to-end ffmpeg clip of a
  * generated tone file. Run on Box1: node scripts/e2e_clip.js
  */
 const { execFileSync } = require('child_process');

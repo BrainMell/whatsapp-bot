@@ -298,7 +298,7 @@ const CRAFTING_RECIPES = {
     // Each tier's raw ore can be refined into a workable form for forging.
     'chaos_ingot_conv': {
         name: 'Chaos Ingot', category: 'CRAFT', id: 'chaos_ingot',
-        desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process — keep mana crystals on hand to quench.',
+        desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process - keep mana crystals on hand to quench.',
         ingredients: { 'chaos_ore': 3, 'mana_crystal': 1 },
         result: { id: 'chaos_ingot' }
     },
@@ -316,7 +316,7 @@ const CRAFTING_RECIPES = {
     },
 
     // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS ---
-    // Tier 1 (S-rank): chaos_blade + chaos_cloak — reqLevel 50, LEGENDARY
+    // Tier 1 (S-rank): chaos_blade + chaos_cloak - reqLevel 50, LEGENDARY
     'chaos_blade': {
         name: 'Chaos Blade', category: 'WEAPON', id: 'chaos_blade',
         desc: 'Forge a chaos ingot into a two-handed blade that fractures reality on impact. (+95 ATK, +15 SPD, +10 CRIT)',
@@ -330,7 +330,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'chaos_cloak', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor' }
     },
 
-    // Tier 2 (SS-rank): null_staff + null_aegis — reqLevel 70, MYTHIC
+    // Tier 2 (SS-rank): null_staff + null_aegis - reqLevel 70, MYTHIC
     'null_staff': {
         name: 'Null Staff', category: 'WEAPON', id: 'null_staff',
         desc: 'Mount a null matrix atop a mythril staff. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)',
@@ -344,7 +344,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'null_aegis', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor' }
     },
 
-    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown — reqLevel 90, MYTHIC
+    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown - reqLevel 90, MYTHIC
     'abyssal_blade': {
         name: 'Abyssal Blade', category: 'WEAPON', id: 'abyssal_blade',
         desc: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)',
@@ -530,10 +530,10 @@ function getRecipeById(id) {
     const needle = String(id).toLowerCase().trim();
 
     // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
-    //    'dragon_key_repair', etc. — keeps backward compat).
+    //    'dragon_key_repair', etc. - keeps backward compat).
     if (all[needle]) return all[needle];
 
-    // 2) Match by result.id — so users can type the item name they want
+    // 2) Match by result.id - so users can type the item name they want
     //    to make: `.g craft refined_steel` finds the `refined_steel_conv`
     //    recipe whose result.id is 'refined_steel'. This is the most
     //    intuitive lookup and was previously failing as "Recipe not found."
@@ -639,7 +639,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
           message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).`,
         };
       }
-      // 💡 QA FIX: check return value — removeMoney returns false if wallet insufficient
+      // 💡 QA FIX: check return value - removeMoney returns false if wallet insufficient
       const deductResult = economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
       if (!deductResult) {
         return { success: false, message: '❌ Zeni deduction failed. You may not have enough Zeni.' };
@@ -699,7 +699,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' — mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
+        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' - mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 
@@ -723,7 +723,7 @@ async function dismantleItem(userId, itemId) {
 
     // 💡 QA FIX: snapshot a deep copy of itemData BEFORE removeItem mutates it.
     // Previously itemData was a reference to inventory[itemId], and removeItem
-    // would set quantity=0 and delete the key — then the rollback would restore
+    // would set quantity=0 and delete the key - then the rollback would restore
     // the item with quantity: 0 (permanently destroyed).
     const itemSnapshot = { ...inventory[itemId] };
     delete itemSnapshot.quantity; // let addItem set quantity: 1
@@ -746,7 +746,7 @@ async function dismantleItem(userId, itemId) {
         if (inventory[ingId]) continue;
         newSlotsNeeded++;
     }
-    // 💡 QA FIX: freesSlot check was wrong — !inventory[itemId]?.quantity is
+    // 💡 QA FIX: freesSlot check was wrong - !inventory[itemId]?.quantity is
     // false for quantity: 1 (the most common case). Should check if the item
     // will be fully consumed (current quantity <= 1).
     const removedItemInfo = lootSystem.getItemInfo(itemId);
@@ -782,7 +782,7 @@ async function dismantleItem(userId, itemId) {
     }
 
     // 💡 FIX 2026-08-31: `itemData` doesn't exist in dismantleItem (renamed to
-    // itemSnapshot in an earlier QA fix) — every successful dismantle threw
+    // itemSnapshot in an earlier QA fix) - every successful dismantle threw
     // ReferenceError AFTER the item was destroyed and materials granted,
     // showing the user an error for a dismantle that actually worked.
     let msg = `♻️ *DISMANTLED: ${itemSnapshot?.name || itemId}*\n\nRecovered materials:\n`;

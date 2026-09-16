@@ -1,5 +1,5 @@
 // ============================================
-// MURDER MYSTERY — BLACKVALE MANOR
+// MURDER MYSTERY - BLACKVALE MANOR
 // A turn-based social deduction game for WhatsApp.
 //
 // Loop: lobby → secret roles (DM image cards) → night
@@ -9,14 +9,14 @@
 //
 // Roles: 1 KILLER + 1 INVESTIGATOR + 1 GUARDIAN (5+ players)
 //        + Civilians. Characters (the 11 manor sprites)
-//        are story persons only — any of them can hold
+//        are story persons only - any of them can hold
 //        any role.
 //
 // Isolated module: state lives in its own System keys
 // (per bot instance), commands live under `murder`/`mm`,
 // cards render locally via node-canvas. No RPG assets.
 //
-// Dead players: independent, loophole-free silence gate —
+// Dead players: independent, loophole-free silence gate -
 // the engine deletes EVERYTHING they post in the group
 // (text, media, view-once, stickers, commands). The gate
 // is bound to the game lifecycle and cannot be bypassed
@@ -29,8 +29,8 @@ const characters = require('./characters');
 const cases = require('./cases');
 const cards = require('./cards');
 
-// RPG economy (Zeni) — used for the manor's PRIZE (owner rule 2026-09-14:
-// "it should have a money prize, not need money to play" — the cast fee is
+// RPG economy (Zeni) - used for the manor's PRIZE (owner rule 2026-09-14:
+// "it should have a money prize, not need money to play" - the cast fee is
 // gone; the manor PAYS the winning side instead).
 // Optional by design: if the economy module is unavailable the manor
 // simply doesn't post a purse rather than refusing to open.
@@ -47,7 +47,7 @@ const DISCUSS_MS = 300000;     // 5 minutes of accusations (and one search each)
 const VOTE_MS = 90000;         // 90s on the ballot
 const LOBBY_TTL_MS = 30 * 60000;
 // --- self-healing phase machine (the live game froze when phase timers fired
-// late/never under load) — the watchdog forces every stalled transition ---
+// late/never under load) - the watchdog forces every stalled transition ---
 const WATCHDOG_MS = 15000;          // tick every 15s
 const WATCHDOG_GRACE_MS = 12000;    // deadline must be this stale before forcing
 const RESOLVE_STALE_MS = 45000;     // resolution flags older than this are dead
@@ -56,7 +56,7 @@ const VOTE_REMIND_MS = 30000;       // "the count closes" reminder
 const DISCUSS_REMIND_MS = 60000;    // "votes in a minute" reminder
 const TAUNT_MAX_LEN = 160;
 const WILL_MAX_LEN = 200;
-const SILENCE_TTL_MS = 12 * 3600000; // failsafe only — silence is released at case close
+const SILENCE_TTL_MS = 12 * 3600000; // failsafe only - silence is released at case close
 const DM_SEND_DELAY_MS = 1100;       // pacing for role-card DM bursts
 const REVEAL_ROLE_ON_DEATH = false;  // configurable
 
@@ -67,7 +67,7 @@ const PRIZE_STEP = 500; // rolled in 500-Zeni steps at lobby open
 
 // ---------- all-time ledger (leaderboard) ----------
 // Global key: one shared process serves every bot instance, and entries are
-// user-keyed — a player's shadow follows them across every manor.
+// user-keyed - a player's shadow follows them across every manor.
 const STATS_KEY = 'murder_mm_stats_v1';
 const LB_MAX_ROWS = 10;
 
@@ -128,7 +128,7 @@ function loadPersisted() {
     if (saved && typeof saved === 'object') {
       for (const [chatId, g] of Object.entries(saved)) adoptGame(chatId, g, now);
     }
-    // legacy v1 flat map — adopt only this bot's games (migration)
+    // legacy v1 flat map - adopt only this bot's games (migration)
     if (system.get(LEGACY_GAMES_KEY, null)) {
       const legacy = system.get(LEGACY_GAMES_KEY, null);
       for (const [chatId, g] of Object.entries(legacy || {})) {
@@ -183,7 +183,7 @@ function isSilenced(jid, chatId) {
 
 // the sock that actually receives this game's chat: captured from the last
 // command ctx (the hosting account is the one IN the group). Falls back to the
-// engine's module sock. Timer-driven sends MUST use this — getSockSafe() alone
+// engine's module sock. Timer-driven sends MUST use this - getSockSafe() alone
 // returns whichever of the 3 bot accounts connected last, which may not even
 // be in the group (that is how the live vote prompt silently vanished).
 function sockForGame(g) {
@@ -191,14 +191,14 @@ function sockForGame(g) {
   return getSockSafe();
 }
 
-// remember the live sock on the game (internal key — never persisted)
+// remember the live sock on the game (internal key - never persisted)
 function noteSock(g, sock) {
   if (g && sock) g._sock = sock;
 }
 
 // idempotency stamp: the same transition twice within TRANSITION_DEDUPE_MS is
 // always a double-fire (late timer + watchdog), never a legit new round.
-// NOTE: keys must be per-round (e.g. `night3`) — a new round may legitimately
+// NOTE: keys must be per-round (e.g. `night3`) - a new round may legitimately
 // re-enter the same phase within the window (fast QA loops, tiny real games).
 function beginTransition(g, key) {
   if (!g) return false;
@@ -271,7 +271,7 @@ function rosterLines(game, excludeJid = null, includeSelfJid = null) {
   const inc = includeSelfJid ? normJid(includeSelfJid) : null;
   return alivePlayers(game)
     .filter((p) => !ex || normJid(p.jid) !== ex)
-    .map((p, i) => `  ${i + 1}. ${nameOf(p)} — ${p.char.name}${normJid(p.jid) === inc ? ' (you)' : ''}`);
+    .map((p, i) => `  ${i + 1}. ${nameOf(p)} - ${p.char.name}${normJid(p.jid) === inc ? ' (you)' : ''}`);
 }
 
 // resolve a target from number / player name / character name against the printed roster
@@ -313,7 +313,7 @@ function resolveRoom(game, raw) {
 }
 
 function roomListOf(game) {
-  return (game.rooms || []).map((r, i) => `  ${i + 1}. ${r.name} — _${r.hint} · ${r.concealLabel}_`).join('\n');
+  return (game.rooms || []).map((r, i) => `  ${i + 1}. ${r.name} - _${r.hint} · ${r.concealLabel}_`).join('\n');
 }
 
 // ---------- messaging ----------
@@ -388,7 +388,7 @@ async function sendPhaseReminder(chatId, kind) {
   const prefix = g.prefix || '.j';
   if (kind === 'discussion' && g.phase === PHASE.DISCUSSION) {
     const unfound = (g.bodies || []).filter((b) => !b.found).length;
-    const bodyNote = unfound ? ` ⚠️ ${unfound} bod${unfound === 1 ? 'y lies' : 'ies lie'} unfound — a search may find it.` : '';
+    const bodyNote = unfound ? ` ⚠️ ${unfound} bod${unfound === 1 ? 'y lies' : 'ies lie'} unfound - a search may find it.` : '';
     await sendGroupCritical(g, chatId,
       `⏱️ The house votes in ONE minute.${bodyNote}\nLast chance: \`${prefix} mm search <number|room>\`.`);
   }
@@ -397,7 +397,7 @@ async function sendPhaseReminder(chatId, kind) {
     const out = alive.length - Object.keys(g.votes || {}).length;
     if (out <= 0) return;
     await sendGroupCritical(g, chatId,
-      `⚖️ The count closes in 30 seconds — *${out} ballot${out === 1 ? '' : 's'}* still out.\nVote: \`${prefix} mm vote <number|name|skip>\`.`);
+      `⚖️ The count closes in 30 seconds - *${out} ballot${out === 1 ? '' : 's'}* still out.\nVote: \`${prefix} mm vote <number|name|skip>\`.`);
   }
 }
 
@@ -444,15 +444,15 @@ async function sendNightNudges(chatId) {
   const left = Math.max(1, Math.ceil((g.deadline - Date.now()) / 1000));
   const killer = livingKiller(g);
   if (killer && !g.killerTargetJid) {
-    await sendDM(sock, killer.jid, `🌙 The night thins — ${left}s of dark remain.\n\`${g.prefix} mm kill <number>\` — then \`mm room <number>\` to hide the body.`);
+    await sendDM(sock, killer.jid, `🌙 The night thins - ${left}s of dark remain.\n\`${g.prefix} mm kill <number>\` - then \`mm room <number>\` to hide the body.`);
   }
   const inv = livingInvestigator(g);
   if (inv && !g.investTargetJid) {
-    await sendDM(sock, inv.jid, `🌙 The night thins — ${left}s of dark remain.\n\`${g.prefix} mm investigate <number>\` before dawn takes the chance from you.`);
+    await sendDM(sock, inv.jid, `🌙 The night thins - ${left}s of dark remain.\n\`${g.prefix} mm investigate <number>\` before dawn takes the chance from you.`);
   }
   const ga = livingGuardian(g);
   if (ga && !g.protectTargetJid) {
-    await sendDM(sock, ga.jid, `🌙 The night thins — ${left}s remain.\n\`${g.prefix} mm protect <number|me>\` if you wish to stand watch.`);
+    await sendDM(sock, ga.jid, `🌙 The night thins - ${left}s remain.\n\`${g.prefix} mm protect <number|me>\` if you wish to stand watch.`);
   }
 }
 
@@ -470,7 +470,7 @@ async function onPhaseTimeout(chatId, sockOverride = null, opts = {}) {
   const g = getGame(chatId);
   if (!g) return;
   // force = watchdog path: skip the in-flight guards ONLY when the flags are
-  // provably dead (stale) — a live resolution (image uploads can be slow) is
+  // provably dead (stale) - a live resolution (image uploads can be slow) is
   // never interrupted
   if (opts.force) {
     const now = Date.now();
@@ -504,7 +504,7 @@ async function onPhaseTimeout(chatId, sockOverride = null, opts = {}) {
 }
 
 // ============================================
-// WATCHDOG — the phase machine is now self-healing. Any phase whose deadline
+// WATCHDOG - the phase machine is now self-healing. Any phase whose deadline
 // passed WATCHDOG_GRACE_MS ago without completing its transition is forced
 // forward. This kills every freeze class: lost/late timers, event-loop
 // stalls, crashed resolutions, restarts mid-transition.
@@ -528,7 +528,7 @@ async function watchdogTick() {
       if (g.phase === PHASE.VOTING) {
         const alive = alivePlayers(g).length;
         if (alive > 0 && Object.keys(g.votes || {}).length >= alive && !g._resolving) {
-          console.log(`🔪 [MurderMystery] watchdog: all ballots in but vote unresolved in ${chatId} — resolving now`);
+          console.log(`🔪 [MurderMystery] watchdog: all ballots in but vote unresolved in ${chatId} - resolving now`);
           g._resolving = true;
           g._resolvingAt = now;
           setTimeout(() => resolveVote(sockForGame(g), chatId, 'watchdog: every ballot was in'), 500);
@@ -561,11 +561,11 @@ function getSockSafe() {
   }
 }
 
-// silent teardown (empty lobby timeout etc.) — releases silences and timers
+// silent teardown (empty lobby timeout etc.) - releases silences and timers
 async function endGame(sock, chatId, reason) {
   const g = getGame(chatId);
   if (!g) return;
-  console.log(`🔪 [MurderMystery] game ended in ${chatId} — ${reason}`);
+  console.log(`🔪 [MurderMystery] game ended in ${chatId} - ${reason}`);
   await sendGroup(sock, chatId, `🕯️ ${reason}`);
   unsilenceChat(chatId);
   clearTimers(chatId);
@@ -582,7 +582,7 @@ async function createLobby(ctx) {
   if (!ctx.isGroup) return sendGroup(sock, chatId, `${botMarker}🕯️ The manor only opens its doors to *groups*. Gather your guests and try again.`);
   if (getGame(chatId)) {
     const g = getGame(chatId);
-    if (g.phase === PHASE.LOBBY) return sendGroup(sock, chatId, `${botMarker}🕯️ A lobby is already open — \`${g.prefix} mm join\` to step inside. (${g.players.length} waiting)`);
+    if (g.phase === PHASE.LOBBY) return sendGroup(sock, chatId, `${botMarker}🕯️ A lobby is already open - \`${g.prefix} mm join\` to step inside. (${g.players.length} waiting)`);
     return sendGroup(sock, chatId, `${botMarker}🕯️ A mystery is already unfolding here. \`${g.prefix} mm status\` to watch it bleed.`);
   }
   const game = {
@@ -596,7 +596,7 @@ async function createLobby(ctx) {
     players: [{ jid: senderJid, name: ctx.senderName, char: null, role: 'CIVILIAN', alive: true }], // host auto-joins
     night: 0,
     rooms: cases.drawRooms(6),
-    prize: rollPrize(), // the manor's purse tonight — paid to the winning side
+    prize: rollPrize(), // the manor's purse tonight - paid to the winning side
     bodies: [],
     searches: { night: 0, used: {} },
     killerTargetJid: null,
@@ -617,9 +617,9 @@ async function createLobby(ctx) {
 
   const opener = cases.pick(cases.OPENING_LINES);
   const feeLine = game.prize
-    ? `💰 Tonight's purse: *${fmtZeni(game.prize)} Zeni* — paid to the winning side\n`
+    ? `💰 Tonight's purse: *${fmtZeni(game.prize)} Zeni* - paid to the winning side\n`
     : '';
-  // the start message gets a card (user ask) — text fallback kept
+  // the start message gets a card (user ask) - text fallback kept
   let lobbyCardOk = false;
   try {
     const buf = await cards.renderLobbyCard({
@@ -639,7 +639,7 @@ async function createLobby(ctx) {
         `• Join: \`${ctx.prefix} mm join\` · Leave: \`${ctx.prefix} mm leave\`\n` +
         `• Host begins with: \`${ctx.prefix} mm start\`\n` +
         feeLine +
-        `*${MIN_PLAYERS}–${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
+        `*${MIN_PLAYERS}-${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
         `⏱️ The lobby holds for 30 minutes.`);
     }
   } catch (e) { /* text fallback */ }
@@ -652,7 +652,7 @@ async function createLobby(ctx) {
       `• Roster: \`${ctx.prefix} mm players\`\n` +
       `• Begin (host only): \`${ctx.prefix} mm start\`\n\n` +
       feeLine +
-      `*${MIN_PLAYERS}–${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
+      `*${MIN_PLAYERS}-${MAX_PLAYERS} guests.* One will be the killer. One will hunt them. Perhaps one will guard the rest.\n` +
       `⏱️ The lobby holds for 30 minutes.`);
   }
 }
@@ -668,7 +668,7 @@ async function joinLobby(ctx) {
   g.players.push({ jid: senderJid, name: ctx.senderName, char: null, role: 'CIVILIAN', alive: true });
   persistGames();
   await sendGroup(sock, chatId,
-    `${botMarker}🕯️ @${n} accepts the invitation. (${g.players.length} guest${g.players.length === 1 ? '' : 's'} — ${g.players.length}/${MIN_PLAYERS}${g.players.length >= MIN_PLAYERS ? ', enough to begin' : ' so far'})` +
+    `${botMarker}🕯️ @${n} accepts the invitation. (${g.players.length} guest${g.players.length === 1 ? '' : 's'} - ${g.players.length}/${MIN_PLAYERS}${g.players.length >= MIN_PLAYERS ? ', enough to begin' : ' so far'})` +
     (g.players.length >= MIN_PLAYERS ? `\nThe host may begin with \`${g.prefix} mm start\`.` : ''),
     { contextInfo: { mentionedJid: [senderJid] } });
 }
@@ -703,16 +703,16 @@ async function showPlayers(ctx) {
   if (g.phase === PHASE.LOBBY) {
     const lines = g.players.map((p, i) => `  ${i + 1}. @${normJid(p.jid)}`).join('\n') || '  _nobody yet…_';
     return sendGroup(sock, chatId,
-      `${botMarker}📜 *GUEST LIST — ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
+      `${botMarker}📜 *GUEST LIST - ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
       `Host: @${g.host} · ${g.players.length}/${MIN_PLAYERS} minimum\n` +
-      `💰 Tonight's purse: *${fmtZeni(g.prize || 0)} Zeni* — paid to the winning side\n` +
+      `💰 Tonight's purse: *${fmtZeni(g.prize || 0)} Zeni* - paid to the winning side\n` +
       `Begin: \`${g.prefix} mm start\``,
       { contextInfo: { mentionedJid: g.players.map((p) => p.jid) } });
   }
   const lines = g.players.map((p) =>
-    `  ${p.alive ? '🤍' : '☠️'} ${nameOf(p)} — ${p.char.name}${p.alive ? '' : ' (dead)'}`).join('\n');
+    `  ${p.alive ? '🤍' : '☠️'} ${nameOf(p)} - ${p.char.name}${p.alive ? '' : ' (dead)'}`).join('\n');
   return sendGroup(sock, chatId,
-    `${botMarker}📜 *THE GUESTS — ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
+    `${botMarker}📜 *THE GUESTS - ${cases.MANOR_NAME}*\n\n${lines}\n\n` +
     `${alivePlayers(g).length} alive · Night ${g.night} · phase: ${g.phase}`);
 }
 
@@ -721,12 +721,12 @@ async function startGame(ctx) {
   if (!ctx.isGroup) return sendGroup(sock, chatId, `${botMarker}🕯️ Begin the mystery from the group where the manor stands.`);
   const g = getGame(chatId);
   if (!g || g.phase !== PHASE.LOBBY) return sendGroup(sock, chatId, `${botMarker}🕯️ No lobby is open right now.`);
-  if (normJid(senderJid) !== g.host) return sendGroup(sock, chatId, `${botMarker}🕯️ Only the host may begin — @${g.host} holds the keys.`, { contextInfo: { mentionedJid: [g.players.find((p) => normJid(p.jid) === g.host)?.jid || g.host] } });
+  if (normJid(senderJid) !== g.host) return sendGroup(sock, chatId, `${botMarker}🕯️ Only the host may begin - @${g.host} holds the keys.`, { contextInfo: { mentionedJid: [g.players.find((p) => normJid(p.jid) === g.host)?.jid || g.host] } });
   if (g.players.length < MIN_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too few guests. The manor requires at least *${MIN_PLAYERS}*.`);
   if (g.players.length > MAX_PLAYERS) return sendGroup(sock, chatId, `${botMarker}🕯️ Too many guests. The manor sleeps at most *${MAX_PLAYERS}*.`);
 
   // ---- the manor's purse ----
-  // Owner rule 2026-09-14: no entry fee — the manor PAYS a prize to the
+  // Owner rule 2026-09-14: no entry fee - the manor PAYS a prize to the
   // winning side when the case closes. Anyone can play for free.
   const purse = g.prize || 0;
 
@@ -743,11 +743,11 @@ async function startGame(ctx) {
   });
   g.phase = 'STARTING';
   persistGames();
-  console.log(`🔪 [MurderMystery] game started in ${chatId} — ${g.players.length} players (roles dealt)`);
+  console.log(`🔪 [MurderMystery] game started in ${chatId} - ${g.players.length} players (roles dealt)`);
 
-  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${purse > 0 ? ` — the manor posts a purse of *${fmtZeni(purse)} Zeni* for the winning side` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
+  await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${purse > 0 ? ` - the manor posts a purse of *${fmtZeni(purse)} Zeni* for the winning side` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
 
-  // mandatory private role cards — paced to respect the flood gods
+  // mandatory private role cards - paced to respect the flood gods
   for (const p of g.players) {
     let sent = false;
     try {
@@ -777,7 +777,7 @@ async function startGame(ctx) {
       nightLine: 'When night falls, so does the knife.',
     });
     if (buf) await sendGroupImage(sock, chatId, buf,
-      `🕯️ ${g.players.length} guests. One killer. One detective.${g.players.length >= 5 ? ' One guardian.' : ''}\nRole cards are in your DMs — read them. Tell no one.`);
+      `🕯️ ${g.players.length} guests. One killer. One detective.${g.players.length >= 5 ? ' One guardian.' : ''}\nRole cards are in your DMs - read them. Tell no one.`);
     else throw new Error('intro render null');
   } catch (e) {
     await sendGroup(sock, chatId,
@@ -791,27 +791,27 @@ async function startGame(ctx) {
 
 function roleCardCaption(role, prefix) {
   if (role === 'KILLER') {
-    return `🔪 You are THE KILLER.\nEach night, choose a guest to eliminate — then choose the room where the body lies.\nYour identity is secret — even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
+    return `🔪 You are THE KILLER.\nEach night, choose a guest to eliminate - then choose the room where the body lies.\nYour identity is secret - even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
   }
   if (role === 'INVESTIGATOR') {
     return `🕵️ You are THE INVESTIGATOR.\nEach night you may study one guest.\nThe result arrives here, by candlelight.\n(At night, in this chat: \`${prefix} mm investigate <n>\`.)`;
   }
   if (role === 'GUARDIAN') {
-    return `👼 You are THE GUARDIAN.\nEach night you may watch over one guest — or yourself. If the knife comes for them, it will be turned away, and no one will know why.\n(At night, in this chat: \`${prefix} mm protect <n|me>\`.)`;
+    return `👼 You are THE GUARDIAN.\nEach night you may watch over one guest - or yourself. If the knife comes for them, it will be turned away, and no one will know why.\n(At night, in this chat: \`${prefix} mm protect <n|me>\`.)`;
   }
-  return `👤 You are a CIVILIAN.\nYou have no special ability — only your wits.\nDiscuss. Search. Accuse. Vote. Survive.`;
+  return `👤 You are a CIVILIAN.\nYou have no special ability - only your wits.\nDiscuss. Search. Accuse. Vote. Survive.`;
 }
 
 function textRoleCard(p, g) {
   const head = `${cases.MANOR_NAME}\n\n${nameOf(p).toUpperCase()}, you play ${p.char.name}, ${p.char.title}.\n\n`;
   if (p.role === 'KILLER') {
-    return `🔪 *${head}*YOU ARE THE KILLER.*\nEliminate the guests night after night — and choose where each body lies. Survive the discussion. Dodge the vote.\n\nYour identity is secret. Tell no one.`;
+    return `🔪 *${head}*YOU ARE THE KILLER.*\nEliminate the guests night after night - and choose where each body lies. Survive the discussion. Dodge the vote.\n\nYour identity is secret. Tell no one.`;
   }
   if (p.role === 'INVESTIGATOR') {
     return `🕵️ *${head}*YOU ARE THE INVESTIGATOR.*\nEach night you may investigate one living guest. The result is yours alone.\n\nKeep it secret. Spend it wisely.`;
   }
   if (p.role === 'GUARDIAN') {
-    return `👼 *${head}*YOU ARE THE GUARDIAN.*\nEach night, watch over one guest — or yourself. If the killer comes for them, you turn the knife away. Nobody will know.\n\nStay secret. Stay watchful.`;
+    return `👼 *${head}*YOU ARE THE GUARDIAN.*\nEach night, watch over one guest - or yourself. If the killer comes for them, you turn the knife away. Nobody will know.\n\nStay secret. Stay watchful.`;
   }
   return `👤 *${head}*YOU ARE A CIVILIAN.*\nYou have no special ability.\nFind the killer through discussion, searching and voting.`;
 }
@@ -851,26 +851,26 @@ async function beginNight(sock, chatId) {
     await sendGroup(sock, chatId, `🌙 *NIGHT ${g.night}* falls over ${cases.MANOR_NAME}.\n_${line}_\nCheck your DMs.`);
   }
 
-  // private night instructions — priority actors first, so their window is as long as possible
+  // private night instructions - priority actors first, so their window is as long as possible
   for (const p of alivePlayers(g)) {
     if (p.role === 'KILLER') {
       const roster = rosterLines(g, p.jid).join('\n');
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.\nChoose tonight's victim:\n\n${roster}\n\n` +
-        `\`${g.prefix} mm kill <number>\` — or a name.\nAfter the kill you will choose the room where the body lies.\n⏱️ The night lasts *3 minutes*.`);
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.\nChoose tonight's victim:\n\n${roster}\n\n` +
+        `\`${g.prefix} mm kill <number>\` - or a name.\nAfter the kill you will choose the room where the body lies.\n⏱️ The night lasts *3 minutes*.`);
     } else if (p.role === 'INVESTIGATOR') {
       const roster = rosterLines(g, p.jid).join('\n');
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYou are the *INVESTIGATOR*.\nChoose someone to investigate:\n\n${roster}\n\n` +
-        `\`${g.prefix} mm investigate <number>\` — or a name.\nYou cannot investigate yourself.\nThe result will find you here, by candlelight.\n⏱️ The night lasts *3 minutes* — do not let dawn take your chance.`);
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *INVESTIGATOR*.\nChoose someone to investigate:\n\n${roster}\n\n` +
+        `\`${g.prefix} mm investigate <number>\` - or a name.\nYou cannot investigate yourself.\nThe result will find you here, by candlelight.\n⏱️ The night lasts *3 minutes* - do not let dawn take your chance.`);
     } else if (p.role === 'GUARDIAN') {
       const roster = rosterLines(g, null, p.jid).join('\n');
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYou are the *GUARDIAN*.\nChoose one guest to watch over — or yourself:\n\n${roster}\n\n` +
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *GUARDIAN*.\nChoose one guest to watch over - or yourself:\n\n${roster}\n\n` +
         `\`${g.prefix} mm protect <number|me>\`\nIf the knife comes for them tonight, it will be turned away.\n⏱️ The night lasts *3 minutes*.`);
     } else {
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYou have no action tonight.\nLock your door. Wait for morning.`);
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou have no action tonight.\nLock your door. Wait for morning.`);
     }
     await sleep(400);
   }
@@ -879,17 +879,17 @@ async function beginNight(sock, chatId) {
 // ---------- killer: choose victim, then the room ----------
 async function submitKill(ctx, rawTarget) {
   const { sock, chatId, senderJid, botMarker } = ctx;
-  // night actions belong in DMs — a group typing of this would out the sender
+  // night actions belong in DMs - a group typing of this would out the sender
   if (ctx.isGroup) return sendGroup(sock, chatId, `${botMarker}🕯️ That command belongs in a DM with the bot.`);
   const g = findGameForPlayer(senderJid);
   if (g) noteSock(g, sock);
   const phaseOk = g && g.phase === PHASE.NIGHT;
   console.log(`🔪 [MurderMystery] mm kill try jid=${normJid(senderJid)} hasGame=${!!g} phase=${g ? g.phase : '-'} accepted=${phaseOk ? 'pending' : 'no'}`);
-  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to act in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke — your chance will return with the next night (3 minutes long).' : ''}`);
+  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to act in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke - your chance will return with the next night (3 minutes long).' : ''}`);
   const me = getPlayer(g, senderJid);
   if (!me) return sendGroup(sock, chatId, `${botMarker}🌙 You are not part of this mystery.`);
   if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead do not kill. Rest.`);
-  if (me.role !== 'KILLER') return sendGroup(sock, chatId, `${botMarker}🌙 Only the killer acts on the night. And you are — presumably — not them.`);
+  if (me.role !== 'KILLER') return sendGroup(sock, chatId, `${botMarker}🌙 Only the killer acts on the night. And you are - presumably - not them.`);
   if (g.killerTargetJid) return sendGroup(sock, chatId, `${botMarker}🌙 The knife has already been chosen tonight. Now choose the room: \`${g.prefix} mm room <number>\`.`);
 
   const target = resolveRosterTarget(g, rawTarget, senderJid);
@@ -902,7 +902,7 @@ async function submitKill(ctx, rawTarget) {
   persistGames();
   await sendGroup(sock, chatId, `${botMarker}🌙 The knife is raised. Now choose where *${nameOf(target)}* will be found…`);
 
-  // room choice — the strategic half of the kill
+  // room choice - the strategic half of the kill
   let sent = false;
   try {
     const buf = await cards.renderRoomChoiceCard({
@@ -912,11 +912,11 @@ async function submitKill(ctx, rawTarget) {
       manorName: cases.MANOR_NAME,
     });
     if (buf) sent = await sendDMImage(sock, senderJid, buf,
-      `🔪 *${nameOf(target)}* will not see dawn — if you finish the deed.\n\nChoose the room where the body lies:\n\n${roomListOf(g)}\n\n\`${g.prefix} mm room <number>\` — the room changes what the searching finds, and how sharp the ghost's clue is.`);
+      `🔪 *${nameOf(target)}* will not see dawn - if you finish the deed.\n\nChoose the room where the body lies:\n\n${roomListOf(g)}\n\n\`${g.prefix} mm room <number>\` - the room changes what the searching finds, and how sharp the ghost's clue is.`);
   } catch (e) { /* text fallback */ }
   if (!sent) {
     await sendDM(sock, senderJid,
-      `🔪 *${nameOf(target)}* will not see dawn — if you finish the deed.\n\nChoose the room where the body lies:\n\n${roomListOf(g)}\n\n\`${g.prefix} mm room <number>\``);
+      `🔪 *${nameOf(target)}* will not see dawn - if you finish the deed.\n\nChoose the room where the body lies:\n\n${roomListOf(g)}\n\n\`${g.prefix} mm room <number>\``);
   }
   maybeResolveNight(sock || getSockSafe(), gameChatIdOf(g));
 }
@@ -933,7 +933,7 @@ async function submitRoom(ctx, raw) {
   if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead hide no bodies. Rest.`);
   if (me.role !== 'KILLER') return sendGroup(sock, chatId, `${botMarker}🌙 You have no body to hide.`);
   if (!g.killerTargetJid) return sendGroup(sock, chatId, `${botMarker}🌙 Choose your victim first: \`${g.prefix} mm kill <number>\`.`);
-  if (g.killerRoomIdx != null) return sendGroup(sock, chatId, `${botMarker}🌙 The body is already placed. Sleep now — dawn is coming.`);
+  if (g.killerRoomIdx != null) return sendGroup(sock, chatId, `${botMarker}🌙 The body is already placed. Sleep now - dawn is coming.`);
 
   const hit = resolveRoom(g, raw);
   if (!hit) {
@@ -953,7 +953,7 @@ async function submitInvestigate(ctx, rawTarget) {
   if (g) noteSock(g, sock);
   const phaseOk = g && g.phase === PHASE.NIGHT;
   console.log(`🔪 [MurderMystery] mm investigate try jid=${normJid(senderJid)} hasGame=${!!g} phase=${g ? g.phase : '-'} accepted=${!!phaseOk}`);
-  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to act in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke — your next chance comes with the next night (3 minutes long). Act early.' : ''}`);
+  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to act in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke - your next chance comes with the next night (3 minutes long). Act early.' : ''}`);
   const me = getPlayer(g, senderJid);
   if (!me) return sendGroup(sock, chatId, `${botMarker}🌙 You are not part of this mystery.`);
   if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead investigate nothing. Rest.`);
@@ -986,12 +986,12 @@ async function submitInvestigate(ctx, rawTarget) {
     });
     if (buf) {
       sent = await sendDMImage(sock, senderJid, buf,
-        `🕵️ *INVESTIGATION RESULT — NIGHT ${g.night}*\n\nYou studied: *${nameOf(target)}*\n\n${isKiller ? '🔴 *THE KILLER.*' : '🟢 *NOT THE KILLER.*'}\n\nKeep this information secret.`);
+        `🕵️ *INVESTIGATION RESULT - NIGHT ${g.night}*\n\nYou studied: *${nameOf(target)}*\n\n${isKiller ? '🔴 *THE KILLER.*' : '🟢 *NOT THE KILLER.*'}\n\nKeep this information secret.`);
     }
   } catch (e) { /* text fallback */ }
   if (!sent) {
     await sendDM(sock, senderJid,
-      `🕵️ *INVESTIGATION RESULT — NIGHT ${g.night}*\n\nYou investigated:\n*${nameOf(target)}* (${target.char.name})\n\n` +
+      `🕵️ *INVESTIGATION RESULT - NIGHT ${g.night}*\n\nYou investigated:\n*${nameOf(target)}* (${target.char.name})\n\n` +
       `${isKiller ? '🔴 *THE KILLER*' : '🟢 *NOT THE KILLER*'}\n\n_${flavor}_\n\nKeep this information secret.`);
   }
   maybeResolveNight(sock || getSockSafe(), gameChatIdOf(g));
@@ -1015,7 +1015,7 @@ async function submitProtect(ctx, rawTarget) {
   const target = resolveRosterTarget(g, rawTarget, null, senderJid); // guardian may pick themselves
   if (!target) {
     const roster = rosterLines(g, null, senderJid).join('\n');
-    return sendGroup(sock, chatId, `${botMarker}🌙 Choose one guest — or yourself:\n\n${roster}\n\n\`${g.prefix} mm protect <number|me>\``);
+    return sendGroup(sock, chatId, `${botMarker}🌙 Choose one guest - or yourself:\n\n${roster}\n\n\`${g.prefix} mm protect <number|me>\``);
   }
   if (!target.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead need no watching.`);
 
@@ -1028,7 +1028,7 @@ async function submitProtect(ctx, rawTarget) {
   maybeResolveNight(sock || getSockSafe(), gameChatIdOf(g));
 }
 
-// resolve as soon as the killer (victim + room) and investigator have acted — never depends on submission order
+// resolve as soon as the killer (victim + room) and investigator have acted - never depends on submission order
 function maybeResolveNight(sock, chatId) {
   const g = getGame(chatId);
   if (!g || g.phase !== PHASE.NIGHT || g._resolving) return;
@@ -1072,7 +1072,7 @@ async function resolveNight(sock, chatId, _reason) {
 
     // private DMs: guardian, saved player, killer
     await sleep(800);
-    await sendDM(sock, guardian.jid, `👼 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\n${cases.GA_SAVE_GA.replace('{name}', nameOf(victim))}`);
+    await sendDM(sock, guardian.jid, `👼 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\n${cases.GA_SAVE_GA.replace('{name}', nameOf(victim))}`);
     try {
       const buf = await cards.renderGuardianSavedCard({
         savedName: nameOf(victim),
@@ -1083,7 +1083,7 @@ async function resolveNight(sock, chatId, _reason) {
       if (buf) await sendDMImage(sock, victim.jid, buf, `👼 You should have died tonight.`);
       else throw new Error('saved render null');
     } catch (e) {
-      await sendDM(sock, victim.jid, `👼 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\n${cases.pick(cases.GA_SAVED_DREAM)}`);
+      await sendDM(sock, victim.jid, `👼 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\n${cases.pick(cases.GA_SAVED_DREAM)}`);
     }
     const killerP = g.players.find((p) => p.role === 'KILLER');
     if (killerP) await sendDM(sock, killerP.jid, `🔪 *NIGHT ${g.night}*\n\n${cases.pick(cases.GA_KILLER_BLOCKED)}`);
@@ -1112,7 +1112,7 @@ async function resolveNight(sock, chatId, _reason) {
     persistGames();
     console.log(`🔪 [MurderMystery] NIGHT ${g.night}: ${normJid(victim.jid)} murdered, body in room idx=${roomIdx}`);
 
-    // the dead learn of their state in private — the house does not know yet
+    // the dead learn of their state in private - the house does not know yet
     await sleep(800);
     try {
       const buf = await cards.renderVictimDMCard({
@@ -1126,7 +1126,7 @@ async function resolveNight(sock, chatId, _reason) {
       if (buf) await sendDMImage(sock, victim.jid, buf, `☠️ You were murdered in the night. The house does not know yet.`);
       else throw new Error('victim render null');
     } catch (e) {
-      await sendDM(sock, victim.jid, `☠️ *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYou were murdered in the night — ${method.title}, in ${g.rooms[roomIdx] ? g.rooms[roomIdx].name : 'the manor'}.\n\nThe house does not know yet. Your voice is lost to the living. You watch now.`);
+      await sendDM(sock, victim.jid, `☠️ *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou were murdered in the night - ${method.title}, in ${g.rooms[roomIdx] ? g.rooms[roomIdx].name : 'the manor'}.\n\nThe house does not know yet. Your voice is lost to the living. You watch now.`);
     }
 
     // killer may have just reached parity
@@ -1136,11 +1136,11 @@ async function resolveNight(sock, chatId, _reason) {
     // the guardian kept a watch but the knife never came for their ward
     const ward = getPlayer(g, watchedJid);
     await sleep(600);
-    await sendDM(sock, guardian.jid, `👼 *NIGHT ${g.night} — ${cases.MANOR_NAME}*\n\nYour watch held${ward ? ` over ${nameOf(ward)}` : ''}, and the knife never came. Stand again tomorrow, if you dare.`);
+    await sendDM(sock, guardian.jid, `👼 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYour watch held${ward ? ` over ${nameOf(ward)}` : ''}, and the knife never came. Stand again tomorrow, if you dare.`);
   }
 
   // restart-mid-resolution heal: a murder was persisted earlier tonight (bot
-  // restarted during the slow card/DM section) but this pass saw no kill —
+  // restarted during the slow card/DM section) but this pass saw no kill -
   // the morning must still tell the house someone died
   const unfoundTonight = (g.bodies || []).find((b) => b.night === g.night);
   if (outcome === 'quiet' && unfoundTonight) {
@@ -1149,7 +1149,7 @@ async function resolveNight(sock, chatId, _reason) {
     console.log(`🔪 [MurderMystery] NIGHT ${g.night}: morning healed after mid-resolution restart (unfound body present)`);
   }
 
-  // ---- public morning card (never names the victim — the body must be found) ----
+  // ---- public morning card (never names the victim - the body must be found) ----
   await sleep(1200);
   try {
     const buf = await cards.renderMorningCard({
@@ -1161,12 +1161,12 @@ async function resolveNight(sock, chatId, _reason) {
     });
     if (buf) {
       await sendGroupImage(sock, chatId, buf,
-        `☀️ *DAWN — NIGHT ${g.night}*\n\n${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
-        `🔍 Every living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` — in the group or in your DMs.`);
+        `☀️ *DAWN - NIGHT ${g.night}*\n\n${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
+        `🔍 Every living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - in the group or in your DMs.`);
     } else throw new Error('morning render null');
   } catch (e) {
     await sendGroup(sock, chatId,
-      `☀️ *DAWN — NIGHT ${g.night}*\n\n${morningLine}\n\n` +
+      `☀️ *DAWN - NIGHT ${g.night}*\n\n${morningLine}\n\n` +
       `${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
       `The rooms of the manor:\n${roomListOf(g)}\n\n🔍 Every living guest may search *one* room: \`${g.prefix} mm search <number|room>\`.`);
   }
@@ -1196,18 +1196,18 @@ async function beginDiscussion(sock, chatId) {
   const bodyNote = unfound.length
     ? `⚠️ ${unfound.length === 1 ? 'A body lies unfound' : `${unfound.length} bodies lie unfound`} in the manor.\n`
     : '';
-  // critical: this is the message players act on — retry with the fallback sock if it fails
+  // critical: this is the message players act on - retry with the fallback sock if it fails
   await sendGroupCritical(g, chatId,
     `🗣️ *DISCUSSION*\n\n${prompt}\n\n` +
     `${bodyNote}` +
-    `🔍 Each living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` — searches are public, the ghost's clue is not.\n` +
+    `🔍 Each living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - searches are public, the ghost's clue is not.\n` +
     `The vote begins when the clock runs out.\n⏱️ *5 minutes* remaining.\n\n` +
     `_Live status: \`${g.prefix} mm status\`_`);
 }
 
 async function submitSearch(ctx, raw) {
   const { sock, chatId, senderJid, botMarker } = ctx;
-  // searches are PUBLIC now (user ask: everyone sees which room you search) —
+  // searches are PUBLIC now (user ask: everyone sees which room you search) -
   // they can be made from the group or from a DM, the card always lands in the GC
   const g = ctx.isGroup ? getGame(chatId) : findGameForPlayer(senderJid);
   const searchChatId = ctx.isGroup ? chatId : gameChatIdOf(g) || chatId;
@@ -1238,7 +1238,7 @@ async function submitSearch(ctx, raw) {
   const body = g.bodies.find((b) => !b.found && b.roomIdx === hit.idx);
   const found = !!body;
 
-  // ---- public search card to the GC — who searched which room, and what they found ----
+  // ---- public search card to the GC - who searched which room, and what they found ----
   let searchCardOk = false;
   try {
     const buf = await cards.renderSearchCard({
@@ -1259,7 +1259,7 @@ async function submitSearch(ctx, raw) {
     }
   } catch (e) { /* text fallback */ }
   if (!searchCardOk && !found) {
-    await sendGroup(sock, searchChatId, `${botMarker}🔍 ${nameOf(me)} searches ${hit.room.name} — and finds nothing.`);
+    await sendGroup(sock, searchChatId, `${botMarker}🔍 ${nameOf(me)} searches ${hit.room.name} - and finds nothing.`);
   }
 
   if (found) {
@@ -1268,7 +1268,7 @@ async function submitSearch(ctx, raw) {
     body.finderJid = senderJid;
     const victim = getPlayer(g, body.victimJid) || { char: characters.getCharacter('butler2'), name: body.victimName };
 
-    // progressive, predetermined clue about the KILLER's character — never random
+    // progressive, predetermined clue about the KILLER's character - never random
     const killerChar = (livingKiller(g) || g.players.find((p) => p.role === 'KILLER') || {}).char;
     let tier = g.cluesGiven + (hit.room.conceal >= 3 ? 1 : 0);
     let clue = characters.clueFor(killerChar ? killerChar.id : null, tier);
@@ -1294,15 +1294,15 @@ async function submitSearch(ctx, raw) {
       if (buf) {
         cardOk = true;
         await sendGroupImage(sock, searchChatId, buf,
-          `☠️ *${body.victimName} has been found dead in ${hit.room.name}* — found by *${nameOf(me)}*.\n\nThe ghost whispers to ${nameOf(me)} alone. Discuss — but wonder what they keep to themselves.`);
+          `☠️ *${body.victimName} has been found dead in ${hit.room.name}* - found by *${nameOf(me)}*.\n\nThe ghost whispers to ${nameOf(me)} alone. Discuss - but wonder what they keep to themselves.`);
       }
     } catch (e) { /* text fallback */ }
     if (!cardOk) {
       await sendGroup(sock, searchChatId,
-        `☠️ *A BODY IS FOUND — ${hit.room.name.toUpperCase()}*\n\n*${body.victimName} is dead* — ${body.method.title}.\nFound by *${nameOf(me)}*.\n\nThe ghost whispers to ${nameOf(me)} alone.`);
+        `☠️ *A BODY IS FOUND - ${hit.room.name.toUpperCase()}*\n\n*${body.victimName} is dead* - ${body.method.title}.\nFound by *${nameOf(me)}*.\n\nThe ghost whispers to ${nameOf(me)} alone.`);
     }
 
-    // the victim's last words are on the body — read aloud (new: wills)
+    // the victim's last words are on the body - read aloud (new: wills)
     if (victim.will) {
       await sleep(900);
       await postWillCard(sock, searchChatId, victim, 'body');
@@ -1321,11 +1321,11 @@ async function submitSearch(ctx, raw) {
       });
       if (buf) {
         clueOk = true;
-        await sendDMImage(sock, senderJid, buf, `👻 *THE GHOST WHISPERS — CLUE*\n\n_${clue}_\n\nYou alone hold this. Reveal it, twist it, or keep it.`);
+        await sendDMImage(sock, senderJid, buf, `👻 *THE GHOST WHISPERS - CLUE*\n\n_${clue}_\n\nYou alone hold this. Reveal it, twist it, or keep it.`);
       }
     } catch (e) { /* text fallback */ }
     if (!clueOk) {
-      await sendDM(sock, senderJid, `👻 *THE GHOST WHISPERS*\n\n_${clue}_\n\n_${exhausted ? '' : `Clue tier ${tier + 1} — the deeper the hiding place, the sharper the memory._`}\nYou alone hold this. Reveal it, twist it, or keep it.`);
+      await sendDM(sock, senderJid, `👻 *THE GHOST WHISPERS*\n\n_${clue}_\n\n_${exhausted ? '' : `Clue tier ${tier + 1} - the deeper the hiding place, the sharper the memory._`}\nYou alone hold this. Reveal it, twist it, or keep it.`);
     }
     return;
   }
@@ -1371,16 +1371,16 @@ async function submitTaunt(ctx, raw) {
   const me = getPlayer(g, senderJid);
   if (!me) return sendGroup(sock, chatId, `${botMarker}🖤 You are not part of this mystery.`);
   if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🖤 The dead keep their silence now.`);
-  if (me.role !== 'KILLER') return sendGroup(sock, chatId, `${botMarker}🖤 The manor accepts only one kind of taunt — and it is not yours to give.`);
+  if (me.role !== 'KILLER') return sendGroup(sock, chatId, `${botMarker}🖤 The manor accepts only one kind of taunt - and it is not yours to give.`);
   if (g.tauntUsed) return sendGroup(sock, chatId, `${botMarker}🖤 The house has heard enough from the dark. One note per game.`);
   const text = sanitizePlayerText(raw, TAUNT_MAX_LEN);
   if (!text) {
-    return sendGroup(sock, chatId, `${botMarker}🖤 Whisper something first: \`${g.prefix} mm taunt <message>\` — unsigned, once per game.`);
+    return sendGroup(sock, chatId, `${botMarker}🖤 Whisper something first: \`${g.prefix} mm taunt <message>\` - unsigned, once per game.`);
   }
   g.tauntUsed = true;
   persistGames();
   console.log(`🔪 [MurderMystery] killer taunt posted night=${g.night} (${text.length} chars)`);
-  // anonymous — posted to the GROUP, never a name
+  // anonymous - posted to the GROUP, never a name
   let cardOk = false;
   try {
     const buf = await cards.renderTauntCard({ text, night: g.night, manorName: cases.MANOR_NAME });
@@ -1439,17 +1439,17 @@ async function beginVoting(sock, chatId) {
 
   const alive = alivePlayers(g);
   const roster = alive.map((p, i) => `  ${i + 1}. ${nameOf(p)}`).join('\n');
-  // critical: this is the message the user said never arrived — retry with fallback sock
+  // critical: this is the message the user said never arrived - retry with fallback sock
   await sendGroupCritical(g, chatId,
     `⚖️ *VOTING*\n\nWho do you believe is the Killer?\n\n${roster}\n\n` +
-    `Cast your vote: \`${g.prefix} mm vote <number>\` — or a name — or \`skip\`.\n` +
+    `Cast your vote: \`${g.prefix} mm vote <number>\` - or a name - or \`skip\`.\n` +
     `Living players only. One ballot each. You may change it until the count. Ballots are public.\n⏱️ *90 seconds.*`);
 }
 
 async function castVote(ctx, rawTarget) {
   const { sock, chatId, senderJid, botMarker } = ctx;
   if (!ctx.isGroup) {
-    // voting is public — but a DM vote can still count if they're in exactly one game
+    // voting is public - but a DM vote can still count if they're in exactly one game
     const gd = findGameForPlayer(senderJid);
     if (gd) noteSock(gd, sock);
     if (!gd) return sendGroup(sock, chatId, `${botMarker}⚖️ No ballot is open for you. Votes are cast in the group.`);
@@ -1490,7 +1490,7 @@ async function castVoteInGame(ctx, g, rawTarget) {
   if (castCount >= aliveCount) {
     g._resolving = true;
     g._resolvingAt = Date.now();
-    console.log(`🔪 [MurderMystery] every ballot is in (${castCount}/${aliveCount}) in ${chatId} — resolving`);
+    console.log(`🔪 [MurderMystery] every ballot is in (${castCount}/${aliveCount}) in ${chatId} - resolving`);
     setTimeout(() => resolveVote(sock, chatId, 'every ballot was in'), 1500);
   }
 }
@@ -1549,12 +1549,12 @@ async function resolveVote(sock, chatId, _reason) {
       manorName: cases.MANOR_NAME,
     });
     if (buf) {
-      const tallyText = tally.map((t) => `${t.name} — ${t.votes} vote${t.votes === 1 ? '' : 's'}`).join('\n') + (skipVotes ? `\nskip — ${skipVotes}` : '');
+      const tallyText = tally.map((t) => `${t.name} - ${t.votes} vote${t.votes === 1 ? '' : 's'}`).join('\n') + (skipVotes ? `\nskip - ${skipVotes}` : '');
       await sendGroupImage(sock, chatId, buf,
         `⚖️ *VOTE RESULT*\n\n${tallyText}\n\n${eliminated ? `*${nameOf(eliminated)} has been eliminated.*` : 'No one was condemned.'}\n\n🗳️ ${ballotText(g)}`);
     } else throw new Error('vote render null');
   } catch (e) {
-    const tallyText = tally.map((t) => `• ${t.name} — ${t.votes}`).join('\n') + (skipVotes ? `\n• skip — ${skipVotes}` : '');
+    const tallyText = tally.map((t) => `• ${t.name} - ${t.votes}`).join('\n') + (skipVotes ? `\n• skip - ${skipVotes}` : '');
     await sendGroup(sock, chatId,
       `⚖️ *VOTE RESULT*\n\n${tallyText || 'No ballots were cast.'}\n\n${eliminated ? `*${nameOf(eliminated)} has been eliminated.*` : 'No one was condemned.'}\n\n🗳️ ${ballotText(g)}`);
   }
@@ -1576,7 +1576,7 @@ async function resolveVote(sock, chatId, _reason) {
   return beginNight(sock, chatId);
 }
 
-// public ballots — who voted for whom (new: open ballots)
+// public ballots - who voted for whom (new: open ballots)
 function ballotText(g) {
   const parts = [];
   for (const [voterJid, choice] of Object.entries(g.votes || {})) {
@@ -1603,7 +1603,7 @@ function checkWin(g) {
 async function declareWinner(sock, chatId, winner) {
   const g = getGame(chatId);
   if (!g) return;
-  if (g.phase === 'ENDED') return; // double-fire guard — one finale only
+  if (g.phase === 'ENDED') return; // double-fire guard - one finale only
   clearTimers(chatId);
   g.phase = 'ENDED';
 
@@ -1665,7 +1665,7 @@ async function declareWinner(sock, chatId, winner) {
 
   games.delete(chatId);
   persistGames();
-  console.log(`🔪 [MurderMystery] game ended in ${chatId} — winner=${winner}`);
+  console.log(`🔪 [MurderMystery] game ended in ${chatId} - winner=${winner}`);
 }
 
 // split the manor's purse among the winners and announce every payout.
@@ -1676,10 +1676,10 @@ async function payPrize(sock, chatId, g, winner, killer) {
   if (!economy || purse <= 0) return;
 
   // legacy safety: a game started while the cast-fee rules were live may
-  // still carry feePaid — return it to the host before anything else.
+  // still carry feePaid - return it to the host before anything else.
   if (g.feePaid) {
     try {
-      economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (cast fee retired)');
+      economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery - manor refund (cast fee retired)');
     } catch (e) {}
   }
 
@@ -1691,8 +1691,8 @@ async function payPrize(sock, chatId, g, winner, killer) {
   const share = Math.floor(purse / winners.length);
   let remainder = purse - share * winners.length; // the manor rounds in the winners' favour
   const reason = winner === 'killer'
-    ? 'Murder Mystery — manor prize (killer won)'
-    : 'Murder Mystery — manor prize (innocents won)';
+    ? 'Murder Mystery - manor prize (killer won)'
+    : 'Murder Mystery - manor prize (innocents won)';
 
   const lines = [];
   for (const w of winners) {
@@ -1701,12 +1701,12 @@ async function payPrize(sock, chatId, g, winner, killer) {
     if (amount <= 0) continue;
     let ok = false;
     try { ok = !!economy.addMoney(w.jid, amount, reason); } catch (e) { ok = false; }
-    lines.push(`  @${normJid(w.jid)} — *${fmtZeni(amount)} Zeni*${ok ? '' : ' ⚠️ (failed — ping a mod)'}`);
+    lines.push(`  @${normJid(w.jid)} - *${fmtZeni(amount)} Zeni*${ok ? '' : ' ⚠️ (failed - ping a mod)'}`);
   }
 
   const headline = winner === 'killer'
-    ? `💰 *THE MANOR PAYS* — the killer walks away with the purse:`
-    : `💰 *THE MANOR PAYS* — *${fmtZeni(purse)} Zeni* split among the innocent guests:`;
+    ? `💰 *THE MANOR PAYS* - the killer walks away with the purse:`
+    : `💰 *THE MANOR PAYS* - *${fmtZeni(purse)} Zeni* split among the innocent guests:`;
   await sendGroup(sock, chatId, `${headline}\n${lines.join('\n')}`, {
     contextInfo: { mentionedJid: winners.map((w) => w.jid) },
   });
@@ -1715,17 +1715,17 @@ async function payPrize(sock, chatId, g, winner, killer) {
 function finalCaption(g, winner, killer, survivors) {
   const victims = g.log.flatMap((l) => [l.victim, l.condemned]).filter(Boolean);
   if (winner === 'civ') {
-    return `🏆 *MYSTERY SOLVED*\n\n*${nameOf(killer)} was the Killer* — ${killer.char.name}, ${killer.char.title}.\n\n` +
+    return `🏆 *MYSTERY SOLVED*\n\n*${nameOf(killer)} was the Killer* - ${killer.char.name}, ${killer.char.title}.\n\n` +
       `Nights survived: ${g.night}\nLost: ${victims.length ? victims.join(', ') : 'no one'}\nSurvivors: ${survivors.join(', ') || 'none'}\n\n` +
-      `The survivors win. The manor is quiet again — for now.`;
+      `The survivors win. The manor is quiet again - for now.`;
   }
-  return `🔪 *THE KILLER WINS*\n\n*${nameOf(killer)} was the Killer* — ${killer.char.name}, ${killer.char.title}.\n\n` +
+  return `🔪 *THE KILLER WINS*\n\n*${nameOf(killer)} was the Killer* - ${killer.char.name}, ${killer.char.title}.\n\n` +
     `Nights survived: ${g.night}\nLost: ${victims.length ? victims.join(', ') : 'no one'}\nStill breathing: ${survivors.join(', ') || 'no one'}\n\n` +
     `Nobody was able to stop them.`;
 }
 
 // ============================================
-// ALL-TIME LEDGER — Hall of Shadows
+// ALL-TIME LEDGER - Hall of Shadows
 // Closed cases only. Wins, kills, saves,
 // finds and sharp votes are remembered per
 // player, forever, across every manor.
@@ -1775,34 +1775,34 @@ function recordMatchStats(g, winner) {
       stats[n] = row;
     }
     system.set(STATS_KEY, stats);
-    console.log(`🔪 [MurderMystery] ledger updated — ${g.players.length} entries (${winner} win, ${murderCount} kill(s))`);
+    console.log(`🔪 [MurderMystery] ledger updated - ${g.players.length} entries (${winner} win, ${murderCount} kill(s))`);
   } catch (e) {
     console.error('🔪 [MurderMystery] ledger update failed:', e.message);
   }
 }
 
 function leaderboardCaption(meRank) {
-  let cap = `🕯️ *HALL OF SHADOWS* — the all-time ledger of ${cases.MANOR_NAME}.`;
+  let cap = `🕯️ *HALL OF SHADOWS* - the all-time ledger of ${cases.MANOR_NAME}.`;
   if (meRank) {
-    cap += `\nYou stand *#${meRank.rank}* with *${fmtZeni(meRank.score)} pts* — ${meRank.wins} win${meRank.wins === 1 ? '' : 's'} in ${meRank.games} case${meRank.games === 1 ? '' : 's'}.`;
+    cap += `\nYou stand *#${meRank.rank}* with *${fmtZeni(meRank.score)} pts* - ${meRank.wins} win${meRank.wins === 1 ? '' : 's'} in ${meRank.games} case${meRank.games === 1 ? '' : 's'}.`;
   }
   cap += `\n_Closed cases only. Every win, kill, save and sharp vote is remembered._`;
   return cap;
 }
 
 function leaderboardText(rows, meRank, prefix) {
-  const lines = ['🕯️ *HALL OF SHADOWS — ' + cases.MANOR_NAME + '*', ''];
+  const lines = ['🕯️ *HALL OF SHADOWS - ' + cases.MANOR_NAME + '*', ''];
   if (!rows.length) {
     lines.push('The ledger is blank. No case has been closed yet.');
-    lines.push(`Open one: \`${prefix} mm create\` — and let the body count begin.`);
+    lines.push(`Open one: \`${prefix} mm create\` - and let the body count begin.`);
   }
   for (const r of rows) {
-    lines.push(`  *${r.rank}.* ${r.name}${r.you ? ' (you)' : ''} — *${fmtZeni(r.score)} pts*`);
+    lines.push(`  *${r.rank}.* ${r.name}${r.you ? ' (you)' : ''} - *${fmtZeni(r.score)} pts*`);
     lines.push(`      ${r.wins}W / ${r.games}G · ${r.winRate}%${r.tag ? ` · ${r.tag}` : ''}`);
   }
   if (meRank && meRank.rank > rows.length) {
     lines.push('');
-    lines.push(`  You: *#${meRank.rank}* — ${fmtZeni(meRank.score)} pts (${meRank.wins}W / ${meRank.games}G)`);
+    lines.push(`  You: *#${meRank.rank}* - ${fmtZeni(meRank.score)} pts (${meRank.wins}W / ${meRank.games}G)`);
   }
   lines.push('');
   lines.push('_Wins +5 · survival +2 · kill +3 · save +4 · body found +1 · sharp vote +3_');
@@ -1860,12 +1860,12 @@ async function forceEnd(ctx) {
     return sendGroup(sock, chatId, `${botMarker}🕯️ Only the host (@${g.host}) or a moderator may close the case early.`);
   }
   // legacy safety: a game cast under the retired entry-fee rules may still
-  // carry feePaid — always return it (new games never set this field)
+  // carry feePaid - always return it (new games never set this field)
   let refundNote = '';
   if (g.feePaid && economy) {
     try {
-      if (economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery — manor refund (cast fee retired)')) {
-        refundNote = `\n💰 The retired cast fee — *${fmtZeni(g.feePaid)} Zeni* — returns to the host's purse.`;
+      if (economy.addMoney(g.feePaidBy || g.host, g.feePaid, 'Murder Mystery - manor refund (cast fee retired)')) {
+        refundNote = `\n💰 The retired cast fee - *${fmtZeni(g.feePaid)} Zeni* - returns to the host's purse.`;
       }
     } catch (e) {}
   }
@@ -1880,20 +1880,20 @@ async function forceEnd(ctx) {
 async function showStatus(ctx) {
   const { sock, chatId, senderJid, botMarker } = ctx;
   if (!ctx.isGroup) {
-    // private status: your character, your role, your pulse — roles live ONLY here
+    // private status: your character, your role, your pulse - roles live ONLY here
     const g = findGameForPlayer(senderJid);
     if (g) noteSock(g, sock);
     if (!g) return sendGroup(sock, chatId, `${botMarker}🕯️ You are not part of any mystery.`);
     const me = getPlayer(g, senderJid);
     const secs = Math.max(0, Math.ceil((g.deadline - Date.now()) / 1000));
-    const aliveList = alivePlayers(g).map((p, i) => `  ${i + 1}. ${nameOf(p)} — ${p.char.name}`).join('\n');
+    const aliveList = alivePlayers(g).map((p, i) => `  ${i + 1}. ${nameOf(p)} - ${p.char.name}`).join('\n');
     const roleWord = me.role === 'KILLER' ? '🔪 the *KILLER*' : me.role === 'INVESTIGATOR' ? '🕵️ the *INVESTIGATOR*' : me.role === 'GUARDIAN' ? '👼 the *GUARDIAN*' : '👤 a *CIVILIAN*';
     const roleLine = me.alive
-      ? `You are *${me.char.name}, ${me.char.title}* — ${roleWord}.`
-      : `You are dead — *${me.char.name}*, taken on night ${me.deathNight || '?'}. You watch now.`;
+      ? `You are *${me.char.name}, ${me.char.title}* - ${roleWord}.`
+      : `You are dead - *${me.char.name}*, taken on night ${me.deathNight || '?'}. You watch now.`;
     let actionLine = '';
     if (me.alive && g.phase === PHASE.NIGHT) {
-      if (me.role === 'KILLER') actionLine = g.killerTargetJid ? `\nTonight: knife chosen${g.killerRoomIdx != null ? ', body placed' : ' — now \`' + g.prefix + ' mm room <n>\`'}.`
+      if (me.role === 'KILLER') actionLine = g.killerTargetJid ? `\nTonight: knife chosen${g.killerRoomIdx != null ? ', body placed' : ' - now \`' + g.prefix + ' mm room <n>\`'}.`
         : `\nTonight: \`${g.prefix} mm kill <n>\`, then \`${g.prefix} mm room <n>\`.`;
       if (me.role === 'INVESTIGATOR') actionLine = g.investTargetJid ? '\nTonight: your investigation is spent.' : `\nTonight: \`${g.prefix} mm investigate <n>\`.`;
       if (me.role === 'GUARDIAN') actionLine = g.protectTargetJid ? '\nTonight: your watch is set.' : `\nTonight: \`${g.prefix} mm protect <n|me>\`.`;
@@ -1901,23 +1901,23 @@ async function showStatus(ctx) {
     let searchLine = '';
     if (me.alive && g.phase === PHASE.DISCUSSION) {
       const used = g.searches && g.searches.night === g.night && g.searches.used[normJid(senderJid)] != null;
-      searchLine = used ? '\nSearch: already made today.' : `\nSearch: one room remains — \`${g.prefix} mm search <n|room>\`.`;
+      searchLine = used ? '\nSearch: already made today.' : `\nSearch: one room remains - \`${g.prefix} mm search <n|room>\`.`;
     }
     const unfound = (g.bodies || []).filter((b) => !b.found).length;
     const bodyLine = unfound ? `\n\nUnfound bodies in the manor: *${unfound}*.` : '';
     return sendGroup(sock, chatId,
-      `🕯️ *${cases.MANOR_NAME} — PRIVATE STATUS*\n\n` +
+      `🕯️ *${cases.MANOR_NAME} - PRIVATE STATUS*\n\n` +
       `Phase: *${g.phase}* · Night *${g.night}* · ⏱️ ${Math.floor(secs / 60)}m ${secs % 60}s left\n\n` +
       `${roleLine}${actionLine}${searchLine}${bodyLine}\n\nThe living:\n${aliveList}`);
   }
   const g = getGame(chatId);
   if (!g) return sendGroup(sock, chatId, `${botMarker}🕯️ No mystery is unfolding here. \`${ctx.prefix} mm create\` to open the manor.`);
   if (g.phase === PHASE.LOBBY) return showPlayers(ctx);
-  // PUBLIC status — never contains roles. Roles live in DMs only.
+  // PUBLIC status - never contains roles. Roles live in DMs only.
   const alive = alivePlayers(g);
   const me = getPlayer(g, senderJid);
   const lines = alive.map((p, i) =>
-    `  ${i + 1}. ${nameOf(p)} — ${p.char.name}${me && normJid(senderJid) === normJid(p.jid) ? ' (you)' : ''}`).join('\n');
+    `  ${i + 1}. ${nameOf(p)} - ${p.char.name}${me && normJid(senderJid) === normJid(p.jid) ? ' (you)' : ''}`).join('\n');
   const deadCount = g.players.length - alive.length;
   const secs = Math.max(0, Math.ceil((g.deadline - Date.now()) / 1000));
   const unfound = (g.bodies || []).filter((b) => !b.found).length;
@@ -1933,30 +1933,30 @@ async function showStatus(ctx) {
 
 function helpText(prefix) {
   return (
-    `🕯️ *MURDER MYSTERY — BLACKVALE MANOR*\n\n` +
+    `🕯️ *MURDER MYSTERY - BLACKVALE MANOR*\n\n` +
     `A murder will be committed. One of you is the killer.\n\n` +
     `*Lobby (group):*\n` +
-    `• \`${prefix} mm create\` — open the manor\n` +
-    `• \`${prefix} mm join\` — accept the invitation\n` +
-    `• \`${prefix} mm leave\` — decline it\n` +
-    `• \`${prefix} mm players\` — guest list\n` +
-    `• \`${prefix} mm start\` — host begins the mystery (the winning side splits the manor's purse: 10,000–25,000 Zeni)\n\n` +
+    `• \`${prefix} mm create\` - open the manor\n` +
+    `• \`${prefix} mm join\` - accept the invitation\n` +
+    `• \`${prefix} mm leave\` - decline it\n` +
+    `• \`${prefix} mm players\` - guest list\n` +
+    `• \`${prefix} mm start\` - host begins the mystery (the winning side splits the manor's purse: 10,000-25,000 Zeni)\n\n` +
     `*At dawn (group or DM):*\n` +
-    `• \`${prefix} mm search <room n|name>\` — one search per guest, per day. Searches are public; the ghost's clue is not.\n` +
-    `• \`${prefix} mm will <text>\` (DM) — seal your last words; the house reads them aloud if you die.\n\n` +
+    `• \`${prefix} mm search <room n|name>\` - one search per guest, per day. Searches are public; the ghost's clue is not.\n` +
+    `• \`${prefix} mm will <text>\` (DM) - seal your last words; the house reads them aloud if you die.\n\n` +
     `*In play (group):*\n` +
-    `• \`${prefix} mm vote <n|name|skip>\` — cast your ballot (ballots are public)\n` +
-    `• \`${prefix} mm status\` — the state of the case\n` +
-    `• \`${prefix} mm lb\` — the Hall of Shadows: every win, kill, save and sharp vote, remembered\n` +
-    `• \`${prefix} mm end\` — host/mod closes the case (no prize is paid if the case never closes)\n\n` +
-    `*At night (in your DM with the bot — 3 minutes):*\n` +
-    `• \`${prefix} mm kill <n|name>\` — killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
-    `• \`${prefix} mm investigate <n|name>\` — investigator only\n` +
-    `• \`${prefix} mm protect <n|me>\` — guardian only (games of 5+)\n\n` +
+    `• \`${prefix} mm vote <n|name|skip>\` - cast your ballot (ballots are public)\n` +
+    `• \`${prefix} mm status\` - the state of the case\n` +
+    `• \`${prefix} mm lb\` - the Hall of Shadows: every win, kill, save and sharp vote, remembered\n` +
+    `• \`${prefix} mm end\` - host/mod closes the case (no prize is paid if the case never closes)\n\n` +
+    `*At night (in your DM with the bot - 3 minutes):*\n` +
+    `• \`${prefix} mm kill <n|name>\` - killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
+    `• \`${prefix} mm investigate <n|name>\` - investigator only\n` +
+    `• \`${prefix} mm protect <n|me>\` - guardian only (games of 5+)\n\n` +
     `*If you dare (DM):*\n` +
-    `• \`${prefix} mm taunt <message>\` — whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
-    `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body; by day the house searches — the finder of the body inherits the ghost's clue about the killer's character. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
-    `*The prize:* the manor posts a purse (10k–25k Zeni, rolled when the lobby opens) — no entry fee, ever. If the innocents solve the case they split the purse; if the killer outlives the manor, the killer takes all of it. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
+    `• \`${prefix} mm taunt <message>\` - whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
+    `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body; by day the house searches - the finder of the body inherits the ghost's clue about the killer's character. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
+    `*The prize:* the manor posts a purse (10k-25k Zeni, rolled when the lobby opens) - no entry fee, ever. If the innocents solve the case they split the purse; if the killer outlives the manor, the killer takes all of it. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
     `Roles: 1 Killer · 1 Investigator · 1 Guardian (5+ players) · the rest Civilians.\n` +
     `You receive a sealed role card in your DMs. Tell no one.`
   );
@@ -2004,7 +2004,7 @@ const SUB_FIXES = {
 async function handleCommand(ctx) {
   ensureRehydrated();
   const { sock, chatId, senderJid, botMarker } = ctx;
-  // capture the live sock on any game in this chat — timer-driven sends
+  // capture the live sock on any game in this chat - timer-driven sends
   // (vote prompt, dawn, reminders) must use the account that is IN the group
   const gLive = getGame(chatId);
   if (gLive) noteSock(gLive, sock);

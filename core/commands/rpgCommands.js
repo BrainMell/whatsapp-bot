@@ -18,7 +18,7 @@ const profileCardRenderer = require('../rpg/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
-// 💡 OWNER RULE 2026-09-11: cards show "[guild title] of [guild name]" —
+// 💡 OWNER RULE 2026-09-11: cards show "[guild title] of [guild name]" -
 // custom guild title, else the member's guild role; empty when no guild.
 function safeGuildInfo(jid) {
   try { return require('../rpg/guilds').getCardGuildInfo(jid) || { name: '', title: '' }; }
@@ -129,7 +129,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
             : '';
           await sock.sendMessage(chatId, {
             image: cardBuffer,
-            caption: `👤 *${senderName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}${allocHint}`,
+            caption: `👤 *${senderName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}${allocHint}`,
             mentions: [senderJid]
           });
           return;
@@ -161,7 +161,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
                 captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
                 
-                // Gear list — name + rarity mark + critical durability warning only
+                // Gear list - name + rarity mark + critical durability warning only
                 // (Full durability bar renders in the profile image card via durXxx fields in cardData)
                 captionMsg += `\n*GEAR:*\n`;
                 const captionEquipped = [];
@@ -238,7 +238,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     msg += `💨 SPD:${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
     msg += `💥 CRIT:${stats?.crit || 0}% | 🕊️ EVA:${(stats?.evasion || 0).toFixed(1)}%\n`;
     
-    // Stat points — always visible so players know the feature exists
+    // Stat points - always visible so players know the feature exists
     const statPts = sheet?.statPoints || 0;
     if (statPts > 0) {
         msg += `\n⚡ *You have ${statPts} unallocated stat point${statPts === 1 ? '' : 's'}!*\n`;
@@ -395,7 +395,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
         // filter `[,v]) => v` correctly excludes 0 but the template
         // `${s.toUpperCase()}+${v}` always prepends "+", producing ugly
         // output like "SPD+-10". Now: filter on `v !== 0`, and only show
-        // "+" for positive values — negative values show "SPD-10" naturally.
+        // "+" for positive values - negative values show "SPD-10" naturally.
         const parts = Object.entries(item.stats)
           .filter(([,v]) => v !== 0)
           .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`);
@@ -686,7 +686,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     // 💡 FIX 2026-08-03 (bug report #8): Sort by RARITY first (Mythic → Common),
     // then by reqLevel (lowest first), then alphabetically.
     // The old sort was reqLevel-only, which made the 144+ item list feel
-    // unsorted — users wanted items grouped by rank/rarity tier.
+    // unsorted - users wanted items grouped by rank/rarity tier.
     const RARITY_ORDER = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     recipes.sort((a, b) => {
         const aInfo = lootSystem.getItemInfo(a.id) || {};
@@ -748,7 +748,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
             return `${qty}x ${ingInfo.name || id}`;
         }).join(', ');
 
-        // Unified 2-line entry — no flavor text (owner: lists must not over-explain)
+        // Unified 2-line entry - no flavor text (owner: lists must not over-explain)
         msg += `*${startIdx + i + 1}.* ${slotIcon} ${rarityEmoji} *${r.name}* \`${r.id}\`${lvlStr}\n`;
         msg += `   🛠️ ${ingredients}\n`;
     });
@@ -895,7 +895,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const user = economy.getUser(senderJid);
     const energyCost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
     const currentEnergy = user.energy !== undefined ? user.energy : 100;
-    // Use progression-derived maxEnergy — `user.maxEnergy` is never initialized
+    // Use progression-derived maxEnergy - `user.maxEnergy` is never initialized
     // on the user object (it's computed dynamically from level + MAG).
     // Previously this capped at 100, making high-level mages' energy pools
     // effectively useless.
@@ -1033,7 +1033,7 @@ async function useItem(sock, chatId, senderJid, target) {
 //   2. Defaults to best-available stone (mythic > legendary > rare > minor)
 //   3. Previously the priority list omitted mythic_enhancement_stone entirely,
 //      so even if a player had Mythic stones the command would skip them.
-// Stone priority — best first. Player can override with the 2nd arg.
+// Stone priority - best first. Player can override with the 2nd arg.
 const ENHANCE_STONE_PRIORITY = [
     'mythic_enhancement_stone',
     'legendary_enhancement_stone',
@@ -1267,7 +1267,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
                 return `${ing.qty}x ${ingInfo.name || ing.itemId}`;
             }).join(', ');
 
-            // Unified 2-line entry — no flavor text (consistent with station recipe lists)
+            // Unified 2-line entry - no flavor text (consistent with station recipe lists)
             msg += `*${i + 1}.* ✨ ${rarityEmoji} *${recipe.name}* \`${recipe.id}\` · Lvl ${recipe.levelReq}${yieldStr}\n`;
             msg += `   🛠️ ${ingredientsStr}\n`;
         });
@@ -1332,7 +1332,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     await inventorySystem.addItem(senderJid, recipe.output.itemId, recipe.output.qty);
 
     // 💡 FIX: track itemsCrafted for rank missions. handleCraftCommand is a
-    // SEPARATE craft path from craftItem() — it does its own ingredient
+    // SEPARATE craft path from craftItem() - it does its own ingredient
     // deduction and item add, but was missing the rank-mission tracking
     // call. Players crafting the 8 legacy recipes (rusty_dagger, iron_sword,
     // steel_sabre, mythril_staff, chainmail, iron_plate, reinforced_plate,
@@ -1407,10 +1407,10 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
 
 
 // ==========================================
-// 🛡️ EQUIPMENT — .j equipment (.j gear)
+// 🛡️ EQUIPMENT - .j equipment (.j gear)
 //    Image card of everything currently worn: slot, item name,
 //    tier (derived from rarity) + remaining durability. Own layout
-//    (Go kind EQUIP, 800x1100 armory board — distinct orientation).
+//    (Go kind EQUIP, 800x1100 armory board - distinct orientation).
 //    Falls back to the classic text list on any render failure.
 // ==========================================
 const EQUIP_TIER_ORDER = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
@@ -1476,7 +1476,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
             kind: 'EQUIP',
             nickname,
             sealText: rankLetter,
-            caption: `${worn.length}/9 slots filled — repair at .j blacksmith`,
+            caption: `${worn.length}/9 slots filled - repair at .j blacksmith`,
             slots,
             playerClass: String(classInfo?.id || '').toUpperCase(),
             playerIndex: econUser?.spriteIndex || 0,
@@ -1489,7 +1489,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
         const marker = `🃏 *${botConfig.getBotName()}*\n\n`;
         const cap =
             marker +
-            `🛡️ *EQUIPPED GEAR — ${nickname}*\n` +
+            `🛡️ *EQUIPPED GEAR - ${nickname}*\n` +
             worn.map(({ meta, item, rarity, tier, dur, durMax }) => {
                 const durTxt = typeof dur === 'number' && durMax
                     ? ` · 🛠️ ${Math.round(dur * 10) / 10}/${durMax} (${Math.max(0, Math.min(100, Math.round((dur / durMax) * 100)))}%)`
@@ -1505,18 +1505,18 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
     }
 
     // ── fallback: classic text list ──
-    let msg = `🛡️ *EQUIPPED GEAR — ${nickname}*\n\n`;
+    let msg = `🛡️ *EQUIPPED GEAR - ${nickname}*\n\n`;
     for (const { meta, item, rarity, tier, dur, durMax } of worn) {
         const durTxt = typeof dur === 'number' && durMax ? ` · 🛠️ ${Math.round(dur * 10) / 10}/${durMax}` : '';
         msg += `${meta.icon} *${meta.label}:* ${item.name || item.id} (T${tier} ${rarity})${durTxt}\n`;
     }
-    if (!worn.length) msg += `_Nothing equipped yet — use \`${getPrefix()} equip <#bag_index>\`._\n`;
+    if (!worn.length) msg += `_Nothing equipped yet - use \`${getPrefix()} equip <#bag_index>\`._\n`;
     msg += `\n💡 \`${getPrefix()} equipment\` shows this card anytime.`;
     await sock.sendMessage(chatId, { text: `🃏 *${botConfig.getBotName()}*\n\n` + msg });
 }
 
 // ==========================================
-// 🎨 CARD STYLE — pick one of the 10 approved character-card designs
+// 🎨 CARD STYLE - pick one of the 10 approved character-card designs
 //    .j cardstyle         -> style sheet + current pick
 //    .j cardstyle <1-10>  -> set + live preview of your card
 // ==========================================
@@ -1534,7 +1534,7 @@ async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
         const sheet = await profileCardRenderer.renderStyleSheet(current);
         await sock.sendMessage(chatId, {
             image: sheet,
-            caption: `🎨 *CHARACTER CARD STYLES*\n\nYour card: *#${current} — ${CARD_STYLE_NAMES[current] || "?"}*${current === defStyle ? " (default)" : ""}\n\nSwitch with \`${getPrefix()} cardstyle <1-10>\` — you'll get a live preview of your own card.`,
+            caption: `🎨 *CHARACTER CARD STYLES*\n\nYour card: *#${current} - ${CARD_STYLE_NAMES[current] || "?"}*${current === defStyle ? " (default)" : ""}\n\nSwitch with \`${getPrefix()} cardstyle <1-10>\` - you'll get a live preview of your own card.`,
             mentions: [senderJid]
         });
         return;
@@ -1545,14 +1545,14 @@ async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
     }
     user.cardStyle = pick;
     economy.saveUser(senderJid);
-    await sock.sendMessage(chatId, { text: `✅ Card style set to *#${pick} — ${CARD_STYLE_NAMES[pick]}*. Here's your card:` });
+    await sock.sendMessage(chatId, { text: `✅ Card style set to *#${pick} - ${CARD_STYLE_NAMES[pick]}*. Here's your card:` });
     try { await displayCharacterSheet(sock, chatId, senderJid, senderName); } catch (e) {
         console.error("[handleCardStyle] preview failed:", e.message);
     }
 }
 
 // ==========================================
-// 🛡️ SET DEFAULT CARD — RPG MOD COMMAND
+// 🛡️ SET DEFAULT CARD - RPG MOD COMMAND
 //    .j setdefaultcard        -> current default + style list
 //    .j setdefaultcard <1-10> -> set the SERVER-WIDE default card
 // Players who never picked a style (and every fresh registration) get the
@@ -1563,8 +1563,8 @@ async function handleSetDefaultCard(sock, chatId, senderJid, args) {
     if (!input) {
         const defStyle = profileCardRenderer.getDefaultStyle();
         let msg = `🛡️ *DEFAULT CHARACTER CARD*\n\n`;
-        msg += `Current default: *#${defStyle} — ${CARD_STYLE_NAMES[defStyle] || "?"}*\n\n`;
-        for (let i = 1; i <= 10; i++) msg += `${i === defStyle ? "▶️" : "▫️"} #${i} — ${CARD_STYLE_NAMES[i]}\n`;
+        msg += `Current default: *#${defStyle} - ${CARD_STYLE_NAMES[defStyle] || "?"}*\n\n`;
+        for (let i = 1; i <= 10; i++) msg += `${i === defStyle ? "▶️" : "▫️"} #${i} - ${CARD_STYLE_NAMES[i]}\n`;
         msg += `\nSet it with \`${getPrefix()} setdefaultcard <1-10 or name>\`.\n_Player picks via \`${getPrefix()} cardstyle\` always override this._`;
         await sock.sendMessage(chatId, { text: msg });
         return;
@@ -1578,7 +1578,7 @@ async function handleSetDefaultCard(sock, chatId, senderJid, args) {
     }
     await require('../utils/system').set('_shared_default_card_style', pick);
     const defStyle = profileCardRenderer.getDefaultStyle();
-    await sock.sendMessage(chatId, { text: `✅ Default card is now *#${pick} — ${CARD_STYLE_NAMES[pick]}*.\nEveryone who hasn't picked their own style will see it. Here's the style sheet:` });
+    await sock.sendMessage(chatId, { text: `✅ Default card is now *#${pick} - ${CARD_STYLE_NAMES[pick]}*.\nEveryone who hasn't picked their own style will see it. Here's the style sheet:` });
     try {
         const sheet = await profileCardRenderer.renderStyleSheet(defStyle);
         await sock.sendMessage(chatId, { image: sheet });

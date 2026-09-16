@@ -73,7 +73,7 @@ async function fetchProfilePicture(sock, jid) {
 
     try {
       // 💡 PERF PATCH 2026-07-27: was sock.profilePictureUrl(jid, 'image')
-      // with NO timeout — could hang for 90s on LID jids. Now uses the
+      // with NO timeout - could hang for 90s on LID jids. Now uses the
       // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
       const pfpUrl = await fetchPfpCached(sock, jid);
       if (pfpUrl) {
@@ -164,7 +164,7 @@ class LudoGame {
     this.lastRoll = 0;
     this.consecutiveSixes = 0;
     this.hasExtraTurn = false;
-    // FIX 2026-09-16: forfeit system — every abandonment path marks the
+    // FIX 2026-09-16: forfeit system - every abandonment path marks the
     // leaver here; their pieces stop existing for turns/captures/walls.
     this.forfeited = new Set();
     this.diceHistory = [];
@@ -180,7 +180,7 @@ class LudoGame {
         try {
           const clientSock = this.sock || globalSock;
           if (clientSock) await clientSock.sendMessage(chatId, {
-            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* — no rewards awarded.\n\nStart a fresh game anytime with `" + botConfig.getPrefix() + " ludo start @user`."
+            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* - no rewards awarded.\n\nStart a fresh game anytime with `" + botConfig.getPrefix() + " ludo start @user`."
           });
         } catch (e) {}
       }
@@ -198,7 +198,7 @@ class LudoGame {
         try {
           const clientSock = this.sock || globalSock;
           if (clientSock) await clientSock.sendMessage(this.chatId, {
-            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* — no rewards awarded."
+            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* - no rewards awarded."
           });
         } catch (e) {}
       }
@@ -257,7 +257,7 @@ class LudoGame {
       this.gameOver = true;
       this.winner = winner.fullJid;
     } else if (ended && active.length === 0) {
-      // everyone forfeited — no contest, mark dead so exports can clean up
+      // everyone forfeited - no contest, mark dead so exports can clean up
       this.gameOver = true;
       this.winner = null;
     }
@@ -505,7 +505,7 @@ async function renderBoard(game, sock = null) {
 }
 
 // ============================================
-// WIN REWARD (shared by natural win + forfeit win) — FIX 2026-09-16
+// WIN REWARD (shared by natural win + forfeit win) - FIX 2026-09-16
 // ============================================
 function awardWin(winnerJid, game) {
   try {
@@ -549,7 +549,7 @@ module.exports = {
       return { success: false, message: BOT_MARKER + "❌ Ludo needs 2-4 players!" };
     }
 
-    // FIX 2026-09-16: every player must be registered — otherwise the win
+    // FIX 2026-09-16: every player must be registered - otherwise the win
     // reward could silently no-op (economy.getUser nulls unregistered users).
     const unregistered = [];
     for (const jid of allPlayers) {
@@ -632,7 +632,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
 
     if (rollResult.burned) {
       message += `⚡ *BURNED!* ⚡\n3 consecutive 6s! Turn skipped!\n\n`;
-      // 💡 FIX: Force-clear extra turn before calling nextTurn — previously
+      // 💡 FIX: Force-clear extra turn before calling nextTurn - previously
       // if hasExtraTurn was true from a previous six, nextTurn() would
       // just clear the flag without advancing the turn, giving the player
       // another roll despite being burned.
@@ -652,7 +652,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       const pieceToMove = movablePieces[0];
       message += `✅ Only piece ${pieceToMove} can move - Auto-moving!\n\n`;
       const moveResult = game.movePiece(player, pieceToMove);
-      // 💡 FIX: Check if auto-move actually succeeded — previously if the
+      // 💡 FIX: Check if auto-move actually succeeded - previously if the
       // move failed (e.g., wall block), the turn advanced anyway.
       if (!moveResult.success) {
         message += `❌ Move blocked! ${moveResult.error || 'Cannot move there.'}\n\n`;
@@ -775,7 +775,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
-  // FIX 2026-09-16: ending is a FORFEIT, not a neutral cancel — quitting
+  // FIX 2026-09-16: ending is a FORFEIT, not a neutral cancel - quitting
   // mid-game abandons the match. Last active player wins by forfeit.
   endGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     globalSock = sock;
@@ -794,10 +794,10 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (game.gameOver && game.activePlayers().length === 0) {
       if (game.timeout) clearTimeout(game.timeout);
       activeGames.delete(chatId);
-      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* — everyone forfeited. No contest, no rewards." }, { quoted: m });
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* - everyone forfeited. No contest, no rewards." }, { quoted: m });
       return { success: true };
     }
-    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(result.player.fullJid)} abandoned the match — their pieces are out of play.\n\n`;
+    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(result.player.fullJid)} abandoned the match - their pieces are out of play.\n\n`;
     if (result.ended && result.winner) {
       msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
       awardWin(result.winner.fullJid, game);
@@ -829,11 +829,11 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (game.gameOver && game.activePlayers().length === 0) {
       if (game.timeout) clearTimeout(game.timeout);
       activeGames.delete(chatId);
-      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* — everyone forfeited. No contest, no rewards." }, { quoted: m });
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* - everyone forfeited. No contest, no rewards." }, { quoted: m });
       return { success: true };
     }
     game.resetTimeout(sock);
-    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} has left the match — their pieces are out of play.\n\n`;
+    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} has left the match - their pieces are out of play.\n\n`;
     if (result.ended && result.winner) {
       msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
       awardWin(result.winner.fullJid, game);
@@ -853,7 +853,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
-  // FIX 2026-09-16: engine hook — group departure (leave OR kick) forfeits
+  // FIX 2026-09-16: engine hook - group departure (leave OR kick) forfeits
   // the departing player. Called from group-participants.update.
   handleParticipantLeave: async (sock, chatId, leaverJid) => {
     const game = activeGames.get(chatId);
@@ -869,7 +869,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     }
     const botMarker = `*${botConfig.getBotName()}*\n\n`;
     const clientSock = sock || game.sock || globalSock;
-    let msg = botMarker + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} left the group — their Ludo pieces are out of play.\n\n`;
+    let msg = botMarker + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} left the group - their Ludo pieces are out of play.\n\n`;
     if (result.ended && result.winner) {
       msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
       awardWin(result.winner.fullJid, game);
@@ -888,6 +888,6 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   }
 };
 
-// FIX 2026-09-16: test hook — lets the harness drive real game state without
+// FIX 2026-09-16: test hook - lets the harness drive real game state without
 // going through WhatsApp. Not used by production code paths.
 module.exports._internals = { activeGames, LudoGame, renderBoard, normalizeJid };

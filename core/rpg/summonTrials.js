@@ -1,5 +1,5 @@
 // ============================================
-// ⚔️ SUMMON TRIALS — solo evolution trials
+// ⚔️ SUMMON TRIALS - solo evolution trials
 // ============================================
 // One of the 6 original Summoner System mechanics.
 // Each summon species has a trial. The summon must solo-kill
@@ -17,7 +17,7 @@ const summonSystem = require('./summonSystem');
 const economy = require('./economy');
 
 // ─────────────────────────────────────────────────────────────
-// TRIAL DEFINITIONS — static data for all 14 species
+// TRIAL DEFINITIONS - static data for all 14 species
 // ─────────────────────────────────────────────────────────────
 // In a full implementation, these would be in MongoDB (SummonTrial model).
 // For Phase 5, we define them statically here and seed them on first access.
@@ -230,7 +230,7 @@ const PLAYER_PASSIVES = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// TRIAL ATTEMPT — check requirements + simulate solo combat
+// TRIAL ATTEMPT - check requirements + simulate solo combat
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -292,7 +292,7 @@ async function attemptTrial(ownerJid, summonId) {
     };
   }
 
-  // VICTORY — evolve the summon
+  // VICTORY - evolve the summon
   const evolvedSpeciesId = registry.getEvolvedSpeciesId(summon.species, trial.rewardEvolution);
   const evolvedSpecies = registry.getSpecies(evolvedSpeciesId);
   const oldName = summon.nickname || registry.getSpecies(summon.species)?.name || summon.species;
@@ -335,18 +335,18 @@ async function attemptTrial(ownerJid, summonId) {
   msg += `📊 Level: ${summon.level}\n`;
   msg += `📊 Rarity: ${summon.rarity}\n\n`;
   msg += `✨ *PLAYER PASSIVE UNLOCKED:*\n`;
-  msg += `${passive?.name || trial.rewardPassive} — ${passive?.desc || 'Unknown effect'}\n\n`;
+  msg += `${passive?.name || trial.rewardPassive} - ${passive?.desc || 'Unknown effect'}\n\n`;
   msg += `This passive is active whenever you own any ${evolvedSpecies.element} summon.`;
 
   return { success: true, message: msg, evolved: true };
 }
 
 // ─────────────────────────────────────────────────────────────
-// SIMULATE TRIAL COMBAT — simplified solo fight
+// SIMULATE TRIAL COMBAT - simplified solo fight
 // ─────────────────────────────────────────────────────────────
 // This is a simplified auto-battle. The summon fights the trial boss
 // in a 1v1 with no player input. The outcome is deterministic based
-// on stats — higher-level summons with good stats will win.
+// on stats - higher-level summons with good stats will win.
 
 async function simulateTrialCombat(summon, trial) {
   const summonStats = summonSystem.computeEffectiveStats(summon);

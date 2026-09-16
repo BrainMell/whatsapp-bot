@@ -366,7 +366,7 @@ const INFECTED_POOLS = {
                 id: 'PHOENIX_CORRUPTED',
                 name: 'Corrupted Phoenix',
                 icon: '🔥🦅',
-                desc: 'Fallen phoenix consumed by corruption — it adapts and rises harder',
+                desc: 'Fallen phoenix consumed by corruption - it adapts and rises harder',
                 stats: { hp: 3200, atk: 42, def: 28, mag: 25, spd: 30, luck: 20, crit: 28 },
                 archetype: 'NEMESIS',
                 skills: ['Phoenix Dive', 'Rebirth', 'Solar Flare'],
@@ -390,7 +390,7 @@ const INFECTED_POOLS = {
                 id: 'ABYSSAL_HORROR',
                 name: 'Abyssal Horror',
                 icon: '🐙',
-                desc: 'Deep sea infected with tentacles — siphons energy and silences',
+                desc: 'Deep sea infected with tentacles - siphons energy and silences',
                 stats: { hp: 1800, atk: 36, def: 22, mag: 20, spd: 20, luck: 18, crit: 22 },
                 archetype: 'SPELLBREAKER',
                 skills: ['Tentacle Lash', 'Pressure Crush'],
@@ -439,7 +439,7 @@ const INFECTED_POOLS = {
                 id: 'KRAKEN_SPAWN',
                 name: 'Kraken Spawn',
                 icon: '🐙👑',
-                desc: 'Offspring of the ancient kraken — immovable and reflects physical damage',
+                desc: 'Offspring of the ancient kraken - immovable and reflects physical damage',
                 stats: { hp: 4500, atk: 44, def: 30, mag: 28, spd: 26, luck: 22, crit: 26 },
                 archetype: 'COLOSSUS',
                 skills: ['Whirlpool Vortex', 'Ink Cloud', 'Crush'],
@@ -463,7 +463,7 @@ const INFECTED_POOLS = {
                 id: 'OBSIDIAN_JUGGERNAUT',
                 name: 'Obsidian Juggernaut',
                 icon: '🪨',
-                desc: 'Infected armored in obsidian — CC-immune and reflects physical strikes',
+                desc: 'Infected armored in obsidian - CC-immune and reflects physical strikes',
                 stats: { hp: 2800, atk: 38, def: 45, mag: 15, spd: 12, luck: 16, crit: 18 },
                 archetype: 'COLOSSUS',
                 skills: ['Obsidian Slam', 'Lava Shield'],
@@ -487,7 +487,7 @@ const INFECTED_POOLS = {
                 id: 'STONE_NEMESIS',
                 name: 'Stone Nemesis',
                 icon: '🪨👁️',
-                desc: 'An ancient stone construct that adapts to how you fight it — the longer the fight, the harder it counters',
+                desc: 'An ancient stone construct that adapts to how you fight it - the longer the fight, the harder it counters',
                 stats: { hp: 2600, atk: 44, def: 35, mag: 20, spd: 14, luck: 18, crit: 20 },
                 archetype: 'NEMESIS',
                 xpReward: 720,
@@ -498,7 +498,7 @@ const INFECTED_POOLS = {
                 id: 'VOID_SEEKER',
                 name: 'Void Seeker',
                 icon: '🌑🪨',
-                desc: 'A shadow-phase hunter that materializes from stone — phases through attacks',
+                desc: 'A shadow-phase hunter that materializes from stone - phases through attacks',
                 stats: { hp: 2300, atk: 46, def: 30, mag: 22, spd: 20, luck: 20, crit: 24 },
                 archetype: 'VOID_WALKER',
                 xpReward: 740,
@@ -512,7 +512,7 @@ const INFECTED_POOLS = {
                 id: 'MOUNTAIN_COLOSSUS',
                 name: 'Mountain Colossus',
                 icon: '⛰️',
-                desc: 'Living mountain of immense size — immune to CC, reflects hits, breaks down over phases',
+                desc: 'Living mountain of immense size - immune to CC, reflects hits, breaks down over phases',
                 stats: { hp: 8000, atk: 46, def: 60, mag: 20, spd: 10, luck: 20, crit: 15 },
                 archetype: 'COLOSSUS',
                 skills: ['Avalanche', 'Mountain Crusher', 'Earthquake'],
@@ -536,7 +536,7 @@ const INFECTED_POOLS = {
                 id: 'FLESH_ABOMINATION',
                 name: 'Flesh Abomination',
                 icon: '🧬',
-                desc: 'Horrifically mutated infected — a berserker that gets deadlier as it takes damage',
+                desc: 'Horrifically mutated infected - a berserker that gets deadlier as it takes damage',
                 stats: { hp: 4500, atk: 45, def: 30, mag: 22, spd: 20, luck: 18, crit: 24 },
                 archetype: 'BERSERKER_MOB',
                 skills: ['Toxic Spray', 'Mutation Burst'],
@@ -548,7 +548,7 @@ const INFECTED_POOLS = {
                 id: 'CHIMERA_BEAST',
                 name: 'Chimera Beast',
                 icon: '🧬',
-                desc: 'Multi-headed mutated infected — adapts its attacks to counter your strategy',
+                desc: 'Multi-headed mutated infected - adapts its attacks to counter your strategy',
                 stats: { hp: 4200, atk: 50, def: 28, mag: 20, spd: 24, luck: 20, crit: 28 },
                 archetype: 'NEMESIS',
                 skills: ['Triple Strike', 'Regenerate'],
@@ -560,7 +560,7 @@ const INFECTED_POOLS = {
                 id: 'SHADOW_STALKER_MUTANT',
                 name: 'Shadow Stalker Mutant',
                 icon: '🧬👤',
-                desc: 'A phase-shifting mutation that blinks in and out of reality — nearly impossible to predict',
+                desc: 'A phase-shifting mutation that blinks in and out of reality - nearly impossible to predict',
                 stats: { hp: 4000, atk: 52, def: 24, mag: 26, spd: 28, luck: 22, crit: 30 },
                 archetype: 'VOID_WALKER',
                 xpReward: 960,
@@ -571,7 +571,7 @@ const INFECTED_POOLS = {
                 id: 'RUNE_EATER',
                 name: 'Rune Eater',
                 icon: '🧬🔮',
-                desc: 'A mutation that feeds on magic — silences heavy casters and drains their energy reserves',
+                desc: 'A mutation that feeds on magic - silences heavy casters and drains their energy reserves',
                 stats: { hp: 4100, atk: 42, def: 32, mag: 35, spd: 22, luck: 20, crit: 26 },
                 archetype: 'SPELLBREAKER',
                 xpReward: 940,
@@ -585,7 +585,7 @@ const INFECTED_POOLS = {
                 id: 'PERFECT_MUTATION',
                 name: 'Perfect Mutation',
                 icon: '🧬👑',
-                desc: 'Infected evolved to perfection — adapts to every strategy, has no weakness',
+                desc: 'Infected evolved to perfection - adapts to every strategy, has no weakness',
                 stats: { hp: 12000, atk: 55, def: 38, mag: 30, spd: 28, luck: 24, crit: 32 },
                 archetype: 'NEMESIS',
                 skills: ['Adaptive Strike', 'Evolution', 'Bio Hazard'],
@@ -644,7 +644,7 @@ const INFECTED_POOLS = {
                 id: 'PHALANX_SOVEREIGN',
                 name: 'Phalanx Sovereign',
                 icon: '🌈🛡️',
-                desc: 'Commander of the Hybrid Phalanx — enrages when allies die, buffs the entire formation',
+                desc: 'Commander of the Hybrid Phalanx - enrages when allies die, buffs the entire formation',
                 stats: { hp: 5800, atk: 50, def: 42, mag: 28, spd: 20, luck: 21, crit: 22 },
                 archetype: 'PHALANX',
                 xpReward: 1130,
@@ -658,7 +658,7 @@ const INFECTED_POOLS = {
                 id: 'ELEMENTAL_SOVEREIGN',
                 name: 'Elemental Sovereign',
                 icon: '🌈👑',
-                desc: 'Master of all elements — adapts, counters, overwhelms. Every strategy has a flaw against this.',
+                desc: 'Master of all elements - adapts, counters, overwhelms. Every strategy has a flaw against this.',
                 stats: { hp: 15000, atk: 58, def: 45, mag: 50, spd: 30, luck: 28, crit: 30 },
                 archetype: 'NEMESIS',
                 skills: ['Elemental Chaos', 'Prismatic Blast', 'Omni-Shield'],
@@ -682,7 +682,7 @@ const INFECTED_POOLS = {
                 id: 'INFERNAL_OVERLORD',
                 name: 'Infernal Overlord',
                 icon: '🔥👹',
-                desc: 'Elite fire infected berserker — escalates with every hit taken, impossible to ignore',
+                desc: 'Elite fire infected berserker - escalates with every hit taken, impossible to ignore',
                 stats: { hp: 8000, atk: 60, def: 42, mag: 45, spd: 32, luck: 26, crit: 34 },
                 archetype: 'BERSERKER_MOB',
                 skills: ['Apocalypse Flame', 'Inferno Domain'],
@@ -694,7 +694,7 @@ const INFECTED_POOLS = {
                 id: 'STAR_EATER',
                 name: 'Star Eater',
                 icon: '☀️🔥',
-                desc: 'Feeds on magical energy — silences, drains, and punishes mages with reflected power',
+                desc: 'Feeds on magical energy - silences, drains, and punishes mages with reflected power',
                 stats: { hp: 7500, atk: 65, def: 40, mag: 48, spd: 35, luck: 28, crit: 36 },
                 archetype: 'SPELLBREAKER',
                 skills: ['Solar Destruction', 'Supernova'],
@@ -706,7 +706,7 @@ const INFECTED_POOLS = {
                 id: 'ETERNAL_NEMESIS',
                 name: 'Eternal Nemesis',
                 icon: '🔥👁️',
-                desc: 'The ultimate adaptive predator — studies your every move and counters with precision',
+                desc: 'The ultimate adaptive predator - studies your every move and counters with precision',
                 stats: { hp: 7800, atk: 62, def: 44, mag: 50, spd: 33, luck: 28, crit: 35 },
                 archetype: 'NEMESIS',
                 xpReward: 1480,
@@ -717,7 +717,7 @@ const INFECTED_POOLS = {
                 id: 'VOID_FLAME',
                 name: 'Void Flame',
                 icon: '🌑🔥',
-                desc: 'A fire entity that exists partially in the void — phases unpredictably, strikes from anywhere',
+                desc: 'A fire entity that exists partially in the void - phases unpredictably, strikes from anywhere',
                 stats: { hp: 7200, atk: 63, def: 38, mag: 52, spd: 38, luck: 30, crit: 38 },
                 archetype: 'VOID_WALKER',
                 xpReward: 1520,
@@ -731,7 +731,7 @@ const INFECTED_POOLS = {
                 id: 'PRIMORDIAL_FLAME',
                 name: 'Primordial Flame',
                 icon: '🔥💫',
-                desc: 'The first flame, source of all fire — CC-immune, reflects all physical hits, phases when below 50%',
+                desc: 'The first flame, source of all fire - CC-immune, reflects all physical hits, phases when below 50%',
                 stats: { hp: 20000, atk: 70, def: 50, mag: 60, spd: 35, luck: 30, crit: 40 },
                 archetype: 'COLOSSUS',
                 skills: ['Genesis Fire', 'Heat Death', 'Eternal Burn'],
@@ -755,8 +755,8 @@ const BOSS_ENCOUNTERS = {
             skills: ['Colossal Slam', 'Infection Spread', 'Rampage', 'Rage Mode'],
             phases: [
                 { name: 'Normal', threshold: 100, effects: [], message: 'The Infected Colossus lumbers forward.' },
-                { name: 'Enraged', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🦠 The Colossus roars — its infections spread faster!' },
-                { name: 'Desperate', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'heal', value: 0 }], message: '💀 Desperation fuels the Colossus — it won\'t go quietly!' },
+                { name: 'Enraged', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🦠 The Colossus roars - its infections spread faster!' },
+                { name: 'Desperate', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'heal', value: 0 }], message: '💀 Desperation fuels the Colossus - it won\'t go quietly!' },
             ],
             xpReward: 3000,
             goldReward: [800, 1400],
@@ -771,8 +771,8 @@ const BOSS_ENCOUNTERS = {
             skills: ['Guardian Strike', 'Ancient Barrier', 'Judgement', 'Corrupted Fury'],
             phases: [
                 { name: 'Defensive', threshold: 100, effects: [], message: 'The Corrupted Guardian raises its shield.' },
-                { name: 'Balanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 20 }, { type: 'stat_boost', stat: 'def', value: 20 }], message: '⚖️ The Guardian drops its guard — balanced offense and defense!' },
-                { name: 'Aggressive', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }], message: '⚔️ The Guardian abandons defense — all-out assault!' },
+                { name: 'Balanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 20 }, { type: 'stat_boost', stat: 'def', value: 20 }], message: '⚖️ The Guardian drops its guard - balanced offense and defense!' },
+                { name: 'Aggressive', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }], message: '⚔️ The Guardian abandons defense - all-out assault!' },
             ],
             xpReward: 3500,
             goldReward: [900, 1600],
@@ -791,7 +791,7 @@ const BOSS_ENCOUNTERS = {
             skills: ['Elemental Storm', 'Prismatic Ray', 'Element Shift', 'Cataclysm'],
             phases: [
                 { name: 'Fire Phase', threshold: 100, effects: [], message: 'The Elemental Archon burns with primal fire.' },
-                { name: 'Water Phase', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌊 The Archon shifts — elemental currents realign!' },
+                { name: 'Water Phase', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌊 The Archon shifts - elemental currents realign!' },
                 { name: 'Final Form', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '✨ The Archon unleashes its true elemental fury!' },
             ],
             xpReward: 6000,
@@ -807,8 +807,8 @@ const BOSS_ENCOUNTERS = {
             skills: ['Adaptive Assault', 'Genetic Overload', 'Evolution Burst', 'Perfect Form'],
             phases: [
                 { name: 'Basic', threshold: 100, effects: [], message: 'Mutation Prime stirs in its basic form.' },
-                { name: 'Advanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🧬 Mutation Prime evolves — taking a more advanced form!' },
-                { name: 'Perfect', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'stat_boost', stat: 'def', value: 30 }], message: '👑 Perfection achieved — Mutation Prime is unstoppable!' },
+                { name: 'Advanced', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '🧬 Mutation Prime evolves - taking a more advanced form!' },
+                { name: 'Perfect', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'stat_boost', stat: 'def', value: 30 }], message: '👑 Perfection achieved - Mutation Prime is unstoppable!' },
             ],
             xpReward: 8000,
             goldReward: [2000, 3200],
@@ -827,7 +827,7 @@ const BOSS_ENCOUNTERS = {
             skills: ['Void Pulse', 'Reality Tear', 'Null Zone', 'Oblivion'],
             phases: [
                 { name: 'Contained', threshold: 100, effects: [], message: 'The Void entity strains against containment.' },
-                { name: 'Unleashed', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌀 Containment breached — the void spills forth!' },
+                { name: 'Unleashed', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '🌀 Containment breached - the void spills forth!' },
                 { name: 'Transcendent', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '👁️ The void entity transcends its mortal shell!' },
             ],
             xpReward: 15000,
@@ -843,15 +843,15 @@ const BOSS_ENCOUNTERS = {
             skills: ['Chaos Wave', 'Creation & Destruction', 'Infinity Spiral', 'Big Bang'],
             phases: [
                 { name: 'Awakening', threshold: 100, effects: [], message: 'Primordial Chaos stirs from the abyss.' },
-                { name: 'Chaos Form', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 The chaos awakens — reality bends!' },
-                { name: 'True Chaos', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '🌌 True chaos is unleashed — all is lost!' },
+                { name: 'Chaos Form', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 The chaos awakens - reality bends!' },
+                { name: 'True Chaos', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }, { type: 'heal', value: 0 }], message: '🌌 True chaos is unleashed - all is lost!' },
             ],
             xpReward: 25000,   // FIX: was 8000 (regression vs VOID_CORRUPTED's 15000)
             goldReward: [8000, 14000],
             levelRange: [95, 120]
         },
         {
-            // NEW: S-rank boss — distinct from A-rank PRIMORDIAL_CHAOS so
+            // NEW: S-rank boss - distinct from A-rank PRIMORDIAL_CHAOS so
             // players feel escalation from A → S → SS → SSS instead of
             // fighting the same boss four ranks in a row.
             id: 'ELDER_CHAOS',
@@ -864,7 +864,7 @@ const BOSS_ENCOUNTERS = {
                 { name: 'Awakening', threshold: 100, effects: [], message: 'The Chaos Sovereign awakens.' },
                 { name: 'Chaos Form', threshold: 66, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 The Sovereign\'s chaos form takes hold!' },
                 { name: 'True Chaos', threshold: 33, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }], message: '🌌 True chaos emanates from the Sovereign!' },
-                { name: 'Eternal Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '♾️ Eternal form achieved — the Sovereign cannot be stopped!' },
+                { name: 'Eternal Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '♾️ Eternal form achieved - the Sovereign cannot be stopped!' },
             ],
             xpReward: 60000,
             goldReward: [10000, 17500], // Economy rebalance: cut 50% (was [20000, 35000])
@@ -882,14 +882,14 @@ const BOSS_ENCOUNTERS = {
                 { name: 'Contained', threshold: 100, effects: [], message: 'The Void Titan strains against its bonds.' },
                 { name: 'Unleashed', threshold: 66, effects: [{ type: 'stat_boost', stat: 'atk', value: 30 }], message: '💥 The Titan breaks containment!' },
                 { name: 'Transcendent', threshold: 33, effects: [{ type: 'stat_boost', stat: 'atk', value: 50 }, { type: 'stat_boost', stat: 'def', value: 30 }], message: '⚡ The Titan transcends mortal limits!' },
-                { name: 'Astral Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'atk', value: 80 }, { type: 'heal', value: 0 }], message: '🌟 Astral form — the Titan becomes a cosmic horror!' },
+                { name: 'Astral Form', threshold: 15, effects: [{ type: 'stat_boost', stat: 'atk', value: 80 }, { type: 'heal', value: 0 }], message: '🌟 Astral form - the Titan becomes a cosmic horror!' },
             ],
             xpReward: 150000,
             goldReward: [25000, 45000], // Economy rebalance: cut 50% (was [50000, 90000])
             levelRange: [100, 120]
         },
         {
-            // NEW: SSS-rank boss — the ultimate challenge
+            // NEW: SSS-rank boss - the ultimate challenge
             id: 'ABYSSAL_GOD',
             name: 'Abyssal God',
             icon: '🌌👁️',
@@ -900,9 +900,9 @@ const BOSS_ENCOUNTERS = {
             phases: [
                 { name: 'Slumbering', threshold: 100, effects: [], message: 'The Abyssal God slumbers... for now.' },
                 { name: 'Awakening', threshold: 80, effects: [{ type: 'stat_boost', stat: 'mag', value: 20 }], message: '👁️ The Abyssal God stirs from slumber!' },
-                { name: 'Chaos Form', threshold: 60, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 Chaos form — reality fractures!' },
-                { name: 'True Chaos', threshold: 40, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }], message: '🌌 True chaos — the abyss consumes all!' },
-                { name: 'Divine Form', threshold: 20, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '⚡ Divine form — the Abyssal God reveals its true power!' },
+                { name: 'Chaos Form', threshold: 60, effects: [{ type: 'stat_boost', stat: 'mag', value: 30 }], message: '💫 Chaos form - reality fractures!' },
+                { name: 'True Chaos', threshold: 40, effects: [{ type: 'stat_boost', stat: 'mag', value: 50 }], message: '🌌 True chaos - the abyss consumes all!' },
+                { name: 'Divine Form', threshold: 20, effects: [{ type: 'stat_boost', stat: 'mag', value: 80 }, { type: 'heal', value: 0 }], message: '⚡ Divine form - the Abyssal God reveals its true power!' },
             ],
             xpReward: 400000,
             goldReward: [75000, 140000], // Economy rebalance: cut 50% (was [150000, 280000])
@@ -936,7 +936,7 @@ const BOSS_ENCOUNTERS = {
         { id: 'CLOCKWORK_TITAN', name: 'Clockwork Titan', icon: '⚙️🗿', stats: { hp: 23000, atk: 380, def: 420, mag: 20, spd: 15 }, levelRange: [1, 100] },
         { id: 'MECH_GOD', name: 'Mech God', icon: '🦾🤖', stats: { hp: 80000, atk: 750, def: 750, mag: 450, spd: 25 }, levelRange: [1, 100] },
         // 💡 FIX: 7 trial bosses referenced by classSystem.js but missing from
-        // the registry — previously selectBoss silently fell back to a random
+        // the registry - previously selectBoss silently fell back to a random
         // boss, so the player fought the wrong enemy and the trial completion
         // recorded the wrong boss id.
         { id: 'DEMON_LORD',          name: 'Demon Lord',          icon: '😈👑', stats: { hp: 45000, atk: 580, def: 80,  mag: 720, spd: 50 }, levelRange: [1, 100] },
@@ -946,7 +946,7 @@ const BOSS_ENCOUNTERS = {
         { id: 'SHADOW_LORD',         name: 'Shadow Lord',         icon: '🌑👑', stats: { hp: 38000, atk: 540, def: 70,  mag: 620, spd: 80 }, levelRange: [1, 100] },
         { id: 'PRIMORDIAL_EVIL',     name: 'Primordial Evil',     icon: '💫👹', stats: { hp: 72000, atk: 760, def: 110, mag: 980, spd: 60 }, levelRange: [1, 100] },
         { id: 'GRAVEYARD_LORD',      name: 'Graveyard Lord',      icon: '🪦💀', stats: { hp: 41000, atk: 480, def: 90,  mag: 700, spd: 35 }, levelRange: [1, 100] },
-        // 💡 Dragon Lord successor trial boss — a stronger Leviathan Spawn
+        // 💡 Dragon Lord successor trial boss - a stronger Leviathan Spawn
         // that emerged after the original Leviathan was slain. Used for
         // post-first-kill Dragon-class ascensions. NOT the same as the
         // LEVIATHAN_SPAWN that spawns naturally in the Toxic Cave dungeon
@@ -974,16 +974,16 @@ function getEnemyPoolByLevel(avgLevel) {
 
 // 💡 FIX: selectRandomEnemy now accepts an optional `environment` parameter.
 // When state.environment is a special dungeon (e.g., DRAGON_LAIR), we pull
-// from environment.mobs instead of getEnemyPoolByLevel — which was ignoring
+// from environment.mobs instead of getEnemyPoolByLevel - which was ignoring
 // the dragon pool entirely and spawning generic FIRE/WATER/EARTH enemies
 // inside the Dragon's Lair.
 //
-// 💡 FIX (Item #2 — dragon quest progression): DUNGEON_ENVIRONMENTS.DRAGON_LAIR.mobs
+// 💡 FIX (Item #2 - dragon quest progression): DUNGEON_ENVIRONMENTS.DRAGON_LAIR.mobs
 // is a flat string array (["DRAKE_SCOUT", "FIRE_BREATHER"]), NOT an object
 // with .COMMON/.ELITE sub-arrays. So the old `pool[difficulty]` lookup
 // returned undefined, fell through to getEnemyPoolByLevel, and spawned
 // generic non-dragon enemies. This meant dragons NEVER spawned as regular
-// mobs in the Dragon's Lair — only the boss counted toward dragonsKilled.
+// mobs in the Dragon's Lair - only the boss counted toward dragonsKilled.
 // Players needed 25 dragon kills for DRAGON_GOD/DRAGON_LORD evolution but
 // could only get 1 per dungeon run (the boss), making progression
 // effectively impossible without hundreds of runs.
@@ -999,17 +999,17 @@ function selectRandomEnemy(avgLevel, difficulty = 'COMMON', environment = null) 
         // Check if environment.mobs is the structured format ({COMMON:[], ELITE:[]})
         // or the legacy flat string format (["DRAKE_SCOUT", "FIRE_BREATHER"]).
         if (Array.isArray(environment.mobs)) {
-            // Legacy flat string format — look up the proper pool in INFECTED_POOLS
+            // Legacy flat string format - look up the proper pool in INFECTED_POOLS
             // by the environment's id (e.g., "DRAGON_LAIR").
             const envId = environment.id;
             if (envId && INFECTED_POOLS[envId]) {
                 pool = INFECTED_POOLS[envId];
             } else {
-                // No matching pool in INFECTED_POOLS — fall back to level-based
+                // No matching pool in INFECTED_POOLS - fall back to level-based
                 pool = getEnemyPoolByLevel(avgLevel);
             }
         } else {
-            // Structured format — use directly
+            // Structured format - use directly
             pool = environment.mobs;
         }
         // If the environment pool doesn't have the requested difficulty tier,
@@ -1054,7 +1054,7 @@ function selectBoss(avgLevel, forceId = null) {
                         // 💡 FIX: spread foundBoss first, then set id last so
                         // the uppercase `forceId` wins. (FoundBoss.id is often
                         // lowercase, which broke every `id.includes("DRAGON")`
-                        // substring check downstream — dragon-seal-ring gate,
+                        // substring check downstream - dragon-seal-ring gate,
                         // dragon kill tracking, etc.)
                         return { ...foundBoss, id: forceId };
                     }
@@ -1067,7 +1067,7 @@ function selectBoss(avgLevel, forceId = null) {
         // 💡 FIX: log when forceId is unfound so trial-boss mismatches are
         // visible. Previously this silently fell through to a random boss and
         // players saw the wrong enemy.
-        console.warn(`[selectBoss] forceId "${forceId}" not found in BOSS_ENCOUNTERS or BOSS_REGISTRY — falling back to random boss`);
+        console.warn(`[selectBoss] forceId "${forceId}" not found in BOSS_ENCOUNTERS or BOSS_REGISTRY - falling back to random boss`);
     }
 
     let pool;
@@ -1175,25 +1175,25 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     const rankIndex = difficulty;
 
     // =========================================================
-    // 🎯 PER-RANK BALANCED SCALING — Target: ~60% player WR
+    // 🎯 PER-RANK BALANCED SCALING - Target: ~60% player WR
     // =========================================================
     // Rank difficulty values from guildAdventure (DUNGEON_RANKS[*].difficulty):
     //   F=0.8, E=1.2, D=3.0, C=5.0, B=10.0, A=18.0, S=35.0, SS=75.0, SSS=80.0
     //
     // Formula breakpoints (tested to ~60% solo WR):
-    //   F/E  (0.8-1.2):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline — unchanged)
+    //   F/E  (0.8-1.2):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline - unchanged)
     //   D    (~3.0):     dmgF=0.14, hpF=0.18, hpQ=0.003
     //   C    (~5.0):     dmgF=0.18, hpF=0.22, hpQ=0.004
     //   B    (~10.0):    dmgF=0.22, hpF=0.28, hpQ=0.006
     //   A    (~18.0):    dmgF=0.26, hpF=0.34, hpQ=0.008
     //   S    (~35.0):    dmgF=0.30, hpF=0.40, hpQ=0.010
-    //   SS   (~75.0):    (uses S breakpoints — extreme scaling)
-    //   SSS  (~80.0):    (uses S breakpoints — extreme scaling)
+    //   SS   (~75.0):    (uses S breakpoints - extreme scaling)
+    //   SSS  (~80.0):    (uses S breakpoints - extreme scaling)
     // =========================================================
 
     let dmgFactor, hpFactor, hpQuadFactor;
     if (rankIndex <= 1.0) {
-        // F / E rank — baseline, no changes
+        // F / E rank - baseline, no changes
         dmgFactor = 0.08; hpFactor = 0.12; hpQuadFactor = 0.002;
     } else if (rankIndex <= 4.0) {
         // D rank
@@ -1279,14 +1279,14 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
         scaled.abilities = enemy.skills || [];
     }
     
-    // Rewards — scaled significantly by difficulty rank so high-rank dungeons
+    // Rewards - scaled significantly by difficulty rank so high-rank dungeons
     // are actually worth doing. Previously the scaling was only +20% XP and
     // +15% gold per rank, which made high-rank dungeons barely better than
     // low-rank ones.
     //
     // 💡 FIX: Changed to EXPONENTIAL scaling so high ranks pull away from
     // low ranks. Linear scaling (1 + rankIndex*0.5) gave S-rank only 18.5×
-    // F-rank XP, while the XP curve to L76 needs ~93.9M XP — meaning 82
+    // F-rank XP, while the XP curve to L76 needs ~93.9M XP - meaning 82
     // S-rank clears per level. With exponential scaling (1 + rankIndex^1.4)
     // S-rank gives ~146× F-rank XP, dropping L75→L76 to ~10 clears.
     // Gold uses a gentler exponent (1.2) so the economy doesn't inflate
@@ -1340,7 +1340,7 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     // 💡 FIX 2026-07-17: Boss HP floor. At low ranks (F/E/D), the boss base
     // HP (e.g. Infected Colossus = 300) combined with the low rank scaling
     // produced bosses with FEWER HP than regular trash mobs (372 HP boss vs
-    // 1865 HP regular enemy at F-rank). This was backwards — the boss should
+    // 1865 HP regular enemy at F-rank). This was backwards - the boss should
     // always be the climax of the dungeon.
     //
     // Fix: compute what a regular enemy's HP would be at this rank using the
@@ -1372,15 +1372,15 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     
-    // Boss Speed Scaling — 💡 QA FIX #33: Bosses must be DANGEROUS.
+    // Boss Speed Scaling - 💡 QA FIX #33: Bosses must be DANGEROUS.
     // High-tier bosses (S+, Dragon, Raid) should outspeed players to feel
     // threatening. They use a higher blend toward player speed (90%) PLUS
     // a boss speed bonus so they act first or trade evenly.
     let baseSpeed = Math.floor(boss.stats.spd * partyFactor * spdMult);
 
-    // Bosses target 110% of player speed (slightly faster — they go first)
+    // Bosses target 110% of player speed (slightly faster - they go first)
     let targetSpeed = Math.max(20, avgPlayerSpeed) * 1.10;
-    // High-level bosses (S+/SS/SSS/Dragon) get EXTRA speed — they should
+    // High-level bosses (S+/SS/SSS/Dragon) get EXTRA speed - they should
     // consistently outspeed even fast players
     if (rankIndex > 25.0) targetSpeed *= 1.15; // S+ bosses: 126% of player speed
     if (rankIndex > 50.0) targetSpeed *= 1.10; // SS+ bosses: 139% of player speed
@@ -1405,7 +1405,7 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     const xpRewardBase = boss.xpReward !== undefined ? boss.xpReward : 1000;
     const goldRewardBase = boss.goldReward !== undefined ? boss.goldReward : [100, 200];
 
-    // Boss rewards — scaled even more aggressively than regular enemies.
+    // Boss rewards - scaled even more aggressively than regular enemies.
     // Bosses are the climax of a dungeon and should drop significantly
     // better loot.
     //
@@ -1415,26 +1415,26 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     // the distinct S/SS/SSS boss templates, S-rank boss XP went from
     // ~229K to ~12.5M.
     //
-    // 💡 FIX (pass 2 — this commit): Bumped XP exponent from 1.5 → 1.55.
+    // 💡 FIX (pass 2 - this commit): Bumped XP exponent from 1.5 → 1.55.
     // The L75→L76 milestone (93.9M XP, 1.8× tier) was forcing ~8 S-rank
-    // boss kills per level — too grindy for the climax rank. The +0.05
+    // boss kills per level - too grindy for the climax rank. The +0.05
     // exponent bump yields:
     //   S    (diff=35):  35^1.55 = 247.3 vs 35^1.5 = 207.1   → +19.4% (12.5M → 14.9M)
     //   SS   (diff=75):  75^1.55 = 806.0 vs 75^1.5 = 649.5   → +24.1% (97.6M → 121.1M)
     //   SSS  (diff=80):  80^1.55 = 890.8 vs 80^1.5 = 715.5   → +24.5% (286.6M → 356.7M)
     //
     // NOTE: An earlier draft of this comment claimed +40-50% bumps. That
-    // was a math error — 35^1.55 was miscomputed as 290.8 (actual 247.3).
+    // was a math error - 35^1.55 was miscomputed as 290.8 (actual 247.3).
     // The bump is real but smaller than originally pitched. If a bigger
     // bump is desired, exponent 1.6 would deliver +~107% (S: 12.5M→26.3M,
-    // SSS: 286.6M→592M) — roughly 2x the current value.
+    // SSS: 286.6M→592M) - roughly 2x the current value.
     //
     // Net effect at the L75 milestone (93.9M XP, the steepest single-level
     // jump in the curve due to the 1.8× tier kicking in):
     //   S-rank boss kills per level: was ~8, now ~6.3 (small but noticeable)
     //   SS-rank: still ~1 boss kill per level
     //   SSS-rank: still ~1 boss kill per level
-    // Trash XP (rankIndex^1.4 at L1155) is unchanged — this targets boss
+    // Trash XP (rankIndex^1.4 at L1155) is unchanged - this targets boss
     // XP only. Gold exponent (1.3) unchanged.
     scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.55)));
     scaled.goldReward = [
@@ -1448,7 +1448,7 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.currentPhase = 0;
     // 💡 FIX P0 (2026-08-16): Copy phases from the boss definition onto the
     // scaled combat entity. checkBossPhase() in guildAdventure.js:5278 reads
-    // boss.phases to trigger phase transitions at HP thresholds — but this
+    // boss.phases to trigger phase transitions at HP thresholds - but this
     // field was never copied here, so phase transitions silently never fired
     // for ANY boss. The bossMechanics.js bosses (HIVE_COMMANDER_BOSS etc.)
     // have proper phase objects with thresholds/abilities/effects/messages;
@@ -1459,7 +1459,7 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
         if (typeof boss.phases[0] === 'object' && boss.phases[0] !== null) {
             scaled.phases = boss.phases;
         }
-        // String-array phases (e.g. ['Normal', 'Enraged']) are left uncopied —
+        // String-array phases (e.g. ['Normal', 'Enraged']) are left uncopied -
         // checkBossPhase can't use them. Commit B converts these to objects.
     }
     // Use BOSS archetype skill objects so AI can evaluate them properly

@@ -1,6 +1,6 @@
 // scripts/test_followup_fixes.js
 // Verifies all 6 follow-up bug fixes:
-//   1. testgc list shows GC names (code path check — getGroupMetadata)
+//   1. testgc list shows GC names (code path check - getGroupMetadata)
 //   2. smart give command auto-detects summon/rune/item (code path + DB test)
 //   3. bug regex allows hyphens + validation (DB test)
 //   3b. editissue/deleteissue/clearissues/lookupban/pardon commands exist (code path)
@@ -129,12 +129,12 @@ async function runTests() {
   // Verify the live cycle: add via testerSystem.addGameTester → check via testerSystem.isGameTester
   await testerSystem.addGameTester(TEST_USER);
   if (!testerSystem.isGameTester(TEST_USER)) {
-    throw new Error('testerSystem.addGameTester failed — isGameTester returns false');
+    throw new Error('testerSystem.addGameTester failed - isGameTester returns false');
   }
   console.log('[+] Live: addGameTester → isGameTester=true ✅');
   await testerSystem.delGameTester(TEST_USER);
   if (testerSystem.isGameTester(TEST_USER)) {
-    throw new Error('testerSystem.delGameTester failed — isGameTester returns true');
+    throw new Error('testerSystem.delGameTester failed - isGameTester returns true');
   }
   console.log('[+] Live: delGameTester → isGameTester=false ✅');
 
@@ -150,7 +150,7 @@ async function runTests() {
 
   // ─── TEST 6: Maintenance lock uses correct category lookup ───────────
   console.log('\n=== TEST 6: Maintenance lock uses correct category lookup ===');
-  if (!engSrc.includes('PHASE 7 FIX 2026-08-29: RPG test-mode lock — fixed category lookup')) {
+  if (!engSrc.includes('PHASE 7 FIX 2026-08-29: RPG test-mode lock - fixed category lookup')) {
     throw new Error('engine.js: maintenance lock fix marker not found');
   }
   // The OLD broken lookup (CMD_REGISTRY.commandRegistry[primaryCmd].category) should be GONE

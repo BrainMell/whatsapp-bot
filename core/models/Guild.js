@@ -18,7 +18,7 @@ const GuildSchema = new mongoose.Schema({
         role: { type: String, default: 'member' }, // leader, officer, member, recruit
         joinedAt: { type: Date, default: Date.now },
         contribution: { type: Number, default: 0 },
-        title: { type: String, default: null } // 💡 Phase 2: custom member title (was lost on restart — schema drift fix)
+        title: { type: String, default: null } // 💡 Phase 2: custom member title (was lost on restart - schema drift fix)
     }],
 
     // Board
@@ -30,7 +30,7 @@ const GuildSchema = new mongoose.Schema({
 
     // Settings
     icon: { type: String, default: null },
-    motto: { type: String, default: 'Adapt or be Infected.' }, // 💡 Phase 2: was lost on restart — schema drift fix
+    motto: { type: String, default: 'Adapt or be Infected.' }, // 💡 Phase 2: was lost on restart - schema drift fix
     requirements: {
         level: { type: Number, default: 1 },
         rank: { type: String, default: 'F' },
@@ -55,7 +55,7 @@ const GuildSchema = new mongoose.Schema({
         background: { type: String, default: null }   // optional background pattern
     },
 
-    // 💡 Phase 2: Guild loans — members can borrow from guild bank
+    // 💡 Phase 2: Guild loans - members can borrow from guild bank
     loans: [{
         borrowerJid: { type: String, required: true },
         amount: { type: Number, required: true },

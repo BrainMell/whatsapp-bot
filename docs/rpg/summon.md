@@ -10,7 +10,7 @@ Defines all 26 valid summon species with their stats, abilities, archetypes, ele
 
 **Species list:** bat, boar, chest, dino, dragon, ghost, giant, mimic, mushroom, octopus, reptile, slime, snake, yeti, ship_cruiser, ship_fighter, ship_squid, plaguefang, lumenmoth, emberwick, skitterswarm, tidalmaw, fireguard, boglurk, frostpeep, starnail
 
-**Rarity tiers:** COMMON, RARE, EPIC, LEGENDARY, MYTHIC — each with a `statGrowthMult` (1.0 → 1.9)
+**Rarity tiers:** COMMON, RARE, EPIC, LEGENDARY, MYTHIC - each with a `statGrowthMult` (1.0 → 1.9)
 
 ### Egg System (`core/rpg/summonEggSystem.js`)
 - **Basic Egg**: 5,000 Zeni from shop. Hatches 1 of 4 starter summons. 1h incubation.
@@ -26,7 +26,7 @@ Defines all 26 valid summon species with their stats, abilities, archetypes, ele
 
 ### Deploy System
 - Only 1 summon can be deployed at a time (`user.activeSummonId`).
-- Deploy command: `.summon deploy <#>` or `.summon <#> deploy` — both route through the same `summonSystem.deploySummon()` function.
+- Deploy command: `.summon deploy <#>` or `.summon <#> deploy` - both route through the same `summonSystem.deploySummon()` function.
 - Deploying from backlog automatically moves the summon to the Main Deck.
 
 ### Soul Forging (`core/rpg/summonForging.js`)

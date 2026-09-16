@@ -96,7 +96,7 @@ async function runTests() {
   const balC_after = economy.getBalance(USER_C);
   const expected = 50000 + 8550;
   if (balC_after !== expected) {
-    throw new Error(`Bounty: C balance wrong — expected ${expected}, got ${balC_after}`);
+    throw new Error(`Bounty: C balance wrong - expected ${expected}, got ${balC_after}`);
   }
   console.log(`[+] Bounty claim verified: C ${50000}→${balC_after} (+8550 = 10000 - 1000 tax - 450 fee, both evaporated since C is unguilded) ✅`);
 
@@ -135,7 +135,7 @@ async function runTests() {
   const balB_after = economy.getBalance(USER_B);
   const expectedNet = 50000 - 1000 + 945; // 49945
   if (balB_after !== expectedNet) {
-    throw new Error(`Investment: B balance wrong — expected ${expectedNet}, got ${balB_after}`);
+    throw new Error(`Investment: B balance wrong - expected ${expectedNet}, got ${balB_after}`);
   }
   console.log(`[+] Investment payout tax verified: B ${50000} →${50000 - 1000} (deposit) →${balB_after} (+945 = 90% of 1050 gross, 10% tax evaporated) ✅`);
 
@@ -143,12 +143,12 @@ async function runTests() {
   // TEST 3: NPC vendor sellItem tax (10% evaporates BEFORE guild 5%)
   // ═══════════════════════════════════════════════════════════════════════
   console.log('\n=== TEST 3: NPC vendor sellItem tax ===');
-  // Use a REAL item that exists in lootSystem — 'health_potion' (UNCOMMON, value=700)
+  // Use a REAL item that exists in lootSystem - 'health_potion' (UNCOMMON, value=700)
   const TEST_ITEM = 'health_potion';
   const addResult = await inventorySystem.addItem(USER_A, TEST_ITEM, 5);
   if (!addResult.success) throw new Error(`addItem failed: ${addResult.message}`);
   console.log(`[+] Added 5× ${TEST_ITEM} to A's inventory (total: ${addResult.totalQuantity})`);
-  // Don't call reloadUserFromDB — addItem already calls saveUser, and reloading
+  // Don't call reloadUserFromDB - addItem already calls saveUser, and reloading
   // from DB can momentarily show a stale inventory due to Mongoose Map
   // serialization timing. Trust the in-memory state.
 
@@ -164,7 +164,7 @@ async function runTests() {
 
   // Sell 1 unit. Base value 700, UNCOMMON rarity → sellMultiplier 0.7
   // totalValue = Math.floor(700 * 0.7 * 1) = Math.floor(489.9999...) = 489
-  // (floating-point quirk — 700*0.7 = 489.9999..., not 490)
+  // (floating-point quirk - 700*0.7 = 489.9999..., not 490)
   // economyTax (10%) = Math.floor(489 * 0.10) = 48 (evaporates)
   // guild fee: A is unguilded, so 0
   // sellValue = 489 - 48 = 441
@@ -175,19 +175,19 @@ async function runTests() {
   const expectedTax = 48;          // Math.floor(489 * 0.10) = 48
   const expectedSell = 441;        // 489 - 48 = 441
   if (sellResult.totalValue !== expectedTotalValue) {
-    throw new Error(`sellItem: totalValue wrong — expected ${expectedTotalValue}, got ${sellResult.totalValue}`);
+    throw new Error(`sellItem: totalValue wrong - expected ${expectedTotalValue}, got ${sellResult.totalValue}`);
   }
   if (sellResult.economyTax !== expectedTax) {
-    throw new Error(`sellItem: economyTax wrong — expected ${expectedTax}, got ${sellResult.economyTax}`);
+    throw new Error(`sellItem: economyTax wrong - expected ${expectedTax}, got ${sellResult.economyTax}`);
   }
   if (sellResult.soldFor !== expectedSell) {
-    throw new Error(`sellItem: soldFor wrong — expected ${expectedSell}, got ${sellResult.soldFor}`);
+    throw new Error(`sellItem: soldFor wrong - expected ${expectedSell}, got ${sellResult.soldFor}`);
   }
   console.log(`[+] Vendor sale verified: totalValue=${expectedTotalValue}, economyTax=${expectedTax} (10% evaporated), soldFor=${expectedSell} (90.1%) ✅`);
 
   const balA_after = economy.getBalance(USER_A);
   if (balA_after !== balA_before + expectedSell) {
-    throw new Error(`sellItem: A balance wrong — expected ${balA_before + expectedSell}, got ${balA_after}`);
+    throw new Error(`sellItem: A balance wrong - expected ${balA_before + expectedSell}, got ${balA_after}`);
   }
   console.log(`[+] A balance ${balA_before}→${balA_after} (+${expectedSell}) ✅`);
 
@@ -210,7 +210,7 @@ async function runTests() {
   ];
   for (const [name, actual, expected] of checks) {
     if (actual !== expected) {
-      throw new Error(`Constant ${name} wrong — expected ${expected}, got ${actual}`);
+      throw new Error(`Constant ${name} wrong - expected ${expected}, got ${actual}`);
     }
     console.log(`[+] ${name} = ${actual} ✅`);
   }

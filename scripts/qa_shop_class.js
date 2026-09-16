@@ -22,7 +22,7 @@ async function main() {
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 20000 });
   console.log('[qa] mongoose connected');
 
-  // ── 1) SHOP SEARCH / VIEWS (pure rendering — reads static catalogs) ──
+  // ── 1) SHOP SEARCH / VIEWS (pure rendering - reads static catalogs) ──
   const shopCommands = require('../core/commands/shopCommands');
   const chatId = 'qa-test-chat@s.whatsapp.net';
 
@@ -59,7 +59,7 @@ async function main() {
     passive: { name: 'QA Passive', effect: 'all_stats', value: 5 },
   });
   const visible = classSystem.getClassById(TEST_ID);
-  console.log('getClassById(TEST_CLASS_QA):', visible ? `OK — ${visible.name} (${visible.tier}/${visible.role})` : 'MISSING!');
+  console.log('getClassById(TEST_CLASS_QA):', visible ? `OK - ${visible.name} (${visible.tier}/${visible.role})` : 'MISSING!');
   const inAll = classSystem.getAllClasses()[TEST_ID];
   console.log('getAllClasses contains it:', inAll ? 'OK' : 'MISSING!');
   const parent = classSystem.getClassById('FIGHTER');

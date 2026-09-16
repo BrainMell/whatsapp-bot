@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================
-// MURDER MYSTERY — QA HARNESS (offline, mock sock)
+// MURDER MYSTERY - QA HARNESS (offline, mock sock)
 // End-to-end scenario suite for Blackvale Manor.
 // Run: node scripts/mm_qa.js [passes=3]
 // Exits non-zero on any failed assertion.
@@ -181,7 +181,7 @@ async function runPass(n) {
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
   // NOTE: qa botId is 'qa-bot' but module-level botIdSafe() is whatever botConfig
-  // returns locally ('global'). Persistence keys use botIdSafe() — we cleared both above.
+  // returns locally ('global'). Persistence keys use botIdSafe() - we cleared both above.
 
   // ---------- A. LOBBY GUARDS ----------
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'create' })); // DM create → rejected
@@ -212,7 +212,7 @@ async function runPass(n) {
   ok(lobbyG && lobbyG.players.length === 5, 'A8b five guests on the list');
 
   await mm.handleCommand(ctxOf(sock, { sub: '1' })); // bare number → help
-  ok(groupText(sock, /MURDER MYSTERY — BLACKVALE MANOR/), 'A9 unknown sub falls to help');
+  ok(groupText(sock, /MURDER MYSTERY - BLACKVALE MANOR/), 'A9 unknown sub falls to help');
 
   // ---------- B. START + ROLES ----------
   await mm.handleCommand(ctxOf(sock, { sub: 'start', sender: P.bob.jid, name: 'Boris' }));
@@ -242,7 +242,7 @@ async function runPass(n) {
   const victimPlan = civs[0];
   const others = g.players.filter((p) => p.role !== 'KILLER');
 
-  // ---------- C. NIGHT 1 — kill + room + investigate + protect ----------
+  // ---------- C. NIGHT 1 - kill + room + investigate + protect ----------
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'kill', rest: '99' }));
   ok(dmTexts(sock, killer.jid, /Choose a \*living\* guest/) === 1, 'C1 invalid kill target rejected');
 
@@ -264,7 +264,7 @@ async function runPass(n) {
   ok(!groupText(sock, new RegExp(`${victimPlan.name}.*dead|dead.*${victimPlan.name}`, 'i')), 'C5 victim not publicly named at kill time');
   ok(dmTexts(sock, killer.jid, /Where does the body lie|Choose the room|where the body lies/) >= 1, 'C6 room-choice DM sent to killer');
 
-  // investigator acts (on the guardian — never a self-target)
+  // investigator acts (on the guardian - never a self-target)
   const rosterForInv = g.players.filter((p) => p.alive && mm._internal.normJid(p.jid) !== mm._internal.normJid(invest.jid));
   const invSubject = playerByRole(g, 'GUARDIAN');
   const iIdx = rosterForInv.findIndex((p) => mm._internal.normJid(p.jid) === mm._internal.normJid(invSubject.jid)) + 1;
@@ -273,7 +273,7 @@ async function runPass(n) {
   ok(g.investResults.length === 1, 'C8 investigation recorded');
 
   // guardian watches someone who is NOT tonight's victim
-  // (GA roster = full living list incl. self — number against THAT, like the module does)
+  // (GA roster = full living list incl. self - number against THAT, like the module does)
   const rosterForGa1 = g.players.filter((p) => p.alive);
   const wardIdx = rosterForGa1.findIndex((p) => mm._internal.normJid(p.jid) === mm._internal.normJid(civs[1].jid)) + 1;
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: guardian.jid, sender: guardian.jid, name: guardian.name, sub: 'protect', rest: String(wardIdx) }));
@@ -289,7 +289,7 @@ async function runPass(n) {
   }
   ok(g.bodies.length === 1, 'C10 body placed');
   ok(g.bodies[0].found === false, 'C11 body starts unfound');
-  ok(groupText(sock, /DAWN — NIGHT 1/), 'C12 morning card sent');
+  ok(groupText(sock, /DAWN - NIGHT 1/), 'C12 morning card sent');
   {
     const leak2 = sock.out.find((m) => m.isGroup && new RegExp(`${victimPlan.name}`, 'i').test(m.text));
     if (leak2) { const mm3 = new RegExp(`${victimPlan.name}`, 'i'); console.log('  [C13-LEAK] name=', victimPlan.name, 'match=', JSON.stringify((leak2.text.match(mm3) || [''])[0]), 'in:', JSON.stringify(leak2.text.slice(0, 60))); }
@@ -301,7 +301,7 @@ async function runPass(n) {
   ok(g.phase === 'DISCUSSION', 'C17 discussion began');
 
   // ---------- C-extra. KILLER TAUNT (anonymous, once per game) ----------
-  // NOTE: civs[0] is the murder victim by now — use the living investigator for the non-killer case
+  // NOTE: civs[0] is the murder victim by now - use the living investigator for the non-killer case
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'taunt', rest: 'definitely not me' }));
   ok(dmTexts(sock, invest.jid, /not yours to give/) === 1, 'T1 non-killer taunt rejected privately (no role leak)');
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'taunt', rest: 'You will never find me in time.' }));
@@ -318,7 +318,7 @@ async function runPass(n) {
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: victimPlan.jid, sender: victimPlan.jid, name: victimPlan.name, sub: 'search', rest: '1' }));
   ok(dmTexts(sock, victimPlan.jid, /dead search nothing/) === 1, 'C18 dead cannot search');
 
-  // wrong-room search by the guardian (always alive after night 1) — private nothing
+  // wrong-room search by the guardian (always alive after night 1) - private nothing
   const rooms = g.rooms;
   const bodyIdx = g.bodies[0].roomIdx;
   const wrongIdx = (bodyIdx + 1) % rooms.length;
@@ -331,7 +331,7 @@ async function runPass(n) {
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: guardian.jid, sender: guardian.jid, name: guardian.name, sub: 'search', rest: '1' }));
   ok(dmTexts(sock, guardian.jid, /already made your one search/) === 1, 'C21 second search same day rejected');
 
-  // discovery by the surviving civilian (group search) — public + clue
+  // discovery by the surviving civilian (group search) - public + clue
   const finder = civs[1];
   await mm.handleCommand(ctxOf(sock, { sender: finder.jid, name: finder.name, sub: 'search', rest: String(bodyIdx + 1) }));
   await sleep(600);
@@ -353,8 +353,8 @@ async function runPass(n) {
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'status' }));
   ok(dmTexts(sock, killer.jid, /PRIVATE STATUS/) >= 1 && dmTexts(sock, killer.jid, /KILLER/i) >= 1, 'D3 DM status keeps the role private-but-present');
 
-  // ---------- E. VOTING — bad vote continues the game ----------
-  // seal the investigator's last words — they are read aloud when they fall
+  // ---------- E. VOTING - bad vote continues the game ----------
+  // seal the investigator's last words - they are read aloud when they fall
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'will', rest: 'The killer poured the claret. Watch the quiet ones.' }));
   ok(dmTexts(sock, invest.jid, /last words are sealed/) === 1, 'E0 will sealed in DM');
   g.deadline = Date.now() - 10;
@@ -372,7 +372,7 @@ async function runPass(n) {
   ok(await waitFor(() => g.phase === 'NIGHT'), 'E4 game continues into night 2 (bad vote matters)');
   ok(groupText(sock, /Watch the quiet ones/) >= 1, 'E4b condemned player’s will was read aloud');
   ok(sock.out.some((m) => m.isGroup && m.image && /Last words of/i.test(m.text)), 'E4c will carried a card');
-  ok(groupText(sock, /Ballots:/) >= 1, 'E4d ballots are public — who voted for whom');
+  ok(groupText(sock, /Ballots:/) >= 1, 'E4d ballots are public - who voted for whom');
 
   // ---------- F. GUARDIAN SAVE on night 2 ----------
   const alive2 = g.players.filter((p) => p.alive);
@@ -388,12 +388,12 @@ async function runPass(n) {
   const gaIdx = rosterForGa.findIndex((p) => mm._internal.normJid(p.jid) === mm._internal.normJid(victim2.jid)) + 1;
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: guardian.jid, sender: guardian.jid, name: guardian.name, sub: 'protect', rest: String(gaIdx) }));
   if (!invest.alive) {
-    // investigator is dead — night can resolve once killer acted
+    // investigator is dead - night can resolve once killer acted
     await sleep(3200);
   }
   g.extendedTonight = true;
   await mm._internal.onPhaseTimeout(CHAT, sock);
-  // NOTE: resolveNight renders 3+ image cards — on a loaded box this takes
+  // NOTE: resolveNight renders 3+ image cards - on a loaded box this takes
   // several seconds. Wait for the transition instead of a fixed sleep.
   ok(await waitFor(() => g.phase === 'DISCUSSION', 30000), 'F1b night 2 resolution completes (guardian save → dawn)');
   ok(victim2.alive === true, 'F2 protected player survived the kill');
@@ -472,7 +472,7 @@ async function runPass(n) {
   ok(!mm.isSilenced(P.bob.jid, CHAT), 'J3 silence dies with the game (lifecycle-bound)');
   mm._internal.persistGames();
 
-  // ---------- K. WATCHDOG — the phase machine self-heals ----------
+  // ---------- K. WATCHDOG - the phase machine self-heals ----------
   // (reproduces the live failure: deadline long past + wedged resolution flags)
   await mm.handleCommand(ctxOf(sock, { sub: 'create', sender: P.alice.jid, name: 'Alice' }));
   for (let i = 1; i < GROUP_SENDERS.length; i++) {
@@ -508,7 +508,7 @@ async function runPass(n) {
   }
   ok(await waitFor(() => g4.phase === 'NIGHT', 15000), 'K4 all-skip vote resolved into the next night');
 
-  // ---------- L. PERSISTENCE HYGIENE — no internal keys ever saved ----------
+  // ---------- L. PERSISTENCE HYGIENE - no internal keys ever saved ----------
   mm._internal.persistGames();
   const savedRaw = await system.get(`murder_mm_games_v2_${BOT_ID === 'qa-bot' ? 'global' : BOT_ID}`, {});
   const savedGame = savedRaw[CHAT];

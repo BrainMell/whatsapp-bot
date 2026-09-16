@@ -1,5 +1,5 @@
 // ============================================
-// 🎨 SUMMON ROSTER RENDERER — node-canvas
+// 🎨 SUMMON ROSTER RENDERER - node-canvas
 // ============================================
 // Renders the Summon Codex as an image card with:
 // - Header (title + slot count)
@@ -31,7 +31,7 @@ const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
-// Font registration (lazy — done on first render)
+// Font registration (lazy - done on first render)
 let _fontsRegistered = false;
 function ensureFonts() {
   if (_fontsRegistered) return;
@@ -50,7 +50,7 @@ function ensureFonts() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// ELEMENT CONFIG — colors + icons per element
+// ELEMENT CONFIG - colors + icons per element
 // ─────────────────────────────────────────────────────────────
 
 const ELEMENT_CONFIG = {
@@ -342,7 +342,7 @@ async function renderRoster(user, summons, options = {}) {
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText('.summon <#> — view  |  .summon <#> deploy  |  .summon skill <#>  |  .summon help', W / 2, hubY + hubH - 12);
+  ctx.fillText('.summon <#> - view  |  .summon <#> deploy  |  .summon skill <#>  |  .summon help', W / 2, hubY + hubH - 12);
 
   return canvas.toBuffer('image/png');
 }
@@ -573,7 +573,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
 async function renderDetailCard(summon, user) {
   const W = 800;
   const H = 500;
-  // 💡 FIX 2026-08-03: createCanvas was not defined here — it's only
+  // 💡 FIX 2026-08-03: createCanvas was not defined here - it's only
   // available via getCanvas(). The old code at line 152 destructured it
   // locally, but this function used it without importing it, causing
   // 'createCanvas is not defined' → image render failed → text fallback.
@@ -652,7 +652,7 @@ async function renderDetailCard(summon, user) {
       ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
     }
   } else {
-    // No sprite — draw emoji fallback
+    // No sprite - draw emoji fallback
     ctx.fillStyle = elementCfg.color;
     ctx.font = `80px "${FONT_REG}", monospace`;
     ctx.textAlign = 'center';

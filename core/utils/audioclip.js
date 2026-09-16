@@ -1,13 +1,13 @@
 // ===============================================
-// AUDIOCLIP.JS — refined audio clipping / citing (FIX 2026-09-16)
+// AUDIOCLIP.JS - refined audio clipping / citing (FIX 2026-09-16)
 // ===============================================
 // Syntax:  `.clip <start> <end>`  while REPLYING to an audio / voice note.
 //          `.clip <end>`          clip from the beginning to <end>.
-//          `.clip info`           while replying — shows duration + help.
+//          `.clip info`           while replying - shows duration + help.
 //
 // Timestamps: `15` `15.5` `0:15` `1:30` `1:30.5` `1:02:30` (h:mm:ss).
 //
-// Design rules (owner brief): clean, reliable, refined — never a crude
+// Design rules (owner brief): clean, reliable, refined - never a crude
 // cutter. Everything validates, everything cleans up, errors are useful.
 // Reuses Baileys' downloadContentFromMessage + local ffmpeg (already the
 // bot's media stack) instead of new dependencies.
@@ -144,12 +144,12 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
   if (!args || args.length === 0) {
     return await sock.sendMessage(chatId, {
       text: BOT_MARKER + [
-        '✂️ *AUDIO CLIP — cut & cite any section*',
+        '✂️ *AUDIO CLIP - cut & cite any section*',
         '',
         `*Reply to an audio/voice note with:*`,
-        `\`${pfx}clip <start> <end>\` — keep that section`,
-        `\`${pfx}clip <end>\` — from the beginning to <end>`,
-        `\`${pfx}clip info\` — show the audio's length`,
+        `\`${pfx}clip <start> <end>\` - keep that section`,
+        `\`${pfx}clip <end>\` - from the beginning to <end>`,
+        `\`${pfx}clip info\` - show the audio's length`,
         '',
         `*Timestamps:* \`0:15\` · \`1:30\` · \`1:30.5\` · \`1:02:30\` · \`90s\` · \`2m30s\``,
         `*Example:* reply to a song with \`${pfx}clip 1:10 1:25\` → 15s chorus.`,
@@ -266,7 +266,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
       tmpOut,
     ]);
     if (!enc.ok) {
-      // some inputs refuse 2ch — retry mono/adaptive
+      // some inputs refuse 2ch - retry mono/adaptive
       enc = await runFfmpeg([
         '-y', '-v', 'error',
         '-i', tmpIn,
@@ -307,8 +307,8 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
     const outBuf = fs.readFileSync(tmpOut);
     const durOut = end - start;
     const notes = [];
-    if (swapped) notes.push('times were reversed — swapped them for you');
-    if (clamped) notes.push(`end was past the audio's length — clamped to ${fmtTimestamp(end)}`);
+    if (swapped) notes.push('times were reversed - swapped them for you');
+    if (clamped) notes.push(`end was past the audio's length - clamped to ${fmtTimestamp(end)}`);
 
     await sock.sendMessage(chatId, { audio: outBuf, mimetype: 'audio/mpeg', ptt: quoted.ptt === true }, { quoted: m });
     await sock.sendMessage(chatId, {

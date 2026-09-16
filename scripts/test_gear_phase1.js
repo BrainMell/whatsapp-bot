@@ -1,18 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  PHASE 1 TESTS — Gear & Equipment system
+//  PHASE 1 TESTS - Gear & Equipment system
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // PURPOSE:
 //   Verify the 2026-08-01 fixes for the Gear & Equipment system.
 //   Each test maps to a BUG # from the audit document:
-//     BUG #1 — mythic_enhancement_stone in ENHANCEMENT_BONUS_MAP
-//     BUG #2 — enhance command priority list includes mythic stone
-//     BUG #3 — shop buyableDbItems propagates rarity
-//     BUG #4 — enhance result includes stone name + bonus
-//     BUG #5 — enhance result includes per-stat deltas
-//     BUG #6 — repairItemStats assumes Mythic stones (0.60), not Legendary (0.35)
-//     BUG #7 — recover_enhancement_stats.js uses relative require path
-//     GAP #1 — getRequiredRankForLevel + rankGte helpers + equipItem rank check
+//     BUG #1 - mythic_enhancement_stone in ENHANCEMENT_BONUS_MAP
+//     BUG #2 - enhance command priority list includes mythic stone
+//     BUG #3 - shop buyableDbItems propagates rarity
+//     BUG #4 - enhance result includes stone name + bonus
+//     BUG #5 - enhance result includes per-stat deltas
+//     BUG #6 - repairItemStats assumes Mythic stones (0.60), not Legendary (0.35)
+//     BUG #7 - recover_enhancement_stats.js uses relative require path
+//     GAP #1 - getRequiredRankForLevel + rankGte helpers + equipItem rank check
 //
 // USAGE:
 //   cd /home/z/my-project/repos/whatsapp-bot
@@ -22,7 +22,7 @@
 const path = require('path');
 const fs = require('fs');
 
-// Test framework — minimal, no external deps
+// Test framework - minimal, no external deps
 const tests = [];
 const results = { pass: 0, fail: 0, skip: 0, failures: [] };
 
@@ -105,7 +105,7 @@ test('BUG #3: shopCommands buyableDbItems copies rarity from ITEM_DATABASE', () 
 });
 
 // --- BUG #4 + #5: enhance result includes stone name + per-stat deltas ---
-// (Integration test — requires mocking economy + inventory. Skip for now,
+// (Integration test - requires mocking economy + inventory. Skip for now,
 //  verify via source inspection that the return value includes the new fields.)
 test('BUG #4+#5: enhanceItem return value includes stoneUsed, stoneName, statDeltas', () => {
     const src = fs.readFileSync(
@@ -210,7 +210,7 @@ test('GAP #1 (cont): rankGte correctly compares ranks using RANK_ORDER indices',
     // Strictly greater
     assertTrue(inv.rankGte('E', 'F'), 'E >= F');
     assertTrue(inv.rankGte('S', 'A'), 'S >= A');
-    assertTrue(inv.rankGte('SS', 'S'), 'SS >= S (string compare would FAIL here — "SS" < "S")');
+    assertTrue(inv.rankGte('SS', 'S'), 'SS >= S (string compare would FAIL here - "SS" < "S")');
     assertTrue(inv.rankGte('SSS', 'S'), 'SSS >= S');
     assertTrue(inv.rankGte('GOD', 'F'), 'GOD >= F');
     // Strictly less (should return false)
@@ -263,7 +263,7 @@ test('INTEGRATION: enhanceItem with Mythic stone gives +60% bonus (not +5%)', ()
     const buggyBonus = 0.05;
     const buggyAtk = Math.ceil(baseAtk * (1 + buggyBonus));
     assertEq(buggyAtk, 105, 'ATK with old buggy 5% fallback');
-    // The fix gives 55 more ATK per stone at this base — a 52% improvement
+    // The fix gives 55 more ATK per stone at this base - a 52% improvement
     assertTrue(newAtk > buggyAtk, 'Fixed Mythic stone should give more ATK than the old 5% fallback');
 });
 
@@ -317,7 +317,7 @@ test('SMOKE: all 4 modified files parse without syntax errors', () => {
     require('../core/rpg/inventorySystem');
     require('../core/commands/rpgCommands');
     require('../core/commands/shopCommands');
-    // recover_enhancement_stats.js connects to MongoDB on load — don't require it,
+    // recover_enhancement_stats.js connects to MongoDB on load - don't require it,
     // just check it parses. We already did `node -c` separately.
     const src = fs.readFileSync(
         path.join(__dirname, '..', 'scripts', 'recover_enhancement_stats.js'),
@@ -332,7 +332,7 @@ test('SMOKE: all 4 modified files parse without syntax errors', () => {
 
 async function main() {
     console.log('\n════════════════════════════════════════════════════');
-    console.log('  PHASE 1 TESTS — Gear & Equipment system');
+    console.log('  PHASE 1 TESTS - Gear & Equipment system');
     console.log('  ' + new Date().toISOString());
     console.log('════════════════════════════════════════════════════\n');
 

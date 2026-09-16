@@ -1,4 +1,4 @@
-// scripts/pardon_psater.js — clear psater from all ban/block lists in MongoDB
+// scripts/pardon_psater.js - clear psater from all ban/block lists in MongoDB
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
@@ -26,7 +26,7 @@ async function main() {
     }
   }
   if (cleared.length === 0) {
-    console.log('Psater was not on any list — no action needed.');
+    console.log('Psater was not on any list - no action needed.');
   } else {
     console.log(`\n✅ PARDONED psater from: ${cleared.join(', ')}`);
     console.log('⚠️  Bot must be restarted (pm2 restart whatsapp-bot) for in-memory Sets to refresh.');

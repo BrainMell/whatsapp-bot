@@ -14,7 +14,7 @@ if (!MONGO_URI) {
 }
 
 console.log(`\n══════════════════════════════════════════════════`);
-console.log(`  GRANT ${POINTS_TO_GRANT} STAT POINTS to Mahxee (nicknames: ${TARGET_NICKNAMES.join(' / ')}) — ${LIVE ? '🔴 LIVE' : '🟡 DRY RUN'}`);
+console.log(`  GRANT ${POINTS_TO_GRANT} STAT POINTS to Mahxee (nicknames: ${TARGET_NICKNAMES.join(' / ')}) - ${LIVE ? '🔴 LIVE' : '🟡 DRY RUN'}`);
 console.log(`══════════════════════════════════════════════════\n`);
 
 async function main() {
@@ -42,13 +42,13 @@ async function main() {
     return;
   }
   if (matches.length > 1) {
-    console.log(`\n⚠️ Multiple matches found. Aborting — please confirm exact user.`);
+    console.log(`\n⚠️ Multiple matches found. Aborting - please confirm exact user.`);
     await mongoose.disconnect();
     return;
   }
 
   if (!LIVE) {
-    console.log(`\n🟡 Dry run — would grant ${POINTS_TO_GRANT} stat points to ${matches.length} user(s).`);
+    console.log(`\n🟡 Dry run - would grant ${POINTS_TO_GRANT} stat points to ${matches.length} user(s).`);
     console.log(`   Re-run with --live to apply.`);
     await mongoose.disconnect();
     return;
@@ -67,7 +67,7 @@ async function main() {
     } else if (typeof user.statPoints === 'number') {
       update.$inc['statPoints'] = POINTS_TO_GRANT;
     } else {
-      // Neither exists — set both
+      // Neither exists - set both
       update.$set = {
         'progression.statPoints': POINTS_TO_GRANT,
         'statPoints': POINTS_TO_GRANT,

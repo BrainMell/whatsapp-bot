@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// 🎛️ GM ADMIN CONSOLE — RPG Moderation Toolkit
+// 🎛️ GM ADMIN CONSOLE - RPG Moderation Toolkit
 // ═══════════════════════════════════════════════════════════════════════════
 // Two distinct features:
 //
 // 1. MAIN-ACCOUNT CLASS SWITCH (.g modclass <name>)
-//    Lightweight — lets RPG Mods switch their own class freely for testing.
+//    Lightweight - lets RPG Mods switch their own class freely for testing.
 //    Everything else about their character stays the same.
 //
 // 2. ADMIN ACCOUNT (.g admin <subcommand>)
@@ -134,12 +134,12 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     const oldClass = economy.getUserClass(senderJid);
     const oldClassName = oldClass ? `${oldClass.icon} ${oldClass.name}` : 'None';
 
-    // Switch class — bypass all evolution requirements
+    // Switch class - bypass all evolution requirements
     user.class = targetClass.id;
     economy.scheduleSave(senderJid);
 
     // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
-    // at max level. Mods are testing — they shouldn't have to grind skills
+    // at max level. Mods are testing - they shouldn't have to grind skills
     // to test a class. This sets every skill in the class's skill tree to
     // maxLevel so the mod can immediately use all abilities.
     let unlockedCount = 0;
@@ -155,7 +155,7 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
                 if (!treeData.skills) continue;
                 for (const [skillId, skill] of Object.entries(treeData.skills)) {
                     // Skip ascended skills (tier 4) unless mod explicitly wants them
-                    // — actually for mod testing, unlock everything
+                    // - actually for mod testing, unlock everything
                     user.skills[skillId] = skill.maxLevel || 1;
                     unlockedCount++;
                 }
@@ -174,7 +174,7 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 2. ADMIN CONSOLE — Direct Actions
+// 2. ADMIN CONSOLE - Direct Actions
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
@@ -193,7 +193,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         try {
             await sock.sendMessage(chatId, { text: BOT_MARKER + text, edit: key });
         } catch (e) {
-            // Edit failed (old message, permissions, etc.) — send new message
+            // Edit failed (old message, permissions, etc.) - send new message
             try { await sock.sendMessage(chatId, { text: BOT_MARKER + text }); } catch (e2) {}
         }
     }
@@ -217,18 +217,18 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return { target, remaining, isSelfTarget };
     }
 
-    // No subcommand — show detailed help
+    // No subcommand - show detailed help
     if (!sub || sub === 'help') {
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE — FULL GUIDE*\n\n` +
+            text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE - FULL GUIDE*\n\n` +
                 `_Mod-only RPG moderation toolkit. RPG Mods, Global Mods, and Owner only._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🎯 *HOW TO TARGET PLAYERS*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `All commands accept a target. 3 ways to specify:\n` +
-                `1️⃣ **@mention** — tag the player: \`${prefix} admin setlevel @friend 50\`\n` +
-                `2️⃣ **Reply** — reply to their message: \`${prefix} admin setlevel 50\`\n` +
-                `3️⃣ **Self** — no mention/reply = targets YOU: \`${prefix} admin setlevel 50\`\n\n` +
+                `1️⃣ **@mention** - tag the player: \`${prefix} admin setlevel @friend 50\`\n` +
+                `2️⃣ **Reply** - reply to their message: \`${prefix} admin setlevel 50\`\n` +
+                `3️⃣ **Self** - no mention/reply = targets YOU: \`${prefix} admin setlevel 50\`\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `👤 *PLAYER MANAGEMENT*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
@@ -266,7 +266,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `• \`${prefix} admin fightenemy <bossId|name>\`\n` +
                 `  Fight any boss for testing. Use \`admin enemy list\` to find IDs.\n\n` +
                 `• \`${prefix} admin givezeni <@user> <amount>\`\n` +
-                `  Adds Zeni to wallet (does NOT overwrite — adds to existing).\n\n` +
+                `  Adds Zeni to wallet (does NOT overwrite - adds to existing).\n\n` +
                 `• \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
                 `  Sets adventurer rank directly.\n\n` +
                 `• \`${prefix} admin unstick <@user>\`\n` +
@@ -303,7 +303,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Set gold reward range.\n\n` +
                 `• \`${prefix} admin enemy reset\`\n` +
                 `  Discards all runtime edits, reloads from source.\n\n` +
-                `_Edits are in-memory only — a restart reverts them. For permanent changes, edit classEncounters.js._\n\n` +
+                `_Edits are in-memory only - a restart reverts them. For permanent changes, edit classEncounters.js._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `⚡ *ENEMY SKILL EDITOR (NEW)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
@@ -322,23 +322,23 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🧪 *SANDBOX MODE (FULL RPG TESTING)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `Fully stacked test character — Lv100, GOD rank, 1B Zeni, all trials done.\n` +
+                `Fully stacked test character - Lv100, GOD rank, 1B Zeni, all trials done.\n` +
                 `When ON, ALL your commands use the sandbox account. Your real account is safe.\n\n` +
                 `*CORE:*\n` +
-                `• \`${prefix} admin sandbox on\` — activate (swap to sandbox character)\n` +
-                `• \`${prefix} admin sandbox off\` — deactivate (save + restore real account)\n` +
-                `• \`${prefix} admin sandbox\` — show status (active/inactive + stats)\n` +
-                `• \`${prefix} admin sandbox save\` — save sandbox data without turning off\n` +
-                `• \`${prefix} admin sandbox reset\` — wipe to fresh stacked state\n\n` +
+                `• \`${prefix} admin sandbox on\` - activate (swap to sandbox character)\n` +
+                `• \`${prefix} admin sandbox off\` - deactivate (save + restore real account)\n` +
+                `• \`${prefix} admin sandbox\` - show status (active/inactive + stats)\n` +
+                `• \`${prefix} admin sandbox save\` - save sandbox data without turning off\n` +
+                `• \`${prefix} admin sandbox reset\` - wipe to fresh stacked state\n\n` +
                 `*COMBAT:*\n` +
-                `• \`${prefix} admin godmode on/off\` — 99999 dmg per hit, 0 dmg taken\n` +
-                `• \`${prefix} admin sandbox fightboss <bossId>\` — fight any boss\n\n` +
+                `• \`${prefix} admin godmode on/off\` - 99999 dmg per hit, 0 dmg taken\n` +
+                `• \`${prefix} admin sandbox fightboss <bossId>\` - fight any boss\n\n` +
                 `*CLASS & SKILLS:*\n` +
-                `• \`${prefix} admin sandbox evolve <class>\` — switch to ANY class + unlock all skills\n` +
-                `• \`${prefix} admin sandbox giveskillsall\` — unlock ALL skills from ALL classes\n` +
-                `• \`${prefix} admin sandbox giveskill <skill> [level]\` — grant a specific skill\n\n` +
+                `• \`${prefix} admin sandbox evolve <class>\` - switch to ANY class + unlock all skills\n` +
+                `• \`${prefix} admin sandbox giveskillsall\` - unlock ALL skills from ALL classes\n` +
+                `• \`${prefix} admin sandbox giveskill <skill> [level]\` - grant a specific skill\n\n` +
                 `*STATS:*\n` +
-                `• \`${prefix} admin sandbox maxstats\` — set all stats to 99999/9999\n` +
+                `• \`${prefix} admin sandbox maxstats\` - set all stats to 99999/9999\n` +
                 `• \`${prefix} admin sandbox setlevel <1-100>\`\n` +
                 `• \`${prefix} admin sandbox setrank <F-SSS|GOD>\`\n` +
                 `• \`${prefix} admin sandbox setstat <stat> <value>\`\n\n` +
@@ -346,10 +346,10 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `• \`${prefix} admin sandbox setwallet <amount>\`\n` +
                 `• \`${prefix} admin sandbox givezeni <amount>\`\n\n` +
                 `*INVENTORY:*\n` +
-                `• \`${prefix} admin sandbox giveall\` — grant 99× all stones, keys + every equipment\n` +
+                `• \`${prefix} admin sandbox giveall\` - grant 99× all stones, keys + every equipment\n` +
                 `• \`${prefix} admin sandbox giveitem <item> [qty]\`\n` +
-                `• \`${prefix} admin sandbox clearinv\` — clear sandbox inventory\n` +
-                `• \`${prefix} admin sandbox unequipall\` — unequip all equipment\n` +
+                `• \`${prefix} admin sandbox clearinv\` - clear sandbox inventory\n` +
+                `• \`${prefix} admin sandbox unequipall\` - unequip all equipment\n` +
                 `• \`${prefix} admin sandbox setclass <name>\`\n\n` +
                 `_Auto-saves after every command. Data persists in separate DB collection._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
@@ -498,7 +498,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
         ]);
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Cannot give \`${item.id}\` — use the dedicated command (forceevolve / giveskill).` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Cannot give \`${item.id}\` - use the dedicated command (forceevolve / giveskill).` });
         }
         // Parse quantity
         let qty = 1;
@@ -943,29 +943,29 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── CREATE CLASS (template) ────────────────────────────────────────────
     if (sub === 'createclass') {
-        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nReqLevel: <level to evolve into this — optional>\nReqQuests: <quests to evolve into this — optional>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|regen|lifesteal|damage_reduction|scaling_damage|crit_when_low|etc>\nPassiveValue: <number>\n\`\`\`\n\n_Created classes are saved to the database — they survive restarts._`;
+        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nReqLevel: <level to evolve into this - optional>\nReqQuests: <quests to evolve into this - optional>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|regen|lifesteal|damage_reduction|scaling_damage|crit_when_low|etc>\nPassiveValue: <number>\n\`\`\`\n\n_Created classes are saved to the database - they survive restarts._`;
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── ENEMY EDITOR (Item #12 — deeper admin console integration) ─────────
+    // ── ENEMY EDITOR (Item #12 - deeper admin console integration) ─────────
     // ═══════════════════════════════════════════════════════════════════════
     // Lets GMs inspect and edit boss/enemy stats at runtime. Changes apply
     // to the in-memory BOSS_ENCOUNTERS registry (classEncounters.js), so
     // they take effect immediately for all subsequent encounters. They are
-    // NOT persisted to MongoDB — a restart reverts them. This is by design:
+    // NOT persisted to MongoDB - a restart reverts them. This is by design:
     // the editor is for live-tuning and testing, not permanent overrides.
     // Permanent changes should go in the source file.
     //
     // Subcommands:
-    //   admin enemy list [pool]            — list all bosses (or one pool)
-    //   admin enemy info <bossId>          — show full boss stat block
-    //   admin enemy setstat <bossId> <stat> <value> — edit one stat
-    //   admin enemy sethp <bossId> <value> — shortcut for HP
-    //   admin enemy setatk <bossId> <value> — shortcut for ATK
-    //   admin enemy setxp <bossId> <value> — set XP reward
-    //   admin enemy setgold <bossId> <min> <max> — set gold reward range
-    //   admin enemy reset                  — reset all edits (reload from source)
+    //   admin enemy list [pool]            - list all bosses (or one pool)
+    //   admin enemy info <bossId>          - show full boss stat block
+    //   admin enemy setstat <bossId> <stat> <value> - edit one stat
+    //   admin enemy sethp <bossId> <value> - shortcut for HP
+    //   admin enemy setatk <bossId> <value> - shortcut for ATK
+    //   admin enemy setxp <bossId> <value> - set XP reward
+    //   admin enemy setgold <bossId> <min> <max> - set gold reward range
+    //   admin enemy reset                  - reset all edits (reload from source)
     if (sub === 'enemy') {
         const classEncounters = require('../rpg/classEncounters');
         const enemySub = (args[1] || '').toLowerCase();
@@ -981,7 +981,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (poolFilter && pool !== poolFilter && poolFilter !== 'LIST') continue;
                 msg += `━ *${pool}* (${BOSS_ENCOUNTERS[pool].length} bosses) ━\n`;
                 for (const boss of BOSS_ENCOUNTERS[pool]) {
-                    msg += `  • ${boss.icon} *${boss.name}* — \`${boss.id}\`\n`;
+                    msg += `  • ${boss.icon} *${boss.name}* - \`${boss.id}\`\n`;
                     msg += `    ❤️ ${boss.stats.hp} | ⚔️ ${boss.stats.atk} | 🛡️ ${boss.stats.def}\n`;
                     msg += `    ⭐ XP ${boss.xpReward} | 💰 ${(boss.goldReward?.[0] || 0)}-${(boss.goldReward?.[1] || 0)}\n`;
                 }
@@ -1122,7 +1122,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const monsterSkills = require('../rpg/monsterSkills');
         const { MONSTER_ARCHETYPES } = monsterSkills;
 
-        // ── enemyskills [archetype] — list all skills ──
+        // ── enemyskills [archetype] - list all skills ──
         if (sub === 'enemyskills') {
             const archFilter = (args[1] || '').toUpperCase();
             let msg = `👹 *ENEMY SKILL DATABASE*\n\n`;
@@ -1130,9 +1130,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             for (const [archId, arch] of archetypes) {
                 if (archFilter && archId !== archFilter) continue;
                 const skillIds = Object.keys(arch.skills);
-                msg += `━ *${archId}* (${arch.name}) — ${skillIds.length} skills ━\n`;
+                msg += `━ *${archId}* (${arch.name}) - ${skillIds.length} skills ━\n`;
                 for (const [sid, s] of Object.entries(arch.skills)) {
-                    msg += `  • \`${sid}\` — ${s.name} [${s.type}, cost=${s.cost}, lvl=${s.levelReq}]\n`;
+                    msg += `  • \`${sid}\` - ${s.name} [${s.type}, cost=${s.cost}, lvl=${s.levelReq}]\n`;
                 }
                 msg += `\n`;
             }
@@ -1334,30 +1334,30 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── ADMIN SANDBOX (Item #11 — isolated test character) ───────────────
+    // ── ADMIN SANDBOX (Item #11 - isolated test character) ───────────────
     // ═══════════════════════════════════════════════════════════════════════
     // Each mod gets ONE sandbox test character stored in a separate MongoDB
     // collection (adminsandboxes). It has its own wallet, stats, class,
-    // skills, inventory — fully isolated from real player data. Mods can
+    // skills, inventory - fully isolated from real player data. Mods can
     // test combat/dungeons/evolutions/economy without risking real accounts.
     //
     // Subcommands:
-    //   admin sandbox                     — show your sandbox status
-    //   admin sandbox reset               — wipe sandbox to level-1 fresh state
-    //   admin sandbox setlevel <1-100>    — set sandbox level (recalcs XP)
-    //   admin sandbox setclass <name>     — set sandbox class (bypasses reqs)
-    //   admin sandbox setrank <F-SSS>     — set sandbox adventurer rank
-    //   admin sandbox setwallet <amount>  — set sandbox wallet
-    //   admin sandbox givezeni <amount>   — add Zeni to sandbox wallet
-    //   admin sandbox setstat <stat> <v>  — set a sandbox stat
-    //   admin sandbox giveitem <item> [n] — add items to sandbox inventory
-    //   admin sandbox giveskill <skill> [lvl] — grant a skill to sandbox
+    //   admin sandbox                     - show your sandbox status
+    //   admin sandbox reset               - wipe sandbox to level-1 fresh state
+    //   admin sandbox setlevel <1-100>    - set sandbox level (recalcs XP)
+    //   admin sandbox setclass <name>     - set sandbox class (bypasses reqs)
+    //   admin sandbox setrank <F-SSS>     - set sandbox adventurer rank
+    //   admin sandbox setwallet <amount>  - set sandbox wallet
+    //   admin sandbox givezeni <amount>   - add Zeni to sandbox wallet
+    //   admin sandbox setstat <stat> <v>  - set a sandbox stat
+    //   admin sandbox giveitem <item> [n] - add items to sandbox inventory
+    //   admin sandbox giveskill <skill> [lvl] - grant a skill to sandbox
     if (sub === 'sandbox') {
         const AdminSandbox = require('../models/AdminSandbox');
         const senderName = m?.pushName || economy.getDisplayName(senderJid);
         const sandboxSub = (args[1] || '').toLowerCase();
 
-        // ── sandbox on — activate sandbox mode ──
+        // ── sandbox on - activate sandbox mode ──
         if (sandboxSub === 'on') {
             try {
                 const engine = require('../engine');
@@ -1370,7 +1370,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox off — deactivate sandbox mode ──
+        // ── sandbox off - deactivate sandbox mode ──
         if (sandboxSub === 'off') {
             try {
                 const engine = require('../engine');
@@ -1387,7 +1387,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox status (no args) — show status ──
+        // ── sandbox status (no args) - show status ──
         if (!sandboxSub || sandboxSub === 'status') {
             try {
                 const engine = require('../engine');
@@ -1412,7 +1412,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox save — save sandbox data to DB without turning off ──
+        // ── sandbox save - save sandbox data to DB without turning off ──
         if (sandboxSub === 'save') {
             try {
                 const engine = require('../engine');
@@ -1455,7 +1455,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox reset — wipe to fresh state ──
+        // ── sandbox reset - wipe to fresh state ──
         if (sandboxSub === 'reset') {
             try {
                 // If sandbox is currently active, disable first so data is saved
@@ -1479,7 +1479,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox giveall — grant all enhancement stones + key items ──
+        // ── sandbox giveall - grant all enhancement stones + key items ──
         if (sandboxSub === 'giveall') {
             try {
                 const engine = require('../engine');
@@ -1521,7 +1521,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox evolve — switch to any class without trial/stones/Zeni ──
+        // ── sandbox evolve - switch to any class without trial/stones/Zeni ──
         if (sandboxSub === 'evolve') {
             try {
                 const engine = require('../engine');
@@ -1573,7 +1573,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox maxstats — set all stats to max ──
+        // ── sandbox maxstats - set all stats to max ──
         if (sandboxSub === 'maxstats') {
             try {
                 const engine = require('../engine');
@@ -1770,7 +1770,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX GODMODE — combat cheats for testing ──────────────────────
+    // ── SANDBOX GODMODE - combat cheats for testing ──────────────────────
     // .g admin godmode [on|off]
     // When on: sandbox user deals 99999 damage per hit and takes 0 damage.
     // Implemented via a global flag that calculateDamage() checks.
@@ -1795,7 +1795,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX GIVESKILLSALL — unlock ALL skills from ALL classes ───────
+    // ── SANDBOX GIVESKILLSALL - unlock ALL skills from ALL classes ───────
     // .g admin sandbox giveskillsall
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'giveskillsall') {
@@ -1827,7 +1827,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX CLEARINV — clear sandbox inventory ───────────────────────
+    // ── SANDBOX CLEARINV - clear sandbox inventory ───────────────────────
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'clearinv') {
         try {
@@ -1845,7 +1845,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX UNEQUIPALL — unequip all equipment ───────────────────────
+    // ── SANDBOX UNEQUIPALL - unequip all equipment ───────────────────────
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'unequipall') {
         try {
@@ -1863,7 +1863,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX FIGHTBOSS — instantly fight any boss (shortcut) ──────────
+    // ── SANDBOX FIGHTBOSS - instantly fight any boss (shortcut) ──────────
     // .g admin sandbox fightboss <bossId>
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'fightboss') {
@@ -1886,8 +1886,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────
-    // 💡 2026-09-10: pointer now aims at the Mod Terminal (<prefix> mod) —
-    // the single command browser — not the legacy admin console.
+    // 💡 2026-09-10: pointer now aims at the Mod Terminal (<prefix> mod) -
+    // the single command browser - not the legacy admin console.
     return await sock.sendMessage(chatId, {
         text: BOT_MARKER + `❌ Unknown command: \`${sub}\`\nUse \`${prefix} mod\` to see all commands.`
     });
@@ -1956,7 +1956,7 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
         await skillTree.saveCustomSkill(targetClass.id, treeName, skillId, newSkill);
 
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *SKILL CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${skillId}\`\n📋 Class: ${targetClass.icon} ${targetClass.name}\n📊 Tier: ${tier} | Lv.${reqLevel}+ | Max Lv.${maxLevel}\n⚡ Cost: ${cost} | CD: ${cooldown}\n💥 ${data.DamageType || 'PHYSICAL'} ×${dmgMult} — ${data.Targeting || 'SINGLE'}\n📝 ${data.Description || ''}\n\n_Immediately usable. Players can learn it via skill tree._`
+            text: BOT_MARKER + `✅ *SKILL CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${skillId}\`\n📋 Class: ${targetClass.icon} ${targetClass.name}\n📊 Tier: ${tier} | Lv.${reqLevel}+ | Max Lv.${maxLevel}\n⚡ Cost: ${cost} | CD: ${cooldown}\n💥 ${data.DamageType || 'PHYSICAL'} ×${dmgMult} - ${data.Targeting || 'SINGLE'}\n📝 ${data.Description || ''}\n\n_Immediately usable. Players can learn it via skill tree._`
         });
     } catch (e) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Parse error: ' + e.message });
@@ -1965,7 +1965,7 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
 
 // ─── HANDLE CLASS CREATION REPLY ───────────────────────────────────────────
 // 💡 2026-09-14 REWRITE (owner: "investigate the create class mod command"):
-// The old version did `classSystem.getAllClasses()[id] = newClass` — a write
+// The old version did `classSystem.getAllClasses()[id] = newClass` - a write
 // into the THROWAWAY spread object that getAllClasses() returns, so created
 // classes evaporated instantly (modclass/classes/evolve never saw them).
 // Now: validated, registered via classSystem.registerCustomClass (in-memory
@@ -2008,10 +2008,10 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         const role = (data.Role || 'HYBRID').toUpperCase();
         const warnings = [];
         if (!TIERS.includes(tier)) {
-            warnings.push(`Tier "${data.Tier}" not recognized — used STARTER`);
+            warnings.push(`Tier "${data.Tier}" not recognized - used STARTER`);
         }
         if (!ROLES.includes(role)) {
-            warnings.push(`Role "${data.Role}" not recognized — used HYBRID`);
+            warnings.push(`Role "${data.Role}" not recognized - used HYBRID`);
         }
 
         const newClass = {
@@ -2036,7 +2036,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         if (data.EvolvesFrom && data.EvolvesFrom.toUpperCase() !== 'NONE') {
             const parent = classSystem.getClassById(data.EvolvesFrom.toUpperCase());
             if (!parent) {
-                warnings.push(`EvolvesFrom "${data.EvolvesFrom}" is not a known class — evolve chain NOT wired`);
+                warnings.push(`EvolvesFrom "${data.EvolvesFrom}" is not a known class - evolve chain NOT wired`);
             } else {
                 newClass.evolvedFrom = parent.id;
                 // optional evolution gate (canEvolve reads requirement.level / .questsCompleted)
@@ -2053,7 +2053,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         if (data.PassiveName && data.PassiveEffect) {
             const effect = data.PassiveEffect.toLowerCase().replace(/\s+/g, '_');
             if (!KNOWN_PASSIVE_EFFECTS.has(effect)) {
-                warnings.push(`PassiveEffect "${data.PassiveEffect}" is not a known effect — it will DISPLAY but not trigger`);
+                warnings.push(`PassiveEffect "${data.PassiveEffect}" is not a known effect - it will DISPLAY but not trigger`);
             }
             newClass.passive = {
                 name: data.PassiveName,
@@ -2062,7 +2062,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             };
         }
 
-        // ── register + persist (throws on duplicate — already checked above) ──
+        // ── register + persist (throws on duplicate - already checked above) ──
         await classSystem.registerCustomClass(newClass);
 
         // ── companion skill tree (in-memory + persisted) ──
@@ -2085,7 +2085,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         if (newClass.evolvedFrom) msg += `🧬 Evolves from: *${newClass.evolvedFrom}*${newClass.requirement ? ` (Lv ${newClass.requirement.level || 0}+ / ${newClass.requirement.questsCompleted || 0} quests)` : ''}\n`;
         if (newClass.passive) msg += `✨ Passive: ${newClass.passive.name} (${newClass.passive.effect} ${newClass.passive.value})\n`;
         if (warnings.length) msg += `\n⚠️ ${warnings.join('\n⚠️ ')}\n`;
-        msg += `\n💾 _Saved to database — survives restarts._\n_Selectable now via \`${prefix} modclass ${data.Name}\`; players see it in \`${prefix} classes\`${newClass.evolvedFrom ? ' and it appears in the evolve chain' : ''}._`;
+        msg += `\n💾 _Saved to database - survives restarts._\n_Selectable now via \`${prefix} modclass ${data.Name}\`; players see it in \`${prefix} classes\`${newClass.evolvedFrom ? ' and it appears in the evolve chain' : ''}._`;
 
         return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
     } catch (e) {

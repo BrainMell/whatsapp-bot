@@ -38,7 +38,7 @@ const STARTER_CLASSES = {
         id: 'APPRENTICE',
         name: 'Apprentice',
         icon: '🔮',
-        desc: `Magic is not learned — it is remembered. Apprentices are those who hear the ancient language of the world.`,
+        desc: `Magic is not learned - it is remembered. Apprentices are those who hear the ancient language of the world.`,
         tier: 'STARTER',
         role: 'MAGIC_DPS',
         stats: { hp: 80, atk: 5, def: 4, mag: 18, spd: 9, luck: 8, crit: 10 },
@@ -49,7 +49,7 @@ const STARTER_CLASSES = {
         id: 'ACOLYTE',
         name: 'Acolyte',
         icon: '✨',
-        desc: `The Acolyte has heard a calling — whether from gods, nature, or the people around them.`,
+        desc: `The Acolyte has heard a calling - whether from gods, nature, or the people around them.`,
         tier: 'STARTER',
         role: 'SUPPORT',
         stats: { hp: 100, atk: 6, def: 8, mag: 14, spd: 10, luck: 12, crit: 6 },
@@ -63,10 +63,10 @@ const STARTER_CLASSES = {
 
 const EVOLVED_CLASSES = {
 // ═══════════════════════════════════════════════════════════════════════════
-// 💡 PEAK TIER CLASSES (contributed by @Daviddey — github.com/Daviddey)
+// 💡 PEAK TIER CLASSES (contributed by @Daviddey - github.com/Daviddey)
 // PR #7: "Add new classes and evolution paths"
 // 19 new PEAK tier classes that evolve from ASCENDED classes.
-// Currently SHELVED — trial bosses, skill trees, and sprites not yet
+// Currently SHELVED - trial bosses, skill trees, and sprites not yet
 // implemented. Uncomment the shelved blocks below once content is ready.
 // ═══════════════════════════════════════════════════════════════════════════
     // ─── FIGHTER LINE ────────────────────────────
@@ -101,7 +101,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "WAREMPEROR" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "WAREMPEROR" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -148,7 +148,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "ANNIHILATOR" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "ANNIHILATOR" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -196,7 +196,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "SERAPH" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "SERAPH" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -231,7 +231,7 @@ const EVOLVED_CLASSES = {
         id: 'DRAGON_GOD',
         name: 'Dragon God',
         icon: '🐲👑',
-        desc: `They did not slay the dragon. They became it. *One-of-one — the first to fall the Leviathan, forever.*`,
+        desc: `They did not slay the dragon. They became it. *One-of-one - the first to fall the Leviathan, forever.*`,
         tier: 'ASCENDED',
         evolvedFrom: 'DRAGONSLAYER',
         role: 'TANK',
@@ -240,12 +240,12 @@ const EVOLVED_CLASSES = {
         evolutionCost: 500000,
         passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.`, effect: 'damage_reduction', value: 50 },
         // SHELVED: evolves_into: ['ASTRALWYRM'],
-        isUnique: true, // 💡 Only ONE player may hold this class — ever.
+        isUnique: true, // 💡 Only ONE player may hold this class - ever.
         uniqueLockId: 'LEVIATHAN', // matches DragonGod model's bossId
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "ASTRALWYRM" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "ASTRALWYRM" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -265,11 +265,11 @@ const EVOLVED_CLASSES = {
     //     uniqueLockId: 'PRIMODIAL_WYRM',
     // },
     // ────────────────────────────────────────────────────────────────────────
-    //  DRAGON LORD — successor class to Dragon God.
+    //  DRAGON LORD - successor class to Dragon God.
     //  Once the Leviathan has been slain and a Dragon God crowned, every
     //  future Dragonslayer who completes their ascension becomes a Dragon
     //  Lord instead. Same tier, similar power curve, distinct mechanics.
-    //  Trial boss: LEVIATHAN_SPAWN_ALPHA — a stronger Leviathan Spawn
+    //  Trial boss: LEVIATHAN_SPAWN_ALPHA - a stronger Leviathan Spawn
     //  (NOT the original Leviathan, who has been defeated forever).
     // ────────────────────────────────────────────────────────────────────────
     DRAGON_LORD: {
@@ -290,7 +290,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "BROOD_SOVEREIGN" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "BROOD_SOVEREIGN" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -342,7 +342,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "NEMESIS" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "NEMESIS" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -389,7 +389,7 @@ const EVOLVED_CLASSES = {
         // SHELVED: evolves_into: ['BUDDHA'],
     },
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "BUDDHA" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "BUDDHA" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -425,7 +425,7 @@ const EVOLVED_CLASSES = {
         id: 'SHOGUN',
         name: 'Shogun',
         icon: '🏯⚔️',
-        desc: `More than a warrior — a tactician, a symbol, a force of history.`,
+        desc: `More than a warrior - a tactician, a symbol, a force of history.`,
         tier: 'ASCENDED',
         evolvedFrom: 'SAMURAI',
         role: 'DPS',
@@ -437,7 +437,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "TENNO" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "TENNO" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -484,7 +484,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "YAMI" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "YAMI" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -534,7 +534,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "DEMIURGE" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "DEMIURGE" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -582,7 +582,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "VOIDLORD" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "VOIDLORD" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -590,7 +590,7 @@ const EVOLVED_CLASSES = {
     //     id: 'VOIDLORD',
     //     name: 'VoidLord',
     //     icon: '🎖️',
-    //     desc: `The void doesn't hunger anymore — it's full of him.`,
+    //     desc: `The void doesn't hunger anymore - it's full of him.`,
     //     tier: 'PEAK',
     //     evolvedFrom: 'VOIDWALKER',
     //     role: 'MAGIC_DPS',
@@ -630,7 +630,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "PRIMORDIAL" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "PRIMORDIAL" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -660,7 +660,7 @@ const EVOLVED_CLASSES = {
         requirement: { level: 15, questsCompleted: 15, trialBoss: 'GRAVEYARD_LORD' },
         evolutionCost: 0,
         // 💡 Phase 3 fix: changed effect from 'magic_damage' (which gave the
-        // player +15% magic damage — unrelated to summons) to 'summon_buff'.
+        // player +15% magic damage - unrelated to summons) to 'summon_buff'.
         // The actual +30% undead summon stat bonus is applied via
         // summonCapture.applyClassSummonBonus in summonSystem.buildCombatEntity.
         // The 'value: 30' now matches the description (+30% stats).
@@ -683,7 +683,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "NEKROS" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "NEKROS" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -731,7 +731,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "CHRONARCH" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "CHRONARCH" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -782,7 +782,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "EMPYREAN" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "EMPYREAN" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -829,7 +829,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "SYLVANUS" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "SYLVANUS" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -837,7 +837,7 @@ const EVOLVED_CLASSES = {
     //     id: 'SYLVANUS',
     //     name: 'Sylvanus',
     //     icon: '🎖️',
-    //     desc: `The forest doesn't just obey him — it remembers him.`,
+    //     desc: `The forest doesn't just obey him - it remembers him.`,
     //     tier: 'PEAK',
     //     evolvedFrom: 'ARCHDRUID',
     //     role: 'SUPPORT',
@@ -877,7 +877,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "PLUTOCRAT" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "PLUTOCRAT" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -925,7 +925,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "HARMONIA" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "HARMONIA" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -973,7 +973,7 @@ const EVOLVED_CLASSES = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 🚧 SHELVED — PEAK tier class "TECHNARCH" (contributed by @Daviddey via PR #7)
+    // 🚧 SHELVED - PEAK tier class "TECHNARCH" (contributed by @Daviddey via PR #7)
     // Trial bosses, skill trees, and Go sprites not yet implemented.
     // Uncomment this block once content is ready.
     // ═══════════════════════════════════════════════════════════════
@@ -1065,7 +1065,7 @@ const ADVENTURER_RANKS = {
 //
 // Each mission has a set of objectives that must ALL be completed.
 // Objectives are tracked cumulatively (lifetime stats) so the player
-// can work on them over time — they don't have to do everything in
+// can work on them over time - they don't have to do everything in
 // one session.
 
 const RANK_MISSIONS = {
@@ -1223,10 +1223,10 @@ const CLASS_SHOP_ITEMS = {
 
 // ─── CUSTOM CLASSES (2026-09-14, owner: "investigate the create class mod command") ───
 // 💡 ROOT-CAUSE FIX: the old handleClassCreationReply did
-//    `classSystem.getAllClasses()[id] = newClass` — but getAllClasses() returns a
+//    `classSystem.getAllClasses()[id] = newClass` - but getAllClasses() returns a
 //    FRESH {...STARTER, ...EVOLVED} spread object on every call, so the write hit a
 //    throwaway copy and every mod-created class silently vanished (modclass,
-//    classes, evolve — nothing ever saw it). The command has been a silent no-op.
+//    classes, evolve - nothing ever saw it). The command has been a silent no-op.
 // This registry is the real store: in-memory for the running process AND persisted
 // to the System collection (key below) so creations survive restarts.
 const CUSTOM_CLASSES = {};
@@ -1236,7 +1236,7 @@ function getAllClasses() {
     return { ...STARTER_CLASSES, ...EVOLVED_CLASSES, ...CUSTOM_CLASSES };
 }
 
-// Rehydrate persisted custom classes. Fire-and-forget at module load — mongoose
+// Rehydrate persisted custom classes. Fire-and-forget at module load - mongoose
 // buffers the query until the connection is up; a failure just means this boot
 // runs with code-defined classes only (same policy as the enemy editor).
 (async function _loadCustomClasses() {
@@ -1280,7 +1280,7 @@ async function registerCustomClass(classData) {
         }
     }
 
-    // Persist (best-effort — the class stays live in memory even if the DB
+    // Persist (best-effort - the class stays live in memory even if the DB
     // write fails; next successful registration re-saves the full registry).
     try {
         const System = require('../models/System');
@@ -1364,14 +1364,14 @@ function canEvolve(currentClassId, userLevel, questsCompleted, dragonsKilled = 0
                 missing.push(`${req.undeadKills} Undead Kills`);
             }
             // 💡 FIX: Total lifetime kills (e.g. DOOMSLAYER requires 500). Was
-            // silently ignored — DOOMSLAYER was achievable without the kill count.
+            // silently ignored - DOOMSLAYER was achievable without the kill count.
             if (req.kills && (userContext.kills || 0) < req.kills) {
                 missing.push(`${req.kills} Total Kills`);
             }
 
             // Trial boss must be in completedTrials
             if (req.trialBoss && !completedTrials.includes(req.trialBoss)) {
-                // 💡 FIX: hint used to say '.g trial' — but that command did
+                // 💡 FIX: hint used to say '.g trial' - but that command did
                 // not exist. The actual trigger is `.g evolve <number>` which
                 // auto-starts the trial boss fight when the player picks an
                 // evolution that requires one. `.g trial` is now a real
@@ -1399,7 +1399,7 @@ function calculateAdventurerRank(level, questsCompleted, gp) {
     //
     // IMPORTANT: This function only checks level + questsCompleted. The actual
     // rank assignment happens via ranking missions. If a player has a rank
-    // already assigned (stored on user.adventurerRank), it's preserved —
+    // already assigned (stored on user.adventurerRank), it's preserved -
     // this function is only used for INITIAL rank calculation when a player
     // has no rank assigned yet.
     const ranks = ['GOD', 'SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];

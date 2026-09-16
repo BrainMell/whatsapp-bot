@@ -55,7 +55,7 @@ async function runTests() {
   console.log('[+] All required exports present ✅');
 
   // ─── TEST 2: Backward-compat single value: setSpawnInterval(25) ──────
-  console.log('\n=== TEST 2: setSpawnInterval(25) — backward-compat fixed ===');
+  console.log('\n=== TEST 2: setSpawnInterval(25) - backward-compat fixed ===');
   const r1 = await cardSystem.setSpawnInterval(25, 'test_owner@s.whatsapp.net', true);
   if (!r1.success) throw new Error(`setSpawnInterval(25) failed: ${r1.message}`);
   const info1 = cardSystem.getSpawnIntervalInfo();
@@ -76,7 +76,7 @@ async function runTests() {
   console.log(`[+] DB persisted as {min, max} object: ${JSON.stringify({min: doc1.value.min/60000 + 'min', max: doc1.value.max/60000 + 'min'})} ✅`);
 
   // ─── TEST 3: Range syntax string: setSpawnInterval('15-30') ─────────
-  console.log('\n=== TEST 3: setSpawnInterval("15-30") — random range ===');
+  console.log('\n=== TEST 3: setSpawnInterval("15-30") - random range ===');
   const r2 = await cardSystem.setSpawnInterval('15-30', 'test_owner@s.whatsapp.net', true);
   if (!r2.success) throw new Error(`setSpawnInterval('15-30') failed: ${r2.message}`);
   const info2 = cardSystem.getSpawnIntervalInfo();
@@ -87,7 +87,7 @@ async function runTests() {
   console.log(`[+] setSpawnInterval("15-30") → min=${info2.minMinutes}, max=${info2.maxMinutes}, isRandom=${info2.isRandom} ✅`);
 
   // ─── TEST 4: Two-arg form: setSpawnInterval(10, 45) ─────────────────
-  console.log('\n=== TEST 4: setSpawnInterval(10, 45) — two-arg form ===');
+  console.log('\n=== TEST 4: setSpawnInterval(10, 45) - two-arg form ===');
   const r3 = await cardSystem.setSpawnInterval(10, 'test_owner@s.whatsapp.net', true, 45);
   if (!r3.success) throw new Error(`setSpawnInterval(10, 45) failed: ${r3.message}`);
   const info3 = cardSystem.getSpawnIntervalInfo();
@@ -97,7 +97,7 @@ async function runTests() {
   console.log(`[+] setSpawnInterval(10, 45) → min=${info3.minMinutes}, max=${info3.maxMinutes} ✅`);
 
   // ─── TEST 5: Range where min > max (auto-swap) ──────────────────────
-  console.log('\n=== TEST 5: setSpawnInterval("30-15") — auto-swap ===');
+  console.log('\n=== TEST 5: setSpawnInterval("30-15") - auto-swap ===');
   const r4 = await cardSystem.setSpawnInterval('30-15', 'test_owner@s.whatsapp.net', true);
   if (!r4.success) throw new Error(`setSpawnInterval('30-15') failed: ${r4.message}`);
   const info4 = cardSystem.getSpawnIntervalInfo();
@@ -153,7 +153,7 @@ async function runTests() {
   }
   console.log(`[+] loadSpawnInterval migrated old format → min=${info9.minMinutes}, max=${info9.maxMinutes} (fixed mode) ✅`);
 
-  // ─── TEST 10: Code path — engine.js has the spawnset command with range support ─
+  // ─── TEST 10: Code path - engine.js has the spawnset command with range support ─
   console.log('\n=== TEST 10: cardSystem.js source verification ===');
   const cardSrc = fs.readFileSync(path.join(__dirname, '..', 'core/rpg/cardSystem.js'), 'utf-8');
   const checks = [

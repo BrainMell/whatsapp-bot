@@ -21,7 +21,7 @@ const activeMinesGames = new Map();
 // ============================================
 
 // Coerce a bet amount to a finite positive integer. Returns null if invalid.
-// All gambling entry points should call this BEFORE doing any wallet math —
+// All gambling entry points should call this BEFORE doing any wallet math -
 // otherwise a non-numeric input (string, NaN, undefined) slips past the
 // `amount < GLOBAL_MIN_BET` check (NaN < x is always false) and then
 // `user.wallet -= amount` produces NaN, permanently corrupting the wallet.
@@ -1790,7 +1790,7 @@ function penalty(userId, amount, direction, economyModule) {
 
   if (won) {
     // 💡 FIX: Deduct the bet first, then add the payout. Previously the
-    // bet was never deducted on win — the player only received 0.4x profit
+    // bet was never deducted on win - the player only received 0.4x profit
     // without the original bet being at risk. Now: wallet = wallet - bet + (bet * 1.4)
     // = wallet + (bet * 0.4). Same net effect, but the accounting is correct.
     const rawGain = Math.floor(amount * 0.4);

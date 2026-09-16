@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON EVOLUTION SYSTEM — Phase 3 of the Summon Progression System
+//  SUMMON EVOLUTION SYSTEM - Phase 3 of the Summon Progression System
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Each summon species has an evolutionStages array (defined in summonRegistry).

@@ -140,7 +140,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
         const debate = activeDebates[chatId];
         if (!debate) return;
 
-        // 💡 FIX: Normalize JIDs before comparison — previously strict !==
+        // 💡 FIX: Normalize JIDs before comparison - previously strict !==
         // was used, which failed if senderJid had a device suffix (e.g.
         // 123:12@s.whatsapp.net) but the stored JID didn't.
         const normJid = (jid) => {
@@ -179,7 +179,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
             };
         }
 
-        // 💡 FIX: Check that BOTH debaters have at least 1 argument —
+        // 💡 FIX: Check that BOTH debaters have at least 1 argument -
         // previously the check was total count >= 2, which allowed one
         // debater to make 2 arguments while the other made 0.
         const normJid = (jid) => {
@@ -374,7 +374,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             if (!debate.debater2WasAdmin) {
                 await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote').catch(() => {});
             }
-            // 💡 FIX: Clean up spectators — previously only handleDebateTimeout
+            // 💡 FIX: Clean up spectators - previously only handleDebateTimeout
             // did this, leaving spectators promoted after cancel/judge.
             if (spectators.has(chatId)) {
                 const groupSpectators = spectators.get(chatId);
@@ -442,7 +442,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         const debate = activeDebates[chatId];
         if (!debate) return;
 
-        // 💡 FIX: Don't allow debaters to be added as spectators — they
+        // 💡 FIX: Don't allow debaters to be added as spectators - they
         // would get a 2-minute spectator timeout that demotes them
         // mid-debate, losing their ability to post in the locked group.
         const normJid = (jid) => {

@@ -52,7 +52,7 @@ async function runTests() {
   console.log('\n=== TEST 1: PvP initiative message uses turn-0 player name ===');
   const pvpSrc = fs.readFileSync(path.join(__dirname, '..', 'core/rpg/pvpSystem.js'), 'utf-8');
   // Verify the OLD hardcoded line is GONE
-  if (pvpSrc.includes('claims the initiative!\\n` +\n        `———————————')) {
+  if (pvpSrc.includes('claims the initiative!\\n` +\n        `-----------')) {
     // The old line was: `startMsg += `\\n🎯 *${p1.name}* claims the initiative!\\n` +`
     // We just check that the hardcoded p1.name version is no longer present
     const hasOld = /startMsg \+= `\\n🎯 \*\$\{p1\.name\}\* claims the initiative!/.test(pvpSrc);
@@ -84,10 +84,10 @@ async function runTests() {
     .replace(/\/\*[\s\S]*?\*\//g, ''); // strip /* block */ comments
   // Now check the code-only block (no comments)
   if (strippedBlock.includes('target.split("@")[0]') || strippedBlock.includes("target.split('@')[0]")) {
-    throw new Error('engine.js: duel challenge block still uses target.split — Issue 2 NOT FIXED');
+    throw new Error('engine.js: duel challenge block still uses target.split - Issue 2 NOT FIXED');
   }
   if (!strippedBlock.includes('economy.getDisplayName(target)')) {
-    throw new Error('engine.js: duel challenge block does not use economy.getDisplayName(target) — Issue 2 NOT FIXED');
+    throw new Error('engine.js: duel challenge block does not use economy.getDisplayName(target) - Issue 2 NOT FIXED');
   }
   console.log('[+] Duel challenge uses economy.getDisplayName(target) ✅');
 
@@ -99,7 +99,7 @@ async function runTests() {
     throw new Error('pvpSystem: SLOW design-limit comment not found');
   }
   console.log('[+] SLOW design-limit comment present ✅');
-  console.log('  (Documentation only — turn order still alternates after first turn; SLOW affects spd in getEffectiveStats only)');
+  console.log('  (Documentation only - turn order still alternates after first turn; SLOW affects spd in getEffectiveStats only)');
 
   // ═══════════════════════════════════════════════════════════════════════
   // TEST 4: 0-cost active abilities no longer mislabeled "Passive"
@@ -139,7 +139,7 @@ async function runTests() {
     throw new Error(`lootSystem.getItemInfo('abyssal_detonator') returned: ${JSON.stringify(itemInfo)}`);
   }
   if (itemInfo.name !== 'Abyssal Detonator') {
-    throw new Error(`lootSystem: abyssal_detonator name wrong — expected "Abyssal Detonator", got "${itemInfo.name}"`);
+    throw new Error(`lootSystem: abyssal_detonator name wrong - expected "Abyssal Detonator", got "${itemInfo.name}"`);
   }
   if (!itemInfo.description) {
     throw new Error('lootSystem: abyssal_detonator missing description');
@@ -150,7 +150,7 @@ async function runTests() {
   console.log(`[+] getItemInfo('abyssal_detonator').value = ${itemInfo.value} ✅`);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // TEST 7: Live verification — getDisplayName on a LID-style user works
+  // TEST 7: Live verification - getDisplayName on a LID-style user works
   // ═══════════════════════════════════════════════════════════════════════
   console.log('\n=== TEST 7: Live getDisplayName resolves LID JID ===');
   // Create a test user with a LID-style userId and a nickname

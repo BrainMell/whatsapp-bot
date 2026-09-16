@@ -38,7 +38,7 @@ function check(name, cond, detail) {
     console.log(`  ✅ ${name}`);
     pass++;
   } else {
-    console.log(`  ❌ ${name}${detail ? ' — ' + detail : ''}`);
+    console.log(`  ❌ ${name}${detail ? ' - ' + detail : ''}`);
     fail++;
   }
 }
@@ -60,7 +60,7 @@ check(
   sendImageSafeLine > 0,
 );
 check(
-  `sendImageSafe is defined BEFORE startBot (line ${startBotLine}) — i.e. at module scope`,
+  `sendImageSafe is defined BEFORE startBot (line ${startBotLine}) - i.e. at module scope`,
   sendImageSafeLine > 0 && sendImageSafeLine < startBotLine,
 );
 
@@ -71,7 +71,7 @@ check(
   buildThumbnailLine > 0,
 );
 check(
-  `buildThumbnail is defined BEFORE startBot — i.e. at module scope`,
+  `buildThumbnail is defined BEFORE startBot - i.e. at module scope`,
   buildThumbnailLine > 0 && buildThumbnailLine < startBotLine,
 );
 
@@ -82,7 +82,7 @@ check(
   fallbackLine > 0,
 );
 check(
-  `FALLBACK_THUMB is defined BEFORE startBot — i.e. at module scope`,
+  `FALLBACK_THUMB is defined BEFORE startBot - i.e. at module scope`,
   fallbackLine > 0 && fallbackLine < startBotLine,
 );
 
@@ -124,11 +124,11 @@ while ((m = callSitePattern.exec(src)) !== null) {
 check(`Found ${callCount} call sites for sendImageSafe`, callCount > 0);
 console.log(`  call sites at lines: ${callSiteLines.join(', ')}`);
 
-// Pick a call site that USED TO BE BROKEN — handleAnimeTrending's call
+// Pick a call site that USED TO BE BROKEN - handleAnimeTrending's call
 // (around line 1168 after the fix).
 const handleTrendingCall = callSiteLines.find((ln) => ln < 1500);
 check(
-  `handleAnimeTrending's call (line ${handleTrendingCall}) exists — was broken before, fixed now`,
+  `handleAnimeTrending's call (line ${handleTrendingCall}) exists - was broken before, fixed now`,
   handleTrendingCall !== undefined,
 );
 
@@ -145,11 +145,11 @@ check(
 if (buildThumbnailBody) {
   const body = buildThumbnailBody[0];
   check(
-    'uses Jimp.Jimp.read (v1.x) — not Jimp.read (v0.x)',
+    'uses Jimp.Jimp.read (v1.x) - not Jimp.read (v0.x)',
     /Jimp\.Jimp\.read\b/.test(body),
   );
   check(
-    'uses Jimp.JimpMime.jpeg (v1.x) — not Jimp.MIME_JPEG (v0.x)',
+    'uses Jimp.JimpMime.jpeg (v1.x) - not Jimp.MIME_JPEG (v0.x)',
     /Jimp\.JimpMime\.jpeg/.test(body),
   );
   check(
@@ -157,7 +157,7 @@ if (buildThumbnailBody) {
     /img\.resize\(\s*\{\s*w:\s*32\s*\}\s*\)/.test(body),
   );
   check(
-    'uses img.getBuffer (v1.x) — not img.getBufferAsync (v0.x)',
+    'uses img.getBuffer (v1.x) - not img.getBufferAsync (v0.x)',
     /img\.getBuffer\b/.test(body) && !/img\.getBufferAsync\b/.test(body),
   );
   check(
@@ -169,7 +169,7 @@ if (buildThumbnailBody) {
     !/Jimp\.MIME_JPEG\b/.test(body),
   );
   check(
-    'no references to Jimp.read (v0.x top-level — i.e. Jimp.read NOT preceded by Jimp.)',
+    'no references to Jimp.read (v0.x top-level - i.e. Jimp.read NOT preceded by Jimp.)',
     !/(?<!Jimp\.)Jimp\.read\b/.test(body),
   );
   check(

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 4: AbyssLeaderboard — persists top Abyss runs.
+// 💡 Phase 4: AbyssLeaderboard - persists top Abyss runs.
 // Reset weekly by the scheduler in index.js.
 // Score = deepestFloor × 100 + monstersKilled × 5
 const AbyssLeaderboardSchema = new mongoose.Schema({
@@ -12,7 +12,7 @@ const AbyssLeaderboardSchema = new mongoose.Schema({
   result: { type: String, enum: ['retreat', 'death'], required: true },
   weekKey: { type: String, required: true, index: true }, // e.g. "2026-W28"
   completedAt: { type: Date, default: Date.now },
-  // Rewards claimed flag — prevents double-claiming
+  // Rewards claimed flag - prevents double-claiming
   rewardsClaimed: { type: Boolean, default: false },
 }, { timestamps: true });
 

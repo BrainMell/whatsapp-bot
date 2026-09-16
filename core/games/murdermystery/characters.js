@@ -1,5 +1,5 @@
 // ============================================
-// MURDER MYSTERY — CHARACTER POOL
+// MURDER MYSTERY - CHARACTER POOL
 // Blackvale Manor's staff and guests.
 // A CHARACTER is a story person, NOT a role.
 // Any character may be the Killer, the
@@ -22,7 +22,7 @@ const CHARACTERS = [
 ];
 
 // ============================================
-// GHOST CLUES — predetermined, NOT random.
+// GHOST CLUES - predetermined, NOT random.
 // When a body is found, the victim's ghost
 // whispers a clue about THEIR KILLER'S
 // character. Clues are indexed by the
@@ -39,13 +39,13 @@ const CLUES = {
   ],
   boy: [
     'Whoever came and went was small. Quick. Easy to overlook.',
-    'Muddy boots, too big for the wearer — borrowed, like the errands.',
+    'Muddy boots, too big for the wearer - borrowed, like the errands.',
     'The ghost heard a whistle. The tune the boy sings with the morning post.',
     'Satchel straps and freckles. The Errand Boy ran more than messages that night.',
   ],
   chef_girl: [
     'The kitchen knew. The kitchen always knows.',
-    'The ghost smelled onions — and something sweeter underneath. Bitter almond.',
+    'The ghost smelled onions - and something sweeter underneath. Bitter almond.',
     'Flour footprints, half-erased, leading away from the pantry.',
     'An apron stained past saving. The Cook fed someone their last meal.',
   ],
@@ -82,7 +82,7 @@ const CLUES = {
   maid1: [
     'The body had been tended. Straightened. Cared for, almost.',
     'A dusting cloth, folded wrong. The ghost notices these things.',
-    'Every footprint had been swept away — all but one, small and quick.',
+    'Every footprint had been swept away - all but one, small and quick.',
     'The hearth was warm where no fire was laid. The Maid dusted over her sins.',
   ],
   nurse1: [
@@ -114,7 +114,7 @@ function clueFor(killerCharId, tier) {
   return pool[Math.max(0, tier)];
 }
 
-// Fisher–Yates on a copy
+// Fisher-Yates on a copy
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {

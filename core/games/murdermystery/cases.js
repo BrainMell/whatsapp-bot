@@ -1,7 +1,7 @@
 // ============================================
-// MURDER MYSTERY — CASE CONTENT
+// MURDER MYSTERY - CASE CONTENT
 // Data-driven procedural flavor. No gameplay
-// logic here — pure narrative variety so two
+// logic here - pure narrative variety so two
 // cases never feel identical.
 // ============================================
 
@@ -16,7 +16,7 @@ const ROOMS = [
   { id: 'library',    name: 'the Library',          hint: 'tall shelves and darker gaps between them' },
   { id: 'dining',     name: 'the Dining Room',      hint: 'one long table, every chair pushed in but one' },
   { id: 'drawing',    name: 'the Drawing Room',     hint: 'velvet settees, curtained corners' },
-  { id: 'entrance',   name: 'the Grand Hall',       hint: 'the first room every guest crosses — impossible to linger unseen' },
+  { id: 'entrance',   name: 'the Grand Hall',       hint: 'the first room every guest crosses - impossible to linger unseen' },
   { id: 'gallery',    name: 'the Portrait Gallery', hint: 'a corridor of painted eyes, long and dim' },
   { id: 'greatroom',  name: 'the Great Room',       hint: 'vaulted and echoing, nowhere to crouch' },
   { id: 'music',      name: 'the Music Room',       hint: 'the piano lid is open. the keys are silent' },
@@ -68,19 +68,19 @@ const MORNING_MURDER_LINES = [
   'The night took its due. The house pretends otherwise.',
 ];
 const MORNING_SAVED_LINES = [
-  'Death reached for someone last night — and something turned its hand away.',
+  'Death reached for someone last night - and something turned its hand away.',
   'The knife stopped. The household will never know how close it came.',
   'Someone woke screaming from a dream of fingers at their throat. They woke.',
 ];
 const MORNING_QUIET_LINES = [
-  'By some mercy — or some cowardice — everyone is still breathing.',
+  'By some mercy - or some cowardice - everyone is still breathing.',
   'The house counts its guests twice and finds no one missing.',
 ];
 
 // Discussion-phase prompts (public)
 const DISCUSSION_PROMPTS = [
   'Someone among you poured the poison. Discuss. Accuse. Defend yourselves.',
-  'The killer is at this table. Talk — and watch their hands.',
+  'The killer is at this table. Talk - and watch their hands.',
   'Grief looks different on a murderer. Compare notes.',
   'Everyone has an alibi. Not everyone is telling the truth.',
   'Ask your questions. Lies have a smell.',
@@ -103,13 +103,13 @@ const GHOST_INTRO_LINES = [
   'Cold breath at your ear. A whisper meant only for you:',
 ];
 const GHOST_EXHAUSTED_LINES = [
-  'The ghost has nothing left to give. It only points — and fades.',
+  'The ghost has nothing left to give. It only points - and fades.',
   'The whisper is only wind now. The dead have said all they will say.',
 ];
 
 // Investigator flavor lines
 const INVEST_GUILTY = [
-  'Mud on their boots — fresh, despite the dry night.',
+  'Mud on their boots - fresh, despite the dry night.',
   'Their smile never once reached their eyes.',
   'An alibi, rehearsed far too perfectly.',
   'Candle wax on their sleeve. Black, like the cellar candles.',
@@ -120,23 +120,23 @@ const INVEST_CLEAN = [
   'Their grief is the loud, ugly, genuine kind.',
   'Nothing. Not a thread out of place.',
   'They were weeping into their tea at the time. Two witnesses.',
-  'An alibi that holds — for whatever that is worth.',
+  'An alibi that holds - for whatever that is worth.',
 ];
 
 // Guardian Angel flavor pools
 const GA_SAVE_PUBLIC = [
   'Someone in this house almost died last night. Dawn found them breathing.',
-  'Death was cheated. Whoever it reached for woke with a racing heart — and a pulse.',
+  'Death was cheated. Whoever it reached for woke with a racing heart - and a pulse.',
   'The knife was turned aside by no hand anyone saw. Someone almost died.',
 ];
-const GA_SAVE_GA    = 'You kept the watch you promised. The knife came for {name} — and you turned it. Tell no one. Not even them.';
+const GA_SAVE_GA    = 'You kept the watch you promised. The knife came for {name} - and you turned it. Tell no one. Not even them.';
 const GA_SAVED_DREAM = [
-  'You dreamt of hands at your throat. You woke screaming — alive. You were meant to die tonight. Tell the group only if you dare.',
+  'You dreamt of hands at your throat. You woke screaming - alive. You were meant to die tonight. Tell the group only if you dare.',
   'Something held you back from the dark, and you do not know what. You were meant to die tonight. Tell the group only if you dare.',
 ];
 const GA_KILLER_BLOCKED = [
   'Your knife stopped mid-air tonight, as if the dark itself refused. Someone is watching over this house.',
-  'You reached your victim — and found the way barred by something you could not name. The house has a guardian.',
+  'You reached your victim - and found the way barred by something you could not name. The house has a guardian.',
 ];
 
 // Endgame headline pools
@@ -156,17 +156,17 @@ function pick(arr) {
 }
 
 // Search difficulty tiers (concealment). Shown to everyone on the
-// room list — the killer's choice of room is a real strategic trade:
+// room list - the killer's choice of room is a real strategic trade:
 // easy rooms get searched first; hard rooms hide the body longer,
 // but a body found in a hard room has watched the killer longer
-// (the ghost's clue comes out sharper — handled in index.js).
+// (the ghost's clue comes out sharper - handled in index.js).
 function concealLabel(c) {
   if (c <= 1) return 'easy to search';
   if (c === 2) return 'slow to search';
   return 'hard to search';
 }
 
-// Draw n rooms for a new game — random composition AND order every game.
+// Draw n rooms for a new game - random composition AND order every game.
 function drawRooms(n = 6) {
   const pool = ROOMS.slice();
   for (let i = pool.length - 1; i > 0; i--) {

@@ -8,10 +8,10 @@ The Security and Spam Controls subsystem intercepts group messages to enforce ch
 
 ## How it works
 
-**Moderation Guard and Admin Bypass** — [`security.js` L11–50](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L11-L50)
+**Moderation Guard and Admin Bypass** - [`security.js` L11-50](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L11-L50)
 
 ```javascript
-// core/utils/security.js L11–50
+// core/utils/security.js L11-50
 handleSecurity: async function(sock, msg, groupSettings, addWarning, getWarningCount, cachedMetadata = null, cachedAdminSet = null) {
     try {
         if (!msg || !msg.message) return;
@@ -57,10 +57,10 @@ This entry point checks if the message was sent in a group chat with the `antili
 
 ---
 
-**Antilink & Status Mention Interceptor** — [`security.js` L102–143](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L102-L143)
+**Antilink & Status Mention Interceptor** - [`security.js` L102-143](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L102-L143)
 
 ```javascript
-// core/utils/security.js L102–143
+// core/utils/security.js L102-143
 const allText = extractAllText(msg.message).join(' ');
 const lowerText = allText.toLowerCase();
 
@@ -109,10 +109,10 @@ The message contents are flattened to raw strings and recursively searched. The 
 
 ---
 
-**Auto Action Penalties** — [`security.js` L149–180](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L149-L180)
+**Auto Action Penalties** - [`security.js` L149-180](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L149-L180)
 
 ```javascript
-// core/utils/security.js L149–180
+// core/utils/security.js L149-180
 if (violations.length > 0) {
     const violationType = [...new Set(violations)].join(', ');
     const userName = resolvedSender.split('@')[0];
@@ -179,11 +179,11 @@ if (warningCount >= 5) { ... }
 
 ## Common tasks
 
-- **Change punishment type (delete/warn/kick)** — Edit the `antilinkAction` field inside group settings documents in MongoDB.
-- **Whitelist a domain** — Add domain bypass checks at [security.js L139](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L139).
-- **Modify status mention detection regex** — Edit the broadcast check conditionals at [security.js L106](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L106).
-- **Configure anti-spam warn threshold** — Edit warning limit conditionals at [security.js L176](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L176).
-- **Add custom warning text** — Modify `warnMsg` at [security.js L174](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L174).
+- **Change punishment type (delete/warn/kick)** - Edit the `antilinkAction` field inside group settings documents in MongoDB.
+- **Whitelist a domain** - Add domain bypass checks at [security.js L139](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L139).
+- **Modify status mention detection regex** - Edit the broadcast check conditionals at [security.js L106](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L106).
+- **Configure anti-spam warn threshold** - Edit warning limit conditionals at [security.js L176](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L176).
+- **Add custom warning text** - Modify `warnMsg` at [security.js L174](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/security.js#L174).
 
 
 

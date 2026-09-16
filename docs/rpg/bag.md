@@ -407,7 +407,7 @@ Defined in `INVENTORY_CONFIG` in `core/rpg/inventorySystem.js`:
 | Constant | Value | Description |
 |---|---|---|
 | `BASE_SLOTS` | 20 | Starting inventory size for new players |
-| `MAX_SLOTS` | 100 | Hard cap — cannot be upgraded beyond this |
+| `MAX_SLOTS` | 100 | Hard cap - cannot be upgraded beyond this |
 | `SLOTS_PER_UPGRADE` | 5 | Slots added per `.j upgrade inv` |
 | `UPGRADE_COST_BASE` | 1,000 Zeni | Cost of the first inventory upgrade |
 | `UPGRADE_COST_SCALING` | ×1.5 | Exponential multiplier per subsequent upgrade |

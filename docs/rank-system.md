@@ -1,4 +1,4 @@
-# 🏅 Group Rank System — Full Documentation
+# 🏅 Group Rank System - Full Documentation
 
 ## Overview
 
@@ -14,10 +14,10 @@ The rank system lets group owners and senior members organize members into a cus
 
 | Actor | Can manage |
 |---|---|
-| **Bot Owner / Global Mod** | Everything — fully exempt from all hierarchy checks |
+| **Bot Owner / Global Mod** | Everything - fully exempt from all hierarchy checks |
 | **WA Superadmin** | Full rank management (setup, add/remove ranks, assign members, titles) |
 | **Rank Level 4+** | Same as Superadmin for rank management |
-| **Rank Level 1–3** | Basic member actions only (unless granted extra perms via `rank allow`) |
+| **Rank Level 1-3** | Basic member actions only (unless granted extra perms via `rank allow`) |
 | **Unranked members** | No rank management |
 
 > **Hierarchy Protection:** You can never act on a member whose rank level is **equal to or higher than your own**. You also cannot assign or add a rank that equals or exceeds your own level. The bot owner is exempt from all restrictions.
@@ -95,7 +95,7 @@ Titles appear beneath a member's tag wherever rank info is shown.
 | Command | Description | Minimum Rank |
 |---|---|---|
 | `.g glock` | Lock group to WA admins only | WA Admin |
-| `.g glock rank <level>` | Rank lock — only members at or above `level` can chat | WA Admin |
+| `.g glock rank <level>` | Rank lock - only members at or above `level` can chat | WA Admin |
 | `.g glock open` | Remove rank lock, keep WA admin lock | WA Admin |
 | `.g gunlock` | Fully unlock the group and clear any rank lock | WA Admin |
 | `.g open` | Alias for `gunlock` | WA Admin |
@@ -133,7 +133,7 @@ Senior ranks (4+) can configure which admin commands lower-rank members are allo
 ```
 
 **How it works:**
-- By default, no restrictions are configured — all admin commands work as normal based on WA admin status.
+- By default, no restrictions are configured - all admin commands work as normal based on WA admin status.
 - `rank deny` blocks a specific command for that rank level.
 - `rank allow` explicitly grants a command (useful when combined with deny rules).
 - Higher rank levels are **not** affected by lower-rank permission rules.
@@ -148,7 +148,7 @@ The `.g who` command shows:
 2. A `👑` badge next to the WA Superadmin
 3. A `🛡️` badge next to WA Admins
 4. Custom titles shown on a line below the member's tag
-5. **Unranked Administrators** section — shows WA admins/superadmins who have NOT been assigned a rank
+5. **Unranked Administrators** section - shows WA admins/superadmins who have NOT been assigned a rank
 
 > A member assigned to a rank will **only** appear under that rank, never in the "Unranked Administrators" section, even if they are the WA superadmin.
 
@@ -170,7 +170,7 @@ the system treats unranked admins as if they held a virtual rank:
 This means a WA superadmin with no explicit rank can still assign any rank to
 other admins, and a WA admin with no explicit rank can assign ranks below the
 top tier. **Display rank** (in `.g who`, `.g myrank`, etc.) is still 0 until
-explicitly assigned — the virtual rank only affects what rank-management
+explicitly assigned - the virtual rank only affects what rank-management
 actions the admin can perform.
 
 > Note: An earlier version of this system auto-assigned the max rank to every
@@ -195,32 +195,32 @@ actions the admin can perform.
 ## Changelog
 
 ### Bug Fixes
-- **JID format mismatch (roster vs. set rank)** — Both write (`set rank`) and
+- **JID format mismatch (roster vs. set rank)** - Both write (`set rank`) and
   read (`getMemberRankLevel`, `.g who`) now normalize JIDs through
   `canonicalRankKey` from `lidResolver.js`. Previously `set rank` stored under
   `<phone>@s.whatsapp.net` but `.g who` looked up the raw participant ID
   (often `<phone>:1@s.whatsapp.net` with a device suffix, or `<lid>@lid` in
   LID-privacy groups). Lookups missed → admins appeared as Unranked.
-- **Device-suffix bug in `lidResolver.getMapping`** — `jid.split("@")[0]`
+- **Device-suffix bug in `lidResolver.getMapping`** - `jid.split("@")[0]`
   left `:1` device suffixes attached, so cache lookups always missed. Now
   strips the suffix before lookup.
-- **`resolveToPhone` short-circuit** — Was returning `@s.whatsapp.net` JIDs
+- **`resolveToPhone` short-circuit** - Was returning `@s.whatsapp.net` JIDs
   unchanged, leaving device suffixes intact. Now normalizes.
-- **Hierarchy guard blocked unranked admins** — `if (levelNum >= senderLevel)`
+- **Hierarchy guard blocked unranked admins** - `if (levelNum >= senderLevel)`
   evaluated to `levelNum >= 0` for any admin whose rank lookup failed,
   blocking them from assigning ANY rank. Now treats unranked WA
   superadmins as top rank and unranked WA admins as top-1 for comparison.
-- **Rank-0 assignment** — Explicit rank level 0 now correctly returns 0 instead of falling through to admin-inheritance logic (`if (assigned)` → `if (assigned != null)`).
-- **`set rank` level parsing** — Level is now extracted from the command tail after removing @mentions, not the full string. Previously, phone number digits in the @mention could corrupt the parsed level.
-- **`glock rank` (no number)** — Now replies with a helpful usage hint instead of silently doing nothing.
-- **`gunlock` inside try block** — The rank lock (`lockMode = 'open'`) is now always cleared first, regardless of whether the WA group setting update succeeds.
-- **`metadataAlreadyCached`** — Fixed to use `groupMetadataCache.get()` (correct NodeCache API) instead of `.has()`, which doesn't exist on NodeCache and always returned `undefined`.
+- **Rank-0 assignment** - Explicit rank level 0 now correctly returns 0 instead of falling through to admin-inheritance logic (`if (assigned)` → `if (assigned != null)`).
+- **`set rank` level parsing** - Level is now extracted from the command tail after removing @mentions, not the full string. Previously, phone number digits in the @mention could corrupt the parsed level.
+- **`glock rank` (no number)** - Now replies with a helpful usage hint instead of silently doing nothing.
+- **`gunlock` inside try block** - The rank lock (`lockMode = 'open'`) is now always cleared first, regardless of whether the WA group setting update succeeds.
+- **`metadataAlreadyCached`** - Fixed to use `groupMetadataCache.get()` (correct NodeCache API) instead of `.has()`, which doesn't exist on NodeCache and always returned `undefined`.
 
 ### New Features
-- **Rank 4+ management access** — Members at Rank 4 or higher can manage the rank system without needing WA Superadmin.
-- **Command permission management** — `.g rank allow`, `.g rank deny`, `.g rank perms`, `.g rank reset perms` added.
-- **Hierarchy enforcement on rank add/remove** — You cannot add or remove rank tiers at or above your own level.
-- **Superadmin duplication fix** — `.g who` no longer shows a ranked member in both their rank section AND the Unranked Administrators section.
-- **Polished output formatting** — `.g who`, `.g myrank`, `.g rankinfo`, `.g ranks` all have cleaner layout with dividers and badges.
-- **Title display beneath names** — Custom titles (🏷️) now appear directly below member tags in all rank displays.
-- **`rankPerms` setting** — Per-group, per-level command permission rules, persisted to MongoDB alongside other group settings.
+- **Rank 4+ management access** - Members at Rank 4 or higher can manage the rank system without needing WA Superadmin.
+- **Command permission management** - `.g rank allow`, `.g rank deny`, `.g rank perms`, `.g rank reset perms` added.
+- **Hierarchy enforcement on rank add/remove** - You cannot add or remove rank tiers at or above your own level.
+- **Superadmin duplication fix** - `.g who` no longer shows a ranked member in both their rank section AND the Unranked Administrators section.
+- **Polished output formatting** - `.g who`, `.g myrank`, `.g rankinfo`, `.g ranks` all have cleaner layout with dividers and badges.
+- **Title display beneath names** - Custom titles (🏷️) now appear directly below member tags in all rank displays.
+- **`rankPerms` setting** - Per-group, per-level command permission rules, persisted to MongoDB alongside other group settings.

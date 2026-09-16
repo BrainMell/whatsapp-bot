@@ -356,7 +356,7 @@ function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) 
 module.exports = {
   getAllScores,
   handleStartGame: async (sock, chatId, senderJid, mentionedJids, botMarker, m, gridSize = 3) => {
-    // 💡 FIX: Validate grid size — only 3, 8, and 16 have win patterns defined.
+    // 💡 FIX: Validate grid size - only 3, 8, and 16 have win patterns defined.
     // Previously any value would pass and crash on the first move when
     // WINNING_PATTERNS[gridSize] returned undefined.
     if (![3, 8, 16].includes(gridSize)) {

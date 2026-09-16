@@ -1,6 +1,6 @@
 // scripts/full_rpg_reset.js
 // WIPES ALL RPG progression for ALL users in production.
-// Goal: every player starts from zero — no skills, no equipment, no inventory
+// Goal: every player starts from zero - no skills, no equipment, no inventory
 // RPG items, no summons, no progression. Non-RPG side of the bot untouched.
 //
 // WHAT GETS WIPED:
@@ -20,15 +20,15 @@
 //   Timers:         user.lastDaily, user.lastRob → 0
 //   Money:          user.wallet → 1000 (STARTING_BALANCE), user.bank → 0
 //   Alt-detect:     user.phoneHash preserved (anti-multibox)
-//   Bonds/CP:       user.bondXp, user.unlockedSummonPassives preserved? NO — these are
+//   Bonds/CP:       user.bondXp, user.unlockedSummonPassives preserved? NO - these are
 //                   summon-related progression, so wipe unlockedSummonPassives too.
 //
 // WHAT IS PRESERVED (non-RPG):
 //   userId, nickname, registered, displayName, spriteIndex (cosmetic)
 //   classChangeCount (history field)
-//   eventTokens (separate economy — could be RPG-related but per spec keep)
+//   eventTokens (separate economy - could be RPG-related but per spec keep)
 //   guild memberships (Guild model not touched)
-//   card collection (UserCard not touched — separate system)
+//   card collection (UserCard not touched - separate system)
 //   chat profile, warnings, mutes, bans
 //   alt-detection state (phoneHash)
 //   message history
@@ -57,7 +57,7 @@ let User, Summon, Rune;
 
 async function main() {
   console.log('[+] Connecting to MongoDB...');
-  // Don't override dbName — production uses URI default ('test')
+  // Don't override dbName - production uses URI default ('test')
   conn = await mongoose.connect(MONGO_URI);
   console.log(`[+] Connected to database: ${conn.connection.db.databaseName}`);
   User = require('../core/models/User');
@@ -221,9 +221,9 @@ async function main() {
     const v = userAgg[0];
     console.log(`[i] Wallet: total=${v.totalWallet.toLocaleString()}, max=${v.maxWallet}, min=${v.minWallet}, avg=${Math.round(v.avgWallet)}`);
     if (v.maxWallet === STARTING_BALANCE && v.minWallet === STARTING_BALANCE) {
-      console.log('✅ Integrity check PASSED — all wallets at starting balance');
+      console.log('✅ Integrity check PASSED - all wallets at starting balance');
     } else {
-      console.log('⚠️ Integrity check WARNING — wallets not uniform');
+      console.log('⚠️ Integrity check WARNING - wallets not uniform');
     }
   }
   // Verify all summons/runes deleted

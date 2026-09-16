@@ -1,11 +1,11 @@
 // ============================================
-// 🎯 SUMMON CAPTURE — Necromancer kill-and-capture pipeline
+// 🎯 SUMMON CAPTURE - Necromancer kill-and-capture pipeline
 // ============================================
 // Necromancer-exclusive mechanic. When army_of_dead ult is active,
 // killing enemies has a chance to capture them as permanent summons.
 //
 // Taming layer: killing 10 of the same enemy type permanently "tames"
-// that species — future captures get a +20% stat bonus ("Tamed" trait).
+// that species - future captures get a +20% stat bonus ("Tamed" trait).
 //
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md (section 3.1)
 
@@ -18,13 +18,13 @@ const Summon = require('../models/Summon');
 // ENEMY → SUMMON SPECIES MAPPING
 // ─────────────────────────────────────────────────────────────
 // Maps enemy type IDs (from classEncounters.js) to summon species
-// (from summonRegistry.js). Not every enemy is captureable — only
+// (from summonRegistry.js). Not every enemy is captureable - only
 // those that map to a summon species. Bosses S-rank+ are immune.
 
 // 💡 FIX 2026-08-05: Remapped all enemy→species mappings to the current 17
 // live species. The old map pointed to stale species (skeleton, imp,
 // flame_elemental, wolf, wyrmling, turret_mk1, etc.) that no longer exist
-// in the registry — captures were silently failing because createSummon
+// in the registry - captures were silently failing because createSummon
 // couldn't find the species. Mappings chosen by thematic similarity.
 const ENEMY_TO_SPECIES_MAP = {
   // Undead-themed enemies → ghost (undead, COMMON)
@@ -92,7 +92,7 @@ const CAPTURE_CONFIG = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// CAPTURE WINDOW — set when army_of_dead is cast
+// CAPTURE WINDOW - set when army_of_dead is cast
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -142,7 +142,7 @@ function getCaptureWindow(state, playerJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CAPTURE ROLL — called when an enemy dies
+// CAPTURE ROLL - called when an enemy dies
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -241,7 +241,7 @@ async function attemptCapture(state, entity, killerJid) {
       mag: Math.floor(summon.baseStats.mag * bonusMult),
       spd: Math.floor(summon.baseStats.spd * bonusMult)
     };
-    // Mark as tamed (we can use a flag on the document — adding to lineage as a marker)
+    // Mark as tamed (we can use a flag on the document - adding to lineage as a marker)
     summon.lineage = summon.lineage || [];
     summon.lineage.push({
       summonId: 'tamed_marker',
@@ -268,7 +268,7 @@ async function attemptCapture(state, entity, killerJid) {
   // Build the capture message
   let message = `💀 *SOUL CAPTURED!* ${entity.name} has been bound as a ${species.name}!`;
   if (isTamed) {
-    message += `\n✨ *TAMED!* (After ${newTamingCount} kills of this type, the species is permanently tamed — +20% stats!)`;
+    message += `\n✨ *TAMED!* (After ${newTamingCount} kills of this type, the species is permanently tamed - +20% stats!)`;
   } else {
     message += `\n📊 Taming progress: ${newTamingCount}/${CAPTURE_CONFIG.TAMING_THRESHOLD} kills toward permanent taming.`;
   }
@@ -277,7 +277,7 @@ async function attemptCapture(state, entity, killerJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// NECROMANCER PASSIVE — +30% undead summon stats
+// NECROMANCER PASSIVE - +30% undead summon stats
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -332,7 +332,7 @@ function applyClassSummonBonus(summonEntity, ownerClass) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TAMING PROGRESS — track kills per enemy type
+// TAMING PROGRESS - track kills per enemy type
 // ─────────────────────────────────────────────────────────────
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Phase 6 unit tests — Phone-hash alt detection.
+ * Phase 6 unit tests - Phone-hash alt detection.
  * Run: node scripts/test_summon_phase6.js
  */
 
@@ -57,7 +57,7 @@ test('computePhoneHash strips non-digits', () => {
 });
 
 test('computePhoneHash handles LID JIDs', () => {
-  // LIDs like 118683049455766@lid — extract the number before @
+  // LIDs like 118683049455766@lid - extract the number before @
   const hash = altDetection.computePhoneHash('118683049455766@lid');
   assert.ok(hash);
   assert.strictEqual(hash.length, 64);  // SHA-256 hex = 64 chars

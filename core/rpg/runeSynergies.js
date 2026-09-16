@@ -1,5 +1,5 @@
 // ============================================================
-// Rune Synergy Engine — core/rpg/runeSynergies.js
+// Rune Synergy Engine - core/rpg/runeSynergies.js
 // ============================================================
 // Detects and applies synergy effects when compatible runes/statuses
 // are combined on the same skill cast.
@@ -215,7 +215,7 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
       result.modifiedEffect.healingReduction = eff.healingReduction;
     }
 
-    // CC effects — track for DR check
+    // CC effects - track for DR check
     if (eff.type === 'guaranteed_stun') {
       result.ccApplied.push('stun');
       result.modifiedEffect.addStatuses = (result.modifiedEffect.addStatuses || []);

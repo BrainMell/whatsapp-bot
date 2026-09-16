@@ -1,9 +1,9 @@
 // ============================================
-// 🎨 PROFILE CARD RENDERER v6 — 10 owner-approved styles
+// 🎨 PROFILE CARD RENDERER v6-10 owner-approved styles
 // ============================================
 // The 10 approved mock designs (5x "v1 set" + 5x "v2 set") are baked into
 // static backgrounds (core/rpgasset/ui/styles/bg_1..10.png) by
-// scripts/bake_profile_bgs.py, together with layouts.json — the single
+// scripts/bake_profile_bgs.py, together with layouts.json - the single
 // source of truth for every dynamic field (positions/fonts/colors).
 // This renderer composites: bg → dynamic ops → portrait → done.
 // Owners pick a style with `<prefix> cardstyle <1-10>`; RPG Mods pick the
@@ -63,9 +63,9 @@ const FONT_FNS = {
 };
 
 // 💡 OWNER PICK 2026-09-11: Royal Decree is the main card.
-const DEFAULT_STYLE = 7; // Royal Decree — baked-in fallback
+const DEFAULT_STYLE = 7; // Royal Decree - baked-in fallback
 
-// Runtime default — RPG Mods can switch it with `<prefix> setdefaultcard <1-10>`.
+// Runtime default - RPG Mods can switch it with `<prefix> setdefaultcard <1-10>`.
 // Stored under a `_shared_` system key (same pattern as _shared_rpg_mods) so it
 // survives restarts and is shared by every bot instance. Falls back to the
 // baked-in DEFAULT_STYLE when the key is unset or out of range.
@@ -246,7 +246,7 @@ function buildCardData(params) {
   const pw = Math.max(0, Number(user?.pvpWins) || 0);
   const pl = Math.max(0, Number(user?.pvpLosses) || 0);
   const cls = (classData?.name || 'Adventurer');
-  // 💡 Owner rule 2026-09-14: XP is never shown as a bare percentage — the
+  // 💡 Owner rule 2026-09-14: XP is never shown as a bare percentage - the
   // card must also show the actual XP requirement (progress / needed).
   const pct = Math.round(params.xpPercent || 0);
   const cur = Number(params.xpCurrent), need = Number(params.xpNeeded);
@@ -261,7 +261,7 @@ function buildCardData(params) {
     RANK: String(rank || 'F'),
     RANKX: `${rank || 'F'} RANK`,
     ZENI: zeni.toLocaleString('en-US'),
-    PVPD: `${pw}W — ${pl}L`,
+    PVPD: `${pw}W - ${pl}L`,
     PVPA: `${pw}W - ${pl}L`,
     PVPH: `${pw}W-${pl}L`,
     XP: String(pct),
@@ -601,7 +601,7 @@ async function renderProfileCard(params) {
 }
 
 // ------------------------------------------------- style pickers sheet (.j cardstyle)
-// 💡 cache is keyed by the highlighted style — the sheet marks BOTH the
+// 💡 cache is keyed by the highlighted style - the sheet marks BOTH the
 // viewer's current pick AND the server default, so a single-slot cache
 // would render stale highlights for everyone after the first viewer.
 const _sheetCache = new Map();
@@ -688,7 +688,7 @@ const EQUIPMENT_SLOTS = [
 
 // 💡 REDESIGN 2026-09-15 v2 (owner feedback: "completely redesign a unique
 // card … dont reuse"). The allocate card no longer borrows anything from the
-// profile deck — no bg_7 bake, no Royal Decree fonts/palette. It is drawn
+// profile deck - no bg_7 bake, no Royal Decree fonts/palette. It is drawn
 // entirely in code as its own identity: THE SOUL FORGE (obsidian + gold +
 // arcane teal), MedievalSharp-led type, rune-circle watermark, starfield.
 const SOUL = {
@@ -710,7 +710,7 @@ function allocFmtGain(v) {
   return `+${String(r)}`;
 }
 
-// gold dot leaders (dark-card geometry — not the parchment card's)
+// gold dot leaders (dark-card geometry - not the parchment card's)
 function soulDots(ctx, startX, endX, y, a) {
   if (endX - startX < 12) return;
   ctx.save();
@@ -785,7 +785,7 @@ async function renderAllocateCard(params) {
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // deterministic starfield (seeded LCG — identical card every render)
+  // deterministic starfield (seeded LCG - identical card every render)
   let seed = 20260915;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   for (let i = 0; i < 110; i++) {
@@ -989,7 +989,7 @@ async function renderAllocateCard(params) {
 
   // ── 10. Footer ──
   drawText(ctx, {
-    x: cx, y: 1056, s: 'spent points are permanent — choose wisely', font: 'medsharp',
+    x: cx, y: 1056, s: 'spent points are permanent - choose wisely', font: 'medsharp',
     size: 17, color: 'rgba(168,148,95,0.75)',
   });
 

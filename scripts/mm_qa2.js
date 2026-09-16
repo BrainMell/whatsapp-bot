@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================
-// MURDER MYSTERY — QA SUITE 2
+// MURDER MYSTERY - QA SUITE 2
 // The manor's PRIZE purse (owner 2026-09-14: money prize, no entry fee)
 // + the Hall of Shadows (all-time ledger)
 // + multiple randomized full game loops. Offline, mock sock, stub economy.
@@ -85,7 +85,7 @@ function players(n, chatIdx) {
   for (let i = 0; i < n; i++) {
     const jid = `200000000${String(chatIdx).padStart(2, '0')}${String(i + 1).padStart(2, '0')}@s.whatsapp.net`;
     QA_BALANCES.set(jid, 1000000);
-    arr.push({ jid, name: `${NAMES[i]}-${chatIdx}` }); // unique names — the QA looks rows up by name
+    arr.push({ jid, name: `${NAMES[i]}-${chatIdx}` }); // unique names - the QA looks rows up by name
   }
   return arr;
 }
@@ -222,13 +222,13 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'players' }));
     ok(groupText(sock, /Tonight's purse: \*[\d,]+ Zeni\*/), '1.5 guest list shows the purse');
 
-    // anyone can play — a BROKE host casts freely, nothing is ever charged
+    // anyone can play - a BROKE host casts freely, nothing is ever charged
     const host = roster[0];
     QA_BALANCES.set(host.jid, 0);
     const beforePlayers = g.players.length;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'start', sender: host.jid, name: host.name }));
     const g2 = mm._internal.getGame(CHATS[0]);
-    ok(g2 && (g2.phase === 'NIGHT' || g2.phase === 'STARTING'), '1.6 broke host casts freely — night begins');
+    ok(g2 && (g2.phase === 'NIGHT' || g2.phase === 'STARTING'), '1.6 broke host casts freely - night begins');
     ok(mm._internal.getGame(CHATS[0]).players.length === beforePlayers, '1.7 all guests dealt in');
     ok(QA_BALANCES.get(host.jid) === 0, '1.8 no coins taken from anyone');
     ok(!QA_TX.some((t) => t.amt < 0 && /entry fee|manor/i.test(t.desc)), '1.9 no charge transaction at cast');
@@ -250,8 +250,8 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[1], { sub: 'end', sender: roster2[0].jid, name: roster2[0].name }));
   }
 
-  // =========== 2. FULL LOOPS — smart civs (civ win) ===========
-  console.log('\n===== 2. GAME LOOP — the house gets it right =====');
+  // =========== 2. FULL LOOPS - smart civs (civ win) ===========
+  console.log('\n===== 2. GAME LOOP - the house gets it right =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
     const roster = players(5, 3);
@@ -292,8 +292,8 @@ async function main() {
     ok(survivorsInLedger === arch.survivors.length, `2.11 survivor credit matches (${survivorsInLedger}/${arch.survivors.length})`);
   }
 
-  // =========== 3. FULL LOOPS — dumb civs (killer win) ===========
-  console.log('\n===== 3. GAME LOOP — the killer gets away =====');
+  // =========== 3. FULL LOOPS - dumb civs (killer win) ===========
+  console.log('\n===== 3. GAME LOOP - the killer gets away =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
     const roster = players(5, 4);
@@ -314,7 +314,7 @@ async function main() {
     const killerP3 = roster.find((p) => p.name === arch.killer);
     ok(QA_BALANCES.get(killerP3.jid) === balBefore3[killerP3.jid] + purse3, `3.7 killer took the whole purse (${purse3})`);
     ok(roster.filter((p) => p.jid !== killerP3.jid).every((p) => QA_BALANCES.get(p.jid) === balBefore3[p.jid]), '3.8 losers paid nothing');
-    const expectedKills = arch.log.filter((l) => l.victim).length; // murders only — condemned are the house's doing
+    const expectedKills = arch.log.filter((l) => l.victim).length; // murders only - condemned are the house's doing
     ok(killerRow && killerRow.kills === expectedKills, `3.5 killer kills match the case log (${killerRow && killerRow.kills}/${expectedKills})`);
     const expectedScore = killerRow.wins * 5 + killerRow.survived * 2 + killerRow.kills * 3 + killerRow.saves * 4 + killerRow.bodiesFound + killerRow.correctVotes * 3;
     ok(killerRow.score === expectedScore, `3.6 score formula exact (${killerRow.score})`);
@@ -345,7 +345,7 @@ async function main() {
     const results = [];
     for (let i = 0; i < 4; i++) {
       const sock = makeSock(); QA_SOCK = sock;
-      const n = 4 + Math.floor(Math.random() * 4); // 4–7 players (guardian may or may not exist)
+      const n = 4 + Math.floor(Math.random() * 4); // 4-7 players (guardian may or may not exist)
       const roster = players(n, 6 + i);
       const chatId = CHATS[5] /* reuse one chat per loop, sequential */;
       await openAndFill(sock, chatId, roster);
@@ -367,7 +367,7 @@ async function main() {
     console.log('   loops:', JSON.stringify(results));
   }
 
-  // =========== 6. LEADERBOARD — card, sort, fallback, typos ===========
+  // =========== 6. LEADERBOARD - card, sort, fallback, typos ===========
   console.log('\n===== 6. HALL OF SHADOWS =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -403,12 +403,12 @@ async function main() {
       if (buf) fs.writeFileSync(path.join(OUT_DIR, 'leaderboard_card.png'), buf);
     } catch (e) { console.log('   (card render for visual QA failed:', e.message, ')'); }
 
-    // sorted by score desc — top row is the max score
+    // sorted by score desc - top row is the max score
     const seededScores = Object.values(seeded).map((r) => r.score);
     const topScore = Math.max(...seededScores);
     ok(lbImg && new RegExp(`\\*${topScore.toLocaleString('en-US')} pts\\*`).test(sock.out.filter((m) => m.isGroup && m.image).map((m) => m.text).join('\n')) === false || true, '6.4 (visual) top score in card'); // card content asserted visually via PNG
 
-    // text fallback — break the renderer once
+    // text fallback - break the renderer once
     const realRender = cards.renderLeaderboardCard;
     cards.renderLeaderboardCard = async () => { throw new Error('QA: renderer offline'); };
     try {
@@ -416,7 +416,7 @@ async function main() {
     } finally {
       cards.renderLeaderboardCard = realRender;
     }
-    ok(groupText(sock, /HALL OF SHADOWS — BLACKVALE MANOR/), '6.5 text fallback renders the table');
+    ok(groupText(sock, /HALL OF SHADOWS - BLACKVALE MANOR/), '6.5 text fallback renders the table');
     ok(groupText(sock, /Wins \+5 · survival \+2 · kill \+3/), '6.6 scoring legend shown');
     ok(groupText(sock, /You: \*#\d+\*/), '6.7 off-board caller told their rank');
 
@@ -431,7 +431,7 @@ async function main() {
     const sock = makeSock(); QA_SOCK = sock;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'help' }));
     ok(groupText(sock, /mm lb/), '7.1 help mentions mm lb');
-    ok(groupText(sock, /10,000–25,000 Zeni/), '7.2 help names the purse range');
+    ok(groupText(sock, /10,000-25,000 Zeni/), '7.2 help names the purse range');
     ok(groupText(sock, /no entry fee, ever/), '7.3 help states the free-entry rule');
   }
 

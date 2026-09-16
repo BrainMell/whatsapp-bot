@@ -30,12 +30,12 @@ const failures = [];
 
 function ok(name, detail) {
   passCount++;
-  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function fail(name, detail) {
   failCount++;
   failures.push({ name, detail });
-  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function section(name) {
   console.log(`\n${CYAN}${BOLD}═══ ${name} ═══${RESET}`);
@@ -160,7 +160,7 @@ async function main() {
       evasion: Math.min(pvpBaseStats.evasion || 0, 55),
     };
 
-    // PvP INTENTIONALLY caps stats — document this, don't fail
+    // PvP INTENTIONALLY caps stats - document this, don't fail
     const pvpCappedAtk = pvpBaseStats.atk > 1200;
     const pvpCappedDef = pvpBaseStats.def > 500;
     const pvpCappedMag = pvpBaseStats.mag > 1200;
@@ -207,7 +207,7 @@ async function main() {
         fail(`damage:pvp=abyss`, `PvP=${pvpDamage} vs Abyss=${abyssDamage} (should match, no cap)`);
       }
     } else {
-      // Cap was applied — PvP damage should be LOWER than Abyss (expected)
+      // Cap was applied - PvP damage should be LOWER than Abyss (expected)
       if (pvpDamage < abyssDamage) {
         ok(`damage:pvp<abyss`, `PvP=${pvpDamage} < Abyss=${abyssDamage} (cap working as intended)`);
       } else {

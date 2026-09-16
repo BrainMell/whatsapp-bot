@@ -61,7 +61,7 @@ const crypto = require('crypto');
   for (const starter of STARTER_SPECIES) {
     const species = registry.getSpecies(starter.species);
     if (!species) {
-      console.log(`WARNING: species ${starter.species} not found in registry — skipping`);
+      console.log(`WARNING: species ${starter.species} not found in registry - skipping`);
       continue;
     }
 

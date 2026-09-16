@@ -15,10 +15,10 @@ The Rune System allows players to socket runes into their class abilities, addin
 
 ### Socketing
 - Runes are socketed into specific skill IDs.
-- `.s rune socket <skillId> <runeId>` — socket a rune.
-- `.s rune sockets` — view all socketed runes across all skills.
-- `.s rune remove <runeId/name>` — remove a rune (accepts friendly names, not just R-XXXX IDs).
-- `.s rune destroy <runeId/name>` — destroy a rune permanently.
+- `.s rune socket <skillId> <runeId>` - socket a rune.
+- `.s rune sockets` - view all socketed runes across all skills.
+- `.s rune remove <runeId/name>` - remove a rune (accepts friendly names, not just R-XXXX IDs).
+- `.s rune destroy <runeId/name>` - destroy a rune permanently.
 
 ### Name Resolution
 - `resolveSocketedRune()`: Accepts both R-XXXX format IDs AND friendly names (e.g. `void_conversion-greater`).
@@ -31,7 +31,7 @@ The Rune System allows players to socket runes into their class abilities, addin
 - Cooldown runes: `cooldownMult` and `cooldownFlatReduction` applied to effective cooldown.
 
 ### Rune Tiers
-- Lesser, Greater, Supreme, Mythic — scaling power per tier.
+- Lesser, Greater, Supreme, Mythic - scaling power per tier.
 - Drop tiers: greater (Floor 21+), supreme (Floor 50+), mythic (special).
 
 ## Recent Changes (2026-08-06)

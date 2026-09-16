@@ -92,15 +92,15 @@ const NEKOS_BEST_MAP = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 💡 2026-09-01 GIF ENDPOINT OVERHAUL (Task 4 — dead endpoint + .gif kill):
+// 💡 2026-09-01 GIF ENDPOINT OVERHAUL (Task 4 - dead endpoint + .gif kill):
 // Diagnosed from the production host (Box1):
-//   - api.waifu.pics  → NXDOMAIN — domain decommissioned (confirmed via 8.8.8.8)
+//   - api.waifu.pics  → NXDOMAIN - domain decommissioned (confirmed via 8.8.8.8)
 //   - nekos.best      → Cloudflare JS challenge (403) on all datacenter requests
 //   - api.waifu.it    → JS "Loading..." interstitial (blocked for bots)
-//   - nekos.life v2   → WORKS: { url }  — cats: hug kiss pat cuddle tickle feed slap smug
-//   - PurrBot v2.3    → WORKS: { link } — sfw gif cats below (16)
+//   - nekos.life v2   → WORKS: { url }  - cats: hug kiss pat cuddle tickle feed slap smug
+//   - PurrBot v2.3    → WORKS: { link } - sfw gif cats below (16)
 // WAIFU_PICS_MAP / NEKOS_BEST_MAP kept: NEKOS_BEST_MAP is still used (source is
-// first in the chain — cheap fast-fail, auto-recovers if protection lifts).
+// first in the chain - cheap fast-fail, auto-recovers if protection lifts).
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── NEW: nekos.life v2 (second source in the chain) ──
@@ -134,7 +134,7 @@ const PURRBOT_REDIRECT = {
   punch: 'slap',
   shoot: 'slap',
   yeet: 'slap',
-  kill: 'slap',       // no live source has 'kill' anymore — closest action
+  kill: 'slap',       // no live source has 'kill' anymore - closest action
   animekick: 'slap',
   stab: 'slap',
   throw: 'slap',

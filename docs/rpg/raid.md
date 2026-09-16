@@ -20,7 +20,7 @@ Weekly raid bosses that the entire server fights together. Players deal damage o
 | Top 3 | 200,000 | 500,000 | Best rewards |
 | Top 10 | 100,000 | 200,000 | Second tier |
 | Top 50 | (scaled) | (scaled) | Participation |
-| Consolation | 5,000 | — | Everyone else |
+| Consolation | 5,000 | - | Everyone else |
 
 ### Recent Changes
 - Runes no longer drop from raids (Abyss-exclusive now)

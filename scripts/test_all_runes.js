@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Comprehensive rune test — verifies every rune type's modifiers are
+// Comprehensive rune test - verifies every rune type's modifiers are
 // correctly applied by applyRuneModifiers to the skill effect.
 //
 // Usage: node scripts/test_all_runes.js
@@ -47,7 +47,7 @@ async function main() {
     try {
       modified = runeSystem.applyRuneModifiers({ ...baseEffect }, [fakeRune]);
     } catch (e) {
-      console.log(`❌ ${typeId} (${runeType.name}) — applyRuneModifiers threw: ${e.message}`);
+      console.log(`❌ ${typeId} (${runeType.name}) - applyRuneModifiers threw: ${e.message}`);
       failCount++;
       failures.push({ typeId, reason: 'threw: ' + e.message });
       continue;
@@ -57,7 +57,7 @@ async function main() {
     const checks = [];
     const r = runeType;
 
-    // damageMult — should modify multiplier
+    // damageMult - should modify multiplier
     if (r.damageMult) {
       const expectedMult = baseEffect.multiplier * r.damageMult[tierIdx];
       if (Math.abs(modified.multiplier - expectedMult) > 0.01) {
@@ -65,7 +65,7 @@ async function main() {
       }
     }
 
-    // energyCostMult — should modify cost
+    // energyCostMult - should modify cost
     if (r.energyCostMult) {
       const expectedCost = Math.ceil(baseEffect.cost * r.energyCostMult[tierIdx]);
       if (modified.cost !== expectedCost) {
@@ -237,10 +237,10 @@ async function main() {
 
     // Report
     if (checks.length === 0) {
-      console.log(`✅ ${typeId.padEnd(22)} (${runeType.name}) — all checks passed`);
+      console.log(`✅ ${typeId.padEnd(22)} (${runeType.name}) - all checks passed`);
       passCount++;
     } else {
-      console.log(`❌ ${typeId.padEnd(22)} (${runeType.name}) — ${checks.length} check(s) failed:`);
+      console.log(`❌ ${typeId.padEnd(22)} (${runeType.name}) - ${checks.length} check(s) failed:`);
       for (const c of checks) {
         console.log(`     • ${c}`);
       }

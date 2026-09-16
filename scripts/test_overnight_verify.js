@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * OVERNIGHT VERIFY SCRIPT — Tests PvP + Abyss + Prefix interpolation
+ * OVERNIGHT VERIFY SCRIPT - Tests PvP + Abyss + Prefix interpolation
  * directly against the actual code modules (no WhatsApp needed).
  *
  * Run locally from /home/z/my-project/workspaces/whatsapp-bot:
  *   node scripts/test_overnight_verify.js
  *
  * Tests:
- *   1. P() interpolation — no literal '${P()}' in any module-exported message
- *   2. PvP cancelDuel — clears stuck 'duel already active' state
+ *   1. P() interpolation - no literal '${P()}' in any module-exported message
+ *   2. PvP cancelDuel - clears stuck 'duel already active' state
  *   3. PvP challengePlayer + acceptChallenge flow (with mocked image gen)
- *   4. Abyss startRun — uses player's REAL stats (HP/EN scale with level)
- *   5. Abyss processAttack — damage scales with player stats, not flat 100
- *   6. buildMentions — only pings explicit @-mentions, not reply targets
+ *   4. Abyss startRun - uses player's REAL stats (HP/EN scale with level)
+ *   5. Abyss processAttack - damage scales with player stats, not flat 100
+ *   6. buildMentions - only pings explicit @-mentions, not reply targets
  */
 
 'use strict';
@@ -35,13 +35,13 @@ const failures = [];
 function ok(name, detail) {
   testCount++;
   passCount++;
-  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function fail(name, detail) {
   testCount++;
   failCount++;
   failures.push({ name, detail });
-  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 // Track failures for final report
@@ -56,10 +56,10 @@ process.on('unhandledRejection', (e) => {
 
 async function main() {
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
-  console.log(`  OVERNIGHT VERIFY — direct module-level tests`);
+  console.log(`  OVERNIGHT VERIFY - direct module-level tests`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // ── TEST 1: P() interpolation — scan all RPG modules for leaks ──
+  // ── TEST 1: P() interpolation - scan all RPG modules for leaks ──
   console.log(`${CYAN}[Test 1]${RESET} Scan for literal '\${P()}' leaks in module source...`);
   const fs = require('fs');
   const path = require('path');
@@ -89,7 +89,7 @@ async function main() {
         leakCount++;
         i += 5; // skip past ${P()}
       }
-      // Single/double quoted strings can't span newlines — reset on newline
+      // Single/double quoted strings can't span newlines - reset on newline
       // (the 'continue' above already did this, but be explicit for safety)
     }
   }
@@ -103,7 +103,7 @@ async function main() {
     const hasP = /const\s+P\s*=\s*\(\)\s*=>/.test(src) || /function\s+P\s*\(\)/.test(src);
     const usesP = /\bP\(\)/.test(src);
     if (usesP && hasP) ok(`P-defined:${f}`, 'P() helper is defined and used');
-    else if (usesP && !hasP) fail(`P-defined:${f}`, 'uses P() but never defines it — ReferenceError at runtime');
+    else if (usesP && !hasP) fail(`P-defined:${f}`, 'uses P() but never defines it - ReferenceError at runtime');
     else ok(`P-defined:${f}`, '(does not use P())');
   }
 
@@ -116,7 +116,7 @@ async function main() {
       fail('cancelDuel:exported', 'cancelDuel is not exported from pvpSystem');
     } else {
       ok('cancelDuel:exported', 'pvpSystem.cancelDuel is a function');
-      // Try calling it on a fake chatId with no active duel — should return {success: false}
+      // Try calling it on a fake chatId with no active duel - should return {success: false}
       const r1 = pvpSystem.cancelDuel('test-chat-nonexistent-' + Date.now());
       if (r1 && r1.success === false && /no active duel/i.test(r1.message)) {
         ok('cancelDuel:empty-state', `returns "${r1.message}" when no duel is active`);
@@ -151,7 +151,7 @@ async function main() {
 
   // ── TEST 5: buildMentions only pings explicit @-mentions ──
   console.log(`\n${CYAN}[Test 5]${RESET} engine.js buildMentions only pings explicit @-mentions...`);
-  // buildMentions is defined inside the engine closure — we can't import it directly.
+  // buildMentions is defined inside the engine closure - we can't import it directly.
   // Instead, verify the helper functions it depends on are wired correctly by reading source.
   const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'engine.js'), 'utf8');
   const hasBuildMentions = /function\s+buildMentions\s*\(/.test(engineSrc);
@@ -167,7 +167,7 @@ async function main() {
   if (buildMentionsCallCount > 5) {
     ok('buildMentions:call-sites', `${buildMentionsCallCount} call-sites use buildMentions (definition + ~${buildMentionsCallCount - 1} callers)`);
   } else {
-    fail('buildMentions:call-sites', `only ${buildMentionsCallCount} call-sites — expected many admin/mod/pvp commands to be migrated`);
+    fail('buildMentions:call-sites', `only ${buildMentionsCallCount} call-sites - expected many admin/mod/pvp commands to be migrated`);
   }
 
   // ── TEST 6: Abyss startRun uses player's real stats ──
@@ -202,7 +202,7 @@ async function main() {
       if (baseStats && baseStats.hp && baseStats.hp > 100) {
         ok('abyss:real-stats', `baseStats.hp=${baseStats.hp} (scales with level, not flat 100)`);
       } else if (baseStats && baseStats.hp === 100) {
-        fail('abyss:real-stats', `baseStats.hp is exactly 100 — likely the flat-default bug still present`);
+        fail('abyss:real-stats', `baseStats.hp is exactly 100 - likely the flat-default bug still present`);
       } else {
         fail('abyss:real-stats', `baseStats.hp is missing or unexpected: ${JSON.stringify(baseStats).slice(0, 200)}`);
       }
@@ -220,10 +220,10 @@ async function main() {
   if (usesPlayerStats) {
     ok('abyss:damage-formula', 'damage formula references playerStats/baseStats');
   } else {
-    fail('abyss:damage-formula', 'damage formula does NOT reference player stats — likely using flat basePower');
+    fail('abyss:damage-formula', 'damage formula does NOT reference player stats - likely using flat basePower');
   }
   if (hasDamageCap) {
-    fail('abyss:damage-cap', 'found Math.min(damage, 100) cap — THIS IS THE BUG');
+    fail('abyss:damage-cap', 'found Math.min(damage, 100) cap - THIS IS THE BUG');
   } else {
     ok('abyss:damage-cap', 'no flat 100 damage cap found in abyssSystem.js');
   }
@@ -241,7 +241,7 @@ async function main() {
     if (/economy\.getUserClass\s*\(/.test(section)) {
       ok('abyss:getUserClass-used', 'startAbyssCombat uses economy.getUserClass()');
     } else {
-      fail('abyss:getUserClass-used', 'startAbyssCombat does NOT use economy.getUserClass — class loading regression');
+      fail('abyss:getUserClass-used', 'startAbyssCombat does NOT use economy.getUserClass - class loading regression');
     }
   } else {
     fail('abyss:getUserClass-used', 'could not locate startAbyssCombat function');
@@ -253,11 +253,11 @@ async function main() {
   if (/queue\s+timeout/i.test(goSrc) && /8000|8_000/.test(goSrc)) {
     ok('goImageService:queue-timeout', '8s queue-wait timeout is present');
   } else {
-    fail('goImageService:queue-timeout', 'queue-wait timeout missing — would hang under load');
+    fail('goImageService:queue-timeout', 'queue-wait timeout missing - would hang under load');
   }
 
   // ── TEST 10: Go service is actually healthy on Box 2 (production) ──
-  console.log(`\n${CYAN}[Test 10]${RESET} Go service health check (via SSH to Box 2 — production VCN IP)...`);
+  console.log(`\n${CYAN}[Test 10]${RESET} Go service health check (via SSH to Box 2 - production VCN IP)...`);
   const { execSync } = require('child_process');
   try {
     const sshScript = '/home/z/my-project/scripts/ssh_oracle.py';

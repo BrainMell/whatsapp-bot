@@ -3,7 +3,7 @@
 //   OLD bug: the 🆔 line showed the raw Mongo ObjectId hex (24-char string,
 //            unusable as command input, meaningless to users).
 //   NEW:     shows the card library ID (e.g. "3-04521") + global Copy #.
-// Pure-function test — no DB connection required.
+// Pure-function test - no DB connection required.
 
 const cardSystem = require('../core/rpg/cardSystem');
 

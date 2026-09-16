@@ -1,50 +1,50 @@
-# Agent Onboarding Prompt — Mellow's WhatsApp Bot
+# Agent Onboarding Prompt - Mellow's WhatsApp Bot
 
 > Paste this entire block into any AI agent (Claude, GPT, Gemini, Cursor, etc.) to give it instant working access to the codebase.
 
 ---
 
-## ⚠️ CRITICAL RULES — READ BEFORE TOUCHING ANYTHING
+## ⚠️ CRITICAL RULES - READ BEFORE TOUCHING ANYTHING
 
 1. **whatsapp-bot: NEVER create a new branch.** Push all whatsapp-bot updates directly to the existing `audit/fix-pass-1` branch. Don't branch off it, don't create a new one per task, and don't touch `main`. The user merges into `main` via PR themselves when ready.
 
-2. **Bot_genaration (Go image service): push directly to `main`.** No branch workflow on this repo — commit and push straight to `main`. This is still subject to rule 5 below: don't touch this repo at all unless the user has specifically asked.
+2. **Bot_genaration (Go image service): push directly to `main`.** No branch workflow on this repo - commit and push straight to `main`. This is still subject to rule 5 below: don't touch this repo at all unless the user has specifically asked.
 
 3. **NEVER force-push to `main`** on either repo unless the user explicitly says to.
 
 4. **NEVER write Chinese characters into code, comments, or commit messages.** English only.
 
-5. **NEVER touch the Go image service repo unless asked.** It's deployed live — a bad push breaks combat image rendering for all bot instances immediately. When you are asked to touch it, push straight to `main` per rule 2 above — no branch.
+5. **NEVER touch the Go image service repo unless asked.** It's deployed live - a bad push breaks combat image rendering for all bot instances immediately. When you are asked to touch it, push straight to `main` per rule 2 above - no branch.
 
 6. **Always cite file:line when proposing changes.** Show before/after. The user hates vague "should be higher" suggestions.
 
 7. **Don't add features without asking.** Fix what's broken first.
 
-8. **NEVER push this onboarding doc to ANY repo.** The user keeps it separate from the code. Do NOT commit `AGENT_ONBOARDING_PROMPT.md` or any onboarding file to `whatsapp-bot` or `Bot_genaration`. If you need to update it, give the updated file to the user directly — do NOT `git add` it.
+8. **NEVER push this onboarding doc to ANY repo.** The user keeps it separate from the code. Do NOT commit `AGENT_ONBOARDING_PROMPT.md` or any onboarding file to `whatsapp-bot` or `Bot_genaration`. If you need to update it, give the updated file to the user directly - do NOT `git add` it.
 
 9. **Commit messages: use conventional commits** (`fix:`, `feat:`, `docs:`, etc.). One logical change per commit. Don't bundle unrelated fixes.
 
 10. **Backups before destructive ops.** When modifying `cards_data.json`, MongoDB collections, or any large data file, always save a `.before_<action>` backup first.
 
-11. **NEVER reference `effect` inside `calculateDamage()`.** The function signature is `calculateDamage(attacker, target, power, type, element, chatId, isAbility)` — there is NO `effect` parameter. Referencing `effect` inside this function throws `ReferenceError: effect is not defined`, which silently breaks ALL combat.
+11. **NEVER reference `effect` inside `calculateDamage()`.** The function signature is `calculateDamage(attacker, target, power, type, element, chatId, isAbility)` - there is NO `effect` parameter. Referencing `effect` inside this function throws `ReferenceError: effect is not defined`, which silently breaks ALL combat.
 
 12. **NEVER add `instances/*/auth/` to `.gitignore`.** Auth files MUST be tracked in git. A previous agent added them to `.gitignore` causing auth didn't survive across machines. If auth isn't in git, the bot can't be recovered after a session logout without manually re-scanning locally.
 
-13. **NEVER call `sharp()` on Oracle.** Sharp crashes with a native `GLib-GObject-CRITICAL` error that kills the entire Node.js process. This is NOT a catchable JS error — it's a native segfault. See "The sharp crisis" section below for the full story and the fixes that must NOT be reverted.
+13. **NEVER call `sharp()` on Oracle.** Sharp crashes with a native `GLib-GObject-CRITICAL` error that kills the entire Node.js process. This is NOT a catchable JS error - it's a native segfault. See "The sharp crisis" section below for the full story and the fixes that must NOT be reverted.
 
-14. **NEVER call `sock.updateProfilePicture()` on Oracle.** Same reason — it calls sharp internally. The `updateBotPFP` function is disabled. Do NOT re-enable it unless sharp is fixed or the box has more RAM.
+14. **NEVER call `sock.updateProfilePicture()` on Oracle.** Same reason - it calls sharp internally. The `updateBotPFP` function is disabled. Do NOT re-enable it unless sharp is fixed or the box has more RAM.
 
-15. **Pairing code is the DEFAULT login method.** QR code is the BACKUP. If you need to re-link the bot, use pairing code. The login menu has NO timeout — wait for the user to choose.
+15. **Pairing code is the DEFAULT login method.** QR code is the BACKUP. If you need to re-link the bot, use pairing code. The login menu has NO timeout - wait for the user to choose.
 
-16. **The server has NO GitHub PAT.** Commits can be made on the server (git identity is set), but `git push` will fail with "could not read Username". The user pushes from their local machine. If you need to push, ask the user for a PAT or tell them to pull + push locally. **PATs expire every ~2 days — treat any PAT touched by a third-party chat interface as burned.**
+16. **The server has NO GitHub PAT.** Commits can be made on the server (git identity is set), but `git push` will fail with "could not read Username". The user pushes from their local machine. If you need to push, ask the user for a PAT or tell them to pull + push locally. **PATs expire every ~2 days - treat any PAT touched by a third-party chat interface as burned.**
 
-17. **ALWAYS test with real evidence, not assumptions.** The user hates when agents say "should work" without testing. Capture screenshots, run actual commands, show VLM verification, and show pixel measurements. Code diffs alone are not proof — the user wants to see the rendered output. **Do NOT claim "VLM-verified" without showing the actual image or pasting the VLM response.**
+17. **ALWAYS test with real evidence, not assumptions.** The user hates when agents say "should work" without testing. Capture screenshots, run actual commands, show VLM verification, and show pixel measurements. Code diffs alone are not proof - the user wants to see the rendered output. **Do NOT claim "VLM-verified" without showing the actual image or pasting the VLM response.**
 
 18. **When fixing rendering bugs, check ALL render paths.** PvE, PvP-1v1, and PvP-summon each have separate (but shared) positioning logic. A fix in one path often doesn't carry to the others. Always verify against all three paths with screenshots.
 
 19. **The `isPvPSummonDuel` flag gates a dedicated render path.** PvP-summon has its own sprite sizing (180px height), positioning (X=220/800), text labels (no portraits), and elliptical shadows. Don't mix these constants with PvE or PvP-1v1.
 
-20. **`generateDuelImage()` must use FIXED slot order `[player1, player2]`.** NEVER use `[attacker, defender]` — that swaps the array each turn, causing sprites to swap positions/facing/HP bars. The turn indicator (`action.attackerIndex`) handles highlighting without reordering the array.
+20. **`generateDuelImage()` must use FIXED slot order `[player1, player2]`.** NEVER use `[attacker, defender]` - that swaps the array each turn, causing sprites to swap positions/facing/HP bars. The turn indicator (`action.attackerIndex`) handles highlighting without reordering the array.
 
 21. **`finishDuel()` returns `{ message: string }`, not a string.** Always extract `result.message` before string concatenation. Concatenating the object directly produces `[object Object]` in chat and corrupts combat state.
 
@@ -62,7 +62,7 @@
    ```
    If you must upload from local, `git pull` on the server FIRST to sync. Uploading a stale engine.js WILL wipe out sibling prefix guards, hardmute fixes, compact UI, uptime persistence, and every other server-only commit.
 
-26. **⚠️ Do NOT use Python to inject code into engine.js.** Python's Unicode handling (surrogate pairs, escape sequences) corrupts the 26K-line file. Use Node.js scripts or sed for targeted edits. For new features, create a SEPARATE module file (e.g., `core/rpg/broadcastHelpers.js`) and `require()` it from engine.js — this avoids touching the massive file entirely.
+26. **⚠️ Do NOT use Python to inject code into engine.js.** Python's Unicode handling (surrogate pairs, escape sequences) corrupts the 26K-line file. Use Node.js scripts or sed for targeted edits. For new features, create a SEPARATE module file (e.g., `core/rpg/broadcastHelpers.js`) and `require()` it from engine.js - this avoids touching the massive file entirely.
 
 27. **⚠️ ALWAYS `git pull` on the server before making changes.** The server may have commits that aren't in your local repo. If you upload without pulling first, you overwrite those commits. This happened 3 times in one session and wiped out 5 features each time.
 
@@ -70,7 +70,7 @@
 
 29. **⚠️ Enemy sprite files are GRID spritesheets, NOT single frames.** Files like `troll_0000_green.png` are 5×3 grids (15 frames), NOT single images. The old `EnemyNameSprites` map pointed to `_single.png` files that either didn't exist or were the full grid. This caused enemies to render as clusters of tiny figures ("goblin grid" bug). The fix was a 1:1 name-to-numbered-file mapping in `EnemyNameSprites`. Do NOT re-add `_single.png` references.
 
-30. **⚠️ When the user asks for "standard combat commands" for a subsystem (Abyss, etc.), they mean ARCHITECTURAL UNIFICATION — not patching call sites.** Abyss combat already shares the standard `startCombat()` path, but floor-advancement logic (treasure, events, skip) has separate glue code that calls `startAbyssCombat()` at each transition. If any of these 3 handlers forgets to call it, the player gets "Not in combat!" on the next floor. All 3 handlers (processEventChoice, processTreasure, processSkip) + handleAbyssVictory + startRun must call `startAbyssCombat` when the next floor is combat.
+30. **⚠️ When the user asks for "standard combat commands" for a subsystem (Abyss, etc.), they mean ARCHITECTURAL UNIFICATION - not patching call sites.** Abyss combat already shares the standard `startCombat()` path, but floor-advancement logic (treasure, events, skip) has separate glue code that calls `startAbyssCombat()` at each transition. If any of these 3 handlers forgets to call it, the player gets "Not in combat!" on the next floor. All 3 handlers (processEventChoice, processTreasure, processSkip) + handleAbyssVictory + startRun must call `startAbyssCombat` when the next floor is combat.
 
 31. **Card mod permissions: `t2edeck`, `setprice`, and `event` commands must include `isCardMod`.** They were originally gated with `isOwner || isMod` (global mod only), which blocked card mods. The fix adds `|| isCardMod` to each permission check in `cardSystem.js`.
 
@@ -78,15 +78,15 @@
 
 33. **Hardmute requires the bot to be WA group admin to delete messages.** If `botAdmin=member`, the delete call returns success but WhatsApp silently ignores it. The hardmute code attempts the delete unconditionally (no pre-check) because the LID/phone admin check was unreliable. The log shows `Delete attempted` on success.
 
-34. **Uptime resets on reconnect.** `botStartTime` was set unconditionally inside `initSocket()` which runs on every reconnect. The fix checks `if (!botStartTime)` and queries MongoDB for a previous heartbeat with matching PID — if same PID, it's a reconnect (keep original time); if different PID, it's a fresh process restart.
+34. **Uptime resets on reconnect.** `botStartTime` was set unconditionally inside `initSocket()` which runs on every reconnect. The fix checks `if (!botStartTime)` and queries MongoDB for a previous heartbeat with matching PID - if same PID, it's a reconnect (keep original time); if different PID, it's a fresh process restart.
 
 35. **Broadcast GC selection.** `.j updateall` now shows a numbered list of all GCs. Reply with `1,3,5` (specific), `1-5` (range), `1,3-5,8` (combo), `all`, or `cancel`. Selection expires after 5 minutes. Uses `core/rpg/broadcastHelpers.js` (separate module, not injected into engine.js).
 
 ---
 
-## ⏩ STEP 0 — DO THIS FIRST, BEFORE ANYTHING ELSE
+## ⏩ STEP 0 - DO THIS FIRST, BEFORE ANYTHING ELSE
 
-Before reading further, before proposing any fix, before touching any code: **clone both repos.** You cannot reason correctly about this codebase from the summaries below alone — go read the actual files.
+Before reading further, before proposing any fix, before touching any code: **clone both repos.** You cannot reason correctly about this codebase from the summaries below alone - go read the actual files.
 
 ```bash
 # Bot
@@ -146,10 +146,10 @@ These are the specific mistakes that caused regressions. Read them BEFORE touchi
 - The user can spot when you're describing what SHOULD be there vs what IS there
 
 ### Mistake 4: Removing functionality instead of fixing it
-**What happened:** Enemy sprites were broken (grid-of-goblins bug). The agent's first fix was to DELETE all sprite mappings and fall back to a generic level-based pool. This meant every F-tier enemy rendered as the exact same `fire (5).png` — no name-specific sprites at all.
+**What happened:** Enemy sprites were broken (grid-of-goblins bug). The agent's first fix was to DELETE all sprite mappings and fall back to a generic level-based pool. This meant every F-tier enemy rendered as the exact same `fire (5).png` - no name-specific sprites at all.
 
 **How to prevent:**
-- When a mapping is broken, FIX THE MAPPING — don't delete it
+- When a mapping is broken, FIX THE MAPPING - don't delete it
 - If you can't fix it immediately, SAY SO: "I'm removing the mappings as a temporary measure, but each enemy will now show a generic sprite, not a name-specific one"
 - Never present a scope reduction as a fix
 
@@ -169,7 +169,7 @@ These are the specific mistakes that caused regressions. Read them BEFORE touchi
 - When in doubt, ask: "Do you mean X (sprite mismatch) or Y (enemy too strong)?"
 
 ### Mistake 7: Asserting completion without end-to-end proof
-**What happened:** The agent claimed "full end-to-end test passed" but the test output was labeled "STEP 1, STEP 2, STEP 5" — steps 3 and 4 were missing (the actual original bug sequence: enter → floor 1 win → event → floor 3 → attack).
+**What happened:** The agent claimed "full end-to-end test passed" but the test output was labeled "STEP 1, STEP 2, STEP 5" - steps 3 and 4 were missing (the actual original bug sequence: enter → floor 1 win → event → floor 3 → attack).
 
 **How to prevent:**
 - Paste the UNTRIMMED test output, including failures
@@ -178,7 +178,7 @@ These are the specific mistakes that caused regressions. Read them BEFORE touchi
 
 ---
 
-## The sharp crisis (READ THIS — it cost 30+ hours of debugging)
+## The sharp crisis (READ THIS - it cost 30+ hours of debugging)
 
 **Sharp is a native image processing library. On Oracle (954MB RAM, no GPU), it crashes with:**
 ```
@@ -188,13 +188,13 @@ GLib-GObject-CRITICAL **: cannot retrieve class for invalid (unclassed) type '<i
 
 ### What sharp was used for (and how each was fixed):
 
-1. **Baileys thumbnail generation** — Every `sock.sendMessage({ image: buffer })` call WITHOUT a `jpegThumbnail` property caused Baileys to call sharp. **FIX:** Monkey-patched `sock.sendMessage` at connection.open to auto-inject `jpegThumbnail: FALLBACK_THUMB` (a 1×1 white JPEG) for ALL image AND video messages.
+1. **Baileys thumbnail generation** - Every `sock.sendMessage({ image: buffer })` call WITHOUT a `jpegThumbnail` property caused Baileys to call sharp. **FIX:** Monkey-patched `sock.sendMessage` at connection.open to auto-inject `jpegThumbnail: FALLBACK_THUMB` (a 1×1 white JPEG) for ALL image AND video messages.
 
-2. **`buildThumbnail()` function** — **FIX:** Returns `FALLBACK_THUMB` directly. No sharp, no jimp.
+2. **`buildThumbnail()` function** - **FIX:** Returns `FALLBACK_THUMB` directly. No sharp, no jimp.
 
-3. **`sock.updateProfilePicture()`** — **FIX:** `updateBotPFP()` is disabled entirely.
+3. **`sock.updateProfilePicture()`** - **FIX:** `updateBotPFP()` is disabled entirely.
 
-4. **`.jk diag` Test 3 (sharp test)** — **FIX:** Replaced with an info message.
+4. **`.jk diag` Test 3 (sharp test)** - **FIX:** Replaced with an info message.
 
 ### DO NOT:
 - Re-enable `updateBotPFP()`
@@ -209,9 +209,9 @@ GLib-GObject-CRITICAL **: cannot retrieve class for invalid (unclassed) type '<i
 
 ### Current state (August 2026)
 - **Three bot instances are active:**
-  - **Jake** (`.jk` prefix, Adventure Time personality) — phone `2349133219812`
-  - **Joker** (`.j` prefix, Persona 5 personality) — phone `233509676154`
-  - **Subaru** (`.s` prefix, Re:Zero personality) — phone `2347076192459`
+  - **Jake** (`.jk` prefix, Adventure Time personality) - phone `2349133219812`
+  - **Joker** (`.j` prefix, Persona 5 personality) - phone `233509676154`
+  - **Subaru** (`.s` prefix, Re:Zero personality) - phone `2347076192459`
 - Goten, Esdeath are disabled.
 - Auth files are tracked in git at `instances/<BotName>/auth/`.
 
@@ -236,14 +236,14 @@ If `pairingPhone` is set in `instances/<BotName>/botConfig.json`, the bot uses p
 
 ## Oracle Cloud infrastructure (SPLIT SERVER)
 
-### Box 1 — Bot Server
+### Box 1 - Bot Server
 - **Host:** `84.8.130.156` (user: `ubuntu`)
 - **Private IP:** `10.0.1.247`
 - **Shape:** `VM.Standard.E2.1.Micro` (AMD x86, 1/8 OCPU, 954 MB RAM)
-- **Runs:** `whatsapp-bot` — Node.js bot (Jake + Joker + Subaru)
+- **Runs:** `whatsapp-bot` - Node.js bot (Jake + Joker + Subaru)
 - **Swap:** 2 GB at `/swapfile` (permanent in `/etc/fstab`). Do NOT remove.
 
-### Box 2 — Go Service Server
+### Box 2 - Go Service Server
 - **Host:** `92.4.134.161` (user: `ubuntu`)
 - **Private IP:** `10.0.1.56`
 - **Shape:** `VM.Standard.E2.1.Micro` (AMD x86, 1/8 OCPU, 954 MB RAM)
@@ -261,7 +261,7 @@ User → WhatsApp → Box 1 (84.8.130.156) → whatsapp-bot
                                               Go service renders → PNG/MP4 back
 ```
 
-### SSH access (use paramiko — no ssh binary on sandbox)
+### SSH access (use paramiko - no ssh binary on sandbox)
 ```python
 import paramiko
 ssh = paramiko.SSHClient()
@@ -271,7 +271,7 @@ ssh.connect("84.8.130.156", username="ubuntu", key_filename="/tmp/ssh_key", time
 ssh.connect("92.4.134.161", username="ubuntu", key_filename="/tmp/ssh_key", timeout=15)
 ```
 
-### Go service deploy (manual — no deploy script on sandbox)
+### Go service deploy (manual - no deploy script on sandbox)
 ```python
 # Upload changed .go files via SFTP, then rebuild + restart:
 stdin, stdout, stderr = ssh.exec_command("cd ~/bot_generation && export PATH=/usr/local/go/bin:$PATH && go build -o bot-generation . && pm2 restart bot-generation-go --update-env")
@@ -290,10 +290,10 @@ A cron job runs hourly to kill stuck `node -e` and `bash -c` debug processes:
 ```env
 # .env (create this in whatsapp-bot/ root)
 
-# MongoDB Atlas — production database (db name: "test")
+# MongoDB Atlas - production database (db name: "test")
 MONGO_URI=mongodb+srv://admin:umtaSx2zu940HhKQ@cluster0.drpztk6.mongodb.net/test?retryWrites=true&w=majority&appName=Cluster0
 
-# Groq — for the AI chat summary / context engine
+# Groq - for the AI chat summary / context engine
 GROQ_API_KEYS=<comma-separated list of gsk_ keys, rotates on rate-limit>
 GROQ_MODEL=llama-3.3-70b-versatile
 
@@ -323,10 +323,10 @@ GO_IMAGE_SERVICE_URL=http://10.0.1.56:7860
 ### Repo 1: WhatsApp Bot (Node.js)
 ```
 GitHub:  https://github.com/BrainMell/whatsapp-bot
-Branch:  audit/fix-pass-1 (active — all recent work is here, NOT on main yet)
+Branch:  audit/fix-pass-1 (active - all recent work is here, NOT on main yet)
 ```
 
-### Repo 2: Go Image Service (separate repo — deployed live)
+### Repo 2: Go Image Service (separate repo - deployed live)
 ```
 GitHub:  https://github.com/BrainMell/Bot_genaration
 Branch:  main
@@ -345,17 +345,17 @@ The Go service renders combat scenes, card grids, profile cards, transaction car
 | **Joker** | `.j` | Phantom Thieves leader | ✅ ACTIVE |
 | **Subaru** | `.s` | Re:Zero Subaru Natsuki | ✅ ACTIVE |
 | Goten | `.g` | Chill half-Saiyan | 🔇 Disabled |
-| Esdeath | — | — | 🔇 Disabled |
+| Esdeath | - | - | 🔇 Disabled |
 
 ---
 
 ## Combat renderer (Bot_genaration/pkg/combat/)
 
 ### Layout system (layout.go)
-- **Slot tables:** `PlayerSlots`, `SummonSlots`, `EnemySlots` — 8 slots each, zigzag formation
+- **Slot tables:** `PlayerSlots`, `SummonSlots`, `EnemySlots` - 8 slots each, zigzag formation
 - **4-column zigzag:** rows alternate between cols 1+3 and cols 2+4 (gaps)
 - **Player zone:** X=80-300 (left edge), **Enemy zone:** X=730-900 (right edge)
-- **Center gap:** 430px (X 300..730) — no sprites in the middle
+- **Center gap:** 430px (X 300..730) - no sprites in the middle
 - **Depth spacing:** 50px between rows, 150px tall player sprites
 - **Sprite heights:** player=150px, summon=75px, enemy=170px, boss=210px
 - **Crop-first-then-resize-by-height:** all sprites normalized to fixed height (not width)
@@ -370,19 +370,19 @@ The Go service renders combat scenes, card grids, profile cards, transaction car
 - Draws golden ellipse under the active attacker BEFORE the sprite (shadow → indicator → sprite)
 
 ### Nameplate pills
-- `drawNameplatePill()` — translucent dark pill with white border above each entity's HP bar
+- `drawNameplatePill()` - translucent dark pill with white border above each entity's HP bar
 - Player[0] also gets name inside the left UI panel (auto-shrinking font, same as PvP)
 
 ### Enemy sprite mapping (EnemyNameSprites in sprites.go)
 - Each enemy name maps to a specific numbered sprite file (1:1 mapping)
 - Element prefix = family type (fire/water/earth/ice/mutated/hybrides)
 - Number = specific mob within that family
-- **Do NOT use `_single.png` files** — they were multi-frame spritesheets that rendered as grids
+- **Do NOT use `_single.png` files** - they were multi-frame spritesheets that rendered as grids
 - Boss sprites use `BossNameSprites` (all 33 `boss_N_N.png` / `boss_N_S.png` files exist and are verified)
 
 ### Case-insensitive class lookup
 - `GetCharacterSpritePath` and `GetCharacterSpriteFile` uppercase the class before map lookup
-- Was case-sensitive — "Fighter" or "fighter" fell back to FIGHTER for every class
+- Was case-sensitive - "Fighter" or "fighter" fell back to FIGHTER for every class
 
 ---
 
@@ -420,9 +420,9 @@ The Abyss is a vast underground network. Before the Infection, natural creatures
 ## Mod system
 
 ### Three-tier moderator system:
-- **Global Mod** (`globalMods`) — all commands, all systems
-- **RPG Mod** (`rpgMods`) — RPG commands only (combat, classes, items, dungeons, abyss, runes)
-- **Cards Mod** (`cardsMods`) — Cards commands only (spawn, market, deck, eshop, espawn, t2edeck, setprice, event)
+- **Global Mod** (`globalMods`) - all commands, all systems
+- **RPG Mod** (`rpgMods`) - RPG commands only (combat, classes, items, dungeons, abyss, runes)
+- **Cards Mod** (`cardsMods`) - Cards commands only (spawn, market, deck, eshop, espawn, t2edeck, setprice, event)
 - Card system `isMod` flag = `overrideUsers || isGlobalMod` (NOT RPG mod)
 - `isCardMod` = `isOwner || inst.modJids || isMod || isCardsMod`
 
@@ -431,7 +431,7 @@ The Abyss is a vast underground network. Before the Infection, natural creatures
 - Runs at the VERY START of the message handler (before MongoDB persist, before any command processing)
 - Attempts delete on EVERY message from hard-muted users in GCs
 - Does NOT check `botIsAdmin` before attempting (the check was unreliable due to LID/phone mismatch)
-- WhatsApp silently ignores delete requests from non-admins — that's expected
+- WhatsApp silently ignores delete requests from non-admins - that's expected
 - Log shows `Delete attempted` on success, `Delete FAILED` on failure
 
 ### Broadcast GC selection
@@ -444,33 +444,33 @@ The Abyss is a vast underground network. Before the Infection, natural creatures
 
 ## Key design patterns
 
-1. **Multi-tenant via AsyncLocalStorage** — `botConfig.js` resolves the active tenant from the call stack.
+1. **Multi-tenant via AsyncLocalStorage** - `botConfig.js` resolves the active tenant from the call stack.
 
-2. **JID normalization hell** — WhatsApp sends participant IDs in 3+ formats. `core/utils/lidResolver.js` is the canonical resolver. `resolveJidHelper()` in economy.js handles LID↔phone swap.
+2. **JID normalization hell** - WhatsApp sends participant IDs in 3+ formats. `core/utils/lidResolver.js` is the canonical resolver. `resolveJidHelper()` in economy.js handles LID↔phone swap.
 
-3. **In-memory `gameStates` Map** — all active dungeon/PvP/trial sessions live in a global Map keyed by `chatId` or `chatId_userId`.
+3. **In-memory `gameStates` Map** - all active dungeon/PvP/trial sessions live in a global Map keyed by `chatId` or `chatId_userId`.
 
-4. **Go microservice for images** — combat scenes, card images, deck renders all go through `core/utils/goImageService.js` → `http://10.0.1.56:7860`.
+4. **Go microservice for images** - combat scenes, card images, deck renders all go through `core/utils/goImageService.js` → `http://10.0.1.56:7860`.
 
-5. **LFS for large assets** — `cards_data.json` (35K cards, ~16MB), all PNGs, TTF fonts are Git-LFS. Always run `git lfs pull` after cloning.
+5. **LFS for large assets** - `cards_data.json` (35K cards, ~16MB), all PNGs, TTF fonts are Git-LFS. Always run `git lfs pull` after cloning.
 
-6. **`sock.sendMessage` monkey-patch** — auto-injects `jpegThumbnail: FALLBACK_THUMB` for all image/video messages. Prevents Baileys from calling sharp. Do NOT remove.
+6. **`sock.sendMessage` monkey-patch** - auto-injects `jpegThumbnail: FALLBACK_THUMB` for all image/video messages. Prevents Baileys from calling sharp. Do NOT remove.
 
-7. **System model: `systems` collection (plural)** — Mongoose pluralizes the model name. The `system` util (`core/utils/system.js`) uses `core/models/System.js` which maps to the `systems` collection. When querying MongoDB directly, use `db.collection('systems')` not `db.collection('system')`.
+7. **System model: `systems` collection (plural)** - Mongoose pluralizes the model name. The `system` util (`core/utils/system.js`) uses `core/models/System.js` which maps to the `systems` collection. When querying MongoDB directly, use `db.collection('systems')` not `db.collection('system')`.
 
 8. **Enemy sprite inventory (30 files, all 64×96 single-frame):**
-   - fire: (5), (6), (7), (8), (11) — 5 files
-   - water: (4), (6), (7) — 3 files
-   - earth: (1), (2), (3), (4), (5) — 5 files
-   - ice: (1), (2), (3) — 3 files
-   - mutated: (1) through (7) — 7 files
-   - hybrides: (1) through (7) — 7 files
+   - fire: (5), (6), (7), (8), (11) - 5 files
+   - water: (4), (6), (7) - 3 files
+   - earth: (1), (2), (3), (4), (5) - 5 files
+   - ice: (1), (2), (3) - 3 files
+   - mutated: (1) through (7) - 7 files
+   - hybrides: (1) through (7) - 7 files
    - Boss sprites: 33 files (`boss_N_N.png` / `boss_N_S.png`), all verified single-frame
 
 9. **Gambling anti-abuse (3 layers):**
-   - House edge: `min(0.03 + rounds * 0.001, 0.10)` — scales 3% → 10%
+   - House edge: `min(0.03 + rounds * 0.001, 0.10)` - scales 3% → 10%
    - Daily profit cap: 2,000,000 Zeni net profit per day
-   - Forced loss: `min(max((rounds - 20) * 0.005, 0), 0.10)` — starts after 20 rounds, caps at 10%
+   - Forced loss: `min(max((rounds - 20) * 0.005, 0), 0.10)` - starts after 20 rounds, caps at 10%
 
 10. **Economy clamp:** `MAX_WALLET = 2,000,000,000` (2B), `MAX_BANK = 10,000,000,000` (10B). Applied on every user load via `clampWallet()`.
 
@@ -480,11 +480,11 @@ The Abyss is a vast underground network. Before the Infection, natural creatures
 
 ```
 whatsapp-bot/
-├── index.js                 # Bootstrap — loads instances, starts Baileys
+├── index.js                 # Bootstrap - loads instances, starts Baileys
 ├── botConfig.js             # Active-tenant resolver (AsyncLocalStorage)
 ├── db.js                    # Mongoose connector (maxPoolSize=10, minPoolSize=2)
 ├── core/
-│   ├── engine.js            # Main message router (~26K lines) — ALL command handlers
+│   ├── engine.js            # Main message router (~26K lines) - ALL command handlers
 │   ├── commands/            # Command entry points (rpg, shop, repair, admin, summon)
 │   ├── rpg/                 # RPG subsystems
 │   │   ├── economy.js       # Wallet, bank, daily, rob, transfers, premium tiers
@@ -552,7 +552,7 @@ img2 = np.array(Image.open("sprite2.png").convert("RGBA"))
 region1 = img1[200:500, 700:950, :3]
 region2 = img2[200:500, 700:950, :3]
 diff = np.abs(region1.astype(int) - region2.astype(int)).mean()
-print(f"Mean diff: {diff:.1f} — {'DIFFERENT' if diff > 5 else 'SAME'}")
+print(f"Mean diff: {diff:.1f} - {'DIFFERENT' if diff > 5 else 'SAME'}")
 ```
 
 ---
@@ -597,21 +597,21 @@ print(f"Mean diff: {diff:.1f} — {'DIFFERENT' if diff > 5 else 'SAME'}")
 
 ## Known issues (August 2026)
 
-1. **Animated combat disabled** — MP4 encoding too slow for Box 2 (6-27s per encode). Code is complete, just needs a bigger Go service instance.
-2. **Box 1 RAM constrained** — 954MB total, bot uses 250-340MB. PM2 `max_memory_restart: 450M` prevents OOM.
-3. **GitHub Actions deploy sometimes doesn't trigger** — Deploy manually via SSH when this happens.
-4. **VLM (z-ai vision) can be unreliable for dark sprites** — Always ask detailed questions, not binary FLOATING/GROUNDED judgments.
-5. **Render.com Go service suspended** — The `bot-genaration-iat6.onrender.com` URL returns 503. The Go service runs on Box 2 (Oracle) at `http://10.0.1.56:7860`, not Render. The Render URL in `.env` is a fallback that's currently broken.
-6. **Enemy sprites are 64×96 pixel art** — small but valid. Not name-specific art (a CAVE BAT doesn't look like a bat), but each enemy gets a unique file within its element family. Boss sprites ARE name-specific.
-7. **Abyss combat is still a parallel system** — shares `startCombat()` but has separate floor-advancement glue code. Not architecturally unified.
+1. **Animated combat disabled** - MP4 encoding too slow for Box 2 (6-27s per encode). Code is complete, just needs a bigger Go service instance.
+2. **Box 1 RAM constrained** - 954MB total, bot uses 250-340MB. PM2 `max_memory_restart: 450M` prevents OOM.
+3. **GitHub Actions deploy sometimes doesn't trigger** - Deploy manually via SSH when this happens.
+4. **VLM (z-ai vision) can be unreliable for dark sprites** - Always ask detailed questions, not binary FLOATING/GROUNDED judgments.
+5. **Render.com Go service suspended** - The `bot-genaration-iat6.onrender.com` URL returns 503. The Go service runs on Box 2 (Oracle) at `http://10.0.1.56:7860`, not Render. The Render URL in `.env` is a fallback that's currently broken.
+6. **Enemy sprites are 64×96 pixel art** - small but valid. Not name-specific art (a CAVE BAT doesn't look like a bat), but each enemy gets a unique file within its element family. Boss sprites ARE name-specific.
+7. **Abyss combat is still a parallel system** - shares `startCombat()` but has separate floor-advancement glue code. Not architecturally unified.
 
 ---
 
 ## Communication style
 
-The owner (BrainMell / "Mellow") is hands-on, prefers concrete numbers, hates vague "should be higher" suggestions. Always cite file:line. Show before/after when proposing changes. Don't add features without asking — fix what's broken first. Code comments in English only. Ask before merging to `main` or pushing to the Go service repo. The server has no GitHub PAT — tell the user to push from their local machine.
+The owner (BrainMell / "Mellow") is hands-on, prefers concrete numbers, hates vague "should be higher" suggestions. Always cite file:line. Show before/after when proposing changes. Don't add features without asking - fix what's broken first. Code comments in English only. Ask before merging to `main` or pushing to the Go service repo. The server has no GitHub PAT - tell the user to push from their local machine.
 
-**The user HATES when agents say "should work" without testing.** Always capture screenshots, run actual commands, show VLM verification, and show pixel measurements. Code diffs alone are not proof — the user wants to see the rendered output working.
+**The user HATES when agents say "should work" without testing.** Always capture screenshots, run actual commands, show VLM verification, and show pixel measurements. Code diffs alone are not proof - the user wants to see the rendered output working.
 
 **When fixing rendering bugs, check ALL render paths (PvE, PvP-1v1, PvP-summon).** A fix in one path often doesn't carry to the others. Always verify against all three with screenshots.
 
@@ -636,22 +636,22 @@ modifying ANY RPG image card. The non-negotiables, summarized:
 2. **Never hardcode a color that has a theme role.** Roles: `Bg Bg2 Panel PanelEd Plate
    PlateTx Banner BannerTx BannerEdge Ink Muted Sub Gold PillBg PillTx Track Fill FillHi
    Done Seal SealTx Caption FrameStyle`. Decree values in `decreeTheme()` are byte-identical
-   to the legacy literals — swapping literals to roles must not change the default render.
+   to the legacy literals - swapping literals to roles must not change the default render.
 3. **Same universe, different purpose.** Card kinds keep their own composition; themes
    own palette/frame/motif/typography. Ten styles ≠ one card recolored ten times.
 4. **Battle cards (DUEL/QUEST/TRIAL/ABYSS/combat-end) intentionally stay on baked Royal
-   Decree art** for combat legibility — do not theme them without the owner's ask.
+   Decree art** for combat legibility - do not theme them without the owner's ask.
 5. **Translucency rule:** translucent fills use `color.NRGBA`. `color.RGBA` with R/G/B
    greater than alpha is ILLEGAL premultiplied and Go garbles it into random hues (this
    was the Ludo mismatched-colors root cause).
 6. **Effect runes** (abilities/skills): only the DejaVu-verified whitelist in
-   `docs/CARD-SYSTEM.md` §6, derived from the REAL skill schema via `effectRunes()` —
+   `docs/CARD-SYSTEM.md` §6, derived from the REAL skill schema via `effectRunes()` -
    never claim an effect the engine does not apply. Cinzel/MedievalSharp have no symbol
    coverage; probe new glyphs before shipping them.
 7. **Abilities codex identity** comes from the BEGINNER class (`lineage[last]`):
    FIGHTER→COMBAT CODEX, SCOUT→HUNTER'S LEDGER, APPRENTICE→ABILITY GRIMOIRE,
    ACOLYTE→PRACTITIONER'S CODEX (payload fields `docTitle`/`docQuote`).
-8. **Pagination:** `.j abilities <page>` pattern — flatten, slice in Node (12 rows/page),
+8. **Pagination:** `.j abilities <page>` pattern - flatten, slice in Node (12 rows/page),
    global numbering preserved (`startNumber` to Go), page label top-right, nav hint in
    caption. Never render one enormous image for 20+ items.
 9. **Cards = presentation, commands = interaction.** Every card command keeps a text

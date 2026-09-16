@@ -41,7 +41,7 @@ async function main() {
   }
 
   if (matches.length > 1) {
-    console.log(`Found ${matches.length} users matching "${nicknameQuery}" — be more specific:`);
+    console.log(`Found ${matches.length} users matching "${nicknameQuery}" - be more specific:`);
     matches.forEach(u => console.log(`  - ${u.nickname}  (userId: ${u.userId}, current statPoints: ${u.statPoints ?? 0})`));
     await mongoose.disconnect();
     return;
@@ -52,7 +52,7 @@ async function main() {
   console.log(`Current statPoints: ${user.statPoints ?? 0} -> ${(user.statPoints ?? 0) + points}`);
 
   if (!apply) {
-    console.log('\nDry run only — nothing written. Re-run with --apply to actually grant the points.');
+    console.log('\nDry run only - nothing written. Re-run with --apply to actually grant the points.');
     await mongoose.disconnect();
     return;
   }

@@ -48,7 +48,7 @@ async function main() {
   const oldResult1 = partsArr1[1];
   const newResult1 = partsArr1[2];
   if (oldResult1 === 'deleteissue') {
-    console.log(`  OLD partsArr[1] = "${oldResult1}" (was causing the bug — ID check fails)`);
+    console.log(`  OLD partsArr[1] = "${oldResult1}" (was causing the bug - ID check fails)`);
   }
   if (newResult1 !== shortId) {
     throw new Error(`NEW partsArr[2] = "${newResult1}", expected "${shortId}"`);
@@ -74,7 +74,7 @@ async function main() {
   const newIdResult = partsArr2[2];
   const newTagResult = partsArr2[3];
   if (oldIdResult === 'editissue') {
-    console.log(`  OLD partsArr[1] = "${oldIdResult}" (was causing bug — ID was 'editissue')`);
+    console.log(`  OLD partsArr[1] = "${oldIdResult}" (was causing bug - ID was 'editissue')`);
     console.log(`  OLD partsArr[2] = "${oldTagResult}" (was treated as tag, but was actually the ID)`);
   }
   if (newIdResult !== shortId) throw new Error(`NEW partsArr[2] = "${newIdResult}", expected "${shortId}"`);

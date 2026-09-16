@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // ============================================
-// ⚔️ SUMMON TRIAL — solo evolution trials
+// ⚔️ SUMMON TRIAL - solo evolution trials
 // ============================================
 // Each summon species has a trial. The summon must solo-kill
 // the trial boss to evolve + unlock a player passive.

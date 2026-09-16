@@ -17,7 +17,7 @@ class GroqClient {
         // every call). Switched to openai/gpt-oss-120b (SMART, JSON mode verified 200)
         // and openai/gpt-oss-20b (FAST). Note gpt-oss models return reasoning in a
         // separate field; message.content stays clean JSON. If GROQ_MODEL is set in
-        // .env, it overrides this default — keep it in sync with the Groq catalog.
+        // .env, it overrides this default - keep it in sync with the Groq catalog.
         this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         

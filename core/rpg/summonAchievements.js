@@ -1,5 +1,5 @@
 // ============================================
-// 🏆 SUMMON ACHIEVEMENTS — pilots the achievement system
+// 🏆 SUMMON ACHIEVEMENTS - pilots the achievement system
 // ============================================
 // The achievement system in progression.js is currently a stub
 // (all check functions return []). Summons become the FIRST real
@@ -11,7 +11,7 @@
 const economy = require('./economy');
 
 // ─────────────────────────────────────────────────────────────
-// ACHIEVEMENT DEFINITIONS — 20 summon achievements
+// ACHIEVEMENT DEFINITIONS - 20 summon achievements
 // ─────────────────────────────────────────────────────────────
 
 const SUMMON_ACHIEVEMENTS = {
@@ -243,7 +243,7 @@ const SUMMON_ACHIEVEMENTS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// CHECK + AWARD — called on key events
+// CHECK + AWARD - called on key events
 // ─────────────────────────────────────────────────────────────
 
 /**

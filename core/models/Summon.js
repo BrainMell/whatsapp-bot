@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 
 // ============================================
-// 🐉 SUMMON MODEL — persistent companion entities
+// 🐉 SUMMON MODEL - persistent companion entities
 // ============================================
 // Each document = one summon owned by one user.
 // Summons are tradeable (mirrors Rune model pattern).
-// Combat state (HP, energy, buffs, etc.) is transient —
+// Combat state (HP, energy, buffs, etc.) is transient -
 // rebuilt at combat start from baseStats + level + allocation.
 //
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
@@ -19,8 +19,8 @@ const SummonSchema = new mongoose.Schema({
   // Species key into SUMMON_SPECIES registry (e.g. 'skeleton', 'flame_elemental')
   species: { type: String, required: true, index: true },
 
-  // Combat archetype — keys into monsterSkills.MONSTER_ARCHETYPES
-  // (BRUTE, MAGE, TANK, STALKER, SUPPORT, etc.) — reuses monster AI
+  // Combat archetype - keys into monsterSkills.MONSTER_ARCHETYPES
+  // (BRUTE, MAGE, TANK, STALKER, SUPPORT, etc.) - reuses monster AI
   archetype: { type: String, required: true },
 
   // Element for synergy calculations (fire, ice, undead, demon, beast, construct, dragon, etc.)
@@ -57,7 +57,7 @@ const SummonSchema = new mongoose.Schema({
     spd: { type: Number, default: 0 }
   },
 
-  // Pristine base stats from species + rarity — never mutated.
+  // Pristine base stats from species + rarity - never mutated.
   // Used by recomputeSummonStats to derive effective stats.
   baseStats: {
     hp: { type: Number, required: true },
@@ -74,7 +74,7 @@ const SummonSchema = new mongoose.Schema({
   // Restore via Loyalty Crystal consumable.
   loyalty: { type: Number, default: 100, min: 0, max: 100 },
 
-  // Dynamic personality — shifts based on how the player uses the summon.
+  // Dynamic personality - shifts based on how the player uses the summon.
   // Tracked via behaviorScore; shift triggers at score ≥ 20.
   personality: { type: String, enum: ['STOIC', 'AGGRESSIVE', 'PROTECTIVE', 'CURIOUS', 'VOLATILE'], default: 'STOIC' },
   behaviorScore: {
@@ -85,7 +85,7 @@ const SummonSchema = new mongoose.Schema({
   },
 
   // ── Lineage (Soul Forging) ─────────────────────────────
-  // Ancestry tree — up to 5 generations. Used for purebred/crossbred bonuses.
+  // Ancestry tree - up to 5 generations. Used for purebred/crossbred bonuses.
   lineage: [{
     summonId: String,
     species: String,
@@ -113,7 +113,7 @@ const SummonSchema = new mongoose.Schema({
   onAuction: { type: Boolean, default: false },
   isLocked: { type: Boolean, default: false },        // prevents trade/sale (per player or mod lock)
 
-  // Soulbound — cannot be traded for N days after Soul Forging.
+  // Soulbound - cannot be traded for N days after Soul Forging.
   // Prevents market flipping of forged summons.
   soulboundUntil: { type: Date, default: null },
 

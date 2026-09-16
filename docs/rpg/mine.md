@@ -247,7 +247,7 @@ Each location in `MINING_LOCATIONS` (in `core/rpg/craftingSystem.js`) accepts th
     energyCost: 15,                      // Base energy cost (reduced by miningLevel/2)
     ores: [
         { id: 'item_id', weight: 50, min: 1, max: 3 }
-        // weight is relative — higher = more common
+        // weight is relative - higher = more common
     ]
 }
 ```
@@ -317,7 +317,7 @@ Each roll picks an ore using weighted random selection:
 drop_chance = ore.weight / sum_of_all_weights_in_location
 ```
 
-Each roll also has a **2% chance** to find a lucky Zeni pouch (100–600 Zeni).
+Each roll also has a **2% chance** to find a lucky Zeni pouch (100-600 Zeni).
 
 ---
 
@@ -333,4 +333,4 @@ The minimum energy cost is always **5**, regardless of mining level.
 
 ### Mining XP
 
-Each successful mine run awards `5–10` mining profession XP (random in that range). Mining level increases unlock more base rolls and reduce energy cost.
+Each successful mine run awards `5-10` mining profession XP (random in that range). Mining level increases unlock more base rolls and reduce energy cost.

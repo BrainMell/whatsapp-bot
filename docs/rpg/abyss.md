@@ -8,7 +8,7 @@ The Abyss is an endless dungeon-crawl mode where players descend through floors,
 ### Floor Structure (`core/rpg/abyssSystem.js`)
 - Floors are grouped into tiers: F (1-10), C (11-20), B (21-30), A (31-40), S (41-50), SS (51-60), SSS (61-70), ABYSSAL_GOD (71+)
 - Each floor spawns 1 enemy (regular or boss)
-- Boss floors: every 5th floor (5, 10, 15, ...) — 5x reward multiplier
+- Boss floors: every 5th floor (5, 10, 15, ...) - 5x reward multiplier
 - Run cooldown: 12 hours between Abyss runs
 
 ### Reward Formula
@@ -52,4 +52,4 @@ xp   = floor(50  * tierMult * bossMult * floorMultiplier)
 - RPG mods bypass Abyss cooldown (can enter at any time)
 - Abyss command routing fixed (`.s combat attack` redirects properly)
 - Abyss resume: can resume interrupted runs
-- Wild summon encounters: 10% spawn rate (was bugged — fixed in audit)
+- Wild summon encounters: 10% spawn rate (was bugged - fixed in audit)

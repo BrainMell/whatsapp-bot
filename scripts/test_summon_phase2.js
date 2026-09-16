@@ -1,5 +1,5 @@
 /**
- * Phase 2 integration tests — verify combat loop integration.
+ * Phase 2 integration tests - verify combat loop integration.
  * Tests source-level invariants (can't load guildAdventure.js without DB,
  * but can verify the code structure is correct).
  *
@@ -176,7 +176,7 @@ test('STOIC personality does not modify decision', () => {
 });
 
 test('VOLATILE personality sometimes returns random action (mocked)', () => {
-  // We can't easily test Math.random — just verify the function doesn't crash
+  // We can't easily test Math.random - just verify the function doesn't crash
   const summon = { personality: 'VOLATILE' };
   const decision = { action: 'attack', target: { name: 'Enemy' } };
   const enemies = [{ name: 'E1', stats: { hp: 10 } }];

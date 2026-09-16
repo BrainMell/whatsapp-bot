@@ -1,5 +1,5 @@
 // scrape_shoob_v2.js
-// CORRECTED shoob.gg scraper — replaces scripts/scrape_shoob.js
+// CORRECTED shoob.gg scraper - replaces scripts/scrape_shoob.js
 //
 // What was wrong with the old scraper (scrape_shoob.js):
 //   1. URL omitted `&tier=X`, so it scraped a mixed-tier listing and could
@@ -7,7 +7,7 @@
 //      `card.tier = '1'` for every new card.
 //   2. Never visited the detail page. Creator was never extracted, so it
 //      defaulted to 'shoob.gg' from the URL host.
-//   3. ID format was `new-<page>-<seq>` — wrong. Should be `<tier>-<seq>`
+//   3. ID format was `new-<page>-<seq>` - wrong. Should be `<tier>-<seq>`
 //      continuing from the max existing ID for that tier.
 //
 // This corrected version:
@@ -99,7 +99,7 @@ const LISTING_EXTRACT_JS = `(function(){
 })()`;
 
 // Extract full metadata from a card detail page.
-// Same logic as repair_broken_cards.js — extract tier from breadcrumb pos 2,
+// Same logic as repair_broken_cards.js - extract tier from breadcrumb pos 2,
 // creator via Card Maker regex, anime from pos 3, name from pos 4.
 const DETAIL_EXTRACT_JS = `(function(){
   var r = { tier: null, animeName: null, cardName: null, creator: null, imageUrl: null };

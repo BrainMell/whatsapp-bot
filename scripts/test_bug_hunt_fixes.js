@@ -74,7 +74,7 @@ async function main() {
   const sellValueMythic = Math.floor(1000 * 1.2 * 0.9);   // old: sell at 1.08x base
   const sellValueCommon = Math.floor(1000 * 0.6 * 0.9);   // 0.54x base
   check('COMMON resale is a loss (by design)', sellValueCommon < 1000, `${sellValueCommon} < 1000`);
-  check('MYTHIC resale math documented (1.08x base — why markup is needed)', sellValueMythic > 1000, `${sellValueMythic} > 1000 (old exploit)`);
+  check('MYTHIC resale math documented (1.08x base - why markup is needed)', sellValueMythic > 1000, `${sellValueMythic} > 1000 (old exploit)`);
 
   // ============ TEST 3: skillSpend ledger ============
   console.log('\n=== TEST 3: skillSpend ledger refunds ===');

@@ -1,5 +1,5 @@
 // ============================================================
-// Threat/Aggro System — core/rpg/threatSystem.js
+// Threat/Aggro System - core/rpg/threatSystem.js
 // ============================================================
 // Minimal threat system for PvE combat. Each combatant has a `threat`
 // value that starts at 0. Dealing damage generates threat (modified by

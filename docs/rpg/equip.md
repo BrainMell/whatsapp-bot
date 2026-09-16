@@ -478,14 +478,14 @@ These are the **only valid slot names** accepted by the equip/unequip system (de
 | Slot Key | Description | Alias |
 |---|---|---|
 | `main_hand` | Primary weapon | `weapon` (legacy, auto-migrated) |
-| `off_hand` | Secondary weapon / shield | — |
-| `armor` | Body armour | — |
-| `helmet` | Head slot | — |
-| `boots` | Feet slot | — |
-| `ring` | Accessory ring | — |
-| `amulet` | Neck accessory | — |
-| `cloak` | Back slot | — |
-| `gloves` | Hand slot | — |
+| `off_hand` | Secondary weapon / shield | - |
+| `armor` | Body armour | - |
+| `helmet` | Head slot | - |
+| `boots` | Feet slot | - |
+| `ring` | Accessory ring | - |
+| `amulet` | Neck accessory | - |
+| `cloak` | Back slot | - |
+| `gloves` | Hand slot | - |
 
 > **Two-handed weapons**: When a two-handed weapon is equipped in `main_hand`, `off_hand` is automatically cleared.
 
@@ -495,7 +495,7 @@ These are the **only valid slot names** accepted by the equip/unequip system (de
 
 Items with `type: 'EQUIPMENT'` can be equipped. The `slot` field determines which equipment slot they occupy.
 
-#### Weapons — `slot: main_hand`
+#### Weapons - `slot: main_hand`
 
 | Item ID | Name | Rarity | Value |
 |---|---|---|---|
@@ -509,7 +509,7 @@ Items with `type: 'EQUIPMENT'` can be equipped. The `slot` field determines whic
 | `dragon_fang_dagger` | Dragon-Fang Dagger | EPIC | 22,000 |
 | `mythril_staff` | Mythril Staff | EPIC | 30,000 |
 
-#### Armour — `slot: armor`
+#### Armour - `slot: armor`
 
 | Item ID | Name | Rarity | Value |
 |---|---|---|---|
@@ -520,13 +520,13 @@ Items with `type: 'EQUIPMENT'` can be equipped. The `slot` field determines whic
 | `reinforced_plate` | Reinforced Plate | EPIC | 24,000 |
 | `dragon_scale_armor` | Dragon-Scale Plate | LEGENDARY | 45,000 |
 
-#### Helmets — `slot: helmet`
+#### Helmets - `slot: helmet`
 
 | Item ID | Name | Rarity | Value |
 |---|---|---|---|
 | `dragon_helm` | Dragon Helm | EPIC | 12,000 |
 
-#### Rings — `slot: ring`
+#### Rings - `slot: ring`
 
 | Item ID | Name | Rarity | Value |
 |---|---|---|---|

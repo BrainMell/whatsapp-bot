@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * DIRECT PIPELINE TEST v2 — with aggressive timeouts on EVERY call.
+ * DIRECT PIPELINE TEST v2 - with aggressive timeouts on EVERY call.
  *
  * v1 hung because some Go service calls have no timeout (120s axios default).
  * This version wraps EVERY call in a 10s Promise.race timeout.
@@ -32,7 +32,7 @@ function logResult(label, success, detail) {
   console.log(`  ${icon} ${color}${label}${RESET}: ${detail}`);
 }
 
-// Wrap any promise in a timeout — prevents hangs
+// Wrap any promise in a timeout - prevents hangs
 async function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -44,12 +44,12 @@ async function withTimeout(promise, ms, label) {
 
 async function main() {
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
-  console.log(`  DIRECT PIPELINE TEST v2 — every call has 10s timeout`);
+  console.log(`  DIRECT PIPELINE TEST v2 - every call has 10s timeout`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
   // ── 1. Environment ─────────────────────────────────────────────
   log('ENV', 'Environment check', CYAN);
-  console.log(`  GO_IMAGE_SERVICE_URL: ${process.env.GO_IMAGE_SERVICE_URL || '(unset — default http://127.0.0.1:7860)'}`);
+  console.log(`  GO_IMAGE_SERVICE_URL: ${process.env.GO_IMAGE_SERVICE_URL || '(unset - default http://127.0.0.1:7860)'}`);
   console.log(`  MONGO_URI: ${process.env.MONGO_URI ? 'set' : '(unset)'}`);
   console.log(`  Node: ${process.version}, CWD: ${process.cwd()}`);
   console.log('');
@@ -65,7 +65,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Create instance — this.client is now set BEFORE healthCheck (fixed in dc7ea3ac)
+  // Create instance - this.client is now set BEFORE healthCheck (fixed in dc7ea3ac)
   log('LOAD', 'Creating GoImageService instance...', CYAN);
   const goService = new GoImageService();
   console.log(`  baseUrl: ${goService.baseUrl}`);
@@ -239,7 +239,7 @@ async function main() {
   console.log(`  If raw axios also fails, the Go service itself is the problem.`);
   console.log(`${CYAN}═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // Force exit — don't let hanging promises keep the process alive
+  // Force exit - don't let hanging promises keep the process alive
   process.exit(0);
 }
 

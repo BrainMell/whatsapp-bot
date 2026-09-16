@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  BOUNTY SYSTEM (Phase 6 — PvP Bounty)
+//  BOUNTY SYSTEM (Phase 6 - PvP Bounty)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Players place Zeni bounties on other players. Bounty hunters track via PvP.
-// Adds risk to hoarding wealth — wealthy players become targets.
+// Adds risk to hoarding wealth - wealthy players become targets.
 //
 // Rules:
 //   - Min bounty: 100K Zeni, Max: 50M Zeni
@@ -15,7 +15,7 @@
 //   - Failed hunt: hunter pays 10% of bounty as penalty
 //   - Targets with bounties cannot use the bank (forces wallet carry = risk)
 //   - Anti-abuse: can't bounty yourself, can't bounty alt accounts
-//     (alt detection by phone number — same as multi-account detection)
+//     (alt detection by phone number - same as multi-account detection)
 
 const Bounty = require('../models/Bounty');
 const botConfig = require('../../botConfig');
@@ -53,7 +53,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
     return { success: false, message: `❌ Target must be at least level 20. (They are L${targetLevel})` };
   }
 
-  // Check placer cooldown — any bounty placed in last 24h
+  // Check placer cooldown - any bounty placed in last 24h
   const recentBounty = await Bounty.findOne({
     placerJid,
     placedAt: { $gte: new Date(Date.now() - PLACER_COOLDOWN_MS) },
@@ -183,7 +183,7 @@ async function claimBounty(hunterJid, targetJid) {
 // bounty. If the target defeats 3 challengers, the bounty is auto-
 // terminated (status='defended', no refund to placer). This gives the
 // target a path to clear the bounty by winning duels, not just waiting
-// 7 days. Placer forfeits the Zeni — they chose to place the bounty.
+// 7 days. Placer forfeits the Zeni - they chose to place the bounty.
 const DEFENDERS_WIN_THRESHOLD = 3;
 async function failedHuntPenalty(hunterJid, targetJid) {
   const bounties = await Bounty.find({ targetJid, status: 'active' });
@@ -197,7 +197,7 @@ async function failedHuntPenalty(hunterJid, targetJid) {
   }
   const economy = require('./economy');
   const hunterWallet = economy.getGold(hunterJid);
-  // Hunter pays min(penalty, wallet) — can't go negative
+  // Hunter pays min(penalty, wallet) - can't go negative
   const actualPenalty = Math.min(penalty, hunterWallet);
   if (actualPenalty > 0) {
     economy.removeMoney(hunterJid, actualPenalty, `Failed bounty hunt penalty: ${targetJid}`);
@@ -222,7 +222,7 @@ async function failedHuntPenalty(hunterJid, targetJid) {
 
   let defenseMsg = '';
   if (defendedBounties.length > 0) {
-    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${economy.getDisplayName(targetJid)} defeated ${DEFENDERS_WIN_THRESHOLD} challengers — ${defendedBounties.length} bounty(ies) cleared!`;
+    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${economy.getDisplayName(targetJid)} defeated ${DEFENDERS_WIN_THRESHOLD} challengers - ${defendedBounties.length} bounty(ies) cleared!`;
   }
 
   return {

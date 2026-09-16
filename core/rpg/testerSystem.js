@@ -2,21 +2,21 @@
 // Game Tester permission + tester GC list + issue/bug command + Groq organize.
 //
 // SYSTEM KEYS (stored in MongoDB `systems` collection):
-//   _shared_game_testers        — Set of tester JIDs (shared across all 3 bot instances)
-//   _shared_tester_gcs           — Array of tester GC JIDs
-//   _shared_rpg_test_mode        — boolean: true = maintenance lock active for non-testers
+//   _shared_game_testers        - Set of tester JIDs (shared across all 3 bot instances)
+//   _shared_tester_gcs           - Array of tester GC JIDs
+//   _shared_rpg_test_mode        - boolean: true = maintenance lock active for non-testers
 //
 // COMMANDS:
-//   .j addgtester @user   — Owner/Global Mod/RPG Mod only: promote to Game Tester
-//   .j delgtester @user   — Owner/Global Mod/RPG Mod only: demote
-//   .j listtesters         — anyone can list current testers
-//   .j testgc add @gid    — Owner/Global Mod/RPG Mod only
+//   .j addgtester @user   - Owner/Global Mod/RPG Mod only: promote to Game Tester
+//   .j delgtester @user   - Owner/Global Mod/RPG Mod only: demote
+//   .j listtesters         - anyone can list current testers
+//   .j testgc add @gid    - Owner/Global Mod/RPG Mod only
 //   .j testgc remove @gid
 //   .j testgc list
-//   .j testmode on|off|status — Owner/Global Mod/RPG Mod only
-//   .j bug <text>          — tester submits an issue (must be in tester GC or be a tester)
-//   .j issues [n]          — view last N issues (default 10, max 30)
-//   .j organizeissues      — Owner/RPG Mod only: send all open issues to Groq for organization
+//   .j testmode on|off|status - Owner/Global Mod/RPG Mod only
+//   .j bug <text>          - tester submits an issue (must be in tester GC or be a tester)
+//   .j issues [n]          - view last N issues (default 10, max 30)
+//   .j organizeissues      - Owner/RPG Mod only: send all open issues to Groq for organization
 
 const mongoose = require('mongoose');
 const System = require('../models/System');
@@ -192,15 +192,15 @@ async function organizeIssuesWithGroq(organizerJid) {
   const systemPrompt = `You are a precise issue-organization assistant for an RPG bot's testing team.
 Your job: take a messy collection of tester-reported bugs/issues and produce a clean, organized development list.
 
-RULES (STRICT — violations are unacceptable):
+RULES (STRICT - violations are unacceptable):
 1. Group related issues together under clear category headers.
 2. Organize the issues point-by-point.
 3. Fix grammar and spelling.
 4. Make wording clearer and more concise.
-5. PRESERVE the original meaning — do not reinterpret.
+5. PRESERVE the original meaning - do not reinterpret.
 6. NEVER invent information that wasn't in the original reports.
 7. NEVER remove an issue. Every single reported issue must appear in your output.
-8. NEVER change what a tester actually reported — only rephrase for clarity.
+8. NEVER change what a tester actually reported - only rephrase for clarity.
 9. Keep the original reporter's name and the issue's category/severity where relevant.
 10. Output as Markdown with headers (## Category) and bullet points (- Issue).
 
@@ -216,7 +216,7 @@ A single Markdown document, organized by category, every issue accounted for, no
   try {
     const GroqClient = require('../src/context_engine/GroqClient');
     const client = GroqClient;
-    // Use chat.completions directly — not extract (we want markdown, not JSON)
+    // Use chat.completions directly - not extract (we want markdown, not JSON)
     const Groq = require('groq-sdk');
     // Reuse the GroqClient's API key rotation
     const apiKey = client.getApiKey ? client.getApiKey() : process.env.GROQ_API_KEYS?.split(',')[0];

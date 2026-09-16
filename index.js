@@ -536,7 +536,7 @@ async function boot() {
         return;
     }
 
-    // 3. Schedule weekly wealth tax (Phase 1 — Economy Rebalance)
+    // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
     try {
       const economy = require('./core/rpg/economy');
       if (typeof economy.scheduleWealthTax === 'function') {
@@ -547,7 +547,7 @@ async function boot() {
       console.error("Failed to init wealth tax scheduler:", e.message);
     }
 
-    // 3b. Schedule daily guild bank interest + loan processing (Phase 2 — Guild Polish)
+    // 3b. Schedule daily guild bank interest + loan processing (Phase 2 - Guild Polish)
     try {
       const guildPerks = require('./core/rpg/guildPerks');
       if (typeof guildPerks.runDailyInterest === 'function') {
@@ -573,7 +573,7 @@ async function boot() {
       console.error("Failed to init guild interest scheduler:", e.message);
     }
 
-    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 — Avatar Raid)
+    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
     try {
       const raidSystem = require('./core/rpg/raidSystem');
       // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
@@ -598,12 +598,12 @@ async function boot() {
       setTimeout(checkAndSpawnRaid, 2 * 60 * 1000);
       setInterval(checkAndSpawnRaid, 60 * 60 * 1000);
 
-      // Voting round resolver — runs every 30s to check if voting window closed
+      // Voting round resolver - runs every 30s to check if voting window closed
       const resolveRaidRound = async () => {
         try {
           await raidSystem.resolveVotingRound();
         } catch (e) {
-          // Silent — raid may not exist yet
+          // Silent - raid may not exist yet
         }
       };
       setInterval(resolveRaidRound, 30 * 1000);
@@ -613,7 +613,7 @@ async function boot() {
       console.error("Failed to init raid scheduler:", e.message);
     }
 
-    // 3d. Schedule daily bounty expiry (Phase 6 — Bounty System)
+    // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
     try {
       const bountySystem = require('./core/rpg/bountySystem');
       const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -629,11 +629,11 @@ async function boot() {
       console.error("Failed to init bounty scheduler:", e.message);
     }
 
-    // 3e. Schedule weekly guild war spawn + resolve (Phase 7 — Multi-Event Guild Wars)
+    // 3e. Schedule weekly guild war spawn + resolve (Phase 7 - Multi-Event Guild Wars)
     try {
       const guildWars = require('./core/rpg/guildWars');
       // Check on boot (delayed 3 min so DB is ready), then every 1h
-      // — spawns new war if missing for current week, resolves if expired
+      // - spawns new war if missing for current week, resolves if expired
       const checkAndSpawnWar = async () => {
         try {
           const existing = await guildWars.getWarStatus();
@@ -643,7 +643,7 @@ async function boot() {
               console.log(`[GuildWars] Spawned weekly war: ${result.war.eventName}`);
             }
           } else if (existing.status === 'active' && new Date() > new Date(existing.endsAt)) {
-            // War has expired — resolve it
+            // War has expired - resolve it
             const result = await guildWars.resolveWeeklyWar();
             if (result.action === 'resolved') {
               console.log(`[GuildWars] Resolved expired war: ${result.war.eventName}`);
@@ -666,13 +666,13 @@ async function boot() {
     // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,
     // +5-13% MP/turn) and class passives with effect:'regen' (e.g. Druid's
     // Nature's Wrath: +5 HP/turn) were ONLY applied during combat rounds.
-    // Outside combat, players had no regen at all — they could only heal via
+    // Outside combat, players had no regen at all - they could only heal via
     // .g hospital. Now a global tick runs every 60s and applies passive regen
     // to ALL users with persistent HP below max.
     //
     // Design notes:
     //   - 60s tick = "1 turn" out of combat (combat turns are ~1-5s).
-    //   - Regen is CAPPED at maxHP — no overheal.
+    //   - Regen is CAPPED at maxHP - no overheal.
     //   - Only users with currentHP < maxHP are touched (efficient).
     //   - Reads the same passive definitions the combat engine uses, so
     //     there's ONE source of truth.
@@ -693,7 +693,7 @@ async function boot() {
       //   Class passive regen (Fighter Tenacity +3, Druid Nature's Wrath +5)
       //   was NEVER applied out of combat. Now resolves via getUserClass().
       //
-      // BUG 2: No in-combat check. Users in combat got DOUBLE regen — once
+      // BUG 2: No in-combat check. Users in combat got DOUBLE regen - once
       //   from the combat tick (applySkillPassivesPerTurn) and once from
       //   this scheduler. Now skips users with an active game state.
       //
@@ -701,7 +701,7 @@ async function boot() {
       //   MP/turn but the out-of-combat scheduler only healed HP. Now also
       //   restores MP (stored on user.stats.currentMP, same as HP).
       //
-      // BUG 4: Performance — getBaseStats() is expensive (calls
+      // BUG 4: Performance - getBaseStats() is expensive (calls
       //   getEquipmentStats + summon trial passives). Calling it for every
       //   user every 60s caused event loop lag on 3400+ users. Now caches
       //   maxHP per user + invalidates on level-up (detected via user.level
@@ -724,7 +724,7 @@ async function boot() {
                 // Check both solo + group session keys
                 const soloState = guildAdventureRef.getGameState(userId, userId);
                 if (soloState?.inCombat) { skipped++; continue; }
-                // Also check if they're in any group combat — scan is expensive
+                // Also check if they're in any group combat - scan is expensive
                 // so we rely on the solo check (most combat is solo for Abyss/dungeon)
               }
 
@@ -740,7 +740,7 @@ async function boot() {
               if (cached && cached.level === userLevel) {
                 maxHP = cached.maxHP;
               } else {
-                // Cache miss — compute + cache. This is the expensive path
+                // Cache miss - compute + cache. This is the expensive path
                 // but only runs on first tick or after level-up.
                 const baseStats = progression.getBaseStats(userId, classId);
                 maxHP = baseStats?.hp || 100;
@@ -828,11 +828,11 @@ async function boot() {
                     }
                   }
                 } catch (mpErr) {
-                  // Non-fatal — MP regen is best-effort
+                  // Non-fatal - MP regen is best-effort
                 }
               }
             } catch (userErr) {
-              // Non-fatal — one user's error shouldn't break the tick
+              // Non-fatal - one user's error shouldn't break the tick
             }
           }
           if (touched > 0) {

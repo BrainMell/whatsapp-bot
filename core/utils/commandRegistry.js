@@ -91,7 +91,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild join', desc: 'Join an existing public guild.', usage: 'guild join <name>' },
     { cmd: 'guild leave', desc: 'Leave your current guild.', usage: 'guild leave' },
     { cmd: 'guild invite', desc: 'Invite a user to join your guild.', usage: 'guild invite @user' },
-    // 💡 REMOVED 2026-09-12 (audit): 'guild accept'/'guild decline' — never dispatched; use `.accept`/`.decline`
+    // 💡 REMOVED 2026-09-12 (audit): 'guild accept'/'guild decline' - never dispatched; use `.accept`/`.decline`
     { cmd: 'guild list', desc: 'List all active guilds.', usage: 'guild list' },
     { cmd: 'guild members', desc: 'View all members in your guild.', usage: 'guild members' },
     { cmd: 'guild tag', desc: 'Mention all members of your guild.', usage: 'guild tag <msg>' },
@@ -193,7 +193,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'bounty target', desc: 'View bounties on your head.', usage: 'bounty target' },
     { cmd: 'bounty mine', desc: 'View bounties you placed.', usage: 'bounty mine' },
     { cmd: 'bounty cancel', desc: 'Cancel a bounty (10% fee).', usage: 'bounty cancel <bountyId>' },
-    { cmd: 'summon', desc: 'Summon system — view your summons + pokedex.', usage: 'summon' },
+    { cmd: 'summon', desc: 'Summon system - view your summons + pokedex.', usage: 'summon' },
     { cmd: 'summon list', desc: 'View your summons.', usage: 'summon list' },
     { cmd: 'summon deploy', desc: 'Equip a summon for combat.', usage: 'summon deploy <id>' },
     { cmd: 'summon dismiss', desc: 'Unequip active summon.', usage: 'summon dismiss' },
@@ -252,7 +252,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'transfer', desc: 'Send currency to another user.', usage: 'transfer @user <amt>' },
     { cmd: 'send', desc: 'Alias for transfer.', usage: 'send @user <amt>' },
     { cmd: 'loan', desc: 'Request a loan from another user.', usage: 'loan @user <amt> <%> <time>' },
-    // 💡 REMOVED 2026-09-12 (audit): 'loan accept'/'loan decline' — never dispatched; use `.accept`/`.decline`
+    // 💡 REMOVED 2026-09-12 (audit): 'loan accept'/'loan decline' - never dispatched; use `.accept`/`.decline`
     { cmd: 'rob', desc: 'Attempt to rob another user\'s wallet.', usage: 'rob @user' },
     { cmd: 'steal', desc: 'Alias for rob. Rob another user.', usage: 'steal @user' },
     { cmd: 'rich', desc: 'Wealth Leaderboard - See the richest players.', usage: 'rich' },
@@ -371,13 +371,13 @@ const COMMAND_REGISTRY = {
     { cmd: 'murder join', desc: 'Accept the invitation and join the lobby.', usage: 'murder join' },
     { cmd: 'murder leave', desc: 'Decline the invitation and leave the lobby.', usage: 'murder leave' },
     { cmd: 'murder players', desc: 'Show the guest list and tonight\'s entry fee.', usage: 'murder players' },
-    { cmd: 'murder start', desc: 'Host begins the mystery — the manor charges the host 10k-25k Zeni to cast.', usage: 'murder start' },
+    { cmd: 'murder start', desc: 'Host begins the mystery - the manor charges the host 10k-25k Zeni to cast.', usage: 'murder start' },
     { cmd: 'murder vote', desc: 'Cast your ballot during the vote (number, name, or skip).', usage: 'murder vote <n|name|skip>' },
     { cmd: 'murder status', desc: 'State of the case (in DM: your secret role + the living).', usage: 'murder status' },
     { cmd: 'murder kill', desc: 'KILLER only, in DM at night: choose tonight\'s victim.', usage: 'murder kill <n|name>' },
     { cmd: 'murder investigate', desc: 'INVESTIGATOR only, in DM at night: study one guest.', usage: 'murder investigate <n|name>' },
     { cmd: 'murder end', desc: 'Host/moderator closes the case early (refunded before the first dawn).', usage: 'murder end' },
-    { cmd: 'murder lb', desc: 'Hall of Shadows — the all-time Blackvale ledger: wins, kills, saves, sharp votes.', usage: 'murder lb' },
+    { cmd: 'murder lb', desc: 'Hall of Shadows - the all-time Blackvale ledger: wins, kills, saves, sharp votes.', usage: 'murder lb' },
     { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' }
   ],
   PowerScaling: [
@@ -420,7 +420,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'backflip', desc: 'Do a backflip.', usage: 'backflip' }
   ],
   MODERATOR: [
-    { cmd: 'mod', desc: 'Open the Mod Terminal (mods only) — all mod commands, menu-style.', usage: 'mod [category|command]' },
+    { cmd: 'mod', desc: 'Open the Mod Terminal (mods only) - all mod commands, menu-style.', usage: 'mod [category|command]' },
     { cmd: 'spawn', desc: 'Force spawn a specific card ID or name.', usage: 'spawn <id/name>' },
     { cmd: 'spawnset', desc: 'Set per-bot card spawn interval (Mod+).', usage: 'spawnset <minutes> | reset' },
     { cmd: 'spawninfo', desc: 'View current spawn configuration.', usage: 'spawninfo' },

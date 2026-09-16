@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * E2E RPG journey test — drives the real module layer on Box1 with a fake sock
+ * E2E RPG journey test - drives the real module layer on Box1 with a fake sock
  * and two test JIDs against the real MongoDB. Every step PASS/FAIL, continues on
  * error, prints a final report. Run: node scripts/e2e_journey.js
  */
@@ -183,7 +183,7 @@ async function main() {
   });
 
   await step('S6b combat loop to victory', async () => {
-    // first encounter(s) may be non-combat — wait for the fight to actually start
+    // first encounter(s) may be non-combat - wait for the fight to actually start
     let st = null;
     const t0 = Date.now();
     while (Date.now() - t0 < 25000) {
@@ -197,7 +197,7 @@ async function main() {
     return `iters=${iters} inCombat=${st ? st.inCombat : 'no-state'}`;
   });
 
-  // ═══ S7: defend leak regression — deterministic calculateDamage A/B ═══
+  // ═══ S7: defend leak regression - deterministic calculateDamage A/B ═══
   await step('S7 def leak: defend-shield leaks ~2%, ability-shield full absorbs', async () => {
     const mkAttacker = () => ({ jid: 'e2e-enemy', isEnemy: true, name: 'E2E Brute', stats: { atk: 50, def: 10, mag: 0, spd: 10, luck: 0, hp: 9000, maxHp: 9000 }, statusEffects: [], equipment: {} });
     const mkTarget = (shields) => ({ jid: P1, isEnemy: false, name: 'E2E Hero', id: 'hero', stats: { atk: 10, def: 5, mag: 0, spd: 10, luck: 0, hp: 5000, maxHp: 5000, dmgReduction: 0, evasion: 0 }, statusEffects: shields, equipment: {} });
@@ -216,13 +216,13 @@ async function main() {
     if (!raw.length || !defSh.length || !abSh.length) throw new Error('empty samples (all evaded?)');
     const mean = (a) => a.reduce((s, r) => s + r.damage, 0) / a.length;
     const rawMean = mean(raw), defMean = mean(defSh), abMax = Math.max(...abSh.map(r => r.damage));
-    if (rawMean <= 0) throw new Error('baseline raw damage 0 — test setup wrong');
-    if (defSh.some(r => r.damage < 1)) throw new Error(`defend shield produced a 0-damage hit — no leak! defMean=${defMean}`);
+    if (rawMean <= 0) throw new Error('baseline raw damage 0 - test setup wrong');
+    if (defSh.some(r => r.damage < 1)) throw new Error(`defend shield produced a 0-damage hit - no leak! defMean=${defMean}`);
     if (defMean > rawMean * 0.06 + 2) throw new Error(`defend leak too big: raw=${rawMean.toFixed(1)} def=${defMean.toFixed(1)}`);
     // ability shields keep full absorb EXCEPT the engine's by-design
     // Math.max(1, ...) minimum-damage floor on calculateDamage's return
     // (verified: exactly 1 gets through every hit, raw ~478)
-    if (abMax > 1) throw new Error(`ability shield leaked ${abMax} — full absorb broken`);
+    if (abMax > 1) throw new Error(`ability shield leaked ${abMax} - full absorb broken`);
     return `raw=${rawMean.toFixed(1)} defendLeak=${defMean.toFixed(1)} (~${(defMean / rawMean * 100).toFixed(1)}%) abilityAbsorb=100%`;
   });
 
@@ -325,7 +325,7 @@ async function main() {
     if (after) throw new Error(`run still queryable as active after retreat (status=${after.status})`);
     const st3 = ga.getGameState(CHAT_AB, P1);
     if (st3 && st3.inCombat) throw new Error('zombie combat after retreat');
-    // re-enter should work (fresh run) — clear any cooldown the extraction set
+    // re-enter should work (fresh run) - clear any cooldown the extraction set
     try { await abyss.adminResetCooldown(P1); } catch (e) {}
     try { await abyss.adminClearRun(P1); } catch (e) {}
     // re-enter should work (fresh run)

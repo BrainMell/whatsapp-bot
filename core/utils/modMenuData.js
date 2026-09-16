@@ -1,10 +1,10 @@
 // ============================================
-// 🛡️ MOD TERMINAL DATA — 2026-09-10
+// 🛡️ MOD TERMINAL DATA - 2026-09-10
 // Single source of truth for the mod menu.
 // Mirrors the regular menu UX: main grid ->
 // category drill-down -> command explain mode.
 //
-// Categories are deliberately ONE WORD each — the drill-down is
+// Categories are deliberately ONE WORD each - the drill-down is
 //   <prefix> mod rpg | cards | management | system | admin
 //
 // tier = minimum role to SEE the category:
@@ -24,7 +24,7 @@ const MOD_MENU = {
       { cmd: "setlevel", desc: "Set a player's level (1-100), instant + cache flushed.", usage: "mod setlevel <@user> <1-100>" },
       { cmd: "setstat", desc: "Set any player stat (str, mag, def, agi, etc.).", usage: "mod setstat <@user> <stat> <value>" },
       { cmd: "setwallet", desc: "Set a player's wallet to an exact amount.", usage: "mod setwallet <@user> <amount>" },
-      { cmd: "giveitem", desc: "Give items — partial names OK (fuzzy match).", usage: "mod giveitem <@user> <item> [qty]" },
+      { cmd: "giveitem", desc: "Give items - partial names OK (fuzzy match).", usage: "mod giveitem <@user> <item> [qty]" },
       { cmd: "takeitem", desc: "Remove items from a player's inventory.", usage: "mod takeitem <@user> <item> [qty]" },
       { cmd: "giveskill", desc: "Grant a skill by ID or name, optional level.", usage: "mod giveskill <@user> <skill> [level]" },
       { cmd: "revokeskill", desc: "Remove a skill from a player.", usage: "mod revokeskill <@user> <skill>" },
@@ -36,15 +36,15 @@ const MOD_MENU = {
       { cmd: "givesummon", desc: "Grant a summon to a player.", usage: "mod givesummon <@user> <summon>" },
       { cmd: "setrank", desc: "Set a player's RPG rank (E to SSS).", usage: "mod setrank <@user> <rank>" },
       { cmd: "forceevolve", desc: "Force a class evolution, no requirements.", usage: "mod forceevolve <@user> <class>" },
-      { cmd: "resetplayer", desc: "Wipe stats AND skills — destructive, no undo.", usage: "mod resetplayer <@user>" },
+      { cmd: "resetplayer", desc: "Wipe stats AND skills - destructive, no undo.", usage: "mod resetplayer <@user>" },
       { cmd: "unstick", desc: "Safely clear stuck combat state.", usage: "mod unstick <@user>" },
       { cmd: "inspect", desc: "Full character sheet: stats, skills, class, gear.", usage: "mod inspect <@user>" },
-      { cmd: "godmode", desc: "Sandbox godmode toggle — testing only, never live.", usage: "mod godmode" },
+      { cmd: "godmode", desc: "Sandbox godmode toggle - testing only, never live.", usage: "mod godmode" },
       { cmd: "sandbox", desc: "Enter the sandbox test environment.", usage: "mod sandbox" },
       { cmd: "modclass", desc: "Switch YOUR class freely (no args = class list).", usage: "modclass <name or ID>" },
       { cmd: "setdefaultcard", desc: "Pick the server-wide DEFAULT character card (10 styles).", usage: "setdefaultcard <1-10|name>" },
 
-      // ── Content Forge (merged into RPG — 2026-09-10, one-word groups) ──
+      // ── Content Forge (merged into RPG - 2026-09-10, one-word groups) ──
       { cmd: "createskill", desc: "Interactive skill creator (bot DMs you).", usage: "mod createskill" },
       { cmd: "createclass", desc: "Interactive class creator.", usage: "mod createclass" },
       { cmd: "enableskill", desc: "Re-enable a disabled skill.", usage: "mod enableskill <name>" },
@@ -123,7 +123,7 @@ const MOD_MENU = {
     emoji: "⚔️",
     tier: "any",
     commands: [
-      { cmd: "warn", desc: "Warn a member — 5 warnings = auto-kick.", usage: "mod warn @user [reason]" },
+      { cmd: "warn", desc: "Warn a member - 5 warnings = auto-kick.", usage: "mod warn @user [reason]" },
       { cmd: "resetwarn", desc: "Clear a user's warnings.", usage: "mod resetwarn @user" },
       { cmd: "mute", desc: "Mute a user for a duration.", usage: "mod mute @user <time>" },
       { cmd: "unmute", desc: "Unmute immediately.", usage: "mod unmute @user" },
@@ -138,25 +138,25 @@ const MOD_MENU = {
 };
 
 // 💡 MOD TIPS: one randomly chosen each time the terminal opens.
-// Covers GM tooling, cards, system admin + group moderation —
+// Covers GM tooling, cards, system admin + group moderation -
 // not just RPG (parity with the regular menu's rotating tips).
 const MOD_TIPS = [
-  `Run \`{p} mod inspect\` before \`{p} mod resetplayer\` — resets wipe stats AND skills, no undo.`,
+  `Run \`{p} mod inspect\` before \`{p} mod resetplayer\` - resets wipe stats AND skills, no undo.`,
   `\`{p} mod unstick\` safely clears stuck combat when a player can't act.`,
-  `\`{p} mod godmode\` is sandbox-only — never leave it on during live fights.`,
+  `\`{p} mod godmode\` is sandbox-only - never leave it on during live fights.`,
   `After every code deploy, \`{p} mod opscheck\` proves the pipeline end-to-end.`,
   `\`{p} mod instances\` shows all bot siblings; \`{p} bots\` is the player-friendly version.`,
   `\`{p} mod spawnset reset\` returns card spawn timing to defaults.`,
-  `Check \`{p} mod eshop deck pending\` regularly — creators wait on approvals.`,
+  `Check \`{p} mod eshop deck pending\` regularly - creators wait on approvals.`,
   `Stop a token event with \`{p} mod event stop\` before starting a new one.`,
   `\`{p} mod giveitem\` and \`{p} mod giverune\` accept partial names (fuzzy match).`,
-  `\`{p} mod debug\` dumps live internals — first stop when something feels off.`,
+  `\`{p} mod debug\` dumps live internals - first stop when something feels off.`,
   `After manual DB edits, \`{p} mod reloaduser @user\` flushes the cache.`,
   `Target anyone with @mention, a reply, or omit it to target yourself.`,
   `\`{p} mod <command>\` (no extra args) shows that command's full usage guide.`,
   `Group commands (warn/mute/kick) also need the bot to be a WhatsApp group admin.`,
-  `\`{p} mod spawn\` accepts card IDs or fuzzy names — partial works.`,
-  `Banned users list: \`{p} mod banlist\` — audit it now and then.`,
+  `\`{p} mod spawn\` accepts card IDs or fuzzy names - partial works.`,
+  `Banned users list: \`{p} mod banlist\` - audit it now and then.`,
 ];
 
 module.exports = { MOD_MENU, MOD_TIPS };

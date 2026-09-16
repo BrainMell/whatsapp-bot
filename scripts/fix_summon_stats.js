@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fix NaN/null baseStats on all summons.
 // The migration script used {...summon} spread on a Mongoose document,
-// which doesn't extract field values properly — so applyLevelGrowth
+// which doesn't extract field values properly - so applyLevelGrowth
 // returned early and baseStats stayed null.
 //
 // This script uses toObject() to get plain values, recomputes baseStats,

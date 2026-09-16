@@ -2,7 +2,7 @@
 const fs = require('fs');
 const botConfig = require('../../botConfig');
 const classSystem = require('./classSystem');
-// 💡 P4 (2026-08-16): Settlement record system — canonical audit log
+// 💡 P4 (2026-08-16): Settlement record system - canonical audit log
 // for every currency-moving action. Lazy-loaded to avoid circular dep.
 let _Settlement = null;
 function getSettlementModel() {
@@ -34,7 +34,7 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 💡 P4 Item 5 (2026-08-16): Daily quest cap — was 5, raised to 8 per owner request (2026-09-12).
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12).
 // Enforced server-side at quest entry. Resets at UTC midnight.
 const DAILY_QUEST_CAP = 8;
 function checkDailyQuestCap(userId) {
@@ -76,7 +76,7 @@ const pendingSaves = new Set();
 let saveTimer = null;
 
 function scheduleSave(userId) {
-  // 💡 SANDBOX: skip sandbox JIDs — they're not in the User collection
+  // 💡 SANDBOX: skip sandbox JIDs - they're not in the User collection
   if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
     return;
   }
@@ -116,7 +116,7 @@ async function loadEconomy() {
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
     // 💡 FIX 2026-08-31: warm the market-cap cache at startup. addMoney() gates
-    // rewards on _marketCap, which was ONLY initialized by getMarketCap() —
+    // rewards on _marketCap, which was ONLY initialized by getMarketCap() -
     // and getMarketCap has zero runtime callers, so _marketCap stayed null
     // forever and the 500M anti-inflation circuit breaker never armed.
     try {
@@ -140,7 +140,7 @@ async function saveUser(userId) {
     const data = economyData.get(userId);
     if (!data) return;
 
-    // 💡 SANDBOX: never persist sandbox users to the User collection —
+    // 💡 SANDBOX: never persist sandbox users to the User collection -
     // they're stored in the AdminSandbox collection instead. Without this
     // guard, every economy.saveUser('sandbox_...') call creates a junk
     // document in the users collection that pollutes the cache on restart.
@@ -188,7 +188,7 @@ function resolveJidHelper(userId) {
     const resolved = lidResolver.resolveJid(userId);
     // 💡 FIX: if resolveJid returned the original (mapping miss), try the
     // OTHER format directly in the economy cache. This fixes PvP after
-    // Oracle migration where LID mapping files may be incomplete — when
+    // Oracle migration where LID mapping files may be incomplete - when
     // someone tags a user in a group, WhatsApp sends a LID JID, but the
     // user may have registered with a phone JID (or vice versa).
     if (resolved === userId || !economyData.has(resolved)) {
@@ -330,7 +330,7 @@ function registerUser(userId, nickname) {
     success: true,
     message: `🌌 *THE AWAKENING* 🌌
 
-"Long ago, the realms were forged in a delicate balance between the *Divine Architect* and *Primordial Chaos*. For eons they coexisted, but the Chaos grew envious, seeping into the world and twisting living beings into mindless husks—*The Infected*.
+"Long ago, the realms were forged in a delicate balance between the *Divine Architect* and *Primordial Chaos*. For eons they coexisted, but the Chaos grew envious, seeping into the world and twisting living beings into mindless husks-*The Infected*.
 
 To save creation, the Divine bestowed fragments of celestial power upon chosen mortals. You, ${nickname}, are one of those chosen *Adventurers*."
 
@@ -343,22 +343,22 @@ ${starterClass.icon} *Class:* ${starterClass.name}
 ━━━━━━━━━━━━━━━
 🚀 *GETTING STARTED*
 ━━━━━━━━━━━━━━━
-1️⃣ \`${botConfig.getPrefix()} quest\` — Fight enemies, gain XP & gold
-2️⃣ \`${botConfig.getPrefix()} allocate <stat> <n>\` — Spend stat points
-3️⃣ \`${botConfig.getPrefix()} skill tree\` — View & unlock abilities
-4️⃣ \`${botConfig.getPrefix()} shop\` — Buy gear & items
-5️⃣ \`${botConfig.getPrefix()} daily\` — Free daily Zeni reward
+1️⃣ \`${botConfig.getPrefix()} quest\` - Fight enemies, gain XP & gold
+2️⃣ \`${botConfig.getPrefix()} allocate <stat> <n>\` - Spend stat points
+3️⃣ \`${botConfig.getPrefix()} skill tree\` - View & unlock abilities
+4️⃣ \`${botConfig.getPrefix()} shop\` - Buy gear & items
+5️⃣ \`${botConfig.getPrefix()} daily\` - Free daily Zeni reward
 
 ━━━━━━━━━━━━━━━
 🎯 *FEATURES TO EXPLORE*
 ━━━━━━━━━━━━━━━
-🕳️ \`${botConfig.getPrefix()} abyss\` — Endless dungeon (fragments for eggs!)
-🐉 \`${botConfig.getPrefix()} summon\` — Collect & battle monsters
-⚔️ \`${botConfig.getPrefix()} duel @user\` — PvP combat
-🃏 \`${botConfig.getPrefix()} cards on\` — Trading card game
-🎰 \`${botConfig.getPrefix()} slots\` — Casino gambling
-⚒️ \`${botConfig.getPrefix()} mine\` — Mining for materials
-🏰 \`${botConfig.getPrefix()} guild\` — Join a guild
+🕳️ \`${botConfig.getPrefix()} abyss\` - Endless dungeon (fragments for eggs!)
+🐉 \`${botConfig.getPrefix()} summon\` - Collect & battle monsters
+⚔️ \`${botConfig.getPrefix()} duel @user\` - PvP combat
+🃏 \`${botConfig.getPrefix()} cards on\` - Trading card game
+🎰 \`${botConfig.getPrefix()} slots\` - Casino gambling
+⚒️ \`${botConfig.getPrefix()} mine\` - Mining for materials
+🏰 \`${botConfig.getPrefix()} guild\` - Join a guild
 
 💡 Type \`${botConfig.getPrefix()} tutorial\` for a full walkthrough!
 💡 Type \`${botConfig.getPrefix()} menu\` to see ALL commands!`
@@ -388,7 +388,7 @@ function logTransaction(userId, description, amount, newBalance) {
   }
 }
 
-// 💡 P4 (2026-08-16): Canonical settlement record — persists to MongoDB.
+// 💡 P4 (2026-08-16): Canonical settlement record - persists to MongoDB.
 // Every currency-moving function should call this AFTER updating balances.
 //
 // @param {string} userId - The user whose balance changed
@@ -413,10 +413,10 @@ function recordSettlement(userId, type, category, amount, opts = {}) {
       botId: botConfig.getBotId ? botConfig.getBotId() : null,
       chatId: opts.chatId || null,
     });
-    // Fire-and-forget — don't block the calling function
+    // Fire-and-forget - don't block the calling function
     entry.save().catch(e => console.error('[Settlement] save failed:', e.message));
   } catch (e) {
-    // Non-fatal — settlement logging should never break a transaction
+    // Non-fatal - settlement logging should never break a transaction
     console.error('[Settlement] recordSettlement error:', e.message);
   }
 }
@@ -490,7 +490,7 @@ function getUser(userId) {
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
   if (!user.summonAchievements) user.summonAchievements = [];
 
-  // 💡 Phase 6: Alt detection — ensure phoneHash is set for all users
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
   try {
     const altDetection = require('./altDetection');
     altDetection.ensurePhoneHash(user);
@@ -633,7 +633,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
   if (!user.summonAchievements) user.summonAchievements = [];
 
-  // 💡 Phase 6: Alt detection — ensure phoneHash is set for all users
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
   try {
     const altDetection = require('./altDetection');
     altDetection.ensurePhoneHash(user);
@@ -656,7 +656,7 @@ function getBalance(userId) {
 }
 
 // 💡 ANTI-INFLATION CAPS: hard ceilings on wallet, bank, and stat values.
-// 💡 OWNER REQUEST 2026-09-12: wallet & bank caps REMOVED — both set to
+// 💡 OWNER REQUEST 2026-09-12: wallet & bank caps REMOVED - both set to
 // Infinity so every `> MAX_WALLET` / `> MAX_BANK` comparison (clampWallet,
 // addMoney clamp, transfer clamp, deposit cap, withdraw cap) is naturally
 // false and the balances grow unbounded. MAX_STAT_VALUE stays in force.
@@ -691,12 +691,12 @@ function addMoney(userId, amount, description = "Money Added") {
   const user = getUser(userId);
   if (!user) return false;
 
-  // Floor to integer — Zeni doesn't have fractional units, and floating-point
+  // Floor to integer - Zeni doesn't have fractional units, and floating-point
   // math would otherwise accumulate rounding errors over many transactions.
   let val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
 
-  // 💡 P4 Item 5: Market cap circuit breaker — block rewards if cap reached.
+  // 💡 P4 Item 5: Market cap circuit breaker - block rewards if cap reached.
   // (unchanged from above)
   if (_marketCap !== null) {
     let quickTotal = 0;
@@ -710,12 +710,12 @@ function addMoney(userId, amount, description = "Money Added") {
     }
   }
 
-  // 💡 P4 (2026-08-16): Auto-debt deduction — if the player has an active
+  // 💡 P4 (2026-08-16): Auto-debt deduction - if the player has an active
   // debt, ALL money they earn is automatically deducted to pay it off.
   // This replaces the old P2P loan system with a simpler debt-to-system
   // model. When a player earns 1000 zeni and has 5000 debt, they receive
   // 0 zeni and the debt drops to 4000. When debt reaches 0, normal
-  // earnings resume. This prevents debt-dodging — players can't just
+  // earnings resume. This prevents debt-dodging - players can't just
   // ignore the debt and keep earning.
   if (user.debt && user.debt.amount > 0) {
     const deducted = Math.min(val, user.debt.amount);
@@ -733,7 +733,7 @@ function addMoney(userId, amount, description = "Money Added") {
       scheduleSave(userId);
       return user.wallet; // All earnings went to debt
     }
-    // Partial — add remaining to wallet
+    // Partial - add remaining to wallet
     val = remainingEarned;
   }
 
@@ -896,7 +896,7 @@ function removeItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !user.inventory || !user.inventory[itemId]) return false;
 
-    // 💡 FIX: reject negative/zero/NaN quantity — was exploitable to GAIN items
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to GAIN items
     // by passing quantity=-N (the < check would pass, then -= would ADD)
     const qty = Math.floor(Number(quantity));
     if (!Number.isFinite(qty) || qty <= 0) return false;
@@ -927,7 +927,7 @@ function sellItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
 
-    // 💡 FIX: reject negative/zero/NaN quantity — was exploitable to gain items
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to gain items
     // AND drain money by passing quantity=-N
     const qty = Math.floor(Number(quantity));
     if (!Number.isFinite(qty) || qty <= 0) return { success: false, msg: '❌ Invalid quantity.' };
@@ -1024,7 +1024,7 @@ function transferMoney(fromUserId, toUserId, amount) {
     return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
   }
   
-  // 💡 Phase 6: Alt-account detection — block transfers between same-phone accounts
+  // 💡 Phase 6: Alt-account detection - block transfers between same-phone accounts
   try {
     const altDetection = require('./altDetection');
     const altCheck = altDetection.checkTransfer(fromUserId, toUserId);
@@ -1033,7 +1033,7 @@ function transferMoney(fromUserId, toUserId, amount) {
     }
   } catch (e) {
     console.error('[AltDetection] checkTransfer failed:', e?.message || e);
-    // Fail open — allow transfer if alt detection module is broken
+    // Fail open - allow transfer if alt detection module is broken
   }
   
   const val = Number(amount);
@@ -1121,10 +1121,10 @@ function deposit(userId, amount) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${val.toLocaleString()}` };
   }
 
-  // 💡 FIX P4 (2026-08-16): Deposit cap bug — check MAX_BANK BEFORE
+  // 💡 FIX P4 (2026-08-16): Deposit cap bug - check MAX_BANK BEFORE
   // deducting from wallet. Previously, deposit added to bank without
   // checking the cap, then clampWallet() ran on next user load and
-  // silently clamped the bank down — the wallet was already deducted
+  // silently clamped the bank down - the wallet was already deducted
   // but the bank excess vanished. Now we reject the deposit if it
   // would exceed the cap, or partial-deposit up to the cap.
   const newBankTotal = user.bank + val;
@@ -1136,7 +1136,7 @@ function deposit(userId, amount) {
         message: `❌ *BANK CAP REACHED*\n\n🏦 Your bank is at the maximum capacity of ${getZENI()}${MAX_BANK.toLocaleString()}.\n💡 Withdraw some funds first or keep zeni in your wallet.`
       };
     }
-    // Partial deposit — only deposit up to the cap
+    // Partial deposit - only deposit up to the cap
     user.wallet -= canDeposit;
     user.bank += canDeposit;
     logTransaction(userId, "Bank Deposit (capped)", -canDeposit, user.wallet);
@@ -1185,7 +1185,7 @@ function withdraw(userId, amount) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
 
-  // Same coercion as deposit — protects against NaN corruption.
+  // Same coercion as deposit - protects against NaN corruption.
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) {
     return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
@@ -1195,7 +1195,7 @@ function withdraw(userId, amount) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${val.toLocaleString()}` };
   }
 
-  // 💡 FIX P4 (2026-08-16): Withdraw cap bug — same as deposit cap but
+  // 💡 FIX P4 (2026-08-16): Withdraw cap bug - same as deposit cap but
   // for wallet. Check MAX_WALLET before withdrawing. If withdrawal would
   // exceed wallet cap, partial-withdraw up to the cap.
   const newWalletTotal = user.wallet + val;
@@ -1306,7 +1306,7 @@ function claimDaily(userId) {
     };
   }
 
-  // 💡 MEMBERSHIP DAILY BONUS — previously the membership tiers defined
+  // 💡 MEMBERSHIP DAILY BONUS - previously the membership tiers defined
   // a `dailyBonus` field (1000 for PREMIUM, 5000 for DIAMOND) but it was
   // never actually granted. Players paid 50k-250k for membership and got
   // the same daily reward as free players.
@@ -1319,7 +1319,7 @@ function claimDaily(userId) {
       membershipLabel = ` (${tier.name})`;
     }
   } else if (user.membership) {
-    // Membership expired — reset to BASIC
+    // Membership expired - reset to BASIC
     user.membership.tier = 'BASIC';
     user.membership.expires = 0;
   }
@@ -1490,11 +1490,11 @@ function changeClass(userId) {
   };
 }
 
-// 💡 DELETED: evolveClass(userId, evolutionId) — was dead code (zero callers
+// 💡 DELETED: evolveClass(userId, evolutionId) - was dead code (zero callers
 // in the entire codebase). The actual evolution logic lives inline in
 // skillCommands.handleEvolve (non-trial path) and guildAdventure.endAdventure
 // (trial path), both of which were hardened in prior commits. Keeping this
-// orphan function around was a maintenance hazard — anyone reading economy.js
+// orphan function around was a maintenance hazard - anyone reading economy.js
 // might assume it was the canonical evolution entry point.
 
 function resetClass(userId) {
@@ -1552,13 +1552,13 @@ async function updateAdventurerRank(userId) {
   if (newIdx > oldIdx) {
     // 💡 RANK MISSION GATE: Check if the promotion from oldRank requires
     // a rank mission to be completed. If it does and the player hasn't
-    // completed it yet, DON'T promote — they need to finish the mission first.
+    // completed it yet, DON'T promote - they need to finish the mission first.
     const completedMissions = user.completedRankMissions || [];
     const eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
 
     if (!eligibility.canPromote) {
       // Player meets level/quest requirements but hasn't completed the
-      // rank mission. Don't promote — they need to finish the mission.
+      // rank mission. Don't promote - they need to finish the mission.
       return {
         ranked_up: false,
         rank: oldRank,
@@ -1574,7 +1574,7 @@ async function updateAdventurerRank(userId) {
     // debounced save fires, the rank promotion is lost.
     await saveUser(userId);
 
-    // 💡 AUDIT FIX (Item #5): Implement the L7 guild perk — "Guild L7+
+    // 💡 AUDIT FIX (Item #5): Implement the L7 guild perk - "Guild L7+
     // grants +1 skill point (GP) on adventurer rank-up". Previously the
     // perk was declared in guildPerks.GUILD_LEVEL_PERKS[7] and shown in
     // `.g guild info` / `.g guild perks`, but nothing actually awarded
@@ -1592,7 +1592,7 @@ async function updateAdventurerRank(userId) {
           // Use the same shape as progression.awardGP: bump gp + totalGP.
           // We touch the user object directly here because progression
           // caches its own copy and we already have `user` from this
-          // module's getUser — but GP lives in the progression cache.
+          // module's getUser - but GP lives in the progression cache.
           if (gpUser) {
             gpUser.gp = (gpUser.gp || 0) + 1;
             gpUser.totalGP = (gpUser.totalGP || 0) + 1;
@@ -1617,13 +1617,13 @@ async function updateAdventurerRank(userId) {
     };
   }
 
-  // No upgrade (rank stays the same, or calculated rank is lower —
+  // No upgrade (rank stays the same, or calculated rank is lower -
   // in which case we PRESERVE the existing rank, not downgrade).
   return { ranked_up: false, rank: oldRank };
 }
 
 /**
- * Get the player's current rank mission status — what mission they need
+ * Get the player's current rank mission status - what mission they need
  * to complete next, their progress on each objective, and whether they
  * can claim it.
  */
@@ -1725,7 +1725,7 @@ async function claimRankMission(userId) {
   // 💡 FIX #50: immediate save, same as rank promotion
   await saveUser(userId);
 
-  // Now try to promote (this will check mission eligibility — which should pass now)
+  // Now try to promote (this will check mission eligibility - which should pass now)
   const rankResult = await updateAdventurerRank(userId);
 
   let msg = `🎉 *MISSION COMPLETE!* 🎉\n\n`;
@@ -1754,12 +1754,12 @@ function trackMissionStat(userId, statKey, amount = 1) {
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return;
   user.stats[statKey] = (user.stats[statKey] || 0) + val;
-  // 💡 FIX: was scheduleSave(userId) — debounced 500ms. If the bot
+  // 💡 FIX: was scheduleSave(userId) - debounced 500ms. If the bot
   // restarted within 500ms of the stat increment, the DB write was
   // lost and the player's progress vanished on next load. Rank-mission
   // stats (itemsCrafted, itemsEquipped, bossesDefeated, etc.) are
-  // high-stakes — losing them means re-doing the work. Use immediate
-  // saveUser (which is async but we don't need to await it here — the
+  // high-stakes - losing them means re-doing the work. Use immediate
+  // saveUser (which is async but we don't need to await it here - the
   // in-memory mutation is already done, the DB write is just persistence).
   saveUser(userId).catch(e => console.error(`[trackMissionStat] saveUser failed for ${userId}:`, e.message));
 }
@@ -1815,7 +1815,7 @@ async function addQuestProgress(userId, amount, won = true) {
 
   // 💡 FIX #41: Use Math.round instead of Math.ceil for fractional
   // quest progress. Math.ceil(0.05) = 1, meaning every combat
-  // encounter in a dungeon added 1 to questsCompleted — the same
+  // encounter in a dungeon added 1 to questsCompleted - the same
   // as completing a full quest. This caused inconsistent rank
   // calculations between players who did the same dungeon but had
   // different numbers of combat encounters (more encounters = more
@@ -1824,11 +1824,11 @@ async function addQuestProgress(userId, amount, won = true) {
   // ⚠️ NOTE: Because the rounded value is written back to
   // user.questsCompleted each call, the running total is ALWAYS an
   // integer. Each call recomputes Math.round(integer + 0.05) = integer.
-  // The fractional part is discarded every call — it does NOT
+  // The fractional part is discarded every call - it does NOT
   // accumulate. 20 × addQuestProgress(0.05) yields 0, not 1. Only
   // calls with amount >= 0.5 (e.g. 1.0 for boss kills, 0.2 doesn't
   // round up) actually move the counter. This is under-counting
-  // fractional progress, which is acceptable — questsCompleted is
+  // fractional progress, which is acceptable - questsCompleted is
   // meant to track COMPLETED quests, not partial progress. The
   // questsWon counter (incremented by 1 on every win) is the
   // authoritative metric for rank missions.
@@ -2101,14 +2101,14 @@ async function syncUserFromDB(userId) {
 }
 
 //========================================
-// 💡 WEALTH TAX (Phase 1 — Economy Rebalance)
+// 💡 WEALTH TAX (Phase 1 - Economy Rebalance)
 //========================================
 // Weekly auto-deduction on bank balances to combat Zeni inflation.
 // - 1% on bank balances over 10M
 // - 2% on bank balances over 50M
-// Wallet (cash on hand) is NOT taxed — only bank. This encourages spending
+// Wallet (cash on hand) is NOT taxed - only bank. This encourages spending
 // or investing rather than hoarding. Tax revenue is deleted from the economy
-// (not redistributed) — it's a pure sink.
+// (not redistributed) - it's a pure sink.
 //
 // Runs automatically every Monday 00:00 UTC via the scheduler in index.js.
 // Can also be triggered manually by the owner via `.g wealthtax run` for
@@ -2129,7 +2129,7 @@ async function runWealthTax() {
     if (!user) continue;
     // 💡 AUDIT FIX 2026-08-01 (Round 3): tax TOTAL wealth (wallet + bank),
     // not just bank. Previously players could avoid the wealth tax entirely
-    // by keeping everything in wallet — defeating the purpose of a "hoarded
+    // by keeping everything in wallet - defeating the purpose of a "hoarded
     // wealth" tax. Now both wallet and bank are included.
     const walletBalance = user.wallet || 0;
     const bankBalance = user.bank || 0;
@@ -2150,7 +2150,7 @@ async function runWealthTax() {
     if (tax <= 0) continue;
 
     // Deduct proportionally from wallet first, then bank
-    // (wallet is "liquid" — easier to tax. Bank is "hoarded" — harder.)
+    // (wallet is "liquid" - easier to tax. Bank is "hoarded" - harder.)
     let remaining = tax;
     const walletTax = Math.min(walletBalance, remaining);
     if (walletTax > 0) {
@@ -2177,7 +2177,7 @@ async function runWealthTax() {
   };
 }
 
-// Schedule the weekly tax — call from index.js on bot startup.
+// Schedule the weekly tax - call from index.js on bot startup.
 // Runs every Monday at 00:00 UTC.
 function scheduleWealthTax() {
   const now = new Date();
@@ -2204,7 +2204,7 @@ function scheduleWealthTax() {
 // ════════════════════════════════════════════════════════════════
 // Problem: @-mentions showed raw LID numbers (e.g., "@251453323092189")
 // instead of readable names. LID JIDs are 17-18 digit random numbers
-// that nobody recognizes — broken UX.
+// that nobody recognizes - broken UX.
 //
 // Solution: these helpers resolve LID→phone JID and use the user's
 // nickname from the economy cache when available.
@@ -2236,7 +2236,7 @@ function getDisplayName(jid) {
       return phoneJid.split('@')[0];
     }
   } catch (e) {}
-  // Step 3: last resort — raw ID part (could be LID or phone)
+  // Step 3: last resort - raw ID part (could be LID or phone)
   return String(jid).split('@')[0];
 }
 
@@ -2244,9 +2244,9 @@ function getMentionJid(jid) {
   if (!jid) return jid;
   try {
     // 💡 FIX: Return the JID format the user is REGISTERED as in the economy
-    // cache. In LID-privacy groups, users register as @lid — WhatsApp matches
+    // cache. In LID-privacy groups, users register as @lid - WhatsApp matches
     // LID mentions in those groups. In regular groups, users register as
-    // @s.whatsapp.net — WhatsApp matches phone mentions there.
+    // @s.whatsapp.net - WhatsApp matches phone mentions there.
     //
     // Using the economy cache key ensures the mention JID matches the format
     // WhatsApp expects for that user's group context.
@@ -2267,7 +2267,7 @@ function getMentionJid(jid) {
 // Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
 // reward table (F=1K, SSS=50K) means a player doing 8 quests/day at SSS
 // earns ~250K/day. With 3700 active players, that's ~925M/day if everyone
-// maxes out — the cap prevents runaway inflation. Admin can adjust live.
+// maxes out - the cap prevents runaway inflation. Admin can adjust live.
 const DEFAULT_MARKET_CAP = 500_000_000;
 let _marketCap = null; // cached from DB
 let _marketCapChecked = 0; // timestamp of last check
@@ -2375,7 +2375,7 @@ module.exports = {
   STARTING_BALANCE,
   getPlaceholderPFP,
   // 💡 2026-08-31: exported so callers (e.g. raidSystem reward retry) can
-  // canonicalize JIDs before paying — addMoney fails silently for
+  // canonicalize JIDs before paying - addMoney fails silently for
   // wrong-format JIDs.
   resolveJid: resolveJidHelper,
 
@@ -2448,7 +2448,7 @@ module.exports = {
       addProfessionXP,
       getProfessionLevel,
       getUserStats,  changeClass,
-  // 💡 evolveClass removed — was dead code (zero callers)
+  // 💡 evolveClass removed - was dead code (zero callers)
   resetClass,
   updateAdventurerRank,
   addStatBonus,
@@ -2475,7 +2475,7 @@ module.exports = {
   setPersistentHP,
   healToFull,
 
-  // 💡 FIX 2026-08-03: Mention display helpers — resolve LID→phone, use nicknames
+  // 💡 FIX 2026-08-03: Mention display helpers - resolve LID→phone, use nicknames
   getDisplayName,
   getMentionJid,
 };
@@ -2542,7 +2542,7 @@ function setPersistentHP(userId, hp, maxHP) {
  * Heal the player to full HP.
  * Called by the .g hospital command.
  * 💡 AUDIT FIX 2026-08-01: added 12-hour cooldown. Without a cooldown, the
- * persistent HP system was meaningless — players could spam .g hospital
+ * persistent HP system was meaningless - players could spam .g hospital
  * after every fight for free full heals. Now: 12h cooldown, tracked on
  * user.lastHospitalUse. Out-of-combat passive regen (Soul of the Deep,
  * Druid regen, etc.) handles healing between hospital visits.

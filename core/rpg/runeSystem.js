@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  RUNE SYSTEM (Phase 3 — Skill Augments)
+//  RUNE SYSTEM (Phase 3 - Skill Augments)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Runes are socketable augments that modify skill behavior. Each rune has:
@@ -9,7 +9,7 @@
 // Socket rules:
 //   - Each skill has 0-3 rune slots (depending on skill tier)
 //   - Starter skills: 0 slots, Evolved skills: 1 slot, Ascended: 2, Ultimates: 3
-//   - Runes are consumable on socket — removal requires a Rune Removal Scroll
+//   - Runes are consumable on socket - removal requires a Rune Removal Scroll
 //
 // Drop sources:
 //   - S+ bosses: 10% chance, SS+: 15%, SSS: 25%
@@ -62,7 +62,7 @@ const RUNE_TYPES = {
     icon: '🛡️',
     desc: 'Skill ignores target DEF at the cost of lower damage',
     defIgnorePct: [0.20, 0.30, 0.40, 0.60], // ignores 20/30/40% of target DEF
-    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries — was 3, caused NaN at ABYSSAL tier)
+    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries - was 3, caused NaN at ABYSSAL tier)
   },
   PIERCE: {
     id: 'PIERCE',
@@ -70,13 +70,13 @@ const RUNE_TYPES = {
     icon: '⚔️',
     desc: 'Skill cannot be evaded, at the cost of lower damage',
     cannotEvade: true,
-    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries — was 3, caused NaN at ABYSSAL tier)
+    damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries - was 3, caused NaN at ABYSSAL tier)
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🎨 BEHAVIOR-MODIFYING RUNES (Phase 4 — Skill Customization System)
+  // 🎨 BEHAVIOR-MODIFYING RUNES (Phase 4 - Skill Customization System)
   // ═══════════════════════════════════════════════════════════════════════════
-  // These runes don't just tweak numbers — they fundamentally alter how a
+  // These runes don't just tweak numbers - they fundamentally alter how a
   // skill behaves. Each adds one or more fields to modifiedEffect that the
   // combat resolution code (applyAbilityEffect / calculateDamage) reads and
   // honors. Post-compute patching architecture: skills expose editable
@@ -260,7 +260,7 @@ const RUNE_TYPES = {
     id: 'SILENCE_INFUSION',
     name: 'Silence Infusion Rune',
     icon: '🤐',
-    desc: 'Silences the target — cannot use abilities.',
+    desc: 'Silences the target - cannot use abilities.',
     addStatus: { type: 'silence', duration: 2 },
     damageMult: [0.90, 0.92, 0.95, 0.98],
   },
@@ -268,7 +268,7 @@ const RUNE_TYPES = {
     id: 'BLIND_INFUSION',
     name: 'Blind Infusion Rune',
     icon: '👁️',
-    desc: 'Blinds the target — reduces accuracy.',
+    desc: 'Blinds the target - reduces accuracy.',
     addStatus: { type: 'blind', value: [25, 40, 55, 70], duration: 2 },
     damageMult: [0.92, 0.94, 0.96, 0.98],
   },
@@ -276,7 +276,7 @@ const RUNE_TYPES = {
     id: 'CURSE_INFUSION',
     name: 'Curse Infusion Rune',
     icon: '💀',
-    desc: 'Curses the target — reduces all stats.',
+    desc: 'Curses the target - reduces all stats.',
     addStatus: { type: 'curse', value: [15, 25, 35, 50], duration: 3 },
     damageMult: [0.95, 0.96, 0.97, 0.98],
   },
@@ -371,7 +371,7 @@ const RUNE_TYPES = {
     icon: '⏱️',
     desc: 'Reduces skill cooldown. Higher tiers can halve or remove it entirely.',
     // Per-tier cooldown multiplier: LESSER 0.75, NORMAL 0.50, GREATER 0.25, ABYSSAL 0.00
-    // (ABYSSAL = no cooldown at all — skill usable every turn)
+    // (ABYSSAL = no cooldown at all - skill usable every turn)
     cooldownMult: [0.75, 0.50, 0.40, 0.40],  // P2 Fix #10e: was [0.75,0.50,0.25,0.00], floored at 0.40 (ABYSSAL no longer removes cooldown entirely)
     // Small energy cost penalty so cooldown runes aren't strictly free
     energyCostMult: [1.15, 1.20, 1.25, 1.30],
@@ -387,7 +387,7 @@ const RUNE_TYPES = {
     name: 'Wet Rune',
     icon: '💧',
     desc: 'Applies WET to affected targets. Reduces movement stability, enables Shock/Frost/Burn synergies.',
-    // WET is a status priming rune — it doesn't modify damage/cost, it adds a status
+    // WET is a status priming rune - it doesn't modify damage/cost, it adds a status
     statusApplied: 'wet',
     statusDuration: [2, 2, 3, 3],
     statusChance: [80, 90, 100, 100],
@@ -424,7 +424,7 @@ function getSkillSlotCount(skill) {
   if (!skill) return 0;
   // 💡 UPDATED 2026-07-17: rune slots now scale with skill tier directly.
   // T1 = 1 slot, T2 = 2 slots, T3 = 3 slots, T4 (ultimate) = 3 slots.
-  // Previously: starter=0, evolved=1, ascended=2, ultimate=3 — which meant
+  // Previously: starter=0, evolved=1, ascended=2, ultimate=3 - which meant
   // T1 starter skills had ZERO slots, making them un-runeable.
   if (skill.isUltimate || skill.tier >= 4) return 3;
   if (skill.tier >= 3) return 3;   // T3 skills
@@ -546,7 +546,7 @@ async function resolveRune(userJid, query) {
 
   // 4. Try matching by rune type NAME (display name, e.g. "Power Rune" → POWER)
   // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
-  // Previous .includes(q) substring match caused ambiguous lookups — e.g. typing
+  // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
   // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
   // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
   for (const [id, rt] of Object.entries(RUNE_TYPES)) {
@@ -568,8 +568,8 @@ async function resolveRune(userJid, query) {
 // Each pair of same-type same-tier runes → 1 rune of the next tier up.
 //
 // @param userJid
-// @param typeQuery  — e.g. "POWER", "power", "Power Rune"
-// @param countQuery — number (2, 4, 6...) or "all"
+// @param typeQuery  - e.g. "POWER", "power", "Power Rune"
+// @param countQuery - number (2, 4, 6...) or "all"
 // @returns { success, message, fusedCount }
 async function fuseRunesByName(userJid, typeQuery, countQuery) {
   if (!typeQuery) return { success: false, message: '❌ Specify a rune type to fuse.' };
@@ -579,7 +579,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   let matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
   if (!matchedType) {
     // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
-    // Previous .includes(q) substring match caused ambiguous lookups — e.g. typing
+    // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
     // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
     // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
     for (const [id, rt] of Object.entries(RUNE_TYPES)) {
@@ -647,7 +647,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
       const r1 = runes.shift();
       const r2 = runes.shift();
       // 💡 CRITICAL FIX: create the new rune FIRST, then delete the old ones.
-      // Was deleting first then creating — if createRune threw (e.g. duplicate
+      // Was deleting first then creating - if createRune threw (e.g. duplicate
       // key error), the deleted runes were lost permanently with no rollback.
       // Now: if createRune fails, the old runes are still in the DB and the
       // error propagates up to the caller. Nothing is consumed on failure.
@@ -655,12 +655,12 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
       try {
         fused = await createRune(userJid, matchedType, newTier, `fusion_${tier}`);
       } catch (createErr) {
-        // Creation failed — don't delete the originals. Put them back.
+        // Creation failed - don't delete the originals. Put them back.
         runes.unshift(r2);
         runes.unshift(r1);
         throw createErr;
       }
-      // Creation succeeded — now safe to delete the consumed runes.
+      // Creation succeeded - now safe to delete the consumed runes.
       await Rune.deleteOne({ _id: r1._id });
       await Rune.deleteOne({ _id: r2._id });
       fusedCount++;
@@ -694,7 +694,7 @@ async function socketRune(userJid, runeId, skillId) {
   const existing = await getSocketedRunes(userJid, skillId);
   // 💡 QA FIX: actually check the skill's slot count. Previously the comment
   // said "the caller validates that" but the caller (engine.js) did NOT
-  // validate — players could socket into 0-slot starter skills.
+  // validate - players could socket into 0-slot starter skills.
   // Look up the skill definition across all class trees.
   const skillTree = require('./skillTree');
   let skillDef = null;
@@ -721,7 +721,7 @@ async function socketRune(userJid, runeId, skillId) {
     return { success: false, message: `❌ This skill already has ${existing.length}/${maxSlots} runes socketed (maximum).` };
   }
 
-  // 💡 QA FIX: SPREAD rune is useless on single-target skills — reject to prevent traps
+  // 💡 QA FIX: SPREAD rune is useless on single-target skills - reject to prevent traps
   if (rune.type === 'SPREAD') {
     const targeting = skillDef.targeting || '';
     const isAOE = targeting.includes('AOE') || targeting === 'ALL_ENEMIES' || targeting === 'CLEAVE' || targeting === 'CHAIN' || skillDef.damageMultiplier;
@@ -850,7 +850,7 @@ async function destroyRune(userJid, runeQuery) {
 }
 
 // ─── APPLY RUNE MODIFIERS TO A SKILL EFFECT ───────────────────────────────
-// This is the core integration point — called from skillTree.getSkillEffect
+// This is the core integration point - called from skillTree.getSkillEffect
 // AFTER the base effect is computed, to apply socketed rune modifiers.
 //
 // Input: the computed effect object + the user's socketed runes for this skill
@@ -954,7 +954,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   // Apply damage multiplier
   // 💡 FIX 2026-08-06: Skip the damageMult penalty if the base skill already
   // ignores DEF (ignoreDefense >= 100) or deals TRUE damage. VOID_CONVERSION
-  // rune's benefit is "ignore DEF" — if the skill already does that, the rune
+  // rune's benefit is "ignore DEF" - if the skill already does that, the rune
   // provides zero benefit and the damageMult penalty would be pure harm.
   // This was the root cause of "Void Conversion breaks Def-ignoring skills".
   const baseSkillIgnoresDef =
@@ -962,7 +962,7 @@ function applyRuneModifiers(effect, socketedRunes) {
     String(effect.damageType).toUpperCase() === 'TRUE';
   const hasVoidConversion = socketedRunes.some(r => r.type === 'VOID_CONVERSION');
   if (hasVoidConversion && baseSkillIgnoresDef) {
-    // VOID_CONVERSION is redundant — don't apply any damageMult from it.
+    // VOID_CONVERSION is redundant - don't apply any damageMult from it.
     // Other runes' damageMult still applies (they're not redundant).
     // Recalculate damageMult excluding VOID_CONVERSION's contribution.
     let recalculatedMult = 1.0;
@@ -1003,7 +1003,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   if (cooldownMult !== 1.0) {
     modifiedEffect.cooldownMult = (modifiedEffect.cooldownMult ?? 1) * cooldownMult;
   }
-  // Apply flat cooldown reduction (QUICK_CAST) — applied IN ADDITION to mult
+  // Apply flat cooldown reduction (QUICK_CAST) - applied IN ADDITION to mult
   if (cooldownFlatReduction > 0) {
     modifiedEffect.cooldownFlatReduction = (modifiedEffect.cooldownFlatReduction || 0) + cooldownFlatReduction;
   }

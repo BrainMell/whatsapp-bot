@@ -1,4 +1,4 @@
-// Shoob scraper v6 — uses execFile to avoid shell escaping issues
+// Shoob scraper v6 - uses execFile to avoid shell escaping issues
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 
@@ -26,7 +26,7 @@ const START = progress.lastPage + 1;
 const END = 2395;
 console.log(`[Scraper] ${existingIds.size} IDs, ${progress.newCards.length} new, starting at page ${START}`);
 
-// JS code to extract cards — uses single quotes only (no shell conflicts)
+// JS code to extract cards - uses single quotes only (no shell conflicts)
 const SCRAPE_JS = `(function(){var imgs=document.querySelectorAll('img[src*="cardr"]');var r=[];imgs.forEach(function(img){var t=img.getAttribute('title')||img.getAttribute('alt')||'';var s=img.src;var m=s.match(/cardr\\/([a-f0-9]+)/);r.push({title:t,cardId:m?m[1]:'',imageUrl:s})});return JSON.stringify(r)})()`;
 
 let currentPage = START;
@@ -45,14 +45,14 @@ process.on('uncaughtException', (err) => {
 for (let page = START; page <= END; page++) {
   currentPage = page;
   try {
-    // Use execFileSync with array args — no shell interpretation
+    // Use execFileSync with array args - no shell interpretation
     execFileSync('agent-browser', ['open', `https://shoob.gg/cards?page=${page}`], { timeout: 15000, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
     execFileSync('agent-browser', ['wait', '1500'], { timeout: 5000, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
     
-    // Pass JS directly as an argument — no shell, no escaping issues
+    // Pass JS directly as an argument - no shell, no escaping issues
     const raw = execFileSync('agent-browser', ['eval', SCRAPE_JS], { timeout: 10000, encoding: 'utf8', maxBuffer: 5*1024*1024, stdio: ['pipe','pipe','pipe'] });
     
-    // Parse — output may be quoted JSON string
+    // Parse - output may be quoted JSON string
     let str = raw.trim();
     if (str.startsWith('"')) str = str.slice(1,-1).replace(/\\"/g,'"').replace(/\\\\/g,'\\');
     let cards = [];

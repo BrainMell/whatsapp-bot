@@ -60,7 +60,7 @@ module.exports = {
                 if (obj.ephemeralMessage) found.push(...extractAllText(obj.ephemeralMessage.message));
                 // 💡 FIX: Add missing message types that can carry captions/text.
                 // Previously audio, sticker, contact, and liveLocation messages
-                // were not scanned — antilink could be bypassed by sending a
+                // were not scanned - antilink could be bypassed by sending a
                 // link in an audio/sticker caption.
                 if (obj.audioMessage) found.push(...extractAllText(obj.audioMessage));
                 if (obj.stickerMessage) found.push(...extractAllText(obj.stickerMessage));

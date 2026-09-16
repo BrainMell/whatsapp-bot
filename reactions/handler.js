@@ -36,12 +36,12 @@ function resolveTarget(msg) {
 /**
  * Resolves and fetches the GIF URL via a 3-source fallback chain.
  *
- * 💡 2026-09-01 ENDPOINT OVERHAUL (Task 4 — dead endpoint + .gif kill fix).
+ * 💡 2026-09-01 ENDPOINT OVERHAUL (Task 4 - dead endpoint + .gif kill fix).
  * The original chain (nekos.best → waifu.pics) went fully dead:
  *   - nekos.best: Cloudflare JS challenge (403) on all datacenter requests.
  *     Kept first because the 403 fails fast (~0.2s) and the source auto-
- *     recovers if protection is ever lifted — it has the best coverage.
- *   - api.waifu.pics: NXDOMAIN — domain decommissioned. Removed.
+ *     recovers if protection is ever lifted - it has the best coverage.
+ *   - api.waifu.pics: NXDOMAIN - domain decommissioned. Removed.
  * New working sources (verified 2026-09-01 from the production host):
  *   - nekos.life v2       → GET /api/v2/img/<cat>      → { url }
  *   - api.purrbot.site/v2 → GET /v2/img/sfw/<cat>/gif  → { link }
@@ -49,7 +49,7 @@ function resolveTarget(msg) {
  * has (see reactions/fallbacks.js maps).
  */
 async function fetchGifUrl(category) {
-  // Try 1: Nekos.best API (original primary — currently Cloudflare-blocked
+  // Try 1: Nekos.best API (original primary - currently Cloudflare-blocked
   // from datacenter IPs; fast-fails with 403 so staying in the chain is cheap)
   try {
     const nekosCat = NEKOS_BEST_MAP[category] || category;
@@ -58,7 +58,7 @@ async function fetchGifUrl(category) {
       return res.data.results[0].url;
     }
   } catch (err) {
-    // expected while the Cloudflare challenge is active — fall through
+    // expected while the Cloudflare challenge is active - fall through
   }
 
   // Try 2: nekos.life v2 (NEW 2026-09-01)
@@ -85,7 +85,7 @@ async function fetchGifUrl(category) {
     }
   }
 
-  // (waifu.pics REMOVED 2026-09-01 — api.waifu.pics returns NXDOMAIN, domain dead)
+  // (waifu.pics REMOVED 2026-09-01 - api.waifu.pics returns NXDOMAIN, domain dead)
 
   throw new Error('All SFW GIF endpoints failed (nekos.best is Cloudflare-blocked; nekos.life and PurrBot both failed).');
 }

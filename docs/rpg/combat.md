@@ -9,7 +9,7 @@ The Combat subsystem drives turn-based encounters (PvE and PvP) in the RPG modul
 
 ## How it works
 
-**Payload Creation for Combat Renderer** — [combatImageGenerator.js L13-L48](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L13-L48)
+**Payload Creation for Combat Renderer** - [combatImageGenerator.js L13-L48](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L13-L48)
 ```javascript
 async function generateCombatImage(players, enemies, options = {}) {
     try {
@@ -52,7 +52,7 @@ This function normalizes in-memory player attributes (levels, HP status, energy,
 
 ---
 
-**Enemy AI Turn Resolution** — [performEnemyAction_new.js L1-L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L1-L43)
+**Enemy AI Turn Resolution** - [performEnemyAction_new.js L1-L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L1-L43)
 ```javascript
 async function performEnemyAction(sock, enemy, sessionKey) {
     const state = gameStates.get(sessionKey);
@@ -103,7 +103,7 @@ This function runs the enemy combat turn. It checks if the battle is active, que
 
 ---
 
-**Combat Scene rendering** — [combatIntegration.js L26-L39](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L26-L39)
+**Combat Scene rendering** - [combatIntegration.js L26-L39](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L26-L39)
 ```javascript
 async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
@@ -172,10 +172,10 @@ To change the pace of combat actions, modify the delay logic inside `core/rpg/pe
 ```
 
 ## Common tasks
-- **Add custom combat action verbs** — Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L84-L91).
-- **Alter enemy AI turn delays** — Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L6-L8).
-- **Modify normalized player properties payload** — Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L15-L26).
-- **Modify normalized enemy properties payload** — Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L27-L35).
+- **Add custom combat action verbs** - Customize the weapon type regex checks and action descriptions in [combatIntegration.js L84-91](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatIntegration.js#L84-L91).
+- **Alter enemy AI turn delays** - Change the amount of time the bot waits before taking enemy combat turns in [performEnemyAction_new.js L6-8](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/performEnemyAction_new.js#L6-L8).
+- **Modify normalized player properties payload** - Add or update fields passed from player data to the combat graphics generator in [combatImageGenerator.js L15-26](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L15-L26).
+- **Modify normalized enemy properties payload** - Add or update fields passed from enemy data to the combat graphics generator in [combatImageGenerator.js L27-35](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/combatImageGenerator.js#L27-L35).
 
 
 
@@ -532,7 +532,7 @@ Boss encounters operate under advanced mechanics tracked by `BossPhaseManager` a
 - `floor` field added to CombatRequest for Abyss banner
 - Boss sprite lookup falls back to EnemyNameSprites (not just BossNameSprites)
 - Enemy formation: 2x2 grid (was overlapping at sub=1 and sub=2)
-- Death tint: dark purple (80,0,80,180) — visible on fire-type enemies
+- Death tint: dark purple (80,0,80,180) - visible on fire-type enemies
 - Shadow: elliptical (DrawShadowEllipse) for PvP, circular (DrawShadow) for PvE
 
 ### Error Handling

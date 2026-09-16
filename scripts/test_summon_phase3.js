@@ -1,5 +1,5 @@
 /**
- * Phase 3 unit tests — Necromancer capture pipeline.
+ * Phase 3 unit tests - Necromancer capture pipeline.
  * Run: node scripts/test_summon_phase3.js
  */
 
@@ -239,7 +239,7 @@ const fs = require('fs');
 const classSource = fs.readFileSync(path.join(REPO, 'core/rpg/classSystem.js'), 'utf8');
 
 test('Necromancer passive effect changed to summon_buff', () => {
-  // Find the NECROMANCER block — use a larger window because the comment
+  // Find the NECROMANCER block - use a larger window because the comment
   // I added pushed the passive line further down.
   const necroIdx = classSource.indexOf("NECROMANCER: {");
   assert.ok(necroIdx > 0);

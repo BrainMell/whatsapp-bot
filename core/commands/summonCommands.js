@@ -1,17 +1,17 @@
 // ============================================
-// 🐉 SUMMON COMMANDS — player-facing summon management
+// 🐉 SUMMON COMMANDS - player-facing summon management
 // ============================================
 // Commands:
-//   .summon list              — view owned summons
-//   .summon deploy <id>       — equip a summon for combat
-//   .summon dismiss           — unequip active summon
-//   .summon info <id>         — detailed summon view
-//   .summon release <id>      — permanently release a summon
-//   .summon train <id>        — daily training (+500 XP, shared cooldown)
-//   .summon allocate <id> <stat> <points> — allocate stat points
-//   .summon resonance         — view active resonance web bonuses
-//   .summon compendium        — view tamed species (Necromancer)
-//   .summon hatch <eggId>     — hatch a summon egg
+//   .summon list              - view owned summons
+//   .summon deploy <id>       - equip a summon for combat
+//   .summon dismiss           - unequip active summon
+//   .summon info <id>         - detailed summon view
+//   .summon release <id>      - permanently release a summon
+//   .summon train <id>        - daily training (+500 XP, shared cooldown)
+//   .summon allocate <id> <stat> <points> - allocate stat points
+//   .summon resonance         - view active resonance web bonuses
+//   .summon compendium        - view tamed species (Necromancer)
+//   .summon hatch <eggId>     - hatch a summon egg
 //
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
 
@@ -31,7 +31,7 @@ const getPrefix = () => botConfig.getPrefix();
 
 // 💡 HELPER: Resolve a summon by position number (1, 2, 3) or fallback to summonId
 // This replaces all the old summonId.endsWith(query) lookups.
-// SYNCHRONOUS — no I/O, no await needed.
+// SYNCHRONOUS - no I/O, no await needed.
 function resolveSummon(summons, query) {
   if (!query) return null;
   // Try position number first
@@ -63,7 +63,7 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
     return await cmdPokedex(sock, chatId, senderJid);
   }
 
-  // Numeric navigation — .summon 3 → view details of the 3rd summon in the list
+  // Numeric navigation - .summon 3 → view details of the 3rd summon in the list
   if (/^\d+$/.test(sub)) {
     return await cmdNavigate(sock, chatId, senderJid, sub, rest);
   }
@@ -141,7 +141,7 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
     case 'moves':
       return await cmdAbilities(sock, chatId, senderJid, rest);
 
-    // 💡 FIX 2026-09-12: `equip`/`unequip` here were UNREACHABLE — duplicate
+    // 💡 FIX 2026-09-12: `equip`/`unequip` here were UNREACHABLE - duplicate
     // cases above ('equip'→deploy, 'unequip'→dismiss) shadowed them, so the
     // summon-gear commands only worked as `.summon gear ...` and gear-UNEQUIP
     // had no route at all. Now: gear equip = `.summon gear <id> <gearId>`,
@@ -185,7 +185,7 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon — Pokémon-style Pokédex interface (DEFAULT when no subcommand)
+// .summon - Pokémon-style Pokédex interface (DEFAULT when no subcommand)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdPokedex(sock, chatId, senderJid) {
@@ -252,7 +252,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
     if (gifBuffer && gifBuffer.length > 0) {
       // 💡 CRITICAL NOTE FOR FUTURE REFERENCE:
       // WhatsApp does NOT support GIF as an image format (image: gifBuffer,
-      // mimetype: 'image/gif' silently fails — the bot sends but the user
+      // mimetype: 'image/gif' silently fails - the bot sends but the user
       // sees nothing). WhatsApp also can't use video + gifPlayback: true
       // with a raw GIF buffer (Baileys tries ffmpeg MP4 conversion which
       // silently fails on Oracle).
@@ -292,7 +292,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
         const sendResult = await sock.sendMessage(chatId, {
           video: mp4Buffer,
           gifPlayback: true,
-          caption: `🐉 *SUMMON ROSTER* — ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`,
+          caption: `🐉 *SUMMON ROSTER* - ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` - view details | \`${p} summon help\` - commands`,
         });
         console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
 
@@ -317,7 +317,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
     if (imageBuffer && imageBuffer.length > 0) {
       await sock.sendMessage(chatId, {
         image: imageBuffer,
-        caption: `🐉 *SUMMON CODEX* — ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` — view details | \`${p} summon help\` — commands`
+        caption: `🐉 *SUMMON CODEX* - ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` - view details | \`${p} summon help\` - commands`
       });
       return;
     }
@@ -364,15 +364,15 @@ async function cmdPokedex(sock, chatId, senderJid) {
   }
 
   msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📱 \`${p} summon <#>\` — view details\n`;
-  msg += `⚔️ \`${p} summon deploy <#>\` — equip\n`;
-  msg += `❓ \`${p} summon help\` — all commands`;
+  msg += `📱 \`${p} summon <#>\` - view details\n`;
+  msg += `⚔️ \`${p} summon deploy <#>\` - equip\n`;
+  msg += `❓ \`${p} summon help\` - all commands`;
 
   await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon <#> — navigate to summon by list position (Pokédex entry)
+// .summon <#> - navigate to summon by list position (Pokédex entry)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
@@ -481,7 +481,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
         await sock.sendMessage(chatId, {
           video: mp4Buffer,
           gifPlayback: true,
-          caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` — equip | \`${p} summon ${index + 1} trial\` — evolve`,
+          caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` - equip | \`${p} summon ${index + 1} trial\` - evolve`,
         });
 
         try { fs.unlinkSync(tmpGif); } catch (e) {}
@@ -506,7 +506,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
       const active = user.activeSummonId === summons[index].summonId;
       await sock.sendMessage(chatId, {
         image: imageBuffer,
-        caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${getPrefix()} summon ${index + 1} deploy\` — equip | \`${getPrefix()} summon ${index + 1} trial\` — evolve`
+        caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${getPrefix()} summon ${index + 1} deploy\` - equip | \`${getPrefix()} summon ${index + 1} trial\` - evolve`
       });
       return;
     }
@@ -519,7 +519,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon deploy <id> — equip a summon
+// .summon deploy <id> - equip a summon
 // ─────────────────────────────────────────────────────────────
 
 async function cmdDeploy(sock, chatId, senderJid, args) {
@@ -565,7 +565,7 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon dismiss — unequip active summon
+// .summon dismiss - unequip active summon
 // ─────────────────────────────────────────────────────────────
 
 async function cmdDismiss(sock, chatId, senderJid) {
@@ -580,7 +580,7 @@ async function cmdDismiss(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon info <id> — detailed view
+// .summon info <id> - detailed view
 // ─────────────────────────────────────────────────────────────
 
 async function cmdInfo(sock, chatId, senderJid, args) {
@@ -616,7 +616,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   msg += `📊 Level ${target.level}/${registry.getRarityConfig(target.rarity).maxLevel} | ${target.rarity} | ${target.tier}\n`;
   msg += `🎯 Element: ${target.element} | Archetype: ${target.archetype}\n`;
   msg += `💖 Loyalty: ${target.loyalty}/100\n`;
-  msg += `🧠 Personality: ${personality.name} — ${personality.desc}\n\n`;
+  msg += `🧠 Personality: ${personality.name} - ${personality.desc}\n\n`;
 
   msg += `*STATS:*\n`;
   msg += `❤️ HP: ${stats.hp} | ⚔️ ATK: ${Math.floor(stats.atk)}\n`;
@@ -629,7 +629,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   msg += `📈 Stat points available: ${target.statPoints}\n\n`;
 
   msg += `*SOUL ECHO:*\n`;
-  msg += `${echo?.icon || '💫'} ${echo?.name || 'Unknown'} — ${echo?.desc || ''}\n\n`;
+  msg += `${echo?.icon || '💫'} ${echo?.name || 'Unknown'} - ${echo?.desc || ''}\n\n`;
 
   // Behavior score (personality development)
   const bs = target.behaviorScore || {};
@@ -642,7 +642,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
     msg += `*LINEAGE:*\n`;
     for (const ancestor of target.lineage) {
       if (ancestor.personality === 'TAMED') {
-        msg += `✨ *TAMED* — +20% stats (permanent bonus)\n`;
+        msg += `✨ *TAMED* - +20% stats (permanent bonus)\n`;
       } else {
         msg += `• ${ancestor.species} (Lv.${ancestor.level}, ${ancestor.personality})\n`;
       }
@@ -660,14 +660,14 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   }
 
   // 💡 FIX 2026-08-05: Removed summon ID from display (user feedback: too cluttered).
-  // The ID is still stored internally for lookups — just not shown on the card.
+  // The ID is still stored internally for lookups - just not shown on the card.
   msg += `📅 Obtained: ${target.obtainedAt?.toLocaleDateString() || 'unknown'} via ${target.obtainedFrom || 'unknown'}`;
 
   await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon release <id> — permanently release
+// .summon release <id> - permanently release
 // ─────────────────────────────────────────────────────────────
 
 async function cmdRelease(sock, chatId, senderJid, args) {
@@ -710,7 +710,7 @@ async function cmdRelease(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon train <id> — daily training
+// .summon train <id> - daily training
 // ─────────────────────────────────────────────────────────────
 
 async function cmdTrain(sock, chatId, senderJid, args) {
@@ -776,7 +776,7 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon codex — view ALL summon species in the game
+// .summon codex - view ALL summon species in the game
 // ─────────────────────────────────────────────────────────────
 
 async function cmdCodex(sock, chatId, senderJid, args) {
@@ -802,7 +802,7 @@ async function cmdCodex(sock, chatId, senderJid, args) {
   const startIdx = (page - 1) * PER_PAGE;
   const pageSpecies = allSpecies.slice(startIdx, startIdx + PER_PAGE);
 
-  // Build payload for Go service — same format as roster but with all species
+  // Build payload for Go service - same format as roster but with all species
   const rosterSummons = pageSpecies.map(speciesId => {
     const s = registry.getSpecies(speciesId);
     return {
@@ -851,8 +851,8 @@ async function cmdCodex(sock, chatId, senderJid, args) {
         ], { timeout: 15000, stdio: 'pipe' });
 
         const mp4Buffer = fs.readFileSync(tmpMp4);
-        let caption = `📖 *SUMMON CODEX* — ${allSpecies.length} species | Page ${page}/${totalPages}`;
-        if (totalPages > 1) caption += `\n💡 \`${p} summon codex <page>\` — navigate`;
+        let caption = `📖 *SUMMON CODEX* - ${allSpecies.length} species | Page ${page}/${totalPages}`;
+        if (totalPages > 1) caption += `\n💡 \`${p} summon codex <page>\` - navigate`;
         await sock.sendMessage(chatId, { video: mp4Buffer, gifPlayback: true, caption });
 
         try { fs.unlinkSync(tmpGif); } catch (e) {}
@@ -869,18 +869,18 @@ async function cmdCodex(sock, chatId, senderJid, args) {
   }
 
   // Text fallback
-  let msg = `📖 *SUMMON CODEX* — Page ${page}/${totalPages}\n`;
+  let msg = `📖 *SUMMON CODEX* - Page ${page}/${totalPages}\n`;
   msg += `Total: ${allSpecies.length} species\n\n`;
   pageSpecies.forEach((id, i) => {
     const s = registry.getSpecies(id);
-    msg += `${startIdx + i + 1}. ${s?.icon || '🐉'} *${s?.name || id}* — ${s?.rarity || 'COMMON'} ${s?.element || ''}\n`;
+    msg += `${startIdx + i + 1}. ${s?.icon || '🐉'} *${s?.name || id}* - ${s?.rarity || 'COMMON'} ${s?.element || ''}\n`;
   });
-  if (totalPages > 1) msg += `\n💡 \`${p} summon codex <page>\` — navigate`;
+  if (totalPages > 1) msg += `\n💡 \`${p} summon codex <page>\` - navigate`;
   await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon resonance — view active resonance web bonuses
+// .summon resonance - view active resonance web bonuses
 // ─────────────────────────────────────────────────────────────
 
 async function cmdResonance(sock, chatId, senderJid) {
@@ -901,7 +901,7 @@ async function cmdResonance(sock, chatId, senderJid) {
     return;
   }
 
-  let msg = `🔗 *RESONANCE WEB* — ${active.length} active\n`;
+  let msg = `🔗 *RESONANCE WEB* - ${active.length} active\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const resonanceId of active) {
@@ -915,7 +915,7 @@ async function cmdResonance(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon compendium — view tamed species (Necromancer)
+// .summon compendium - view tamed species (Necromancer)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdCompendium(sock, chatId, senderJid) {
@@ -944,7 +944,7 @@ async function cmdCompendium(sock, chatId, senderJid) {
     msg += `*TAMED SPECIES:*\n`;
     for (const t of tamed) {
       const species = registry.getSpecies(t.speciesId);
-      msg += `${species?.icon || '🐉'} ${species?.name || t.speciesId} — ${t.count} kills\n`;
+      msg += `${species?.icon || '🐉'} ${species?.name || t.speciesId} - ${t.count} kills\n`;
     }
   }
 
@@ -959,7 +959,7 @@ async function cmdCompendium(sock, chatId, senderJid) {
     for (const [enemyType, count] of inProgress.slice(0, 10)) {
       const speciesId = allMappings[enemyType];
       const species = registry.getSpecies(speciesId);
-      msg += `${species?.icon || '❓'} ${species?.name || enemyType} — ${count}/${summonCapture.CAPTURE_CONFIG.TAMING_THRESHOLD}\n`;
+      msg += `${species?.icon || '❓'} ${species?.name || enemyType} - ${count}/${summonCapture.CAPTURE_CONFIG.TAMING_THRESHOLD}\n`;
     }
   }
 
@@ -967,7 +967,7 @@ async function cmdCompendium(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon hatch <eggId> — hatch a summon egg
+// .summon hatch <eggId> - hatch a summon egg
 // ─────────────────────────────────────────────────────────────
 
 async function cmdHatch(sock, chatId, senderJid, args) {
@@ -981,7 +981,7 @@ async function cmdHatch(sock, chatId, senderJid, args) {
   if (!eggId) {
     // 💡 AUDIT FIX 2026-08-01: updated help text to reflect the new egg system
     await sock.sendMessage(chatId, {
-      text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` — 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` — random RARE summon\n• \`epic_summon_egg\` — random EPIC summon\n• \`legendary_summon_egg\` — random LEGENDARY summon\n• \`mythic_summon_egg\` — random MYTHIC summon\n\n_Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._`
+      text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` - 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` - random RARE summon\n• \`epic_summon_egg\` - random EPIC summon\n• \`legendary_summon_egg\` - random LEGENDARY summon\n• \`mythic_summon_egg\` - random MYTHIC summon\n\n_Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._`
     });
     return;
   }
@@ -999,7 +999,7 @@ async function cmdHatch(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon forge <id1> <id2> — Soul Forging
+// .summon forge <id1> <id2> - Soul Forging
 // ─────────────────────────────────────────────────────────────
 
 async function cmdForge(sock, chatId, senderJid, args) {
@@ -1052,7 +1052,7 @@ async function cmdForge(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon trial <id> — attempt solo evolution trial
+// .summon trial <id> - attempt solo evolution trial
 // ─────────────────────────────────────────────────────────────
 
 async function cmdTrial(sock, chatId, senderJid, args) {
@@ -1083,7 +1083,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
       for (const s of eligible) {
         const trial = summonTrials.getTrial(s.species);
         const species = registry.getSpecies(s.species);
-        msg += `${species?.icon || '🐉'} *${s.nickname || species?.name || s.species}* — ${trial.name}\n`;
+        msg += `${species?.icon || '🐉'} *${s.nickname || species?.name || s.species}* - ${trial.name}\n`;
         msg += `   📊 Lv.${s.level} | Boss: ${trial.bossId} (Lv.${trial.bossLevel})\n`;
         msg += `   🆔 \`${s.summonId.slice(-8)}\`\n`;
         msg += `   Reward: Evolve to ${trial.rewardEvolution} + unlock *${summonTrials.getPassive(trial.rewardPassive)?.name || 'passive'}*\n\n`;
@@ -1109,7 +1109,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon passives — view unlocked player passives from trials
+// .summon passives - view unlocked player passives from trials
 // ─────────────────────────────────────────────────────────────
 
 async function cmdPassives(sock, chatId, senderJid) {
@@ -1134,14 +1134,14 @@ async function cmdPassives(sock, chatId, senderJid) {
   } else {
     msg += `*ACTIVE PASSIVES:*\n`;
     for (const p of passives) {
-      msg += `✅ ${p.name} — ${p.desc}\n`;
+      msg += `✅ ${p.name} - ${p.desc}\n`;
     }
 
     const locked = allPassives.filter(([id]) => !user.unlockedSummonPassives.includes(id));
     if (locked.length > 0) {
       msg += `\n*LOCKED:*\n`;
       for (const [id, p] of locked.slice(0, 10)) {
-        msg += `🔒 ${p.name} — ${p.desc}\n`;
+        msg += `🔒 ${p.name} - ${p.desc}\n`;
       }
       if (locked.length > 10) {
         msg += `... and ${locked.length - 10} more\n`;
@@ -1153,8 +1153,8 @@ async function cmdPassives(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon backlog — view backlog summons
-// .summon swap <backlog#> <deckSlot> — swap backlog into main deck
+// .summon backlog - view backlog summons
+// .summon swap <backlog#> <deckSlot> - swap backlog into main deck
 // ─────────────────────────────────────────────────────────────
 
 async function cmdBacklog(sock, chatId, senderJid, args) {
@@ -1173,13 +1173,13 @@ async function cmdBacklog(sock, chatId, senderJid, args) {
     return;
   }
 
-  let msg = `📦 *BACKLOG* — ${backlog.length} summons\n━━━━━━━━━━━━━━━\n\n`;
+  let msg = `📦 *BACKLOG* - ${backlog.length} summons\n━━━━━━━━━━━━━━━\n\n`;
   backlog.forEach((s, i) => {
     const species = registry.getSpecies(s.species);
     const name = s.nickname || species?.name || s.species;
-    msg += `${i + 1}. ${species?.icon || '🐉'} *${name}* — Lv.${s.level} ${s.rarity} ${s.element}\n`;
+    msg += `${i + 1}. ${species?.icon || '🐉'} *${name}* - Lv.${s.level} ${s.rarity} ${s.element}\n`;
   });
-  msg += `\n💡 \`${p} summon swap <backlog#> <deckSlot>\` — swap into Main Deck`;
+  msg += `\n💡 \`${p} summon swap <backlog#> <deckSlot>\` - swap into Main Deck`;
   await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -1196,7 +1196,7 @@ async function cmdSwap(sock, chatId, senderJid, args) {
 
   if (!backlogNum || !deckSlot) {
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${p} summon swap <backlog#> <deckSlot>\`\n\nExample: \`${p} summon swap 1 2\` — swaps backlog summon #1 into Main Deck slot 2.\n\nView backlog: \`${p} summon backlog\`\nView Main Deck: \`${p} summons\``,
+      text: `❌ Usage: \`${p} summon swap <backlog#> <deckSlot>\`\n\nExample: \`${p} summon swap 1 2\` - swaps backlog summon #1 into Main Deck slot 2.\n\nView backlog: \`${p} summon backlog\`\nView Main Deck: \`${p} summons\``,
     });
     return;
   }
@@ -1213,7 +1213,7 @@ async function cmdSwap(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon market <subcommand> — summon trading market
+// .summon market <subcommand> - summon trading market
 // ─────────────────────────────────────────────────────────────
 
 const SummonMarket = require('../models/SummonMarket');
@@ -1239,7 +1239,7 @@ async function cmdMarket(sock, chatId, senderJid, args) {
       return await cmdMarketMy(sock, chatId, senderJid);
     default:
       await sock.sendMessage(chatId, {
-        text: `🏪 *SUMMON MARKET*\n\nCommands:\n• \`${getPrefix()} summon market list\` — browse summons for sale\n• \`${getPrefix()} summon market sell <id> <price>\` — list a summon\n• \`${getPrefix()} summon market buy <listingId>\` — buy a summon\n• \`${getPrefix()} summon market cancel <listingId>\` — cancel your listing\n• \`${getPrefix()} summon market my\` — view your listings\n\n💡 5% listing fee on sale price. Soulbound summons can't be sold.`
+        text: `🏪 *SUMMON MARKET*\n\nCommands:\n• \`${getPrefix()} summon market list\` - browse summons for sale\n• \`${getPrefix()} summon market sell <id> <price>\` - list a summon\n• \`${getPrefix()} summon market buy <listingId>\` - buy a summon\n• \`${getPrefix()} summon market cancel <listingId>\` - cancel your listing\n• \`${getPrefix()} summon market my\` - view your listings\n\n💡 5% listing fee on sale price. Soulbound summons can't be sold.`
       });
   }
 }
@@ -1516,7 +1516,7 @@ async function cmdMarketMy(sock, chatId, senderJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon duel @user [wager] — PvP summon vs summon
+// .summon duel @user [wager] - PvP summon vs summon
 // 💡 REWORKED 2026-08-05: Now uses the REAL PvP engine (turn-based,
 // abilities, accept/decline flow). The old flat-damage-roll simulator
 // is gone. This command issues a challenge with mode='summon'; the
@@ -1551,7 +1551,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
 
   if (!targetJid) {
     await sock.sendMessage(chatId, {
-      text: `❌ Usage: \`${getPrefix()} summon duel @user [wager]\`\n\nChallenge another player's active summon to a real turn-based duel. Both players must have a summon deployed.\n\nAfter challenging, the target uses \`${getPrefix()} accept\` to accept. Then both players take turns using:\n  • \`${getPrefix()} combat attack\` — basic attack\n  • \`${getPrefix()} combat ability <n>\` — use an ability\n  • \`${getPrefix()} combat item\` — use a Summon Healing Pill\n  • \`${getPrefix()} combat flee\` — forfeit (loyalty penalty)\n\n💡 You can also reply to a player's message and run \`${getPrefix()} summon duel\` to target them.`
+      text: `❌ Usage: \`${getPrefix()} summon duel @user [wager]\`\n\nChallenge another player's active summon to a real turn-based duel. Both players must have a summon deployed.\n\nAfter challenging, the target uses \`${getPrefix()} accept\` to accept. Then both players take turns using:\n  • \`${getPrefix()} combat attack\` - basic attack\n  • \`${getPrefix()} combat ability <n>\` - use an ability\n  • \`${getPrefix()} combat item\` - use a Summon Healing Pill\n  • \`${getPrefix()} combat flee\` - forfeit (loyalty penalty)\n\n💡 You can also reply to a player's message and run \`${getPrefix()} summon duel\` to target them.`
     });
     return;
   }
@@ -1571,7 +1571,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     }
   } catch (e) {}
 
-  // Parse wager (optional — only if mentioned arg was a number, or 2nd arg)
+  // Parse wager (optional - only if mentioned arg was a number, or 2nd arg)
   let wager = 0;
   if (mentioned && !mentioned.includes('@') && !isNaN(parseInt(mentioned))) {
     wager = parseInt(mentioned);
@@ -1608,18 +1608,18 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
   }
   msg += `@${economy.getDisplayName(targetJid)}, use \`${getPrefix()}accept\` to accept the summon duel!\n`;
   msg += `(Expires in 2 minutes)\n\n`;
-  msg += `_Real turn-based combat — abilities, energy, cooldowns. May the best summon win._`;
+  msg += `_Real turn-based combat - abilities, energy, cooldowns. May the best summon win._`;
 
   await sock.sendMessage(chatId, { text: msg, mentions: [targetJid] });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon skill — view/manage summon skill tree (Phase 2)
+// .summon skill - view/manage summon skill tree (Phase 2)
 // Subcommands:
-//   .summon skill <id>           — view skill tree for a summon
-//   .summon skill choose <id> <A|B|C> — choose a path
-//   .summon skill unlock <id> <A1-A5> — unlock a node
-//   .summon skill respec <id>    — reset skill tree (needs scroll)
+//   .summon skill <id>           - view skill tree for a summon
+//   .summon skill choose <id> <A|B|C> - choose a path
+//   .summon skill unlock <id> <A1-A5> - unlock a node
+//   .summon skill respec <id>    - reset skill tree (needs scroll)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdSkillTree(sock, chatId, senderJid, args) {
@@ -1630,16 +1630,16 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   let summonNum = args[1] || '';
   const p = getPrefix();
 
-  // 💡 FIX 2026-08-05: .s summon skill <#> — args[0] is the summon number,
+  // 💡 FIX 2026-08-05: .s summon skill <#> - args[0] is the summon number,
   // not a subcommand. Detect numeric args[0] and treat as summonNum directly.
   if (/^\d+$/.test(sub)) {
     summonNum = sub;
   }
 
-  // .summon skill (no args) — show help
+  // .summon skill (no args) - show help
   if (!sub || !summonNum) {
     await sock.sendMessage(chatId, {
-      text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <#>\` — view skill tree for summon #N\n• \`${p} summon skill choose <#> <A|B|C>\` — choose a path\n• \`${p} summon skill unlock <#> <A1-A5>\` — unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <#>\` — reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._\n_Use summon position number (1, 2, 3) not summon ID._`
+      text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <#>\` - view skill tree for summon #N\n• \`${p} summon skill choose <#> <A|B|C>\` - choose a path\n• \`${p} summon skill unlock <#> <A1-A5>\` - unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <#>\` - reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._\n_Use summon position number (1, 2, 3) not summon ID._`
     });
     return;
   }
@@ -1696,12 +1696,12 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
     return;
   }
 
-  // .summon skill <id> — show the skill tree
+  // .summon skill <id> - show the skill tree
   const tree = summonSkillTrees.getSkillTree(summon.archetype);
   const chosenPath = summon.chosenSkillPath;
   const unlocked = summon.unlockedSkillNodes || [];
 
-  let msg = `🛤️ *SKILL TREE — ${summon.nickname || registry.getSpecies(summon.species)?.name}*\n`;
+  let msg = `🛤️ *SKILL TREE - ${summon.nickname || registry.getSpecies(summon.species)?.name}*\n`;
   msg += `📊 L${summon.level} | Skill Points: ${summon.skillPoints || 0}\n`;
   msg += `${chosenPath ? `🛤️ Path: ${chosenPath}` : '⚠️ No path chosen yet'}\n\n`;
 
@@ -1714,7 +1714,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
       const isUnlocked = unlocked.includes(nodeKey);
       const canUnlock = isChosen && !isUnlocked && summonSkillTrees.canUnlockNode(summon, nodeKey).canUnlock;
       const icon = isUnlocked ? '✅' : (canUnlock ? '🔹' : '🔒');
-      msg += `  ${icon} \`${nodeKey}\` L${node.levelReq} — ${node.name} (${node.type})\n`;
+      msg += `  ${icon} \`${nodeKey}\` L${node.levelReq} - ${node.name} (${node.type})\n`;
       msg += `     ${node.desc}\n`;
     }
     msg += `\n`;
@@ -1730,7 +1730,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon evolve <id> — evolve a summon to its next stage (Phase 3)
+// .summon evolve <id> - evolve a summon to its next stage (Phase 3)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdEvolve(sock, chatId, senderJid, args) {
@@ -1795,7 +1795,7 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon equip <summonId> <gearId> — equip summon gear (Phase 5)
+// .summon equip <summonId> <gearId> - equip summon gear (Phase 5)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdSummonEquip(sock, chatId, senderJid, args) {
@@ -1812,12 +1812,12 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  // 💡 FIX 2026-09-12: was `resolveSummon(summons, summonNum)` — summonNum is
+  // 💡 FIX 2026-09-12: was `resolveSummon(summons, summonNum)` - summonNum is
   // a variable of a DIFFERENT function → ReferenceError on every use.
   const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
-  // Resolve gear item — look up in ITEM_DATABASE for type SUMMON_GEAR
+  // Resolve gear item - look up in ITEM_DATABASE for type SUMMON_GEAR
   const lootSystem = require('../rpg/lootSystem');
   const inventorySystem = require('../rpg/inventorySystem');
   const cleanQuery = gearIdQuery.toLowerCase().replace(/_/g, '').replace(/ /g, '');
@@ -1875,7 +1875,7 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon unequip <summonId> <slot> — unequip summon gear (Phase 5)
+// .summon unequip <summonId> <slot> - unequip summon gear (Phase 5)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdSummonUnequip(sock, chatId, senderJid, args) {
@@ -1900,7 +1900,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
 
   const summons = await summonSystem.getUserSummons(senderJid);
   // 💡 FIX 2026-08-31: referenced `summonNum` (a variable of a DIFFERENT
-  // function) — ReferenceError on every .summon unequip; the command was
+  // function) - ReferenceError on every .summon unequip; the command was
   // completely non-functional. Use this handler's own query variable.
   const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
@@ -1913,11 +1913,11 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
 
   // Return to inventory
   const inventorySystem = require('../rpg/inventorySystem');
-  // 💡 FIX 2026-08-31: await + check — a full bag previously destroyed the
+  // 💡 FIX 2026-08-31: await + check - a full bag previously destroyed the
   // gear permanently (slot nulled first, addItem failure ignored).
   const returnResult = await inventorySystem.addItem(senderJid, gear.id, 1);
   if (!returnResult || !returnResult.success) {
-    await sock.sendMessage(chatId, { text: `❌ ${returnResult?.message || 'Bag full — make space first.'}` });
+    await sock.sendMessage(chatId, { text: `❌ ${returnResult?.message || 'Bag full - make space first.'}` });
     return;
   }
   summon.summonEquipment[slot] = null;
@@ -1927,7 +1927,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon bond <id> — view bond level + bonuses (Phase 4)
+// .summon bond <id> - view bond level + bonuses (Phase 4)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdBond(sock, chatId, senderJid, args) {
@@ -1937,7 +1937,7 @@ async function cmdBond(sock, chatId, senderJid, args) {
   const summonIdQuery = (args[0] || '').trim();
   if (!summonIdQuery) {
     await sock.sendMessage(chatId, {
-      text: `💖 *SUMMON BOND SYSTEM*\n\nFight alongside your summon to grow your bond. Each combat grants 1-3 bond XP.\n\n*Bond Tiers:*\n• 10: Acquainted — +5% all stats\n• 25: Trusted — +10% stats, loyalty decays slower\n• 50: Bonded — +15% stats, echo buff stronger\n• 75: Soulbound — +20% stats, combo attack unlocked\n• 100: Eternal — +25% stats, loyalty never decays\n\n_Usage: \`${getPrefix()} summon bond <id>\`_`
+      text: `💖 *SUMMON BOND SYSTEM*\n\nFight alongside your summon to grow your bond. Each combat grants 1-3 bond XP.\n\n*Bond Tiers:*\n• 10: Acquainted - +5% all stats\n• 25: Trusted - +10% stats, loyalty decays slower\n• 50: Bonded - +15% stats, echo buff stronger\n• 75: Soulbound - +20% stats, combo attack unlocked\n• 100: Eternal - +25% stats, loyalty never decays\n\n_Usage: \`${getPrefix()} summon bond <id>\`_`
     });
     return;
   }
@@ -1952,13 +1952,13 @@ async function cmdBond(sock, chatId, senderJid, args) {
   const summonBondTraits = require('../rpg/summonBondTraits');
   const bondDisplay = summonBondTraits.getBondDisplay(summon);
   const species = registry.getSpecies(summon.species);
-  let msg = `💖 *BOND — ${summon.nickname || species?.name || summon.species}*\n\n`;
+  let msg = `💖 *BOND - ${summon.nickname || species?.name || summon.species}*\n\n`;
   msg += bondDisplay;
   await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon traits <id> — view traits (Phase 4)
+// .summon traits <id> - view traits (Phase 4)
 // ─────────────────────────────────────────────────────────────
 
 async function cmdTraits(sock, chatId, senderJid, args) {
@@ -1982,18 +1982,18 @@ async function cmdTraits(sock, chatId, senderJid, args) {
 
   const summonBondTraits = require('../rpg/summonBondTraits');
   const species = registry.getSpecies(summon.species);
-  let msg = `🧬 *TRAITS — ${summon.nickname || species?.name || summon.species}*\n\n`;
+  let msg = `🧬 *TRAITS - ${summon.nickname || species?.name || summon.species}*\n\n`;
   msg += `   ${summonBondTraits.getTraitsDisplay(summon)}\n`;
-  msg += `\n_Traits are permanent — they define this summon's unique identity._`;
+  msg += `\n_Traits are permanent - they define this summon's unique identity._`;
   await sock.sendMessage(chatId, { text: msg });
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon ai <id> <mode> — set AI behavior mode (Phase 4)
+// .summon ai <id> <mode> - set AI behavior mode (Phase 4)
 // ─────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────
-// .summon abilities — list auto-unlocked abilities for active summon
+// .summon abilities - list auto-unlocked abilities for active summon
 // 💡 NEW 2026-08-05: Summons auto-unlock abilities at level milestones.
 // This command shows what's unlocked + what's coming next.
 // ─────────────────────────────────────────────────────────────
@@ -2024,7 +2024,7 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
   const name = summon.nickname || species?.name || summon.species;
   const icon = species?.icon || '🐉';
 
-  let msg = `${icon} *${name}* — Abilities (Lv.${summon.level} ${summon.archetype})\n`;
+  let msg = `${icon} *${name}* - Abilities (Lv.${summon.level} ${summon.archetype})\n`;
   msg += `━━━━━━━━━━━━━━━━━━━\n\n`;
 
   // Unlocked abilities
@@ -2040,7 +2040,7 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
 
   msg += `✅ *UNLOCKED (${unlocked.length}):*\n`;
   if (unlocked.length === 0) {
-    msg += `   _No abilities yet — reach Lv.${locked[0]?.levelReq || 1} to unlock the first._\n`;
+    msg += `   _No abilities yet - reach Lv.${locked[0]?.levelReq || 1} to unlock the first._\n`;
   } else {
     for (const ab of unlocked) {
       const costStr = ab.cost > 0 ? ` · ${ab.cost} EN` : '';
@@ -2055,7 +2055,7 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
     const next = locked.slice(0, 3);
     for (const ab of next) {
       const costStr = ab.cost > 0 ? ` · ${ab.cost} EN` : '';
-      msg += `   • *${ab.name}* — unlocks at Lv.${ab.levelReq}${costStr}\n`;
+      msg += `   • *${ab.name}* - unlocks at Lv.${ab.levelReq}${costStr}\n`;
     }
     if (locked.length > 3) {
       msg += `   _...and ${locked.length - 3} more at higher levels_\n`;
@@ -2092,7 +2092,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   if (!mode) {
     const summonBondTraits = require('../rpg/summonBondTraits');
     const currentMode = summonBondTraits.getAIMode(summon.aiMode || 'BALANCED');
-    let msg = `🤖 *AI MODE — ${summon.nickname || summon.species}*\n\n`;
+    let msg = `🤖 *AI MODE - ${summon.nickname || summon.species}*\n\n`;
     msg += `Current: ${currentMode.icon} ${currentMode.name}\n${currentMode.desc}\n\n`;
     msg += `*Available modes:*\n`;
     msg += summonBondTraits.getAIModesDisplay();
@@ -2114,7 +2114,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon eggcraft <tier> — craft eggs from fragments
+// .summon eggcraft <tier> - craft eggs from fragments
 // ─────────────────────────────────────────────────────────────
 
 async function cmdEggCraft(sock, chatId, senderJid, args) {
@@ -2140,7 +2140,7 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
       const have = inventorySystem.getItemCount(senderJid, fragId);
       const eggName = require('../rpg/lootSystem').getItemInfo(tierData.eggId)?.name || tierData.eggId;
       const fragName = require('../rpg/lootSystem').getItemInfo(fragId)?.name || fragId;
-      msg += `• \`${p} summon eggcraft ${t}\` — ${fragCount}x ${fragName} → ${eggName}\n  _You have: ${have}/${fragCount}_\n`;
+      msg += `• \`${p} summon eggcraft ${t}\` - ${fragCount}x ${fragName} → ${eggName}\n  _You have: ${have}/${fragCount}_\n`;
     }
     msg += `\n_Get fragments by defeating Wild Summons in the Abyss (10% encounter rate per floor)._`;
     await sock.sendMessage(chatId, { text: msg });
@@ -2168,25 +2168,25 @@ async function cmdHelp(sock, chatId) {
   let msg = `🐉 *SUMMONER SYSTEM*\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
   msg += `*COMMANDS:*\n`;
-  msg += `📋 \`${p} summons\` — view your Main Deck (animated)\n`;
-  msg += `📦 \`${p} summon backlog\` — view your Backlog summons\n`;
-  msg += `🔄 \`${p} summon swap <backlog#> <deckSlot>\` — swap between Backlog and Main Deck\n`;
-  msg += `🔍 \`${p} summon <#>\` — view summon details (animated)\n`;
-  msg += `⚔️ \`${p} summon <#> deploy\` — deploy summon for combat (1 at a time)\n`;
-  msg += `🛡️ \`${p} summon dismiss\` — unequip active summon\n`;
-  msg += `📈 \`${p} summon train <#>\` — daily training (+500 XP)\n`;
-  msg += `📊 \`${p} summon allocate <#> <stat> <pts>\` — allocate stat points\n`;
-  msg += `🛤️ \`${p} summon skill <#>\` — view/manage skill tree\n`;
-  msg += `🔗 \`${p} summon resonance\` — view active resonance bonuses\n`;
-  msg += `📚 \`${p} summon codex\` — view ALL summon species (5 per page)\n`;
-  msg += `🥚 \`${p} summon hatch <egg_id>\` — hatch a summon egg\n`;
-  msg += `💎 \`${p} summon eggcraft <tier>\` — craft eggs from fragments\n`;
-  msg += `⚔️ \`${p} summon forge <#1> <#2>\` — Soul Forge two summons\n`;
-  msg += `🏆 \`${p} summon trial <#>\` — attempt evolution trial\n`;
-  msg += `✨ \`${p} summon passives\` — view unlocked trial passives\n`;
-  msg += `🏪 \`${p} summon market <list/sell/buy/cancel>\` — summon trading\n`;
-  msg += `⚔️ \`${p} summon duel @user\` — summon vs summon PvP\n`;
-  msg += `💔 \`${p} summon release <#>\` — permanently release a summon\n\n`;
+  msg += `📋 \`${p} summons\` - view your Main Deck (animated)\n`;
+  msg += `📦 \`${p} summon backlog\` - view your Backlog summons\n`;
+  msg += `🔄 \`${p} summon swap <backlog#> <deckSlot>\` - swap between Backlog and Main Deck\n`;
+  msg += `🔍 \`${p} summon <#>\` - view summon details (animated)\n`;
+  msg += `⚔️ \`${p} summon <#> deploy\` - deploy summon for combat (1 at a time)\n`;
+  msg += `🛡️ \`${p} summon dismiss\` - unequip active summon\n`;
+  msg += `📈 \`${p} summon train <#>\` - daily training (+500 XP)\n`;
+  msg += `📊 \`${p} summon allocate <#> <stat> <pts>\` - allocate stat points\n`;
+  msg += `🛤️ \`${p} summon skill <#>\` - view/manage skill tree\n`;
+  msg += `🔗 \`${p} summon resonance\` - view active resonance bonuses\n`;
+  msg += `📚 \`${p} summon codex\` - view ALL summon species (5 per page)\n`;
+  msg += `🥚 \`${p} summon hatch <egg_id>\` - hatch a summon egg\n`;
+  msg += `💎 \`${p} summon eggcraft <tier>\` - craft eggs from fragments\n`;
+  msg += `⚔️ \`${p} summon forge <#1> <#2>\` - Soul Forge two summons\n`;
+  msg += `🏆 \`${p} summon trial <#>\` - attempt evolution trial\n`;
+  msg += `✨ \`${p} summon passives\` - view unlocked trial passives\n`;
+  msg += `🏪 \`${p} summon market <list/sell/buy/cancel>\` - summon trading\n`;
+  msg += `⚔️ \`${p} summon duel @user\` - summon vs summon PvP\n`;
+  msg += `💔 \`${p} summon release <#>\` - permanently release a summon\n\n`;
   msg += `*MAIN DECK & BACKLOG:*\n`;
   msg += `• Main Deck = 3 slots (deployable in combat)\n`;
   msg += `• Backlog = unlimited storage for extra summons\n`;
@@ -2194,7 +2194,7 @@ async function cmdHelp(sock, chatId) {
   msg += `• Example: \`${p} summon swap 1 2\` = backlog #1 → deck slot 2\n\n`;
   msg += `*OBTAINING SUMMONS:*\n`;
   msg += `• 🥚 Buy a *Basic Summon Egg* from the shop (5K Zeni) → hatches 1 of 4 starters\n`;
-  msg += `• 🐉 Explore the *Abyss* — 10% chance per floor to encounter a Wild Summon\n`;
+  msg += `• 🐉 Explore the *Abyss* - 10% chance per floor to encounter a Wild Summon\n`;
   msg += `• 💎 Defeat Wild Summons → drop *Summon Fragments* (tiered by floor depth)\n`;
   msg += `• 🔮 Craft higher-tier eggs from fragments → hatch stronger summons\n`;
   msg += `• Necromancer: cast Army of the Dead to capture enemies\n`;
@@ -2208,7 +2208,7 @@ async function cmdHelp(sock, chatId) {
   msg += `• Summons act via gauge-based turn order (high SPD = more turns)\n`;
   msg += `• Personalities shift based on how you use them\n`;
   msg += `• Death leaves a Soul Echo buff on you (3 turns)\n`;
-  msg += `• Loyalty decays per action — restore with Loyalty Crystals\n`;
+  msg += `• Loyalty decays per action - restore with Loyalty Crystals\n`;
   msg += `• Own diverse summons to activate Resonance Web bonuses\n`;
   msg += `• At 0 loyalty: 5% betrayal chance per combat\n\n`;
   msg += `💡 Use partial IDs (last 8 chars) or nicknames for <id>.`;

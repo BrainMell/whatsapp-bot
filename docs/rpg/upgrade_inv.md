@@ -183,7 +183,7 @@ function upgradeInventory(userId) {
 | Constant | Value | Description |
 |---|---|---|
 | `BASE_SLOTS` | 20 | Starting slot count for new players |
-| `MAX_SLOTS` | 100 | Maximum slots — upgrade is rejected once reached |
+| `MAX_SLOTS` | 100 | Maximum slots - upgrade is rejected once reached |
 | `SLOTS_PER_UPGRADE` | 5 | Slots added per successful `.j upgrade inv` |
 | `UPGRADE_COST_BASE` | 1,000 Zeni | Cost of the very first upgrade |
 | `UPGRADE_COST_SCALING` | ×1.5 | Exponential multiplier applied per upgrade already purchased |

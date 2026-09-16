@@ -1,8 +1,8 @@
 // ============================================
-// 🐉 SUMMON REGISTRY — Species Database
+// 🐉 SUMMON REGISTRY - Species Database
 // ============================================
 // ONLY summons with dedicated sparklinlabs sprites are in this registry.
-// Each summon maps 1:1 to its own idle.gif — no sprite sharing.
+// Each summon maps 1:1 to its own idle.gif - no sprite sharing.
 // 23 animated idle.gif sprites + 3 static ship PNGs = 26 total summons.
 
 const SUMMON_SPECIES = {
@@ -183,7 +183,7 @@ const SUMMON_SPECIES = {
     baseStats: { hp: 400, atk: 30, def: 36, mag: 14, spd: 8 },
     rarity: 'RARE', echoId: 'guardian_echo',
     evolutionStages: ['fireguard'], trialId: 'trial_fireguard',
-    icon: '🔥', desc: 'A hulking molten-armored sentinel wreathed in flame. The heaviest frontline piece — built to outlast.',
+    icon: '🔥', desc: 'A hulking molten-armored sentinel wreathed in flame. The heaviest frontline piece - built to outlast.',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -264,8 +264,8 @@ function getRarityConfig(rarity) {
   return RARITY_CONFIG[rarity] || RARITY_CONFIG.COMMON;
 }
 
-// Echoes — 💡 FIX P2 (2026-08-16): Added missing .buff field to all 8 echoes.
-// applySoulEcho() in summonAI.js checks `if (!echo.buff) return ''` — without
+// Echoes - 💡 FIX P2 (2026-08-16): Added missing .buff field to all 8 echoes.
+// applySoulEcho() in summonAI.js checks `if (!echo.buff) return ''` - without
 // this field, every echo was a no-op. Now each echo has a buff that applies
 // to the summoner on summon death.
 const ECHOES = {

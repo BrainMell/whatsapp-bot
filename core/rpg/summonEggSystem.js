@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON EGG SYSTEM — eggs, hatching, fragments, crafting
+//  SUMMON EGG SYSTEM - eggs, hatching, fragments, crafting
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // The Summon Progression Loop:
@@ -7,7 +7,7 @@
 //   2. Player explores Abyss → 10% chance per floor to encounter a Wild Summon
 //   3. Defeat Wild Summon → drops Summon Fragments (tiered by floor depth)
 //   4. Craft higher-tier eggs from fragments → hatch into stronger summons
-//   5. Eggs have incubation time (1h-48h by tier) — speed up with Zeni
+//   5. Eggs have incubation time (1h-48h by tier) - speed up with Zeni
 //
 // Fragment tiers → egg tiers → summon rarities:
 //   Common Fragment   → (craft) → Rare Egg     → hatches RARE summon
@@ -31,7 +31,7 @@ const summonSystem = require('./summonSystem');
 // ─── 4 STARTER SUMMONS ────────────────────────────────────────────
 // 💡 FIX 2026-08-05: Use the live registry's starter species. The old
 // hardcoded list (stoneguard, emberdrake, mistwisp, bloompixie) referenced
-// stale species that no longer exist — basic eggs would fail at createSummon.
+// stale species that no longer exist - basic eggs would fail at createSummon.
 const STARTER_SPECIES = registry.STARTER_SPECIES || ['bat', 'slime', 'mushroom', 'snake'];
 
 // ─── EGG TIERS + INCUBATION ───────────────────────────────────────
@@ -105,7 +105,7 @@ async function hatchEgg(userId, eggId) {
     // {id: speciesObj}, so s.rarity was undefined, the filter rejected
     // everything, pool was empty, and tiered eggs ALWAYS fell back to
     // starters. Players could never hatch rare/epic/legendary/mythic summons
-    // from crafted eggs — they always got a starter.
+    // from crafted eggs - they always got a starter.
     // Fix: use registry.getSpecies(id) to resolve each ID.
     const speciesIds = registry.getAllSpecies();
     const pool = [];
@@ -207,7 +207,7 @@ function generateWildSummonEncounter(floor) {
   // Pick a random species from the registry (weighted by floor depth)
   // 💡 FIX 2026-08-03 (bug report #3): getAllSpecies() returns an ARRAY of
   // species ID strings, not an object. The old code did Object.entries() on
-  // the array, which gave [[0, 'skeleton'], [1, 'skeleton_knight'], ...] —
+  // the array, which gave [[0, 'skeleton'], [1, 'skeleton_knight'], ...] -
   // so 's' was a STRING, s.rarity was undefined, the filter rejected
   // everything, pool.length was 0, and the function returned null.
   // Result: Wild Summon encounters NEVER spawned, despite the 10% chance

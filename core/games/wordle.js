@@ -644,7 +644,7 @@ module.exports = {
   },
 
   showStats: async (sock, chatId, senderJid, botMarker, m) => {
-    // 💡 FIX: Don't create a full WordleGame instance just to read stats —
+    // 💡 FIX: Don't create a full WordleGame instance just to read stats -
     // the constructor selects a random word AND sets a 10-minute timeout
     // that references undefined chatId/sock, causing memory leaks on every
     // `.wordle s` call. Read stats directly from the system store instead.

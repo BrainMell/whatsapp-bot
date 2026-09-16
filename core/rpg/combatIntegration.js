@@ -67,7 +67,7 @@ function buildAnimationAction(turnInfo, options = {}) {
     // of returning null) so the static renderer can use it for the turn
     // indicator (golden ellipse under the active attacker).
     //
-    // The ANIMATED MP4 path is still disabled — see updateCombatImage() below,
+    // The ANIMATED MP4 path is still disabled - see updateCombatImage() below,
     // which now always uses the static PNG path. The action payload is passed
     // to the static renderer, which uses req.Action.AttackerSide + AttackerIndex
     // to draw the turn indicator.
@@ -75,7 +75,7 @@ function buildAnimationAction(turnInfo, options = {}) {
     // To re-enable animated MP4 combat: re-add the early `return null` here,
     // AND change updateCombatImage() to route to generateAnimatedCombatImage
     // when options.action is set. The Go service's /api/combat/animated
-    // endpoint is unchanged and still works — it's just too slow for the
+    // endpoint is unchanged and still works - it's just too slow for the
     // 512MB Box 2 instance (6-27s per MP4 encode).
 
     if (!turnInfo || !turnInfo.action) return null;
@@ -161,7 +161,7 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
     try {
         // 💡 2026-09-14: extended payload for the redesigned lamoot-style
         // victory/defeat portrait card (bg_VICTORY/bg_DEFEAT). All the new
-        // fields are optional — the Go side degrades gracefully when absent.
+        // fields are optional - the Go side degrades gracefully when absent.
         const items = rewards?.items?.map(i => i.name).join(', ') || '';
         const p0 = (players || []).find(p => p && !p._isSummon) || (players || [])[0] || {};
         // primary enemy = the beefiest one on the field (boss battles have one)
@@ -206,7 +206,7 @@ function generateStartCaption(players, enemies, encounterInfo) {
     const rankBadge = rankColors[encounterInfo.rank] || '⬜';
     
     let caption = `⚔️ *BATTLE COMMENCES!* ⚔️\n`;
-    caption += `———————————\n`;
+    caption += `-----------\n`;
     
     if (encounterInfo.turnOrderStr) {
         caption += `${encounterInfo.turnOrderStr}\n\n`;
@@ -230,7 +230,7 @@ function generateTurnCaption(players, enemies, turnInfo) {
     // Dynamic action verb based on weapon/actor type.
     // ⚠️ FIX 2026-07-17: only use weapon-flavored verbs (SMASHES/SLASHES/PIERCES/
     // CASTS/SHOOTS) for *basic attacks*. For named skills (Tactical Strike,
-    // Cleave, Fireball, etc.) the verb should be neutral "uses" — otherwise
+    // Cleave, Fireball, etc.) the verb should be neutral "uses" - otherwise
     // a player with a spear-equipped weapon would see "PIERCES with Fireball"
     // which makes no sense and led to user reports of "everything pierces".
     // The skill itself determines its own behavior; the weapon is irrelevant
@@ -252,7 +252,7 @@ function generateTurnCaption(players, enemies, turnInfo) {
     }
     
     let caption = `🎮 *TURN ${turnInfo.turnNumber || '?'}*\n`;
-    caption += `———————————\n`;
+    caption += `-----------\n`;
     
     // Action summary
     if (turnInfo.action) {

@@ -2,17 +2,17 @@
 
 ## 1. Description
 The Reaction/Interaction commands generate context-specific SFW anime reaction GIFs and deliver them to WhatsApp as autoplaying video clips (`gifPlayback: true`). The available commands are:
-- `.j kiss @user` — Kiss someone.
-- `.j hug @user` — Give someone a warm hug.
-- `.j pat @user` — Pat someone on the head.
-- `.j slap @user` — Slap someone.
-- `.j kill @user` — Falsely murder someone.
-- `.j wink` — Wink to express your vibes.
-- `.j cry` — Cry out loud.
-- `.j dance` — Start dancing.
-- `.j smug` — Look smug.
-- `.j eat @user` — Eat/Nom something or someone.
-- `.j backflip` — Do a backflip.
+- `.j kiss @user` - Kiss someone.
+- `.j hug @user` - Give someone a warm hug.
+- `.j pat @user` - Pat someone on the head.
+- `.j slap @user` - Slap someone.
+- `.j kill @user` - Falsely murder someone.
+- `.j wink` - Wink to express your vibes.
+- `.j cry` - Cry out loud.
+- `.j dance` - Start dancing.
+- `.j smug` - Look smug.
+- `.j eat @user` - Eat/Nom something or someone.
+- `.j backflip` - Do a backflip.
 
 The system dynamically pulls media links from public anime picture repositories (Nekos.best & Waifu.pics), converts the graphics format locally via FFmpeg, and cleans up residual temporary storage.
 

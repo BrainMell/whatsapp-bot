@@ -1,5 +1,5 @@
 // ============================================
-// 🛡️ ALT DETECTION — phone-hash based anti-abuse
+// 🛡️ ALT DETECTION - phone-hash based anti-abuse
 // ============================================
 // The codebase has NO alt detection. The placerPhone param in
 // bountySystem.placeBounty is dead code. This module implements
@@ -27,7 +27,7 @@ const economy = require('./economy');
 // ─────────────────────────────────────────────────────────────
 
 // Salt for phone hashing. In production, this should be an env variable.
-// For now, hardcoded — changing it invalidates all existing hashes.
+// For now, hardcoded - changing it invalidates all existing hashes.
 const PHONE_HASH_SALT = process.env.PHONE_HASH_SALT || 'mellow_rpg_2026_salt_v1';
 
 // ─────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ function isAltAccount(jid1, jid2) {
   if (!user1.phoneHash) setPhoneHash(user1);
   if (!user2.phoneHash) setPhoneHash(user2);
 
-  // If either hash is null, can't determine — allow (fail open, not closed)
+  // If either hash is null, can't determine - allow (fail open, not closed)
   if (!user1.phoneHash || !user2.phoneHash) return false;
 
   return user1.phoneHash === user2.phoneHash;
@@ -114,7 +114,7 @@ function checkTransfer(fromJid, toJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LAZY MIGRATION — backfill phoneHash for existing users
+// LAZY MIGRATION - backfill phoneHash for existing users
 // ─────────────────────────────────────────────────────────────
 
 /**

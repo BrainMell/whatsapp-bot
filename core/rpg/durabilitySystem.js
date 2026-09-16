@@ -194,7 +194,7 @@ function applyWear(entity, slotOrAll, opts = {}) {
         if (item.durability > 0 && item.durability <= (item.maxDurability * 0.15) && !item.warnedLow) {
             item.warnedLow = true;
             if (opts.combatHistory) {
-                opts.combatHistory.push(`⚠️ *${entity.name}*'s *${item.name || slot}* is badly worn (${Math.ceil(item.durability)}/${item.maxDurability}) — repair it soon!`);
+                opts.combatHistory.push(`⚠️ *${entity.name}*'s *${item.name || slot}* is badly worn (${Math.ceil(item.durability)}/${item.maxDurability}) - repair it soon!`);
             }
         }
     }

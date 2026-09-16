@@ -1,4 +1,4 @@
-// scripts/lookup_psater.js — diagnostic for psater's ban/block state
+// scripts/lookup_psater.js - diagnostic for psater's ban/block state
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');

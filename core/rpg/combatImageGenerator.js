@@ -58,7 +58,7 @@ function buildPayload(players, enemies, options = {}) {
         rank: String(options.rank || 'F'),
         floor: Math.floor(Number(options.floor) || 0),
         // 💡 FIX 2026-09-11 R2 (owner directive: "PvP background = montage_E_4
-        // style"): the colosseum (spark_15) was rejected by the owner — the
+        // style"): the colosseum (spark_15) was rejected by the owner - the
         // duel arena is now spark_5.png (the bright open beach arena from the
         // approved E-series audit renders). The Go service mirrors this guard.
         background: String(options.backgroundPath
@@ -103,7 +103,7 @@ function buildActionPayload(action = {}) {
 /**
  * 💡 2026-09-15 PERF: sniff the buffer's magic bytes instead of hardcoding.
  * The Go static renderer now serves fmt=jpeg (much smaller uploads), and the
- * animated endpoint can still return MP4 or its static fallback — so the
+ * animated endpoint can still return MP4 or its static fallback - so the
  * mimeType must follow the actual bytes, not an assumption.
  */
 function sniffMediaMime(buf) {

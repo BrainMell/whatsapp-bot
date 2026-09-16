@@ -1,5 +1,5 @@
 // ============================================
-// 🛠️ OPS CHECK — deploy-pipeline verification
+// 🛠️ OPS CHECK - deploy-pipeline verification
 // Added 2026-09-10 after the boot-volume rebuild surgery
 // to verify the change -> push -> deploy -> pm2 chain end-to-end.
 // Harmless by design: read-only, no DB access, no side effects.

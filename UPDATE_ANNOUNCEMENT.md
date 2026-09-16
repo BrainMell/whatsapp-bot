@@ -1,8 +1,8 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║   🎮  MELLOW'S WHATSAPP BOT — MEGA UPDATE v2.0  🎮            ║
+║   🎮  MELLOW'S WHATSAPP BOT - MEGA UPDATE v2.0  🎮            ║
 ║                                                               ║
-║   "The Abyss Awakens" — 8 New Systems + Full Economy Overhaul ║
+║   "The Abyss Awakens" - 8 New Systems + Full Economy Overhaul ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
@@ -49,7 +49,7 @@
    • Tradeable on the market (.g rune sell/buy/market)
    • Rune Removal Scrolls (rare drop) for safe removal
 
-🕳️  THE ABYSS — ENDLESS DUNGEON
+🕳️  THE ABYSS - ENDLESS DUNGEON
    Procedural floors that get harder forever. How deep can you go?
    • Floors 1-10: F→A rank enemies
    • Floors 11-20: S rank, mini-bosses every 3rd floor
@@ -83,14 +83,14 @@
    • Hunter fee: 5% to hunter's guild treasury
    • Failed hunt: hunter pays 10% penalty to target
    • Targets with bounties CANNOT deposit to bank (forces wallet carry = risk)
-   • Auto-claim on PvP win — beat the target, collect the bounty
+   • Auto-claim on PvP win - beat the target, collect the bounty
 
 ⚔️  MULTI-EVENT GUILD WARS
    Weekly guild competition with 4 rotating event types!
-   • Week 1: CHAMPION TOURNAMENT — 1v1 PvP bracket between guild champions
-   • Week 2: GUARDIAN CLASH — 3v3 team PvP between top guilds
-   • Week 3: MONSTER HUNT — PvE race (boss kills + Abyss + dungeons)
-   • Week 4: STRONGHOLD SIEGE — defend virtual strongholds (activity + RNG)
+   • Week 1: CHAMPION TOURNAMENT - 1v1 PvP bracket between guild champions
+   • Week 2: GUARDIAN CLASH - 3v3 team PvP between top guilds
+   • Week 3: MONSTER HUNT - PvE race (boss kills + Abyss + dungeons)
+   • Week 4: STRONGHOLD SIEGE - defend virtual strongholds (activity + RNG)
    • Points from: dungeon clears, boss kills, PvP wins, raid participation, Abyss runs
    • Rewards: 1st = 5M Zeni + 10% buff, 2nd-3rd = 2M + 5% buff, 4th-8th = 500K
 
@@ -108,52 +108,52 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   💎 Runes:
-     .g rune              — help
-     .g rune inv          — your rune inventory
-     .g rune list         — all rune types
+     .g rune              - help
+     .g rune inv          - your rune inventory
+     .g rune list         - all rune types
      .g rune socket <runeId> <skillId>
      .g rune remove <runeId>     (needs scroll)
      .g rune destroy <runeId>    (permanent)
-     .g rune slots <skillId>     — check capacity
+     .g rune slots <skillId>     - check capacity
      .g rune sell <runeId> <price>
      .g rune buy <listingId>
-     .g rune market              — browse runes for sale
+     .g rune market              - browse runes for sale
 
   🕳️ Abyss:
-     .g abyss             — help
-     .g abyss enter        — start a run (12h cooldown, L20+)
-     .g abyss attack       — attack current enemy
-     .g abyss status       — view your run
-     .g abyss retreat      — extract with 100% loot
-     .g abyss leaderboard  — top runs this week
-     .g abyss best         — your best run ever
+     .g abyss             - help
+     .g abyss enter        - start a run (12h cooldown, L20+)
+     .g abyss attack       - attack current enemy
+     .g abyss status       - view your run
+     .g abyss retreat      - extract with 100% loot
+     .g abyss leaderboard  - top runs this week
+     .g abyss best         - your best run ever
 
   ⚔️ Raid:
-     .g raid              — help
-     .g raid status       — current raid state
-     .g raid join         — join the raid (L20+)
-     .g raid vote 1-5     — vote for Avatar's skill
-     .g raid leaderboard  — all-time top contributors
+     .g raid              - help
+     .g raid status       - current raid state
+     .g raid join         - join the raid (L20+)
+     .g raid vote 1-5     - vote for Avatar's skill
+     .g raid leaderboard  - all-time top contributors
 
   💰 Bounty:
-     .g bounty            — help
+     .g bounty            - help
      .g bounty place @target <amount>
-     .g bounty list       — top 10 active bounties
-     .g bounty target     — bounties on you
-     .g bounty mine       — bounties you placed
+     .g bounty list       - top 10 active bounties
+     .g bounty target     - bounties on you
+     .g bounty mine       - bounties you placed
      .g bounty cancel <bountyId>
 
   🏰 Guild Wars:
-     .g war              — help + this week's event
-     .g war status       — current war state
-     .g war leaderboard  — this week's rankings
-     .g war history      — all-time top guilds
+     .g war              - help + this week's event
+     .g war status       - current war state
+     .g war leaderboard  - this week's rankings
+     .g war history      - all-time top guilds
 
   🏛️ Guild (new commands):
-     .g guild perks      — view active perks + multipliers
+     .g guild perks      - view active perks + multipliers
      .g guild donate <amount>
      .g guild loan <amount> | list | repay <amount>
-     .g guild info       — comprehensive guild status
+     .g guild info       - comprehensive guild status
      .g guild emblem <emoji> [hexColor]
      .g guild role @user <recruit|member|officer>
 
@@ -162,10 +162,10 @@
      .g raid admin spawn|end|sethp|revive|kick|skip|purge
      .g bounty admin cancel|purge|expire
      .g war admin spawn|resolve|champion|purge|sync
-     .g spawnset <minutes>  — per-bot spawn interval
-     .g spawninfo           — view spawn config
-     .g rank toggleperm <level>  — grant toggle permission
-     .g rank togglelock on|off   — hard-lock rank toggle
+     .g spawnset <minutes>  - per-bot spawn interval
+     .g spawninfo           - view spawn config
+     .g rank toggleperm <level>  - grant toggle permission
+     .g rank togglelock on|off   - hard-lock rank toggle
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -188,21 +188,21 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   1. ECONOMY CHANGES: Players will notice reduced gold from S+ dungeons.
-     This is intentional — the economy was "completely over the top."
+     This is intentional - the economy was "completely over the top."
      Wealth tax runs every Monday 00:00 UTC.
 
   2. GUILD PERKS: Existing guilds now have WORKING perks. ADVENTURER
      guilds get +15% XP, MERCHANT +10% gold, RESEARCH -10% craft costs.
-     This is a significant buff — players will feel it immediately.
+     This is a significant buff - players will feel it immediately.
 
   3. RAID SCHEDULER: The raid auto-spawns on boot if missing for the
      current week. Use .g raid admin spawn to force-spawn manually.
 
-  4. GUILD WAR SCHEDULER: Same — auto-spawns on boot. Use .g war admin
+  4. GUILD WAR SCHEDULER: Same - auto-spawns on boot. Use .g war admin
      spawn to force-spawn, .g war admin resolve to force-end.
 
   5. BOSS SPLASH: Requires the Go service to be redeployed with the new
-     /api/combat/splash endpoint. Splash is non-fatal — if Go service
+     /api/combat/splash endpoint. Splash is non-fatal - if Go service
      hasn't been updated, combat proceeds without the splash image.
 
   6. DATABASE MIGRATION: New schema fields (inventorySlots, undeadKills,

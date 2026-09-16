@@ -94,7 +94,7 @@ async function main() {
   }
 
   console.log(`\n${'═'.repeat(70)}`);
-  console.log(`  SUMMON SPECIES MIGRATION — ${isLive ? '🔴 LIVE MODE' : '⚪ DRY RUN'}`);
+  console.log(`  SUMMON SPECIES MIGRATION - ${isLive ? '🔴 LIVE MODE' : '⚪ DRY RUN'}`);
   console.log(`${'═'.repeat(70)}\n`);
 
   console.log(`Connecting to MongoDB...`);
@@ -142,7 +142,7 @@ async function main() {
   console.log('✅ Backup complete.\n');
 
   if (!isLive) {
-    console.log('⚪ DRY RUN — no writes will be made. Use --live to apply.\n');
+    console.log('⚪ DRY RUN - no writes will be made. Use --live to apply.\n');
     console.log(`Would update ${staleSummons.length} summon documents.`);
     await mongoose.disconnect();
     return;
@@ -159,7 +159,7 @@ async function main() {
     const newSpecies = registry.getSpecies(newSpeciesKey);
 
     if (!newSpecies) {
-      console.error(`  ⚠️ Could not find new species "${newSpeciesKey}" in registry — skipping summon ${summon.summonId}`);
+      console.error(`  ⚠️ Could not find new species "${newSpeciesKey}" in registry - skipping summon ${summon.summonId}`);
       continue;
     }
 
@@ -188,7 +188,7 @@ async function main() {
       summonSystem.applyLevelGrowth(tempSummon, tempSummon.level);
       updatedFields.baseStats = tempSummon.baseStats;
     } catch (e) {
-      console.error(`  ⚠️ applyLevelGrowth failed for ${summon.summonId}: ${e.message} — using species baseStats directly`);
+      console.error(`  ⚠️ applyLevelGrowth failed for ${summon.summonId}: ${e.message} - using species baseStats directly`);
       updatedFields.baseStats = newSpecies.baseStats;
     }
 

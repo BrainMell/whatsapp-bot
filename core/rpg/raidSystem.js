@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  RAID SYSTEM (Phase 5 — Weekly Avatar Raid)
+//  RAID SYSTEM (Phase 5 - Weekly Avatar Raid)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players
-// merge into "The Avatar" — class = most common class among participants,
+// merge into "The Avatar" - class = most common class among participants,
 // stats = aggregated + scaled, 5 skills filled by top 5 classes.
 //
 // Each round (60s voting window):
@@ -35,8 +35,8 @@ const RAID_BOSSES = [
     atk: 800,
     def: 200,
     flavorText: 'An ancient chaos awakens, twisting reality itself...',
-    // Phase 2 (50% HP): enrage — ATK +50%
-    // Phase 3 (25% HP): ultimate — gains AOE attack
+    // Phase 2 (50% HP): enrage - ATK +50%
+    // Phase 3 (25% HP): ultimate - gains AOE attack
   },
   {
     id: 'VOID_TITAN',
@@ -46,8 +46,8 @@ const RAID_BOSSES = [
     atk: 1000,
     def: 300,
     flavorText: 'The void between worlds takes form. Reality trembles.',
-    // Phase 2 (60% HP): shield — absorbs 50% of damage
-    // Phase 3 (30% HP): reflect — 25% of damage reflected
+    // Phase 2 (60% HP): shield - absorbs 50% of damage
+    // Phase 3 (30% HP): reflect - 25% of damage reflected
   },
   {
     id: 'ABYSSAL_GOD',
@@ -57,8 +57,8 @@ const RAID_BOSSES = [
     atk: 1500,
     def: 400,
     flavorText: 'The divine entity of the deepest abyss stirs. Pray.',
-    // Phase 2 (70% HP): immunity — ignores attacks below 50% of avatar's max ATK
-    // Phase 3 (40% HP): summons — adds 3 mini-bosses
+    // Phase 2 (70% HP): immunity - ignores attacks below 50% of avatar's max ATK
+    // Phase 3 (40% HP): summons - adds 3 mini-bosses
   },
   {
     id: 'ANCIENT_DRAGON',
@@ -69,14 +69,14 @@ const RAID_BOSSES = [
     def: 500,
     flavorText: "The dragon's roar scorches the heavens. Steel yourself.",
     requiresDragonSealRing: true, // any attacker without ring deals 0 damage
-    // Phase 2 (50% HP): inferno — AOE fire damage
-    // Phase 3 (20% HP): last stand — ATK doubles, immune to CC
+    // Phase 2 (50% HP): inferno - AOE fire damage
+    // Phase 3 (20% HP): last stand - ATK doubles, immune to CC
   },
 ];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────
 function getWeekIndex(weekKey) {
-  // weekKey format: "2026-W28" — extract week number, mod 4 to get 0-3
+  // weekKey format: "2026-W28" - extract week number, mod 4 to get 0-3
   const match = weekKey.match(/W(\d+)$/);
   if (!match) return 0;
   return (parseInt(match[1], 10) - 1) % 4;
@@ -183,7 +183,7 @@ async function joinRaid(userId, userClass, userLevel) {
   });
   raid.attackerCount = raid.attackers.length;
 
-  // Recompute avatar stats (lazy — only when first attacker joins or new class joins)
+  // Recompute avatar stats (lazy - only when first attacker joins or new class joins)
   await recomputeAvatar(raid);
 
   await raid.save();
@@ -207,7 +207,7 @@ async function recomputeAvatar(raid) {
   const sortedClasses = Object.entries(classCounts).sort((a, b) => b[1] - a[1]);
   const mostCommonClass = sortedClasses[0]?.[0] || 'FIGHTER';
 
-  // Aggregate stats — sum all attackers' base stats, scale by sqrt(count)
+  // Aggregate stats - sum all attackers' base stats, scale by sqrt(count)
   // to keep numbers manageable. Without scaling, 100 attackers × 500 HP = 50K HP
   // which is fine, but 100 attackers × 100 ATK = 10K ATK which would one-shot
   // the boss. Scale by sqrt(count) instead.
@@ -236,7 +236,7 @@ async function recomputeAvatar(raid) {
     const hpPct = raid.avatar.hp / raid.avatar.maxHp;
     raid.avatar.hp = Math.floor(newMaxHp * hpPct);
   } else {
-    raid.avatar.hp = newMaxHp; // first join or dead avatar — full HP
+    raid.avatar.hp = newMaxHp; // first join or dead avatar - full HP
   }
   raid.avatar.maxHp = newMaxHp;
   raid.avatar.atk = Math.floor(totalAtk * scale);
@@ -330,19 +330,19 @@ async function castVote(userId, skillIndex) {
   // Check if voting window is open
   // 💡 FIX 2026-08-31 (vote-window griefing): a vote arriving AFTER the 60s
   // window closed (but before the 30s resolver tick) used to wipe the
-  // round's votes and re-arm the window — that round was never executed.
+  // round's votes and re-arm the window - that round was never executed.
   // A single user voting every <60s could stall the raid FOREVER (rounds
   // voided, raid ends 'fled' at 24h). Now a closed window REJECTS the vote;
   // only the resolver (resolveVotingRound) may open the next round.
   if (!raid.votingClosesAt) {
-    // No window has ever been opened — open the first one
+    // No window has ever been opened - open the first one
     raid.votingClosesAt = new Date(Date.now() + 60 * 1000); // 60s
     raid.currentVotes = [];
     raid.votingRound += 1;
   } else if (new Date() > new Date(raid.votingClosesAt)) {
     return {
       success: false,
-      message: '⏳ Voting for this round is closed — the round is being resolved. Try again in a few seconds.',
+      message: '⏳ Voting for this round is closed - the round is being resolved. Try again in a few seconds.',
     };
   }
 
@@ -386,10 +386,10 @@ async function resolveVotingRound() {
     return { action: 'voting_open' };
   }
 
-  // Voting window closed — tally votes
+  // Voting window closed - tally votes
   if (raid.currentVotes.length === 0) {
-    // No votes — skip round (boss attacks for free)
-    raid.combatLog.push(`Round ${raid.round}: No votes cast — Avatar hesitates! Boss attacks for free.`);
+    // No votes - skip round (boss attacks for free)
+    raid.combatLog.push(`Round ${raid.round}: No votes cast - Avatar hesitates! Boss attacks for free.`);
     await bossAttack(raid);
     raid.round += 1;
     raid.votingClosesAt = null;
@@ -406,7 +406,7 @@ async function resolveVotingRound() {
   const winningIndex = voteCounts.indexOf(Math.max(...voteCounts));
   const winningSkill = raid.avatar.skills[winningIndex];
 
-  // Execute skill — calculate damage
+  // Execute skill - calculate damage
   const avatarAtk = raid.avatar.atk;
   const skillMult = winningSkill?.damageMult || 1.0;
   let damage = Math.floor(avatarAtk * skillMult * (0.8 + Math.random() * 0.4));
@@ -436,11 +436,11 @@ async function resolveVotingRound() {
   if (raid.bossPhase === 1 && hpPct < 0.5) {
     raid.bossPhase = 2;
     raid.bossAtk = Math.floor(raid.bossAtk * 1.3); // enrage
-    raid.combatLog.push(`⚠️ ${raid.bossName} enters PHASE 2 — enraged! ATK +30%`);
+    raid.combatLog.push(`⚠️ ${raid.bossName} enters PHASE 2 - enraged! ATK +30%`);
   } else if (raid.bossPhase === 2 && hpPct < 0.25) {
     raid.bossPhase = 3;
     raid.bossAtk = Math.floor(raid.bossAtk * 1.5); // final phase
-    raid.combatLog.push(`💀 ${raid.bossName} enters PHASE 3 — final form! ATK +50%`);
+    raid.combatLog.push(`💀 ${raid.bossName} enters PHASE 3 - final form! ATK +50%`);
   }
 
   // Boss attacks
@@ -554,7 +554,7 @@ async function distributeRewards(raid) {
       // Top 10
       xpReward = 12000;
       goldReward = 25000; // 💡 Rebalanced 2026-08-17: trimmed proportionally.
-      // (Runes removed — Abyss-exclusive now, see comment above.)
+      // (Runes removed - Abyss-exclusive now, see comment above.)
       label = `🏆 Top 10`;
     } else if (i < 50) {
       // Top 50
@@ -573,7 +573,7 @@ async function distributeRewards(raid) {
     }
     if (goldReward > 0) {
       // 💡 FIX 2026-08-31: addMoney returns false on failure (unresolvable
-      // JID / market cap) — it does NOT throw, so the catch never fired and
+      // JID / market cap) - it does NOT throw, so the catch never fired and
       // the reward silently vanished while the summary still claimed it.
       // Log failures so ops can see them; retry once via the canonical JID.
       let paid = false;
@@ -607,10 +607,10 @@ async function distributeConsolationRewards(raid) {
   for (const a of raid.attackers) {
     try {
       // 💡 REBALANCED 2026-09-14 (owner order: level requirements ×5):
-      // was 10000 tuned for the old exponential curve — a single raid grant
+      // was 10000 tuned for the old exponential curve - a single raid grant
       // under the polynomial curve. Matches the participant payout below.
       progression.awardXP(a.jid, 2500);
-      // 💡 FIX 2026-08-31: check the return — silent failure paid nothing
+      // 💡 FIX 2026-08-31: check the return - silent failure paid nothing
       // while the message said everyone got consolation rewards.
       const consoPaid = economy.addMoney(a.jid, 5000, 'Raid consolation');
       if (!consoPaid) console.warn(`[RaidConsolation] FAILED to pay 5000 to ${a.jid}`);
@@ -665,10 +665,10 @@ module.exports = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  ADMIN FUNCTIONS (Phase 5 — moderation)
+//  ADMIN FUNCTIONS (Phase 5 - moderation)
 // ═══════════════════════════════════════════════════════════════════════════
 // All admin functions are caller-permission-checked in the engine command
-// handler — these functions assume the caller is authorized.
+// handler - these functions assume the caller is authorized.
 
 // ─── FORCE SPAWN ──────────────────────────────────────────────────────────
 // Force-spawns the weekly raid boss even if one already exists.
@@ -811,8 +811,8 @@ async function adminSkipRound() {
 }
 
 // ─── PURGE ALL RAIDS ──────────────────────────────────────────────────────
-// Emergency admin function — deletes ALL raid data (all weeks).
-// Use with caution — this is the nuclear option.
+// Emergency admin function - deletes ALL raid data (all weeks).
+// Use with caution - this is the nuclear option.
 async function adminPurgeAllRaids() {
   try {
     const result = await RaidBoss.deleteMany({});

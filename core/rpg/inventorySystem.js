@@ -167,18 +167,18 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
             if (!inventory[itemId].stats && itemInfo.stats) inventory[itemId].stats = JSON.parse(JSON.stringify(itemInfo.stats));
             if (!inventory[itemId].slot && itemInfo.slot) inventory[itemId].slot = itemInfo.slot;
 
-            // 💡 BUG-05 fix: Update metadata if provided — but NEVER overwrite
+            // 💡 BUG-05 fix: Update metadata if provided - but NEVER overwrite
             // instance-specific fields (rarity/stats/name/value/enhancement*)
             // that were set by a previous drop or by the hydrate block above.
             // The old `Object.assign(inventory[itemId], itemData)` clobbered
             // a previously-rolled Mythic rarity with the new drop's (often
-            // lower) rarity, and replaced enhanced stats with base stats —
+            // lower) rarity, and replaced enhanced stats with base stats -
             // producing Akon's "Mythic weapon enhanced, no visible effect"
             // symptom. Now we only set fields that aren't already populated.
             // NOTE: equipment stacking is fundamentally broken (each instance
             // is unique), but this fix at least preserves the best existing
             // instance instead of overwriting it. Proper fix = non-stackable
-            // equipment (deferred — bigger architectural change).
+            // equipment (deferred - bigger architectural change).
             for (const [k, v] of Object.entries(itemData)) {
                 if (k === 'quantity') continue; // already handled at line 150
                 if (inventory[itemId][k] === undefined || inventory[itemId][k] === null) {
@@ -218,7 +218,7 @@ function removeItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
 
     // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
-    // `quantity -= -N` ADDS items — this was the root of the negative-sell dupe.
+    // `quantity -= -N` ADDS items - this was the root of the negative-sell dupe.
     const qRem = Math.floor(Number(quantity));
     if (!Number.isFinite(qRem) || qRem <= 0) {
         return { success: false, message: '❌ Invalid quantity.' };
@@ -427,7 +427,7 @@ async function equipItem(userId, itemId, slot) {
     // required rank or level." The reqRank is derived from reqLevel using the
     // rank thresholds in classSystem.ADVENTURER_RANKS (F=1, E=10, D=20, ...).
     // A player may meet the level req but not hold the rank yet (rank also
-    // requires questsCompleted + GP) — in that case, block the equip.
+    // requires questsCompleted + GP) - in that case, block the equip.
     const reqRank = getRequiredRankForLevel(reqLevel);
     const user = economy.getUser(userId);
     const playerRank = user?.adventurerRank || 'F';
@@ -435,7 +435,7 @@ async function equipItem(userId, itemId, slot) {
         const rankData = classSystem.ADVENTURER_RANKS[reqRank];
         return {
             success: false,
-            message: `❌ Rank too low! Need *${rankData?.name || reqRank}* (Level ${reqLevel}) to equip this. You are *${classSystem.ADVENTURER_RANKS[playerRank]?.name || playerRank}*.\n\nRank up by completing quests and earning GP — use \`${botConfig.getPrefix()}rank\` to see your progress.`
+            message: `❌ Rank too low! Need *${rankData?.name || reqRank}* (Level ${reqLevel}) to equip this. You are *${classSystem.ADVENTURER_RANKS[playerRank]?.name || playerRank}*.\n\nRank up by completing quests and earning GP - use \`${botConfig.getPrefix()}rank\` to see your progress.`
         };
     }
     
@@ -510,7 +510,7 @@ async function equipItem(userId, itemId, slot) {
     //
     // Worst case: equipping a two-hander to main_hand while a one-hander +
     // shield are currently equipped. That swaps 1 new item OUT of the bag
-    // and pushes 2 old items (main_hand + off_hand) back IN — net +1 slot.
+    // and pushes 2 old items (main_hand + off_hand) back IN - net +1 slot.
     //
     // Previously the code did removeItem() first, then awaited addItem()
     // for the displaced items. If addItem() failed because the bag was full,
@@ -519,12 +519,12 @@ async function equipItem(userId, itemId, slot) {
     const willReturnOffHand = isTwoHanded && slotName === 'main_hand' && !!equipment.off_hand;
     const willReturnMainHandForOffHandSwap = slotName === 'off_hand' && equipment.main_hand && lootSystem.getItemInfo(equipment.main_hand.id)?.isTwoHanded;
     const itemsReturning = (willReturnMainHand ? 1 : 0) + (willReturnOffHand ? 1 : 0) + (willReturnMainHandForOffHandSwap ? 1 : 0);
-    // The new item is removed first, freeing 1 slot — so net slots needed = itemsReturning - 1
+    // The new item is removed first, freeing 1 slot - so net slots needed = itemsReturning - 1
     const netSlotsNeeded = Math.max(0, itemsReturning - 1);
     if (netSlotsNeeded > 0 && !hasInventorySpace(userId, netSlotsNeeded)) {
         return {
             success: false,
-            message: `❌ Inventory full! Free up ${netSlotsNeeded} slot(s) before equipping — your current gear needs somewhere to go.`
+            message: `❌ Inventory full! Free up ${netSlotsNeeded} slot(s) before equipping - your current gear needs somewhere to go.`
         };
     }
 
@@ -628,7 +628,7 @@ async function unequipItem(userId, slot) {
 
     // 💡 FIX 2026-08-03 (bug report #7): normalize spaces to underscores
     // so '.jk unequip main hand' works the same as '.jk unequip main_hand'.
-    // Also strip dashes — some users type 'main-hand'.
+    // Also strip dashes - some users type 'main-hand'.
     if (typeof slot === 'string') {
         slot = slot.toLowerCase().replace(/[\s-]+/g, '_');
     }
@@ -723,8 +723,8 @@ function getEquipmentStats(userId) {
 // 💡 FIX 2026-08-01 (BUG #1): mythic_enhancement_stone was MISSING from this map.
 // It is defined in lootSystem.js:895 with description "Boosts gear stats by 60%."
 // but enhanceItem() fell through to the || 0.05 fallback (worst bonus in the game)
-// instead of giving the intended 60% per stone. This made Mythic stones — the
-// most expensive enhancement item at 80,000 Zeni — completely useless.
+// instead of giving the intended 60% per stone. This made Mythic stones - the
+// most expensive enhancement item at 80,000 Zeni - completely useless.
 const ENHANCEMENT_BONUS_MAP = {
     'minor_enhancement_stone': 0.05,
     'rare_enhancement_stone': 0.15,
@@ -733,7 +733,7 @@ const ENHANCEMENT_BONUS_MAP = {
 };
 
 // 💡 FIX 2026-08-01 (GAP #1): rank enforcement on equip.
-// The rank thresholds mirror classSystem.ADVENTURER_RANKS — a player must
+// The rank thresholds mirror classSystem.ADVENTURER_RANKS - a player must
 // hold at least the rank whose level requirement is <= the item's reqLevel.
 // F=1, E=10, D=20, C=30, B=40, A=50, S=60, SS=75, SSS=90, GOD=100.
 const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
@@ -754,7 +754,7 @@ function getRequiredRankForLevel(level) {
 }
 
 // Returns true if rankA is >= rankB (using RANK_ORDER indices, not string
-// comparison — 'S' > 'SS' is false in JS string compare but S < SS in rank).
+// comparison - 'S' > 'SS' is false in JS string compare but S < SS in rank).
 function rankGte(rankA, rankB) {
     const a = RANK_ORDER.indexOf(rankA);
     const b = RANK_ORDER.indexOf(rankB);
@@ -783,7 +783,7 @@ const MAX_ENHANCEMENT_LEVEL = 5;
 
 // 💡 POLISH 2026-07-17: rarity-aware bonus cap. Previously MAX_ENHANCEMENT_BONUS
 // was a flat 1.0 (= 2x base stats) regardless of rarity. This meant a Mythic
-// item enhanced to level 30 was still capped at 2x base — exactly the same as
+// item enhanced to level 30 was still capped at 2x base - exactly the same as
 // a Common item at level 5. The rarity cap was meaningless for actual stat
 // output, only the LEVEL was bounded.
 //
@@ -798,7 +798,7 @@ const MAX_ENHANCEMENT_LEVEL = 5;
 //   MYTHIC  max +10.50 (30 × 0.35)  → 11.50x base
 //
 // This is more generous than the original exponential system at high levels
-// (intentional — players lost stats when the flat cap was added and we want
+// (intentional - players lost stats when the flat cap was added and we want
 // to make them whole), but bounded so a single Common trash item can't be
 // enhanced into endgame gear.
 const MAX_ENHANCEMENT_BONUS_BY_RARITY = {
@@ -831,7 +831,7 @@ function getMaxEnhancementLevel(item, itemId) {
 }
 
 // 💡 POLISH 2026-07-17: resolves the per-item enhancement BONUS cap based on
-// its rarity. Same rarity lookup as getMaxEnhancementLevel — used by
+// its rarity. Same rarity lookup as getMaxEnhancementLevel - used by
 // recalculateEnhancedStats, enhanceItem, and repairItemStats so a Mythic
 // item can actually reach 11.5x base stats, not just 2x.
 function getMaxEnhancementBonus(item, itemId) {
@@ -869,7 +869,7 @@ function hydrateBaseStats(item, itemId) {
 // Recomputes item.stats = baseStats * (1 + cumulative bonus), rounded to integers.
 // 💡 POLISH 2026-07-17: uses rarity-aware bonus cap (getMaxEnhancementBonus)
 // instead of the flat MAX_ENHANCEMENT_BONUS = 1.0. This is the actual fix
-// for the "stats still haven't changed" complaint — items can now exceed
+// for the "stats still haven't changed" complaint - items can now exceed
 // 2x base when their rarity allows it.
 function recalculateEnhancedStats(item, itemId) {
     const maxBonus = getMaxEnhancementBonus(item, itemId);
@@ -943,13 +943,13 @@ function enhanceItem(userId, itemId, stoneId) {
     // (line 530: `equipment[slotName] = { ...itemToEquip }`). So when we
     // enhance the inventory copy here, the equipped copy is a SEPARATE
     // object that never gets updated. getEquipmentStats() then reads the
-    // OLD pre-enhancement stats from the equipped copy — making the
+    // OLD pre-enhancement stats from the equipped copy - making the
     // enhancement appear to have "no effect" in combat.
     //
     // Fix: after enhancing the inventory copy, check if this item is
     // equipped in any slot. If so, sync the enhanced fields (stats,
     // enhancementLevel, enhancementBonus, name, rarity) to the equipped copy.
-    // 💡 FIX 2026-08-03 (bug report #1): also sync `rarity` — the equipped
+    // 💡 FIX 2026-08-03 (bug report #1): also sync `rarity` - the equipped
     // copy could have a stale rarity label if the item was added before
     // rarity was properly set, causing "Common" to show for Mythic items.
     const equipment = getEquipment(userId);
@@ -962,7 +962,7 @@ function enhanceItem(userId, itemId, stoneId) {
                 eqItem.enhancementBonus = item.enhancementBonus;
                 eqItem.baseStats = item.baseStats ? JSON.parse(JSON.stringify(item.baseStats)) : undefined;
                 eqItem.name = item.name;
-                // 💡 FIX 2026-08-03: sync rarity too — prevents "Common" label
+                // 💡 FIX 2026-08-03: sync rarity too - prevents "Common" label
                 // on Mythic/Legendary items after enhancement.
                 if (item.rarity) eqItem.rarity = item.rarity;
                 break; // an item can only be equipped in one slot
@@ -1000,7 +1000,7 @@ function enhanceItem(userId, itemId, stoneId) {
 
 // Repairs items corrupted by the old compounding-multiplier bug (stats blown up
 // to absurd values by repeated enhancement). Safe to call repeatedly / on items
-// that were never enhanced — it's a no-op for anything that isn't inflated.
+// that were never enhanced - it's a no-op for anything that isn't inflated.
 // Since the old system didn't record which stones were used historically, this
 // is a best-effort reconstruction: it assumes the strongest stone (legendary,
 // 0.35) was used for every prior level, capped the same way new enhancements
@@ -1091,7 +1091,7 @@ function sellItem(userId, itemId, quantity = 1) {
     // removeItem ADD items to the stack (infinite duplication exploit).
     const qSell = Math.floor(Number(quantity));
     if (!Number.isFinite(qSell) || qSell <= 0) {
-        return { success: false, message: '❌ Invalid quantity — must be a positive number.' };
+        return { success: false, message: '❌ Invalid quantity - must be a positive number.' };
     }
     quantity = qSell;
 
@@ -1140,7 +1140,7 @@ function sellItem(userId, itemId, quantity = 1) {
     const removeResult = removeItem(userId, targetItemId, quantity);
     if (!removeResult.success) return removeResult;
 
-    // Guild House Contribution System (5% tax — applied to POST-economy-tax amount)
+    // Guild House Contribution System (5% tax - applied to POST-economy-tax amount)
     const guildName = guilds.getUserGuild(userId);
     if (guildName) {
         const guildTaxable = totalValue - economyTax;
@@ -1247,7 +1247,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // Items flagged usable:false are consumed by their own dedicated
         // systems (e.g. summon_healing_pill is swallowed mid-summon-duel
         // via `combat item`), never through the generic bag-use flow.
-        // ⚠️ Must run BEFORE the CONSUMABLE/POTION type check — those items
+        // ⚠️ Must run BEFORE the CONSUMABLE/POTION type check - those items
         // are exactly the ones the effect chain has no branch for.
         return {
             success: false,
@@ -1256,7 +1256,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
 
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
-        // 💡 SUMMON EGGS: hatchable items — use triggers the egg spin
+        // 💡 SUMMON EGGS: hatchable items - use triggers the egg spin
         if (itemId.endsWith('_summon_egg')) {
             // Eggs are async (createSummon is async) but useItem is sync.
             // Return a special marker so the caller (rpgCommands.useItem)
@@ -1265,7 +1265,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
             return {
                 success: false,
                 isEgg: true,
-                message: `🥚 *${itemInfo.name}* — use \`${botConfig.getPrefix()} summon hatch\` to hatch it!`
+                message: `🥚 *${itemInfo.name}* - use \`${botConfig.getPrefix()} summon hatch\` to hatch it!`
             };
         }
         // Give specific guidance based on item type
@@ -1278,7 +1278,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         }
         const isGear = ['WEAPON', 'ARMOR', 'ACCESSORY', 'HELMET', 'BOOTS'].includes(itemInfo.type);
         if (isGear) {
-            return { success: false, message: `⚔️ *${itemInfo.name}* is equipment — you wear it, not consume it!\n\nUse \`${botConfig.getPrefix()} equip <#bag_index>\` to put it on.` };
+            return { success: false, message: `⚔️ *${itemInfo.name}* is equipment - you wear it, not consume it!\n\nUse \`${botConfig.getPrefix()} equip <#bag_index>\` to put it on.` };
         }
         const isCombatItem = itemInfo.type === 'COMBAT' || itemInfo.type === 'ITEM';
         if (isCombatItem) {
@@ -1293,7 +1293,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
     // ── OUT-OF-BATTLE CONSUMABLE EFFECTS (2026-09-15) ─────────────────
     // Wires heal-type consumables into the persistent HP system
-    // (economy.getPersistentHP / setPersistentHP — the same store quest
+    // (economy.getPersistentHP / setPersistentHP - the same store quest
     // combat already writes back to and the profile displays). Effect
     // values come from the lootSystem item defs (effect/effectValue) and
     // mirror the in-battle switch in pvpSystem's combat-item handler.
@@ -1313,7 +1313,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
         // Instant potions use effectValue directly. Regen salves collapse
         // their per-turn ticks (effectValue x duration) into one
-        // application — turns only exist inside battle, so out of combat
+        // application - turns only exist inside battle, so out of combat
         // the full effect lands immediately.
         let frac = Number(itemInfo.effectValue);
         if (!Number.isFinite(frac) || frac <= 0) frac = 0.35;
@@ -1323,10 +1323,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
         }
 
         if (currentHP >= maxHP) {
-            // Nothing to heal — never waste the player's item.
+            // Nothing to heal - never waste the player's item.
             return {
                 success: false,
-                message: `❤️ *${itemInfo.name}* — you're already at full HP (${currentHP}/${maxHP})! Item not consumed.\n\nPotions shine *during* battle: when hurt in a fight, use \`${botConfig.getPrefix()} combat item <#>\`.`
+                message: `❤️ *${itemInfo.name}* - you're already at full HP (${currentHP}/${maxHP})! Item not consumed.\n\nPotions shine *during* battle: when hurt in a fight, use \`${botConfig.getPrefix()} combat item <#>\`.`
             };
         }
 
@@ -1350,23 +1350,23 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // to cure, so the item is NOT consumed.
         return {
             success: false,
-            message: `🧪 *${itemInfo.name}* cures battle status effects (poison, burn, freeze...).\n\nYou have no active status effects outside battle — nothing to cure, item not consumed.`
+            message: `🧪 *${itemInfo.name}* cures battle status effects (poison, burn, freeze...).\n\nYou have no active status effects outside battle - nothing to cure, item not consumed.`
         };
     }
     else if (itemId === 'energy_drink') {
         const user = economy.getUser(userId);
         // Use the progression system's derived maxEnergy instead of an
-        // uninitialized user.maxEnergy field — for a L50 mage with 100 MAG,
+        // uninitialized user.maxEnergy field - for a L50 mage with 100 MAG,
         // actual maxEnergy is 1135, not the 100 default this code assumed.
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
         // Default current energy to maxEn on first use (undefined → full).
         const currentEn = user.energy !== undefined ? user.energy : maxEn;
         if (currentEn >= maxEn) {
-            return { success: false, message: `⚡ *${itemInfo.name}* — your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
+            return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
         }
         // 💡 2026-09-15: use the item def's percentage (effectValue) instead
-        // of a hardcoded flat 30 — matches "Restores 30% Energy" and scales
+        // of a hardcoded flat 30 - matches "Restores 30% Energy" and scales
         // with the derived maxEnergy (same fix the maxEn read already got).
         const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.30;
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
@@ -1408,10 +1408,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
         effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
     else if (itemId === 'holy_water') {
-        // Same logic as HP potion — out-of-combat HP isn't a thing.
+        // Same logic as HP potion - out-of-combat HP isn't a thing.
         return {
             success: false,
-            message: `💚 *${itemInfo.name}* can only be used during combat — your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
+            message: `💚 *${itemInfo.name}* can only be used during combat - your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
         };
     }
     else if (itemId === 'energy_brew') {
@@ -1446,7 +1446,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const maxEn = derivedStats.maxEnergy || 100;
         const currentEn = user.energy !== undefined ? user.energy : maxEn;
         if (currentEn >= maxEn) {
-            return { success: false, message: `⚡ *${itemInfo.name}* — your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
+            return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
         }
         const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.40;
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
@@ -1455,7 +1455,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
     else if (COMBAT_ONLY_ITEM_EFFECTS.has(itemInfo.effect)) {
         // Battle-only consumables (bombs, smokes, revives...): keep them
-        // exclusive to combat — do NOT auto-generalise to out-of-battle use.
+        // exclusive to combat - do NOT auto-generalise to out-of-battle use.
         return {
             success: false,
             message: `🎒 *${itemInfo.name}* only works in the heat of battle!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate it.`

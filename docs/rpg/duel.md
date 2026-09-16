@@ -459,7 +459,7 @@ Fleeing from a duel carries heavy penalties applied instantly to the fleeing pla
 - `generateDuelImage()` now passes `duel.players` in fixed order `[player1, player2]`
 - Previously passed `[attacker, defender]` which SWAPPED the array each turn
 - This caused sprites to swap positions, facing, and HP bar assignments
-- Turn indicator (golden ellipse) is driven by `action.attackerIndex` — independent of array order
+- Turn indicator (golden ellipse) is driven by `action.attackerIndex` - independent of array order
 
 ### [object Object] Crash Fix
 - `finishDuel()` returns `{ message: string }`, but `handlePvPAction` was concatenating the entire object

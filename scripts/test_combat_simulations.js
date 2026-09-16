@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * COMBAT SIMULATION SUITE — tests damage formula, HP/EN display,
+ * COMBAT SIMULATION SUITE - tests damage formula, HP/EN display,
  * summon deployment, and @-mention display across multiple class/level
  * combinations. Calls actual code paths against real MongoDB data.
  *
@@ -24,12 +24,12 @@ const failures = [];
 
 function ok(name, detail) {
   passCount++;
-  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function fail(name, detail) {
   failCount++;
   failures.push({ name, detail });
-  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${FAIL}❌ FAIL${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
 }
 function section(name) {
   console.log(`\n${CYAN}${BOLD}═══ ${name} ═══${RESET}`);
@@ -40,7 +40,7 @@ function section(name) {
 // ========================================
 
 async function simulateDamageFormula() {
-  section('SIMULATION 1: Damage Formula — Multiple Classes × Levels');
+  section('SIMULATION 1: Damage Formula - Multiple Classes × Levels');
 
   const connectDB = require('../db');
   await connectDB();
@@ -94,7 +94,7 @@ async function simulateDamageFormula() {
 
     // Check: HP should NOT be 100 (the old bug)
     if (baseStats.hp === 100) {
-      fail(`hp-not-100:${jid}`, `level ${level} ${classId}: HP is exactly 100 — flat default bug`);
+      fail(`hp-not-100:${jid}`, `level ${level} ${classId}: HP is exactly 100 - flat default bug`);
     } else if (baseStats.hp > 100) {
       ok(`hp-real:${jid}`, `level ${level} ${classId}: HP=${baseStats.hp} (scales with level)`);
     }
@@ -106,7 +106,7 @@ async function simulateDamageFormula() {
 // ========================================
 
 async function simulateCombatImages() {
-  section('SIMULATION 2: Combat Image Rendering — All Combat Types');
+  section('SIMULATION 2: Combat Image Rendering - All Combat Types');
 
   const { execSync } = require('child_process');
   const sshScript = '/home/z/my-project/scripts/ssh_oracle.py';
@@ -186,7 +186,7 @@ async function simulateCombatImages() {
 // ========================================
 
 async function simulateMentionDisplay() {
-  section('SIMULATION 3: @-mention Display — Nickname Resolution');
+  section('SIMULATION 3: @-mention Display - Nickname Resolution');
 
   const economy = require('../core/rpg/economy');
   const connectDB = require('../db');
@@ -214,8 +214,8 @@ async function simulateMentionDisplay() {
     }
 
     // Mention JID should match the user's registered format (LID or phone)
-    // In LID-privacy groups, WhatsApp matches LID mentions — so LID is correct.
-    // In regular groups, WhatsApp matches phone mentions — so phone is correct.
+    // In LID-privacy groups, WhatsApp matches LID mentions - so LID is correct.
+    // In regular groups, WhatsApp matches phone mentions - so phone is correct.
     // The key: getMentionJid should return the JID the user is registered as.
     if (mentionJid && (mentionJid.endsWith('@lid') || mentionJid.endsWith('@s.whatsapp.net'))) {
       ok(`mention-jid:${jid}`, `mentionJid="${mentionJid}" (valid format)`);
@@ -278,7 +278,7 @@ async function simulatePvPRecovery() {
 // ========================================
 
 async function simulateAbyssDisplay() {
-  section('SIMULATION 5: Abyss HP/EN Display — No Decimals, No /100');
+  section('SIMULATION 5: Abyss HP/EN Display - No Decimals, No /100');
 
   const fs = require('fs');
   const abyssSrc = fs.readFileSync(require('path').join(__dirname, '..', 'core', 'rpg', 'abyssSystem.js'), 'utf8');
@@ -301,7 +301,7 @@ async function simulateAbyssDisplay() {
 
   // Check: no literal /100 default (the old bug)
   if (abyssSrc.includes('/100 HP') || abyssSrc.includes('/100 EN')) {
-    fail('abyss:no-100-default', 'found "/100 HP" or "/100 EN" — the old flat-default bug');
+    fail('abyss:no-100-default', 'found "/100 HP" or "/100 EN" - the old flat-default bug');
   } else {
     ok('abyss:no-100-default', 'no "/100 HP" or "/100 EN" flat-default patterns');
   }
@@ -331,7 +331,7 @@ async function simulateAbyssDisplay() {
 // ========================================
 
 async function simulateSummonFields() {
-  section('SIMULATION 6: Summon Field Compatibility — Go Service Struct');
+  section('SIMULATION 6: Summon Field Compatibility - Go Service Struct');
 
   const summonSystem = require('../core/rpg/summonSystem');
 
@@ -380,7 +380,7 @@ async function simulateSummonFields() {
 
 async function main() {
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
-  console.log(`  COMBAT SIMULATION SUITE — Multi-System, Multi-Angle`);
+  console.log(`  COMBAT SIMULATION SUITE - Multi-System, Multi-Angle`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
   try { await simulateDamageFormula(); } catch (e) { console.error('SIM1 error:', e.message); }

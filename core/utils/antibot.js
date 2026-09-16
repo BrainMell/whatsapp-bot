@@ -1,11 +1,11 @@
 'use strict';
 /**
- * antibot.js — detect other automated accounts (bots) posting in groups.
+ * antibot.js - detect other automated accounts (bots) posting in groups.
  *
  * Research basis (2026-09-15): reviewed the antibot implementations of 15+
  * established WhatsApp MD bots (BWM-XMD, BMB-TECH, nikka-md, Silva-MD, the
  * OurinMD family, ELITE-PRO, FEE-XMD, Toxic-MD, LoliBot, …). There is NO
- * WhatsApp-side "this user is a bot" flag — every working implementation
+ * WhatsApp-side "this user is a bot" flag - every working implementation
  * fingerprints messages instead:
  *
  *   1. Message-ID shapes. Baileys' generateMessageID() produces
@@ -13,11 +13,11 @@
  *      ids, "BAE5…" ids, or debug-style "WAMID."/"false_" prefixes.
  *      ⚠️ "3EB0…" collides with real WhatsApp Web/Desktop users, so it is a
  *      WEAK signal here, never a kick on its own (false-positive guard).
- *   2. deviceSentMessage — the message was relayed from a linked device
+ *   2. deviceSentMessage - the message was relayed from a linked device
  *      (how most self-bots send). Also weak: real people use WA Web.
- *   3. Interactive message payloads (buttons/template/list) — effectively
+ *   3. Interactive message payloads (buttons/template/list) - effectively
  *      only bots and WhatsApp Business send these into casual groups.
- *   4. Behaviour — sending within seconds of joining the group.
+ *   4. Behaviour - sending within seconds of joining the group.
  *   5. Bot-style watermark text in the message body.
  *
  * Design decisions (deliberately different from the naive forks):
@@ -26,7 +26,7 @@
  *     kicks on any fingerprint alone.
  *   - Admins / owner / global mods / the bot itself are always exempt.
  *   - Actions: warn (default; 3 strikes via the existing warning system),
- *     kick, delete — mirroring the antilink action set.
+ *     kick, delete - mirroring the antilink action set.
  */
 
 // Message-ID fingerprints
@@ -34,7 +34,7 @@ const RE_BAILEYS_DEFAULT = /^3EB0[0-9A-F]{18}$/; // Baileys generateMessageID (2
 const RE_HEX32 = /^[0-9A-F]{32}$/; // frameworks that emit 32-hex ids
 const RE_HEX_GENERIC = /^[0-9A-F]{12,}$/; // bare hex, no separators (iOS uses hyphens)
 const RE_BAE5 = /^BAE5[0-9A-F]{12}$/; // some WA-web-era clients
-const RE_DEBUG_ID = /^(WAMID\.|false_)/; // Cloud API / debug clients — strong
+const RE_DEBUG_ID = /^(WAMID\.|false_)/; // Cloud API / debug clients - strong
 
 // Interactive payloads: real bots love buttons; humans cannot send them.
 function interactiveSignals(msg) {
@@ -69,12 +69,12 @@ function inspect(m, opts = {}) {
   const id = String(key.id || '');
   const text = extractText(m);
 
-  // Debug/Cloud-API style ids — real consumer clients never produce these.
+  // Debug/Cloud-API style ids - real consumer clients never produce these.
   if (id && RE_DEBUG_ID.test(id)) {
     score += STRONG_SCORE;
     signals.push('debug-id');
   }
-  // Message-ID shape fingerprints (weak — WA Web collisions exist).
+  // Message-ID shape fingerprints (weak - WA Web collisions exist).
   if (id && RE_BAILEYS_DEFAULT.test(id)) {
     score += WEAK_SCORE;
     signals.push('baileys-id');
@@ -163,16 +163,16 @@ async function act(sock, chatId, m, senderJid, verdict, helpers) {
   if (action === 'delete') return deleted;
 
   if (action === 'kick') {
-    await announce(sock, chatId, who, senderJid, `🤖 *Bot detected & removed*\n\n*Signals:* ${tag}\n_(anti-bot is on — admins: use .antibot off to disable)_`);
+    await announce(sock, chatId, who, senderJid, `🤖 *Bot detected & removed*\n\n*Signals:* ${tag}\n_(anti-bot is on - admins: use .antibot off to disable)_`);
     await kick(sock, chatId, senderJid);
     return true;
   }
 
-  // warn (default) — 3 strikes via the shared warning system, then kick.
+  // warn (default) - 3 strikes via the shared warning system, then kick.
   const count = addWarning ? addWarning(senderJid, chatId, `AntiBot: ${tag}`) : 1;
   const maxWarn = 3;
   if (count >= maxWarn) {
-    await announce(sock, chatId, who, senderJid, `🤖 *Bot detected — warning ${count}/${maxWarn} exceeded. Removing…*\n\n*Signals:* ${tag}`);
+    await announce(sock, chatId, who, senderJid, `🤖 *Bot detected - warning ${count}/${maxWarn} exceeded. Removing…*\n\n*Signals:* ${tag}`);
     if (resetWarnings) resetWarnings(senderJid, chatId);
     await kick(sock, chatId, senderJid);
   } else {
@@ -181,7 +181,7 @@ async function act(sock, chatId, m, senderJid, verdict, helpers) {
       chatId,
       who,
       senderJid,
-      `🤖 *Automated account suspected*\n\n*Signals:* ${tag}\n*Warning:* ${count}/${maxWarn}\n\n_If you are a human, you are safe — this account is only removed after ${maxWarn} strikes._`
+      `🤖 *Automated account suspected*\n\n*Signals:* ${tag}\n*Warning:* ${count}/${maxWarn}\n\n_If you are a human, you are safe - this account is only removed after ${maxWarn} strikes._`
     );
   }
   return true;

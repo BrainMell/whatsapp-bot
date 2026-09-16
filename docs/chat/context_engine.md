@@ -5,7 +5,7 @@ The Context-Aware AI Engine is designed to process and store chat memories, joke
 
 ## How it works
 
-**AI Group Summary Generation** — [engine.js L1131-L1185](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1131-L1185)
+**AI Group Summary Generation** - [engine.js L1131-L1185](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1131-L1185)
 ```javascript
     // Create AI-powered summary with user mentions
     async function createGroupSummary(messages) {
@@ -69,7 +69,7 @@ This function aggregates recent chat messages, formats them into a dialogue scri
 
 ---
 
-**Context-Aware Memory Extraction Trigger** — [Engine.js L27-L65](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L27-L65)
+**Context-Aware Memory Extraction Trigger** - [Engine.js L27-L65](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L27-L65)
 ```javascript
     async onMessage(rawMsg, body) {
         // 1. Normalize message
@@ -115,7 +115,7 @@ This method processes every incoming message by normalising raw data, updating t
 
 ---
 
-**Saving Group-Wide Context Results** — [Engine.js L169-L222](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L169-L222)
+**Saving Group-Wide Context Results** - [Engine.js L169-L222](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L169-L222)
 ```javascript
         // Save group-wide context
         const chatId = batch && batch.length > 0 ? batch[0].message.chatId : null;
@@ -283,12 +283,12 @@ if (userData.pets && Array.isArray(userData.pets)) {
 ---
 
 ## Common tasks
-- **Change the maximum buffer size** — Adjust the maximum number of messages stored in the circular buffer in [BufferManager.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/BufferManager.js#L10).
-- **Modify the TTL for stale windows** — Adjust how long message history is cached in [BufferManager.js L11](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/BufferManager.js#L11).
-- **Change the Groq LLM model used for chat summaries** — Update the model identifier in [engine.js L1166](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1166).
-- **Adjust the summary context range size** — Modify how many preceding messages are fetched for context triggers in [Engine.js L49](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L49).
-- **Modify the system instructions for summaries** — Edit the developer system prompt for Groq completions in [engine.js L1148-L1152](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1148-L1152).
-- **Add custom response triggers** — Edit rules in [engine.js L2888-L2905](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2888).
+- **Change the maximum buffer size** - Adjust the maximum number of messages stored in the circular buffer in [BufferManager.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/BufferManager.js#L10).
+- **Modify the TTL for stale windows** - Adjust how long message history is cached in [BufferManager.js L11](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/BufferManager.js#L11).
+- **Change the Groq LLM model used for chat summaries** - Update the model identifier in [engine.js L1166](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1166).
+- **Adjust the summary context range size** - Modify how many preceding messages are fetched for context triggers in [Engine.js L49](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/Engine.js#L49).
+- **Modify the system instructions for summaries** - Edit the developer system prompt for Groq completions in [engine.js L1148-L1152](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1148-L1152).
+- **Add custom response triggers** - Edit rules in [engine.js L2888-L2905](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L2888).
 
 
 

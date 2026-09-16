@@ -1,5 +1,5 @@
 /**
- * Phase 4 unit tests — summon commands + egg items.
+ * Phase 4 unit tests - summon commands + egg items.
  * Run: node scripts/test_summon_phase4.js
  */
 

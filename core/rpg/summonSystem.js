@@ -1,5 +1,5 @@
 // ============================================
-// 🐉 SUMMON SYSTEM — main logic
+// 🐉 SUMMON SYSTEM - main logic
 // ============================================
 // Factory, persistence, stat computation, resonance computation,
 // deploy/dismiss, loyalty, personality tracking.
@@ -16,7 +16,7 @@ const registry = require('./summonRegistry');
 const economy = require('./economy');
 
 // ─────────────────────────────────────────────────────────────
-// FACTORY — create a new summon instance
+// FACTORY - create a new summon instance
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -126,7 +126,7 @@ function applyLevelGrowth(summon, targetLevel) {
 
 /**
  * Recompute a summon's effective stats from baseStats + allocatedStats + loyalty.
- * This is the "effective stats" used in combat — NOT the persisted baseStats.
+ * This is the "effective stats" used in combat - NOT the persisted baseStats.
  * Mirrors inventorySystem.recalculateEnhancedStats pattern.
  *
  * @param {object} summon - Summon document (or plain object)
@@ -272,7 +272,7 @@ function computeEffectiveStats(summon) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMBAT POWER (CP) — derived rating for matchmaking + flee penalty
+// COMBAT POWER (CP) - derived rating for matchmaking + flee penalty
 // ─────────────────────────────────────────────────────────────
 // 💡 NEW 2026-08-05: CP is a single-number rating that summarizes a summon's
 // overall combat strength. Used for:
@@ -281,7 +281,7 @@ function computeEffectiveStats(summon) {
 //   - Display in roster/detail cards
 //
 // Formula: weighted sum of effective stats + level + rarity multiplier.
-// Higher rarity = higher CP ceiling. CP is NOT persisted — it's derived
+// Higher rarity = higher CP ceiling. CP is NOT persisted - it's derived
 // from current stats + level + loyalty + equipment, recomputed on demand.
 
 function computeCP(summon) {
@@ -330,7 +330,7 @@ async function getSummon(summonId) {
 async function getUserSummons(ownerJid, opts = {}) {
   // 💡 MAIN DECK SYSTEM: by default, only return Main Deck summons (deployable).
   // Use opts.includeBacklog=true to get ALL summons (Main Deck + Backlog).
-  // 💡 FIX 2026-08-04: Don't filter by inMainDeck in the MongoDB query —
+  // 💡 FIX 2026-08-04: Don't filter by inMainDeck in the MongoDB query -
   // Mongoose strictQuery can strip it for old documents that don't have
   // the field in their raw BSON. Instead, fetch all and filter in JS.
   const query = { ownerJid };
@@ -358,7 +358,7 @@ async function saveSummon(summon) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// DEPLOY / DISMISS — equip/unequip a summon for combat
+// DEPLOY / DISMISS - equip/unequip a summon for combat
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -393,7 +393,7 @@ async function deploySummon(user, summonId) {
     user.activeSummonId = summonId;
     summon.lastUsedAt = new Date();
     await summon.save();
-    // 💡 FIX 2026-08-31: was passing the user OBJECT — saveUser(userId) does
+    // 💡 FIX 2026-08-31: was passing the user OBJECT - saveUser(userId) does
     // economyData.get(userId), so an object key never matched and the call
     // silently no-op'd (deploy lost on restart). Pass the canonical key.
     economy.saveUser(user.userId);
@@ -406,7 +406,7 @@ async function deploySummon(user, summonId) {
   user.activeSummonId = summonId;
   summon.lastUsedAt = new Date();
   await summon.save();
-  // 💡 FIX 2026-08-31: same as above — pass user.userId, not the object.
+  // 💡 FIX 2026-08-31: same as above - pass user.userId, not the object.
   economy.saveUser(user.userId);
 
   return {
@@ -429,7 +429,7 @@ async function dismissSummon(user) {
   const summonId = user.activeSummonId;
   user.activeSummonId = null;
   // 💡 FIX 2026-08-07: saveUser takes userId (string), not user object.
-  // Was passing the object — economy.saveUser(user) tried to use it as a
+  // Was passing the object - economy.saveUser(user) tried to use it as a
   // string key, silently failing. Now passes user.userId.
   if (user.userId) {
     await economy.saveUser(user.userId);
@@ -452,12 +452,12 @@ async function getActiveSummon(user) {
   if (!user || !user.activeSummonId) return null;
   const summon = await Summon.findOne({ summonId: user.activeSummonId, ownerJid: user.userId });
   if (!summon) {
-    // Active summon ID is stale — clear it
+    // Active summon ID is stale - clear it
     user.activeSummonId = null;
     return null;
   }
   if (summon.forSale || summon.loyalty <= 0 || summon.isLocked) {
-    // Summon became invalid for combat — clear it
+    // Summon became invalid for combat - clear it
     user.activeSummonId = null;
     return null;
   }
@@ -465,7 +465,7 @@ async function getActiveSummon(user) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// RELEASE — permanently release a summon (leaves no echo)
+// RELEASE - permanently release a summon (leaves no echo)
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -525,7 +525,7 @@ function computeResonances(summons) {
   // 💡 FIX P2 (2026-08-16): Was registry.RESONANCE_WEB (doesn't exist).
   // Correct name is registry.RESONANCES. This caused every
   // refreshUserResonances call to throw TypeError, silently swallowed
-  // by try/catch wrappers — user.activeResonances stayed empty forever.
+  // by try/catch wrappers - user.activeResonances stayed empty forever.
   const activeResonances = [];
   const resonances = registry.RESONANCES || {};
   for (const [resonanceId, resonance] of Object.entries(resonances)) {
@@ -620,7 +620,7 @@ function addSummonXP(summon, amount) {
   let leveledUp = false;
   let statPointsGained = 0;
   const newlyUnlockedAbilities = []; // 💡 NEW: track abilities unlocked this level-up
-  summon.statPoints = summon.statPoints || 0;  // defensive — prevent NaN on undefined
+  summon.statPoints = summon.statPoints || 0;  // defensive - prevent NaN on undefined
   const rarityConfig = registry.getRarityConfig(summon.rarity);
   const maxLevel = rarityConfig.maxLevel;
 
@@ -659,7 +659,7 @@ function addSummonXP(summon, amount) {
         }
       }
     } catch (e) {
-      // monsterSkills not available — skip ability detection
+      // monsterSkills not available - skip ability detection
     }
 
     // Re-grow base stats to new level
@@ -674,13 +674,13 @@ function addSummonXP(summon, amount) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMBAT ENTITY — convert a Summon document to a combat-ready entity
+// COMBAT ENTITY - convert a Summon document to a combat-ready entity
 // ─────────────────────────────────────────────────────────────
 
 /**
  * Build a combat entity from a Summon document.
  * This entity is pushed into state.turnOrder during combat.
- * Combat state is transient — not persisted to the Summon document.
+ * Combat state is transient - not persisted to the Summon document.
  *
  * @param {object} summon - Summon document
  * @param {string} summonerJid - Owner's JID (for guard mode, echo target)
@@ -700,7 +700,7 @@ function buildCombatEntity(summon, summonerJid) {
     type: summon.species,
     // 💡 FIX 2026-08-03: Go service's Summon struct expects `species` (not `type`).
     // Without this, GetSummonSpritePath receives an empty string and the summon
-    // is silently skipped — root cause of "no summons appearing in combat".
+    // is silently skipped - root cause of "no summons appearing in combat".
     species: summon.species,
     archetype: summon.archetype,
     element: summon.element,
@@ -714,7 +714,7 @@ function buildCombatEntity(summon, summonerJid) {
     // Default to 0 (first player) so it always has a valid value.
     ownerIndex: 0,
 
-    // Stats (transient — rebuilt each combat)
+    // Stats (transient - rebuilt each combat)
     stats: {
       ...stats,
       maxHp: stats.maxHp,
@@ -763,7 +763,7 @@ function buildCombatEntity(summon, summonerJid) {
       summonCapture.applyClassSummonBonus(entity, user.class);
     }
   } catch (e) {
-    // Non-fatal — bonus is optional
+    // Non-fatal - bonus is optional
     console.error('[Summon] applyClassSummonBonus failed:', e?.message || e);
   }
 
@@ -771,7 +771,7 @@ function buildCombatEntity(summon, summonerJid) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// DAILY TRAINING (shared cooldown — 1/day per player, any 1 summon)
+// DAILY TRAINING (shared cooldown - 1/day per player, any 1 summon)
 // ─────────────────────────────────────────────────────────────
 
 const DAILY_TRAINING_COOLDOWN_MS = 24 * 60 * 60 * 1000;  // 24h
@@ -815,7 +815,7 @@ async function trainSummon(user, summonId) {
 
   return {
     success: true,
-    message: `✨ Trained ${summon.nickname || registry.getSpecies(summon.species)?.name || summon.species}! +${DAILY_TRAINING_XP} XP${leveledUp ? ` — leveled up to ${newLevel}!` : ''}`,
+    message: `✨ Trained ${summon.nickname || registry.getSpecies(summon.species)?.name || summon.species}! +${DAILY_TRAINING_XP} XP${leveledUp ? ` - leveled up to ${newLevel}!` : ''}`,
     xpGained: DAILY_TRAINING_XP,
     leveledUp
   };
@@ -907,7 +907,7 @@ module.exports = {
   allocateStatPoint,
 
   // 💡 FIX 2026-08-05: Main Deck / Backlog functions were defined after
-  // module.exports but never added to the exports object — caused
+  // module.exports but never added to the exports object - caused
   // TypeError in cmdBacklog/cmdSwap (reported as "0.0s timeout").
   getMainDeck,
   getBacklog,

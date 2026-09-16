@@ -26,10 +26,10 @@ const UserSchema = new mongoose.Schema({
   class: { type: String, default: null },
   adventurerRank: { type: String, default: 'F' },
   spriteIndex: { type: Number, default: 0 },
-  // 💡 FIX 2026-09-14: cardStyle was NEVER in the schema — Mongoose strict
+  // 💡 FIX 2026-09-14: cardStyle was NEVER in the schema - Mongoose strict
   // mode silently stripped it from every saveUser() $set, so every
   // `.cardstyle <n>` pick reset to the server default on the next read.
-  // (Same bug class as allocatedStatPoints / gamblingProfile — see notes
+  // (Same bug class as allocatedStatPoints / gamblingProfile - see notes
   // below in this file.) 0 = "no personal pick → use server default".
   cardStyle: { type: Number, default: 0 },
   
@@ -42,7 +42,7 @@ const UserSchema = new mongoose.Schema({
   
   // Flexible Objects
   inventory: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
-  inventorySlots: { type: Number, default: 20 }, // Persistent inventory cap (was missing — caused reset-to-20 bug)
+  inventorySlots: { type: Number, default: 20 }, // Persistent inventory cap (was missing - caused reset-to-20 bug)
   
   equipment: {
     main_hand: { type: Object, default: null },
@@ -71,8 +71,8 @@ const UserSchema = new mongoose.Schema({
     dragonsKilled: { type: Number, default: 0 },
     itemsCrafted: { type: Number, default: 0 },     // Rank mission tracking
     itemsEquipped: { type: Number, default: 0 },    // Rank mission tracking
-    undeadKills: { type: Number, default: 0 },      // Required for TEMPLAR ascension (was missing — class permanently locked)
-    kills: { type: Number, default: 0 },            // Total lifetime kills — required for DOOMSLAYER (req.kills: 500)
+    undeadKills: { type: Number, default: 0 },      // Required for TEMPLAR ascension (was missing - class permanently locked)
+    kills: { type: Number, default: 0 },            // Total lifetime kills - required for DOOMSLAYER (req.kills: 500)
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },
@@ -123,7 +123,7 @@ const UserSchema = new mongoose.Schema({
   skills: { type: Map, of: Number, default: {} }, // Skill levels
   // 💡 FIX 2026-08-31: actual skill points spent per skill (skillId -> total
   // spent). Respec refunds previously recomputed cost from the CURRENT
-  // (evolved) class schedule — skills learned cheaply as a starter class
+  // (evolved) class schedule - skills learned cheaply as a starter class
   // were refunded at the evolved class's escalating rates (up to +44 free
   // points per respec). This ledger records what was actually paid.
   skillSpend: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -152,7 +152,7 @@ const UserSchema = new mongoose.Schema({
         luck: { type: Number, default: 0 },
         crit: { type: Number, default: 0 }
     },
-    // 💡 QA FIX: was missing from schema — Mongoose strict mode stripped it
+    // 💡 QA FIX: was missing from schema - Mongoose strict mode stripped it
     // on save, causing the stat soft cap (20 points) to be disabled and
     // resetStats to refund wrong amounts.
     allocatedStatPoints: {
@@ -176,7 +176,7 @@ const UserSchema = new mongoose.Schema({
   },
 
   // 💡 CRITICAL FIX 2026-08-31: gamblingProfile / dailyQuests / debt were
-  // NEVER in the schema — Mongoose strict mode silently stripped them from
+  // NEVER in the schema - Mongoose strict mode silently stripped them from
   // every saveUser() $set, so on every restart the daily gambling anti-abuse
   // (house edge ramp, forced-loss, 2M/day net cap, wallet cap), the 5/day
   // quest cap, and auto-debt tracking all reset. Adding the paths makes them
@@ -199,7 +199,7 @@ const UserSchema = new mongoose.Schema({
     setAt: { type: Number, default: 0 },
   },
 
-  // Event Tokens (for token events — earned by claiming cards, spent in eShop)
+  // Event Tokens (for token events - earned by claiming cards, spent in eShop)
   eventTokens: { type: Number, default: 0 },
 
   // Rank Mission System

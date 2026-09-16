@@ -1,5 +1,5 @@
 /**
- * Phase 5 unit tests — Soul Forging + Summon Trials + Achievements + Loot eggs.
+ * Phase 5 unit tests - Soul Forging + Summon Trials + Achievements + Loot eggs.
  * Run: node scripts/test_summon_phase5.js
  */
 

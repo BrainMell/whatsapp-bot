@@ -1,11 +1,11 @@
 // rpg/itemMarket.js
-// Player-to-player item/gear market — list, buy, unlist, browse.
+// Player-to-player item/gear market - list, buy, unlist, browse.
 //
 // Commands (dispatched from cardSystem.handleCommand):
-//   listitem <slot> <price> [qty]   (alias: li)   — list an inventory item for sale
-//   unlistitem <market#>            (alias: uli)   — cancel own listing, return item to inventory
-//   buyitem <market#>              (alias: bi)    — buy a listing (10% tax, seller gets 90%)
-//   itemmarket [page]               (alias: im)    — browse active listings
+//   listitem <slot> <price> [qty]   (alias: li)   - list an inventory item for sale
+//   unlistitem <market#>            (alias: uli)   - cancel own listing, return item to inventory
+//   buyitem <market#>              (alias: bi)    - buy a listing (10% tax, seller gets 90%)
+//   itemmarket [page]               (alias: im)    - browse active listings
 //
 // 10% tax rule matches card market (cardSystem.cmdBuyCard) and P2P transfers (economy.transferMoney):
 //   buyer pays full listing price, seller receives 90%, 10% evaporates (genuine sink).
@@ -74,7 +74,7 @@ async function cmdListItem(senderJid, reply, args = []) {
   if (isNaN(slot) || slot < 1 || isNaN(price) || price < MIN_LISTING || isNaN(qty) || qty < 1 || price > MAX_LISTING) {
     return reply(
       `❌ Usage: \`listitem <slot> <price> [qty]\`\n` +
-      `Example: \`listitem 3 5000 5\` — list 5 of slot-3 item for 5,000 total.\n` +
+      `Example: \`listitem 3 5000 5\` - list 5 of slot-3 item for 5,000 total.\n` +
       `Look up your slot numbers with the bag command first.`
     ), true;
   }
@@ -85,7 +85,7 @@ async function cmdListItem(senderJid, reply, args = []) {
   if (!target) return reply(`❌ No item in slot #${slot}. You have ${items.length} inventory item(s).`), true;
   if (target.quantity < qty) return reply(`❌ You only have ${target.quantity} of ${target.name} (need ${qty}).`), true;
 
-  // Remove from seller's inventory FIRST. If this fails, abort — no listing should be created
+  // Remove from seller's inventory FIRST. If this fails, abort - no listing should be created
   // for items that aren't actually in the inventory.
   const removed = removeItem(senderJid, target.itemId, qty);
   if (!removed || !removed.success) {
@@ -114,7 +114,7 @@ async function cmdListItem(senderJid, reply, args = []) {
       `💡 Other players can buy with \`buyitem <#>\` once the market page refreshes.`
     ), true;
   } catch (err) {
-    // Listing creation failed — restore the item to the seller's inventory.
+    // Listing creation failed - restore the item to the seller's inventory.
     console.error('[ItemMarket] listItem create failed:', err);
     await addItem(senderJid, target.itemId, qty, { name: target.name, rarity: target.rarity });
     await economy.saveUser(senderJid);
@@ -127,7 +127,7 @@ async function cmdListItem(senderJid, reply, args = []) {
 // ───────────────────────────────────────────────────────────
 async function cmdUnlistItem(senderJid, reply, args = []) {
   const num = parseInt(args[0]);
-  if (isNaN(num) || num < 1) return reply('❌ Usage: `unlistitem <market#>` — find the number in `itemmarket`.'), true;
+  if (isNaN(num) || num < 1) return reply('❌ Usage: `unlistitem <market#>` - find the number in `itemmarket`.'), true;
 
   const active = await ItemMarket.find({ status: 'active' }).sort({ listedAt: -1 });
   const listing = active[num - 1];
@@ -141,7 +141,7 @@ async function cmdUnlistItem(senderJid, reply, args = []) {
       rarity: listing.itemRarity
     });
     if (!restored || !restored.success) {
-      // Inventory full — keep the listing active, tell them to clear space.
+      // Inventory full - keep the listing active, tell them to clear space.
       return reply(
         `❌ Couldn't return ${listing.quantity}× ${listing.itemName} to your inventory (full?). ` +
         `Clear some space and try again. Listing still active.`
@@ -164,7 +164,7 @@ async function cmdUnlistItem(senderJid, reply, args = []) {
 // ───────────────────────────────────────────────────────────
 async function cmdBuyItem(senderJid, reply, args = []) {
   const num = parseInt(args[0]);
-  if (isNaN(num) || num < 1) return reply('❌ Usage: `buyitem <market#>` — find the number in `itemmarket`.'), true;
+  if (isNaN(num) || num < 1) return reply('❌ Usage: `buyitem <market#>` - find the number in `itemmarket`.'), true;
 
   const active = await ItemMarket.find({ status: 'active' }).sort({ listedAt: -1 });
   const listing = active[num - 1];
@@ -176,7 +176,7 @@ async function cmdBuyItem(senderJid, reply, args = []) {
     return reply(`❌ Insufficient funds! Need ${ZENI()}${listing.price.toLocaleString()}, have ${ZENI()}${balance.toLocaleString()}.`), true;
   }
 
-  // 10% tax — buyer pays full price, seller gets 90%, 10% evaporates.
+  // 10% tax - buyer pays full price, seller gets 90%, 10% evaporates.
   const taxAmount = Math.floor(listing.price * 0.10);
   const sellerGets = listing.price - taxAmount;
 
@@ -257,7 +257,7 @@ async function cmdItemMarket(senderJid, reply, args = []) {
 }
 
 // ───────────────────────────────────────────────────────────
-// Public exports — wired into cardSystem.handleCommand
+// Public exports - wired into cardSystem.handleCommand
 // ───────────────────────────────────────────────────────────
 module.exports = {
   ItemMarket,

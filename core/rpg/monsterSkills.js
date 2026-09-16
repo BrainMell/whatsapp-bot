@@ -1,5 +1,5 @@
 // ============================================
-// 👹 MONSTER SKILL SYSTEM — ENHANCED v2.0
+// 👹 MONSTER SKILL SYSTEM - ENHANCED v2.0
 // ============================================
 // Each archetype has a distinct combat identity.
 // AI logic tries to match the fantasy of each type.
@@ -27,7 +27,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'taunt', name: 'Provoking Roar', levelReq: 1, cost: 15,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', multiplier: 0.2, cc: 'taunt', ccDuration: 2, ccChance: 85 }),
-                msg: 'releases a thunderous roar — you cannot ignore this threat!'
+                msg: 'releases a thunderous roar - you cannot ignore this threat!'
             },
             shield_bash: {
                 id: 'shield_bash', name: 'Crushing Slam', levelReq: 5, cost: 25,
@@ -52,7 +52,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'thornwall', name: 'Thornwall', levelReq: 15, cost: 35,
                 type: 'buff_self',
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'reflect', value: 20 + lvl * 2, duration: 2 }),
-                msg: 'erupts in a crackling barrier of jagged spikes — hit me and bleed!'
+                msg: 'erupts in a crackling barrier of jagged spikes - hit me and bleed!'
             },
         },
     },
@@ -86,7 +86,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'buff_self',
                 condition: (hpPct) => hpPct < 0.5,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 40 + (lvl * 5), duration: 4 }),
-                msg: 'snaps — wounds fuel an explosive surge of berserker rage!'
+                msg: 'snaps - wounds fuel an explosive surge of berserker rage!'
             },
             obliterate: {
                 id: 'obliterate', name: 'World Obliteration', levelReq: 1, cost: 45,
@@ -99,7 +99,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'shatter_will', name: 'Shatter Will', levelReq: 20, cost: 35,
                 type: 'debuff_target',
                 effect: (lvl) => ({ type: 'debuff_target', debuffType: 'all', value: 30 + lvl * 2, duration: 3, clearBuffs: true }),
-                msg: 'howls with primal fury — strips all buffs and crushes their will to fight!'
+                msg: 'howls with primal fury - strips all buffs and crushes their will to fight!'
             },
         },
     },
@@ -126,14 +126,14 @@ const MONSTER_ARCHETYPES = {
                 id: 'mark', name: 'Predator\'s Mark', levelReq: 8, cost: 15,
                 type: 'debuff_target',
                 effect: (lvl) => ({ type: 'debuff_target', debuffType: 'evasion', value: 20 + lvl, duration: 3 }),
-                msg: 'marks the prey — nowhere to hide now!'
+                msg: 'marks the prey - nowhere to hide now!'
             },
             execute: {
                 id: 'execute', name: 'Death Blow', levelReq: 12, cost: 50,
                 type: 'execute',
                 condition: (hpPct, targetHpPct) => targetHpPct === undefined || targetHpPct < 0.3,
                 effect: (lvl) => ({ type: 'execute', multiplier: 3.2 + (lvl * 0.1), threshold: 30 }),
-                msg: 'closes in for the killing blow — no mercy!'
+                msg: 'closes in for the killing blow - no mercy!'
             },
             shadow_strike: {
                 id: 'shadow_strike', name: 'Assassinate', levelReq: 1, cost: 45,
@@ -187,7 +187,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'aoe',
                 isFollowUp: true,
                 effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 4.5 + (lvl * 0.2), element: 'fire' }),
-                msg: 'completes the incantation — fire rains from above!'
+                msg: 'completes the incantation - fire rains from above!'
             },
             abyssal_void: {
                 id: 'abyssal_void', name: 'Abyssal Singularity', levelReq: 1, cost: 60,
@@ -214,7 +214,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'unholy_zeal', name: 'Unholy Zeal', levelReq: 5, cost: 20,
                 type: 'buff_team',
                 effect: (lvl) => ({ type: 'buff_team', buffType: 'attack', value: 18 + (lvl * 2), duration: 3 }),
-                msg: 'screams a profane blessing — allies fight with renewed ferocity!'
+                msg: 'screams a profane blessing - allies fight with renewed ferocity!'
             },
             blood_shield: {
                 id: 'blood_shield', name: 'Blood Ward', levelReq: 10, cost: 35,
@@ -255,7 +255,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'slam', name: 'Titanic Slam', levelReq: 1, cost: 0,
                 type: 'aoe',
                 effect: (lvl) => ({ type: 'aoe', multiplier: 2.0 + (lvl * 0.1), cc: 'stun', ccDuration: 1, ccChance: 40 }),
-                msg: 'SLAMS the ground with devastating force — the whole area shakes!'
+                msg: 'SLAMS the ground with devastating force - the whole area shakes!'
             },
             phase_shift: {
                 id: 'phase_shift', name: 'Phase Shift', levelReq: 1, cost: 0,
@@ -263,14 +263,14 @@ const MONSTER_ARCHETYPES = {
                 condition: (hpPct) => hpPct < 0.5,
                 isPhaseChange: true,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 50, duration: 999 }),
-                msg: '⚠️ *PHASE 2!* A terrifying transformation — it\'s not holding back anymore!'
+                msg: '⚠️ *PHASE 2!* A terrifying transformation - it\'s not holding back anymore!'
             },
             ultimate: {
                 id: 'ultimate', name: 'Annihilation', levelReq: 1, cost: 80,
                 type: 'aoe',
                 chargeTime: 2,
                 effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 6.0 + (lvl * 0.3) }),
-                msg: '⚠️ *CHARGING ULTIMATE* ⚠️ — RUN! SURVIVE! USE EVERYTHING!'
+                msg: '⚠️ *CHARGING ULTIMATE* ⚠️ - RUN! SURVIVE! USE EVERYTHING!'
             },
         },
     },
@@ -286,7 +286,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'arcane_silence', name: 'Arcane Silence', levelReq: 1, cost: 25,
                 type: 'debuff_target',
                 effect: (lvl) => ({ type: 'debuff_target', debuffType: 'silence', value: 0, duration: 2, silenceTarget: true }),
-                msg: 'seals their arcane channels — no spells can be cast!'
+                msg: 'seals their arcane channels - no spells can be cast!'
             },
             mana_drain: {
                 id: 'mana_drain', name: 'Mana Drain', levelReq: 5, cost: 20,
@@ -304,19 +304,19 @@ const MONSTER_ARCHETYPES = {
                 id: 'runic_punishment', name: 'Runic Punishment', levelReq: 12, cost: 40,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 2.0 + lvl * 0.08, scaledByTargetMana: true }),
-                msg: 'reads their energy signature and fires back with a resonant bolt — the more mana you have, the harder this hits!'
+                msg: 'reads their energy signature and fires back with a resonant bolt - the more mana you have, the harder this hits!'
             },
             counterspell: {
                 id: 'counterspell', name: 'Counterspell', levelReq: 1, cost: 30,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 1.5 + lvl * 0.06, cc: 'stun', ccDuration: 1, ccChance: 50, interruptCharge: true }),
-                msg: 'senses an incoming spell and blasts it apart at the source — stunned!'
+                msg: 'senses an incoming spell and blasts it apart at the source - stunned!'
             },
             arcane_feedback: {
                 id: 'arcane_feedback', name: 'Arcane Feedback', levelReq: 18, cost: 45,
                 type: 'aoe',
                 effect: (lvl) => ({ type: 'aoe', damageType: 'magic', multiplier: 1.8 + lvl * 0.07, cc: 'slow', ccDuration: 2, ccChance: 70 }),
-                msg: 'floods the arena with dissonant arcane feedback — overwhelming everyone\'s senses!'
+                msg: 'floods the arena with dissonant arcane feedback - overwhelming everyone\'s senses!'
             },
         },
     },
@@ -332,7 +332,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'shield_wall', name: 'Shield Wall', levelReq: 1, cost: 25,
                 type: 'buff_team',
                 effect: (lvl) => ({ type: 'buff_team', buffType: 'defense', value: 25 + lvl * 4, duration: 3 }),
-                msg: 'locks shields with their brothers — they form an impenetrable wall!'
+                msg: 'locks shields with their brothers - they form an impenetrable wall!'
             },
             coordinated_strike: {
                 id: 'coordinated_strike', name: 'Coordinated Strike', levelReq: 5, cost: 30,
@@ -345,7 +345,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'buff_self',
                 condition: (hpPct, targetHpPct, allies) => allies && allies.some(a => a.isDead || a.currentHP <= 0),
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 60 + lvl * 5, duration: 999, triggered_by_death: true }),
-                msg: 'lets out a battle cry over their fallen comrade — a terrifying killing intent fills the air!'
+                msg: 'lets out a battle cry over their fallen comrade - a terrifying killing intent fills the air!'
             },
             spear_volley: {
                 id: 'spear_volley', name: 'Spear Volley', levelReq: 10, cost: 35,
@@ -358,7 +358,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'buff_self',
                 condition: (hpPct) => hpPct < 0.25,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'all', value: 45 + lvl * 3, duration: 3 }),
-                msg: 'plants their feet and roars — they will not fall without a fight!'
+                msg: 'plants their feet and roars - they will not fall without a fight!'
             },
         },
     },
@@ -386,7 +386,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'void_anchor', name: 'Void Anchor', levelReq: 8, cost: 40,
                 type: 'debuff_target',
                 effect: (lvl) => ({ type: 'debuff_target', debuffType: 'slow', value: 0, duration: 2, cc: 'slow', ccDuration: 2, ccChance: 90 }),
-                msg: 'tears a void anchor beneath them — no escape, no tricks, just survival!'
+                msg: 'tears a void anchor beneath them - no escape, no tricks, just survival!'
             },
             nemesis_form: {
                 id: 'nemesis_form', name: 'Nemesis Form', levelReq: 12, cost: 0,
@@ -394,13 +394,13 @@ const MONSTER_ARCHETYPES = {
                 condition: (hpPct) => hpPct < 0.6,
                 isPhaseChange: true,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'all', value: 35 + lvl * 3, duration: 999 }),
-                msg: '⚠️ *ADAPTING!* It has studied your patterns and evolved — this fight just changed!'
+                msg: '⚠️ *ADAPTING!* It has studied your patterns and evolved - this fight just changed!'
             },
             fate_seal: {
                 id: 'fate_seal', name: 'Fate Seal', levelReq: 18, cost: 50,
                 type: 'debuff_target',
                 effect: (lvl) => ({ type: 'debuff_target', debuffType: 'cooldownExtend', value: 2, duration: 2, extendCooldowns: true }),
-                msg: 'seals the target\'s fate — their abilities recoil and slam their cooldowns back!'
+                msg: 'seals the target\'s fate - their abilities recoil and slam their cooldowns back!'
             },
         },
     },
@@ -423,7 +423,7 @@ const MONSTER_ARCHETYPES = {
                 type: 'buff_self',
                 condition: (hpPct) => hpPct < 0.7,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'attack', value: 15 + lvl * 2, duration: 4 }),
-                msg: 'wounds awaken something ancient — their eyes go red!'
+                msg: 'wounds awaken something ancient - their eyes go red!'
             },
             frenzy_cleave: {
                 id: 'frenzy_cleave', name: 'Frenzy Cleave', levelReq: 8, cost: 30,
@@ -435,7 +435,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'war_cry', name: 'War Cry', levelReq: 10, cost: 25,
                 type: 'buff_self',
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'spd', value: 30 + lvl * 3, duration: 3 }),
-                msg: 'bellows a war cry that surges their blood — they move faster, strike harder!'
+                msg: 'bellows a war cry that surges their blood - they move faster, strike harder!'
             },
             death_or_glory: {
                 id: 'death_or_glory', name: 'Death or Glory', levelReq: 15, cost: 0,
@@ -458,19 +458,19 @@ const MONSTER_ARCHETYPES = {
                 id: 'phase_step', name: 'Phase Step', levelReq: 1, cost: 20,
                 type: 'buff_self',
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'evasion', value: 35 + lvl * 3, duration: 2 }),
-                msg: 'blinks between dimensions — strikes pass through them like smoke!'
+                msg: 'blinks between dimensions - strikes pass through them like smoke!'
             },
             void_lash: {
                 id: 'void_lash', name: 'Void Lash', levelReq: 5, cost: 28,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 1.8 + lvl * 0.07, element: 'VOID', ignoreDefense: 20 }),
-                msg: 'reaches through the void and strikes from an impossible angle — ignoring armor!'
+                msg: 'reaches through the void and strikes from an impossible angle - ignoring armor!'
             },
             shadow_mimic: {
                 id: 'shadow_mimic', name: 'Shadow Mimic', levelReq: 8, cost: 35,
                 type: 'buff_self',
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'dmgReduction', value: 30 + lvl * 3, duration: 2 }),
-                msg: 'fractures into shadow copies — which one is real?'
+                msg: 'fractures into shadow copies - which one is real?'
             },
             entropy_blast: {
                 id: 'entropy_blast', name: 'Entropy Blast', levelReq: 12, cost: 45,
@@ -482,7 +482,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'void_collapse', name: 'Void Collapse', levelReq: 18, cost: 60,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'magic', multiplier: 3.8 + lvl * 0.12, element: 'VOID', cc: 'stun', ccDuration: 2, ccChance: 45 }),
-                msg: 'collapses a pocket of void energy directly on a target — time stops for a moment!'
+                msg: 'collapses a pocket of void energy directly on a target - time stops for a moment!'
             },
         },
     },
@@ -498,7 +498,7 @@ const MONSTER_ARCHETYPES = {
                 id: 'iron_rebuke', name: 'Iron Rebuke', levelReq: 1, cost: 30,
                 type: 'buff_self',
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'reflect', value: 25 + lvl * 3, duration: 3 }),
-                msg: 'hardens to an extreme — physical strikes are partially reflected back!'
+                msg: 'hardens to an extreme - physical strikes are partially reflected back!'
             },
             titan_stomp: {
                 id: 'titan_stomp', name: 'Titan Stomp', levelReq: 5, cost: 35,
@@ -511,13 +511,13 @@ const MONSTER_ARCHETYPES = {
                 type: 'buff_self',
                 condition: (hpPct) => hpPct < 0.8,
                 effect: (lvl) => ({ type: 'buff_self', buffType: 'ccImmune', value: 1, duration: 2, ccImmune: true }),
-                msg: 'plunges their fist into the ground — rooted, unshakeable, immovable!'
+                msg: 'plunges their fist into the ground - rooted, unshakeable, immovable!'
             },
             world_break: {
                 id: 'world_break', name: 'World Break', levelReq: 12, cost: 50,
                 type: 'attack',
                 effect: (lvl) => ({ type: 'attack', damageType: 'physical', multiplier: 4.0 + lvl * 0.13, ignoreDefense: 50 }),
-                msg: 'gathers all momentum and delivers a strike that warps the air — this can\'t be blocked!'
+                msg: 'gathers all momentum and delivers a strike that warps the air - this can\'t be blocked!'
             },
             seismic_slam: {
                 id: 'seismic_slam', name: 'Seismic Slam', levelReq: 18, cost: 55,
@@ -566,7 +566,7 @@ function evaluateAction(enemy, players, allies = []) {
     //   - 50% chance: highest-threat combatant (tanks hold aggro)
     //   - 30% chance: lowest-HP combatant (finish kills)
     //   - 20% chance: random (unpredictability)
-    // Also checks for taunt (force_target) — if any combatant has taunt
+    // Also checks for taunt (force_target) - if any combatant has taunt
     // active, they are ALWAYS the target.
     //
     // CC'd targets are still prioritized when the roll lands on them via
@@ -963,7 +963,7 @@ function evaluateAction(enemy, players, allies = []) {
 
         // 💡 FIX P2 (2026-08-15): Respect chargeTime on the ultimate.
         // Previously, the BOSS AI returned { action: 'skill' } which fired
-        // the ultimate immediately — 36× ATK instakill on turn 1 with no
+        // the ultimate immediately - 36× ATK instakill on turn 1 with no
         // warning. Now: if the ultimate has chargeTime > 0, return a
         // 'charge' action so the boss telegraphs the attack for 2 turns
         // before firing. This gives players a window to prepare/heal/shield.
@@ -975,7 +975,7 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: ultimateSkill, target: defaultTarget };
         }
 
-        // AoE slam — id is 'slam' in BOSS archetype. 💡 HARDER: 85% chance
+        // AoE slam - id is 'slam' in BOSS archetype. 💡 HARDER: 85% chance
         // (was 80%) and smart-target the lowest-HP player for pressure.
         const slamSkill = available.find(s => s.id === 'slam' || s.type === 'aoe');
         if (slamSkill && Math.random() > 0.05) return { action: 'skill', skill: slamSkill, target: defaultTarget };
@@ -985,10 +985,10 @@ function evaluateAction(enemy, players, allies = []) {
         if (offSkill) return { action: 'skill', skill: offSkill, target: defaultTarget };
     }
 
-    // 💡 REACTIVE MOB AI (Phase 1 — smarter regular mobs):
+    // 💡 REACTIVE MOB AI (Phase 1 - smarter regular mobs):
     // When HP is low, prioritize self-buffs/heals/defensive skills.
     // When allies are dead and HP is critical, attempt to flee (returns
-    // 'flee' action — handled by performEnemyAction in guildAdventure.js).
+    // 'flee' action - handled by performEnemyAction in guildAdventure.js).
     const liveAllies = allies.filter(a => !a.isDead && a.currentHP > 0 && a !== enemy);
     const isAlone = liveAllies.length === 0;
 
@@ -1024,7 +1024,7 @@ function evaluateAction(enemy, players, allies = []) {
 
     // ── AGGRESSIVE FALLBACK ────────────────────────
     // 💡 HARDER AI: Previously only 75% chance to use a skill (25% default attack).
-    // Now 90% chance to use a skill — enemies lead with their strongest
+    // Now 90% chance to use a skill - enemies lead with their strongest
     // available offensive ability instead of default-attacking. Default
     // attack is now the last resort, not the norm.
     if (available.length > 0 && Math.random() < 0.90) {

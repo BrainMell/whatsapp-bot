@@ -36,7 +36,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     }
 
     // ── SKILLTREE card (primary, 2026-09-14 owner: "make the skill tree an
-    // image card … take inspiration from other RPG skill trees") — a real
+    // image card … take inspiration from other RPG skill trees") - a real
     // tree layout: 3 branch columns, tier fan-out, medallion states
     // (maxed/learned/open/locked), cur/max pips, class root. Falls back to
     // the legacy text layout below on any Go failure.
@@ -72,14 +72,14 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
                 skillPoints: user.skillPoints || 0,
                 branches,
                 sealText: String(user.adventurerRank || 'F').toUpperCase(),
-                caption: `${user.skillPoints || 0} points — spend with .skill up <name>`,
+                caption: `${user.skillPoints || 0} points - spend with .skill up <name>`,
             });
         }
     } catch (e) {
         console.error('[skilltree] card render failed:', e?.message || e);
     }
 
-    // 💡 2026-09-14 owner: "attach the old skill tree text as the caption —
+    // 💡 2026-09-14 owner: "attach the old skill tree text as the caption -
     // no info may be lost". The legacy text layout is now ALWAYS built and
     // rides along as the image caption (capped to WhatsApp's 1024-char
     // caption limit); when the card fails it is still sent standalone.
@@ -87,7 +87,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
 
     const buildTreeText = () => {
         let t = `🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
-        t += `${userClass.icon} *${senderName}* — Lv.${level} | 📊 Points: *${user.skillPoints || 0}*\n\n`;
+        t += `${userClass.icon} *${senderName}* - Lv.${level} | 📊 Points: *${user.skillPoints || 0}*\n\n`;
 
         // --- Current class tree (SPECIALIZATION) ---
         const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
@@ -135,7 +135,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
                         if (curLevel > 0) {
                             inheritedSection += `✅ *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
                         } else if (canLearn && (user.skillPoints || 0) > 0) {
-                            inheritedSection += `⭕ *${skill.name}* _(Inherited)_ — \`${getPrefix()} skill up ${skillId}\`\n`;
+                            inheritedSection += `⭕ *${skill.name}* _(Inherited)_ - \`${getPrefix()} skill up ${skillId}\`\n`;
                         } else {
                             inheritedSection += `🔒 *${skill.name}*\n`;
                         }
@@ -156,7 +156,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const treeText = buildTreeText();
 
     if (treeBuf && treeBuf.length > 100) {
-        // WhatsApp hard-caps image captions at 1024 chars — keep the most
+        // WhatsApp hard-caps image captions at 1024 chars - keep the most
         // valuable head of the legacy text and mark the cut.
         const head = treeText.length > 980 ? treeText.slice(0, 977) + '…' : treeText;
         await sock.sendMessage(chatId, {
@@ -279,7 +279,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     // 🏆 RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
     // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
-    // 💡 QA FIX: was missing 'GOD' — GOD-rank players got indexOf=-1, treated
+    // 💡 QA FIX: was missing 'GOD' - GOD-rank players got indexOf=-1, treated
     // as below F-rank, and were blocked from learning ANY T3/T4 skills.
     const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
     const userRank = user.adventurerRank || 'F';
@@ -295,9 +295,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             });
             return;
         } else {
-            // Grace period: already unlocked, warn but allow use — block further upgrades
+            // Grace period: already unlocked, warn but allow use - block further upgrades
             await sock.sendMessage(chatId, {
-                text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it — but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
+                text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it - but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
             });
             return;
         }
@@ -311,7 +311,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             return;
         } else {
             await sock.sendMessage(chatId, {
-                text: `⚠️ *${targetSkill.name}* is a Tier 3 skill.\n\nYou unlocked it before the rank system was enforced — upgrades are locked until you reach *B rank*.\n\n📊 *Your Rank:* ${userRank} (need B)`
+                text: `⚠️ *${targetSkill.name}* is a Tier 3 skill.\n\nYou unlocked it before the rank system was enforced - upgrades are locked until you reach *B rank*.\n\n📊 *Your Rank:* ${userRank} (need B)`
             });
             return;
         }
@@ -332,7 +332,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     user.skillPoints -= cost;
     // 💡 FIX 2026-08-31: record the ACTUAL cost paid so respec refunds are
     // exact. Without this ledger, calculateSpentPoints recomputed costs from
-    // the CURRENT (evolved) class schedule — starter-class prices (1pt/level)
+    // the CURRENT (evolved) class schedule - starter-class prices (1pt/level)
     // refunded at evolved-class rates ([2,3,4,5,6]...) = free skill points.
     if (!user.skillSpend || typeof user.skillSpend !== 'object') user.skillSpend = {};
     user.skillSpend[targetSkill.id] = (user.skillSpend[targetSkill.id] || 0) + cost;
@@ -344,7 +344,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const heritageNote = (foundInClassName !== userClass?.name) ? `_(${foundInClassName} Heritage)_\n` : '';
 
     // ── SKILLUP card (primary, 2026-09-14 owner: "make the skill upgrade an
-    // image card as well") — giant tier-accented skill medallion, level pips,
+    // image card as well") - giant tier-accented skill medallion, level pips,
     // THE PATH effect rows. Falls back to the plain text below.
     let upBuf = null;
     try {
@@ -442,7 +442,7 @@ async function resetSkills(sock, chatId, senderJid) {
     }
 
     // 💡 ECONOMY SINK (Item #4): scale reset cost with level². Previously
-    // a flat 500 Zeni — trivially cheap for a level-100 player with
+    // a flat 500 Zeni - trivially cheap for a level-100 player with
     // millions of Zeni. Now: level 10 = 50K, level 50 = 1.25M, level 100
     // = 5M. This makes skill resets a meaningful Zeni sink at high levels
     // while staying accessible for low-level players experimenting with
@@ -461,7 +461,7 @@ async function resetSkills(sock, chatId, senderJid) {
     const spentPoints = skillTree.calculateSpentPoints(user, userClass.id);
     const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
-    // 💡 FIX 2026-08-31: clear the spend ledger with the skills — the refund
+    // 💡 FIX 2026-08-31: clear the spend ledger with the skills - the refund
     // already credited every recorded point.
     user.skillSpend = {};
     user.skillPoints = totalPoints;
@@ -483,7 +483,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     const userClass = economy.getUserClass(senderJid);
     const classSystem = require('../rpg/classSystem');
     // r6 fix: the card payload used `level` but this function never defined
-    // it — every .j abilities card render threw "level is not defined" and
+    // it - every .j abilities card render threw "level is not defined" and
     // silently fell back to the text list.
     const level = progression.getLevel(senderJid);
     
@@ -605,7 +605,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     const pageRows = allRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const buildAbilitiesText = () => {
-        let t = `⚡ *${doc.title}* — ${senderName}\n`;
+        let t = `⚡ *${doc.title}* - ${senderName}\n`;
         t += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities`;
         if (totalPages > 1) t += ` • Page ${page}/${totalPages}`;
         t += `\n\n`;
@@ -653,7 +653,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     let abBuf = null;
     try {
         const goService = require('../utils/goImageService');
-        // group the PAGE slice — the card never overflows, 20+ skills OK
+        // group the PAGE slice - the card never overflows, 20+ skills OK
         const pageGroups = [];
         for (const row of pageRows) {
             const key = row.group ? row.group.className : '__MIRRORED__';
@@ -705,7 +705,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     }
 
     if (abBuf && abBuf.length > 100) {
-        // WhatsApp hard-caps image captions at 1024 chars — same rule as the
+        // WhatsApp hard-caps image captions at 1024 chars - same rule as the
         // skill tree: the full legacy list rides along, cut only if huge.
         const head = abilitiesText.length > 980 ? abilitiesText.slice(0, 977) + '…' : abilitiesText;
         await sock.sendMessage(chatId, {
@@ -854,7 +854,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     if (!evolutionCheck.canEvolve) {
         if (currentClass?.tier === 'ASCENDED') {
             return sock.sendMessage(chatId, { 
-                text: `✨ *${currentClass.name}* — You stand at the very peak of power.\n\nNo higher path exists. Your legend is written.` 
+                text: `✨ *${currentClass.name}* - You stand at the very peak of power.\n\nNo higher path exists. Your legend is written.` 
             });
         }
         return sock.sendMessage(chatId, { text: `❌ *Evolution Not Available*\n\n${evolutionCheck.reason}` });
@@ -940,7 +940,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
         // ───────────────────────────────────────────────────────────────────
         //  💡 DRAGON GOD UNIQUENESS GATE
-        //  Only ONE player may ever hold the DRAGON_GOD class — the first
+        //  Only ONE player may ever hold the DRAGON_GOD class - the first
         //  to defeat the Leviathan. Once crowned, the path closes forever
         //  and all future Dragon-class ascenders become DRAGON_LORD instead.
         //  We check here BEFORE the trial starts so we can redirect them
@@ -960,7 +960,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     let redirectMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                     redirectMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
                     redirectMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                    redirectMsg    += `The Leviathan's soul recognized a single champion — *${godName}* — the one true Dragon God. The path has closed forever.\n\n`;
+                    redirectMsg    += `The Leviathan's soul recognized a single champion - *${godName}* - the one true Dragon God. The path has closed forever.\n\n`;
                     redirectMsg    += `Those who seek its power may instead ascend as a *Dragon Lord*, commanding the Leviathan's surviving children.\n\n`;
                     if (dragonLord) {
                         redirectMsg += `🐉 *Dragon Lord* ${dragonLord.icon}\n`;
@@ -977,14 +977,14 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     }
                     return sock.sendMessage(chatId, { text: redirectMsg });
                 }
-                // No existing Dragon God — this player is attempting the
+                // No existing Dragon God - this player is attempting the
                 // FIRST ascension. Let them proceed, but flag it.
                 await sock.sendMessage(chatId, {
-                    text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God — forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
+                    text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God - forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
                 });
             } catch (e) {
                 console.error('[DragonGod] Uniqueness check failed:', e.message);
-                // Fail-open is dangerous here — if the DB check errors, we
+                // Fail-open is dangerous here - if the DB check errors, we
                 // could accidentally let two players race to Dragon God.
                 // Fail-closed: block the trial until the check works.
                 return sock.sendMessage(chatId, {
@@ -999,7 +999,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         // 💡 FIX: wrap trial kickoff in try/catch. If initAdventure throws
         // (transient state issue, corrupted gameStates entry, downstream
         // startCombat error), the player would otherwise see "CLASS TRIAL
-        // INITIATED" then nothing — no error reply, no follow-up. The
+        // INITIATED" then nothing - no error reply, no follow-up. The
         // unhandled promise rejection was silently swallowed by the
         // engine's outer try/catch (engine.js:20355-20366).
         setTimeout(async () => {
@@ -1037,7 +1037,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
-    // Verify all resource deductions succeed before mutating class — otherwise
+    // Verify all resource deductions succeed before mutating class - otherwise
     // the user could end up evolved without paying the cost (or losing the
     // stone). Previously the return values of removeItem and removeMoney
     // were ignored, so a race condition or stale inventory could let users
@@ -1045,7 +1045,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const stoneRemoved = inventorySystem.removeItem(senderJid, requiredStone, 1);
     if (!stoneRemoved.success) {
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to consume ${stoneName} — it may have been used elsewhere. Evolution cancelled.`
+            text: `❌ Failed to consume ${stoneName} - it may have been used elsewhere. Evolution cancelled.`
         });
     }
     if (chosen.requirement?.item) {
@@ -1054,7 +1054,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             // Roll back the stone removal
             await inventorySystem.addItem(senderJid, requiredStone, 1);
             return sock.sendMessage(chatId, {
-                text: `❌ Failed to consume required item ${chosen.requirement.item} — evolution cancelled.`
+                text: `❌ Failed to consume required item ${chosen.requirement.item} - evolution cancelled.`
             });
         }
     }
@@ -1070,7 +1070,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             await inventorySystem.addItem(senderJid, chosen.requirement.item, 1);
         }
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to deduct ${chosen.evolutionCost.toLocaleString()} Zeni — your wallet may have changed. Evolution cancelled.`
+            text: `❌ Failed to deduct ${chosen.evolutionCost.toLocaleString()} Zeni - your wallet may have changed. Evolution cancelled.`
         });
     }
     
@@ -1129,15 +1129,15 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     successMsg += `📊 *Total Points Available:* ${user.skillPoints}\n\n`;
     
     if (chosen.passive) {
-        successMsg += `⚡ *New Passive — ${chosen.passive.name}:*\n`;
+        successMsg += `⚡ *New Passive - ${chosen.passive.name}:*\n`;
         successMsg += `_${chosen.passive.desc}_\n\n`;
     }
     
     successMsg += `🌳 \`${getPrefix()} skill tree\` to continue your path!`;
 
-    // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL) — same lamoot assets,
+    // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL) - same lamoot assets,
     // portrait orientation ("same assets but a different orientation").
-    // Non-fatal — text fallback below.
+    // Non-fatal - text fallback below.
     try {
         const goService = require('../utils/goImageService');
         if (await goService.isHealthy()) {

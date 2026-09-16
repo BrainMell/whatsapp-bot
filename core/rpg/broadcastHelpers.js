@@ -1,4 +1,4 @@
-// broadcastHelpers.js — GC selection for broadcast command
+// broadcastHelpers.js - GC selection for broadcast command
 // Created 2026-08-15
 
 const pendingBroadcasts = new Map();

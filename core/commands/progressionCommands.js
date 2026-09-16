@@ -314,7 +314,7 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
  * Handle ${getPrefix()} rank command - show detailed rank info
  * 2026-09-14 (owner: "make the .rank an image card and include your level
  * and xp left to progress"): renders the ADVENTURER portrait card (Go
- * service, bg_RANK — big LEVEL line, rank pill, XP bar with the exact XP
+ * service, bg_RANK - big LEVEL line, rank pill, XP bar with the exact XP
  * left to progress, standings). Falls back to the legacy text layout if
  * the Go render fails for any reason.
  */
@@ -339,15 +339,15 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     // 2026-09-14 r6 (owner: "the rank card still doesn't show the
     // requirements needed to progress … make the requirements into a
     // progress bar / progress section"): the rank gates are no longer plain
-    // text rows — they are computed here as structured PROGRESSION bars
+    // text rows - they are computed here as structured PROGRESSION bars
     // (level, quests, gate-mission objectives) so the card can render each
     // requirement as a fill bar: done vs still-needed at a glance.
     const totalUsers = rank.totalUsers || 0;
     const topPct = Math.max(1, Math.min(99, 100 - (rank.percentile || 0)));
     const standing = [
       // r6: values kept compact so the 3×2 standing grid never kisses the
-      // label — "#4/4234 · TOP 9%" fits the half-column width.
-      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition}/${totalUsers} · TOP ${topPct}%` : `—/${totalUsers}` },
+      // label - "#4/4234 · TOP 9%" fits the half-column width.
+      { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition}/${totalUsers} · TOP ${topPct}%` : `-/${totalUsers}` },
       { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}/${totalUsers}` : 'UNRANKED' },
       { label: 'TOTAL XP', value: fmtCompact(stats.xp?.total || 0) },
       { label: 'TOTAL GP', value: fmtCompact(stats.gp?.total || 0) },
@@ -386,7 +386,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
           valueText: `${qc}/${req.questsCompleted}`,
         });
       }
-      // gate-mission objectives — each becomes its own bar
+      // gate-mission objectives - each becomes its own bar
       const gateMission = (() => {
         try { return classSystem.getGateMissionForRank(curRank); } catch { return null; }
       })();
@@ -425,7 +425,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         style: (() => { try { const u = economy.getUser(senderJid); return (u && u.cardStyle) || 0; } catch (e) { return 0; } })(),
         nickname,
         caption: atMax
-          ? ('the peak — no level left to climb' + (gateCaption ? ` · ${gateCaption}` : ''))
+          ? ('the peak - no level left to climb' + (gateCaption ? ` · ${gateCaption}` : ''))
           : (`${fmtCompact(xp.nextLevel)} xp to level ${(stats.level || 1) + 1}` + (gateCaption ? ` · ${gateCaption}` : '')),
         sealText: rankLetter,
         level: stats.level || 1,
@@ -435,7 +435,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         xpPercent: Math.max(0, Math.min(100, Math.floor(xp.progress || 0))),
         standing,
         progressTitle: nextRankInfo
-          ? `PROGRESSION — NEXT RANK ${String(nextRankInfo.rank).toUpperCase()}`
+          ? `PROGRESSION - NEXT RANK ${String(nextRankInfo.rank).toUpperCase()}`
           : 'MAX RANK ACHIEVED',
         progress: shownProgress,
       });
@@ -447,8 +447,8 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       const caption = getBotMarker() +
         `👑 *Level ${stats.level || 1}* · ${rankLetter}-Rank\n` +
         (atMax
-          ? `⚡ ${fmtCompact(xp.current || 0)} total XP — maximum level reached`
-          : `⚡ ${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP — *${fmtCompact(xp.nextLevel)} left to progress*`);
+          ? `⚡ ${fmtCompact(xp.current || 0)} total XP - maximum level reached`
+          : `⚡ ${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP - *${fmtCompact(xp.nextLevel)} left to progress*`);
       await sock.sendMessage(chatId, {
         image: buffer,
         caption,
@@ -537,7 +537,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
       try {
         // 💡 2026-09-15 (owner: "use the style/assets with different
         // orientation used across the entire rpg"): the card is now a member
-        // of the Go PORTRAIT FAMILY — bg_ALLOCATE.png, 600x1000, the exact
+        // of the Go PORTRAIT FAMILY - bg_ALLOCATE.png, 600x1000, the exact
         // bake geometry of DUEL/QUEST/TRIAL/RANK (banner ribbon, name plate,
         // THE POINTS/THE ALLOCATION parchment panels, wax seal). Rendered by
         // the Go service; text panel below stays as the fallback.
@@ -577,7 +577,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         if (cardBuffer && cardBuffer.length > 0) {
           let cap = `✨ *STAT ALLOCATION* ✨\n`;
           cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
-          cap += `🎯 *How to allocate — one command per stat (5 pts each):*\n`;
+          cap += `🎯 *How to allocate - one command per stat (5 pts each):*\n`;
           for (const allocS of ["hp", "atk", "def", "mag", "spd", "luck", "crit"]) {
             const allocPer = allocPerPoint[allocS.toUpperCase()] || 1;
             cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPer * 5} ${allocS.toUpperCase()}\n`;
@@ -625,7 +625,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
 }
 
 /*
- * Handle ${getPrefix()} respec — reset allocated stat points for Zeni
+ * Handle ${getPrefix()} respec - reset allocated stat points for Zeni
  * 💡 ECONOMY SINK (Item #4): Previously stat allocation was permanent
  * (no way to undo). Now players can pay Zeni to respec. Cost scales
  * with level so it's a meaningful sink at high levels:

@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 7: GuildWar — weekly multi-event guild competition.
+// 💡 Phase 7: GuildWar - weekly multi-event guild competition.
 // 4 event types rotate weekly:
-//   Week 1: Champion Tournament — admin-curated 1v1 PvP bracket
-//   Week 2: Guardian Clash — 3v3 guild team PvP (simulated)
-//   Week 3: Monster Hunt — multi-day PvE race (reuses warPoints)
-//   Week 4: Stronghold Siege — aggregate activity + RNG
+//   Week 1: Champion Tournament - admin-curated 1v1 PvP bracket
+//   Week 2: Guardian Clash - 3v3 guild team PvP (simulated)
+//   Week 3: Monster Hunt - multi-day PvE race (reuses warPoints)
+//   Week 4: Stronghold Siege - aggregate activity + RNG
 //
 // One GuildWar document per week. War runs Monday 00:00 → Sunday 23:00 UTC.
 const GuildWarParticipantSchema = new mongoose.Schema({

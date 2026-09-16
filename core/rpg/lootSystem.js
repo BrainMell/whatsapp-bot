@@ -39,7 +39,7 @@ const LOOT_TABLES = {
     // Elite enemy drops
     // 💡 FIX: Previously this table still dropped bronze_spear (reqLvl 2),
     // chainmail (reqLvl 4), crystal_staff (reqLvl 6), greatsword (reqLvl 8)
-    // — all low-tier equipment unsuitable for B/A-rank players (the ranks
+    // - all low-tier equipment unsuitable for B/A-rank players (the ranks
     // that actually hit this table per the routing at lootSystem.js:508,
     // since S+ uses S_RANK_COMMON). Removed those four and rebalanced
     // weights toward mid-tier materials + a higher equipment_piece weight
@@ -255,7 +255,7 @@ const BOSS_DROPS = {
             dropChance: 12,
             quantity: 1,
             rarity: 'MYTHIC',
-            announcement: '🌌 *MYTHIC DROP!* A Godshard — fragment of the Abyssal God\'s divine essence — descends!'
+            announcement: '🌌 *MYTHIC DROP!* A Godshard - fragment of the Abyssal God\'s divine essence - descends!'
         },
         // 💡 Phase 5: Summon egg drops
         {
@@ -398,13 +398,13 @@ const BOSS_DROPS = {
 // ==========================================
 
 const GOLD_RANGES = {
-    COMMON_ENEMY: [15, 50],      // Was [10, 30] — increased by 50-66%
-    ELITE_ENEMY: [80, 200],      // Was [50, 100] — increased by 60-100%
-    BOSS: [400, 1200],            // Was [200, 500] — increased by 100-140%
-    TRAP_SUCCESS: [30, 80],       // Was [20, 50] — increased by 50-60%
-    PUZZLE_SUCCESS: [80, 250],    // Was [50, 150] — increased by 60-67%
-    TREASURE: [200, 600],         // Was [100, 300] — increased by 100%
-    MERCHANT_BONUS: [100, 400]    // Was [50, 200] — increased by 100%
+    COMMON_ENEMY: [15, 50],      // Was [10, 30] - increased by 50-66%
+    ELITE_ENEMY: [80, 200],      // Was [50, 100] - increased by 60-100%
+    BOSS: [400, 1200],            // Was [200, 500] - increased by 100-140%
+    TRAP_SUCCESS: [30, 80],       // Was [20, 50] - increased by 50-60%
+    PUZZLE_SUCCESS: [80, 250],    // Was [50, 150] - increased by 60-67%
+    TREASURE: [200, 600],         // Was [100, 300] - increased by 100%
+    MERCHANT_BONUS: [100, 400]    // Was [50, 200] - increased by 100%
 };
 
 // ==========================================
@@ -428,7 +428,7 @@ function rollDrop(lootTable, rarityBoost = 0) {
             const dbInfo = ITEM_DATABASE[item.id];
             let finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
 
-            // Scale rarity of any item upward with difficulty — higher dungeons give better loot
+            // Scale rarity of any item upward with difficulty - higher dungeons give better loot
             const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
             let currentIdx = rarities.indexOf(finalRarity);
             if (rarityBoost > 0 && currentIdx < rarities.length - 1) {
@@ -573,7 +573,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 // this did `const [min, max] = guaranteedDrop.quantity` which
                 // throws TypeError when quantity is a number (e.g. 1) instead
                 // of an array (e.g. [1, 1]). Multiple boss guaranteed drops
-                // use the shorthand `quantity: 1` — ELEMENTAL_ARCHON's
+                // use the shorthand `quantity: 1` - ELEMENTAL_ARCHON's
                 // mega_potion, VOID_CORRUPTED's legendary_shard, PRIMORDIAL_CHAOS's
                 // void_essence, ABYSSAL_GOD's infernal_crown. Any kill of these
                 // bosses would have thrown and (depending on caller's try/catch)
@@ -607,7 +607,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
-                    // 💡 FIX 2026-08-31: normalize array quantities — same fix
+                    // 💡 FIX 2026-08-31: normalize array quantities - same fix
                     // the guaranteed-drop loop got above. ABYSSAL_GOD's
                     // summon_egg_common uses quantity:[1,2], which was passed
                     // through RAW, stored as the stack quantity, and bricked
@@ -655,7 +655,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         drops.push(standardDrop);
     }
 
-    // Bonus drop chance scales with difficulty — high-rank dungeons get
+    // Bonus drop chance scales with difficulty - high-rank dungeons get
     // more bonus drops, so the loot feels richer.
     const bonusChance = difficulty >= 35.0 ? 0.5 + (difficulty * 0.005) : 0.3 + (difficulty * 0.02);
     if (difficulty >= 2.0 && Math.random() < bonusChance) {
@@ -729,7 +729,7 @@ async function distributeLoot(players, encounterType, enemyName = null, difficul
         // 💡 FIX (BUG 4: "equipments still not in their actual rank, all come
         // as common, enhanced mythic weapon had no effect"):
         // distributeLoot was passing itemInfo.name, itemInfo.stats, and
-        // itemInfo.value (the BASE item database values) to addItem —
+        // itemInfo.value (the BASE item database values) to addItem -
         // completely discarding the rolled name/stats/rarity/value from the
         // loot generation (which includes prefix/suffix bonuses and rarity
         // boosts). So a "Sturdy Sharp Iron Sword of Might" with MYTHIC
@@ -811,7 +811,7 @@ const ITEM_DATABASE = {
 
     // --- KEY ITEMS ---
     'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragons Lair. Consumed on use.', rarity: 'RARE', value: 15000, type: 'ITEM' },
-    'dragon_key_reusable': { name: 'Master Dragon Key', description: 'A permanently enchanted key. Never consumed — unlimited Dragon Dungeon entry.', rarity: 'LEGENDARY', value: 100000, type: 'ITEM' },
+    'dragon_key_reusable': { name: 'Master Dragon Key', description: 'A permanently enchanted key. Never consumed - unlimited Dragon Dungeon entry.', rarity: 'LEGENDARY', value: 100000, type: 'ITEM' },
     'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated Hive essence.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
     'rare_gem': { name: 'Rare Gem', description: 'A sparkling gemstone of immense value.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
@@ -824,7 +824,7 @@ const ITEM_DATABASE = {
     'lich_phylactery': { name: 'Lich Phylactery', description: 'Contains the soul of a powerful necromancer.', rarity: 'EPIC', value: 15000, type: 'MATERIAL' },
     'dragon_scale': { name: 'Dragon Scale', description: 'Nearly indestructible plate from a dragon.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
     'demon_horn': { name: 'Demon Horn', description: 'Razor sharp and warm to the touch.', rarity: 'EPIC', value: 8000, type: 'MATERIAL' },
-  // 💡 FIX 2026-08-18: Added missing entry — was showing as "Unknown item" in inventory.
+  // 💡 FIX 2026-08-18: Added missing entry - was showing as "Unknown item" in inventory.
   // Stats sourced from guildAdventure.js SHOP_LIST (cost=150K, 25% MAX HP true dmg).
   'abyssal_detonator': {
     name: 'Abyssal Detonator',
@@ -938,7 +938,7 @@ const ITEM_DATABASE = {
 
     // ═══════════════════════════════════════════════════════════════
     // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): OFF_HAND SHIELDS
-    // The off_hand slot had ZERO items — players could equip off_hand
+    // The off_hand slot had ZERO items - players could equip off_hand
     // but had nothing to put there. Now shields fill this slot.
     // ═══════════════════════════════════════════════════════════════
 
@@ -1020,7 +1020,7 @@ const ITEM_DATABASE = {
     'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },
     'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' },
 
-    // --- HIGH-RANK BOSS TROPHIES (previously missing — were falling back to 10-zeni stubs) ---
+    // --- HIGH-RANK BOSS TROPHIES (previously missing - were falling back to 10-zeni stubs) ---
     'elder_chaos_essence': { name: 'Elder Chaos Essence', description: 'Crystallized chaos from the Elder Chaos boss. Humming with unstable reality.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
     'void_titan_heart':    { name: 'Void Titan Heart',    description: 'A still-beating heart ripped from the Void Titan. Pulses with dimensional energy.', rarity: 'MYTHIC', value: 120000, type: 'MATERIAL' },
     'godshard':            { name: 'Godshard',            description: 'A fragment of the Abyssal God\'s divine essence. Reality bends around it.', rarity: 'MYTHIC', value: 250000, type: 'MATERIAL' },
@@ -1055,7 +1055,7 @@ const ITEM_DATABASE = {
 
     // ═══════════════════════════════════════════════════════════════
     // 💡 PHASE 5 (2026-08-01): SUMMON EQUIPMENT
-    // Separate from player gear — 5 slots: Claw, Core, Armor, Crest, Relic.
+    // Separate from player gear - 5 slots: Claw, Core, Armor, Crest, Relic.
     // Dropped by wild summons in the Abyss + craftable from fragments.
     // ═══════════════════════════════════════════════════════════════
 
@@ -1083,11 +1083,11 @@ const ITEM_DATABASE = {
     'lifesteal_crest':    { name: 'Crest of Vampirism', description: 'Grants 8% lifesteal to a summon.', rarity: 'EPIC', value: 50000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { lifestealPct: 8 } },
     'swift_crest':        { name: 'Crest of Swiftness', description: 'Grants +20 SPD to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { spd: 20 } },
 
-    // --- RELICS (Ultimate bonus — very rare) ---
+    // --- RELICS (Ultimate bonus - very rare) ---
     'ancient_relic':      { name: 'Ancient Relic',      description: 'A relic of immense power. (+10% all stats for summon)', rarity: 'LEGENDARY', value: 200000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.10 } },
     'abyssal_relic':      { name: 'Abyssal Relic',      description: 'A relic from the deepest abyss. (+15% all stats, +5% lifesteal for summon)', rarity: 'MYTHIC', value: 500000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.15, lifestealPct: 5 } },
 
-    // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
+    // --- MINING ORES (previously mined but undefined - were falling back to 10-zeni stubs) ---
     'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
     'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },
     'obsidian_chunk':      { name: 'Obsidian Chunk',      description: 'A jagged piece of volcanic glass. Edges sharper than steel.', rarity: 'EPIC',    value: 2200, type: 'MATERIAL' },
@@ -1102,9 +1102,9 @@ const ITEM_DATABASE = {
     // (see craftingSystem.js Phase B2 commit). This gives S/SS/SSS players a
     // reliable long-tail drop to chase beyond just boss trophies.
     //
-    // S-rank:  chaos_ore        — LEGENDARY, ~5% drop weight in S_RANK_COMMON
-    // SS-rank: null_shard       — MYTHIC,    ~5% drop weight in SS_RANK_COMMON
-    // SSS-rank: abyssal_heartstone — MYTHIC, ~4% drop weight in SSS_RANK_COMMON
+    // S-rank:  chaos_ore        - LEGENDARY, ~5% drop weight in S_RANK_COMMON
+    // SS-rank: null_shard       - MYTHIC,    ~5% drop weight in SS_RANK_COMMON
+    // SSS-rank: abyssal_heartstone - MYTHIC, ~4% drop weight in SSS_RANK_COMMON
     'chaos_ore':           { name: 'Chaos Ore',            description: 'Raw chaos crystallized into an unstable metallic ore. Tingles when held.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
     'null_shard':          { name: 'Null Shard',           description: 'A fragment of pure negation. Light entering it does not come back.', rarity: 'MYTHIC', value: 90000, type: 'MATERIAL' },
     'abyssal_heartstone':  { name: 'Abyssal Heartstone',   description: 'A warm, dense gem pulsing in sync with the Abyssal God\'s heartbeat. Theorized to be unmaking made solid.', rarity: 'MYTHIC', value: 220000, type: 'MATERIAL' },
@@ -1125,7 +1125,7 @@ const ITEM_DATABASE = {
     'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 },
 
     // ── SUMMONER SYSTEM ITEMS (Phase 4) ──────────────────────────
-    // Summon eggs — hatch via `.summon hatch <eggId>`. Drop from bosses, raids, abyss.
+    // Summon eggs - hatch via `.summon hatch <eggId>`. Drop from bosses, raids, abyss.
     // Common egg = random COMMON species. Species-specific eggs = that species.
     'summon_egg_common':       { name: 'Common Summon Egg',   description: 'A pulsating egg. Hatches into a random common summon. Use `.summon hatch summon_egg_common`.', rarity: 'UNCOMMON', value: 5000, type: 'ITEM', usable: false },
     'summon_egg_skeleton':     { name: 'Skeleton Egg',         description: 'A bone-white egg. Hatches into a Skeleton summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
@@ -1144,7 +1144,7 @@ const ITEM_DATABASE = {
     'loyalty_crystal':         { name: 'Loyalty Crystal',       description: 'Restores a summon\'s loyalty to 100. Use via the summon system.', rarity: 'RARE', value: 5000, type: 'CONSUMABLE', usable: false },
     'summon_rename_tag':       { name: 'Summon Rename Tag',     description: 'Renames a summon. Cosmetic.', rarity: 'UNCOMMON', value: 2000, type: 'CONSUMABLE', usable: false },
     'memory_tonic':            { name: 'Memory Tonic',          description: 'Resets a summon\'s personality to STOIC. Rare drop.', rarity: 'EPIC', value: 15000, type: 'CONSUMABLE', usable: false },
-    // 💡 NEW 2026-08-05: Summon Healing Pill — mid-battle heal for summon duels.
+    // 💡 NEW 2026-08-05: Summon Healing Pill - mid-battle heal for summon duels.
     // Restores 30% of max HP when used via `.s pvp item` during a summon duel.
     'summon_healing_pill':     { name: 'Summon Healing Pill',   description: 'Heals 30% of max HP mid-battle. Used in summon duels via .s pvp item.', rarity: 'UNCOMMON', value: 3000, type: 'CONSUMABLE', usable: false, summonItem: true }
 };

@@ -127,7 +127,7 @@ async function runTests() {
   const r2 = makeReply();
   await itemMarket.cmdItemMarket(USER_B, r2.reply, []);
   if (!/Test Potion/i.test(r2.log[0])) throw new Error(`browse: market doesn't show listing: ${r2.log[0]}`);
-  console.log(`[+] Browse verified — market shows the listing ✅`);
+  console.log(`[+] Browse verified - market shows the listing ✅`);
 
   // ─── Phase 4: buyitem (10% tax) ───
   console.log('\n=== Phase 4: buyitem ===');
@@ -140,8 +140,8 @@ async function runTests() {
   const balB1 = economy.getBalance(USER_B);
   const expA = 100000 + 4500;
   const expB = 100000 - 5000;
-  if (balA1 !== expA) throw new Error(`buyitem: A balance wrong — expected ${expA}, got ${balA1}`);
-  if (balB1 !== expB) throw new Error(`buyitem: B balance wrong — expected ${expB}, got ${balB1}`);
+  if (balA1 !== expA) throw new Error(`buyitem: A balance wrong - expected ${expA}, got ${balA1}`);
+  if (balB1 !== expB) throw new Error(`buyitem: B balance wrong - expected ${expB}, got ${balB1}`);
   console.log(`[+] Money flow: A 100000→${balA1} (+4500 = 90% of 5000) ✅`);
   console.log(`[+] Money flow: B 100000→${balB1} (-5000 full price) ✅`);
   console.log(`[+] Tax evaporated: 500 (10% of 5000) ✅`);
@@ -196,7 +196,7 @@ async function runTests() {
   }).sort({ timestamp: -1 });
   console.log(`[+] Settlement records created for test users: ${settlements.length}`);
   if (settlements.length > 0) {
-    console.log(`[i] Sample — category: ${settlements[0].category}, type: ${settlements[0].type}, amount: ${settlements[0].amount}`);
+    console.log(`[i] Sample - category: ${settlements[0].category}, type: ${settlements[0].type}, amount: ${settlements[0].amount}`);
   }
 
   console.log('\n========== ALL TESTS PASSED ==========');

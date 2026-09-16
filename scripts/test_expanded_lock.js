@@ -6,7 +6,7 @@
 //
 // Approach: read engine.js source + verify the new RPG_COMMANDS list is
 // present + verify each of the user-reported commands is in the list.
-// We don't run a live test (would require a real WhatsApp message) —
+// We don't run a live test (would require a real WhatsApp message) -
 // code-path verification is sufficient since the lock check is structurally
 // the same as the one already verified by test_followup_fixes.js.
 
@@ -18,7 +18,7 @@ console.log('[+] Verifying expanded RPG maintenance lock in engine.js...');
 const engSrc = fs.readFileSync(path.join(__dirname, '..', 'core/engine.js'), 'utf-8');
 
 // 1. Verify the expanded lock block is present
-if (!engSrc.includes('PHASE 7 FIX 2026-08-29: expanded RPG lock — hardcoded command list')) {
+if (!engSrc.includes('PHASE 7 FIX 2026-08-29: expanded RPG lock - hardcoded command list')) {
   throw new Error('engine.js: expanded lock marker not found');
 }
 console.log('[+] Expanded lock block present ✅');
@@ -49,7 +49,7 @@ const mustContain = [
   'status',         // .j status (character status)
   'summons',        // .j summons (alias for summon)
   'adventure',      // .j adventure (alias for quest)
-  // Cards commands (intercepted by cardSystem BEFORE the lock — now caught earlier):
+  // Cards commands (intercepted by cardSystem BEFORE the lock - now caught earlier):
   'claim', 'coll', 'info', 'deck', 'sc', 'auction', 'bid', 'merge',
   'cg', 'cs', 'cltr', 'scc', 'maker', 'burn', 'cdeck', 'tokens',
   'eshop', 'buycard', 'fc', 'spawn',
@@ -59,7 +59,7 @@ const mustContain = [
   'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw',
   // Gambling commands:
   'gamble', 'slots', 'dice', 'coinflip',
-  // Confirmed-registered commands (already locked — should still be in list):
+  // Confirmed-registered commands (already locked - should still be in list):
   'char', 'character', 'stats', 'abilities', 'inventory', 'bag',
   'quest', 'solo', 'duel', 'pvp', 'rune', 'summon', 'abyss', 'raid',
   'bounty', 'shop', 'craft', 'brew', 'forge', 'cook', 'mine',
@@ -72,18 +72,18 @@ if (missing.length > 0) {
 console.log(`[+] All ${mustContain.length} commands present in RPG_CMDS Set ✅`);
 
 // 4. Verify the lock fires BEFORE the card system intercept (so cards commands are caught)
-const expandLockIdx = engSrc.indexOf('PHASE 7 FIX 2026-08-29: expanded RPG lock — hardcoded command list');
+const expandLockIdx = engSrc.indexOf('PHASE 7 FIX 2026-08-29: expanded RPG lock - hardcoded command list');
 const cardInterceptIdx = engSrc.indexOf('// ── CARD SYSTEM INTERCEPT ──────────────────');
 if (expandLockIdx < 0 || cardInterceptIdx < 0) {
   throw new Error('engine.js: could not locate lock or card intercept');
 }
 if (expandLockIdx > cardInterceptIdx) {
-  throw new Error('engine.js: expanded lock is AFTER card system intercept — cards commands will bypass it');
+  throw new Error('engine.js: expanded lock is AFTER card system intercept - cards commands will bypass it');
 }
-console.log(`[+] Lock is at offset ${expandLockIdx}, card intercept at ${cardInterceptIdx} — lock fires FIRST ✅`);
+console.log(`[+] Lock is at offset ${expandLockIdx}, card intercept at ${cardInterceptIdx} - lock fires FIRST ✅`);
 
 // 5. Verify the existing isCommandDisabled-based lock (line ~7298) is still present as backup
-if (!engSrc.includes('PHASE 7 FIX 2026-08-29: RPG test-mode lock — fixed category lookup')) {
+if (!engSrc.includes('PHASE 7 FIX 2026-08-29: RPG test-mode lock - fixed category lookup')) {
   throw new Error('engine.js: backup registry-based lock not found');
 }
 console.log('[+] Backup registry-based lock still present ✅');

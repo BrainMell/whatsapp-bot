@@ -1910,7 +1910,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Cleric skills (was 2 — only Heal + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Cleric skills (was 2 - only Heal + ult)
                     smite: {
                         id: 'smite',
                         name: 'Smite',
@@ -2004,7 +2004,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Ninja skills (was 2 — only Shuriken + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Ninja skills (was 2 - only Shuriken + ult)
                     shadow_clone_jutsu: {
                         id: 'shadow_clone_jutsu',
                         name: 'Shadow Clone Jutsu',
@@ -2098,7 +2098,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Monk skills (was 2 — only Palm Strike + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Monk skills (was 2 - only Palm Strike + ult)
                     ki_blast: {
                         id: 'ki_blast',
                         name: 'Ki Blast',
@@ -2390,7 +2390,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Elementalist skills (was 2 — only Elemental Bolt + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Elementalist skills (was 2 - only Elemental Bolt + ult)
                     flame_burst: {
                         id: 'flame_burst',
                         name: 'Flame Burst',
@@ -2542,7 +2542,7 @@ const SKILL_TREES = {
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Warlord skills (class had only 2 damaging skills — Tactical Strike + Total War ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlord skills (class had only 2 damaging skills - Tactical Strike + Total War ult)
                     wide_cleave: {
                         id: 'wide_cleave',
                         name: 'Wide Cleave',
@@ -2766,7 +2766,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [171, 154, 137],
                         cooldown: 2,
-                        damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] — nerfed AOE ult
+                        damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] - nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'The ultimate elemental collapse.',
@@ -2833,7 +2833,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Warlock skills (was 2 — only Shadow Bolt + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlock skills (was 2 - only Shadow Bolt + ult)
                     curse_of_agony: {
                         id: 'curse_of_agony',
                         name: 'Curse of Agony',
@@ -2926,7 +2926,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Druid skills (was 2 — only Nature's Wrath + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Druid skills (was 2 - only Nature's Wrath + ult)
                     entangle: {
                         id: 'entangle',
                         name: 'Entangle',
@@ -3257,7 +3257,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Samurai skills (was 2 — only Iaido + ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Samurai skills (was 2 - only Iaido + ult)
                     frontal_cut: {
                         id: 'frontal_cut',
                         name: 'Frontal Cut',
@@ -3418,9 +3418,9 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [171, 149, 125],
                         cooldown: 2,
-                        // 💡 FIX 2026-08-05: Rebalanced from [4,5,6] (underpowered — Lich ult
+                        // 💡 FIX 2026-08-05: Rebalanced from [4,5,6] (underpowered - Lich ult
                         // was weaker than inherited Apprentice Meteor Strike [6.5] despite
-                        // 4.5x energy cost). Now [8,10,12] — Lv.3 = 1200% MAG, ~1.85x Meteor
+                        // 4.5x energy cost). Now [8,10,12] - Lv.3 = 1200% MAG, ~1.85x Meteor
                         // Strike, justifying the 125 energy + curse + summon bonuses.
                         damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'MAGICAL',
@@ -3532,7 +3532,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [162, 149, 135],
                         cooldown: 2,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] — nerfed AOE ult
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] - nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Unleash a wave of temporal paradoxes that ravage all enemies.',
@@ -3748,7 +3748,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [162, 149, 135],
                         cooldown: 2,
-                        damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] — nerfed AOE ult w/ root
+                        damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] - nerfed AOE ult w/ root
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
@@ -3858,7 +3858,7 @@ const SKILL_TREES = {
                         energyCost: [76, 68, 61],
                         goldCost: [5000, 10000, 20000],
                         cooldown: 2,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [15.0, 25.0, 40.0] — nerfed TRUE dmg AOE ult
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [15.0, 25.0, 40.0] - nerfed TRUE dmg AOE ult
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
                         description: 'Rain down heavy gold coins, dealing massive true damage.',
@@ -4134,7 +4134,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [162, 149, 135],
                         cooldown: 2,
-                        damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] — nerfed ALL targets ult (stays higher, single-ish)
+                        damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] - nerfed ALL targets ult (stays higher, single-ish)
                         damageType: 'MAGICAL',
                         targeting: 'ALL',
                         description: 'Erase all from existence',
@@ -4500,7 +4500,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [0, 0, 0],
                         cooldown: 2,
-                        damageMultiplier: [6.0, 7.0, 8.0], // was [15.0, 18.0, 20.0] — nerfed TRUE ALL ult
+                        damageMultiplier: [6.0, 7.0, 8.0], // was [15.0, 18.0, 20.0] - nerfed TRUE ALL ult
                         damageType: 'TRUE',
                         targeting: 'ALL',
                         description: 'Transcend mortality achieving oneness.',
@@ -4575,7 +4575,7 @@ const SKILL_TREES = {
                         description: 'Transform into full dragon form for 3-5 turns. +50% ATK/DEF/MAG. All attacks gain fire element.',
                         animation: '🐲✨🔥',
                         skillPointCost: [6, 8, 10],
-                        // 💡 FIX 2026-08-01: Added effect callback — previously had
+                        // 💡 FIX 2026-08-01: Added effect callback - previously had
                         // unrecognized buffType/buffs fields that the engine couldn't read.
                         // Now uses standard 'all' buff type with 50% value.
                         effect: (level) => ({
@@ -4607,7 +4607,7 @@ const SKILL_TREES = {
                         // added drown as a separate DoT effect.
                         effect: (level) => ({
                             type: 'aoe',
-                            multiplier: 8.0 + level,  // 9/10/11 — matches description
+                            multiplier: 8.0 + level,  // 9/10/11 - matches description
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
                             element: 'fire',
@@ -4621,7 +4621,7 @@ const SKILL_TREES = {
                             stunDuration: 1,
                             // 💡 AUDIT FIX 2026-08-01: added drown DoT.
                             // Description says "Burn, Stun, and Drown" but
-                            // drown was missing — no effect.drown field and
+                            // drown was missing - no effect.drown field and
                             // no `drown` entry in STATUS_EFFECTS. Both are
                             // now added; engine reads effect.drown + applies
                             // via applyStatusEffect('drown', ...).
@@ -4682,12 +4682,12 @@ const SKILL_TREES = {
                         description: 'All enemies are silenced and pacified for 2-4 turns. Their buffs are stripped. "Kneel," you say. They kneel.',
                         animation: '🐲👑⚡',
                         skillPointCost: [7, 9, 11],
-                        // 💡 FIX 2026-08-01: Added effect callback — previously had
+                        // 💡 FIX 2026-08-01: Added effect callback - previously had
                         // unrecognized debuffType:'SUPPRESS' that did nothing.
                         // Now applies silence + strips buffs via standard engine fields.
                         effect: (level) => ({
                             type: 'aoe',
-                            multiplier: 0,  // no damage — pure CC
+                            multiplier: 0,  // no damage - pure CC
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
                             // Silence all enemies
@@ -4704,7 +4704,7 @@ const SKILL_TREES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  DRAGON LORD — successor class skill tree.
+    //  DRAGON LORD - successor class skill tree.
     //  Distinct identity: where Dragon God channels the slain Leviathan's
     //  oceanic apocalypse, Dragon Lord COMMANDS its surviving children.
     //  Dragon God = solitary divine power. Dragon Lord = pack leader.
@@ -4938,7 +4938,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [157, 143, 129],
                         cooldown: 2,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] — nerfed AOE physical ult
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] - nerfed AOE physical ult
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
                         description: 'An ultimate strike that decimates all enemies in your wake.',
@@ -5244,7 +5244,7 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [171, 149, 125],
                         cooldown: 2,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] — nerfed AOE large ult
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] - nerfed AOE large ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Call down a devastating laser from space.',
@@ -5293,7 +5293,7 @@ const SKILL_TREES = {
                         animation: '👊🌌💥',
                         skillPointCost: [4, 5, 6, 7, 8]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Divine Fist skills (was 1 — only Star Shatterer ult)
+                    // 💡 PHASE 2 2026-07-17: 3 new Divine Fist skills (was 1 - only Star Shatterer ult)
                     iron_palm: {
                         id: 'iron_palm',
                         name: 'Iron Palm',
@@ -5529,7 +5529,7 @@ const SKILL_TREES = {
                         animation: '💀⌛🌑',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Death Lord skills (was 1 — only Soul Reaping)
+                    // 💡 PHASE 2 2026-07-17: 3 new Death Lord skills (was 1 - only Soul Reaping)
                     raise_dead: {
                         id: 'raise_dead',
                         name: 'Raise Dead',
@@ -5957,7 +5957,7 @@ function calculateSpentPoints(user, userClassId) {
 
         // 💡 FIX 2026-08-31: prefer the ACTUAL spend ledger. The heuristic
         // below resolves the skill against the CURRENT lineage (evolved class
-        // first) — shared starter/evolved skills (cleave, fireball, smite...)
+        // first) - shared starter/evolved skills (cleave, fireball, smite...)
         // defined WITHOUT skillPointCost in the starter tree but WITH
         // escalating arrays in the evolved tree refunded MORE than was paid.
         if (user.skillSpend && typeof user.skillSpend === 'object' &&

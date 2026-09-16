@@ -19,7 +19,7 @@ const getPrefix = () => botConfig.getPrefix();
 
 // 💡 ECONOMY FIX 2026-08-31: MYTHIC shop pricing.
 // Shop-bought MYTHIC gear could be resold at 1.2× sellMultiplier (×0.9 after
-// tax = 1.08×) — a guaranteed 8% profit per buy/sell cycle (infinite money
+// tax = 1.08×) - a guaranteed 8% profit per buy/sell cycle (infinite money
 // printer). All other rarities have sellMultiplier ≤ 1.0 so resale is always
 // at a loss. Fix: price MYTHIC shop gear 35% above base value so resale
 // (max 1.08× base) is always a loss. NOTE: handleEquipment() stores the DB
@@ -45,7 +45,7 @@ function buildShopCatalog() {
         if (item.value <= 1) return;
 
         // Summon-specific items live in the dedicated summon shop
-        // 💡 Only basic_summon_egg is buyable — higher-tier eggs come from crafting fragments
+        // 💡 Only basic_summon_egg is buyable - higher-tier eggs come from crafting fragments
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
                              id === 'summon_healing_pill' ||
@@ -98,7 +98,7 @@ function buildShopCatalog() {
 // 🔍 SHOP SEARCH (2026-09-14, owner: "add a search feature for the shop"):
 // `.j shop <anything that isn't a category>` now searches name/ID/desc.
 // Every shop view remembers what it displayed per chat (10-min TTL) so the
-// numbers shown can be bought with `.buy <#>` — previously `.buy <#>` always
+// numbers shown can be bought with `.buy <#>` - previously `.buy <#>` always
 // resolved against the FULL catalog regardless of what the user was looking
 // at, so category/search numbers silently pointed at the wrong items.
 const KNOWN_CATEGORIES = new Set(['all', 'class', 'quest', 'equipment', 'summon', 'permanent']);
@@ -107,7 +107,7 @@ const SHOP_LIST_TTL_MS = 10 * 60 * 1000;
 
 function rememberShopList(chatId, list) {
     _lastShopList.set(chatId, { list, expiresAt: Date.now() + SHOP_LIST_TTL_MS });
-    if (_lastShopList.size > 500) { // hard cap — chats are plenty, never grow unbounded
+    if (_lastShopList.size > 500) { // hard cap - chats are plenty, never grow unbounded
         const oldest = _lastShopList.keys().next().value;
         _lastShopList.delete(oldest);
     }
@@ -127,7 +127,7 @@ function getRememberedShopList(chatId) {
 // ==========================================
 
 async function displayShop(sock, chatId, category = 'all') {
-    // 1. Shared catalog (single source of truth — see buildShopCatalog above)
+    // 1. Shared catalog (single source of truth - see buildShopCatalog above)
     const { classItems, mainItems, summonItems } = buildShopCatalog();
     const p = getPrefix();
     const Z = getZENI();
@@ -141,10 +141,10 @@ async function displayShop(sock, chatId, category = 'all') {
         }
         let msg = '🥚 *SUMMON SHOP*\n';
         msg += '━━━━━━━━━━━━━━━\n\n';
-        const flat = []; // displayed order — powers `.buy <#>`
+        const flat = []; // displayed order - powers `.buy <#>`
         const renderEntry = (item, statStr) => {
             flat.push(item);
-            msg += `*${flat.length}.* ${item.icon} *${item.name}* — ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
+            msg += `*${flat.length}.* ${item.icon} *${item.name}* - ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
             if (statStr) msg += '   ⚙️ ' + statStr + '\n';
         };
         msg += '*EGGS*\n';
@@ -168,7 +168,7 @@ async function displayShop(sock, chatId, category = 'all') {
 
     // 🔍 SHOP SEARCH: any arg that isn't a known category is a query.
     // Searches item name, ID and description across ALL buyable stock
-    // (class items + main shop + summon shop — summon hits get a 🥚 marker).
+    // (class items + main shop + summon shop - summon hits get a 🥚 marker).
     if (!KNOWN_CATEGORIES.has(category.toLowerCase())) {
         const q = category.toLowerCase().trim();
         const qFlat = q.replace(/\s+/g, '_'); // "health potion" also matches id "health_potion"
@@ -189,7 +189,7 @@ async function displayShop(sock, chatId, category = 'all') {
 
         const MAX_RESULTS = 25;
         const results = scored.slice(0, MAX_RESULTS);
-        let msg = `🔍 *SHOP SEARCH* — "${category}"\n`;
+        let msg = `🔍 *SHOP SEARCH* - "${category}"\n`;
         msg += `━━━━━━━━━━━━━━━\n\n`;
         if (results.length === 0) {
             msg += `❌ Nothing matches "${category}".\n\n`;
@@ -199,12 +199,12 @@ async function displayShop(sock, chatId, category = 'all') {
             rememberShopList(chatId, results.map(r => r.item));
             results.forEach(({ item }, i) => {
                 const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
-                msg += `*${i + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${Z}${item.cost.toLocaleString()}${item.category === 'SUMMON' ? ' 🥚' : ''}\n`;
+                msg += `*${i + 1}.* ${item.icon} ${rarIcon} *${item.name}* - ${Z}${item.cost.toLocaleString()}${item.category === 'SUMMON' ? ' 🥚' : ''}\n`;
                 if (item.desc) msg += `   _${item.desc.slice(0, 70)}${item.desc.length > 70 ? '…' : ''}_\n`;
                 msg += `   🆔 \`${item.id}\`\n`;
             });
             if (scored.length > MAX_RESULTS) {
-                msg += `\n…and ${scored.length - MAX_RESULTS} more — narrow the search.\n`;
+                msg += `\n…and ${scored.length - MAX_RESULTS} more - narrow the search.\n`;
             }
         }
         msg += `━━━━━━━━━━━━━━━\n`;
@@ -243,7 +243,7 @@ async function displayShop(sock, chatId, category = 'all') {
         rememberShopList(chatId, filteredItems.map(([, item]) => item));
         filteredItems.forEach(([key, item], index) => {
             const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
-            msg += `*${index + 1}.* ${item.icon} ${rarIcon} *${item.name}* — ${Z}${item.cost.toLocaleString()}\n`;
+            msg += `*${index + 1}.* ${item.icon} ${rarIcon} *${item.name}* - ${Z}${item.cost.toLocaleString()}\n`;
             const meta = [];
             if (item.reqLevel && item.reqLevel > 1) meta.push(`Lv ${item.reqLevel}`);
             if (item.slot) meta.push(item.slot.replace('_', ' '));
@@ -272,7 +272,7 @@ async function displayShop(sock, chatId, category = 'all') {
 // ==========================================
 
 async function buyItem(sock, chatId, senderJid, input) {
-    // 💡 2026-09-14: shared catalog — one builder for display + buy (previously
+    // 💡 2026-09-14: shared catalog - one builder for display + buy (previously
     // this function carried a second, drift-prone copy of the item loop).
     const { classItems, mainItems, summonItems } = buildShopCatalog();
     // Full buyable universe: main shop + summon shop + class items.
@@ -301,7 +301,7 @@ async function buyItem(sock, chatId, senderJid, input) {
 
     // Fallback 3: If not found by ID or Name, check if it's a number.
     // 💡 2026-09-14 (shop search round): resolve against the LAST shop view
-    // shown in this chat (search / category / summon — see rememberShopList)
+    // shown in this chat (search / category / summon - see rememberShopList)
     // so the numbers the user actually sees are the numbers that buy. The old
     // code always indexed the FULL catalog, so numbers from `.shop equipment`
     // or a search result silently pointed at the wrong items. If no fresh
@@ -376,10 +376,10 @@ async function buyItem(sock, chatId, senderJid, input) {
     if (result.success) {
         // 💡 FIX: For non-rollbackable items (STAT_BOOST, CLASS_CHANGE, RESET,
         // CONSUMABLE), deduct money FIRST, then apply the effect. Previously
-        // the effect was applied first and removeMoney was called after — if
+        // the effect was applied first and removeMoney was called after - if
         // removeMoney failed (race condition), the user got the effect for free.
         // For EQUIPMENT, the item can be rolled back, so the order doesn't
-        // matter as much — but we still verify payment.
+        // matter as much - but we still verify payment.
         const nonRollbackable = ['STAT_BOOST', 'STAT_BOOST_PERM', 'CLASS_CHANGE', 'RESET', 'CONSUMABLE', 'BOOSTER', 'SPECIAL_KEY', 'EVOLUTION', 'ASCENSION'];
 
         if (nonRollbackable.includes(item.type)) {
@@ -391,7 +391,7 @@ async function buyItem(sock, chatId, senderJid, input) {
                 });
                 return;
             }
-            // Effect was already applied above — if we reach here, payment succeeded.
+            // Effect was already applied above - if we reach here, payment succeeded.
         } else {
             // EQUIPMENT: can be rolled back if payment fails
             const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
@@ -479,7 +479,7 @@ async function handleEquipment(senderJid, item) {
     // 💡 FIX 2026-08-01 (BUG #3): item.rarity is now properly propagated
     // from lootSystem.ITEM_DATABASE via the buyableDbItems construction in
     // both displayShop and buyItem. Previously it was undefined here, so
-    // every shop-bought equipment defaulted to 'COMMON' rarity — wrong
+    // every shop-bought equipment defaulted to 'COMMON' rarity - wrong
     // sell multiplier, wrong enhancement cap, wrong display.
     const result = await inventorySystem.addItem(senderJid, item.id, 1, {
         name: item.name,
@@ -498,7 +498,7 @@ async function handleEquipment(senderJid, item) {
     if (result.success) {
         // 💡 FIX §2.1: item.slot was undefined for some shop items, producing
         // "Use .e equip abyssal_carapace undefined to wear it." Now omits
-        // the slot hint entirely if slot is missing — the player can just
+        // the slot hint entirely if slot is missing - the player can just
         // use .e equip <id> without a slot argument.
         const slotHint = item.slot ? ` ${item.slot}` : '';
         return {
@@ -514,7 +514,7 @@ async function handleConsumable(senderJid, item) {
     const baseId = item.id.replace('_shop', '');
     const itemInfo = lootSystem.getItemInfo(baseId);
 
-    // 💡 FIX: Guard against undefined itemInfo — previously a misconfigured
+    // 💡 FIX: Guard against undefined itemInfo - previously a misconfigured
     // shop item with _shop suffix but no matching base item would crash
     // on itemInfo.name with a TypeError.
     if (!itemInfo || !itemInfo.name) {
@@ -566,7 +566,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const classData = economy.getUserClass(finalJid);
     const charSheet = progression.getCharacterSheet(finalJid);
     // 💡 FIX 2026-09-12 (owner): whois/profile/me must show the player's
-    // CURRENT stats — progression.getBaseStats includes level growth,
+    // CURRENT stats - progression.getBaseStats includes level growth,
     // allocated points, admin bonuses, equipment and summon passives.
     // economy.getUserStats was only class base + statBonuses (base stats).
     const stats = charSheet?.stats || economy.getUserStats(finalJid);
@@ -602,7 +602,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
                 pfpBuffer = Buffer.from(resp.data);
             } catch (e) {}
         }
-        // 💡 OWNER RULE: "[guild title] of [guild name]" — title falls back to role; empty when no guild
+        // 💡 OWNER RULE: "[guild title] of [guild name]" - title falls back to role; empty when no guild
         let _guildCard = { name: '', title: '' };
         try { _guildCard = require('../rpg/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
         const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
@@ -625,7 +625,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             guildTitle: _guildCard.title
         });
         if (styledBuffer && styledBuffer.length > 0) {
-            const styledCaption = `👤 *${user.nickname || finalName}* — ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* — change with \`${getPrefix()} cardstyle\``;
+            const styledCaption = `👤 *${user.nickname || finalName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* - change with \`${getPrefix()} cardstyle\``;
             await sock.sendMessage(chatId, {
                 image: styledBuffer,
                 caption: styledCaption,

@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  GUILD PERKS SYSTEM (Phase 2 — Guild Polish)
+//  GUILD PERKS SYSTEM (Phase 2 - Guild Polish)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Centralizes ALL guild perk calculations so they're applied consistently
 // across the codebase. Previously the guild system declared perks in flavor
-// text (GUILD_ARCHETYPES, GUILD_UPGRADES) but never wired them up — this
+// text (GUILD_ARCHETYPES, GUILD_UPGRADES) but never wired them up - this
 // module is the wiring.
 //
 // Perk sources:
@@ -78,7 +78,7 @@ const BUILDING_PERKS = {
 // 💡 AUDIT FIX: descriptions now match the actual implemented behavior.
 // Previously L5 said "1% daily interest" but the real rate is 0.5% per
 // treasury level (max 2.5% at treasury L5). L10 said "Access to GUILD-rank
-// dungeon" but no such dungeon exists yet — desc now reflects that. L7 is
+// dungeon" but no such dungeon exists yet - desc now reflects that. L7 is
 // now actually wired up (see economy.js checkAndPromoteRank).
 const GUILD_LEVEL_PERKS = {
   2:  { xpBonus: 0.05, desc: '+5% XP for all members' },
@@ -261,7 +261,7 @@ function awardWarPoints(userId, amount, reason) {
 }
 
 function getWeekKey(date) {
-  // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` — LOCAL Y/M/D
+  // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` - LOCAL Y/M/D
   // interpreted as UTC. On any server with TZ >= UTC+2 the week key flipped
   // ~1-2h BEFORE the UTC Sunday war deadline, leaving the expiring war
   // unreachable by weekKey (rewards never paid, war stuck 'active') and
@@ -420,7 +420,7 @@ module.exports = {
 //   - Auto-deduct 10% from the borrower's wallet (forced repayment)
 //   - Apply the deducted amount to the loan principal
 //   - If wallet is empty, the loan stays overdue and accrues a 5% penalty
-//     added to the principal (compounding — encourages repayment)
+//     added to the principal (compounding - encourages repayment)
 // Called from index.js scheduler (same as runDailyInterest).
 async function runDailyLoanProcessing() {
   console.log('[GuildPerks] Running daily loan processing...');
@@ -461,7 +461,7 @@ async function runDailyLoanProcessing() {
             loan.repaidAt = new Date();
           }
         } else {
-          // Borrower can't pay — apply 5% penalty to principal (compounds)
+          // Borrower can't pay - apply 5% penalty to principal (compounds)
           const penalty = Math.floor(loan.amount * 0.05);
           loan.amount += penalty;
           penaltiesApplied += penalty;

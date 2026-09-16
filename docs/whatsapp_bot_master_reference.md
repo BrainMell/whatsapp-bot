@@ -1,4 +1,4 @@
-# WhatsApp RPG Bot — Master Reference Doc
+# WhatsApp RPG Bot - Master Reference Doc
 
 
 Consolidated from: `economy_report.pdf`, `difficulty_curve.png`, `envis.txt`, `users_export.csv`, `caludechat.txt` (a prior Claude Code combat-audit + simulation session).
@@ -11,12 +11,12 @@ Generated: 2026-08-08
 
 1. [Combat System Audit](#1-combat-system-audit)
 2. [Real-Player Simulation Findings](#2-real-player-simulation-findings)
-3. [Difficulty Curve — Chart Reading + Simulation Narrative](#3-difficulty-curve--chart-reading--simulation-narrative)
+3. [Difficulty Curve - Chart Reading + Simulation Narrative](#3-difficulty-curve--chart-reading--simulation-narrative)
 4. [Economy Report](#4-economy-report)
 5. [Environment Variables / Secrets](#5-environment-variables--secrets)
-6. [User Database — Active Users (Summary Table)](#6-user-database--active-users-summary-table)
-7. [User Database — Active Users (Full Records)](#7-user-database--active-users-full-records)
-8. [Appendix — Original Audit Request & Team Chat Context](#8-appendix--original-audit-request--team-chat-context)
+6. [User Database - Active Users (Summary Table)](#6-user-database--active-users-summary-table)
+7. [User Database - Active Users (Full Records)](#7-user-database--active-users-full-records)
+8. [Appendix - Original Audit Request & Team Chat Context](#8-appendix--original-audit-request--team-chat-context)
 
 
 ---
@@ -25,38 +25,38 @@ Generated: 2026-08-08
 ## 1. Combat System Audit
 
 
-Branch audited: `audit/fix-pass-1` (repo: `brainmell/whatsapp-bot`). Full audit as originally produced, unedited — headings below are demoted one level so they nest under this section (§0–§9 numbering is internal to the audit itself, kept as-is for cross-reference).
+Branch audited: `audit/fix-pass-1` (repo: `brainmell/whatsapp-bot`). Full audit as originally produced, unedited - headings below are demoted one level so they nest under this section (§0-§9 numbering is internal to the audit itself, kept as-is for cross-reference).
 
 
 **Branch audited:** `audit/fix-pass-1` (repo: `brainmell/whatsapp-bot`)
-**Scope:** everything that touches combat outcomes — classes, enemies, stats, progression, equipment, status effects, damage math, turn order, RNG.
-**Method:** direct source inspection (not docs — the docs undersell how much has already been hand-tuned; see the `💡 QA FIX` / `💡 AUDIT FIX` comments littered through `guildAdventure.js`, which show this file has already been through several balance passes). Chat logs and the economy report you supplied are used as ground-truth for what players are actually feeling in practice, cross-referenced against the code that produces those feelings.
+**Scope:** everything that touches combat outcomes - classes, enemies, stats, progression, equipment, status effects, damage math, turn order, RNG.
+**Method:** direct source inspection (not docs - the docs undersell how much has already been hand-tuned; see the `💡 QA FIX` / `💡 AUDIT FIX` comments littered through `guildAdventure.js`, which show this file has already been through several balance passes). Chat logs and the economy report you supplied are used as ground-truth for what players are actually feeling in practice, cross-referenced against the code that produces those feelings.
 
 ---
 
 #### 0. TL;DR
 
-- **Balance score: 4/10.** Not because the game is un-fun — there's a genuinely thoughtful damage pipeline underneath (shields, CC diminishing returns, elemental chart, environment modifiers) — but because two or three *specific, isolated* numbers dwarf everything else in the system, which flattens all the nuance the rest of the formula tries to build. Fix those three numbers and this jumps to a 7+.
+- **Balance score: 4/10.** Not because the game is un-fun - there's a genuinely thoughtful damage pipeline underneath (shields, CC diminishing returns, elemental chart, environment modifiers) - but because two or three *specific, isolated* numbers dwarf everything else in the system, which flattens all the nuance the rest of the formula tries to build. Fix those three numbers and this jumps to a 7+.
 - The single biggest lever in the entire combat system is **not** a stat, a class, or a skill. It's `adventurerRank`: any *player* (never enemies) at D-rank or higher deals **flat 2x damage on every hit, forever**, stacking multiplicatively with everything else. This one `if` statement outweighs the entire stat-allocation, class-selection, and gear system combined.
-- **Crit chance has no cap anywhere in the codebase.** By mid-late game (crit stat 80+ base on some classes, plus growth, plus allocation, plus gear) many builds sit at or above 100% crit — "crit chance" stops being a chance.
-- **`TOTAL_ANNIHILATION`** (the mechanic your players were angry about in the logs) is a hard turn-30 wipe that sets every player's HP to 0 regardless of stats, DEF, HP pool, or evasion. It's an enrage timer wearing a damage-number costume — it doesn't run through `calculateDamage` at all, so nothing you build can mitigate it. That's *why* 🫩's complaint ("ignores my hp and defence") is literally true, not a perception issue.
-- **PEAK-tier classes (19 of them) fall through every per-class scaling table** (`STAT_GROWTH.CLASS_MODIFIERS`, the stat-point tier multiplier) and silently inherit FIGHTER's growth curve and a 1.0x stat-point multiplier — worse than ASCENDED gets. They appear to be shelved/unreachable via the normal `.jk modclass` list right now (confirmed against your own chat log), so this is a landmine waiting for whenever that content goes live, not an active fire.
-- Class base stats are wildly inconsistent in how much power each tier jump grants — some STARTER→EVOLVED jumps are +30%, others (WARRIOR, BERSERKER) are +65%+, before any level scaling even applies.
+- **Crit chance has no cap anywhere in the codebase.** By mid-late game (crit stat 80+ base on some classes, plus growth, plus allocation, plus gear) many builds sit at or above 100% crit - "crit chance" stops being a chance.
+- **`TOTAL_ANNIHILATION`** (the mechanic your players were angry about in the logs) is a hard turn-30 wipe that sets every player's HP to 0 regardless of stats, DEF, HP pool, or evasion. It's an enrage timer wearing a damage-number costume - it doesn't run through `calculateDamage` at all, so nothing you build can mitigate it. That's *why* 🫩's complaint ("ignores my hp and defence") is literally true, not a perception issue.
+- **PEAK-tier classes (19 of them) fall through every per-class scaling table** (`STAT_GROWTH.CLASS_MODIFIERS`, the stat-point tier multiplier) and silently inherit FIGHTER's growth curve and a 1.0x stat-point multiplier - worse than ASCENDED gets. They appear to be shelved/unreachable via the normal `.jk modclass` list right now (confirmed against your own chat log), so this is a landmine waiting for whenever that content goes live, not an active fire.
+- Class base stats are wildly inconsistent in how much power each tier jump grants - some STARTER→EVOLVED jumps are +30%, others (WARRIOR, BERSERKER) are +65%+, before any level scaling even applies.
 
 Everything below explains *why*, with line references, then proposes concrete redesign directions.
 
 ---
 
-#### 1. How a Hit Actually Resolves — Full Pipeline
+#### 1. How a Hit Actually Resolves - Full Pipeline
 
-This is the annotated order of operations inside `calculateDamage()` (`core/rpg/guildAdventure.js:2118-2477`), the single function every point of damage in the game passes through (PvE, PvP, abyss, raids, summon duels — everything calls this).
+This is the annotated order of operations inside `calculateDamage()` (`core/rpg/guildAdventure.js:2118-2477`), the single function every point of damage in the game passes through (PvE, PvP, abyss, raids, summon duels - everything calls this).
 
 ```
-1.  base damage = power (the flat number passed in — usually skill% × ATK or MAG)
+1.  base damage = power (the flat number passed in - usually skill% × ATK or MAG)
 2.  GODMODE check          → instant 99999 dmg / 0 dmg escape hatch (admin/debug only)
 3.  Dragon Seal Ring gate  → 0 dmg vs DRAKE_*/DRAGON_* enemies without the ring
 4.  RANK BONUS             → ×2.0 damage if attacker.adventurerRank ∈ {D,C,B,A,S,SS,SSS}
-                              (PLAYERS ONLY — enemies never carry this field)
+                              (PLAYERS ONLY - enemies never carry this field)
 5.  Environment mults      → Fire Cave / Demon Castle enemy-only bonuses
 6.  def = target.def (physical) | target.mag×0.5 (magic) | 0 (true)
 7.  Attack buffs           → damage ×= (1 + Σattack%/100)
@@ -68,12 +68,12 @@ This is the annotated order of operations inside `calculateDamage()` (`core/rpg/
                                                   + Σ(dmgReduction buffs) + Σ(all buffs)
                               capped at 90%; damage ×= (1 - totalDmgReduction/100)
 13. Class passive (atk)    → damage_when_low_hp / damage_per_hit(combo, capped 5 stacks) /
-                              first_turn_bonus / rotate_elements / magic_damage — player-only
+                              first_turn_bonus / rotate_elements / magic_damage - player-only
 14. Class passive (def)    → flat % reduction, player-only, capped 90% combined w/ step 12
 15. Shield absorption      → consumes target.statusEffects shield pool before HP
 16. Berserk/Blessing (atk) → attacker-side % dmg boosts
 17. Blind check            → attacker-side extra miss chance (early return, wasEvaded)
-18. Variance               → ×(0.9 – 1.1) uniform random
+18. Variance               → ×(0.9-1.1) uniform random
 19. Elemental chart        → ×1.5 strong / ×0.75 weak
 20. Crit roll              → Math.random()*100 < attacker.crit → ×1.5 (×2.0 w/ specific rings)
                               (mantlet_of_chaos armor cloak = crit immune)
@@ -85,13 +85,13 @@ This is the annotated order of operations inside `calculateDamage()` (`core/rpg/
 A few things jump out just from reading the order:
 
 - **Step 4 (rank bonus) happens before literally every other multiplier**, and it's the single largest constant in the whole function. A C-rank Scout and an S-rank Scout with identical gear, stats, and skill do 2x different damage from one flag on their profile that has nothing to do with build choices.
-- **Steps 11+12 both consume the same `def` stat** — once as a flat subtraction, once (via `dmgReduction`, itself derived from the *same* raw def) as a percentage. This isn't necessarily wrong (Diablo/PoE-style games layer flat armor + % resist too), but here the two layers aren't independently tunable — they're both functions of one number, so DEF's marginal value curve bends hard and unpredictably around raw-def ≈ 118 (where `def×0.55` hits the 65% cap and the percent layer stops responding to further investment; see §4).
-- **Step 21 (evasion) happens *after* the crit roll, elemental multiplier and full mitigation math** — computationally wasteful, not a balance bug per se, but it means "evasion tanks" pay the full cost of every other calculation for a hit that then gets thrown away half the time. Not a balance issue, but worth flagging as a performance/readability cleanup.
-- **`'all'`-type buffs are double-counted.** Look at steps 7-8 vs step 12: a buff tagged `type:'all'` is summed into `defenseBuffPercent` (which multiplies `def` before the flat subtraction) *and* separately summed into `totalDmgReduction` (the percent layer). A buff tagged `type:'defense'` only hits the first channel. So "+30% all stats" buffs are quietly worth much more defensively than a dedicated "+30% defense" buff of the same magnitude — almost certainly not intended, since nothing in the effect authoring surfaces this distinction to whoever is writing skill data.
+- **Steps 11+12 both consume the same `def` stat** - once as a flat subtraction, once (via `dmgReduction`, itself derived from the *same* raw def) as a percentage. This isn't necessarily wrong (Diablo/PoE-style games layer flat armor + % resist too), but here the two layers aren't independently tunable - they're both functions of one number, so DEF's marginal value curve bends hard and unpredictably around raw-def ≈ 118 (where `def×0.55` hits the 65% cap and the percent layer stops responding to further investment; see §4).
+- **Step 21 (evasion) happens *after* the crit roll, elemental multiplier and full mitigation math** - computationally wasteful, not a balance bug per se, but it means "evasion tanks" pay the full cost of every other calculation for a hit that then gets thrown away half the time. Not a balance issue, but worth flagging as a performance/readability cleanup.
+- **`'all'`-type buffs are double-counted.** Look at steps 7-8 vs step 12: a buff tagged `type:'all'` is summed into `defenseBuffPercent` (which multiplies `def` before the flat subtraction) *and* separately summed into `totalDmgReduction` (the percent layer). A buff tagged `type:'defense'` only hits the first channel. So "+30% all stats" buffs are quietly worth much more defensively than a dedicated "+30% defense" buff of the same magnitude - almost certainly not intended, since nothing in the effect authoring surfaces this distinction to whoever is writing skill data.
 
 ---
 
-#### 2. The Rank Multiplier — the Real Boss of This Game
+#### 2. The Rank Multiplier - the Real Boss of This Game
 
 ```js
 // guildAdventure.js:2172-2190
@@ -102,11 +102,11 @@ if (attacker.adventurerRank) {
 }
 ```
 
-`adventurerRank` is a **player profile field** (`economy.js:1095, 1298`) driven by `calculateAdventurerRank(level, questsCompleted, gp)` — i.e. it's an account-progression gate, not a combat stat, not something you build around, and not something that scales gradually. It's binary: you either have it or you don't, and once you cross D-rank it never goes away.
+`adventurerRank` is a **player profile field** (`economy.js:1095, 1298`) driven by `calculateAdventurerRank(level, questsCompleted, gp)` - i.e. it's an account-progression gate, not a combat stat, not something you build around, and not something that scales gradually. It's binary: you either have it or you don't, and once you cross D-rank it never goes away.
 
-Enemies are built via `scaleEnemyStats()` in `classEncounters.js`, which sets `.stats.{hp,atk,def,mag,spd}` but **never sets `.adventurerRank` on the scaled enemy object at all** — confirmed by grep across every file that constructs enemy objects. So this multiplier is structurally one-directional: only players ever get it, enemies never do.
+Enemies are built via `scaleEnemyStats()` in `classEncounters.js`, which sets `.stats.{hp,atk,def,mag,spd}` but **never sets `.adventurerRank` on the scaled enemy object at all** - confirmed by grep across every file that constructs enemy objects. So this multiplier is structurally one-directional: only players ever get it, enemies never do.
 
-**Why this matters more than every other system combined:** every other lever in the game — class choice, stat allocation (soft-capped, tier-multiplied, all carefully tuned with comments about avoiding "stat explosion"), skill tree investment, equipment, runes, forging — competes for marginal percentage gains in the 5-40% range. Rank bonus hands out +100% unconditionally, on top of all of it, the moment you hit an *account* milestone. It explains a huge amount of what your players are describing in the chat log ("mfs one shot everything") — and it explains why Mellow had to invent counter-mechanics like `TOTAL_ANNIHILATION` and `silence` just to give bosses a fighting chance: the intended lever (enemy stat scaling) can't keep pace with a flat player-side 2x that enemies structurally cannot access.
+**Why this matters more than every other system combined:** every other lever in the game - class choice, stat allocation (soft-capped, tier-multiplied, all carefully tuned with comments about avoiding "stat explosion"), skill tree investment, equipment, runes, forging - competes for marginal percentage gains in the 5-40% range. Rank bonus hands out +100% unconditionally, on top of all of it, the moment you hit an *account* milestone. It explains a huge amount of what your players are describing in the chat log ("mfs one shot everything") - and it explains why Mellow had to invent counter-mechanics like `TOTAL_ANNIHILATION` and `silence` just to give bosses a fighting chance: the intended lever (enemy stat scaling) can't keep pace with a flat player-side 2x that enemies structurally cannot access.
 
 ---
 
@@ -114,7 +114,7 @@ Enemies are built via `scaleEnemyStats()` in `classEncounters.js`, which sets `.
 
 ##### 3.1 Base stats at unlock, by tier (extracted from `classSystem.js`)
 
-*"off" = a rough offense score (max(atk,mag) + crit×0.5 + spd×0.3), "def" = a rough survivability score (hp/10 + def×1.5). These are not in-game formulas — they're this audit's own composite for ranking, computed directly from the base-stat tables so the tier gaps below are verifiable, not vibes.*
+*"off" = a rough offense score (max(atk,mag) + crit×0.5 + spd×0.3), "def" = a rough survivability score (hp/10 + def×1.5). These are not in-game formulas - they're this audit's own composite for ranking, computed directly from the base-stat tables so the tier gaps below are verifiable, not vibes.*
 
 **STARTER**
 | Class | Role | Total | Off | Def |
@@ -124,7 +124,7 @@ Enemies are built via `scaleEnemyStats()` in `classEncounters.js`, which sets `.
 | ACOLYTE | SUPPORT | 156 | 20.0 | 22.0 |
 | APPRENTICE | MAGIC_DPS | 134 | 25.7 | 14.0 |
 
-APPRENTICE starts ~20% behind FIGHTER in raw stat total for a class whose entire identity is "glass cannon." That's *fine* if the cannon part is real — but its offense score (25.7) is barely ahead of ACOLYTE, a **support** class. The mage archetype doesn't actually hit harder than the healer archetype at level 1; it's just squishier for no payoff yet (payoff arrives later via the MAGE line's growth modifiers — see §3.2 — but a brand-new player feels strictly worse for picking the "high risk" starter).
+APPRENTICE starts ~20% behind FIGHTER in raw stat total for a class whose entire identity is "glass cannon." That's *fine* if the cannon part is real - but its offense score (25.7) is barely ahead of ACOLYTE, a **support** class. The mage archetype doesn't actually hit harder than the healer archetype at level 1; it's just squishier for no payoff yet (payoff arrives later via the MAGE line's growth modifiers - see §3.2 - but a brand-new player feels strictly worse for picking the "high risk" starter).
 
 **EVOLVED** (sorted by total)
 | Class | Role | Total | Off | Def |
@@ -148,9 +148,9 @@ APPRENTICE starts ~20% behind FIGHTER in raw stat total for a class whose entire
 | BARD | SUPPORT | 167 | 24.6 | 20.5 |
 | NECROMANCER | MAGIC_DPS | 158 | 34.9 | 16.7 |
 
-The four TANK evolutions occupy the **top four slots by total stat budget**, and PALADIN — a class whose entire kit is "be hard to kill" — has the *worst* offense score in the entire evolved tier (13.7) while still out-defending three of the four DPS/MAGIC_DPS lines. Meanwhile every FIGHTER line class (WARRIOR/BERSERKER/DRAGONSLAYER/PALADIN) got a noticeably bigger stat-total jump from STARTER than the SCOUT, APPRENTICE, or ACOLYTE lines did. This is the class-design version of what §2 does at the account level: the tank archetype is just given more total stuff, not a different shape of stuff.
+The four TANK evolutions occupy the **top four slots by total stat budget**, and PALADIN - a class whose entire kit is "be hard to kill" - has the *worst* offense score in the entire evolved tier (13.7) while still out-defending three of the four DPS/MAGIC_DPS lines. Meanwhile every FIGHTER line class (WARRIOR/BERSERKER/DRAGONSLAYER/PALADIN) got a noticeably bigger stat-total jump from STARTER than the SCOUT, APPRENTICE, or ACOLYTE lines did. This is the class-design version of what §2 does at the account level: the tank archetype is just given more total stuff, not a different shape of stuff.
 
-**ASCENDED / PEAK** show the same pattern amplified — see the raw numbers in the appendix table (§9). By PEAK tier, ANNIHILATOR (TANK) posts total=1160 vs DEMIURGE (MAGIC_DPS, the actual "highest single-stat mag" class in the game at 125 base mag) at total=590 — **DEMIURGE has barely half of ANNIHILATOR's stat budget** despite being marketed as the number-crunching endgame caster. Glass cannons in this game are not compensated for their glassiness; they're just cannons with less of everything.
+**ASCENDED / PEAK** show the same pattern amplified - see the raw numbers in the appendix table (§9). By PEAK tier, ANNIHILATOR (TANK) posts total=1160 vs DEMIURGE (MAGIC_DPS, the actual "highest single-stat mag" class in the game at 125 base mag) at total=590 - **DEMIURGE has barely half of ANNIHILATOR's stat budget** despite being marketed as the number-crunching endgame caster. Glass cannons in this game are not compensated for their glassiness; they're just cannons with less of everything.
 
 ##### 3.2 Per-level growth (`progression.js:37-96`)
 
@@ -160,10 +160,10 @@ getBaseGrowth(level) → { hp:15×f, atk:2.5×f, def:2.0×f, mag:2.5×f, spd:1.5
 CLASS_MODIFIERS[classId] scales each of the 7 growth numbers per class
 ```
 
-This is a *good* system in principle — it's the right idea (differentiate classes by growth curve, not just base stats) and the modifier table is genuinely well thought out for the classes it covers (KAGE getting crit 3.0x, TYCOON getting luck 3.5x, etc. — real, legible identity). The problem is coverage, not design:
+This is a *good* system in principle - it's the right idea (differentiate classes by growth curve, not just base stats) and the modifier table is genuinely well thought out for the classes it covers (KAGE getting crit 3.0x, TYCOON getting luck 3.5x, etc. - real, legible identity). The problem is coverage, not design:
 
-- `STAT_GROWTH.CLASS_MODIFIERS` only defines entries for STARTER, EVOLVED, and ASCENDED classes. **Every one of the 19 PEAK classes is undefined in this table** and falls back to `CLASS_MODIFIERS.FIGHTER` (`progression.js:322`). A caster like DEMIURGE (mag 125 base) would level up gaining magic at FIGHTER's 0.5x modifier — worse mag growth than *literally every other class in the game*, including FIGHTER itself gets to use its own 0.5x on-brand (FIGHTER isn't supposed to have good mag growth; DEMIURGE emphatically is).
-- Right now this is inert — PEAK classes don't appear in the `.jk modclass` list your own logs show (`5:18pm` — the mod-class menu tops out at GRAND_INVENTOR, an ASCENDED class), consistent with the docs' note that PEAK tier is "SHELVED — trial bosses, skill trees, and sprites not yet implemented." **This is a landmine, not a live fire** — but it will detonate the day someone flips PEAK content on unless the modifier table is filled in first.
+- `STAT_GROWTH.CLASS_MODIFIERS` only defines entries for STARTER, EVOLVED, and ASCENDED classes. **Every one of the 19 PEAK classes is undefined in this table** and falls back to `CLASS_MODIFIERS.FIGHTER` (`progression.js:322`). A caster like DEMIURGE (mag 125 base) would level up gaining magic at FIGHTER's 0.5x modifier - worse mag growth than *literally every other class in the game*, including FIGHTER itself gets to use its own 0.5x on-brand (FIGHTER isn't supposed to have good mag growth; DEMIURGE emphatically is).
+- Right now this is inert - PEAK classes don't appear in the `.jk modclass` list your own logs show (`5:18pm` - the mod-class menu tops out at GRAND_INVENTOR, an ASCENDED class), consistent with the docs' note that PEAK tier is "SHELVED - trial bosses, skill trees, and sprites not yet implemented." **This is a landmine, not a live fire** - but it will detonate the day someone flips PEAK content on unless the modifier table is filled in first.
 
 ##### 3.3 Stat-point allocation (`.jk allocate`, `progression.js:374-439`)
 
@@ -173,30 +173,30 @@ tierMultiplier: STARTER/PEAK = 1.0×, EVOLVED = 2.0×, ASCENDED = 2.0×
 soft cap: after 20 points in one stat, further points worth 0.5× (partial-fill math for the crossing point)
 ```
 
-This is the exact mechanic 🫩 and David were arguing about in your chat log — 🫩 wanted class-conditional *bonus* multipliers on top of allocation (a bracket system), David correctly pushed back that "you allocate the class's identity through what you allocate it *to*, not by getting more points for allocating it right" — and landed on rank/tier-based caps instead, which is the same idea you two eventually converged on with the "New Game+ / rebirth" framing. The code already mostly reflects David's position, which is good — the counter-argument in that conversation won and shipped.
+This is the exact mechanic 🫩 and David were arguing about in your chat log - 🫩 wanted class-conditional *bonus* multipliers on top of allocation (a bracket system), David correctly pushed back that "you allocate the class's identity through what you allocate it *to*, not by getting more points for allocating it right" - and landed on rank/tier-based caps instead, which is the same idea you two eventually converged on with the "New Game+ / rebirth" framing. The code already mostly reflects David's position, which is good - the counter-argument in that conversation won and shipped.
 
 Two implementation gaps worth fixing, both small:
 
-1. **PEAK tier isn't in the `tierMultiplier` switch** (only `EVOLVED`/`ASCENDED` are checked; PEAK silently falls to the 1.0× STARTER default at `progression.js:402-404`). Same shelved-content landmine as §3.2 — the top tier would get the *worst* stat-point value in the game once it's live.
-2. The soft cap is per-stat, not global, and its "half value past 20 points" partial-fill math (`progression.js:415-421`) is correct and reads fine — no issue there, flagging it only because it's the one piece of this subsystem that's actually solid and worth keeping as-is in any redesign.
+1. **PEAK tier isn't in the `tierMultiplier` switch** (only `EVOLVED`/`ASCENDED` are checked; PEAK silently falls to the 1.0× STARTER default at `progression.js:402-404`). Same shelved-content landmine as §3.2 - the top tier would get the *worst* stat-point value in the game once it's live.
+2. The soft cap is per-stat, not global, and its "half value past 20 points" partial-fill math (`progression.js:415-421`) is correct and reads fine - no issue there, flagging it only because it's the one piece of this subsystem that's actually solid and worth keeping as-is in any redesign.
 
 ---
 
-#### 4. Defense, Evasion, Crit — the Secondary-Stat Layer
+#### 4. Defense, Evasion, Crit - the Secondary-Stat Layer
 
-- **DEF → damage reduction:** `dmgReduction = min(65, rawDef × 0.55)` (`progression.js:368`). This means the percent-mitigation layer **saturates at raw DEF ≈ 118** — every point of DEF past that is *only* contributing through the flat `def×0.5` subtraction (step 11 in §1), not the percent layer. Given WARLORD alone posts 48 base DEF before any levels/allocation/gear, and DEF growth modifiers go up to 2.2× (TEMPLAR) per level, hitting raw-def 118 happens well before end-game. After that point DEF stops "feeling" like it's doing anything new mechanically (the percent number on your character sheet caps at 65%, visibly flatlining), even though the flat term keeps growing — this is a UX/legibility problem as much as a math one: the game shows you a stat that visibly stops moving while the *actual* mitigation from that same stat keeps changing underneath it.
-- **Crit chance has no cap anywhere in the pipeline.** `Math.random()*100 < attacker.stats.crit` (`guildAdventure.js:2401`) is the only crit gate, and nothing clamps `stats.crit` — not in `getBaseStats` (§3.2, only HP/dmgReduction/evasion/energy are clamped there), not in `calculateDamage`. Classes like KAGE (crit growth 3.0×/level, base 50) or YAMI (base crit 80) plus 20+ allocated points plus gear reach 100%+ crit chance well before max level, at which point "crit chance" is a boolean, not a percentage, and the crit multiplier (1.5–2.0×) becomes a second flat damage multiplier stacked permanently on top of rank bonus.
-- **Evasion is capped at 45%** in `getBaseStats` (`progression.js:367`) but a separate code path — the `.jk` shield-type buff at `guildAdventure.js:3123` — clamps evasion buffs to **75%**, a different, higher ceiling than the base-stat cap. Not exploitable by itself (75% only applies to the buff component, and it's additive on top of the 45%-capped base), but it's the kind of inconsistency that suggests these two caps were written at different times without cross-referencing each other.
+- **DEF → damage reduction:** `dmgReduction = min(65, rawDef × 0.55)` (`progression.js:368`). This means the percent-mitigation layer **saturates at raw DEF ≈ 118** - every point of DEF past that is *only* contributing through the flat `def×0.5` subtraction (step 11 in §1), not the percent layer. Given WARLORD alone posts 48 base DEF before any levels/allocation/gear, and DEF growth modifiers go up to 2.2× (TEMPLAR) per level, hitting raw-def 118 happens well before end-game. After that point DEF stops "feeling" like it's doing anything new mechanically (the percent number on your character sheet caps at 65%, visibly flatlining), even though the flat term keeps growing - this is a UX/legibility problem as much as a math one: the game shows you a stat that visibly stops moving while the *actual* mitigation from that same stat keeps changing underneath it.
+- **Crit chance has no cap anywhere in the pipeline.** `Math.random()*100 < attacker.stats.crit` (`guildAdventure.js:2401`) is the only crit gate, and nothing clamps `stats.crit` - not in `getBaseStats` (§3.2, only HP/dmgReduction/evasion/energy are clamped there), not in `calculateDamage`. Classes like KAGE (crit growth 3.0×/level, base 50) or YAMI (base crit 80) plus 20+ allocated points plus gear reach 100%+ crit chance well before max level, at which point "crit chance" is a boolean, not a percentage, and the crit multiplier (1.5-2.0×) becomes a second flat damage multiplier stacked permanently on top of rank bonus.
+- **Evasion is capped at 45%** in `getBaseStats` (`progression.js:367`) but a separate code path - the `.jk` shield-type buff at `guildAdventure.js:3123` - clamps evasion buffs to **75%**, a different, higher ceiling than the base-stat cap. Not exploitable by itself (75% only applies to the buff component, and it's additive on top of the 45%-capped base), but it's the kind of inconsistency that suggests these two caps were written at different times without cross-referencing each other.
 
 ---
 
 #### 5. Enemy Scaling (`classEncounters.js:1111-1200`, `scaleEnemyStats`)
 
-This is honestly the **best-designed system in the codebase** — genuinely worth preserving in any redesign. It's rank-bucketed (F/E → D → C → B → A → S+), each bucket has hand-tuned `dmgFactor`/`hpFactor`/`hpQuadFactor` breakpoints with an explicit target ("~60% player WR" — 60% player win rate), HP scaling includes a quadratic term so high-rank content doesn't just scale linearly, party size scales HP/ATK/MAG together (`partyFactor = 1 + (partySize-1)×0.20`) to keep multiplayer from trivializing content, and enemy speed *rubber-bands toward the party's average speed* rather than being static — archetype-aware (STALKER/ASSASSIN run 15% faster than the party, TANK/BRUTE run 25% slower), with an explicit comment trail (`QA FIX #33`) showing this was iterated on with real playtesting.
+This is honestly the **best-designed system in the codebase** - genuinely worth preserving in any redesign. It's rank-bucketed (F/E → D → C → B → A → S+), each bucket has hand-tuned `dmgFactor`/`hpFactor`/`hpQuadFactor` breakpoints with an explicit target ("~60% player WR" - 60% player win rate), HP scaling includes a quadratic term so high-rank content doesn't just scale linearly, party size scales HP/ATK/MAG together (`partyFactor = 1 + (partySize-1)×0.20`) to keep multiplayer from trivializing content, and enemy speed *rubber-bands toward the party's average speed* rather than being static - archetype-aware (STALKER/ASSASSIN run 15% faster than the party, TANK/BRUTE run 25% slower), with an explicit comment trail (`QA FIX #33`) showing this was iterated on with real playtesting.
 
-The problem isn't this system — it's that **this is the system fighting against §2's 2x rank multiplier and losing.** No amount of `dmgFactor`/`hpFactor` tuning on the enemy side can compensate for a flat, unconditional 2x that enemies structurally cannot receive. That's almost certainly *why* `TOTAL_ANNIHILATION` and abilities like `silence` exist — they're hand-authored patches bolted on top of a well-designed scaling system to compensate for damage the scaling system was never allowed to counter on its own terms.
+The problem isn't this system - it's that **this is the system fighting against §2's 2x rank multiplier and losing.** No amount of `dmgFactor`/`hpFactor` tuning on the enemy side can compensate for a flat, unconditional 2x that enemies structurally cannot receive. That's almost certainly *why* `TOTAL_ANNIHILATION` and abilities like `silence` exist - they're hand-authored patches bolted on top of a well-designed scaling system to compensate for damage the scaling system was never allowed to counter on its own terms.
 
-##### `TOTAL_ANNIHILATION` — the turn-30 wipe (`guildAdventure.js:3893-3909`)
+##### `TOTAL_ANNIHILATION` - the turn-30 wipe (`guildAdventure.js:3893-3909`)
 
 ```js
 if (state.turnCount > 30) {
@@ -205,37 +205,37 @@ if (state.turnCount > 30) {
 }
 ```
 
-This never touches `calculateDamage()`. It ignores HP, DEF, evasion, shields, class passives — everything the rest of the game asks you to build around. It's a pure **enrage timer**: "if the fight isn't over by turn 30, everyone loses," dressed up with a damage number for flavor. Enrage timers are a completely standard, well-understood tool (real MMOs use them constantly) — the issue here is presentation and asymmetry: it reads as a *combat mechanic* (the boss "attacks" you) when it's actually a *meta rule* (the encounter has a clock), and there's no in-fight signal counting down to it (no "boss grows unstable," no visible timer) apart from the ATK creep at turns 15/20/25 (`×1.05` each, `guildAdventure.js:3888`) which is far too subtle to read as "you have 5-15 turns left before an unconditional wipe."
+This never touches `calculateDamage()`. It ignores HP, DEF, evasion, shields, class passives - everything the rest of the game asks you to build around. It's a pure **enrage timer**: "if the fight isn't over by turn 30, everyone loses," dressed up with a damage number for flavor. Enrage timers are a completely standard, well-understood tool (real MMOs use them constantly) - the issue here is presentation and asymmetry: it reads as a *combat mechanic* (the boss "attacks" you) when it's actually a *meta rule* (the encounter has a clock), and there's no in-fight signal counting down to it (no "boss grows unstable," no visible timer) apart from the ATK creep at turns 15/20/25 (`×1.05` each, `guildAdventure.js:3888`) which is far too subtle to read as "you have 5-15 turns left before an unconditional wipe."
 
 ---
 
-#### 6. Bugs, Exploits, and Dead Mechanics — Summary Table
+#### 6. Bugs, Exploits, and Dead Mechanics - Summary Table
 
 | # | Issue | Location | Severity | Type |
 |---|---|---|---|---|
 | 1 | Player-only flat 2x damage at D-rank+, enemies never get it | `guildAdventure.js:2172` | **Critical** | Balance |
-| 2 | Crit chance uncapped — 100%+ reachable mid-late game | `guildAdventure.js:2401`, `progression.js` (no clamp) | **Critical** | Balance |
+| 2 | Crit chance uncapped - 100%+ reachable mid-late game | `guildAdventure.js:2401`, `progression.js` (no clamp) | **Critical** | Balance |
 | 3 | `TOTAL_ANNIHILATION` bypasses all mitigation, no telegraph | `guildAdventure.js:3893` | High | Design/UX |
 | 4 | `'all'`-type buffs double-counted (flat *and* percent mitigation channel) | `guildAdventure.js:2240-2296` | Medium | Balance bug |
 | 5 | PEAK tier (19 classes) missing from `CLASS_MODIFIERS` → inherits FIGHTER growth | `progression.js:322` | Medium (dormant) | Data gap |
 | 6 | PEAK tier missing from stat-point `tierMultiplier` → worst point-value in game | `progression.js:402-404` | Medium (dormant) | Data gap |
-| 7 | DEF's percent-mitigation layer saturates at raw-def≈118 while flat layer keeps scaling — stat feels like it "stops working" on the character sheet | `progression.js:368` | Low-Medium | Legibility |
+| 7 | DEF's percent-mitigation layer saturates at raw-def≈118 while flat layer keeps scaling - stat feels like it "stops working" on the character sheet | `progression.js:368` | Low-Medium | Legibility |
 | 8 | Evasion has two different caps (45% base, 75% buff) set independently | `progression.js:367` vs `guildAdventure.js:3123` | Low | Consistency |
 | 9 | Evasion roll happens *after* full damage math (steps 1-20 wasted on evaded hits) | `guildAdventure.js:2418-2450` | Low | Perf/clarity, not balance |
-| 10 | Robbery, respec, and skill-reset costs (from your economy report) all scale off `level`, not off the actual power a respec undoes — so late-game respecs (5-10M Zeni) are priced independently of how big a stat swing rank bonus + crit stacking make possible | `economy.md` cross-ref | Low | Economy/combat interaction |
+| 10 | Robbery, respec, and skill-reset costs (from your economy report) all scale off `level`, not off the actual power a respec undoes - so late-game respecs (5-10M Zeni) are priced independently of how big a stat swing rank bonus + crit stacking make possible | `economy.md` cross-ref | Low | Economy/combat interaction |
 
-**Dead/underleveraged mechanics** worth naming even though they're not "broken": the elemental chart (`strongVs`/`weakTo`, ×1.5/×0.75) is a real, working RPS layer that nothing in the class or skill data seems to lean on heavily — enemies get an `element` field but player skills mostly don't route damage through elements in a way that makes RPS matchup decisions visible pre-fight. Given how much other machinery already exists (status effects, environment modifiers, CC diminishing returns), this is a system that's *built* but not *used* as a balancing axis — it could be doing real work instead of being cosmetic flavor text on ability names.
+**Dead/underleveraged mechanics** worth naming even though they're not "broken": the elemental chart (`strongVs`/`weakTo`, ×1.5/×0.75) is a real, working RPS layer that nothing in the class or skill data seems to lean on heavily - enemies get an `element` field but player skills mostly don't route damage through elements in a way that makes RPS matchup decisions visible pre-fight. Given how much other machinery already exists (status effects, environment modifiers, CC diminishing returns), this is a system that's *built* but not *used* as a balancing axis - it could be doing real work instead of being cosmetic flavor text on ability names.
 
 ---
 
 #### 7. What Well-Balanced Games (and the People Who Study This) Do Differently
 
-You and David were already reaching for exactly the right reference points in the chat (Dark Souls' NG+ scaling, "there's no reason class should change how many points you get, class should change what those points *do*") — that instinct is correct and matches how the field actually thinks about this problem. A few concrete anchors:
+You and David were already reaching for exactly the right reference points in the chat (Dark Souls' NG+ scaling, "there's no reason class should change how many points you get, class should change what those points *do*") - that instinct is correct and matches how the field actually thinks about this problem. A few concrete anchors:
 
-- **Ian Schreiber's "Game Balance" course/book** (RIT; free 10-week version at `gamebalanceconcepts.wordpress.com`, later published as *Game Balance* with Brenda Romero, Routledge/CRC 2021) is the closest thing this space has to a canonical text, and its central vocabulary is directly applicable here: **transitive vs. intransitive mechanics.** A transitive relationship is a strict power ordering (A beats B beats C — this is what "higher rank = flatly stronger" is). An intransitive relationship is rock-paper-scissors (A beats B, B beats C, C beats A — no single best choice). Right now almost everything in this combat system is transitive (rank, tier, raw stat totals all just go up), while the *one* intransitive system you have (the elemental chart) is barely load-bearing. A game with only transitive systems has a single optimal build; a game with a real intransitive layer has *many* viable builds, which is what makes "balance" a meaningful, ongoing conversation instead of a one-time patch. Schreiber's course also gives the vocabulary for exactly the DEF-saturation problem in §4 ("cost curves" and diminishing marginal value should be a deliberate design choice with a visible cap, not an accidental byproduct of composing a flat term with a capped percent term).
-- **Path of Exile's armor formula** — `mitigation% = armor / (armor + 10 × incoming_hit_damage)` — is the standard reference for "flat defense stat that scales smoothly against small hits but is deliberately weak against big hits," and it's a good template for replacing this game's def×0.5 + def×0.55%-capped-at-65 combo: one clean formula, self-diminishing (no separate hard cap needed), and its behavior against big single hits vs. many small hits is a real build-differentiating axis (tanky-vs-many-weak-attackers builds vs. tanky-vs-one-big-hit builds) — which maps directly onto the STALKER/BRUTE archetype split this game's enemy AI already has.
-- **Tabletop's "bounded accuracy"** (the design principle D&D 5e is built around, and the opposite of what earlier D&D editions did) is the direct antidote to the rank-bonus problem: instead of letting to-hit/damage bonuses grow unboundedly with level so a level-1 creature becomes *literally irrelevant* at level 20, cap the total spread between weakest-relevant and strongest-relevant numbers so that a lower-level threat can still matter (with the right tactics) at higher levels, and — critically — so that *no single flag flips the whole game 2x*. This is the fix for §2, not "nerf the number" but "structurally prevent any one multiplier from being that large relative to everything else."
-- **Dark Souls' NG+** (which you two already used as the reference for the "rebirth" idea) is worth citing precisely because it does what your chat log's rebirth proposal wanted: it re-scales *the encounter*, not just the player, on each cycle (enemies get more HP/damage too), so replaying content stays a meaningful choice instead of a pure power spike. If rebirth/prestige ships, it should scale both sides together the same way `scaleEnemyStats` already does for dungeon rank — reusing infrastructure you already have, rather than inventing a second system.
+- **Ian Schreiber's "Game Balance" course/book** (RIT; free 10-week version at `gamebalanceconcepts.wordpress.com`, later published as *Game Balance* with Brenda Romero, Routledge/CRC 2021) is the closest thing this space has to a canonical text, and its central vocabulary is directly applicable here: **transitive vs. intransitive mechanics.** A transitive relationship is a strict power ordering (A beats B beats C - this is what "higher rank = flatly stronger" is). An intransitive relationship is rock-paper-scissors (A beats B, B beats C, C beats A - no single best choice). Right now almost everything in this combat system is transitive (rank, tier, raw stat totals all just go up), while the *one* intransitive system you have (the elemental chart) is barely load-bearing. A game with only transitive systems has a single optimal build; a game with a real intransitive layer has *many* viable builds, which is what makes "balance" a meaningful, ongoing conversation instead of a one-time patch. Schreiber's course also gives the vocabulary for exactly the DEF-saturation problem in §4 ("cost curves" and diminishing marginal value should be a deliberate design choice with a visible cap, not an accidental byproduct of composing a flat term with a capped percent term).
+- **Path of Exile's armor formula** - `mitigation% = armor / (armor + 10 × incoming_hit_damage)` - is the standard reference for "flat defense stat that scales smoothly against small hits but is deliberately weak against big hits," and it's a good template for replacing this game's def×0.5 + def×0.55%-capped-at-65 combo: one clean formula, self-diminishing (no separate hard cap needed), and its behavior against big single hits vs. many small hits is a real build-differentiating axis (tanky-vs-many-weak-attackers builds vs. tanky-vs-one-big-hit builds) - which maps directly onto the STALKER/BRUTE archetype split this game's enemy AI already has.
+- **Tabletop's "bounded accuracy"** (the design principle D&D 5e is built around, and the opposite of what earlier D&D editions did) is the direct antidote to the rank-bonus problem: instead of letting to-hit/damage bonuses grow unboundedly with level so a level-1 creature becomes *literally irrelevant* at level 20, cap the total spread between weakest-relevant and strongest-relevant numbers so that a lower-level threat can still matter (with the right tactics) at higher levels, and - critically - so that *no single flag flips the whole game 2x*. This is the fix for §2, not "nerf the number" but "structurally prevent any one multiplier from being that large relative to everything else."
+- **Dark Souls' NG+** (which you two already used as the reference for the "rebirth" idea) is worth citing precisely because it does what your chat log's rebirth proposal wanted: it re-scales *the encounter*, not just the player, on each cycle (enemies get more HP/damage too), so replaying content stays a meaningful choice instead of a pure power spike. If rebirth/prestige ships, it should scale both sides together the same way `scaleEnemyStats` already does for dungeon rank - reusing infrastructure you already have, rather than inventing a second system.
 
 ---
 
@@ -243,16 +243,16 @@ You and David were already reaching for exactly the right reference points in th
 
 Three drafts, roughly ordered from "surgical, ship this week" to "structural, needs a content pass."
 
-##### Draft A — Fix the Three Numbers (lowest effort, highest immediate impact)
+##### Draft A - Fix the Three Numbers (lowest effort, highest immediate impact)
 
-1. **Replace the flat rank-bonus with a smooth, symmetric curve applied to *both* sides.** Instead of `if (rank >= D) damage *= 2.0` for players only, give every combatant (player *and* scaled enemy) a small per-rank multiplier that grows gradually: e.g. `damage *= 1 + (rankVal - 1) * 0.08` (F=1.0x, SSS=1.64x) — meaningful, still rewards progression, but no longer a step function that quadruples the gap between C-rank and D-rank builds overnight, and because it now applies to enemies too via `scaleEnemyStats`'s existing rank-bucket system, the two sides stay in the relationship your `dmgFactor`/`hpFactor` tuning already assumes.
-2. **Cap crit chance** (suggest 50-60%, matching the philosophy of the existing 45% evasion cap) in the same place `getBaseStats` already clamps evasion (`progression.js:367`) — one line, `baseStats.crit = Math.min(55, baseStats.crit)`.
+1. **Replace the flat rank-bonus with a smooth, symmetric curve applied to *both* sides.** Instead of `if (rank >= D) damage *= 2.0` for players only, give every combatant (player *and* scaled enemy) a small per-rank multiplier that grows gradually: e.g. `damage *= 1 + (rankVal - 1) * 0.08` (F=1.0x, SSS=1.64x) - meaningful, still rewards progression, but no longer a step function that quadruples the gap between C-rank and D-rank builds overnight, and because it now applies to enemies too via `scaleEnemyStats`'s existing rank-bucket system, the two sides stay in the relationship your `dmgFactor`/`hpFactor` tuning already assumes.
+2. **Cap crit chance** (suggest 50-60%, matching the philosophy of the existing 45% evasion cap) in the same place `getBaseStats` already clamps evasion (`progression.js:367`) - one line, `baseStats.crit = Math.min(55, baseStats.crit)`.
 3. **Fix the `'all'`-buff double-count** by having the `def *=` step (line ~2251) only read `buff.type === 'defense'`, and keep `totalDmgReduction` as the sole consumer of `'all'`-type buffs. One-line fix, makes "+X% all stats" buffs cost/value-consistent with dedicated defense buffs.
-4. **Give `TOTAL_ANNIHILATION` a visible countdown** (a "boss instability: 8 turns until Annihilation" line starting at turn ~20) so it reads as the enrage timer it mechanically is, instead of feeling like an unfair damage number. Doesn't change the underlying balance, just the honesty of the UI — the ATK creep at turns 15/20/25 already gives you the hook to attach a countdown message to.
+4. **Give `TOTAL_ANNIHILATION` a visible countdown** (a "boss instability: 8 turns until Annihilation" line starting at turn ~20) so it reads as the enrage timer it mechanically is, instead of feeling like an unfair damage number. Doesn't change the underlying balance, just the honesty of the UI - the ATK creep at turns 15/20/25 already gives you the hook to attach a countdown message to.
 
 These four changes alone should meaningfully close the gap between "why does one guy one-shot everything" (rank + crit stacking) and the actually well-tuned enemy-scaling system underneath it, without touching a single class stat table.
 
-##### Draft B — Layered Mitigation (medium effort, reworks §4)
+##### Draft B - Layered Mitigation (medium effort, reworks §4)
 
 Replace the flat-subtraction-plus-capped-percent DEF formula with a single PoE-style saturating curve:
 
@@ -260,21 +260,21 @@ Replace the flat-subtraction-plus-capped-percent DEF formula with a single PoE-s
 mitigation% = def / (def + K × incoming_raw_damage)
 ```
 
-Pick `K` (start around 8-12) so that early-game DEF values (10-30) still meaningfully blunt early-game hits, while it naturally self-caps against big late-game numbers without needing an arbitrary `min(65, ...)`. This removes bug #7 entirely (no more "the number on my sheet stopped moving but my actual mitigation didn't"), gives DEF a value curve that differentiates "tanky vs. many small hits" from "tanky vs. one big hit" builds (a real intransitive axis per §7), and slots into `calculateDamage` as a straight replacement for the current steps 11-12 — everything downstream (buffs, passives, status effects) keeps working, since they're currently expressed as modifiers to `def` or to `totalDmgReduction`, both of which still exist as intermediate values, just computed differently.
+Pick `K` (start around 8-12) so that early-game DEF values (10-30) still meaningfully blunt early-game hits, while it naturally self-caps against big late-game numbers without needing an arbitrary `min(65, ...)`. This removes bug #7 entirely (no more "the number on my sheet stopped moving but my actual mitigation didn't"), gives DEF a value curve that differentiates "tanky vs. many small hits" from "tanky vs. one big hit" builds (a real intransitive axis per §7), and slots into `calculateDamage` as a straight replacement for the current steps 11-12 - everything downstream (buffs, passives, status effects) keeps working, since they're currently expressed as modifiers to `def` or to `totalDmgReduction`, both of which still exist as intermediate values, just computed differently.
 
-##### Draft C — Real Class Identity via Intransitive Triangles (highest effort, most durable fix)
+##### Draft C - Real Class Identity via Intransitive Triangles (highest effort, most durable fix)
 
 Right now every class differentiates by *how much* stat it has, in a strict tier ordering (§3.1). The redesign direction with the most staying power is to make classes differentiate by *what beats what*, using systems that already exist but are underused:
 
-- Lean on the **elemental chart** (§6, "dead mechanic") as a real build axis: give each class line 1-2 signature elements, and make enemy archetypes (STALKER/BRUTE/TANK/etc. — already in `classEncounters.js`) have real elemental leanings, so "which class should I bring to this dungeon" becomes a genuine RPS question instead of "bring whoever has the highest total stat."
-- Split DEF's job (Draft B) from CC-resistance's job (already partially separate via the `ccImmune`/DR-window system at `guildAdventure.js:2504-2520`, which is good and worth keeping) so "tanky" isn't one stat but a real choice between physical-mitigation tanks, CC-immune tanks, and evasion tanks — each strong against a different enemy archetype, none strictly better than the others.
+- Lean on the **elemental chart** (§6, "dead mechanic") as a real build axis: give each class line 1-2 signature elements, and make enemy archetypes (STALKER/BRUTE/TANK/etc. - already in `classEncounters.js`) have real elemental leanings, so "which class should I bring to this dungeon" becomes a genuine RPS question instead of "bring whoever has the highest total stat."
+- Split DEF's job (Draft B) from CC-resistance's job (already partially separate via the `ccImmune`/DR-window system at `guildAdventure.js:2504-2520`, which is good and worth keeping) so "tanky" isn't one stat but a real choice between physical-mitigation tanks, CC-immune tanks, and evasion tanks - each strong against a different enemy archetype, none strictly better than the others.
 - For PEAK tier specifically (§3.2/§3.3, currently shelved): before it goes live, fill in `CLASS_MODIFIERS` and `tierMultiplier` for all 19 classes deliberately, using this as the opportunity to *also* assign each PEAK class an elemental/CC-resistance identity from the point above, rather than just extrapolating the existing "more of everything" curve one more tier up.
 
-This draft is the one that actually answers 🫩's original instinct from the chat log ("class should give bonuses to allocation") — just routed the way David's counter-argument correctly redirected it: not more points, but a different *shape* of power, expressed through matchups instead of magnitude.
+This draft is the one that actually answers 🫩's original instinct from the chat log ("class should give bonuses to allocation") - just routed the way David's counter-argument correctly redirected it: not more points, but a different *shape* of power, expressed through matchups instead of magnitude.
 
 ---
 
-#### 9. Appendix — Full Class Stat Table (ASCENDED / PEAK, referenced in §3.1)
+#### 9. Appendix - Full Class Stat Table (ASCENDED / PEAK, referenced in §3.1)
 
 **ASCENDED**
 | Class | Role | Total | Off | Def |
@@ -299,7 +299,7 @@ This draft is the one that actually answers 🫩's original instinct from the ch
 | AVATAR | MAGIC_DPS | 440 | 90.9 | 58.0 |
 | ARCHMAGE | MAGIC_DPS | 371 | 92.6 | 47.0 |
 
-**PEAK** *(currently shelved — no trial bosses/skill trees/sprites, not reachable via `.jk modclass`)*
+**PEAK** *(currently shelved - no trial bosses/skill trees/sprites, not reachable via `.jk modclass`)*
 | Class | Role | Total | Off | Def |
 |---|---|---|---|---|
 | ANNIHILATOR | TANK | 1160 | 111.5 | 155.0 |
@@ -333,21 +333,21 @@ This draft is the one that actually answers 🫩's original instinct from the ch
 ## 2. Real-Player Simulation Findings
 
 
-Follow-up round using 92 real accounts pulled from `users_export.csv` (real class, level, achievements, and actual equipped gear), run 300 fights each through the real `calculateDamage`/`scaleEnemyStats` code — as opposed to the synthetic/invented-roster simulation in §3 below.
+Follow-up round using 92 real accounts pulled from `users_export.csv` (real class, level, achievements, and actual equipped gear), run 300 fights each through the real `calculateDamage`/`scaleEnemyStats` code - as opposed to the synthetic/invented-roster simulation in §3 below.
 
 
-Ran the last round of testing — real accounts this time, not invented ones. Here's what came out:
+Ran the last round of testing - real accounts this time, not invented ones. Here's what came out:
 
-The cliff is real, and gear doesn't save you from it. I rebuilt 92 real player accounts from your export (actual class, level, achievements, and — critically — actual equipped gear stats) and threw them at your real calculateDamage/scaleEnemyStats code, 300 fights each. Same shape as the synthetic sim: F through S rank is 83-100% win rate across the board, no exceptions, gear or no gear. Then SS hits and Revlis/Akon (your actual accounts, with actual gear) drop to 11%/21%. SSS is a wall: ace and Too Much — your two most invested, best-geared characters in the whole export — win 0% of simulated fights.
+The cliff is real, and gear doesn't save you from it. I rebuilt 92 real player accounts from your export (actual class, level, achievements, and - critically - actual equipped gear stats) and threw them at your real calculateDamage/scaleEnemyStats code, 300 fights each. Same shape as the synthetic sim: F through S rank is 83-100% win rate across the board, no exceptions, gear or no gear. Then SS hits and Revlis/Akon (your actual accounts, with actual gear) drop to 11%/21%. SSS is a wall: ace and Too Much - your two most invested, best-geared characters in the whole export - win 0% of simulated fights.
 
-Isolated why, with real accounts: halving the enemy HP quadratic term takes Revlis/Akon from 11-21% up to 64-73%. Zeroing it entirely gets them to 100%. So SS rank has one clear, cheap, validated fix. SSS is a different problem — even zeroing that same term barely moves ace and Too Much (0%→17%, 0%→4%). At SSS the linear damage/HP scaling factors alone are already enough to overwhelm your best real characters, gear included. Needs its own separate tuning pass, not the same fix as SS.
+Isolated why, with real accounts: halving the enemy HP quadratic term takes Revlis/Akon from 11-21% up to 64-73%. Zeroing it entirely gets them to 100%. So SS rank has one clear, cheap, validated fix. SSS is a different problem - even zeroing that same term barely moves ace and Too Much (0%→17%, 0%→4%). At SSS the linear damage/HP scaling factors alone are already enough to overwhelm your best real characters, gear included. Needs its own separate tuning pass, not the same fix as SS.
 
 Two things outside the combat-balance question entirely, worth your attention regardless:
 
-Gojousensei's account has 20,366,227,966 unspent stat points sitting in their save. Every other account is in the tens/hundreds. Looks like the exact dupe exploit your own code comments describe as patched — except this account's corrupted value predates or bypasses the patch. Worth a direct DB check.
-Rank and enemy level-gating are decoupled: getEnemyPoolByLevel() gates on level, scaleEnemyStats()'s difficulty gates on rank. Gojousensei is level 85 but B-rank, so they simulate at 100% win rate — full late-game monster roster, low-mid-game scaling. Any player who out-levels their rank promotion falls into this for free, no min-maxing required.
+Gojousensei's account has 20,366,227,966 unspent stat points sitting in their save. Every other account is in the tens/hundreds. Looks like the exact dupe exploit your own code comments describe as patched - except this account's corrupted value predates or bypasses the patch. Worth a direct DB check.
+Rank and enemy level-gating are decoupled: getEnemyPoolByLevel() gates on level, scaleEnemyStats()'s difficulty gates on rank. Gojousensei is level 85 but B-rank, so they simulate at 100% win rate - full late-game monster roster, low-mid-game scaling. Any player who out-levels their rank promotion falls into this for free, no min-maxing required.
 
-Also confirmed: gear now dwarfs everything else in the stat budget by mid-late game (10,000+ points from equipment vs. low hundreds from class+level+allocation combined at level 90+). So the class-identity redesign work from the first audit only really matters in the first 10-20 levels — past that, itemization is where balance actually lives.
+Also confirmed: gear now dwarfs everything else in the stat budget by mid-late game (10,000+ points from equipment vs. low hundreds from class+level+allocation combined at level 90+). So the class-identity redesign work from the first audit only really matters in the first 10-20 levels - past that, itemization is where balance actually lives.
 
 Full writeup with the chart, the isolation-test table, and a revised priority list (data-integrity fix first, then the rank/level gate, then SS's quadratic term, then SSS's linear terms, then the Draft A items from round one) is in the file above.
 
@@ -355,26 +355,26 @@ Full writeup with the chart, the isolation-test table, and a revised priority li
 ---
 
 
-## 3. Difficulty Curve — Chart Reading + Simulation Narrative
+## 3. Difficulty Curve - Chart Reading + Simulation Narrative
 
 
 ### 3.1 Chart reading (`difficulty_curve.png`)
 
 
-Source: `difficulty_curve.png` — simulated win rate vs. on-level dungeon mob, using the real formulas from the codebase.
+Source: `difficulty_curve.png` - simulated win rate vs. on-level dungeon mob, using the real formulas from the codebase.
 
-**Left chart — Win rate vs. on-level dungeon mob (%) and Avg HP% left after win**
-- Levels ~3–75 (ranks F through S): win rate holds essentially flat at ~100%, with average HP remaining after a win starting around 96% at rank F and staying in the high-90s through ranks D–B, dipping slightly to ~97% at rank A and A(high).
-- At rank S (~level 75): win rate is still ~100%, but avg HP left after win drops sharply to ~52% — this is the first real difficulty spike, where fights start actually costing meaningful HP.
-- At rank SS (~level 90–100): win rate collapses to ~0% and avg HP left is ~0% — the content becomes effectively unwinnable at these levels with the simulated build.
+**Left chart - Win rate vs. on-level dungeon mob (%) and Avg HP% left after win**
+- Levels ~3-75 (ranks F through S): win rate holds essentially flat at ~100%, with average HP remaining after a win starting around 96% at rank F and staying in the high-90s through ranks D-B, dipping slightly to ~97% at rank A and A(high).
+- At rank S (~level 75): win rate is still ~100%, but avg HP left after win drops sharply to ~52% - this is the first real difficulty spike, where fights start actually costing meaningful HP.
+- At rank SS (~level 90-100): win rate collapses to ~0% and avg HP left is ~0% - the content becomes effectively unwinnable at these levels with the simulated build.
 
-**Right chart — Fight length (turns to resolve), cap = 60 (timeout/unwinnable)**
-- Levels 3–38: fight length is flat and short, 1–2 turns.
-- Levels 45–65: gradual climb to ~4–8 turns.
-- Level ~75 (rank S): sharp spike to ~22 turns — matches the HP-loss cliff on the left chart.
-- Levels 90–100 (rank SS): fight length actually drops back down to ~18–15 turns, but this is misleading — it's not because fights got easier, it's consistent with characters losing (dying/timing out in ways that end the encounter faster) rather than grinding out a win, matching the ~0% win rate over the same range.
+**Right chart - Fight length (turns to resolve), cap = 60 (timeout/unwinnable)**
+- Levels 3-38: fight length is flat and short, 1-2 turns.
+- Levels 45-65: gradual climb to ~4-8 turns.
+- Level ~75 (rank S): sharp spike to ~22 turns - matches the HP-loss cliff on the left chart.
+- Levels 90-100 (rank SS): fight length actually drops back down to ~18-15 turns, but this is misleading - it's not because fights got easier, it's consistent with characters losing (dying/timing out in ways that end the encounter faster) rather than grinding out a win, matching the ~0% win rate over the same range.
 
-**Interpretation:** the difficulty curve is essentially flat/trivial from level 3 to ~65, then hits a wall at rank S (~level 75) where fights suddenly get costly (HP-wise and turn-wise), and becomes a hard wall at rank SS (~level 90+) where the current formulas make encounters unwinnable. That's a very sharp, late difficulty cliff rather than a smooth ramp — worth flagging if the intent was gradual scaling.
+**Interpretation:** the difficulty curve is essentially flat/trivial from level 3 to ~65, then hits a wall at rank S (~level 75) where fights suddenly get costly (HP-wise and turn-wise), and becomes a hard wall at rank SS (~level 90+) where the current formulas make encounters unwinnable. That's a very sharp, late difficulty cliff rather than a smooth ramp - worth flagging if the intent was gradual scaling.
 
 ---
 
@@ -382,26 +382,26 @@ Source: `difficulty_curve.png` — simulated win rate vs. on-level dungeon mob, 
 ### 3.2 Simulation narrative (synthetic-roster run, from the original session)
 
 
-Couldn't touch the live DB, so here's what I did instead: built players using the actual level-up math (getBaseGrowth, CLASS_MODIFIERS, stat-point allocation with the real soft caps) from your own code, and threw them at the actual level-appropriate enemy pool for their bracket, scaled through the real scaleEnemyStats. 400 fights per level, invented player is a straightforward FIGHTER→WARRIOR→WARLORD build spending 60% of points on ATK, 20% DEF, 20% HP — nothing exotic, no equipment, no skills (basic attacks only, so this if anything underestimates real player damage since your skills go up to 700% ATK).
+Couldn't touch the live DB, so here's what I did instead: built players using the actual level-up math (getBaseGrowth, CLASS_MODIFIERS, stat-point allocation with the real soft caps) from your own code, and threw them at the actual level-appropriate enemy pool for their bracket, scaled through the real scaleEnemyStats. 400 fights per level, invented player is a straightforward FIGHTER→WARRIOR→WARLORD build spending 60% of points on ATK, 20% DEF, 20% HP - nothing exotic, no equipment, no skills (basic attacks only, so this if anything underestimates real player damage since your skills go up to 700% ATK).
 
 Here's what came out:
 
-It's not "hard start → smooth glide" — it's "flat 100% stomp for 65% of the level range → brick wall." From level 3 all the way to level 65, win rate never drops below 97%, and most fights resolve in 1-2 turns. That's not "a bit of a challenge that fades" — that's never having been a challenge at all for the vast majority of the game, followed by an abrupt cliff at S/SS rank where win rate falls off a table (75→90 goes from 100% to 0%, and fights that don't get won just time out at 60 turns — practically unwinnable, not "hard").
+It's not "hard start → smooth glide" - it's "flat 100% stomp for 65% of the level range → brick wall." From level 3 all the way to level 65, win rate never drops below 97%, and most fights resolve in 1-2 turns. That's not "a bit of a challenge that fades" - that's never having been a challenge at all for the vast majority of the game, followed by an abrupt cliff at S/SS rank where win rate falls off a table (75→90 goes from 100% to 0%, and fights that don't get won just time out at 60 turns - practically unwinnable, not "hard").
 
-So the shape you're describing ("hard at the very start, then I just mow through everything") is really: the very earliest levels (3-8) are the only place the enemy scaling and player growth are anywhere close to matched, because that's the one bracket your dmgFactor: 0.08, hpFactor: 0.12 baseline was tuned against directly. Every bracket after that, the player's growth curve (level growth × class modifier × stat allocation, all multiplying together) pulls ahead of the enemy scaling multiplier faster than the multiplier can compensate — until suddenly, around S/SS, the enemy HP's quadratic term (rankIndex² × hpQuadFactor) catches up all at once and overshoots into unwinnable. There's no smooth "getting harder" in the middle — the curve is doing almost nothing between E-rank and A-rank.
+So the shape you're describing ("hard at the very start, then I just mow through everything") is really: the very earliest levels (3-8) are the only place the enemy scaling and player growth are anywhere close to matched, because that's the one bracket your dmgFactor: 0.08, hpFactor: 0.12 baseline was tuned against directly. Every bracket after that, the player's growth curve (level growth × class modifier × stat allocation, all multiplying together) pulls ahead of the enemy scaling multiplier faster than the multiplier can compensate - until suddenly, around S/SS, the enemy HP's quadratic term (rankIndex² × hpQuadFactor) catches up all at once and overshoots into unwinnable. There's no smooth "getting harder" in the middle - the curve is doing almost nothing between E-rank and A-rank.
 
 That matches exactly why you reached for TOTAL_ANNIHILATION and silence: those aren't balance tools, they're patches for the fact that the actual difficulty knob (per-rank dmgFactor/hpFactor) can't move fast enough across 90 levels of compounding player growth without also breaking the brackets on either side of wherever you tune it. Turning the dial up enough to matter at level 60 makes level 10 unplayable; tuning it for level 10 makes level 60 (and then 90) a joke, which is exactly what the chart shows.
 
 A couple of quick isolation runs to show what's actually driving it:
 
-Killing the D-rank-and-up 2x rank bonus entirely barely moves the needle below S-rank (game's already at 100% either way — the multiplier isn't what's making mid-game trivial, mid-game is trivial from pure stat growth alone), but at S-rank it's the difference between 100% and 56.5% win rate. In other words: the one number I flagged as the "critical" issue in the first audit is currently the only thing standing between a coherent S-rank fight and a curbstomp — which tells you it's structurally load-bearing in a way it shouldn't be. You don't want your one emergency lever also being your only functioning difficulty control at the top of the game.
-Capping crit at 50% (vs. uncapped) does basically nothing across this whole range with this build — worth remembering that crit uncapped isn't the main driver of the "everything melts" feeling, it's an amplifier on top of it. Fix the base curve first.
-What I'd actually do, concretely, given what you said ("I have no idea how to fix this"): the honest answer is the per-rank enemy multiplier table (dmgFactor/hpFactor/hpQuadFactor in scaleEnemyStats) is trying to do a job that a single multiplicative fudge factor structurally can't do once player growth is itself multiplicative across level×class×allocation. Rather than keep re-tuning those six numbers (which is what got you here — I can see in the comments this table's already been through several tuning passes), I'd:
+Killing the D-rank-and-up 2x rank bonus entirely barely moves the needle below S-rank (game's already at 100% either way - the multiplier isn't what's making mid-game trivial, mid-game is trivial from pure stat growth alone), but at S-rank it's the difference between 100% and 56.5% win rate. In other words: the one number I flagged as the "critical" issue in the first audit is currently the only thing standing between a coherent S-rank fight and a curbstomp - which tells you it's structurally load-bearing in a way it shouldn't be. You don't want your one emergency lever also being your only functioning difficulty control at the top of the game.
+Capping crit at 50% (vs. uncapped) does basically nothing across this whole range with this build - worth remembering that crit uncapped isn't the main driver of the "everything melts" feeling, it's an amplifier on top of it. Fix the base curve first.
+What I'd actually do, concretely, given what you said ("I have no idea how to fix this"): the honest answer is the per-rank enemy multiplier table (dmgFactor/hpFactor/hpQuadFactor in scaleEnemyStats) is trying to do a job that a single multiplicative fudge factor structurally can't do once player growth is itself multiplicative across level×class×allocation. Rather than keep re-tuning those six numbers (which is what got you here - I can see in the comments this table's already been through several tuning passes), I'd:
 
-Cap growth instead of trying to out-scale it. Put a soft ceiling on how much total stat a player can accumulate relative to their level (the D&D "bounded accuracy" idea from the first report) — e.g. total allocated-stat value capped as a function of level, not just per-stat soft caps. Right now nothing stops the compounding of (level growth) × (class modifier up to 2.2x) × (tier-multiplied allocation) from just running away.
-Make the enemy multiplier scale off the player's actual current power, not just dungeon rank. avgLevel already feeds in — extend that to read the player's real ATK/DEF/HP off their sheet (which you already compute) and scale relative to that, not a static per-rank table. That's the only way to stay matched across a level range this wide without breaking either end.
-Kill or heavily nerf TOTAL_ANNIHILATION once (1) and (2) land — if the curve is actually matched, you shouldn't need a turn-30 unconditional wipe to make fights end. Keep it only as a genuine last-resort anti-stall timer at like turn 60+, not turn 30.
-Happy to build out a version of this sim that reads real user docs if you want to open network access to your Mongo cluster for a session, or if you'd rather just paste me a handful of real player stat blocks (.jk char output for a few actual accounts across the level range), I can run the same simulation against real data instead of invented ones — would sharpen the numbers but I don't think it'll change the shape of that chart much.
+Cap growth instead of trying to out-scale it. Put a soft ceiling on how much total stat a player can accumulate relative to their level (the D&D "bounded accuracy" idea from the first report) - e.g. total allocated-stat value capped as a function of level, not just per-stat soft caps. Right now nothing stops the compounding of (level growth) × (class modifier up to 2.2x) × (tier-multiplied allocation) from just running away.
+Make the enemy multiplier scale off the player's actual current power, not just dungeon rank. avgLevel already feeds in - extend that to read the player's real ATK/DEF/HP off their sheet (which you already compute) and scale relative to that, not a static per-rank table. That's the only way to stay matched across a level range this wide without breaking either end.
+Kill or heavily nerf TOTAL_ANNIHILATION once (1) and (2) land - if the curve is actually matched, you shouldn't need a turn-30 unconditional wipe to make fights end. Keep it only as a genuine last-resort anti-stall timer at like turn 60+, not turn 30.
+Happy to build out a version of this sim that reads real user docs if you want to open network access to your Mongo cluster for a session, or if you'd rather just paste me a handful of real player stat blocks (.jk char output for a few actual accounts across the level range), I can run the same simulation against real data instead of invented ones - would sharpen the numbers but I don't think it'll change the shape of that chart much.
 
 
 ---
@@ -410,8 +410,8 @@ Happy to build out a version of this sim that reads real user docs if you want t
 ## 4. Economy Report
 
 
-### WhatsApp RPG Bot — Comprehensive Economy Report
-Complete reference for every Zeni/gold flow in the bot — generation, removal, transfer, and all associated formulas, prices, and mechanics. All data extracted directly from source code.
+### WhatsApp RPG Bot - Comprehensive Economy Report
+Complete reference for every Zeni/gold flow in the bot - generation, removal, transfer, and all associated formulas, prices, and mechanics. All data extracted directly from source code.
 
 **Source files:** `economy.js`, `gambling.js`, `guildAdventure.js`, `pvpSystem.js`, `summonEggSystem.js`, `abyssSystem.js`, `guilds.js`, `summonAchievements.js`
 
@@ -451,13 +451,13 @@ Complete reference for every Zeni/gold flow in the bot — generation, removal, 
 
 | Tier | Multiplier | Floor Range |
 |---|---|---|
-| F | 1x | 1–10 |
-| C | 2x | 11–20 |
-| B | 4x | 21–30 |
-| A | 8x | 31–40 |
-| S | 20x | 41–50 |
-| SS | 50x | 51–60 |
-| SSS | 150x | 61–70 |
+| F | 1x | 1-10 |
+| C | 2x | 11-20 |
+| B | 4x | 21-30 |
+| A | 8x | 31-40 |
+| S | 20x | 41-50 |
+| SS | 50x | 51-60 |
+| SSS | 150x | 61-70 |
 | ABYSSAL_GOD | 1000x | 71+ |
 | GOD | 5000x | Special |
 
@@ -477,7 +477,7 @@ Examples:
 - Smash (failure): no gold, takes damage instead
 - `tier` = dungeon rank index (F=0, E=1, D=2, ...)
 
-### 1.6 Gambling — Coinflip (`gambling.js`)
+### 1.6 Gambling - Coinflip (`gambling.js`)
 - 50/50 base win condition
 - Base payout 1:1
 - House edge applied: `gain = floor(winnings * (1 - edge))`
@@ -485,7 +485,7 @@ Examples:
 - Forced loss can override a win after 20+ rounds/day
 - If daily cap reached: bet refunded (no gain, no loss)
 
-### 1.7 Gambling — Slots (`gambling.js`)
+### 1.7 Gambling - Slots (`gambling.js`)
 
 | Symbol | Multiplier | Approx. Probability (per reel) |
 |---|---|---|
@@ -501,12 +501,12 @@ Examples:
 - No match: bet lost
 - House edge + daily cap apply to all winnings
 
-### 1.8 Gambling — Dice (`gambling.js`)
+### 1.8 Gambling - Dice (`gambling.js`)
 - `playerRoll > dealerRoll` wins
 - 1:1 payout, same as coinflip
 - House edge, forced loss, daily profit cap all apply
 
-### 1.9 Gambling — Anti-Abuse Systems (`gambling.js`)
+### 1.9 Gambling - Anti-Abuse Systems (`gambling.js`)
 
 **House Edge (Scaling)**
 - `edge = min(0.03 + roundsToday * 0.001, 0.10)`
@@ -522,7 +522,7 @@ Examples:
 
 **Forced Loss System**
 - `forcedLossChance = min(max((rounds - 20) * 0.005, 0), 0.10)`
-- 0% for rounds 1–20, +0.5%/round after, caps at 10%
+- 0% for rounds 1-20, +0.5%/round after, caps at 10%
 - If wallet ≥ daily wallet cap: forced loss = 100%
 - `dailyWalletCap = entryWalletToday + withdrawnToday`
 - Resets daily
@@ -548,7 +548,7 @@ Examples:
 - Loyalty: winner −1, loser −2
 - ELO: winner `arenaWins` +1, loser `arenaLosses` +1
 - Stakes still apply (owner's Zeni at stake)
-- No player XP/gold prize — summon rewards only
+- No player XP/gold prize - summon rewards only
 
 ### 1.12 Guild Daily Board Rewards (`guilds.js`)
 - Gold/XP reward varies per board, paid to shared guild balance
@@ -581,7 +581,7 @@ Examples:
 
 ### 2. Money Removal (Sinks)
 
-**2.1 Gambling Losses** — bet is permanently removed on any loss (coinflip/slots/dice); tracked in `gamblingProfile.netToday`.
+**2.1 Gambling Losses** - bet is permanently removed on any loss (coinflip/slots/dice); tracked in `gamblingProfile.netToday`.
 
 **2.2 Shop Purchases & Item Prices** (`shopCommands.js`)
 
@@ -595,9 +595,9 @@ Examples:
 | Stones (evolution) | varies | Required for class evolution |
 
 - Items with `value ≤ 1` hidden from shop
-- Rare–Mythic summon eggs are NOT buyable, only crafted
+- Rare-Mythic summon eggs are NOT buyable, only crafted
 
-**2.3 Summon Egg Shop Purchases** (`summonEggSystem.js`) — only Basic (5,000 Zeni) is purchasable; others crafted from fragments.
+**2.3 Summon Egg Shop Purchases** (`summonEggSystem.js`) - only Basic (5,000 Zeni) is purchasable; others crafted from fragments.
 
 **2.4 Egg Incubation Speed-Up Costs**
 
@@ -612,7 +612,7 @@ Examples:
 **2.5 Robbery Fines** (`economy.js`)
 - `fine = max(500, floor(thief.wallet * 0.01))`
 - Success rate: 40%
-- On success: steals `floor(random()*20)+10` percent (10–30%) of victim's wallet
+- On success: steals `floor(random()*20)+10` percent (10-30%) of victim's wallet
 - On failure: fine removed, robberyStrikes incremented; 3+ strikes = 24h prison ban
 - Jail: 30 min after failed attempt; cooldown 30 min between attempts
 - Victim minimum wallet to be robbable: 500 Zeni
@@ -651,7 +651,7 @@ Examples:
 
 - **Bank Deposit/Withdraw**: deposit `wallet -= amount, bank += (amount - tax)`; withdraw `bank -= amount, wallet += amount` (no tax); no interest earned
 - **Player-to-Player Transfers**: no fee, minimum 1 Zeni, alt-account (same-phone) transfers blocked
-- **Robbery (Theft)**: success = transfer of 10–30% of victim's wallet; failure = sink (fine)
+- **Robbery (Theft)**: success = transfer of 10-30% of victim's wallet; failure = sink (fine)
 - **PvP Stake Escrow**: both pay stake on accept; winner gets full pot; cancel = refund to both
 
 ---
@@ -669,7 +669,7 @@ Examples:
 - Player can still gamble (and lose)
 
 **4.3 Forced Loss System**
-- Rounds 1–20: 0% forced loss · Round 21: 0.5% · Round 40: 10% (capped)
+- Rounds 1-20: 0% forced loss · Round 21: 0.5% · Round 40: 10% (capped)
 - Wallet ≥ `dailyWalletCap` (entry wallet + withdrawn today) → 100% forced loss
 
 **4.4 Bet Limits**
@@ -731,7 +731,7 @@ Examples:
 | Abyss Treasure | GEN | scaled by tier multiplier | abyssSystem.js |
 | Gambling Loss | SINK | bet amount (all games) | gambling.js |
 | Basic Egg Buy | SINK | 5,000 | summonEggSystem.js |
-| Egg Speed-Up | SINK | 2K–500K (by tier) | summonEggSystem.js |
+| Egg Speed-Up | SINK | 2K-500K (by tier) | summonEggSystem.js |
 | Shop Items | SINK | `item.value` (varies) | shopCommands.js |
 | Robbery Fine | SINK | `max(500, wallet*1%)` | economy.js |
 | PvP Flee (player) | SINK | 20% XP + 50% wallet + 1 item | pvpSystem.js |
@@ -742,22 +742,22 @@ Examples:
 | Bank Deposit | XFER | wallet → bank (−tax) | economy.js |
 | Bank Withdraw | XFER | bank → wallet (no tax) | economy.js |
 | Player Transfer | XFER | sender → receiver (0% fee) | economy.js |
-| Robbery (success) | XFER | victim → thief (10–30%) | economy.js |
+| Robbery (success) | XFER | victim → thief (10-30%) | economy.js |
 | PvP Stake Escrow | XFER | both → winner | pvpSystem.js |
 | Guild Balance | XFER | guild pool (shared) | guilds.js |
 
 **Legend:** GEN = Generation (creates new Zeni) · SINK = Removal (destroys Zeni) · XFER = Transfer (moves existing Zeni)
 
 **Key balancing notes:**
-- Daily reward (500–5,500) is the only guaranteed passive income
-- Gambling has 3 anti-abuse layers: scaling house edge (3–10%), daily profit cap (2M), forced loss (0–10%)
-- Abyss is the primary high-level income source — Floor 50 boss ≈ 72,500 Zeni
-- PvP without stakes generates modest gold — not a major inflation source
-- Premium tiers are the largest single one-time sink (50K–250K)
+- Daily reward (500-5,500) is the only guaranteed passive income
+- Gambling has 3 anti-abuse layers: scaling house edge (3-10%), daily profit cap (2M), forced loss (0-10%)
+- Abyss is the primary high-level income source - Floor 50 boss ≈ 72,500 Zeni
+- PvP without stakes generates modest gold - not a major inflation source
+- Premium tiers are the largest single one-time sink (50K-250K)
 - Bank tax (2%) is a passive sink on all free/PREMIUM deposits
-- Egg speed-up costs scale dramatically (2K–500K) by tier
+- Egg speed-up costs scale dramatically (2K-500K) by tier
 - Robbery is net-neutral on success (transfer), sink on failure (fine)
-- Soul Forging is free but cooldown-limited (1/day) — not a Zeni sink
+- Soul Forging is free but cooldown-limited (1/day) - not a Zeni sink
 
 ---
 
@@ -793,13 +793,13 @@ UPSTASH_REDIS_TOKEN=<UPSTASH_REDIS_TOKEN>
 UPSTASH_REDIS_URL=https://unique-dove-77772.upstash.io
 ```
 
-**⚠️ Flag (not a redaction, just noting it):** this section previously contained working credentials in plaintext (Mongo password, Groq/HF/RapidAPI/Cloudinary/Upstash keys). They have been replaced with `<PLACEHOLDER>` notes for the public repository — keep the real values in your local `.env` files only.
+**⚠️ Flag (not a redaction, just noting it):** this section previously contained working credentials in plaintext (Mongo password, Groq/HF/RapidAPI/Cloudinary/Upstash keys). They have been replaced with `<PLACEHOLDER>` notes for the public repository - keep the real values in your local `.env` files only.
 
 
 ---
 
 
-## 6. User Database — Active Users (Summary Table)
+## 6. User Database - Active Users (Summary Table)
 
 
 3,675 total accounts in `users_export.csv`. 3,650 are default/untouched (level 1, empty inventory, 0 wallet). These are the 25 accounts with real play data.
@@ -917,7 +917,7 @@ CraftTestHero          SCOUT          F       5      0      0      0      -     
 ---
 
 
-## 7. User Database — Active Users (Full Records)
+## 7. User Database - Active Users (Full Records)
 
 
 Complete raw fields for all 25 active accounts, including full inventory/equipment/profession JSON.
@@ -23101,7 +23101,7 @@ Complete raw fields for all 25 active accounts, including full inventory/equipme
 ---
 
 
-## 8. Appendix — Original Audit Request & Team Chat Context
+## 8. Appendix - Original Audit Request & Team Chat Context
 
 
 ### 8.1 Original request that kicked off the combat audit
@@ -23111,7 +23111,7 @@ Complete raw fields for all 25 active accounts, including full inventory/equipme
 Pull the repo: "github.com/brainmell/whatsapp-bot", specifically the fix/audit branch, NOT the main branch.
 Read through the docs and thoroughly examine the entire codebase. Note that the docs are not fully up to date, so don't rely on them alone. You need to inspect the actual implementation and figure out how everything works.
 Your focus is everything related to the combat system: players, classes, enemies, skills, stats, progression, equipment, status effects, damage calculations, defense, attack, scaling, and anything else that directly or indirectly affects combat.
-I want you to compare all player classes, enemies, and general combat mechanics, and document how everything interacts. Break down all the math happening under the hood—damage formulas, attack/defense calculations, stat scaling, multipliers, reductions, HP calculations, skill formulas, progression scaling, RNG, and anything else that affects combat outcomes.
+I want you to compare all player classes, enemies, and general combat mechanics, and document how everything interacts. Break down all the math happening under the hood-damage formulas, attack/defense calculations, stat scaling, multipliers, reductions, HP calculations, skill formulas, progression scaling, RNG, and anything else that affects combat outcomes.
 Basically, I want a comprehensive combat-system audit. Cover every system and subsystem that has any meaningful connection to combat, including interactions that aren't immediately obvious from the docs.
 After that:
 
@@ -23120,7 +23120,7 @@ Identify major balance problems, exploits, dead mechanics, overpowered/underpowe
 Look at older, well-balanced games for inspiration. Search online for games with strong combat balancing, preferably older games and open-source projects where possible.
 Look for useful books, papers, developer talks, or other resources on game/combat balance.
 Use those references to propose redesigns and balancing drafts for this game's combat system.
-Don't just suggest changes—explain why each change would improve the balance and how it would affect the existing systems.
+Don't just suggest changes-explain why each change would improve the balance and how it would affect the existing systems.
 The end goal is to understand the combat system from top to bottom, document exactly how it currently works, identify what's wrong with the balance, and then develop a few solid redesign directions based on proven balancing principles and examples from other games.
 Here are some calculations and player chat logs to help you understand the current system and put the code and mechanics into context. Use them alongside the codebase when analyzing the combat system.
 ```

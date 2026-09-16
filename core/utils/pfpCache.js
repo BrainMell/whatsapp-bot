@@ -2,7 +2,7 @@
  * PFP (profile picture URL) fetcher with TTL cache + negative caching.
  *
  * 💡 PERF PATCH 2026-07-27:
- * Background — sock.profilePictureUrl() has NO built-in timeout. On LID JIDs
+ * Background - sock.profilePictureUrl() has NO built-in timeout. On LID JIDs
  * (xxx@lid) it tries to fetch from WhatsApp's servers and frequently hangs
  * for the full 90s command-timeout window. Even on phone JIDs it does a
  * network round-trip every time, which is wasteful: a user's PFP doesn't
@@ -10,14 +10,14 @@
  * call profilePictureUrl() independently on every invocation.
  *
  * This module wraps sock.profilePictureUrl() with:
- *   - 8s hard timeout (consistent across all callsites — previously some
+ *   - 8s hard timeout (consistent across all callsites - previously some
  *     callsites had 8s, others had none and would hit the 90s global
  *     command-timeout).
  *   - Positive cache: successful lookups cached for 5 min. Subsequent
  *     calls within the window return instantly with no network hop.
  *   - Negative cache: failed/timed-out lookups cached for 60s. Without
  *     this, a user with an unreachable PFP would block 8s on EVERY
- *     command they ran — now they block 8s once, then ~0ms for the
+ *     command they ran - now they block 8s once, then ~0ms for the
  *     next minute.
  *   - In-flight de-duplication: if two commands for the same JID arrive
  *     simultaneously, only ONE profilePictureUrl call is made; both
@@ -33,10 +33,10 @@
  *   const pfpUrl = await fetchPfp(sock, jid);
  */
 
-const TTL_POSITIVE_MS = 5 * 60 * 1000;   // 5 min — PFPs rarely change
-const TTL_NEGATIVE_MS = 60 * 1000;        // 60s — backoff before retrying a failed lookup
+const TTL_POSITIVE_MS = 5 * 60 * 1000;   // 5 min - PFPs rarely change
+const TTL_NEGATIVE_MS = 60 * 1000;        // 60s - backoff before retrying a failed lookup
 // 💡 2026-09-15 PERF (owner: "make images get sent faster"): 8s was far too
-// generous — the PFP is purely decorative (cards fall back to a medallion),
+// generous - the PFP is purely decorative (cards fall back to a medallion),
 // yet a slow lookup stalled the WHOLE command for up to 8s once per cache
 // window (pm2 log showed repeated 8s timeouts). 3s is plenty for a normal
 // round-trip; misses now cost 3s instead of 8s.
@@ -44,7 +44,7 @@ const TIMEOUT_MS = 3000;                  // 3s hard bound on profilePictureUrl
 
 // Map<jid, { value: string|null, expiresAt: number }>
 const _cache = new Map();
-// Map<jid, Promise<string|null>> — in-flight lookups for de-dup
+// Map<jid, Promise<string|null>> - in-flight lookups for de-dup
 const _inflight = new Map();
 
 /**
@@ -82,9 +82,9 @@ async function fetchPfp(sock, jid) {
       _cache.set(jid, { value: url || null, expiresAt: Date.now() + TTL_POSITIVE_MS });
       return url || null;
     } catch (e) {
-      // Negative cache — prevents hammering WhatsApp for unreachable LID jids
+      // Negative cache - prevents hammering WhatsApp for unreachable LID jids
       _cache.set(jid, { value: null, expiresAt: Date.now() + TTL_NEGATIVE_MS });
-      // Brief warning — keep volume low because this fires once per minute
+      // Brief warning - keep volume low because this fires once per minute
       // per unreachable JID, which on a busy bot is still a lot.
       console.warn(`[pfpCache] miss for ${jid}: ${e.message}`);
       return null;

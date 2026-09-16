@@ -23,7 +23,7 @@ function startInvestment(userId, planId, amount) {
     // `user.wallet < amount` (because string-vs-number comparisons in JS
     // coerce to NaN, which is always false), then economy.removeMoney would
     // silently fail, but the investment would still get pushed to the user's
-    // portfolio — letting them claim free payouts later.
+    // portfolio - letting them claim free payouts later.
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
         return { success: false, message: "❌ Amount must be a positive number!" };
@@ -49,7 +49,7 @@ function startInvestment(userId, planId, amount) {
     if (!deductOk) {
         // Defensive: removeMoney can fail if the wallet dropped between the
         // check above and now. Don't push the investment if we didn't pay.
-        return { success: false, message: "❌ Failed to deduct funds — your wallet may have changed." };
+        return { success: false, message: "❌ Failed to deduct funds - your wallet may have changed." };
     }
 
     // Create investment

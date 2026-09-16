@@ -1,5 +1,5 @@
 /**
- * Phase 1 unit tests — verify summon registry + system logic work correctly.
+ * Phase 1 unit tests - verify summon registry + system logic work correctly.
  * Run: node /home/z/my-project/scripts/test_summon_phase1.js
  */
 
@@ -110,7 +110,7 @@ test('getEvolvedSpeciesId returns correct stage', () => {
   assert.strictEqual(registry.getEvolvedSpeciesId('skeleton', 'TRANSCENDENT'), 'skeleton_king');
 });
 
-// ─── System tests (no DB — test pure functions) ────────────────
+// ─── System tests (no DB - test pure functions) ────────────────
 console.log('\n--- System (pure functions) ---');
 
 const summonSystem = require(path.join(REPO, 'core/rpg/summonSystem.js'));
@@ -218,7 +218,7 @@ test('addSummonXP levels up and grants stat points', () => {
     rarity: 'COMMON',
     level: 1,
     xp: 0,
-    statPoints: 0,  // 💡 must initialize — += on undefined produces NaN
+    statPoints: 0,  // 💡 must initialize - += on undefined produces NaN
     baseStats: { hp: 80, atk: 15, def: 5, mag: 5, spd: 8 },
     allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0 },
     loyalty: 100
@@ -321,7 +321,7 @@ test('legion resonance does NOT activate with only 2 undead', () => {
 
 test('forSale summons do not count toward resonances', () => {
   const summons = [
-    { element: 'undead', loyalty: 100, forSale: true },   // listed — doesn't count
+    { element: 'undead', loyalty: 100, forSale: true },   // listed - doesn't count
     { element: 'undead', loyalty: 100, forSale: false },
     { element: 'undead', loyalty: 100, forSale: false },
     { element: 'undead', loyalty: 100, forSale: false }
@@ -332,7 +332,7 @@ test('forSale summons do not count toward resonances', () => {
 
 test('zero-loyalty summons do not count toward resonances', () => {
   const summons = [
-    { element: 'undead', loyalty: 0, forSale: false },     // depleted — doesn't count
+    { element: 'undead', loyalty: 0, forSale: false },     // depleted - doesn't count
     { element: 'undead', loyalty: 100, forSale: false },
     { element: 'undead', loyalty: 100, forSale: false }
   ];

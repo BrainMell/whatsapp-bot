@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const economy = require('../rpg/economy');
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  ADMIN SANDBOX — Isolated Test Characters for RPG Mods (Item #11)
+//  ADMIN SANDBOX - Isolated Test Characters for RPG Mods (Item #11)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 //  PROBLEM
@@ -10,9 +10,9 @@ const economy = require('../rpg/economy');
 //  RPG Mods need to test new skills, classes, boss balance, dungeon flow,
 //  evolution trials, and economy features before pushing them to players.
 //  Currently they have two bad options:
-//    (a) Test on their OWN main account — risks corrupting real progression,
+//    (a) Test on their OWN main account - risks corrupting real progression,
 //        and can't test "fresh level 1" scenarios without nuking real stats.
-//    (b) Test on a real player's account via `.g admin setlevel` etc. —
+//    (b) Test on a real player's account via `.g admin setlevel` etc. -
 //        even worse, mutates a real player's data.
 //
 //  SOLUTION
@@ -20,7 +20,7 @@ const economy = require('../rpg/economy');
 //  Each mod (Owner / GlobalMod / RpgMod) gets ONE sandbox test character
 //  stored in a SEPARATE MongoDB collection (`adminsandboxes`). The sandbox
 //  has its own wallet, stats, class, skills, inventory, equipment, and
-//  rank — fully independent from the real User collection. Mods can:
+//  rank - fully independent from the real User collection. Mods can:
 //    - Reset it to level 1 with starting gear
 //    - Bump it to any level/class/rank for testing
 //    - Run dungeons, combat, and trials against it
@@ -28,10 +28,10 @@ const economy = require('../rpg/economy');
 //
 //  ISOLATION GUARANTEES
 //  ────────────────────
-//  1. Separate collection (adminsandboxes) — never queried by economy.js,
+//  1. Separate collection (adminsandboxes) - never queried by economy.js,
 //     progression.js, guildAdventure.js, or any real-player code path.
 //  2. The sandbox ownerJid is the mod's real JID, but the sandbox is
-//     keyed separately — looking up a user by JID in the real User
+//     keyed separately - looking up a user by JID in the real User
 //     collection will NEVER return a sandbox doc.
 //  3. Sandbox data is never aggregated into leaderboards, guild member
 //     lists, economy totals, or wealth tax calculations.
@@ -39,12 +39,12 @@ const economy = require('../rpg/economy');
 //
 //  SCHEMA
 //  ──────
-//  ownerJid    — the mod who owns this sandbox (unique, one per mod)
-//  name        — display name (default: "Sandbox (ModName)")
-//  isSandbox   — always true (defensive flag)
-//  createdAt   — when the sandbox was first created
-//  lastUsedAt  — last time the mod interacted with it
-//  resetCount  — how many times the sandbox has been wiped (audit)
+//  ownerJid    - the mod who owns this sandbox (unique, one per mod)
+//  name        - display name (default: "Sandbox (ModName)")
+//  isSandbox   - always true (defensive flag)
+//  createdAt   - when the sandbox was first created
+//  lastUsedAt  - last time the mod interacted with it
+//  resetCount  - how many times the sandbox has been wiped (audit)
 //
 //  The rest mirrors the User model's RPG-relevant fields so the sandbox
 //  can be passed to combat/dungeon/trial code paths with minimal adapter
@@ -58,7 +58,7 @@ const economy = require('../rpg/economy');
 //
 //  NOTE: This is a SANDBOX. Fields like `lastDaily`, `lastRob`, `jailUntil`,
 //  `profile`, `membership`, `portfolio`, `investments`, `eventTokens` are
-//  intentionally OMITTED — they're economy/social features that don't make
+//  intentionally OMITTED - they're economy/social features that don't make
 //  sense for a test character and would just bloat the schema.
 
 const AdminSandboxSchema = new mongoose.Schema({
@@ -253,7 +253,7 @@ AdminSandboxSchema.statics.logAction = function(ownerJid, action, details) {
 };
 
 // Update arbitrary fields on the sandbox (used by setlevel, setstat, etc.)
-// Pass a partial update object — only the specified fields are mutated.
+// Pass a partial update object - only the specified fields are mutated.
 AdminSandboxSchema.statics.patch = function(ownerJid, updateObj) {
   return this.findOneAndUpdate(
     { ownerJid },

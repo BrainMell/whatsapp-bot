@@ -80,7 +80,7 @@ const sorted = activity.sort((a, b) => b.count - a.count).slice(0, 15);
 
 let text = `🏆 *Most Active Members*\n\n`;
 sorted.forEach((user, i) => {
-  text += `${i + 1}. @${user.userId.split("@")[0]} — *${user.count}* msgs\n`;
+  text += `${i + 1}. @${user.userId.split("@")[0]} - *${user.count}* msgs\n`;
 });
 await sock.sendMessage(chatId, { text, mentions: sorted.map(u => u.userId) });
 ```

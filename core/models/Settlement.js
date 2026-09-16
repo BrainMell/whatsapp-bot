@@ -1,5 +1,5 @@
 // models/Settlement.js
-// Canonical settlement record — one auditable line item for every
+// Canonical settlement record - one auditable line item for every
 // currency-moving action in the bot.
 //
 // Classification:
