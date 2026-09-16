@@ -300,3 +300,145 @@ RENDER DEFECTS:
   confirmed from the live API).
 - Repos: bot_generation 92569bc pushed to origin/main; Box1 mirror commit
   f369ac5; whatsapp-bot docs updated (this section).
+
+## 9. V4 PASS - BROKEN COMMANDS + COMPLETED THEME COVERAGE (2026-09-16)
+
+Owner report that started this pass: ".abilities and .equip are broken, the
+skill tree is still showing the default design." All three root-caused and
+fixed; then the remaining unthemed economy surfaces were redesigned, and the
+whole inventory was re-verified visually.
+
+### 9.1 Root causes + fixes
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| .abilities fatal (every call) | viewAbilities referenced pagination arg `pageArg` but the signature never declared it (ReferenceError, message skipped as FATAL) | signature now `(sock, chatId, senderJid, senderName, pageArg)` - engine already passed it |
+| .abilities fatal one layer deeper | `abilityEffectText()` was called by the text+card builders but never defined anywhere | new module-level formatter: effect object -> one short line, covering every effect type in the schema |
+| abilities card tofu boxes | real payloads carry emoji (cost `⚡`, rune glyphs); theme faces (Cinzel/IM Fell/PressStart/Inter) have no such glyphs | card payload now uses ASCII tags (EN 12, CD2, STUN/BURN/... via effectTags()); cardstyle.Sanitize also drops emoji/symbol codepoints as a global defense (item names like "☣️ Infected Shard" included) |
+| skill tree = default design for everyone | SKILLTREE generatePortraitCard call passed kind but never `style` | passes `user.cardStyle` now; live render verified (style 9 player gets THE PILLARS OF MASTERY, not the decree constellation) |
+| .equip broken UX | bare `.equip` printed the legacy raw text list; equip errors doubled the ❌ prefix | bare `.equip` now shows the themed EQUIP card (same as .equipment); single ❌ |
+
+### 9.2 Completed theme coverage: money family
+
+The balance + money-movement cards had never been themed (Kenney base for
+every player). They are now part of each theme's system, following the same
+base-and-variation contract as the craft family (see section 10):
+
+| Kind | Canvas | Command | Composition per theme |
+|---|---|---|---|
+| BALANCE | 1000x600 | .balance/.bal | the theme's treasury register (vault plaque / gilded ledger / statement of account / coin till / house account / astral exchequer / credit terminal / counting stone / treasurer's plate) |
+| TRANSFER | 1000x600 | .transfer | the theme's directed flow: FROM WALLET -> TO ADVENTURER |
+| DEPOSIT | 1000x600 | .deposit | same flow, wallet -> bank |
+| WITHDRAW | 1000x600 | .withdraw | same flow, bank -> wallet (arrow reverses) |
+
+Node style pass-throughs added for: BALANCE, TRANSFER, DEPOSIT, WITHDRAW,
+FISH catch, DECREE rank-up (the last two were themed Go-side since v3 but the
+engine never sent the player's style).
+
+### 9.3 Renderer bug found by visual QA: sticky clip mask
+
+gg v1.3.0's Pop() deliberately keeps the post-Clip mask (`dc.mask =
+before.mask`), so Push/Clip/Pop leaves the clip sticky. The Rune Monolith
+painters (combat style09.go, econStyle09, the new money painters) draw their
+registers inside the stele, so anything drawn afterwards was silently
+clipped away. Symptom: S09 money cards rendered ONE stele and nothing else.
+Fix: `dc.ResetClip()` after every Pop that follows a Clip (style09.go base,
+econStyle09, econ_style_money.go).
+
+### 9.4 VERIFIED INVENTORY CHECKLIST (final, evidence-based)
+
+Every line below was rendered and LOOKED at (QA matrix 9 styles x 18 kinds =
+162 renders, 3 visual rounds) and the marked commands were additionally
+exercised live through the real handlers with a mock sock against production
+Mongo (e2e_cardcmds.js / e2e_cardcmds2.js).
+
+| # | Card | Command | 10-style support | Verified |
+|---|------|---------|------------------|----------|
+| 1 | PROFILE character sheet | .char/.profile + previews | real per-style designs (bg_1..10 + layouts) | ✅ visual (10/10 renders) |
+| 2 | Style picker sheet | .cardstyle | auto from profile designs | ✅ rendered |
+| 3 | RANK | .rank | 9 rebuilt + decree baked | ✅ visual sheet |
+| 4 | ALLOCATE | .allocate | 9 rebuilt + decree | ✅ visual sheet |
+| 5 | SKILLUP | .skill up | 9 rebuilt + decree | ✅ visual sheet |
+| 6 | ABILITIES | .abilities | 9 rebuilt + decree | ✅ visual sheet + ✅ LIVE (pages 1/2, no tofu) |
+| 7 | SKILLTREE | .skill tree/.st | 9 rebuilt + decree | ✅ visual sheet + ✅ LIVE (style 9 pillars) |
+| 8 | EQUIP | .equipment/.gear/.equip | 9 rebuilt + decree | ✅ visual sheet + ✅ LIVE (style 9 armory) |
+| 9 | GUILDINFO | .guild info | 9 rebuilt + decree | ✅ visual sheet |
+| 10 | SHOP | (kind ready, no live caller) | 9 rebuilt + decree | ✅ visual sheet |
+| 11 | BALANCE | .balance/.bal | 9 rebuilt + Kenney base | ✅ visual sheet + ✅ LIVE (styles 1/6/9/10) |
+| 12 | CRAFT result | .craft | 9 rebuilt + decree | ✅ visual sheet |
+| 13 | BREW result | .brew | 9 rebuilt + decree | ✅ visual sheet |
+| 14 | COOK result | .cook | 9 rebuilt + decree | ✅ visual sheet |
+| 15 | FORGE result | .forge | 9 rebuilt + decree | ✅ visual sheet |
+| 16 | FISH catch | fishing result | 9 rebuilt + decree (Node pass added in v4) | ✅ visual sheet |
+| 17 | DECREE rank-up | rank-up ceremony | 9 rebuilt + decree (Node pass added in v4) | ✅ visual sheet |
+| 18 | TRANSFER | .transfer | 9 rebuilt + Kenney base (NEW v4) | ✅ visual sheet |
+| 19 | DEPOSIT | .deposit | 9 rebuilt + Kenney base (NEW v4) | ✅ visual sheet |
+| 20 | WITHDRAW | .withdraw | 9 rebuilt + Kenney base (NEW v4) | ✅ visual sheet |
+| 21 | Summon roster + detail | .summons | own animated identity (NOT decree-derived; sprite GIF compositor - left as designed) | documented decision |
+| 22 | TCG grids/decks/eshop | card-game commands | out of scope (separate TCG product surface) | documented decision |
+| 23 | Ludo/TTT/Chess boards | game commands | out of scope (games with own identities) | documented decision |
+| 24 | DUEL / QUEST / TRIAL / ABYSS_ENTRY+RESULT | battle results | EXCLUDED (battle-active) | owner rule |
+| 25 | QUESTSTART / RAID | battle starter screen | EXCLUDED (battle-active) | owner rule |
+| 26 | HUNT / BOSS splash / VICTORY / DEFEAT / EndScreen | encounters + combat end | EXCLUDED (battle-active) | owner rule |
+
+Live command verification (real handlers, production Mongo, style 9 + 10
+players): .abilities pages 1/2 -> styled codex image; .skill tree -> styled
+pillar card; .equipment -> styled armory card; .equip <item> -> equips +
+confirms; .equip (bare) -> styled armory card; unequip -> restores. Services
+restarted on both boxes; /health 200; pm2 all online.
+## 10. THE ROYAL DECREE REUSE PATTERN (documented) + HOW EVERY THEME MIRRORS IT
+
+Owner directive: document every instance where Royal Decree (the default)
+reuses one of its own designs with slight modifications, then use that as
+the design pattern for the other themes - each theme gets ORIGINAL base
+designs per command/card, and may reuse ITS OWN designs with modifications
+where that makes sense. Coherent language per theme; intentional reuse and
+variation within it; themes fundamentally distinct from each other.
+
+### 10.1 Where Royal Decree reuses its own designs (code-documented)
+
+| Base design | Reused for | Modification per reuse |
+|---|---|---|
+| 600x1000 lamoot portrait bake (leather name plate (60,132)-(330,186), main panel (55,208)-(545,832), dividers y266/y492) | DUEL, QUEST, TRIAL, RANK, ALLOCATE (bg_DUEL/QUEST/TRIAL/RANK/ALLOCATE.png share the geometry) | banner text ("DUEL RESOLVED" / "QUEST COMPLETE" / "EVOLUTION" / "ADVENTURER"), panel labels ("THE TALLY" / "THE ASCENSION" / "THE PATH AHEAD"), row layout (stat rows vs party rows vs progress bars), scene window only on DUEL |
+| QUEST render path | TRIAL | literally the same stat-row code path, different labels + seal |
+| QUESTSTART renderer | RAID | one function `renderQuestStartCard(c, req, raid bool)`; raid flag swaps scene palette/label |
+| 1000x600 craft bake (workbench parchment) | CRAFT, BREW, COOK, FORGE, FISH | type title ("CRAFTED"/"BREWED"/"COOKED"/"FORGED"/"CATCH OF THE DAY"), accent colour, item + caption |
+| craft bake + bg_DECREE.png | DECREE rank-up | same leather plate + Cinzel family, banner becomes "RANK UP", wax seal carries the rank letter, ledger old->new |
+| EndCard shell | VICTORY / DEFEAT | outcome word, palette accent, reward ledger sign |
+| Kenney money base (drawBase + drawHead) | BALANCE, TRANSFER, DEPOSIT, WITHDRAW | headline (TOTAL WEALTH vs kind), FROM/TO panels, accent set per kind |
+
+That is the house pattern: ONE strong base per family, then per-kind
+modifications of header, labels, accents and data layout - never a new
+unrelated canvas per kind, never one canvas for everything.
+
+### 10.2 Each theme's base designs and their reuses (current implementation)
+
+| Theme | Family bases (original per theme) | Reuse with modification |
+|---|---|---|
+| 1 STONEKEEP | (a) riveted granite plaque set (s01Base/s01IronPlate/s01Slab); (b) THE VAULT wall face (s01VaultBase) | plaque set underlies RANK/ALLOCATE/SKILLUP/ABILITIES/GUILDINFO/SHOP/EQUIP; vault face = BALANCE (three slabs + meter) and money flow (same slabs, FROM/TO tags + carved arrow + torchlit amount); craft family = anvil plaque with type titles |
+| 2 GOLDEN ARCANUM | (a) indigo ritual field + hairline frames + starfield; (b) the transmutation circle (arcaneCircle) | circle = ABILITIES seal, econ item sigil, BALANCE great total circle; money flow = TWO circles joined by a gold arc with a travelling diamond; skilltree = radial constellation of the same circles |
+| 3 RETRO COURT | (a) sepia halftone page + double rules + fleuron (s03ParlourBase/parlourRule) | page underlies all portrait kinds; craft = apprenticeship certificate; BALANCE = STATEMENT OF ACCOUNT (dot-leader ledger rows); money flow = promissory note (sum in the middle, FROM/TO dotted lines) |
+| 4 WOODMERE | (a) oak planks + hanging shingle + stitched vellum panel | craft = workbench plaque; SKILLTREE = literal branching tree; BALANCE = THE COIN TILL (burned ledger rows + notch meter); money flow = two trays + carved groove with a rolling coin |
+| 5 EMBLEM NOIR | (a) black field, registration marks, ziggurat crown, chartered band, wax seal | craft = operation report; BALANCE = HOUSE ACCOUNT (band holds TOTAL, register rows right); money flow = same frame, band holds the AMOUNT, register becomes FROM/TO with deco chevrons; seal anchors every kind |
+| 6 SOUL FORGE | (a) night sky + gold hairline frame + centre diamonds + dotted leaders + gold pill CTA (owner's Allocate anchor) | ALLOCATE is the canonical composition; abilities/econ reframe the diamond geometry; BALANCE = ASTRAL EXCHEQUER shelves (diamond bullets, cyan numerals, pill CTA); money flow = two diamond nodes on a dotted gold thread with the amount glowing above |
+| 7 ROYAL DECREE | baked default (see 10.1) | unchanged |
+| 8 NEON ARCADE | (a) navy grid + scanlines + bracket panels + PS2P marquee | craft = crafted toast; BALANCE = CREDIT TERMINAL (marquee, glowing total, slot panels + seg bars); money flow = FROM/TO slot panels + chunky pixel arrow + score-popup amount; skilltree = circuit grid |
+| 9 RUNE MONOLITH | (a) standing stele silhouette (s09Stele) + glyph bands + ember glows | stele underlies RANK/ALLOCATE/SKILLUP/ABILITIES/GUILDINFO/SHOP/EQUIP; skilltree = pillar columns; BALANCE = THE COUNTING STONE (one wide stele, ember total); money flow = TWO steles + carved channel + ember spark, arrow direction by kind |
+| 10 CRIMSON COURT | (a) damask field + gold hairline frames + cartouches + shields + wax seal | craft = commission shield; BALANCE = THE TREASURY (three stacked cartouches); money flow = twin shields + gold filigree arrow; skilltree = lineage tree of shields |
+
+Within every theme the bases share that theme's palette roles, corner
+language, texture and typography; across themes nothing transfers - a
+Stonekeep vault, an Arcanum circle pair, a Noir chartered band and a
+Monolith stele count money in four different structural ways.
+
+### 10.3 Files carried by this pass
+
+- Go: pkg/economy/econ_style_money.go (NEW - 18 painters + dispatch + QA hook),
+  pkg/economy/econ_style_craft.go (money routing + ResetClip), pkg/economy/renderer.go
+  (EconomyCardRequest.Style + dispatch), pkg/cardstyle/cardstyle.go (Sanitize
+  drops emoji codepoints), pkg/combat/style09.go (ResetClip).
+- Node: core/commands/skillCommands.js (pageArg, abilityEffectText, effectTags,
+  SKILLTREE style pass), core/engine.js (bare .equip -> EQUIP card; style
+  pass-throughs for DECREE/FISH/TRANSFER/DEPOSIT/WITHDRAW/BALANCE),
+  core/commands/rpgCommands.js (single error prefix).
+- QA: qa/styleqa/main.go extended to 18 kinds x 9 styles (+BALANCE) = 162 renders.

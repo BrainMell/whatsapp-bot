@@ -5108,6 +5108,7 @@ What to do:
               const decreeCard = await goService.generateTransactionCard({
                 nickname: economy.getDisplayName(userId),
                 type: "DECREE",
+                style: (() => { try { return (economy.getUser(userId) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                 amount: 1,
                 newWallet: 0,
                 newBank: 0,
@@ -9759,6 +9760,17 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // .j equip / .j unequip
+                    if (primaryCmd === "equip" && !cmdArgs[1]) {
+                      // 2026-09-16: bare ".equip" shows the themed equipment
+                      // card instead of the legacy raw text list.
+                      await rpgCommands.displayEquipmentCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                      );
+                      return;
+                    }
                     if (primaryCmd === "equip") {
                       const itemId = cmdArgs[1];
                       const slot = cmdArgs[2];
@@ -10486,6 +10498,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             const fishCard = await goService.generateTransactionCard({
                               nickname: freshUser.nickname || economy.getDisplayName(senderJid),
                               type: "FISH",
+                              style: (freshUser && freshUser.cardStyle) || 0,
                               amount: 1,
                               newWallet: freshUser.wallet || 0,
                               newBank: freshUser.bank || 0,
@@ -24833,6 +24846,7 @@ ${senderName} said y'all should know:
 
                       const cardBuffer = await goService.generateEconomyCard({
                         nickname: user.nickname || economy.getDisplayName(senderJid),
+                        style: (user && user.cardStyle) || 0,
                         wallet: balance.wallet || 0,
                         bank: balance.bank || 0,
                         total: balance.total || 0,
@@ -25125,6 +25139,7 @@ Examples:
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "TRANSFER",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,
@@ -25285,6 +25300,7 @@ Examples:
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "DEPOSIT",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,
@@ -25381,6 +25397,7 @@ Examples:
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "WITHDRAW",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,

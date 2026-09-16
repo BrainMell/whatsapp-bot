@@ -604,7 +604,8 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
 
     const result = await inventorySystem.equipItem(senderJid, targetItemId, slot);
     if (!result.success) { 
-        await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
+        const _m = result.message || 'Cannot equip that.';
+        await sock.sendMessage(chatId, { text: _m.startsWith('❌') ? _m : `❌ ${_m}` });
         return;
     }
     

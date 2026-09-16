@@ -66,6 +66,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         if (branches.length) {
             treeBuf = await goService.generatePortraitCard({
                 kind: 'SKILLTREE',
+                style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
                 nickname: senderName,
                 className: userClass.name,
                 level,
@@ -474,10 +475,112 @@ async function resetSkills(sock, chatId, senderJid) {
 }
 
 // ==========================================
+// 📝 ABILITY EFFECT TEXT (2026-09-16)
+//    effect object -> one short readable line. This helper was referenced
+//    by the abilities text/card builders but never defined, which made
+//    every .abilities call die with "abilityEffectText is not defined".
+// ==========================================
+const ABILITY_CC_NAME = {
+    stun: 'Stun', slow: 'Slow', freeze: 'Freeze', silence: 'Silence',
+    sleep: 'Sleep', paralyze: 'Paralyze', petrify: 'Petrify', blind: 'Blind',
+};
+const ABILITY_DOT_NAME = { burn: 'Burn', poison: 'Poison', bleed: 'Bleed' };
+
+function abilityEffectText(effect) {
+    if (!effect || typeof effect !== 'object') return '';
+    const t = String(effect.type || '').toLowerCase();
+    const num = (x) => {
+        const n = Number(x);
+        return (x === undefined || x === null || x === '' || !Number.isFinite(n)) ? null : Math.round(n);
+    };
+    const v = num(effect.value);
+    const dur = num(effect.duration);
+    const durTxt = dur && dur > 0 ? ` for ${dur} turn${dur > 1 ? 's' : ''}` : '';
+    const human = (s) => String(s || '').replace(/_/g, ' ').toLowerCase();
+    const cc = ABILITY_CC_NAME[String(effect.cc || '').toLowerCase()] || human(effect.cc);
+    const dot = ABILITY_DOT_NAME[String(effect.dot || '').toLowerCase()] || human(effect.dot);
+    const buff = human(effect.buffType);
+    const debuff = human(effect.debuffType);
+    const join = (parts, fallback) => {
+        const out = parts.filter(Boolean).join(' + ');
+        return out || fallback;
+    };
+
+    switch (t) {
+        case 'damage':
+            return v != null ? `Deals ${v} damage${durTxt}` : 'Deals damage';
+        case 'damage_cc':
+        case 'crowd_control':
+            return join([v != null ? `${v} damage` : '', cc ? `${cc}${durTxt}` : ''], 'Control effect');
+        case 'damage_dot':
+        case 'damage_over_time':
+            return join([v != null ? `${v} damage` : '', dot ? `${dot}${durTxt}` : 'damage over time'], 'Damage over time');
+        case 'damage_heal':
+            return v != null ? `${v} damage, heals the user for part of it` : 'Damage that heals the user';
+        case 'hybrid_damage':
+            return v != null ? `${v} hybrid damage (phys + magic)` : 'Hybrid damage';
+        case 'chain':
+            return v != null ? `${v} damage that chains to nearby foes` : 'Chained damage';
+        case 'heal':
+            return v != null ? `Restores ${v} HP` : 'Restores HP';
+        case 'heal_over_time':
+            return v != null ? `Restores ${v} HP over time${durTxt}` : 'Heals over time';
+        case 'heal_team':
+            return v != null ? `Heals the whole team ${v} HP` : 'Heals the whole team';
+        case 'revive':
+            return v != null ? `Revives a fallen ally at ${v}% HP` : 'Revives a fallen ally';
+        case 'revive_team':
+        case 'revive_all':
+            return 'Revives the whole team';
+        case 'buff':
+        case 'buff_self':
+            return join([buff ? `+${v != null ? v : ''}${buff ? `% ${buff}` : ''}` : '', durTxt ? `lasts${durTxt.replace(' for ', ' ')}` : ''], 'Self buff');
+        case 'buff_team':
+            return buff ? `Team +${v != null ? v : ''}% ${buff}${durTxt}` : 'Team buff';
+        case 'buff_target':
+            return buff ? `Ally +${v != null ? v : ''}% ${buff}${durTxt}` : 'Ally buff';
+        case 'shield':
+            return v != null ? `Grants a ${v} point shield${durTxt}` : 'Grants a shield';
+        case 'debuff_target':
+            return debuff ? `-${v != null ? v : ''}% ${debuff} on the target${durTxt}` : 'Debuffs the target';
+        case 'debuff_enemies':
+            return debuff ? `-${v != null ? v : ''}% ${debuff} on all enemies${durTxt}` : 'Debuffs all enemies';
+        case 'defense_break':
+            return 'Shreds the target\'s defense';
+        case 'ignore_armor':
+            return v != null ? `Ignores ${v}% of armor` : 'Ignores armor';
+        case 'guaranteed_crit':
+            return 'Next hit is a guaranteed crit';
+        case 'haste':
+            return v != null ? `+${v}% speed${durTxt}` : 'Raises speed';
+        case 'berserk':
+            return v != null ? `Berserk: +${v}% damage at low HP${durTxt}` : 'Berserk state';
+        case 'aoe':
+            return v != null ? `${v} damage to all enemies` : 'Hits all enemies';
+        case 'execute':
+            return v != null ? `Executes foes below ${v}% HP` : 'Executes weakened foes';
+        case 'drain':
+            return v != null ? `Drains ${v} HP from the target` : 'Drains HP';
+        case 'summon':
+            return 'Summons an ally to fight';
+        case 'passive':
+        case 'positive':
+        case 'negative':
+            return 'Passive effect';
+        case 'dragon':
+            return v != null ? `${v} draconic damage` : 'Draconic damage';
+        default: {
+            const name = human(t) || 'Special effect';
+            return v != null ? `${name} (${v})${durTxt}` : name;
+        }
+    }
+}
+
+// ==========================================
 // 📋 VIEW ABILITIES (COMBAT LIST)
 // ==========================================
 
-async function viewAbilities(sock, chatId, senderJid, senderName) {
+async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
@@ -566,6 +669,33 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         stun: '✦', slow: '✺', freeze: '❄', burn: '♨', bleed: '⚔', poison: '☠',
         dot: '✥', heal: '✚', buff: '▲', debuff: '▼', shield: '◈', aoe: '✷',
         execute: '⚡', passive: '❖', drain: '⨀', summon: '⚑',
+    };
+    // CARD payload tags: theme card faces carry no emoji glyphs, so the
+    // card gets ASCII effect tags while the text message keeps the runes.
+    const CARD_TAGS = {
+        stun: 'STUN', slow: 'SLOW', freeze: 'FRZ', burn: 'BURN', bleed: 'BLD', poison: 'PSN',
+        dot: 'DOT', heal: 'HEAL', buff: 'BUFF', debuff: 'DBF', shield: 'SHLD', aoe: 'AOE',
+        execute: 'EXEC', passive: 'PASV', drain: 'DRN', summon: 'SUMN',
+    };
+    const effectTags = (ability) => {
+        const out = [];
+        const push = (t) => { if (t && !out.includes(t) && out.length < 4) out.push(t); };
+        const e = ability.effect || {};
+        for (const k of Object.keys(ability.effects || {})) push(CARD_TAGS[k]);
+        if (e.cc && CARD_TAGS[e.cc]) push(CARD_TAGS[e.cc]);
+        if (e.dot && CARD_TAGS[e.dot]) push(CARD_TAGS[e.dot]);
+        if (e.buffType === 'shield') push(CARD_TAGS.shield);
+        switch (e.type) {
+            case 'heal': case 'heal_team': case 'heal_over_time': push(CARD_TAGS.heal); break;
+            case 'buff_self': case 'buff_team': case 'buff_target': push(CARD_TAGS.buff); break;
+            case 'debuff_target': case 'debuff_enemies': push(CARD_TAGS.debuff); break;
+            case 'aoe': push(CARD_TAGS.aoe); break;
+            case 'execute': push(CARD_TAGS.exec || CARD_TAGS.execute); break;
+            case 'damage_dot': case 'damage_over_time': push(CARD_TAGS.dot); break;
+            case 'passive': push(CARD_TAGS.passive); break;
+        }
+        if (ability.type === 'passive') push(CARD_TAGS.passive);
+        return out.join(' ');
     };
     const effectRunes = (ability) => {
         const out = [];
@@ -666,13 +796,13 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
             }
             if (row.group) {
                 const ability = row.ability;
-                const costPart = ability.cost > 0 ? `⚡${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? 'PASSIVE' : '⚡0');
+                const costPart = ability.cost > 0 ? `EN ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? 'PASSIVE' : 'EN 0');
                 const cdPart = ability.cooldown > 0 ? ` · CD${ability.cooldown}` : '';
                 g.items.push({
                     title: String(ability.name || ''),
                     sub: `Lv.${ability.level}/${ability.maxLevel} · ${costPart}${cdPart}`,
                     value: abilityEffectText(ability.effect),
-                    runes: effectRunes(ability),
+                    runes: effectTags(ability),
                 });
             } else {
                 const energyCost = row.ability.cost || (Array.isArray(row.ability.energyCost) ? row.ability.energyCost[0] : row.ability.energyCost) || 0;
