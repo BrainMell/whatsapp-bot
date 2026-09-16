@@ -366,6 +366,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         }
         upBuf = await goService.generatePortraitCard({
             kind: 'SKILLUP',
+            style: (() => { try { const _su = economy.getUser(senderJid); return (_su && _su.cardStyle) || 0; } catch (e) { return 0; } })(),
             nickname: economy.getDisplayName(senderJid),
             skillName: targetSkill.name,
             tier: targetSkill.tier || 1,
@@ -549,32 +550,82 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         return;
     }
     
-    // ── ABILITIES card (primary, 2026-09-14 owner: ".j abilities must also
-    // be an image card") — parchment ability sheet, grouped by class origin,
-    // one row per ability with cost/CD pills + effect line. The legacy text
-    // layout below rides along as the caption (capped to WhatsApp's 1024).
-    const abilityEffectText = (e) => {
-        if (!e) return '';
-        if (e.type === 'damage' && e.multiplier) return `💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage`;
-        if (e.type === 'aoe' && e.multiplier) return `💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : e.damageType === 'true' ? 'TRUE' : 'ATK'} — ALL ENEMIES`;
-        if (e.type === 'heal' || e.type === 'heal_team') return `💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}`;
-        if (e.type === 'buff_self' && e.value) return `✨ +${e.value} ${e.buffType || 'stats'} for ${e.duration}t`;
-        if (e.type === 'buff_team' && e.value) return `✨ Party +${e.value} ${e.buffType || 'stats'} for ${e.duration}t`;
-        if (e.type === 'damage_cc') return `💥 ${Math.floor((e.multiplier || 1) * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} + ${e.ccChance}% ${e.cc || 'CC'}`;
-        if (e.type === 'execute') return `⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)`;
-        if (e.type === 'passive') return `🔹 Passive: ${e.trigger || ''}`;
-        return '';
+    // ── ABILITIES card (2026-09-16 redesign) ──
+    // The card is the player's CODEX: identity comes from the BEGINNER class
+    // (Combat Codex / Hunter's Ledger / Ability Grimoire / Practitioner's
+    // Codex), effect runes come from the REAL skill schema, and pagination
+    // keeps 20+ skill collections readable (12 rows/page).
+    const BEGINNER_DOC = {
+        FIGHTER: { title: 'COMBAT CODEX', quote: '"Every scar is a lesson. Every battle, a page."' },
+        SCOUT: { title: "HUNTER'S LEDGER", quote: '"The prey is already dead. It simply hasn\'t realized it yet."' },
+        APPRENTICE: { title: 'ABILITY GRIMOIRE', quote: '"Every spell is a question the world must answer."' },
+        ACOLYTE: { title: "PRACTITIONER'S CODEX", quote: '"Faith is the first armor. Devotion is the blade."' },
+    };
+    // DejaVu-safe symbols only (verified glyph coverage on the renderer host).
+    const RUNE_MAP = {
+        stun: '✦', slow: '✺', freeze: '❄', burn: '♨', bleed: '⚔', poison: '☠',
+        dot: '✥', heal: '✚', buff: '▲', debuff: '▼', shield: '◈', aoe: '✷',
+        execute: '⚡', passive: '❖', drain: '⨀', summon: '⚑',
+    };
+    const effectRunes = (ability) => {
+        const out = [];
+        const push = (r) => { if (r && !out.includes(r) && out.length < 4) out.push(r); };
+        const e = ability.effect || {};
+        for (const k of Object.keys(ability.effects || {})) push(RUNE_MAP[k]);
+        if (e.cc && RUNE_MAP[e.cc]) push(RUNE_MAP[e.cc]);
+        if (e.dot && RUNE_MAP[e.dot]) push(RUNE_MAP[e.dot]);
+        if (e.buffType === 'shield') push(RUNE_MAP.shield);
+        if (e.type === 'damage_cc' && e.cc && RUNE_MAP[e.cc]) push(RUNE_MAP[e.cc]);
+        switch (e.type) {
+            case 'heal': case 'heal_team': push(RUNE_MAP.heal); break;
+            case 'buff_self': case 'buff_team': push(RUNE_MAP.buff); break;
+            case 'aoe': push(RUNE_MAP.aoe); break;
+            case 'execute': push(RUNE_MAP.execute); break;
+            case 'passive': push(RUNE_MAP.passive); break;
+        }
+        if (ability.type === 'passive') push(RUNE_MAP.passive);
+        return out.join('');
     };
 
+    const beginnerId = String(lineage[lineage.length - 1] || '').toUpperCase();
+    const doc = BEGINNER_DOC[beginnerId] || { title: 'ABILITY GRIMOIRE', quote: '"Every skill is a story the body remembers."' };
+
+    // ── pagination: flatten groups → 12 rows per page ──
+    const PAGE_SIZE = 12;
+    const allRows = [];
+    for (const group of abilityGroups) {
+        for (const ability of group.skills) allRows.push({ group, ability });
+    }
+    for (const ability of mirroredAbilities) allRows.push({ group: null, ability });
+
+    const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+    let page = parseInt(pageArg, 10);
+    if (!Number.isFinite(page) || page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+    const pageRows = allRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     const buildAbilitiesText = () => {
-        let t = `⚡ *ABILITIES: ${senderName}*\n`;
-        t += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities\n\n`;
-        let count = 1;
-        for (const group of abilityGroups) {
-            t += group.isCurrentClass
-                ? `━━ ${group.classIcon} *${group.className}* ━━\n`
-                : `━━ ${group.classIcon} _${group.className} Heritage_ ━━\n`;
-            for (const ability of group.skills) {
+        let t = `⚡ *${doc.title}* — ${senderName}\n`;
+        t += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities`;
+        if (totalPages > 1) t += ` • Page ${page}/${totalPages}`;
+        t += `\n\n`;
+        let lastGroupKey = null;
+        let count = (page - 1) * PAGE_SIZE;
+        for (const row of pageRows) {
+            const gKey = row.group ? row.group.className : '__MIRRORED__';
+            if (gKey !== lastGroupKey) {
+                lastGroupKey = gKey;
+                if (row.group) {
+                    t += row.group.isCurrentClass
+                        ? `━━ ${row.group.classIcon} *${row.group.className}* ━━\n`
+                        : `━━ ${row.group.classIcon} _${row.group.className} Heritage_ ━━\n`;
+                } else {
+                    t += `━━ 🪞 *Mirrored Skills* ━━\n`;
+                }
+            }
+            count++;
+            const ability = row.ability;
+            if (row.group) {
                 const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? `✨ Passive` : `⚡ 0`);
                 const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
                 const animation = ability.animation || ability.effect?.animation || '🔮';
@@ -583,17 +634,15 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
                 const effectLine = abilityEffectText(ability.effect);
                 if (effectLine) t += `   ${effectLine}\n`;
                 t += `\n`;
-                count++;
-            }
-        }
-        if (mirroredAbilities.length > 0) {
-            t += `━━ 🪞 *Mirrored Skills* ━━\n`;
-            for (const ability of mirroredAbilities) {
+            } else {
                 const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
                 t += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
                 t += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
-                count++;
             }
+        }
+        if (totalPages > 1) {
+            const nextPage = page < totalPages ? page + 1 : 1;
+            t += `📄 \`${getPrefix()} abilities ${nextPage}\` for page ${nextPage}/${totalPages}\n`;
         }
         t += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
         t += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
@@ -604,45 +653,51 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
     let abBuf = null;
     try {
         const goService = require('../utils/goImageService');
-        const groups = [];
-        for (const group of abilityGroups) {
-            groups.push({
-                name: String(group.className || '').toUpperCase(),
-                sub: group.isCurrentClass ? 'CURRENT' : 'HERITAGE',
-                items: group.skills.map((ability) => {
-                    const costPart = ability.cost > 0 ? `⚡${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? '✨PASSIVE' : '⚡0');
-                    const cdPart = ability.cooldown > 0 ? ` · CD${ability.cooldown}` : '';
-                    return {
-                        title: String(ability.name || ''),
-                        sub: `Lv.${ability.level}/${ability.maxLevel} · ${costPart}${cdPart}`,
-                        value: abilityEffectText(ability.effect),
-                    };
-                }),
-            });
+        // group the PAGE slice — the card never overflows, 20+ skills OK
+        const pageGroups = [];
+        for (const row of pageRows) {
+            const key = row.group ? row.group.className : '__MIRRORED__';
+            let g = pageGroups.find((x) => x.__key === key);
+            if (!g) {
+                g = row.group
+                    ? { __key: key, name: String(row.group.className || '').toUpperCase(), sub: row.group.isCurrentClass ? 'CURRENT' : 'HERITAGE', items: [] }
+                    : { __key: key, name: 'MIRRORED', sub: 'BORROWED', items: [] };
+                pageGroups.push(g);
+            }
+            if (row.group) {
+                const ability = row.ability;
+                const costPart = ability.cost > 0 ? `⚡${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? 'PASSIVE' : '⚡0');
+                const cdPart = ability.cooldown > 0 ? ` · CD${ability.cooldown}` : '';
+                g.items.push({
+                    title: String(ability.name || ''),
+                    sub: `Lv.${ability.level}/${ability.maxLevel} · ${costPart}${cdPart}`,
+                    value: abilityEffectText(ability.effect),
+                    runes: effectRunes(ability),
+                });
+            } else {
+                const energyCost = row.ability.cost || (Array.isArray(row.ability.energyCost) ? row.ability.energyCost[0] : row.ability.energyCost) || 0;
+                g.items.push({
+                    title: String(row.ability.name || ''),
+                    sub: `from ${row.ability.sourceClass || '?'} · ⚡${Math.floor(energyCost * 1.5)} mirrored`,
+                    value: '',
+                    runes: '',
+                });
+            }
         }
-        if (mirroredAbilities.length > 0) {
-            groups.push({
-                name: 'MIRRORED',
-                sub: 'BORROWED',
-                items: mirroredAbilities.map((ability) => {
-                    const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
-                    return {
-                        title: `🪞 ${String(ability.name || '')}`,
-                        sub: `from ${ability.sourceClass || '?'}`,
-                        value: `⚡${Math.floor(energyCost * 1.5)} mirrored cost`,
-                    };
-                }),
-            });
-        }
-        if (groups.length) {
+        if (pageGroups.length) {
             abBuf = await goService.generatePortraitCard({
                 kind: 'ABILITIES',
+                style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
                 nickname: senderName,
                 className: userClass.name,
                 level,
-                groups,
+                groups: pageGroups,
                 sealText: String(user.adventurerRank || 'F').toUpperCase(),
-                caption: `${totalCount} abilities — cast with .combat ability <num>`,
+                docTitle: doc.title,
+                docQuote: doc.quote,
+                pageLabel: totalPages > 1 ? `PAGE ${page}/${totalPages}` : '',
+                startNumber: (page - 1) * PAGE_SIZE + 1,
+                caption: `cast with .combat ability <num>`,
             });
         }
     } catch (e) {

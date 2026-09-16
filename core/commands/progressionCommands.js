@@ -422,6 +422,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         .join(' | ');
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
+        style: (() => { try { const u = economy.getUser(senderJid); return (u && u.cardStyle) || 0; } catch (e) { return 0; } })(),
         nickname,
         caption: atMax
           ? ('the peak — no level left to climb' + (gateCaption ? ` · ${gateCaption}` : ''))
@@ -562,6 +563,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         const goService = require('../utils/goImageService');
         const cardBuffer = await goService.generatePortraitCard({
           kind: 'ALLOCATE',
+          style: (allocUser && allocUser.cardStyle) || 0,
           nickname: economy.getDisplayName(senderJid),
           pointsBig: `${allocAvail} POINTS`,
           pill: `${allocClass?.name || 'Adventurer'} · ${allocTier}`,

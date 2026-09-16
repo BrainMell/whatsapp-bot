@@ -164,6 +164,9 @@ class LudoGame {
     this.lastRoll = 0;
     this.consecutiveSixes = 0;
     this.hasExtraTurn = false;
+    // FIX 2026-09-16: forfeit system — every abandonment path marks the
+    // leaver here; their pieces stop existing for turns/captures/walls.
+    this.forfeited = new Set();
     this.diceHistory = [];
     this.walls = [];
     this.gameOver = false;
@@ -176,8 +179,8 @@ class LudoGame {
         const botMarker = `*${botConfig.getBotName()}*\n\n`;
         try {
           const clientSock = this.sock || globalSock;
-          if (clientSock) await clientSock.sendMessage(chatId, { 
-            text: botMarker + "⌛ *LUDO GAME OVER* ⌛\n\nThe game has ended due to inactivity (30 minutes of no actions)." 
+          if (clientSock) await clientSock.sendMessage(chatId, {
+            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* — no rewards awarded.\n\nStart a fresh game anytime with `" + botConfig.getPrefix() + " ludo start @user`."
           });
         } catch (e) {}
       }
@@ -194,8 +197,8 @@ class LudoGame {
         const botMarker = `*${botConfig.getBotName()}*\n\n`;
         try {
           const clientSock = this.sock || globalSock;
-          if (clientSock) await clientSock.sendMessage(this.chatId, { 
-            text: botMarker + "⌛ *LUDO GAME OVER* ⌛\n\nThe game has ended due to inactivity (30 minutes of no actions)." 
+          if (clientSock) await clientSock.sendMessage(this.chatId, {
+            text: botMarker + "⌛ *LUDO DISSOLVED* ⌛\n\nThe game was closed after 30 minutes of inactivity.\n📊 *No contest* — no rewards awarded."
           });
         } catch (e) {}
       }
@@ -204,6 +207,67 @@ class LudoGame {
 
   getCurrentPlayer() {
     return this.players[this.currentTurnIndex];
+  }
+
+  // FIX 2026-09-16: forfeit support ─────────────────────────────────
+  isForfeited(player) {
+    return this.forfeited.has(normalizeJid(player.jid));
+  }
+
+  activePlayers() {
+    return this.players.filter((p) => !this.isForfeited(p));
+  }
+
+  // Advance to the next non-forfeited player. Returns true if the turn moved.
+  nextTurnSkipForfeited() {
+    for (let i = 0; i < this.players.length; i++) {
+      this.currentTurnIndex = (this.currentTurnIndex + 1) % this.players.length;
+      if (!this.isForfeited(this.players[this.currentTurnIndex])) return true;
+    }
+    return false;
+  }
+
+  // Mark a player as forfeited: pieces removed from play, turn advanced if
+  // needed, and the game resolved if fewer than 2 active players remain.
+  // Returns { ended, winner, player } for the caller's message.
+  forfeitPlayer(jid) {
+    const target = normalizeJid(jid);
+    const player = this.players.find(
+      (p) => normalizeJid(p.jid) === target || normalizeJid(p.fullJid) === target
+    );
+    if (!player || this.isForfeited(player)) return null;
+
+    this.forfeited.add(normalizeJid(player.jid));
+    // remove pieces from the board entirely (no wall/capture/blocking traces)
+    player.pieces.forEach((piece) => {
+      piece.position = -1;
+      piece.inBase = false;
+      piece.inHome = false;
+      piece.onHomePath = false;
+      piece.homePathIndex = -1;
+      piece.forfeited = true;
+    });
+    this.updateWalls();
+
+    const active = this.activePlayers();
+    const ended = active.length < 2;
+    let winner = null;
+    if (ended && active.length === 1) {
+      winner = active[0];
+      this.gameOver = true;
+      this.winner = winner.fullJid;
+    } else if (ended && active.length === 0) {
+      // everyone forfeited — no contest, mark dead so exports can clean up
+      this.gameOver = true;
+      this.winner = null;
+    }
+    // if it was the forfeiter's turn, move on
+    if (!ended && this.isForfeited(this.getCurrentPlayer())) {
+      this.hasExtraTurn = false;
+      this.consecutiveSixes = 0;
+      this.nextTurnSkipForfeited();
+    }
+    return { ended, winner, player };
   }
 
   getPlayerByJid(jid) {
@@ -243,6 +307,7 @@ class LudoGame {
   checkWall(position, excludePlayer = null) {
     const piecesAtPosition = [];
     this.players.forEach(player => {
+      if (this.isForfeited(player)) return;
       if (excludePlayer && normalizeJid(player.jid) === normalizeJid(excludePlayer.jid)) return;
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
@@ -264,8 +329,9 @@ class LudoGame {
   }
 
   movePiece(player, pieceId) {
+    if (this.isForfeited(player)) return { success: false, error: 'You have forfeited this game!' };
     const piece = player.pieces.find(p => p.id === pieceId);
-    if (!piece || !this.canMovePiece(player, pieceId)) {
+    if (!piece || piece.forfeited || !this.canMovePiece(player, pieceId)) {
       return { success: false, error: 'Cannot move this piece!' };
     }
 
@@ -351,6 +417,7 @@ class LudoGame {
   checkCapture(currentPlayer, position) {
     let captured = false;
     this.players.forEach(player => {
+      if (this.isForfeited(player)) return;
       if (normalizeJid(player.jid) === normalizeJid(currentPlayer.jid)) return;
       player.pieces.forEach(piece => {
         if (!piece.inBase && !piece.inHome && !piece.onHomePath && piece.position === position) {
@@ -376,8 +443,9 @@ class LudoGame {
   }
 
   getMovablePieces(player) {
+    if (this.isForfeited(player)) return [];
     return player.pieces
-      .filter(piece => this.canMovePiece(player, piece.id))
+      .filter(piece => !piece.forfeited && this.canMovePiece(player, piece.id))
       .map(piece => piece.id);
   }
 
@@ -386,7 +454,7 @@ class LudoGame {
       this.hasExtraTurn = false;
       return;
     }
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % this.players.length;
+    this.nextTurnSkipForfeited();
     this.consecutiveSixes = 0;
   }
 }
@@ -408,12 +476,15 @@ async function renderBoard(game, sock = null) {
       await Promise.all(pfpPromises);
     }
 
+    const currentJid = (!game.gameOver && game.getCurrentPlayer()) ? normalizeJid(game.getCurrentPlayer().fullJid) : '';
     const payload = {
-      players: game.players.map(p => ({
+      players: game.players.filter(p => !game.isForfeited || !game.isForfeited(p)).map(p => ({
         jid: p.fullJid,
         color: p.color,
         pfpUrl: pfpUrls[p.fullJid] || '',
-        pieces: p.pieces.map(piece => ({
+        playerName: (() => { try { return economy.getDisplayName(p.fullJid); } catch (e) { return ''; } })(),
+        isCurrentTurn: normalizeJid(p.fullJid) === currentJid,
+        pieces: p.pieces.filter(piece => !piece.forfeited).map(piece => ({
           id: piece.id,
           position: piece.position,
           inBase: piece.inBase,
@@ -431,6 +502,24 @@ async function renderBoard(game, sock = null) {
     console.error('❌ Board rendering failed via Go Service:', err.message);
     return null;
   }
+}
+
+// ============================================
+// WIN REWARD (shared by natural win + forfeit win) — FIX 2026-09-16
+// ============================================
+function awardWin(winnerJid, game) {
+  try {
+    economy.addMoney(winnerJid, 500);
+  } catch (e) {}
+  try {
+    const socialSystem = require('../rpg/socialSystem');
+    const gamePlayers = game.players.map((p) => p.fullJid);
+    for (let i = 0; i < gamePlayers.length; i++) {
+      for (let j = i + 1; j < gamePlayers.length; j++) {
+        socialSystem.incrementRelationship(gamePlayers[i], gamePlayers[j], 5);
+      }
+    }
+  } catch (e) {}
 }
 
 // ============================================
@@ -458,6 +547,23 @@ module.exports = {
     const allPlayers = uniquePlayers;
     if (allPlayers.length < 2 || allPlayers.length > 4) {
       return { success: false, message: BOT_MARKER + "❌ Ludo needs 2-4 players!" };
+    }
+
+    // FIX 2026-09-16: every player must be registered — otherwise the win
+    // reward could silently no-op (economy.getUser nulls unregistered users).
+    const unregistered = [];
+    for (const jid of allPlayers) {
+      let ok = false;
+      try { ok = economy.isRegistered(jid); } catch (e) {}
+      if (!ok) unregistered.push(jid);
+    }
+    if (unregistered.length > 0) {
+      const list = unregistered.map((j) => `@${j.split("@")[0]}`).join(" ");
+      return {
+        success: false,
+        mentions: unregistered,
+        message: BOT_MARKER + `❌ *Ludo needs registered adventurers!*\n\nNot registered yet: ${list}\nEveryone types \`${botConfig.getPrefix()} register <nickname>\` first, then start the match.`
+      };
     }
 
     const game = new LudoGame(chatId, allPlayers, sock);
@@ -492,7 +598,10 @@ ${playerList}
 • \`${botConfig.getPrefix()} ludo roll\`
 • \`${botConfig.getPrefix()} ludo move <1-4>\`
 • \`${botConfig.getPrefix()} ludo board\`
-• \`${botConfig.getPrefix()} ludo end\`
+• \`${botConfig.getPrefix()} ludo end\` (⚠️ forfeits!)
+• \`${botConfig.getPrefix()} ludo leave\` (⚠️ forfeits!)
+
+Leaving the group mid-game also counts as a forfeit.
 
 Type \`${botConfig.getPrefix()} ludo roll\` to start!
 └───────────────┘`;
@@ -511,6 +620,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     if (normalizeJid(game.getCurrentPlayer().fullJid) !== normalizeJid(senderJid)) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
+    if (game.isForfeited(game.getCurrentPlayer())) return { success: false, message: BOT_MARKER + "❌ You have forfeited this game!" };
 
     const rollResult = game.rollDice();
     game.resetTimeout(sock);
@@ -665,20 +775,119 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
+  // FIX 2026-09-16: ending is a FORFEIT, not a neutral cancel — quitting
+  // mid-game abandons the match. Last active player wins by forfeit.
   endGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     globalSock = sock;
     const game = activeGames.get(chatId);
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
-    // 💡 FIX: Only players or admins can end the game — previously any user
-    // could grief an ongoing game by typing '.ludo end'.
     const isPlayer = game.players && game.players.some(p => normalizeJid(p.jid) === normalizeJid(senderJid));
     if (!isPlayer) {
-      // Allow if sender is admin (check via sock if needed — for now block non-players)
       return { success: false, message: BOT_MARKER + "❌ Only players in the game can end it!" };
     }
-    if (game.timeout) clearTimeout(game.timeout);
-    activeGames.delete(chatId);
-    await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ Ludo game ended!" }, { quoted: m });
+    const result = game.forfeitPlayer(senderJid);
+    if (!result) {
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      return { success: true };
+    }
+    if (game.gameOver && game.activePlayers().length === 0) {
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* — everyone forfeited. No contest, no rewards." }, { quoted: m });
+      return { success: true };
+    }
+    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(result.player.fullJid)} abandoned the match — their pieces are out of play.\n\n`;
+    if (result.ended && result.winner) {
+      msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
+      awardWin(result.winner.fullJid, game);
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      await sock.sendMessage(chatId, { text: msg, mentions: [result.player.fullJid, result.winner.fullJid] }, { quoted: m });
+      return { success: true };
+    }
+    msg += `🎯 Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
+    const imageBuffer = await renderBoard(game, sock);
+    const mentions = [result.player.fullJid, game.getCurrentPlayer().fullJid];
+    if (imageBuffer) {
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: msg, mentions }, { quoted: m });
+    } else {
+      await sock.sendMessage(chatId, { text: msg, mentions }, { quoted: m });
+    }
     return { success: true };
+  },
+
+  // FIX 2026-09-16: explicit voluntary forfeit (game continues if 2+ remain).
+  leaveGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
+    globalSock = sock;
+    const game = activeGames.get(chatId);
+    if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
+    const player = game.getPlayerByJid(senderJid);
+    if (!player) return { success: false, message: BOT_MARKER + "❌ You're not in this game!" };
+    const result = game.forfeitPlayer(senderJid);
+    if (!result) return { success: false, message: BOT_MARKER + "❌ You already forfeited!" };
+    if (game.gameOver && game.activePlayers().length === 0) {
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      await sock.sendMessage(chatId, { text: BOT_MARKER + "🏁 *LUDO ENDED* — everyone forfeited. No contest, no rewards." }, { quoted: m });
+      return { success: true };
+    }
+    game.resetTimeout(sock);
+    let msg = BOT_MARKER + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} has left the match — their pieces are out of play.\n\n`;
+    if (result.ended && result.winner) {
+      msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
+      awardWin(result.winner.fullJid, game);
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      await sock.sendMessage(chatId, { text: msg, mentions: [player.fullJid, result.winner.fullJid] }, { quoted: m });
+      return { success: true };
+    }
+    msg += `🎯 Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}\nUse: \`${botConfig.getPrefix()} ludo roll\``;
+    const imageBuffer = await renderBoard(game, sock);
+    const mentions = [player.fullJid, game.getCurrentPlayer().fullJid];
+    if (imageBuffer) {
+      await sock.sendMessage(chatId, { image: imageBuffer, caption: msg, mentions }, { quoted: m });
+    } else {
+      await sock.sendMessage(chatId, { text: msg, mentions }, { quoted: m });
+    }
+    return { success: true };
+  },
+
+  // FIX 2026-09-16: engine hook — group departure (leave OR kick) forfeits
+  // the departing player. Called from group-participants.update.
+  handleParticipantLeave: async (sock, chatId, leaverJid) => {
+    const game = activeGames.get(chatId);
+    if (!game) return null;
+    const player = game.getPlayerByJid(leaverJid);
+    if (!player || game.isForfeited(player)) return null;
+    const result = game.forfeitPlayer(leaverJid);
+    if (!result) return null;
+    if (game.gameOver && game.activePlayers().length === 0) {
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      return result;
+    }
+    const botMarker = `*${botConfig.getBotName()}*\n\n`;
+    const clientSock = sock || game.sock || globalSock;
+    let msg = botMarker + `🏃 *FORFEIT!* @${economy.getDisplayName(player.fullJid)} left the group — their Ludo pieces are out of play.\n\n`;
+    if (result.ended && result.winner) {
+      msg += `👑 *VICTORY BY FORFEIT!* @${economy.getDisplayName(result.winner.fullJid)} wins! 💰 +500 Zeni`;
+      awardWin(result.winner.fullJid, game);
+      if (game.timeout) clearTimeout(game.timeout);
+      activeGames.delete(chatId);
+      try {
+        if (clientSock) await clientSock.sendMessage(chatId, { text: msg, mentions: [player.fullJid, result.winner.fullJid] });
+      } catch (e) {}
+      return result;
+    }
+    msg += `🎯 Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
+    try {
+      if (clientSock) await clientSock.sendMessage(chatId, { text: msg, mentions: [player.fullJid, game.getCurrentPlayer().fullJid] });
+    } catch (e) {}
+    return result;
   }
 };
+
+// FIX 2026-09-16: test hook — lets the harness drive real game state without
+// going through WhatsApp. Not used by production code paths.
+module.exports._internals = { activeGames, LudoGame, renderBoard, normalizeJid };

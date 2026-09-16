@@ -6867,6 +6867,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 });
               }
             }
+
+            // FIX 2026-09-16: Ludo forfeit on departure — leaving OR being
+            // removed from the group mid-game counts as a forfeit. Runs for
+            // remove/leave actions only, and never on promote/demote.
+            if (action === "remove" || action === "leave") {
+              try {
+                for (const dep of participants || []) {
+                  const depJid = normalizeParticipantJid(dep) || String(dep);
+                  if (!depJid) continue;
+                  await ludo.handleParticipantLeave(sock, id, depJid);
+                }
+              } catch (ludoErr) {
+                console.log("Ludo forfeit-on-leave error:", ludoErr.message);
+              }
+            }
           } catch (err) {
             console.log("Error in group-participants.update:", err);
           }
@@ -9651,11 +9666,13 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j abilities / .j skills
                     if (primaryCmd === "abilities" || primaryCmd === "skills") {
+                      // FIX 2026-09-16: page arg — `.j abilities 2` shows page 2.
                       await skillCommands.viewAbilities(
                         sock,
                         chatId,
                         senderJid,
                         senderName,
+                        cmdArgs.slice(1)[0],
                       );
                       return;
                     }
@@ -21676,7 +21693,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       });
 
                       try {
-                        const result = await getPowerScale(character);
+                        const result = await getPowerScale(character, chatId);
 
                         if (!result.success) {
                           await sock.sendMessage(chatId, {
@@ -22925,6 +22942,26 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // FIX 2026-09-16: `.clip` — refined audio clipping/citing.
+                    // Reply to an audio/voice note: `.clip <start> <end>`.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} clip` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} clip `)
+                    ) {
+                      const clipArgs = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} clip`.length)
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean);
+                      const audioClip = require('./utils/audioclip');
+                      await audioClip.handleClipCommand(
+                        sock, chatId, senderJid, clipArgs, m, BOT_MARKER,
+                        botConfig.getPrefix(),
+                      );
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
                     // Trivia Command (NEW)
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} trivia`
@@ -22948,16 +22985,35 @@ _💡 Reply with another number from your search list!_`.trim();
                             [options[i], options[j]] = [options[j], options[i]];
                           }
 
+                          // FIX 2026-09-16: overwrite-safe timer — announce
+                          // time's-up + reveal answer instead of silent expiry.
+                          const __prevTrivia = activeTrivias.get(chatId);
+                          if (__prevTrivia && __prevTrivia.timerId) {
+                            try { clearTimeout(__prevTrivia.timerId); } catch (e) {}
+                          }
+                          const __triviaCategory = decodeHtmlEntities(result.category || "");
                           activeTrivias.set(chatId, {
                             question,
                             correctAnswer,
                             options,
-                            expiresAt: Date.now() + 60000
+                            category: __triviaCategory,
+                            difficulty: result.difficulty || "",
+                            expiresAt: Date.now() + 60000,
+                            timerId: setTimeout(async () => {
+                              const __td = activeTrivias.get(chatId);
+                              if (!__td || __td.correctAnswer !== correctAnswer) return; // answered/replaced
+                              activeTrivias.delete(chatId);
+                              try {
+                                await sock.sendMessage(chatId, {
+                                  text: BOT_MARKER + `⏰ *TIME'S UP!* ⏰\n\nThe answer was: *${correctAnswer}*\n\n_Play again with \`${botConfig.getPrefix()} trivia\`!_`
+                                });
+                              } catch (e) {}
+                            }, 61000)
                           });
 
                           const triviaMsg = [
                             `${BOT_MARKER}🧠 *TRIVIA QUESTION* 🧠`,
-                            `*Category:* ${result.category} | *Difficulty:* ${result.difficulty}`,
+                            `*Category:* ${__triviaCategory} | *Difficulty:* ${result.difficulty}`,
                             `━━━━━━━━━━━━━━━━━`,
                             question,
                             ``,
@@ -23466,14 +23522,16 @@ ${senderName} said y'all should know:
                         const isCorrectNumber = !isNaN(choice) && choice >= 1 && choice <= 4 && triviaData.options[choice - 1] === triviaData.correctAnswer;
                         const isCorrectText = lowerTxt.trim() === triviaData.correctAnswer.toLowerCase();
                         
+                        // FIX 2026-09-16: clear the pending timer on a win.
                         if (isCorrectNumber || isCorrectText) {
+                          if (triviaData.timerId) { try { clearTimeout(triviaData.timerId); } catch (e) {} }
                           activeTrivias.delete(chatId);
                           const rewardZeni = 500;
                           const rewardXp = 50;
                           
                           try {
                             economy.addMoney(senderJid, rewardZeni, "Trivia Reward");
-                            const xpResult = progression.addXP(senderJid, 45, "Trivia Answer");
+                            const xpResult = progression.addXP(senderJid, rewardXp, "Trivia Answer");
                             if (xpResult && xpResult.leveledUp) {
                               const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
                               let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
@@ -23496,6 +23554,15 @@ ${senderName} said y'all should know:
                             contextInfo: { mentionedJid: [senderJid] }
                           }, { quoted: m });
                           return;
+                        } else {
+                          // FIX 2026-09-16: quiet feedback for REAL attempts only —
+                          // a numeric 1-4 pick or an exact wrong-option text. Random
+                          // chat never triggers a react, so the group stays clean.
+                          const __attempt = (choice >= 1 && choice <= 4) ||
+                            triviaData.options.some(o => String(o).toLowerCase() === lowerTxt.trim());
+                          if (__attempt) {
+                            await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                          }
                         }
                       }
                     }
@@ -27081,12 +27148,30 @@ _(Or reply to their message)_
                     return;
                   }
 
-                  // `${botConfig.getPrefix().toLowerCase()}` ludo end - End game
+                  // `${botConfig.getPrefix().toLowerCase()}` ludo end - End game (FORFEIT)
                   if (
                     lowerTxt ===
                     `${botConfig.getPrefix().toLowerCase()} ludo end`
                   ) {
                     const result = await ludo.endGame(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                    );
+                    if (!result.success) {
+                      await sock.sendMessage(chatId, { text: result.message });
+                    }
+                    return;
+                  }
+
+                  // FIX 2026-09-16: `.ludo leave` — voluntary forfeit.
+                  if (
+                    lowerTxt ===
+                    `${botConfig.getPrefix().toLowerCase()} ludo leave`
+                  ) {
+                    const result = await ludo.leaveGame(
                       sock,
                       chatId,
                       senderJid,
