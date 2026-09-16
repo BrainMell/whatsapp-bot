@@ -49,10 +49,15 @@ const GuildSchema = new mongoose.Schema({
     upgrades: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
 
     // 💡 Phase 2: Guild emblem (cosmetic)
+    // 2026-09-17: `img` holds the UPLOADED crest (data:image/png;base64, ...,
+    // resized to <=512x512 / <=700KB by the .guild emblem upload path). Without
+    // declaring it here, Mongoose strict mode silently stripped it on every
+    // syncGuild() write - uploads "worked" then vanished on the next restart.
     emblem: {
         icon: { type: String, default: null },     // emoji or short text
         color: { type: String, default: '#FFD700' }, // hex color for rendering
-        background: { type: String, default: null }   // optional background pattern
+        background: { type: String, default: null },  // optional background pattern
+        img: { type: String, default: null }          // uploaded crest (data URL); takes priority over icon on cards
     },
 
     // 💡 Phase 2: Guild loans - members can borrow from guild bank

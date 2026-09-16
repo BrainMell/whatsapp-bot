@@ -895,27 +895,29 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     }
 
     const user = economy.getUser(senderJid);
+    // PERSISTENT ENERGY SYSTEM (2026-09-17): mining now drains the SAME
+    // canonical pool every other RPG system uses (see economy.getPersistentEnergy).
+    // The old code read `user.energy`, which the strict User schema never had,
+    // so it silently reset to the 100 sentinel on every save while the display
+    // used the progression-derived max - the "87/964" inconsistency.
     const energyCost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
-    const currentEnergy = user.energy !== undefined ? user.energy : 100;
-    // Use progression-derived maxEnergy - `user.maxEnergy` is never initialized
-    // on the user object (it's computed dynamically from level + MAG).
-    // Previously this capped at 100, making high-level mages' energy pools
-    // effectively useless.
+    // Use progression-derived maxEnergy - computed dynamically from level + MAG,
+    // identical to the max duels and adventures show.
     const derivedStats = progression.getBaseStats(senderJid, user.class);
     const maxEn = derivedStats.maxEnergy || 100;
+    const currentEnergy = economy.getPersistentEnergy(senderJid, maxEn);
 
-    if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}/${maxEn}.` });
+    if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}/${maxEn}. It recharges over time (~6h for a full bar).` });
 
-    user.energy = Math.max(0, currentEnergy - energyCost);
+    const leftAfterMine = Math.max(0, currentEnergy - energyCost);
+    economy.setPersistentEnergy(senderJid, leftAfterMine, maxEn);
     const xpGained = Math.floor(loc.energyCost * 20 + miningLevel * 5);
     const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
 
     if (Math.random() < 0.25) {
         const energyRecovered = Math.floor(Math.random() * 15) + 8;
-        user.energy = Math.min(maxEn, user.energy + energyRecovered);
+        economy.setPersistentEnergy(senderJid, leftAfterMine + energyRecovered, maxEn);
     }
-
-    economy.saveUser(senderJid);
 
     let msg = `⛏️ *MINING: ${loc.name.toUpperCase()}* ⛏️\n\nYou strike the veins of the earth...\n\n`;
     const luck = sheet.stats.luck || 5;
@@ -946,7 +948,8 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     Object.entries(found).forEach(([id, qty]) => { msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`; });
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
-    msg += `\n⚡ Energy Left: ${user.energy}/${maxEn} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
+    const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
+    msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
     if (levelUp?.leveledUp) msg += `\n✨ *LEVEL UP!* Mining is now Level ${levelUp.newLevel}!`;
     await sock.sendMessage(chatId, { text: msg });
 }

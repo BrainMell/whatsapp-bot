@@ -1618,7 +1618,7 @@
     "op": "statvals",
     "vals": [
      {
-      "x": 396,
+      "x": 372,
       "y": 726,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1632,7 +1632,7 @@
       }
      },
      {
-      "x": 396,
+      "x": 372,
       "y": 798,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1646,7 +1646,7 @@
       }
      },
      {
-      "x": 396,
+      "x": 372,
       "y": 870,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1660,7 +1660,7 @@
       }
      },
      {
-      "x": 396,
+      "x": 372,
       "y": 942,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1674,7 +1674,7 @@
       }
      },
      {
-      "x": 752,
+      "x": 728,
       "y": 726,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1688,7 +1688,7 @@
       }
      },
      {
-      "x": 752,
+      "x": 728,
       "y": 798,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1702,7 +1702,7 @@
       }
      },
      {
-      "x": 752,
+      "x": 728,
       "y": 870,
       "anchor": "rm",
       "font": "cinzel_dec_b",
@@ -1716,7 +1716,7 @@
       }
      },
      {
-      "x": 752,
+      "x": 728,
       "y": 942,
       "anchor": "rm",
       "font": "cinzel_dec_b",

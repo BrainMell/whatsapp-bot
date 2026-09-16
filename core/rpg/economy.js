@@ -2473,6 +2473,8 @@ module.exports = {
   // 💡 Persistent HP System (2026-07-31)
   getPersistentHP,
   setPersistentHP,
+  getPersistentEnergy,
+  setPersistentEnergy,
   healToFull,
 
   // 💡 FIX 2026-08-03: Mention display helpers - resolve LID→phone, use nicknames
@@ -2536,6 +2538,60 @@ function setPersistentHP(userId, hp, maxHP) {
   // Clamp: 0 to maxHP. 0 means defeated (will be restored to 1 on next access).
   user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
   scheduleSave(userId);
+}
+
+/**
+ * PERSISTENT ENERGY SYSTEM (2026-09-17): the canonical energy pool, mirroring
+ * the persistent-HP helpers above.
+ * - Lazy migration: -1/undefined initializes to FULL maxEnergy (same rule as
+ *   adventures, which always started players at full energy).
+ * - Time regen: a full bar recharges in 6h, scaled to max, so every rank
+ *   refills at the same pace. Fractional regen accumulates via energyTs.
+ * - Mining drains this pool; adventures read it at start (floor 50%).
+ */
+const ENERGY_REGEN_FULL_MS = 6 * 60 * 60 * 1000; // full recharge in 6 hours
+
+function getPersistentEnergy(userId, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return maxEnergy; // fallback for unregistered users
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const now = Date.now();
+
+  if (user.stats.currentEnergy === undefined || user.stats.currentEnergy === -1) {
+    user.stats.currentEnergy = max;
+    user.stats.energyTs = now;
+    scheduleSave(userId);
+    return max;
+  }
+
+  let energy = Math.floor(Number(user.stats.currentEnergy) || 0);
+  const last = Number(user.stats.energyTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (energy >= max) {
+    energy = max;
+    user.stats.energyTs = now;
+  } else if (elapsed > 0) {
+    const regen = Math.floor((elapsed / ENERGY_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      energy = Math.min(max, energy + regen);
+      user.stats.energyTs = now;
+    }
+    // regen === 0: keep energyTs so fractional regen keeps accumulating
+  }
+  user.stats.currentEnergy = energy;
+  scheduleSave(userId);
+  return energy;
+}
+
+function setPersistentEnergy(userId, energy, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return;
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const val = Math.max(0, Math.min(max, Math.floor(Number(energy) || 0)));
+  user.stats.currentEnergy = val;
+  user.stats.energyTs = Date.now();
+  scheduleSave(userId);
+  return val;
 }
 
 /**

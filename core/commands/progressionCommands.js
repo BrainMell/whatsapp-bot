@@ -422,6 +422,11 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         .join(' | ');
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
+        // 🧩 SPRITE CONSISTENCY 2026-09-17: themed styles draw the hero from
+        // playerClass+playerIndex - RANK never sent them, so every player
+        // rendered as Fighter variant 0 regardless of class/assigned sprite.
+        playerClass: String((userDoc && userDoc.class) || '').toUpperCase(),
+        playerIndex: Math.max(0, Math.floor(Number(userDoc && userDoc.spriteIndex) || 0)),
         style: (() => { try { const u = economy.getUser(senderJid); return (u && u.cardStyle) || 0; } catch (e) { return 0; } })(),
         nickname,
         caption: atMax
@@ -564,6 +569,9 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         const cardBuffer = await goService.generatePortraitCard({
           kind: 'ALLOCATE',
           style: (allocUser && allocUser.cardStyle) || 0,
+          // 🧩 SPRITE CONSISTENCY 2026-09-17: send class + assigned sprite.
+          playerClass: String((allocClass && allocClass.id) || (allocUser && allocUser.class) || '').toUpperCase(),
+          playerIndex: Math.max(0, Math.floor(Number(allocUser && allocUser.spriteIndex) || 0)),
           nickname: economy.getDisplayName(senderJid),
           pointsBig: `${allocAvail} POINTS`,
           pill: `${allocClass?.name || 'Adventurer'} · ${allocTier === 'STARTER' ? 'STARTER TIER' : allocTier}`,

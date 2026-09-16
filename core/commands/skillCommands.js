@@ -66,6 +66,9 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         if (branches.length) {
             treeBuf = await goService.generatePortraitCard({
                 kind: 'SKILLTREE',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
                 nickname: senderName,
                 className: userClass.name,
@@ -367,6 +370,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         }
         upBuf = await goService.generatePortraitCard({
             kind: 'SKILLUP',
+            // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+            playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+            playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
             style: (() => { try { const _su = economy.getUser(senderJid); return (_su && _su.cardStyle) || 0; } catch (e) { return 0; } })(),
             nickname: economy.getDisplayName(senderJid),
             skillName: targetSkill.name,
@@ -817,6 +823,9 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         if (pageGroups.length) {
             abBuf = await goService.generatePortraitCard({
                 kind: 'ABILITIES',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
                 nickname: senderName,
                 className: userClass.name,
@@ -1273,6 +1282,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         if (await goService.isHealthy()) {
             const evolveBuf = await goService.generatePortraitCard({
                 kind: 'TRIAL',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: show the NEW class sprite.
+                playerClass: String((chosen && chosen.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 nickname: economy.getDisplayName(senderJid),
                 caption: 'proven in the crucible of trial',
                 sealText: String(nextTier || 'E').slice(0, 3),

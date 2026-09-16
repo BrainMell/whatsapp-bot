@@ -122,6 +122,41 @@ function getRememberedShopList(chatId) {
     return entry.list;
 }
 
+// 🏷️ RANK FILTER (2026-09-17, owner: "add rank filter to the shop"):
+// `.j shop equipment legendary`, `.j shop mythic`, `.j shop epic sword`…
+// A rank token is stripped from the args and becomes a rarity filter that
+// composes with EVERY view (category, search, summon). Bare `.j shop <rank>`
+// lists that rank across the whole shop. Name search still works exactly as
+// before whenever no rank token is present.
+const RANK_ALIASES = {
+    common: 'COMMON', commons: 'COMMON',
+    uncommon: 'UNCOMMON', uncommons: 'UNCOMMON', uc: 'UNCOMMON',
+    rare: 'RARE', rares: 'RARE',
+    epic: 'EPIC', epics: 'EPIC',
+    legendary: 'LEGENDARY', legendaries: 'LEGENDARY', leg: 'LEGENDARY',
+    mythic: 'MYTHIC', mythics: 'MYTHIC', myth: 'MYTHIC',
+};
+const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
+
+// Splits ".j shop <args>" into { rank, query }: rank = rarity keyword (or null),
+// query = the remaining category/name text ('all' when nothing is left).
+function parseShopArgs(raw) {
+    const tokens = String(raw || 'all').trim().split(/\s+/).filter(Boolean);
+    let rank = null;
+    if (tokens.length === 1 && RANK_ALIASES[tokens[0].toLowerCase()]) {
+        rank = RANK_ALIASES[tokens[0].toLowerCase()];
+        tokens.length = 0;
+    } else if (tokens.length > 1) {
+        const last = tokens[tokens.length - 1].toLowerCase();
+        const first = tokens[0].toLowerCase();
+        if (RANK_ALIASES[last]) { rank = RANK_ALIASES[last]; tokens.pop(); }
+        else if (RANK_ALIASES[first]) { rank = RANK_ALIASES[first]; tokens.shift(); }
+    }
+    return { rank, query: tokens.join(' ') || 'all' };
+}
+
+const matchRank = (item, rank) => !rank || (item.rarity || 'COMMON').toUpperCase() === rank;
+
 // ==========================================
 // 🏪 SHOP DISPLAY
 // ==========================================
@@ -132,14 +167,18 @@ async function displayShop(sock, chatId, category = 'all') {
     const p = getPrefix();
     const Z = getZENI();
 
-    // 💡 DEDICATED SUMMON SHOP: if category is 'summon', show only summon items
-    if (category.toLowerCase() === 'summon') {
-        const summonEntries = Object.entries(summonItems);
+    // 🏷️ Rank filter: ".j shop equipment legendary" / ".j shop mythic" etc.
+    const { rank, query } = parseShopArgs(category);
+    const rankTag = rank ? ` • ${RARITY_ICONS[rank]} ${rank}` : '';
+
+    // 💡 DEDICATED SUMMON SHOP: if query is 'summon', show only summon items
+    if (query.toLowerCase() === 'summon') {
+        const summonEntries = Object.entries(summonItems).filter(([, i]) => matchRank(i, rank));
         if (summonEntries.length === 0) {
             await sock.sendMessage(chatId, { text: '🥚 No summon items available.' });
             return;
         }
-        let msg = '🥚 *SUMMON SHOP*\n';
+        let msg = `🥚 *SUMMON SHOP*${rankTag}\n`;
         msg += '━━━━━━━━━━━━━━━\n\n';
         const flat = []; // displayed order - powers `.buy <#>`
         const renderEntry = (item, statStr) => {
@@ -169,10 +208,10 @@ async function displayShop(sock, chatId, category = 'all') {
     // 🔍 SHOP SEARCH: any arg that isn't a known category is a query.
     // Searches item name, ID and description across ALL buyable stock
     // (class items + main shop + summon shop - summon hits get a 🥚 marker).
-    if (!KNOWN_CATEGORIES.has(category.toLowerCase())) {
-        const q = category.toLowerCase().trim();
+    if (!KNOWN_CATEGORIES.has(query.toLowerCase())) {
+        const q = query.toLowerCase().trim();
         const qFlat = q.replace(/\s+/g, '_'); // "health potion" also matches id "health_potion"
-        const pool = [...Object.values(classItems), ...Object.values(mainItems), ...Object.values(summonItems)];
+        const pool = [...Object.values(classItems), ...Object.values(mainItems), ...Object.values(summonItems)].filter(i => matchRank(i, rank));
         const scored = [];
         for (const item of pool) {
             const name = (item.name || '').toLowerCase();
@@ -189,13 +228,12 @@ async function displayShop(sock, chatId, category = 'all') {
 
         const MAX_RESULTS = 25;
         const results = scored.slice(0, MAX_RESULTS);
-        let msg = `🔍 *SHOP SEARCH* - "${category}"\n`;
+        let msg = `🔍 *SHOP SEARCH* - "${query}"${rankTag}\n`;
         msg += `━━━━━━━━━━━━━━━\n\n`;
         if (results.length === 0) {
-            msg += `❌ Nothing matches "${category}".\n\n`;
-            msg += `📂 Categories: \`${p} shop all · equipment · class · quest · permanent · summon\`\n`;
+            msg += `❌ Nothing matches "${query}"${rank ? ` in ${RARITY_ICONS[rank]} ${rank} rank` : ''}.\n\n`;
+            msg += `📂 Categories: \`${p} shop all · equipment · class · quest · permanent · summon\` · 🏷️ Ranks: \`${p} shop equipment legendary\`\n`;
         } else {
-            const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
             rememberShopList(chatId, results.map(r => r.item));
             results.forEach(({ item }, i) => {
                 const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
@@ -223,23 +261,22 @@ async function displayShop(sock, chatId, category = 'all') {
     };
 
     const items = { ...classItems, ...mainItems };
-    const activeCat = categoryInfo[category.toLowerCase()] || categoryInfo.all;
+    const activeCat = categoryInfo[query.toLowerCase()] || categoryInfo.all;
 
-    let msg = `${activeCat.icon} *SHOP*${category.toLowerCase() !== 'all' ? ` • ${activeCat.name}` : ''}\n`;
+    let msg = `${activeCat.icon} *SHOP*${query.toLowerCase() !== 'all' ? ` • ${activeCat.name}` : ''}${rankTag}\n`;
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `📂 \`${p} shop all · equipment · class · quest · permanent\` · 🔍 \`${p} shop <name>\`\n\n`;
+    msg += `📂 \`${p} shop all · equipment · class · quest · permanent\` · 🏷️ \`${p} shop <category> <rank>\` · 🔍 \`${p} shop <name>\`\n\n`;
 
     // Filter items by category
     const filteredItems = Object.entries(items).filter(([key, item]) => {
-        if (category === 'all') return true;
-        return item.category.toLowerCase() === category.toLowerCase();
-    });
+        if (query === 'all') return true;
+        return item.category.toLowerCase() === query.toLowerCase();
+    }).filter(([, item]) => matchRank(item, rank));
 
     if (filteredItems.length === 0) {
-        msg += `❌ No items found in this category.\n`;
+        msg += `❌ No items found${rank ? ` in ${RARITY_ICONS[rank]} ${rank} rank` : ' in this category'}.\n`;
     } else {
         // 💡 RESTYLE 2026-09-11: unified compact entries (numbered, no flavor text).
-        const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
         rememberShopList(chatId, filteredItems.map(([, item]) => item));
         filteredItems.forEach(([key, item], index) => {
             const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
@@ -262,7 +299,7 @@ async function displayShop(sock, chatId, category = 'all') {
     }
 
     msg += `━━━━━━━━━━━━━━━\n`;
-    msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (e.g. \`${p} buy health_potion_shop\`) • 🔍 \`${p} shop sword\``;
+    msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (e.g. \`${p} buy health_potion_shop\`) • 🏷️ \`${p} shop equipment legendary\``;
 
     await sock.sendMessage(chatId, { text: msg });
 }

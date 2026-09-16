@@ -82,6 +82,15 @@ const UserSchema = new mongoose.Schema({
     // combat ends. Players heal via .g hospital (free) or rest events.
     // -1 = "not initialized" → first access sets it to maxHP.
     currentHP: { type: Number, default: -1 },
+    // PERSISTENT ENERGY SYSTEM (2026-09-17): ONE canonical energy pool for the
+    // whole RPG. Mining previously used `user.energy`, a field this schema
+    // never had, so Mongoose strict mode silently stripped it on every save
+    // (players always re-read the 100 sentinel) while the display denominator
+    // came from the progression formula - the "87/964" bug. Now energy works
+    // like persistent HP: stored here, lazily initialized, time-regenerated.
+    // -1 = "not initialized" -> first access sets it to maxEnergy.
+    currentEnergy: { type: Number, default: -1 },
+    energyTs: { type: Number, default: 0 },
   },
   
   // 💡 AUDIT FIX 2026-08-01: hospital cooldown timestamp. Set by healToFull()

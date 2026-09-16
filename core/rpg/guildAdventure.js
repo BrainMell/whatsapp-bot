@@ -6598,6 +6598,9 @@ async function endCombat(sock, victory, sessionKey) {
             const __go = require('../utils/goImageService');
             const __fallBuf = await __go.generatePortraitCard({
               kind: 'ABYSS_RESULT',
+              // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+              playerClass: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || '').toUpperCase(),
+              playerIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
               nickname: __eco.getDisplayName(state.players[0].jid),
               partyText: 'FALLEN',
               cur: __c.floor,
@@ -7142,7 +7145,13 @@ async function startJourney(sock, sessionKey) {
     p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
     p.stats.maxHp = p.stats.hp;
     p.stats.maxEnergy = baseStats.maxEnergy;
-    p.stats.energy = p.stats.maxEnergy;
+    // PERSISTENT ENERGY SYSTEM (2026-09-17): adventures start from the
+    // player's canonical energy pool (mining drains it) instead of a blanket
+    // full bar - energy now carries over across RPG activities. Floor at 50%
+    // so nobody enters a boss fight unable to act; in-combat regen covers
+    // the rest. Session energy stays session-local (no write-back).
+    const persistEn = economy.getPersistentEnergy(p.jid, baseStats.maxEnergy);
+    p.stats.energy = Math.max(Math.floor(baseStats.maxEnergy * 0.5), persistEn);
     p.stats.atk = baseStats.atk;
     p.stats.def = baseStats.def;
     p.stats.mag = baseStats.mag;
@@ -8441,6 +8450,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
         if (await goServiceTrial.isHealthy()) {
           const trialBuf = await goServiceTrial.generatePortraitCard({
             kind: 'TRIAL',
+            // 🧩 SPRITE CONSISTENCY 2026-09-17: show the NEW class sprite.
+            playerClass: String((nextClass && nextClass.id) || '').toUpperCase(),
+            playerIndex: Math.max(0, Math.floor(Number((player && player.spriteIndex != null) ? player.spriteIndex : (user && user.spriteIndex)) || 0)),
             nickname: player.name || economy.getDisplayName(player.jid),
             caption: 'proven in the crucible of trial',
             sealText: String(nextClass.tier || 'E').slice(0, 3),

@@ -34,6 +34,10 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         rank: rank,
         class: classData?.name || "Adventurer",
         classIcon: classData?.icon || "🛡️",
+        // 🧩 SPRITE CONSISTENCY 2026-09-17: carry the assigned sprite index so
+        // any sprite-drawing consumer resolves the same variant as combat.
+        playerClass: String(classData?.id || classData?.name || '').toUpperCase(),
+        playerIndex: Math.max(0, Math.floor(Number(economyUser && economyUser.spriteIndex) || 0)),
         guildName: require('../rpg/guilds').getUserGuild(userId) || "",
         wallet: economyUser.wallet || 0,
         bank: economyUser.bank || 0,

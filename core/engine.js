@@ -18453,6 +18453,7 @@ _Sorted by guild level + XP_
                             level: guildLevel,
                             xpPercent: Math.max(0, Math.min(100, Math.floor((guildPoints / guildXpNeed) * 100))),
                             hexColor: guild.emblem?.color || '',
+                            emblem: guild.emblem?.img || '',
                             motto: guild.motto || '',
                             caption: '',
                             rows: [
@@ -18518,38 +18519,103 @@ _Sorted by guild level + XP_
                       return;
                     }
 
-                    // `.g guild emblem <icon> <color>` - set guild emblem (leader only)
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild emblem `)) {
+                    // `.g guild emblem` - set guild emblem (leader only)
+                    // 2026-09-17: upload path - send an IMAGE with caption
+                    // `.guild emblem` (or reply to an image with it) to set a
+                    // picture emblem shown on the guild charter card. Emoji +
+                    // color path unchanged. `.guild emblem clear` removes.
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild emblem` ||
+                        lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild emblem `)) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c You are not in a guild.' });
                         }
                         if (!guilds.isGuildOwner(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the guild leader can set the emblem.' });
-                        }
-                        const parts = txt.trim().split(/\s+/);
-                        const icon = parts[3]; // .g guild emblem <icon>
-                        const color = parts[4] || '#FFD700'; // optional hex color
-                        if (!icon) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild emblem <emoji> [hexColor]\`\nExample: \`${botConfig.getPrefix()} guild emblem 🐉 #FF5500\`` });
-                        }
-                        if (icon.length > 4) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Emblem icon must be a single emoji (max 4 chars).' });
-                        }
-                        // Validate hex color
-                        const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
-                        if (!hexColorRegex.test(color)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Color must be a hex code like #FFD700.\n_Got: ${color}_` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Only the guild leader can set the emblem.' });
                         }
                         const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Guild not found.' });
+                        }
+                        const parts = txt.trim().split(/\s+/);
+                        const sub = (parts[3] || '').toLowerCase();
+                        const quotedImg = m?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+                        const ownImg = m?.message?.imageMessage;
+                        const srcImg = ownImg || quotedImg || null;
+                        const wantsUpload = !sub || sub === 'set' || sub === 'upload';
+                        const wantsClear = sub === 'clear' || sub === 'remove';
+
+                        // UPLOAD: image attached (or quoted), no emoji arg
+                        if (srcImg && wantsUpload) {
+                          await sock.sendMessage(chatId, { react: { text: '\u23f3', key: m.key } });
+                          let raw;
+                          try {
+                            raw = await downloadMediaMessage(
+                              { message: ownImg ? m.message : { imageMessage: quotedImg } },
+                              'buffer',
+                              {},
+                              { logger: console, reuploadRequest: sock.updateMediaMessage }
+                            );
+                          } catch (dlErr) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Could not download that image - send it again with caption `.guild emblem`.' });
+                          }
+                          if (!raw || raw.length < 512) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c That image looks empty - try another one.' });
+                          }
+                          if (raw.length > 8 * 1024 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Image too large (max 8MB).' });
+                          }
+                          const sharp = require('sharp');
+                          const png = await sharp(raw).rotate().resize(512, 512, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+                          if (!png || png.length > 700 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem is still too big after resize - use a smaller image.' });
+                          }
+                          if (!guild.emblem) guild.emblem = {};
+                          guild.emblem.img = `data:image/png;base64,${png.toString('base64')}`;
+                          await guilds.syncGuild(userGuild);
+                          await sock.sendMessage(chatId, {
+                            image: png,
+                            caption: BOT_MARKER + '\u2705 Guild emblem uploaded! It now shows on the guild crest card (`.guild info`).',
+                          });
+                          return;
+                        }
+
+                        if (wantsClear) {
+                          if (guild.emblem?.img) {
+                            guild.emblem.img = null;
+                            await guilds.syncGuild(userGuild);
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2705 Uploaded emblem cleared - the emoji emblem shows again.' });
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2139\ufe0f No uploaded emblem to clear.' });
+                        }
+
+                        if (!sub) {
+                          return sock.sendMessage(chatId, {
+                            text: BOT_MARKER + '\ud83c\udfa8 *GUILD EMBLEM*\n\n'
+                              + `\u2022 Send an image with caption \`${botConfig.getPrefix()} guild emblem\` - it becomes the crest on the guild card\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [hexColor]\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the uploaded image`,
+                          });
+                        }
+
+                        const icon = parts[3];
+                        const color = parts[4] || '#FFD700';
+                        if (icon.length > 4) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem icon must be a single emoji (max 4 chars).' });
+                        }
+                        const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+                        if (!hexColorRegex.test(color)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `\u274c Color must be a hex code like #FFD700.\n_Got: ${color}_` });
+                        }
                         if (!guild.emblem) guild.emblem = {};
                         guild.emblem.icon = icon;
                         guild.emblem.color = color;
                         await guilds.syncGuild(userGuild);
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Guild emblem updated: ${icon} (color ${color})` });
+                        const hasImg = guild.emblem && guild.emblem.img;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `\u2705 Guild emblem updated: ${icon} (color ${color})${hasImg ? ' - the uploaded image takes priority on cards (`.guild emblem clear` to remove it)' : ''}` });
                       } catch (e) {
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Failed: ' + e.message });
                       }
                       return;
                     }
@@ -19394,6 +19460,9 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             const abyssMult = Number(abyssSystem.getFloorMultiplier(run.currentFloor || 1).toFixed(1));
                             const __entryBuf = await (require('./utils/goImageService')).generatePortraitCard({
                               kind: 'ABYSS_ENTRY',
+                              // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                              playerClass: String((economy.getUser(senderJid) || {}).class || '').toUpperCase(),
+                              playerIndex: Math.max(0, Math.floor(Number((economy.getUser(senderJid) || {}).spriteIndex) || 0)),
                               nickname: economy.getDisplayName(senderJid),
                               cur: run.currentFloor || 1,
                               pointsBig: `FLOOR ${run.currentFloor || 1}`,
@@ -19546,6 +19615,9 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                               const __eco = require('./rpg/economy');
                               const __exBuf = await (require('./utils/goImageService')).generatePortraitCard({
                                 kind: 'ABYSS_RESULT',
+                                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                                playerClass: String((__eco.getUser(senderJid) || {}).class || '').toUpperCase(),
+                                playerIndex: Math.max(0, Math.floor(Number((__eco.getUser(senderJid) || {}).spriteIndex) || 0)),
                                 nickname: __eco.getDisplayName(senderJid),
                                 partyText: 'EXTRACTED',
                                 cur: __c.floor,
