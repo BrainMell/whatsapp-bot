@@ -7169,6 +7169,18 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     ? jidNormalizedUser(sock.authState.creds.me.lid)
                     : null;
 
+                  // ⚡ INTERACTION TRACKER (2026-09-17): record @tags /
+                  // reply-targets per pair for the ship Match Meter.
+                  // Registered users only, in-memory + 5-min batched flush.
+                  try {
+                    require('./rpg/interactionTracker').recordMessage(m, senderJid, chatId, {
+                      isGroup: isGroupChat,
+                      botJid,
+                      botLid,
+                      normalize: jidNormalizedUser,
+                    });
+                  } catch (e) {}
+
                   // Sync user registration status from DB if missing in memory cache
                   await economy.syncUserFromDB(senderJid);
 
@@ -22117,8 +22129,12 @@ _💡 Reply with another number from your search list!_`.trim();
                             mentions.length === 2 ? mentions[0] : senderJid;
                           jid2 =
                             mentions.length === 2 ? mentions[1] : mentions[0];
-                          p1 = getUserProfile(jid1) || {};
-                          p2 = getUserProfile(jid2) || {};
+                          // v2.1 FIX: pass FULL user objects. getUserProfile()
+                          // returns the bare profile subdoc, so p.profile.*
+                          // accessors never resolved and the bond factor was
+                          // silently null in the live path.
+                          p1 = economy.getUser(jid1) || {};
+                          p2 = economy.getUser(jid2) || {};
                           // v2 FIX: getDisplayName already treats the
                           // 'Adventurer' placeholder as missing and falls
                           // back to the real WhatsApp name - never prefer a
@@ -22147,14 +22163,17 @@ _💡 Reply with another number from your search list!_`.trim();
                         // Optional AI verdict (comment ONLY - the score always
                         // comes from the deterministic engine). Guarded:
                         // 12s timeout, needs real profile data on both sides.
-                        const hasData = (p) =>
-                          p &&
-                          (((p.notes || []).length > 0) ||
-                            (p.memories &&
-                              ((p.memories.likes || []).length +
-                                (p.memories.hobbies || []).length +
-                                (p.memories.personal || []).length) >
-                                0));
+                        const memOf = (p) =>
+                          (p && (p.memories || (p.profile && p.profile.memories))) || {};
+                        const hasData = (p) => {
+                          if (!p) return false;
+                          const prof = p.profile || p;
+                          const mem = memOf(p);
+                          return (((prof.notes || []).length > 0) ||
+                            (((mem.likes || []).length) +
+                              ((mem.hobbies || []).length) +
+                              ((mem.personal || []).length)) > 0);
+                        };
                         if (jid1 && jid2 && hasData(p1) && hasData(p2)) {
                           try {
                             const res = await Promise.race([
@@ -22163,8 +22182,8 @@ _💡 Reply with another number from your search list!_`.trim();
                                   {
                                     role: "user",
                                     content: `Two people: ${name1} and ${name2}.
-${name1}: likes=${(p1.memories?.likes || []).join(", ") || "?"}; hobbies=${(p1.memories?.hobbies || []).join(", ") || "?"}
-${name2}: likes=${(p2.memories?.likes || []).join(", ") || "?"}; hobbies=${(p2.memories?.hobbies || []).join(", ") || "?"}
+${name1}: likes=${(memOf(p1).likes || []).join(", ") || "?"}; hobbies=${(memOf(p1).hobbies || []).join(", ") || "?"}
+${name2}: likes=${(memOf(p2).likes || []).join(", ") || "?"}; hobbies=${(memOf(p2).hobbies || []).join(", ") || "?"}
 Compatibility score (from the engine): ${result.score}/100.
 Write ONE witty verdict line (max 90 chars) about their compatibility. Roast them lightly if the score is low. Plain text only - no percentages, no emoji.`,
                                   },

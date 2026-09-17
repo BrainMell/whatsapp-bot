@@ -256,7 +256,10 @@ const UserSchema = new mongoose.Schema({
         lastSeen: { type: Date, default: Date.now },
         messageCount: { type: Number, default: 0 }
     },
-    relationships: { type: Map, of: Number, default: {} }
+    relationships: { type: Map, of: Number, default: {} },
+    // ⚡ 2026-09-17: tags/mentions/replies per pair (interactionTracker).
+    // Values are small {c,t} objects; Mixed keeps the tracker shape-agnostic.
+    interactions: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }
   }
 
 }, { timestamps: true, minimize: false });

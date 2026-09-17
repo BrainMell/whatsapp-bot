@@ -118,28 +118,63 @@ function nameChemistry(a, b, canon) {
   return Math.max(4, Math.min(97, Math.round(val)));
 }
 
-// Factor 2: real interaction history from socialSystem relationship scores.
+// Factor 2: real interaction history - tags/mentions/replies (tracked by
+// interactionTracker, stored on user.profile.interactions) DOMINATE, with
+// socialSystem relationship points as a complement. A real pair that never
+// interacted scores LOW (owner: silent pairs must not coast to 60%).
+const escKey = (jid) => String(jid || '').replace(/\./g, '_');
+const relsOf = (p) => (p && ((p.profile && p.profile.relationships) || p.relationships)) || null;
+const memOf = (p) => (p && (p.memories || (p.profile && p.profile.memories))) || {};
+
 function getRelScore(p, otherJid) {
-  const rels = p && p.profile && p.profile.relationships;
+  const rels = relsOf(p);
   if (!rels || !otherJid) return 0;
-  const esc = String(otherJid).replace(/\./g, '_');
   const grab = (k) => {
     try {
       if (typeof rels.get === 'function') return rels.get(k) || 0;
       return rels[k] || 0;
     } catch (e) { return 0; }
   };
-  return grab(esc) || grab(otherJid) || 0;
+  return grab(escKey(otherJid)) || grab(otherJid) || 0;
+}
+
+// Log-scaled combined tag/mention/reply counts, recency-decayed.
+function interactionFactor(p1, p2, jid1, jid2) {
+  const interOf = (p) => (p && ((p.profile && p.profile.interactions) || p.interactions)) || null;
+  const grab = (p, other) => {
+    const map = interOf(p);
+    if (!map || !other) return null;
+    const rec = typeof map.get === 'function' ? map.get(escKey(other)) : map[escKey(other)];
+    return rec && rec.c > 0 ? rec : null;
+  };
+  const a = grab(p1, jid2), b = grab(p2, jid1);
+  if (!a && !b) return null;
+  const n = ((a && a.c) || 0) + ((b && b.c) || 0);
+  const last = Math.max((a && a.t) || 0, (b && b.t) || 0);
+  const days = last ? (Date.now() - last) / 86400000 : 999;
+  const rec = days <= 3 ? 1.0 : days <= 7 ? 0.8 : days <= 14 ? 0.65 : days <= 30 ? 0.45 : 0.3;
+  return Math.min(100, Math.round(28 * Math.log(1 + n) * rec));
 }
 
 function bondFactor(p1, p2, jid1, jid2) {
   if (!p1 || !p2 || !jid1 || !jid2 || jid1 === jid2) return null;
-  const r1 = getRelScore(p1, jid2);
-  const r2 = getRelScore(p2, jid1);
-  if (!r1 && !r2) return null; // never interacted - no data, factor excluded
-  const avg = (r1 + r2) / 2;   // -100..100
-  const v = Math.round(54 + avg * 0.44);
-  return Math.max(3, Math.min(98, v));
+  const rel1 = getRelScore(p1, jid2);
+  const rel2 = getRelScore(p2, jid1);
+  const inter = interactionFactor(p1, p2, jid1, jid2);
+  const hasRel = !!(rel1 || rel2);
+  if (inter !== null) {
+    // tags/mentions/replies are the signal - relationship points complement
+    const avgRel = hasRel ? (rel1 + rel2) / 2 : 0;
+    const v = inter * 0.65 + (54 + avgRel * 0.44) * 0.35;
+    return Math.max(3, Math.min(98, Math.round(v)));
+  }
+  if (hasRel) {
+    const avg = (rel1 + rel2) / 2;   // -100..100
+    return Math.max(3, Math.min(98, Math.round(54 + avg * 0.44)));
+  }
+  // Real pair (mentions path) with zero recorded interaction history:
+  // strangers score LOW on this factor - per owner directive.
+  return 15;
 }
 
 // Factor 3: shared interests from AI-maintained profile memories.
@@ -147,7 +182,7 @@ const normTok = (x) => String(x || '').toLowerCase().trim();
 
 function vibeFactor(p1, p2) {
   const bag = (p) => {
-    const m = (p && p.memories) || {};
+    const m = memOf(p);
     const arr = [...(m.likes || []), ...(m.hobbies || []), ...(m.dislikes || [])];
     return new Set(arr.map(normTok).filter(Boolean));
   };
@@ -208,11 +243,12 @@ function tierFor(score) {
 function computeShip({ name1, name2, jid1 = null, jid2 = null, p1 = null, p2 = null, now = null }) {
   // order-independent canonical pair key (letters only, sorted)
   const canon = [letters(name1), letters(name2)].sort().join('~');
+  // Owner directive: tags/mentions/replies history is the MAJOR factor (w40).
   const defs = [
-    { key: 'name',  label: 'Name chemistry',      weight: 30, value: nameChemistry(name1, name2, canon) },
-    { key: 'bond',  label: 'Interaction history', weight: 35, value: bondFactor(p1, p2, jid1, jid2) },
-    { key: 'vibe',  label: 'Shared interests',    weight: 20, value: vibeFactor(p1, p2) },
-    { key: 'spark', label: "Today's spark",       weight: 15, value: sparkFactor(canon, now) },
+    { key: 'name',  label: 'Name chemistry',   weight: 25, value: nameChemistry(name1, name2, canon) },
+    { key: 'bond',  label: 'Tags & replies',   weight: 40, value: bondFactor(p1, p2, jid1, jid2) },
+    { key: 'vibe',  label: 'Shared interests', weight: 15, value: vibeFactor(p1, p2) },
+    { key: 'spark', label: "Today's spark",    weight: 20, value: sparkFactor(canon, now) },
   ];
   const avail = defs.filter((f) => f.value !== null);
   const wsum = avail.reduce((s, f) => s + f.weight, 0) || 1;

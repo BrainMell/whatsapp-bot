@@ -41,6 +41,10 @@ function buildPayload(players, enemies, options = {}) {
             isBoss: Boolean(e.isBoss),
             justDied: Boolean(e.justDied),
             spriteIndex: Math.floor(Number(e.spriteIndex) || 0),
+            // 💡 FIX 2026-09-17: wild summons as ENEMIES (abyss floors) must
+            // render their summon species sprite, not a random monster.
+            mode: String(e.mode || ((e.isWildSummon || e._isSummon) ? 'summon' : '') || ''),
+            species: String(e.species || ((e.isWildSummon || e._isSummon) ? (e.speciesId || e.id) : '') || ''),
             bossId: String(e.id || e.name || '').toUpperCase().replace(/\s+/g, '_'),
             level: Math.floor(Number(e.level || e.stats?.level || 1))
         })),
@@ -63,7 +67,7 @@ function buildPayload(players, enemies, options = {}) {
         // approved E-series audit renders). The Go service mirrors this guard.
         background: String(options.backgroundPath
             ? options.backgroundPath.split(/[\/\\]/).pop()
-            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_5.png' : 'spark_1.png'))
+            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_15.png' : 'spark_1.png'))
     };
 }
 

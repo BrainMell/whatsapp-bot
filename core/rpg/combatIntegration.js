@@ -182,6 +182,9 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
                 enemyLevel: Math.floor(Number(e0.level || e0.stats?.level) || 0),
                 enemyIndex: Math.floor(Number(e0.spriteIndex) || 0),
                 enemyIsBoss: Boolean(e0.isBoss),
+                // 💡 FIX 2026-09-17: wild summons render their species sprite
+                // on the end card instead of a random monster.
+                enemySpecies: String(e0.species || ((e0.isWildSummon || e0._isSummon) ? (e0.speciesId || e0.id) : '') || ''),
                 rank: String(options.rank || ''),
                 floor: Math.floor(Number(options.floor) || 0),
                 background: String(options.backgroundPath
