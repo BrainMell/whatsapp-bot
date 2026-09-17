@@ -269,7 +269,7 @@ function timeAgo(ts) {
 function renderPairHistory(jid1, jid2) {
   try {
     if (!jid1 || !jid2) {
-      return { ok: false, text: '❌ Tag two people (or reply to one) — e.g. `.j history @a @b`' };
+      return { ok: false, text: '❌ Tag two people (or reply to one) — e.g. `.j bond @a @b`' };
     }
     if (jid1 === jid2) {
       return { ok: false, text: '❌ Tag two *different* people to see their interaction history.' };

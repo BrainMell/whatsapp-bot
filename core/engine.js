@@ -22323,8 +22323,6 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                     // Shows the tracked tags/mentions/replies between two
                     // people - the same data that feeds the ship Match Meter.
                     if (
-                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} history` ||
-                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} history `) ||
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} bond` ||
                       lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bond `)
                     ) {
@@ -22351,8 +22349,8 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                           chatId,
                           BOT_MARKER,
                           "🤝 INTERACTION HISTORY",
-                          "history @u1 @u2",
-                          "history @alice (you × alice)",
+                          "bond @u1 @u2",
+                          "bond @alice (you × alice)",
                           "See who tags, mentions & replies to whom - the data behind the ship score!",
                         );
                       }

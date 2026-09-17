@@ -324,6 +324,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'dare', desc: 'Get a Truth or Dare dare challenge.', usage: 'dare' },
     { cmd: 'roast', desc: 'AI-powered roast of a user.', usage: 'roast @user' },
     { cmd: 'ship', desc: 'Calculate the love compatibility between two people.', usage: 'ship @u1 @u2' },
+    { cmd: 'bond', desc: 'See the tag/mention/reply history between two people (feeds the ship score).', usage: 'bond @u1 @u2' },
     { cmd: 'fact', desc: 'Get a random interesting fact.', usage: 'fact' },
     { cmd: 'define', desc: 'Get the definition of a word.', usage: 'define <word>' },
     { cmd: 'rate', desc: 'Let the bot rate anything.', usage: 'rate <thing>' },
