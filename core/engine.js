@@ -18693,8 +18693,43 @@ _Sorted by guild level + XP_
                         }
                         const parts = txt.trim().split(/\s+/);
                         const sub = (parts[3] || '').toLowerCase();
-                        const quotedImg = m?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-                        const ownImg = m?.message?.imageMessage;
+                        // 💡 2026-09-17 FIX: deep-unwrap ephemeral/viewOnce
+                        // wrappers before looking for the image - with
+                        // disappearing-messages ON every message is wrapped and
+                        // the raw reads never saw the picture.
+                        const emblemUnwrap = (node) => {
+                          let cur = node;
+                          for (let i = 0; cur && i < 6; i++) {
+                            const inner = cur.ephemeralMessage?.message || cur.viewOnceMessage?.message ||
+                              cur.viewOnceMessageV2?.message || cur.viewOnceMessageV2Extension?.message ||
+                              cur.documentWithCaptionMessage?.message;
+                            if (!inner) break;
+                            cur = inner;
+                          }
+                          return cur;
+                        };
+                        const emblemFindImg = (msgNode) => {
+                          let cur = msgNode;
+                          for (let i = 0; cur && i < 6; i++) {
+                            if (cur.imageMessage) return cur.imageMessage;
+                            const inner = cur.ephemeralMessage?.message || cur.viewOnceMessage?.message ||
+                              cur.viewOnceMessageV2?.message || cur.viewOnceMessageV2Extension?.message ||
+                              cur.documentWithCaptionMessage?.message;
+                            if (!inner) break;
+                            cur = inner;
+                          }
+                          if (cur && typeof cur === 'object') {
+                            for (const type of Object.keys(cur)) {
+                              const node = cur[type];
+                              if (node && typeof node === 'object' && node.imageMessage) return node.imageMessage;
+                            }
+                          }
+                          return null;
+                        };
+                        const emblemCore = emblemUnwrap(m?.message);
+                        const quotedCore = m?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                        const ownImg = emblemFindImg(emblemCore);
+                        const quotedImg = quotedCore ? emblemFindImg(emblemUnwrap(quotedCore)) : null;
                         const srcImg = ownImg || quotedImg || null;
                         const wantsUpload = !sub || sub === 'set' || sub === 'upload';
                         const wantsClear = sub === 'clear' || sub === 'remove';
@@ -18732,8 +18767,49 @@ _Sorted by guild level + XP_
                           if (raw.length > 8 * 1024 * 1024) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Image too large (max 8MB).' });
                           }
-                          const sharp = require('sharp');
-                          const png = await sharp(raw, { limitInputPixels: 8000000, sequentialRead: true }).rotate().resize(512, 512, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+                          // 💡 2026-09-17 FIX: gate exotic formats up-front
+                          // (iPhone HEIC/HEIF photos were crashing libvips with
+                          // GLib-GObject-CRITICAL) and run sharp in an ISOLATED
+                          // child process - a native crash now kills only the
+                          // worker, never the whole bot.
+                          const _h = raw.subarray(0, 12);
+                          const _a3 = _h.subarray(0, 3).toString('latin1');
+                          if (_h.subarray(4, 8).toString('latin1') === 'ftyp') {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '📷 That looks like an iPhone HEIC/HEIF photo - send it as JPG or PNG (repost the compressed photo), then caption it `.guild emblem` again.' });
+                          }
+                          const _okFmt = (_h[0] === 0xFF && _h[1] === 0xD8) || _a3 === 'GIF' ||
+                            (_h[0] === 0x89 && _h[1] === 0x50) ||
+                            (_h.subarray(0, 4).toString('latin1') === 'RIFF' && _h.subarray(8, 12).toString('latin1') === 'WEBP');
+                          if (!_okFmt) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Unsupported image format - send a JPG or PNG photo.' });
+                          }
+                          const png = await new Promise((resolve, reject) => {
+                            const cp = require('child_process');
+                            const pth = require('path');
+                            const child = cp.fork(pth.join(__dirname, 'utils', 'emblemWorker.js'), [], { silent: true, execArgv: [] });
+                            const chunks = [];
+                            let settled = false, outBuf = null, outDone = false, exitCode = null, exitSig = null;
+                            const timer = setTimeout(() => finish(reject, new Error('image processing timed out')), 30000);
+                            function finish(fn, arg) {
+                              if (settled) return;
+                              settled = true;
+                              clearTimeout(timer);
+                              try { child.kill(); } catch (e) {}
+                              fn(arg);
+                            }
+                            function trySettle() {
+                              if (settled || !outDone || exitCode === null) return;
+                              if (exitCode === 0 && outBuf && outBuf.length > 0) finish(resolve, outBuf);
+                              else finish(reject, new Error(exitCode === 0 ? 'image processor returned nothing' : 'image processor crashed' + (exitSig ? ' (' + exitSig + ')' : ' (' + exitCode + ')')));
+                            }
+                            child.stdout.on('data', (c) => chunks.push(c));
+                            child.stdout.on('end', () => { outDone = true; outBuf = Buffer.concat(chunks); trySettle(); });
+                            child.on('exit', (code, sig) => { exitCode = code; exitSig = sig; trySettle(); });
+                            child.on('error', (e) => finish(reject, e));
+                            child.stdin.on('error', () => {});
+                            child.stdin.write(raw);
+                            child.stdin.end();
+                          });
                           if (!png || png.length > 700 * 1024) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem is still too big after resize - use a smaller image.' });
                           }
@@ -22241,6 +22317,64 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                             `❌ Ship card failed: ${err.message}`,
                         });
                       }
+                    }
+
+                    // Interaction History (.j history [@a] [@b]) 2026-09-17
+                    // Shows the tracked tags/mentions/replies between two
+                    // people - the same data that feeds the ship Match Meter.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} history` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} history `) ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} bond` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bond `)
+                    ) {
+                      const historyMentions =
+                        m.message.extendedTextMessage?.contextInfo
+                          ?.mentionedJid || [];
+
+                      let hj1 = null, hj2 = null;
+                      if (historyMentions.length >= 2) {
+                        hj1 = jidNormalizedUser(historyMentions[0]);
+                        hj2 = jidNormalizedUser(historyMentions[1]);
+                      } else {
+                        // single mention or reply-to -> you x them
+                        const single = getMentionOrReply(m);
+                        if (single) {
+                          hj1 = senderJid;
+                          hj2 = single;
+                        }
+                      }
+
+                      if (!hj1 || !hj2) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🤝 INTERACTION HISTORY",
+                          "history @u1 @u2",
+                          "history @alice (you × alice)",
+                          "See who tags, mentions & replies to whom - the data behind the ship score!",
+                        );
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🤝", key: m.key },
+                      });
+
+                      try {
+                        const interactionTracker = require('./rpg/interactionTracker');
+                        const histOut = interactionTracker.renderPairHistory(hj1, hj2);
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + histOut.text,
+                        });
+                      } catch (err) {
+                        console.error("Interaction history error:", err);
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `❌ Interaction history failed: ${err.message}`,
+                        });
+                      }
+                      return;
                     }
 
                     // Random Joke

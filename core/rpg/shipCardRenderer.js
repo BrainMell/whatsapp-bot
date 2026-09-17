@@ -138,7 +138,12 @@ function getRelScore(p, otherJid) {
   return grab(escKey(otherJid)) || grab(otherJid) || 0;
 }
 
-// Log-scaled combined tag/mention/reply counts, recency-decayed.
+// RELATIVE interaction factor (owner v2 directive 2026-09-17): the bond
+// reflects "percentage of interaction with this person compared to
+// interaction with everyone else", not raw volume. Dominant term = mutual
+// relative focus (min of the two users' shares - both sides must actually
+// focus on each other, which also kills one-sided stalking); a small
+// absolute-volume term and a tiny-sample dampener keep it honest.
 function interactionFactor(p1, p2, jid1, jid2) {
   const interOf = (p) => (p && ((p.profile && p.profile.interactions) || p.interactions)) || null;
   const grab = (p, other) => {
@@ -147,13 +152,30 @@ function interactionFactor(p1, p2, jid1, jid2) {
     const rec = typeof map.get === 'function' ? map.get(escKey(other)) : map[escKey(other)];
     return rec && rec.c > 0 ? rec : null;
   };
+  const mapTotal = (map) => {
+    if (!map) return 0;
+    let sum = 0;
+    const entries = typeof map.entries === 'function' ? [...map.entries()] : Object.entries(map);
+    for (const [, v] of entries) sum += (v && v.c) || 0;
+    return sum;
+  };
   const a = grab(p1, jid2), b = grab(p2, jid1);
   if (!a && !b) return null;
   const n = ((a && a.c) || 0) + ((b && b.c) || 0);
   const last = Math.max((a && a.t) || 0, (b && b.t) || 0);
   const days = last ? (Date.now() - last) / 86400000 : 999;
   const rec = days <= 3 ? 1.0 : days <= 7 ? 0.8 : days <= 14 ? 0.65 : days <= 30 ? 0.45 : 0.3;
-  return Math.min(100, Math.round(28 * Math.log(1 + n) * rec));
+  // relative focus: share of each user's whole interaction life on this partner
+  const totA = mapTotal(interOf(p1));
+  const totB = mapTotal(interOf(p2));
+  const shareA = totA > 0 ? ((a && a.c) || 0) / totA : 0;
+  const shareB = totB > 0 ? ((b && b.c) || 0) / totB : 0;
+  const mutualShare = Math.min(shareA, shareB);          // 0..1
+  const relScore = 100 * Math.sqrt(mutualShare);         // 100% -> 100, 50% -> 71, 10% -> 32
+  const volume = Math.min(100, 28 * Math.log(1 + n));    // absolute floor
+  const damp = Math.min(1, n / 10);                      // tiny samples can't max out
+  const base = relScore * damp * 0.7 + volume * 0.3;
+  return Math.max(2, Math.min(100, Math.round(base * rec)));
 }
 
 function bondFactor(p1, p2, jid1, jid2) {
