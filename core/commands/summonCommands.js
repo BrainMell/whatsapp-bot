@@ -240,7 +240,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
 
     console.log('[SummonRoster] Calling Go service for GIF...');
     const gifBuffer = await goService.generateSummonRosterGIF({
-      userNickname: user.nickname || 'Adventurer',
+      userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
       slotsUsed: summons.length,
       slotsMax: user.summonSlots || 5,
       summons: rosterSummons,
@@ -434,7 +434,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     const species = registry.getSpecies(s.species);
 
     const detailGifBuffer = await goService.generateSummonDetailGIF({
-      userNickname: user.nickname || 'Adventurer',
+      userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
       slotsUsed: summons.length,
       slotsMax: user.summonSlots || 5,
       activeIndex: -1,

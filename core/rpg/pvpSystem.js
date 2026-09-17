@@ -573,7 +573,9 @@ function buildDuelPlayer(jid, userData, stats, idx, equalise = false) {
         name: userData.nickname || economy.getDisplayName(jid),
         hp: playerHp,
         maxHp: playerHp,
-        energy: maxEnergy,
+        // PERSISTENT ENERGY (2026-09-17): duels start from the player's
+        // canonical pool (reduced if they spent energy beforehand).
+        energy: Math.max(1, economy.getPersistentEnergy(jid, maxEnergy)),
         maxEnergy: maxEnergy,
         stats,
         level: progData?.level || 1,

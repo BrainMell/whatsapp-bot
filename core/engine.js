@@ -2299,6 +2299,64 @@ async function startBot(configInstance) {
       return false;
     }
 
+    // ⚡ MODE: updates-feed control shared by '.jmode' and the bare
+    // '.updates' alias. Returns the reply text (string).
+    async function handleModeUpdates(modeArgs) {
+      const p = botConfig.getPrefix().toLowerCase();
+      const sub = modeArgs[0] || '';
+      const sub2 = modeArgs[1] || '';
+
+      if (!sub) {
+        const settingsM = getGroupSettings(chatId);
+        let msg = `⚙️ *MODE*\n\n`;
+        msg += `📰 Updates feed (this chat): ${settingsM.animeNews ? '✅ ON' : '❌ OFF'}\n\n`;
+        msg += `• \`${p}mode updates on|off\` - feed for this chat\n`;
+        msg += `• \`${p}mode updates all\` - enable everywhere + broadcast (owner)\n`;
+        msg += `• \`${p}mode updates status\` - per-group summary`;
+        return msg;
+      }
+
+      if (sub === 'updates') {
+        if (sub2 === 'all') {
+          if (!isOwner && !isGlobalMod(senderJid)) {
+            return '❌ Only the bot owner or a global mod can broadcast updates to all groups.';
+          }
+          loadGroupSettings();
+          let enabled = 0;
+          for (const [gId, cfg] of groupSettings.entries()) {
+            if (gId.endsWith('@g.us') && !cfg.animeNews) {
+              cfg.animeNews = true;
+              enabled++;
+            }
+          }
+          saveGroupSettings();
+          const count = await broadcastUpdate(sock, null);
+          return `✅ *Updates enabled in all groups* (+${enabled} newly enabled).\n📢 Broadcast sent to ${count} groups.`;
+        }
+        if (sub2 === 'on' || sub2 === 'off') {
+          if (!canUseAdminCommands) {
+            return '❌ Only admins can toggle the updates feed for this chat.';
+          }
+          const settingsM = getGroupSettings(chatId);
+          settingsM.animeNews = sub2 === 'on';
+          saveGroupSettings();
+          return `📰 Updates feed ${settingsM.animeNews ? '✅ ON' : '❌ OFF'} for this chat.`;
+        }
+        loadGroupSettings();
+        let onCount = 0;
+        let total = 0;
+        for (const [gId, cfg] of groupSettings.entries()) {
+          if (gId.endsWith('@g.us')) {
+            total++;
+            if (cfg.animeNews) onCount++;
+          }
+        }
+        return `📰 *Updates feed:* ${onCount}/${total} groups enabled.\n_Use \`${p}mode updates all\` (owner) or \`${p}mode updates on/off\`._`;
+      }
+
+      return `⚙️ *MODE*\n\n• \`${p}mode\` - status\n• \`${p}mode updates on|off\` - feed for this chat\n• \`${p}mode updates all\` - enable everywhere + broadcast (owner)\n• \`${p}mode updates status\` - per-group summary`;
+    }
+
     function getGroupSettings(chatId) {
       if (!groupSettings.has(chatId)) {
         groupSettings.set(chatId, {
@@ -2828,6 +2886,29 @@ async function startBot(configInstance) {
     const pendingTagRequests = new Map();
     const activeTrivias = new Map();
     const pendingNameRequests = new Map();
+
+    // ⚡ CROSS-INSTANCE ELECTION (2026-09-17): prefix-less aliases like
+    // '.lore' / '.updates' are visible to EVERY sibling instance. A tiny
+    // shared-Mongo claim ensures exactly ONE instance replies instead of
+    // 3-4 duplicates. Fail-open: on any error we reply anyway.
+    function electOnce(lockName, msgKey) {
+      try {
+        const sys = require('./utils/system');
+        const now = Date.now();
+        const cur = sys.get('shared_command_elections', {}) || {};
+        for (const k of Object.keys(cur)) {
+          if (now - (cur[k] && cur[k].ts ? cur[k].ts : 0) > 90000) delete cur[k];
+        }
+        const id = lockName + '|' + msgKey;
+        if (cur[id]) return false;
+        cur[id] = { bot: botConfig.getBotId(), ts: now };
+        sys.set('shared_command_elections', cur);
+        return true;
+      } catch (e) {
+        console.error('[electOnce] election failed, fail-open:', e.message);
+        return true;
+      }
+    }
     const spamTracker = new Map();
     const menuSessions = new Map();
 
@@ -8028,6 +8109,32 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
                   let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
 
+                  // ⚡ PREFIX-LESS ALIASES (2026-09-17): '.lore' and '.updates …'
+                  // work without any instance prefix; one sibling replies.
+                  if (lowerTxt === '.lore') {
+                    if (electOnce('lore', (m && m.key && m.key.id) || String(Date.now()))) {
+                      const { sendLore } = require('./rpg/loreContent');
+                      await sendLore(sock, chatId, botConfig.getPrefix());
+                    }
+                    return;
+                  }
+                  if (lowerTxt === '.updates' || lowerTxt.startsWith('.updates ')) {
+                    if (lowerTxt === '.updates' || lowerTxt.split(' ')[1] === 'all') {
+                      if (electOnce('updates', (m && m.key && m.key.id) || String(Date.now()))) {
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the bot owner or a global mod can broadcast updates to all groups.' });
+                        } else {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '🔄 *UPDATES ALL*\nEnabling the updates feed in every group and broadcasting now...' });
+                          const count = await handleModeUpdates(['updates', 'all']);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + count });
+                        }
+                      }
+                      return;
+                    }
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `📰 Use: \`.updates all\` (owner broadcast) or \`.updates status\`.` });
+                    return;
+                  }
+
                   const senderRankLevel = isGroupChat ? getMemberRankLevel(chatId, senderJid) : 0;
                   let canUseAdminCommands =
                     senderIsAdmin ||
@@ -10096,16 +10203,25 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j audio <query>
                     if (primaryCmd === "audio") {
                       const query = cmdArgs.slice(1).join(" ");
-                      if (!query)
-                        return await sendUsage(
-                          sock,
-                          chatId,
-                          BOT_MARKER,
-                          "🎵 AUDIO",
-                          "audio <query>",
-                          "audio starboy",
-                          "Search and download any song from YouTube.",
-                        );
+                      if (!query) {
+                        // ⚡ REALM'S THEME (2026-09-17): bare '.j audio' plays a
+                        // song drawn from the bot's lore - epic dungeon/divine
+                        // themes fit for the Chronicles. Fixed 2026-09-17 audio
+                        // pipeline: local Go chain + WARP (tv_embedded client).
+                        const REALM_THEMES = [
+                          'epic fantasy orchestral battle theme',
+                          'dungeon boss battle epic music',
+                          'divine choir angelic epic orchestral',
+                          'dark fantasy ambient dungeon music',
+                          'heroic adventure orchestral theme',
+                        ];
+                        const themeQuery = REALM_THEMES[Math.floor(Math.random() * REALM_THEMES.length)];
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🎵 *THE REALM'S THEME* 🎵\n_Summoning a song worthy of the Divine Architect's chronicles..._\n\n💡 Tip: search any song with \`${botConfig.getPrefix()} audio <song>\``,
+                        });
+                        await handleAudioCommand(sock, chatId, themeQuery, m);
+                        return;
+                      }
                       await handleAudioCommand(sock, chatId, query, m);
                       return;
                     }
@@ -10799,9 +10915,11 @@ _💡 Reply with another number from your search list!_`.trim();
                         whatsappName: m.pushName,
                       });
 
-                      // Also set as nickname if user doesn't have one yet (ONLY if they are registered)
+                      // ⚡ 2026-09-17: also heal placeholder nicknames ('Adventurer')
+                      // to the WhatsApp display name - the username IS their
+                      // default name until they register a custom one.
                       const currentProfile = getUserProfile(senderJid);
-                      if (currentProfile && !currentProfile.nickname && economy.isRegistered(senderJid)) {
+                      if (currentProfile && (!currentProfile.nickname || currentProfile.nickname === 'Adventurer')) {
                         updateUserProfile(senderJid, { nickname: m.pushName });
                       }
                     }
@@ -14806,6 +14924,29 @@ Moderation:
                     });
                   }
 
+                  // ⚡ MODE COMMAND (2026-09-17): '.jmode updates all' and
+                  // '.j mode updates all' both land here (prefix-attached
+                  // 'mode' is just this instance's prefix + mode). Controls
+                  // the automated updates feed + owner broadcast.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()}mode` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}mode `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} mode` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} mode `)
+                  ) {
+                    const p = botConfig.getPrefix().toLowerCase();
+                    const modeArgs = lowerTxt
+                      .substring(
+                        lowerTxt.startsWith(`${p} mode `) ? p.length + 1 : p.length,
+                      )
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean);
+                    const replyMsg = await handleModeUpdates(modeArgs);
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + replyMsg }, { quoted: m });
+                    return;
+                  }
+
                   // news on/off - Toggle automated anime news
                   if (
                     lowerTxt ===
@@ -18549,16 +18690,29 @@ _Sorted by guild level + XP_
                         // UPLOAD: image attached (or quoted), no emoji arg
                         if (srcImg && wantsUpload) {
                           await sock.sendMessage(chatId, { react: { text: '\u23f3', key: m.key } });
+                          // ⚡ 2026-09-17: memory guard - large photo spikes were
+                          // pushing the process over the pm2 450MB restart line
+                          // (hourglass react then silent restart = the "hang").
+                          const _memNow = process.memoryUsage();
+                          if (_memNow.rss > 400 * 1024 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u26a0\ufe0f The bot is under heavy load right now - try uploading the emblem again in a minute.' });
+                          }
                           let raw;
                           try {
-                            raw = await downloadMediaMessage(
-                              { message: ownImg ? m.message : { imageMessage: quotedImg } },
-                              'buffer',
-                              {},
-                              { logger: console, reuploadRequest: sock.updateMediaMessage }
-                            );
+                            // ⚡ 2026-09-17: hard 45s cap - media re-uploads can
+                            // hang forever on a stale session, which looked like
+                            // the emblem command "hanging".
+                            raw = await Promise.race([
+                              downloadMediaMessage(
+                                { message: ownImg ? m.message : { imageMessage: quotedImg } },
+                                'buffer',
+                                {},
+                                { logger: console, reuploadRequest: sock.updateMediaMessage }
+                              ),
+                              new Promise((_, rej) => setTimeout(() => rej(new Error('media download timed out (45s)')), 45000)),
+                            ]);
                           } catch (dlErr) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Could not download that image - send it again with caption `.guild emblem`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Could not download that image (' + (dlErr.message || 'error') + ') - send it again with caption `.guild emblem`.' });
                           }
                           if (!raw || raw.length < 512) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c That image looks empty - try another one.' });
@@ -18567,7 +18721,7 @@ _Sorted by guild level + XP_
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Image too large (max 8MB).' });
                           }
                           const sharp = require('sharp');
-                          const png = await sharp(raw).rotate().resize(512, 512, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+                          const png = await sharp(raw, { limitInputPixels: 8000000, sequentialRead: true }).rotate().resize(512, 512, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
                           if (!png || png.length > 700 * 1024) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem is still too big after resize - use a smaller image.' });
                           }
@@ -22067,28 +22221,31 @@ _💡 Reply with another number from your search list!_`.trim();
                         else if (score > 25) comment = "It's a bit chilly. 🧊";
                         else comment = "Run. Just run. ☠️";
                       }
-                      let emoji =
-                        score > 90
-                          ? "💍"
-                          : score > 75
-                            ? "💖"
-                            : score > 50
-                              ? "⚖️"
-                              : "💔";
-
-                      // Create Progress Bar
-                      const filledLength = Math.floor(score / 10);
-                      const emptyLength = 10 - filledLength;
-                      const bar =
-                        "█".repeat(filledLength) + "░".repeat(emptyLength);
-
+                      // ⚡ POLISHED BOND READING (2026-09-17): hearts bar,
+                      // fate tiers flavored with the bot's lore, destiny roll.
+                      const hearts = Math.max(0, Math.min(10, Math.round(score / 10)));
+                      const heartBar = '❤️'.repeat(hearts) + '💔'.repeat(10 - hearts);
+                      const tiers = [
+                        [90, '💍', 'CELESTIAL DECREE', 'The Divine Architect himself signed this bond. Not even the Primordial Chaos can undo it.'],
+                        [75, '💖', 'SOULBOUND SPARKS', 'Two Divine Sparks burning as one - the Infected flee from this kind of energy.'],
+                        [50, '⚖️', 'A BOND IN BALANCE', 'Chaos whispers doubts, but the spark is real. Cleanse a few dungeons together and watch it grow.'],
+                        [25, '🧊', 'FADING EMBERS', 'Even the Architect squints at this pairing. A few co-op quests might rekindle it.'],
+                        [-1, '☠️', 'THE VOID CLAIMS IT', 'The Chaos showed me this pairing in a dream and I woke up screaming. Run.'],
+                      ];
+                      const tier = tiers.find((t) => score > t[0]) || tiers[tiers.length - 1];
+                      const destiny = 11 + (Math.abs(score * 7919) % 89); // stable per-pair roll 11-99
                       const response = [
-                        `${BOT_MARKER} ${emoji} *LOVE CALCULATOR* ${emoji}`,
-                        `*Pair:* ${namesDisplay}`,
-                        `*Score:* ${score}%`,
-                        `*Meter:* [${bar}]`,
-                        `*Verdict:* ${comment}`,
-                      ].join("\n");
+                        `${BOT_MARKER} ${tier[1]} *BOND READING* ${tier[1]}`,
+                        ``,
+                        `💞 *Pair:* ${namesDisplay}`,
+                        `🔮 *Compatibility:* ${score}%`,
+                        `❤️ ${heartBar}`,
+                        `🌌 *Destiny index:* ${destiny}/100`,
+                        ``,
+                        `📜 *Verdict:* ${comment}`,
+                        `✨ *Fate tier:* ${tier[2]}`,
+                        `_${tier[3]}_`,
+                      ].join('\n');
 
                       return await sock.sendMessage(chatId, { text: response });
                     }
@@ -28512,44 +28669,32 @@ _(Or reply to their message)_
                   }
                   // -----------------------------------------
 
-                  // Conversational nickname placeholder acquisition for unregistered users
+                  // ⚡ AUTO-NAME (2026-09-17, owner directive): the AI never asks
+                  // for names anymore. Unregistered users automatically get
+                  // their WhatsApp display name as their default name until
+                  // they register and choose a different one.
                   if (!economy.isRegistered(senderJid)) {
                     if (senderJid === botJid || (botLid && senderJid === botLid)) return;
-                    if (pendingNameRequests.has(senderJid)) return; // Already waiting for name response!
-                    const user = economy.getOrCreateUser(senderJid);
-                    const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
-                    if (isNameUnknown) {
-                      // --- Sibling Bot Detection: skip name-ask for known peer bots ---
-                      const siblings = botConfig.getSiblings().map(s => s.toLowerCase());
-                      const senderPushName = (m.pushName || "").trim();
-                      const isSiblingBot = senderPushName && siblings.includes(senderPushName.toLowerCase());
-                      if (isSiblingBot) {
-                        // Auto-register this sibling with their known name + friend relationship
-                        user.nickname = senderPushName;
-                        if (!user.profile) user.profile = {};
-                        user.profile.nickname = senderPushName;
-                        user.profile.whatsappName = senderPushName;
-                        if (!user.profile.relationships) user.profile.relationships = {};
-                        // 💡 FIX: Mongoose Maps do not support keys that contain "."
-                        // JIDs like "2348086616347@s.whatsapp.net" have "." in the
-                        // domain part. Sanitize by replacing "." with "_" (same
-                        // pattern used by socialSystem.js).
-                        const relKey = (botJid || '').replace(/\./g, '_');
-                        if (typeof user.profile.relationships.set === 'function') {
-                          user.profile.relationships.set(relKey, 50);
-                        } else {
-                          user.profile.relationships[relKey] = 50;
-                        }
-                        economy.scheduleSave(senderJid);
-                        // Don't return - let the conversation continue naturally
-                      } else {
-                        await reply(`Yo! I don't know your name yet. What should I call you?`);
-                        pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
-                        return;
+                    const userAuto = economy.getOrCreateUser(senderJid);
+                    const pnAuto = (m.pushName || "").trim();
+                    const isNameUnknown =
+                      !userAuto.nickname || userAuto.nickname === "Adventurer";
+                    if (
+                      isNameUnknown &&
+                      pnAuto &&
+                      pnAuto.toLowerCase() !== "undefined" &&
+                      pnAuto.length >= 2 &&
+                      pnAuto.length <= 20
+                    ) {
+                      userAuto.nickname = pnAuto;
+                      if (!userAuto.profile) userAuto.profile = {};
+                      userAuto.profile.nickname = pnAuto;
+                      if (!userAuto.profile.whatsappName) {
+                        userAuto.profile.whatsappName = pnAuto;
                       }
+                      economy.scheduleSave(senderJid);
                     }
                   }
-
 
                   const prompt = txt
                     .replace(new RegExp(`${botConfig.getPrefix()}`, "gi"), "")

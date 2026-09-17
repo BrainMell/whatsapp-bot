@@ -432,6 +432,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'delmod', desc: 'Remove a global bot moderator.', usage: 'delmod @user' },
     { cmd: 'mods', desc: 'List all global moderators.', usage: 'mods' },
     { cmd: 'updateall', desc: 'Broadcast a message to all groups.', usage: 'updateall [message]' },
+    { cmd: 'mode', desc: 'Bot mode settings - updates feed + broadcasts.', usage: 'mode updates all|on|off|status' },
     { cmd: 'event start', desc: 'Start a token event (Owner/Mod).', usage: 'event start' },
     { cmd: 'event stop', desc: 'Stop the active token event.', usage: 'event stop' },
     { cmd: 'event status', desc: 'Check token event status.', usage: 'event status' },

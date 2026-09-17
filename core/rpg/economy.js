@@ -328,40 +328,21 @@ function registerUser(userId, nickname) {
   
   return {
     success: true,
-    message: `🌌 *THE AWAKENING* 🌌
+    message: `🌌 *WELCOME, ${nickname.toUpperCase()}* 🌌
 
-"Long ago, the realms were forged in a delicate balance between the *Divine Architect* and *Primordial Chaos*. For eons they coexisted, but the Chaos grew envious, seeping into the world and twisting living beings into mindless husks-*The Infected*.
+The Divine Architect has awakened you as one of the chosen *Adventurers* of the Realms.
 
-To save creation, the Divine bestowed fragments of celestial power upon chosen mortals. You, ${nickname}, are one of those chosen *Adventurers*."
+${starterClass.icon} *Class:* ${starterClass.name} - ${starterClass.desc}
+💰 *Starter Zeni:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
+🏆 *Rank:* F-Rank Adventurer
 
-👤 *Player:* ${nickname}
-💰 *Starting Balance:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
-${starterClass.icon} *Class:* ${starterClass.name}
-📝 ${starterClass.desc}
-🏆 *Rank:* F-Rank
+🚀 *Try these first:*
+• \`${botConfig.getPrefix()} quest\` - fight enemies, earn XP & Zeni
+• \`${botConfig.getPrefix()} shop\` - buy your first gear
+• \`${botConfig.getPrefix()} daily\` - free daily reward
+• \`${botConfig.getPrefix()} menu\` - see everything else
 
-━━━━━━━━━━━━━━━
-🚀 *GETTING STARTED*
-━━━━━━━━━━━━━━━
-1️⃣ \`${botConfig.getPrefix()} quest\` - Fight enemies, gain XP & gold
-2️⃣ \`${botConfig.getPrefix()} allocate <stat> <n>\` - Spend stat points
-3️⃣ \`${botConfig.getPrefix()} skill tree\` - View & unlock abilities
-4️⃣ \`${botConfig.getPrefix()} shop\` - Buy gear & items
-5️⃣ \`${botConfig.getPrefix()} daily\` - Free daily Zeni reward
-
-━━━━━━━━━━━━━━━
-🎯 *FEATURES TO EXPLORE*
-━━━━━━━━━━━━━━━
-🕳️ \`${botConfig.getPrefix()} abyss\` - Endless dungeon (fragments for eggs!)
-🐉 \`${botConfig.getPrefix()} summon\` - Collect & battle monsters
-⚔️ \`${botConfig.getPrefix()} duel @user\` - PvP combat
-🃏 \`${botConfig.getPrefix()} cards on\` - Trading card game
-🎰 \`${botConfig.getPrefix()} slots\` - Casino gambling
-⚒️ \`${botConfig.getPrefix()} mine\` - Mining for materials
-🏰 \`${botConfig.getPrefix()} guild\` - Join a guild
-
-💡 Type \`${botConfig.getPrefix()} tutorial\` for a full walkthrough!
-💡 Type \`${botConfig.getPrefix()} menu\` to see ALL commands!`
+📜 Want the story of this world? \`${botConfig.getPrefix()} lore\``
   };
 }
 //========================================
@@ -2226,7 +2207,8 @@ function getDisplayName(jid) {
     // Step 1: resolve to the economy cache key (handles LID↔phone swap)
     const resolvedId = resolveJidHelper(jid);
     const user = economyData.get(resolvedId);
-    if (user && user.nickname) return user.nickname;
+    if (user && user.nickname && user.nickname !== 'Adventurer') return user.nickname;
+    if (user && user.profile && user.profile.whatsappName) return user.profile.whatsappName;
   } catch (e) {}
   // Step 2: fall back to phone number (resolve LID → phone)
   try {

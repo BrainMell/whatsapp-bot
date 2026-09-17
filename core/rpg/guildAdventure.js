@@ -6378,6 +6378,13 @@ async function endCombat(sock, victory, sessionKey) {
         const finalHP = p.currentHP !== undefined ? p.currentHP : p.stats.hp;
         economy.setPersistentHP(p.jid, finalHP, p.stats.maxHp);
       }
+      // PERSISTENT ENERGY WRITE-BACK (2026-09-17): energy spent in combat
+      // stays spent - one canonical pool shared by mining/quests/duels,
+      // mirroring exactly how persistent HP works.
+      if (p.jid && p.stats && p.stats.maxEnergy) {
+        const finalEn = Number.isFinite(p.stats.energy) ? p.stats.energy : p.stats.maxEnergy;
+        economy.setPersistentEnergy(p.jid, finalEn, p.stats.maxEnergy);
+      }
     });
   }
 
@@ -7145,13 +7152,13 @@ async function startJourney(sock, sessionKey) {
     p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
     p.stats.maxHp = p.stats.hp;
     p.stats.maxEnergy = baseStats.maxEnergy;
-    // PERSISTENT ENERGY SYSTEM (2026-09-17): adventures start from the
-    // player's canonical energy pool (mining drains it) instead of a blanket
-    // full bar - energy now carries over across RPG activities. Floor at 50%
-    // so nobody enters a boss fight unable to act; in-combat regen covers
-    // the rest. Session energy stays session-local (no write-back).
+    // PERSISTENT ENERGY SYSTEM (2026-09-17, owner directive): energy spent
+    // out of combat (mining) CARRIES INTO COMBAT - same contract as the
+    // persistent HP system. No artificial 50% floor: enter with what you
+    // have (min 1 so you are never hard-locked), recover via in-combat
+    // regen. The session writes back to the pool when combat ends.
     const persistEn = economy.getPersistentEnergy(p.jid, baseStats.maxEnergy);
-    p.stats.energy = Math.max(Math.floor(baseStats.maxEnergy * 0.5), persistEn);
+    p.stats.energy = Math.max(1, persistEn);
     p.stats.atk = baseStats.atk;
     p.stats.def = baseStats.def;
     p.stats.mag = baseStats.mag;
@@ -10631,6 +10638,10 @@ function getDebuffIcon(debuffType) {
 // ==========================================
 
 module.exports = {
+  showLore: async (sock, chatId) => {
+    const { sendLore } = require('./loreContent');
+    return sendLore(sock, chatId, '.');
+  },
   initAdventure,
   joinAdventure,
   getDungeonMenu,

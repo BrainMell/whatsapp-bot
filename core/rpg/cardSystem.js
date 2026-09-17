@@ -607,7 +607,8 @@ function calcPrice(tier, totalSpawned, maxCopies) {
 async function getUserName(jid) {
     try {
         const u = await User.findOne({ userId: jid });
-        return u?.nickname || u?.profile?.whatsappName || 'Adventurer';
+        if (u?.nickname && u.nickname !== 'Adventurer') return u.nickname;
+        return u?.profile?.whatsappName || u?.nickname || 'Adventurer';
     } catch (e) { return 'Adventurer'; }
 }
 
