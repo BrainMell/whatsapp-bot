@@ -34,6 +34,9 @@ const AbyssRunSchema = new mongoose.Schema({
   // type was lost between commands). Now properly defined.
   currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event' | 'wild_summon'
   currentEncounterData: { type: mongoose.Schema.Types.Mixed, default: null },
+  // 💡 2026-09-17: pack fights - weakened pack members queued for the
+  // current floor (empty on solo floors). Same shape as currentEnemy.
+  packQueue: { type: [mongoose.Schema.Types.Mixed], default: [] },
   // Player state snapshot at run start (so we can restore on death)
   // 💡 FIX 2026-08-31: added atk/def/spd - TRAP events roll against these
   // stats (playerStats[choice.stat]), but only hp/energy were snapshotted,

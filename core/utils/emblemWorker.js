@@ -15,7 +15,8 @@ process.stdin.on('data', (c) => chunks.push(c));
 process.stdin.on('end', async () => {
   try {
     const png = await sharp(Buffer.concat(chunks), {
-      limitInputPixels: 8000000,
+      limitInputPixels: 100000000, // 💡 2026-09-17: was 8MP - rejected EVERY modern phone photo (12MP+).
+                                   // Isolated child process, so big rasters never hit the bot's own memory.
       sequentialRead: true,
       failOn: 'none', // be tolerant of slightly corrupt input instead of crashing
     })

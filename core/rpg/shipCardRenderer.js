@@ -268,7 +268,7 @@ function computeShip({ name1, name2, jid1 = null, jid2 = null, p1 = null, p2 = n
   // Owner directive: tags/mentions/replies history is the MAJOR factor (w40).
   const defs = [
     { key: 'name',  label: 'Name chemistry',   weight: 25, value: nameChemistry(name1, name2, canon) },
-    { key: 'bond',  label: 'Tags & replies',   weight: 40, value: bondFactor(p1, p2, jid1, jid2) },
+    { key: 'bond',  label: 'Interaction focus', weight: 40, value: bondFactor(p1, p2, jid1, jid2) },
     { key: 'vibe',  label: 'Shared interests', weight: 15, value: vibeFactor(p1, p2) },
     { key: 'spark', label: "Today's spark",    weight: 20, value: sparkFactor(canon, now) },
   ];

@@ -6267,6 +6267,36 @@ async function handleAbyssVictory(sock, sessionKey) {
     }
   }
 
+  // 💡 2026-09-17 PACK FIGHTS: queued pack members jump in one after
+  // another on the SAME floor - no HP reset, +25% rewards per add. The
+  // floor only advances once the whole pack is down (bosses/wild summons
+  // never have packs).
+  if (Array.isArray(run.packQueue) && run.packQueue.length > 0 && run.currentEncounterType === 'combat') {
+    const addRewards = abyssSystem.getFloorRewards(state.abyssFloor, false, 0.25);
+    run.lootAccumulator.xp += addRewards.xp;
+    run.lootAccumulator.gold += addRewards.gold;
+    run.monstersKilled = (run.monstersKilled || 0) + 1;
+    try { economy.trackMissionStat(senderJid, 'kills', 1); } catch (e) {}
+
+    const nextPackEnemy = run.packQueue.shift();
+    run.currentEnemy = nextPackEnemy;
+    run.currentEncounterType = 'combat';
+    run.currentEncounterData = null;
+    await run.save();
+
+    const packLeft = run.packQueue.length;
+    let pmsg = `🧸 *Pack fight! ${nextPackEnemy.name || 'Another enemy'} rushes in!*\n`;
+    pmsg += `❤️ Your HP carries over: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n`;
+    pmsg += `🎁 +${addRewards.xp} XP, +${addRewards.gold} Zeni (pack share)\n`;
+    pmsg += packLeft > 0 ? `👥 ${packLeft} more pack member(s) waiting after this one!\n\n` : '\n';
+    pmsg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    try { await sock.sendMessage(state.chatId, { text: pmsg }); } catch (e) {}
+
+    deleteGameState(sessionKey);
+    await startAbyssCombat(sock, state.chatId, senderJid, nextPackEnemy, run, state.abyssFloor);
+    return;
+  }
+
   // Advance floor
   run.currentFloor = (run.currentFloor || state.abyssFloor) + 1;
   const newFloor = run.currentFloor;
@@ -6277,6 +6307,8 @@ async function handleAbyssVictory(sock, sessionKey) {
   if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
     run.currentEncounterType = encounter.type;
+    // 💡 2026-09-17: carry the pack queue onto the run (empty for wilds)
+    run.packQueue = Array.isArray(encounter.packQueue) ? encounter.packQueue : [];
     if (encounter.type === 'wild_summon') {
       run.currentEncounterData = {
         species: encounter.wildSummonSpecies,
@@ -6303,6 +6335,9 @@ async function handleAbyssVictory(sock, sessionKey) {
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* - ${encounter.enemy.name}\n`;
     msg += `HP: ${Math.floor(encounter.enemy.stats?.hp ?? encounter.enemy.hp)}/${Math.floor(encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp)}\n`;
+    if (Array.isArray(encounter.packQueue) && encounter.packQueue.length) {
+      msg += `👥 *PACK FIGHT* - ${encounter.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n`;
+    }
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);

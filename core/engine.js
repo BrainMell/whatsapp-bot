@@ -18767,6 +18767,13 @@ _Sorted by guild level + XP_
                           if (raw.length > 8 * 1024 * 1024) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Image too large (max 8MB).' });
                           }
+                          // ⚡ 2026-09-17: SECOND memory gate AFTER the download -
+                          // a big-photo spike here was the remaining path over the
+                          // pm2 450MB line (hourglass react then silence).
+                          if (process.memoryUsage().rss > 430 * 1024 * 1024) {
+                            raw = null;
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u26a0\ufe0f Bot is near its memory limit right now - try again in a minute.' });
+                          }
                           // 💡 2026-09-17 FIX: gate exotic formats up-front
                           // (iPhone HEIC/HEIF photos were crashing libvips with
                           // GLib-GObject-CRITICAL) and run sharp in an ISOLATED
@@ -19819,6 +19826,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
                             msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
                             if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
+                            if (Array.isArray(run.packQueue) && run.packQueue.length) msg += `👥 *PACK FIGHT* - ${run.packQueue.length} more pack member(s) queued on this floor\n`;
                             // 💡 AUDIT FIX 2026-08-01 (Round 1): if the bot restarted
                             // while the player was in Abyss combat, the in-memory
                             // gameStates Map was wiped - the player had no way to

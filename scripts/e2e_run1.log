@@ -1,0 +1,41 @@
+◇ injected env (11) from .env // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+📡 [GoService] Using Base URL: http://127.0.0.1:7860 (concurrency=3)
+[GoService] Health: ✅ {"engine":"synchronous","status":"ready"}
+PASS :: S0 modules load :: all 12 modules required
+PASS :: S1 register P1+P2 :: class=APPRENTICE zeni=1000
+PASS :: S2 XP curve 200*L^2 :: L10=20000 L100=2000000
+PASS :: S2b base stats + level :: class=APPRENTICE hp=80 atk=5
+PASS :: S3 claimDaily :: {"success":true,"message":"🎁 *DAILY REWARD CLAIMED!*\n\n━━━━━━━━━━━━━━━\n💰 *Reward:* +Ꞩ2,000\n*Total:* +Ꞩ2,000\n━━━━━━
+PASS :: S4 wallet add/remove :: bal 53000 -> 52000
+PASS :: S5 addItem+equip :: equip ok; equipStats atk bonus present=true
+FAIL :: S6 initAdventure solo :: no game state after initAdventure @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:143:20
+PASS :: S6b combat loop to victory :: iters=0 inCombat=no-state
+FAIL :: S7 def leak: fight, defend, HP drops a little :: no state for second quest @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:160:20
+[classSystem] custom class load failed (continuing without): Operation `systems.findOne()` buffering timed out after 10000ms
+[skillTree] custom skill data load failed (continuing without): Operation `systems.findOne()` buffering timed out after 10000ms
+❌ Failed to save user 19998887761@s.whatsapp.net: Operation `users.findOneAndUpdate()` buffering timed out after 10000ms
+❌ Failed to save user 19998887761@s.whatsapp.net: Operation `users.findOneAndUpdate()` buffering timed out after 10000ms
+❌ Failed to save user 19998887761@s.whatsapp.net: Operation `users.findOneAndUpdate()` buffering timed out after 10000ms
+[Settlement] save failed: Operation `settlements.insertOne()` buffering timed out after 10000ms
+[Settlement] save failed: Operation `settlements.insertOne()` buffering timed out after 10000ms
+❌ Failed to save user 19998887761@s.whatsapp.net: Operation `users.findOneAndUpdate()` buffering timed out after 10000ms
+FAIL :: S8 abyss startRun :: Operation `abyssruns.findOne()` buffering timed out after 10000ms @     at Timeout._onTimeout (/home/ubuntu/whatsapp-bot/node_modules/mongoose/lib/drivers/node-mongodb-native/collection.js:142:25)
+❌ Failed to save user 19998887762@s.whatsapp.net: Operation `users.findOneAndUpdate()` buffering timed out after 10000ms
+FAIL :: S8b abyss drive to floor 4 :: Operation `abyssruns.findOne()` buffering timed out after 10000ms @     at Timeout._onTimeout (/home/ubuntu/whatsapp-bot/node_modules/mongoose/lib/drivers/node-mongodb-native/collection.js:142:25)
+FAIL :: S9 MID-COMBAT retreat (defuse contract) :: Operation `abyssruns.findOne()` buffering timed out after 10000ms @     at Timeout._onTimeout (/home/ubuntu/whatsapp-bot/node_modules/mongoose/lib/drivers/node-mongodb-native/collection.js:142:25)
+PASS :: S10 allocateStatPoint :: {"success":true,"stat":"ATK","pointsSpent":2,"valueGained":6,"remainingPoints":18}
+FAIL :: S11 skill tree :: getAllSkills empty @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:290:29
+PASS :: S12 craft leg :: recipes=247 first=steel_sabre canCraft={"canCraft":false,"reason":"Missing ingredients:\n- Iron Swo craft=OK 
+PASS :: S13 rune leg :: created=true inventory={}
+/home/ubuntu/whatsapp-bot/core/rpg/runeSystem.js:481
+  if (!RUNE_TYPES[type]) throw new Error(`Invalid rune type: ${type}`);
+                               ^
+
+Error: Invalid rune type: common
+    at Object.createRune (/home/ubuntu/whatsapp-bot/core/rpg/runeSystem.js:481:32)
+    at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:310:24
+    at step (/home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:26:26)
+    at main (/home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:309:9)
+
+Node.js v20.20.2

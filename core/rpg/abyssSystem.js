@@ -26,6 +26,11 @@
 //
 // Entry: free, but only 1 run per 12 hours (anti-farm).
 // Score = deepestFloor × 100 + monstersKilled × 5
+//
+// 💡 2026-09-17: PACK FIGHTS - non-boss combat floors (5+) can spawn a
+// 2-3 enemy pack (adds at 55% stats, +25% rewards each). Rewards rebalanced
+// to fit the new XP curve: getFloorRewards now uses getFloorRewardMultiplier
+// (flat, capped) instead of the enemy difficulty curve.
 
 const AbyssRun = require('../models/AbyssRun');
 const AbyssLeaderboard = require('../models/AbyssLeaderboard');
@@ -64,6 +69,14 @@ function getFloorMultiplier(floor) {
   return 1.0 + (floor - 1) * 0.15 + Math.pow(floor - 1, 1.5) * 0.05;
 }
 
+// 💡 2026-09-17 REBALANCE: rewards use their own curve - much flatter
+// than the enemy difficulty curve above, with a hard ceiling. Keeps deep
+// floors meaningful without printing millions of XP/Zeni per room.
+function getFloorRewardMultiplier(floor) {
+  if (floor <= 100) return 1 + (floor - 1) * 0.12;          // 1 -> 12.88
+  return Math.min(15, 12.88 + Math.log2(floor / 100) * 4);  // soft cap 15
+}
+
 // ─── ENEMY POOLS BY FLOOR TIER ────────────────────────────────────────────
 // 💡 FIX 2026-08-15: Rebalanced F-tier - was spawning STONE_HULK (a big rock
 // golem) on Floor 1. F-tier should be weak introductory mobs (rats, bats,
@@ -99,14 +112,20 @@ const ABYSS_BOSS_POOL = {
 };
 
 // ─── REWARDS PER FLOOR ────────────────────────────────────────────────────
-function getFloorRewards(floor, isBoss) {
+function getFloorRewards(floor, isBoss, rewardMult = 1) {
   const tier = getFloorTier(floor);
-  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
+  // 💡 2026-09-17 REBALANCE: the old tier mults (1000/5000) stacked with the
+  // enemy difficulty curve (~74x at floor 110) paid ~3.7M XP / 7.4M Zeni per
+  // room - 1.85x the ENTIRE 0-100 XP curve (2M total) in ONE floor. New
+  // table (~1.35x per tier) + rewards-only curve: floor 100 now pays ~18.5K
+  // XP / ~12K Zeni, boss ~37K. rewardMult < 1 for pack-fight adds.
+  const tierMult = { F: 1, C: 2, B: 3, A: 4, S: 6, SS: 8, SSS: 10, ABYSSAL_GOD: 12, GOD: 15 };
   const mult = tierMult[tier] || 1;
-  const bossMult = isBoss ? 5 : 1;
+  const bossMult = isBoss ? 2 : 1;
+  const xp = Math.floor(120 * mult * bossMult * getFloorRewardMultiplier(floor) * rewardMult);
   return {
-    xp: Math.floor(50 * mult * bossMult * getFloorMultiplier(floor)),
-    gold: Math.floor(100 * mult * bossMult * getFloorMultiplier(floor)),
+    xp,
+    gold: Math.floor(xp * 0.65),
   };
 }
 
@@ -221,6 +240,7 @@ async function startRun(userId, playerStats) {
   if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
     run.currentEncounterType = encounter.type;
+    run.packQueue = Array.isArray(encounter.packQueue) ? encounter.packQueue : [];
     if (encounter.type === 'wild_summon') {
       run.currentEncounterData = {
         species: encounter.wildSummonSpecies,
@@ -294,14 +314,46 @@ function generateFloorEncounter(floor) {
   } else if (roll < 0.30) {
     return generateEventEncounter(floor);
   }
-  return { type: 'combat', enemy: generateFloorEnemy(floor) };
+
+  // 💡 2026-09-17 PACK FIGHTS: not every floor has to be a 1v1 duel. From
+  // floor 5 there is a 35% chance a combat floor spawns a PACK: the primary
+  // enemy fights at full strength, then 1-2 weakened (55% stats) pack
+  // members jump in one after another while your HP stays where it was.
+  // Boss floors and wild summons stay solo duels.
+  const primary = generateFloorEnemy(floor);
+  if (floor >= 5 && Math.random() < 0.35) {
+    const maxPack = floor >= 15 ? 3 : 2;
+    const packSize = 2 + Math.floor(Math.random() * (maxPack - 1)); // 2..maxPack
+    const packQueue = [];
+    for (let i = 1; i < packSize; i++) {
+      const member = generateFloorEnemy(floor);
+      member.isPackMember = true;
+      member.packIndex = i + 1;
+      member.packSize = packSize;
+      member.name = `${member.name} (pack ${i + 1}/${packSize})`;
+      for (const k of ['hp', 'maxHp', 'atk', 'def', 'spd']) {
+        if (typeof member[k] === 'number') member[k] = Math.max(1, Math.floor(member[k] * 0.55));
+      }
+      if (member.stats) {
+        for (const k of ['hp', 'maxHp', 'atk', 'def', 'spd']) {
+          if (typeof member.stats[k] === 'number') member.stats[k] = Math.max(1, Math.floor(member.stats[k] * 0.55));
+        }
+      }
+      packQueue.push(member);
+    }
+    return { type: 'combat', enemy: primary, packQueue };
+  }
+  return { type: 'combat', enemy: primary };
 }
 
 // ─── TREASURE ENCOUNTERS ──────────────────────────────────────────────────
 function generateTreasureEncounter(floor) {
   const tier = getFloorTier(floor);
-  const mult = getFloorMultiplier(floor);
-  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
+  // 💡 2026-09-17 REBALANCE: use the rewards curve (not the enemy difficulty
+  // curve) + the flattened tier table - treasure rooms now pay ~2-3x a
+  // combat floor instead of ~1000x.
+  const rm = getFloorRewardMultiplier(floor);
+  const tierMult = { F: 1, C: 2, B: 3, A: 4, S: 6, SS: 8, SSS: 10, ABYSSAL_GOD: 12, GOD: 15 };
   const tm = tierMult[tier] || 1;
   
   const treasures = [
@@ -310,14 +362,14 @@ function generateTreasureEncounter(floor) {
       name: 'Gold Cache',
       icon: '💰',
       desc: 'A glittering pile of ancient coins!',
-      gold: Math.floor(200 * tm * mult),
+      gold: Math.floor(100 * tm * rm),
     },
     {
       type: 'XP_SHRINE',
       name: 'Experience Shrine',
       icon: '✨',
       desc: 'A mystical shrine radiating power.',
-      xp: Math.floor(100 * tm * mult),
+      xp: Math.floor(50 * tm * rm),
     },
     {
       type: 'HEALING_FOUNTAIN',
@@ -340,8 +392,8 @@ function generateTreasureEncounter(floor) {
       desc: 'An ornate chest - what could be inside?',
       // Random reward: gold, XP, or rune drop chance
       randomReward: true,
-      gold: Math.floor(500 * tm * mult),
-      xp: Math.floor(300 * tm * mult),
+      gold: Math.floor(200 * tm * rm),
+      xp: Math.floor(120 * tm * rm),
       runeDropChance: floor >= 11 ? 0.25 : 0,
     },
     {
@@ -381,10 +433,10 @@ function generateEventEncounter(floor) {
       desc: 'Two paths lie before you.',
       choices: [
         { id: '1', text: 'Left path (risky, better rewards)', risk: 'high',
-          rewards: { gold: Math.floor(300 * getFloorMultiplier(floor)), xp: Math.floor(200 * getFloorMultiplier(floor)) },
+          rewards: { gold: Math.floor(600 * getFloorRewardMultiplier(floor)), xp: Math.floor(400 * getFloorRewardMultiplier(floor)) },
           danger: Math.floor(100 * getFloorMultiplier(floor)) },
         { id: '2', text: 'Right path (safe, lesser rewards)', risk: 'low',
-          rewards: { gold: Math.floor(100 * getFloorMultiplier(floor)), xp: Math.floor(50 * getFloorMultiplier(floor)) },
+          rewards: { gold: Math.floor(200 * getFloorRewardMultiplier(floor)), xp: Math.floor(100 * getFloorRewardMultiplier(floor)) },
           danger: 0 },
       ],
     },
@@ -395,7 +447,7 @@ function generateEventEncounter(floor) {
       desc: 'A shrine offers a blessing - for a price.',
       choices: [
         { id: '1', text: 'Pray (sacrifice HP for XP)', sacrifice: 'hp', amount: '20%',
-          reward: { xp: Math.floor(500 * getFloorMultiplier(floor)) } },
+          reward: { xp: Math.floor(800 * getFloorRewardMultiplier(floor)) } },
         { id: '2', text: 'Leave it', nothing: true },
       ],
     },
@@ -569,7 +621,8 @@ function applyNextEncounter(run, nextEncounter) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
+    run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'wild_summon') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'wild_summon';
@@ -695,7 +748,8 @@ async function processSkip(userId) {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n_Attack with \`${P()} combat attack\`_`;
+    run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
@@ -922,6 +976,8 @@ module.exports = {
   isBossFloor,
   getFloorMultiplier,
   getFloorRewards,
+  getFloorRewardMultiplier,
+  applyNextEncounter,
   generateFloorEnemy,
   generateFloorEncounter,
   generateTreasureEncounter,

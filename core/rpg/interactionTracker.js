@@ -334,7 +334,7 @@ function renderPairHistory(jid1, jid2) {
       `🔗 Relative focus: ${name1} spends *${hist.shareA}%* of their interaction time on ${name2} · ${name2} spends *${hist.shareB}%* on ${name1}`,
     );
     lines.push(
-      `💫 Bond strength: *${hist.score == null ? 0 : hist.score}/100* — major factor (40%) of the ship score`,
+      `💫 Bond strength: *${hist.score == null ? 0 : hist.score}/100* — how much of your chat life is each other (40% of the ship score)`,
     );
 
     // Recent events: merge both directions' rings, newest first. d=1 means
